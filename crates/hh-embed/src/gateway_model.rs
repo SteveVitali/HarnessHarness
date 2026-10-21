@@ -60,6 +60,90 @@ pub struct ModelLane {
     /// Slot-declared `provider_params` (validated against the dialect's
     /// `plan_schema` at arm).
     pub provider_params: BTreeMap<String, Json>,
+    /// The R4.5c TLS lane declaration (`tls{}` — file *names*, never
+    /// PEM bodies; the manifest re-binds the same lane).
+    pub tls: TlsLane,
+}
+
+/// `TlsLane` — the `model_port` slot's `tls{}` declaration: the
+/// local-CA extra-roots file and/or the mTLS client identity files.
+/// Members resolve like every lane member (`env:NAME` indirection
+/// admitted — a path/name is never a secret *value*).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TlsLane {
+    /// The explicitly named extra-roots file (PEM CERTIFICATE blocks —
+    /// the only path to a private issuer; ADR-0365).
+    pub extra_roots_file: Option<String>,
+    /// The client certificate chain file (mTLS).
+    pub client_cert_file: Option<String>,
+    /// The client private-key file (mTLS — required with the chain).
+    pub client_key_file: Option<String>,
+}
+
+impl TlsLane {
+    /// `params(Some(TlsLane))` → the `tls{}` member for `to_json`
+    /// (absent ⇒ the member is omitted).
+    fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        if let Some(p) = &self.extra_roots_file {
+            m.insert("extra_roots_file".into(), Json::str(p.clone()));
+        }
+        if let Some(p) = &self.client_cert_file {
+            m.insert("client_cert_file".into(), Json::str(p.clone()));
+        }
+        if let Some(p) = &self.client_key_file {
+            m.insert("client_key_file".into(), Json::str(p.clone()));
+        }
+        Json::Obj(m)
+    }
+
+    /// `is_empty()` — the all-absent lane is the webpki-roots default.
+    fn is_empty(&self) -> bool {
+        self.extra_roots_file.is_none()
+            && self.client_cert_file.is_none()
+            && self.client_key_file.is_none()
+    }
+
+    /// `client_tls()` — arm the `hh_tls::ClientTls` the lane declares.
+    /// Arm-time refusals are typed (`Refused` — the file is gone or
+    /// unparseable at drive), never a silently smaller root set.
+    fn client_tls(&self) -> Result<hh_tls::ClientTls, EmbedError> {
+        let mut tls = hh_tls::ClientTls::webpki_roots();
+        if let Some(p) = &self.extra_roots_file {
+            tls =
+                tls.extra_roots_file(std::path::Path::new(p))
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("model_port.tls.extra_roots_file `{p}`: {e}"),
+                    })?;
+        }
+        match (&self.client_cert_file, &self.client_key_file) {
+            (Some(c), Some(k)) => {
+                let chain = hh_tls::pem::read_pem(std::path::Path::new(c)).map_err(|e| {
+                    EmbedError::Refused {
+                        reason: format!("model_port.tls.client_cert_file `{c}`: {e}"),
+                    }
+                })?;
+                let key = hh_tls::pem::read_pem(std::path::Path::new(k)).map_err(|e| {
+                    EmbedError::Refused {
+                        reason: format!("model_port.tls.client_key_file `{k}`: {e}"),
+                    }
+                })?;
+                tls = tls
+                    .client_identity(&chain, &key)
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("model_port.tls client identity: {e}"),
+                    })?;
+            }
+            (None, None) => {}
+            _ => {
+                return Err(EmbedError::Refused {
+                    reason: "model_port.tls: client_cert_file and client_key_file pair up"
+                        .to_string(),
+                });
+            }
+        }
+        Ok(tls)
+    }
 }
 
 impl ModelLane {
@@ -77,6 +161,9 @@ impl ModelLane {
             Json::Bool(self.substitution_allowed),
         );
         m.insert("profile_ref".into(), Json::str(self.profile_ref.clone()));
+        if !self.tls.is_empty() {
+            m.insert("tls".into(), self.tls.to_json());
+        }
         if !self.provider_params.is_empty() {
             m.insert(
                 "provider_params".into(),
@@ -103,6 +190,23 @@ impl ModelLane {
                 Some(Json::Obj(m)) => m.clone(),
                 _ => BTreeMap::new(),
             },
+            tls: match j.get("tls") {
+                Some(Json::Obj(t)) => TlsLane {
+                    extra_roots_file: t
+                        .get("extra_roots_file")
+                        .and_then(Json::as_str)
+                        .map(str::to_string),
+                    client_cert_file: t
+                        .get("client_cert_file")
+                        .and_then(Json::as_str)
+                        .map(str::to_string),
+                    client_key_file: t
+                        .get("client_key_file")
+                        .and_then(Json::as_str)
+                        .map(str::to_string),
+                },
+                _ => TlsLane::default(),
+            },
         })
     }
 }
@@ -128,8 +232,9 @@ fn resolve_value(member: &str, v: Option<&Json>) -> Result<String, EmbedError> {
 
 /// `decode_model_lane(params, profile_ref)` — the `model_port` slot's
 /// `params` → the lane. Typed refusals at arm, never silent defaults:
-/// unknown dialect, missing members, `https:` endpoints (`tls_pending`
-/// — R4.5c), and `provider_params` outside the dialect's
+/// unknown dialect, missing members, non-`http(s):` endpoints, an
+/// unpaired or unknown-keyed `tls{}` member (R4.5c — `tls_pending`
+/// retired), and `provider_params` outside the dialect's
 /// `plan_schema.allowed_keys`.
 pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, EmbedError> {
     let dialect_ref = params
@@ -147,19 +252,60 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
     }
     let dialect = hh_gateway::dialects::openai_compatible();
     let endpoint_ref = resolve_value("endpoint", params.get("endpoint"))?;
-    if !endpoint_ref.starts_with("http://") {
-        if endpoint_ref.starts_with("https://") {
-            return Err(EmbedError::InvalidDefinition {
-                diagnostics: vec![format!(
-                    "model_port.endpoint `{endpoint_ref}` is https — tls_pending (R4.5c)"
-                )],
-            });
-        }
+    if !(endpoint_ref.starts_with("http://") || endpoint_ref.starts_with("https://")) {
         return Err(EmbedError::InvalidDefinition {
             diagnostics: vec![format!(
-                "model_port.endpoint `{endpoint_ref}` — `http://host[:port][/base]` required"
+                "model_port.endpoint `{endpoint_ref}` — `http(s)://host[:port][/base]` required"
             )],
         });
+    }
+    // `tls{}` — the R4.5c lane declaration: extra-roots file and/or
+    // mTLS client identity. Members resolve through the sanctioned
+    // `env:NAME` indirection; unknown keys and an unpaired
+    // cert/key are typed refusals at arm (no silent defaults).
+    let mut tls = TlsLane::default();
+    match params.get("tls") {
+        None | Some(Json::Null) => {}
+        Some(Json::Obj(m)) => {
+            for k in m.keys() {
+                if !matches!(
+                    k.as_str(),
+                    "extra_roots_file" | "client_cert_file" | "client_key_file"
+                ) {
+                    return Err(EmbedError::InvalidDefinition {
+                        diagnostics: vec![format!("model_port.tls key `{k}` unknown")],
+                    });
+                }
+            }
+            tls.extra_roots_file = match m.get("extra_roots_file") {
+                Some(v) => Some(resolve_value("tls.extra_roots_file", Some(v))?),
+                None => None,
+            };
+            tls.client_cert_file = match m.get("client_cert_file") {
+                Some(v) => Some(resolve_value("tls.client_cert_file", Some(v))?),
+                None => None,
+            };
+            tls.client_key_file = match m.get("client_key_file") {
+                Some(v) => Some(resolve_value("tls.client_key_file", Some(v))?),
+                None => None,
+            };
+            match (&tls.client_cert_file, &tls.client_key_file) {
+                (Some(_), None) | (None, Some(_)) => {
+                    return Err(EmbedError::InvalidDefinition {
+                        diagnostics: vec![
+                            "model_port.tls: client_cert_file and client_key_file pair up"
+                                .to_string(),
+                        ],
+                    });
+                }
+                _ => {}
+            }
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.tls is not an object".to_string()],
+            });
+        }
     }
     let provider_model_id = resolve_value("provider_model_id", params.get("provider_model_id"))?;
     if provider_model_id.is_empty() {
@@ -192,6 +338,7 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
         substitution_allowed: matches!(params.get("substitution_allowed"), Some(Json::Bool(true))),
         profile_ref: profile_ref.to_string(),
         provider_params,
+        tls,
     })
 }
 
@@ -234,7 +381,8 @@ pub struct GatewayModel {
     lane: ModelLane,
     /// The bound dialect document.
     dialect: WireDialect,
-    /// The HTTP transport (plain loopback; `https` refuses `tls_pending`).
+    /// The HTTP transport (plain or TLS-terminated — the lane's `tls{}`
+    /// declaration armed at construction; R4.5c).
     transport: hh_gateway::http_transport::HttpModelTransport,
     /// The credential port — `NoCredentials` for the local family.
     credentials: NoCredentials,
@@ -263,26 +411,31 @@ pub struct GatewayModel {
 impl GatewayModel {
     /// `new(lane, instruction, invoke, surfaces)` — the armed lane's
     /// dialect is the document `dialect_ref` names (any other ref refused
-    /// at `decode_model_lane`; a mismatch here is a construction fault,
-    /// surfaced as `None` — the caller falls back to the typed refusal
-    /// path).
+    /// at `decode_model_lane`; a mismatch here is a construction fault).
+    /// The lane's `tls{}` members arm the client TLS config — a missing
+    /// or unparseable file is a typed `Refused` at drive, never a
+    /// silently-weak session (R4.5c; ADR-0365).
     pub fn new(
         lane: ModelLane,
         instruction: String,
         invoke: Option<(String, Json)>,
         surfaces: Vec<SurfaceSpec>,
-    ) -> Option<GatewayModel> {
+    ) -> Result<GatewayModel, EmbedError> {
         if lane.dialect_ref != hh_gateway::dialects::OPENAI_COMPATIBLE_ID {
-            return None;
+            return Err(EmbedError::Refused {
+                reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
+            });
         }
         let dialect = hh_gateway::dialects::openai_compatible();
-        let transport = hh_gateway::http_transport::HttpModelTransport::new(dialect.clone());
+        let client_tls = lane.tls.client_tls()?;
+        let transport =
+            hh_gateway::http_transport::HttpModelTransport::with_tls(dialect.clone(), client_tls);
         let mut endpoints = EndpointAllowlist {
             policy_ref: dialect.endpoint_allowlist_ref.clone(),
             ..Default::default()
         };
         endpoints.endpoints.insert(lane.endpoint_ref.clone());
-        Some(GatewayModel {
+        Ok(GatewayModel {
             lane,
             dialect,
             transport,

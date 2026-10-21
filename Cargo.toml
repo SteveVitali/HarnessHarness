@@ -1,17 +1,28 @@
 # HarnessHarness — E1 kernel/helper ecosystem workspace (bound at Stage 0 by ADR-0050 (e)).
 # CC4: the spec/contracts name no language; this workspace is the *build* binding of the E1
 # candidate (compiled, memory-safe systems ecosystem) and is the one place, alongside the
-# build ADRs, that names it concretely. Hermetic modulo one ADR-admitted dep: the workspace's
-# external crates are the `tempfile` dev-dependency of `hh-varhost` and the `ring =0.17.14`
+# build ADRs, that names it concretely. Hermetic modulo the ADR-admitted deps: the workspace's
+# external crates are the `tempfile` dev-dependency of `hh-varhost`, the `ring =0.17.14`
 # dependency of `hh-secrets` admitted by ADR-0359 (the DPoP-verifier scope plus `ring::aead`
 # + `ring::rand`, consumed by R3.8's blob-pool AEAD under ADR-0361 — nothing else imports the
-# crate). All other runtime code is
+# crate), and the rustls graph of `hh-tls` admitted by ADR-0365
+# (`rustls =0.23.46` on the ADR-0359 `ring` provider + `rustls-webpki =0.103.15`
+# + `webpki-roots =1.0.9`, default features off — the closed
+# HTTPS-client / TLS-server / mTLS scope; nothing else imports them).
+# All other runtime code is
 # pure standard library; builds are lockfile-pinned and reproducible, and `cargo build
 # --offline` works on a warm cache (ADR-0359 D4 — a cold build performs one pinned fetch).
 [workspace]
 resolver = "2"
 members = [
     "crates/hh-wire",
+    # The workspace's ONE TLS home (R4.5c; ADR-0365): HTTPS client sessions
+    # over the admitted rustls/ring graph, webpki root verification with an
+    # explicit extra-roots file hook, mTLS client-cert presentation, TLS
+    # server configs for fixtures and the R4.7a mediator, and verified
+    # peer-identity (subject/SAN) extraction. The only member that may name
+    # the rustls graph.
+    "crates/hh-tls",
     "crates/hh-embed-schema",
     # The C0/Stage-1 ontology and formal model (spec §2, R-2.1.1; ticket S1.1). A PERSISTENT
     # workspace member (not a throwaway like hh-baseline): the home table, the formal-model

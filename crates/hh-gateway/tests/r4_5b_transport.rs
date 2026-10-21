@@ -1,8 +1,9 @@
 //! R4.5b — `HttpModelTransport` over loopback (AC2; DF-S1.18-1;
-//! ADR-0364 D3). A `TcpListener` fixture answers the transport's POST /
-//! GET legs — no live service anywhere; the cells pin the wire codec's
-//! single home (`hh_wire::http`), the `tls_pending` refusal, streaming
-//! frame translation, and the dialect's error classification.
+//! ADR-0364 D3; R4.5c TLS mount). A `TcpListener` fixture answers the
+//! transport's POST / GET legs — no live service anywhere; the cells pin
+//! the wire codec's single home (`hh_wire::http`), the typed scheme
+//! refusals, streaming frame translation, and the dialect's error
+//! classification.
 
 #![allow(clippy::unwrap_used)]
 
@@ -133,19 +134,23 @@ fn anon() -> CredentialHandle {
 
 // ── the cells ────────────────────────────────────────────────────────────────
 
-/// `https://` refuses typed — `unsupported_feature` carrying
-/// `tls_pending` (R4.5c owns TLS; the lane never downgrades).
+/// `https://` now dials TLS (R4.5c landed beneath the same codec —
+/// `tls_pending` retired): a dead port is the typed `network` refusal;
+/// a foreign scheme stays `unsupported_feature{unsupported_scheme}` —
+/// never a downgrade either way.
 #[test]
-fn https_endpoint_refuses_tls_pending() {
+fn https_dials_tls_foreign_scheme_refuses() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d.clone());
     let p = plan("https://127.0.0.1:1", true);
     let bytes = hh_gateway::codec::serialize(&p);
     let err = t.send(&bytes, &anon(), "https://127.0.0.1:1").unwrap_err();
-    assert_eq!(err.class, ModelErrorClass::UnsupportedFeature);
-    assert_eq!(err.provider_code.as_deref(), Some("tls_pending"));
+    assert_eq!(err.class, ModelErrorClass::Network);
     let err = t.discover("https://127.0.0.1:1").unwrap_err();
+    assert_eq!(err.class, ModelErrorClass::Network);
+    let err = t.discover("ftp://127.0.0.1:1").unwrap_err();
     assert_eq!(err.class, ModelErrorClass::UnsupportedFeature);
+    assert_eq!(err.provider_code.as_deref(), Some("unsupported_scheme"));
 }
 
 /// `send` POSTs `{endpoint}/chat/completions` with the plan's `body`

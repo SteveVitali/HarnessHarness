@@ -1,0 +1,25 @@
+[package]
+name = "hh-tls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The workspace's one TLS home (R4.5c; ADR-0365): HTTPS client sessions over the admitted rustls/ring graph with webpki root verification (extra roots only via an explicitly named PEM file — the local-CA hook), client-certificate presentation for mTLS, TLS server configs for fixtures and the mediator, and verified peer-identity (subject/SAN) extraction."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# The ADR-0365 dep admission — the workspace's TLS stack: `rustls =0.23.46`
+# on the already-admitted `ring =0.17.14` provider (default features off;
+# no aws-lc, no `log`), `rustls-webpki =0.103.15` for the peer-identity
+# cert parse, `webpki-roots =1.0.9` for the Mozilla root set. Nothing else
+# in the workspace — and no other member — may name them.
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-webpki = "=0.103.15"
+webpki-roots = "=1.0.9"
+
+[dev-dependencies]
+# Test-side codec for the wire roundtrips — the TLS stream is the transport
+# beneath `hh_wire::http` (ADR-0364 D1's "mount on the one codec" rule).
+hh-wire = { path = "../hh-wire" }

@@ -15,6 +15,9 @@ path = "src/bin/hh-gateway-stub.rs"
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The ADR-0365 TLS home — `ClientTls` beneath the one codec for `https:`
+# endpoints (the ticket's named consumer; only hh-tls may name rustls).
+hh-tls = { path = "../hh-tls" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
 hh-ledger = { path = "../hh-ledger" }

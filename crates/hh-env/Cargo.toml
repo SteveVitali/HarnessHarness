@@ -18,6 +18,9 @@ tier-c1 = ["hh-ledger/tier-c1"]
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The ADR-0365 TLS home — `LocalTlsTransport` terminates `https_connect`
+# legs at the mediator (tls.terminate honoured, never silently plain).
+hh-tls = { path = "../hh-tls" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
 hh-ontology = { path = "../hh-ontology" }

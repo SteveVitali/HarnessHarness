@@ -11,6 +11,9 @@ path = "src/lib.rs"
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The ADR-0365 TLS home — the model_port `tls{}` params build the
+# `ClientTls` `HttpModelTransport` consumes on `https:` lanes.
+hh-tls = { path = "../hh-tls" }
 hh-embed-schema = { path = "../hh-embed-schema" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }

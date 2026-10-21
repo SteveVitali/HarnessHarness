@@ -5,9 +5,11 @@
 The E1 reference build of the MetaHarness program: a kernel + Laboratory for
 *harness engineering* — durable, observable, model-conditioned runtimes for
 goal-directed agents, with provenance, budgets and governance carried as
-load-bearing contracts rather than conventions. The system is a 51-crate
-pure-std-modulo-ADR-0359 Rust workspace (one named, pinned `ring` dep —
-the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361) plus
+load-bearing contracts rather than conventions. The system is a 52-crate
+pure-std-modulo-ADR-0359/ADR-0365 Rust workspace (one named, pinned `ring`
+dep — the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361 — and the
+named, pinned rustls/`ring`-backend TLS graph admitted by ADR-0365 for
+`hh-tls`'s closed HTTPS/mTLS scope) plus
 committed contract, spec and build records.
 Human-facing overview: `README.md`. The behavioural contract:
 `spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
@@ -96,13 +98,16 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 
 ## Code conventions
 
-- **Pure std, hermetic — modulo ADR-0359.** No external runtime crates
-  except (a) the `tempfile` dev-dep of `hh-varhost` tests and (b) the
+- **Pure std, hermetic — modulo ADR-0359 + ADR-0365.** No external runtime
+  crates except (a) the `tempfile` dev-dep of `hh-varhost` tests, (b) the
   `ring =0.17.14` dep of `hh-secrets` admitted by ADR-0359 for the closed
   DPoP-verifier scope plus `ring::aead`/`ring::rand`, consumed by R3.8's
   blob-pool AEAD (ADR-0361 — `hh-ledger`'s `BlobCipher` seam, the producer
-  stays in `hh-secrets`). Do
-  not add dependencies — any further crate or `ring` surface is its own ADR.
+  stays in `hh-secrets`), and (c) the `hh-tls`-only rustls graph admitted
+  by ADR-0365 (`rustls =0.23.46` on the `ring` backend +
+  `rustls-webpki =0.103.15` + `webpki-roots =1.0.9` — the closed
+  HTTPS-client / TLS-server / mTLS scope). Do
+  not add dependencies — any further crate or admitted surface is its own ADR.
 - **CC1 — one canonical implementation.** Reuse the existing codec, store,
   canonicalizer or class table; a second spelling of a contract is a defect.
 - **CC7 — the schema source owns both directions.** Change `hh-embed-schema`
@@ -251,8 +256,9 @@ any ledger (record `provided: yes/no`). Validate with
 ## Don't
 
 - Don't add runtime dependencies — the workspace is hermetic by contract
-  modulo ADR-0359's one named, pinned, scoped admission (`ring` in
-  `hh-secrets`); anything beyond its scope needs its own ADR first.
+  modulo the named, pinned, scoped admissions (`ring` in `hh-secrets` —
+  ADR-0359; the rustls graph in `hh-tls` — ADR-0365); anything beyond
+  their scope needs its own ADR first.
 - Don't hand-edit generated artifacts, `docs/adr/README.md`, or anything under
   `docs/build/` history regions.
 - Don't merge PRs — `mergePolicy: OPERATOR`; the operator merges.

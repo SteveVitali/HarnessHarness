@@ -213,6 +213,80 @@ impl EgressTransport for LocalHttpTransport {
     }
 }
 
+/// The local TLS-terminated transport (R4.5c; ADR-0365; DF-S2.4-2):
+/// `hh_tls::ClientTls` wraps the resolved-address `TcpStream`, then the
+/// **same** `hh_wire::http` codec carries the request. `terminates_tls()`
+/// answers `true` — the policy's `tls.terminate` declaration is honoured
+/// with a real session (webPKI verification always on; a private issuer
+/// needs the operator-declared extra-roots file), and `tls_terminated`
+/// decided-rows report the truth. A failed handshake is a typed forward
+/// refusal — never a silently-plain leg.
+pub struct LocalTlsTransport {
+    /// The client TLS configuration (`ClientTls::webpki_roots()` plus
+    /// any declared extra roots / mTLS client identity).
+    pub tls: hh_tls::ClientTls,
+    /// The dial/handshake/read timeout.
+    pub timeout: Duration,
+}
+
+impl Default for LocalTlsTransport {
+    fn default() -> Self {
+        LocalTlsTransport {
+            tls: hh_tls::ClientTls::webpki_roots(),
+            timeout: Duration::from_secs(5),
+        }
+    }
+}
+
+impl EgressTransport for LocalTlsTransport {
+    fn forward(
+        &self,
+        addr: IpAddr,
+        port: u16,
+        host: &str,
+        method: &str,
+        path: &str,
+        headers: &[(String, String)],
+        body: Option<&[u8]>,
+    ) -> Result<WireResponse, String> {
+        let s =
+            TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
+        s.set_read_timeout(Some(self.timeout)).ok();
+        s.set_write_timeout(Some(self.timeout)).ok();
+        // The handshake terminates at the mediator — verification is the
+        // configured root set's, never skipped.
+        let mut s = self
+            .tls
+            .connect(s, host)
+            .map_err(|e| format!("tls {addr}:{port}: {e}"))?;
+        let host_header = format!("{host}:{port}");
+        let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
+        hdrs.push(("Host", &host_header));
+        hdrs.push(("Connection", "close"));
+        for (k, v) in headers {
+            hdrs.push((k.as_str(), v.as_str()));
+        }
+        hh_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
+            .map_err(|e| format!("write {addr}:{port}: {e}"))?;
+        let mut r = std::io::BufReader::new(s);
+        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+            .map_err(|e| format!("read {addr}:{port}: {e}"))?;
+        Ok(WireResponse {
+            status: head.status,
+            headers: head
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            body,
+        })
+    }
+
+    fn terminates_tls(&self) -> bool {
+        true
+    }
+}
+
 // ── the inspect-hook seam (R2.9b; ADR-0341 D3/D4) ─────────────────────────────
 
 /// `InspectView` — the request view a declared `inspect_hooks` member
@@ -1429,7 +1503,16 @@ impl<'a> EgressMediator<'a> {
                     effect_id: None,
                     tool_call_id: "credential-revoke".to_string(),
                     env_handle: "kernel".to_string(),
-                    protocol: hh_containment::policy::EgressProtocol::Http,
+                    // The revoke rides the destination's declared carrier:
+                    // an `https` destination gets the `https_connect` leg
+                    // — under `tls.terminate` the terminating transport
+                    // honours it, a non-terminating one refuses typed
+                    // (R4.5c; the intent's scheme is R4.5c's addition).
+                    protocol: if i.scheme == "https" {
+                        hh_containment::policy::EgressProtocol::HttpsConnect
+                    } else {
+                        hh_containment::policy::EgressProtocol::Http
+                    },
                     host_raw: i.host_pattern.clone(),
                     resolved_addrs: vec![],
                     port: i.port.unwrap_or(80),

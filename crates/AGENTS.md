@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The 51-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
+The 52-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
 service slices, the Lab (experiment/evaluation plane), the C3–C5 services, and
 the surfaces. Members are declared — with a one-line provenance comment each —
 in the root `Cargo.toml`. Dependency edges point downward through the layers
@@ -75,12 +75,16 @@ cargo build -p hh-embed --no-default-features    # tier-c4 off
 
 ## Code conventions
 
-- The workspace is dependency-free by contract **modulo ADR-0359**: only
-  `hh-secrets` may name the admitted `ring =0.17.14` pin, and only inside
-  the ADR's closed API scope (DPoP signature verification + test-time
-  fixture signing + `ring::aead`/`ring::rand`, the blob-pool AEAD R3.8
-  consumed under ADR-0361's `BlobCipher` seam). Every
-  other crate and every other `ring` surface stays hermetic.
+- The workspace is dependency-free by contract **modulo ADR-0359 +
+  ADR-0365**: only `hh-secrets` may name the admitted `ring =0.17.14`
+  pin, and only inside the ADR's closed API scope (DPoP signature
+  verification + test-time fixture signing + `ring::aead`/`ring::rand`,
+  the blob-pool AEAD R3.8 consumed under ADR-0361's `BlobCipher` seam);
+  and only `hh-tls` may name the admitted rustls graph
+  (`rustls =0.23.46` on the `ring` backend + `rustls-webpki =0.103.15`
+  + `webpki-roots =1.0.9` — the closed HTTPS-client / TLS-server / mTLS
+  scope). Every
+  other crate and every other admitted surface stays hermetic.
 - A crate's public contract is its `src/lib.rs` doc header — it names the spec
   section, the `R-2.*` slices, the ticket and the owning ADRs. Read it before
   editing the crate.

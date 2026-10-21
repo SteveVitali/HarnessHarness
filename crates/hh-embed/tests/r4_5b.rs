@@ -10,7 +10,9 @@
 //!
 //! Hermetic: a loopback `TcpListener` fixture answers the dialect's
 //! frames — no live provider claim (the local Ollama leg rides
-//! `scripts/live-verify.sh local-run`; ADR-0363).
+//! `scripts/live-verify.sh local-run`; ADR-0363). R4.5c's TLS lane cells
+//! (the `tls{}` declaration, the extra-roots hook, the typed refusals)
+//! ride the committed test PKI (`hh-tls/fixtures/pki` — ADR-0365).
 
 #![allow(clippy::unwrap_used)]
 
@@ -359,6 +361,54 @@ fn fake_provider(response: String) -> FakeProvider {
     }
 }
 
+/// The TLS twin of `fake_provider` — `hh_tls::ServerTls` terminates the
+/// handshake over the committed test PKI, then the same loopback shape
+/// serves (R4.5c; the response body is the caller's).
+fn fake_provider_tls(response: String) -> FakeProvider {
+    let tls = hh_tls::ServerTls::new(
+        &std::fs::read_to_string(pki("server.pem")).unwrap(),
+        &std::fs::read_to_string(pki("server-key.pem")).unwrap(),
+    )
+    .unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let got = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let got2 = got.clone();
+    std::thread::spawn(move || {
+        if let Ok((sock, _)) = listener.accept() {
+            sock.set_read_timeout(Some(std::time::Duration::from_secs(15)))
+                .ok();
+            if let Ok(mut s) = tls.accept(sock) {
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 8192];
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                loop {
+                    if head_complete(&buf) || std::time::Instant::now() > deadline {
+                        break;
+                    }
+                    match s.read(&mut tmp) {
+                        Ok(0) => break,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                        Err(_) => break,
+                    }
+                }
+                *got2.lock().unwrap() = Some(buf);
+                let _ = s.write_all(response.as_bytes());
+                let _ = s.flush();
+            }
+        }
+    });
+    FakeProvider {
+        endpoint: format!("https://localhost:{port}"),
+        got,
+    }
+}
+
+fn pki(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("../hh-tls/fixtures/pki/{name}"))
+}
+
 fn head_complete(buf: &[u8]) -> bool {
     let Some(p) = buf.windows(4).position(|w| w == b"\r\n\r\n") else {
         return false;
@@ -688,22 +738,147 @@ fn live_lane_served_model_mismatch_is_typed() {
     );
 }
 
-/// `https://` refuses at open — `tls_pending` (R4.5c), never a dial.
+/// `https://` arms at open now (R4.5c — `tls_pending` retired); a dead
+/// endpoint answers the typed `model.call.failed{network}` row at the
+/// call — the refusal moved from arm to wire, never silently plain.
 #[test]
-fn https_lane_refuses_open() {
+fn https_lane_arms_dead_endpoint_fails_typed() {
     let root = test_dir("https");
     let mut svc = service_in(&root);
     hello(&mut svc);
     let doc = document_json(Some(lane_params("https://127.0.0.1:9", "m")));
+    let (sess, run) = open_live(&mut svc, doc, "k-https");
+    let _ = submit(&mut svc, &sess, text_input("go"), "k-sub-https");
+    let evs = classes(&svc, &run);
+    let failed = evs
+        .iter()
+        .find(|(_, c, _)| c == "model.call.failed")
+        .expect("failed row");
+    assert_eq!(
+        failed
+            .2
+            .get("error")
+            .and_then(|e| e.get("class"))
+            .and_then(Json::as_str),
+        Some("network"),
+        "{failed:?}"
+    );
+}
+
+/// `tls{extra_roots_file}` — the lane's explicit local-CA hook carries a
+/// real HTTPS submit to `model.call.completed`; the served model is the
+/// bound one.
+#[test]
+fn tls_lane_extra_roots_completes() {
+    let root = test_dir("tls-ca");
+    let mut svc = service_in(&root);
+    hello(&mut svc);
+    let provider = fake_provider_tls(sse_submit_stream("fixture-model", "ok"));
+    let mut params = lane_params(&provider.endpoint, "fixture-model");
+    params.insert(
+        "tls".into(),
+        Json::Obj(BTreeMap::from([(
+            "extra_roots_file".to_string(),
+            Json::str(pki("hh-test-ca.pem").display().to_string()),
+        )])),
+    );
+    let doc = document_json(Some(params));
+    let (sess, run) = open_live(&mut svc, doc, "k-tls");
+    let _ = submit(&mut svc, &sess, text_input("go"), "k-sub-tls");
+    let evs = classes(&svc, &run);
+    assert!(
+        evs.iter().any(|(_, c, _)| c == "model.call.completed"),
+        "no completed row: {evs:?}"
+    );
+    // The captured request crossed the TLS session — the provider saw
+    // the dialect's POST bytes, never plaintext-offered TLS.
+    let got = provider.got.lock().unwrap().clone().unwrap_or_default();
+    let head = String::from_utf8_lossy(&got);
+    assert!(head.starts_with("POST /chat/completions"), "{head}");
+}
+
+/// No `extra_roots_file` ⇒ the private test CA is untrusted — the
+/// refusal is the typed `network` row; the lane never downgraded.
+#[test]
+fn tls_lane_without_roots_refuses() {
+    let root = test_dir("tls-no-ca");
+    let mut svc = service_in(&root);
+    hello(&mut svc);
+    let provider = fake_provider_tls(sse_submit_stream("fixture-model", "ok"));
+    let doc = document_json(Some(lane_params(&provider.endpoint, "fixture-model")));
+    let (sess, run) = open_live(&mut svc, doc, "k-tls-nc");
+    let _ = submit(&mut svc, &sess, text_input("go"), "k-sub-tls-nc");
+    let evs = classes(&svc, &run);
+    let failed = evs
+        .iter()
+        .find(|(_, c, _)| c == "model.call.failed")
+        .expect("failed row");
+    assert_eq!(
+        failed
+            .2
+            .get("error")
+            .and_then(|e| e.get("class"))
+            .and_then(Json::as_str),
+        Some("network"),
+        "{failed:?}"
+    );
+}
+
+/// `tls{}` member discipline at arm: an unpaired `client_cert_file` and
+/// an unknown key are `InvalidDefinition`; a missing extra-roots file is
+/// the typed `Refused` at drive (the arm-time file read happens at
+/// `GatewayModel::new` — never a silently smaller root set).
+#[test]
+fn tls_lane_member_refusals() {
+    let root = test_dir("tls-ref");
+    let mut svc = service_in(&root);
+    hello(&mut svc);
+    // Unpaired cert/key.
+    let mut params = lane_params("https://127.0.0.1:9", "m");
+    params.insert(
+        "tls".into(),
+        Json::Obj(BTreeMap::from([(
+            "client_cert_file".to_string(),
+            Json::str("/nope/cert.pem"),
+        )])),
+    );
     let r = call(
         &mut svc,
         "open_session",
         Json::obj(vec![
-            ("spec", spec_for(doc)),
-            ("idempotency_key", Json::str("k-https")),
+            ("spec", spec_for(document_json(Some(params)))),
+            ("idempotency_key", Json::str("k-tls-pair")),
         ]),
     );
     assert_eq!(err_kind(&r), "InvalidDefinition");
+    // Unknown key.
+    let mut params = lane_params("https://127.0.0.1:9", "m");
+    params.insert(
+        "tls".into(),
+        Json::Obj(BTreeMap::from([("bogus".to_string(), Json::str("x"))])),
+    );
+    let r = call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", spec_for(document_json(Some(params)))),
+            ("idempotency_key", Json::str("k-tls-bogus")),
+        ]),
+    );
+    assert_eq!(err_kind(&r), "InvalidDefinition");
+    // Missing extra-roots file — the open decodes; the drive refuses
+    // typed (`Refused`), never a session on the default roots.
+    let mut params = lane_params("https://127.0.0.1:9", "m");
+    params.insert(
+        "tls".into(),
+        Json::Obj(BTreeMap::from([(
+            "extra_roots_file".to_string(),
+            Json::str("/definitely/not/here.pem"),
+        )])),
+    );
+    let (sess, _run) = open_live(&mut svc, document_json(Some(params)), "k-tls-miss");
+    let r = submit(&mut svc, &sess, text_input("go"), "k-sub-tls-miss");
+    assert_eq!(err_kind(&r), "Refused", "{r:?}");
 }
 
 /// The `env:` indirection is the sanctioned secret-name channel — an
@@ -796,7 +971,7 @@ fn unbound_lane_is_byte_identical() {
     assert!(completed.2.get("served_model").is_none());
     assert!(completed.2.get("timing").is_none());
     let manifest = svc.store().manifest(&run).unwrap();
-    assert!(manifest.extra.get("model_lane").is_none());
+    assert!(!manifest.extra.contains_key("model_lane"));
 
     // Probe — does deterministic replay reproduce the scripted record?
     let rep = ok(&call(

@@ -1502,17 +1502,12 @@ impl EmbedService {
             fail_plan,
         };
         let mut live = match &model_lane {
-            Some(lane) => Some(
-                crate::gateway_model::GatewayModel::new(
-                    lane.clone(),
-                    completion,
-                    invoke,
-                    model_surfaces,
-                )
-                .ok_or_else(|| EmbedError::Refused {
-                    reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
-                })?,
-            ),
+            Some(lane) => Some(crate::gateway_model::GatewayModel::new(
+                lane.clone(),
+                completion,
+                invoke,
+                model_surfaces,
+            )?),
             None => None,
         };
         let model: &mut dyn hh_control::driver::ModelPort = match live.as_mut() {
