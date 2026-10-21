@@ -83,25 +83,31 @@ pub fn describe(dialect: &WireDialect) -> TransportCapabilityDeclaration {
     }
 }
 
-/// `run_transport_probes(dialect, transport, endpoint_ref, pinned, canaries,
-/// observed_at)` — for each declared row, issue the probe that elicits the
-/// claim and fold pinned-vs-observed into a `ConformanceRecord` (the
-/// `derive_verdict` rule: concrete disagreement → `Drift`; `unknown`/
-/// `skipped` never drift). `pinned` is the registry's pinned claim values
-/// (`capability → Json`); an unpinned capability carries `declared = null`
-/// (the observed verdict projects — the pin's absence is recorded, not
-/// coerced). A transport without a probe primitive yields `observed =
-/// skipped` rows; a probe *failure* is an `Err`, never a silent row.
+/// `run_transport_probes(dialect, transport, credential, endpoint_ref,
+/// model, pinned, canaries, observed_at)` — for each declared row, issue
+/// the probe that elicits the claim and fold pinned-vs-observed into a
+/// `ConformanceRecord` (the `derive_verdict` rule: concrete disagreement
+/// → `Drift`; `unknown`/`skipped` never drift). `pinned` is the
+/// registry's pinned claim values (`capability → Json`); an unpinned
+/// capability carries `declared = null` (the observed verdict projects —
+/// the pin's absence is recorded, not coerced). A transport without a
+/// probe primitive yields `observed = skipped` rows; a probe *failure*
+/// is an `Err`, never a silent row. `credential` rides every probe call
+/// exactly as `send`'s handle does; `model` is the claim-shaping calls'
+/// provider model id.
 ///
 /// `canaries` names capabilities the declaration does **not** carry
 /// (AC-R-2.3.1-14's honesty clause): an *undeclared* operation the transport
 /// answers successfully produces a `Drift` row (`declared = unsupported`,
 /// `observed = <the success value>`) — the record fails the suite, never
 /// silently passes.
+#[allow(clippy::too_many_arguments)] // the arity is the probe call's — each argument names one probe-decl member.
 pub fn run_transport_probes(
     dialect: &WireDialect,
     transport: &mut dyn crate::gateway::Transport,
+    credential: &crate::gateway::CredentialHandle,
     endpoint_ref: &str,
+    model: &str,
     pinned: &BTreeMap<String, Json>,
     canaries: &[String],
     observed_at: u64,
@@ -109,7 +115,8 @@ pub fn run_transport_probes(
     let declaration = describe(dialect);
     let mut out = Vec::new();
     for (capability, _declared_by_dialect) in &declaration.entries {
-        let observed = match transport.probe_capability(capability, endpoint_ref) {
+        let observed = match transport.probe_capability(capability, credential, endpoint_ref, model)
+        {
             Ok(v) => v,
             Err(e) if e.class == ModelErrorClass::UnsupportedFeature => Json::str("skipped"),
             Err(e) => return Err(e),
@@ -126,7 +133,8 @@ pub fn run_transport_probes(
         ));
     }
     for capability in canaries {
-        let observed = match transport.probe_capability(capability, endpoint_ref) {
+        let observed = match transport.probe_capability(capability, credential, endpoint_ref, model)
+        {
             Ok(v) => v,
             Err(e) if e.class == ModelErrorClass::UnsupportedFeature => Json::str("unsupported"),
             Err(e) => return Err(e),
@@ -517,5 +525,152 @@ pub fn run_fingerprint_probe(
         record,
         claim,
         calls: spec.prompts.len(),
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The live `probe_exec` lane (R4.5e — ADR-0284 (b)/ADR-0338 (b) fired)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `ProbeExecDecl` — one `probe_exec[]` slot entry decoded verbatim
+/// (`endpoint`/`provider_model_id` already `env:`-resolved by the arm;
+/// `credential_ref` keeps its `env:NAME` coordinate spelling — the
+/// binding coordinate may record, the value never).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeExecDecl {
+    /// The `model.profile.probed` row's profile coordinate.
+    pub profile_ref: String,
+    /// The bound dialect coordinate (`{id}@{version}`).
+    pub dialect_coordinate: String,
+    /// The endpoint coordinate.
+    pub endpoint_ref: String,
+    /// The credential coordinate (`env:NAME`) when the family auths.
+    pub credential_ref: Option<String>,
+    /// The provider model id the claim-shaping calls name.
+    pub provider_model_id: String,
+    /// `pinned{capability → Json}` — the pin set the fold reads.
+    pub pinned: BTreeMap<String, Json>,
+    /// Undeclared capabilities expected `unsupported` (canary rows).
+    pub canaries: Vec<String>,
+    /// Capabilities whose `drift`/`unsupported` verdict flips status —
+    /// the profile's declared probe dependency set (§5b.3).
+    pub dependency_capabilities: Vec<String>,
+    /// The profile's declared status (the `from` member of a flip row).
+    pub status_declared: String,
+}
+
+/// `ProbeExecOutcome` — the executor's result: the records to mint, the
+/// deterministic `probe_run_id`, whether a dependency-set verdict flips
+/// status, and the measured probe-call usage (the leg's spend record
+/// reads it — never an estimate).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeExecOutcome {
+    /// The idp/1 probe-run identity (over the record spellings).
+    pub probe_run_id: String,
+    /// Discovery + capability conformance records (`ObservedIn::Probe`).
+    pub records: Vec<ConformanceRecord>,
+    /// `true` when a `dependency_capabilities` row verdicted
+    /// `drift`/`unsupported`.
+    pub status_flip: bool,
+    /// The probe call's measured usage (`None` when no claim-shaping
+    /// call ran).
+    pub usage: Option<Json>,
+}
+
+/// `exec_probe_decl(decl, observed_at)` — the live `probe_profile`
+/// executor (R4.5e): bind the credential, read the authenticated model
+/// listing, fold the served-model pin + every declared capability row
+/// through `run_transport_probes`, and hand back the rows to mint. A
+/// `dependency_capabilities` verdict of `drift`/`unsupported` marks
+/// `status_flip` — the caller mints `model.profile.status.changed{
+/// trigger: "probe_failure"}` (§5b.3), never silently.
+///
+/// `Err` on an unadmitted dialect coordinate, an unbindable credential,
+/// or a probe leg's typed transport refusal — the arm refuses the open;
+/// no partial rows mint.
+pub fn exec_probe_decl(decl: &ProbeExecDecl, observed_at: u64) -> Result<ProbeExecOutcome, String> {
+    let dialect = match decl.dialect_coordinate.as_str() {
+        crate::dialects::OPENAI_COMPATIBLE_ID => crate::dialects::openai_compatible(),
+        crate::dialects::OPENAI_ID => crate::dialects::openai(),
+        crate::dialects::ANTHROPIC_MESSAGES_ID => crate::dialects::anthropic_messages(),
+        other => return Err(format!("probe_exec.dialect unadmitted: {other}")),
+    };
+    let mut port = crate::credentials::BrokerCredentialPort::default();
+    let credential = crate::gateway::CredentialPort::bind(
+        &mut port,
+        decl.credential_ref.as_deref(),
+        &decl.endpoint_ref,
+        &dialect.auth_kinds,
+    )
+    .map_err(|e| format!("probe_exec credential bind: {e}"))?;
+    let mut transport = crate::http_transport::HttpModelTransport::new(dialect.clone());
+    use crate::gateway::Transport as _;
+
+    // Leg 1 — the authenticated model listing: `GET /models` → the
+    // dialect's `model_listing` member's `id`s → `served_model.<id>`
+    // claims folded against the pin `served_model.<model> = true` (the
+    // bound model must appear — a listing that doesn't serve it is a
+    // real DRIFT row, never a pass).
+    let listing = transport
+        .discover(&credential, &decl.endpoint_ref)
+        .map_err(|e| format!("probe_exec discover: {e}"))?;
+    let member = dialect.model_listing.as_deref().unwrap_or("data");
+    let mut served = Vec::new();
+    if let Some(Json::Arr(models)) = listing.get(member) {
+        for m in models {
+            if let Some(id) = m.get("id").and_then(Json::as_str) {
+                served.push(Json::str(id));
+            }
+        }
+    }
+    let descriptor = Json::obj([("served_models", Json::Arr(served))]);
+    let discovery_pins = BTreeMap::from([(
+        format!("served_model.{}", decl.provider_model_id),
+        Json::Bool(true),
+    )]);
+    let mut records = discovery_conformance(
+        &decl.dialect_coordinate,
+        &descriptor,
+        &discovery_pins,
+        observed_at,
+    );
+
+    // Leg 2 — the declared capability walk (one measured tiny call +
+    // the family's count_tokens primitive where it exists).
+    let mut caps = run_transport_probes(
+        &dialect,
+        &mut transport,
+        &credential,
+        &decl.endpoint_ref,
+        &decl.provider_model_id,
+        &decl.pinned,
+        &decl.canaries,
+        observed_at,
+    )
+    .map_err(|e| format!("probe_exec probes: {e}"))?;
+    records.append(&mut caps);
+
+    // The deterministic run id — idp/1 over the record spellings (the
+    // same observed outcome replays to the same id).
+    let preimage = records
+        .iter()
+        .map(|r| hh_registry::schema::hosted_entry_json(r).to_canonical_string())
+        .collect::<Vec<_>>()
+        .join("");
+    let probe_run_id = hh_identity::idp_id("model.profile.probe_run", preimage.as_bytes());
+
+    let status_flip = records.iter().any(|r| {
+        decl.dependency_capabilities.contains(&r.dimension)
+            && matches!(
+                r.verdict,
+                hh_registry::kinds::ConformanceVerdict::Drift
+                    | hh_registry::kinds::ConformanceVerdict::Unsupported
+            )
+    });
+    Ok(ProbeExecOutcome {
+        probe_run_id,
+        records,
+        status_flip,
+        usage: transport.probe_usage(),
     })
 }

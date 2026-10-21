@@ -118,8 +118,8 @@ pub use probes::{
 pub use router::{
     check_reroute_order, error_action, explain, lift, lower, on_attempt_failed, project_health,
     reroute, select, select_with, AccountBudget, AttemptDisposition, AttemptState, BanditCell,
-    BanditView, BudgetPort, Candidate, CandidateRejectReason, CandidateVerdict, ErrorAction,
-    GiveUpReason, HealthConfig, HealthView, LiftedPreferences, LoweringLossReport,
+    BanditView, BudgetPort, Candidate, CandidateRejectReason, CandidateVerdict, DeclaredPricing,
+    ErrorAction, GiveUpReason, HealthConfig, HealthView, LiftedPreferences, LoweringLossReport,
     MigrationLossBound, MigrationView, ModelRoleTable, NoBandit, NoHealth, NoMigration, NoPricing,
     NoQualityPrior, PolicyConditionedRule, PricingView, QualityPriorView, RerouteOrderError,
     RoleBinding, RouteCandidate, RoutingDecision, RoutingExplanation, RoutingPolicy,

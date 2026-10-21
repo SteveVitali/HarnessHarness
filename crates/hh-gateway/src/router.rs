@@ -1401,13 +1401,20 @@ impl HealthView for TableHealth {
     }
 }
 
-/// `project_health(rows, cfg)` — the ADR-0122 d.4 fold. `rows` are the run's
-/// `(seq, ts_ms, class, payload)` projection inputs over
-/// `model.call.requested`/`model.route.decided` (the call→target join) and
-/// `model.call.attempt.{started,completed,failed}` (the observations):
+/// `project_health(rows, cfg, single_candidate, probe_targets)` — the
+/// ADR-0122 d.4 fold. `rows` are the run's `(seq, ts_ms, class, payload)`
+/// projection inputs over `model.call.requested`/`model.route.decided`
+/// (the call→target join), `model.call.attempt.{started,completed,failed}`
+/// (the attempt observations), and — R4.5e — `model.profile.probed` (the
+/// probe verdicts):
 ///
 /// - attempts/failures are counted per `(provider_model_id, serving_route)`
 ///   (failures keep their `error.class` spelling);
+/// - a probed row's `profile_ref` joins its target through
+///   `probe_targets` (the role table's `profile_ref → target` map): a
+///   `SUPPORTED` verdict counts a success observation, `DRIFT`/
+///   `UNSUPPORTED` a failure, every other verdict no observation (CC1 —
+///   probe outcomes feed health exactly as attempts do);
 /// - `p95_ms` is the 95th-percentile `duration_ms` over completed attempts;
 /// - `429`/`rate_limited` ⇒ `cooldown_until = failed_at +
 ///   cfg.rate_limited_cooldown_ms` (the spec default);
@@ -1421,6 +1428,7 @@ pub fn project_health(
     rows: &[(u64, u64, &str, &Json)],
     cfg: &HealthConfig,
     single_candidate: &BTreeSet<(String, String)>,
+    probe_targets: &BTreeMap<String, (String, String)>,
 ) -> TableHealth {
     // model_call_id → target (the call→route join).
     let mut target_of: BTreeMap<String, (String, String)> = BTreeMap::new();
@@ -1472,6 +1480,37 @@ pub fn project_health(
     let mut watermark = 0u64;
     for (seq, ts_ms, class, p) in rows {
         watermark = watermark.max(*seq);
+        // R4.5e — `model.profile.probed` rows carry no `model_call_id`:
+        // the profile's probe verdicts fold onto the profile's bound
+        // target. `SUPPORTED` counts a success observation; `DRIFT`/
+        // `UNSUPPORTED` a failure (a contradiction is observed harm —
+        // never silent); every other verdict is no observation.
+        if *class == "model.profile.probed" {
+            if let Some(profile_ref) = p.get("profile_ref").and_then(Json::as_str) {
+                if let Some(target) = probe_targets.get(profile_ref).cloned() {
+                    let agg = per_target.entry(target).or_insert_with(|| Agg {
+                        attempts: vec![],
+                        rl_cooldown_until_ms: None,
+                        last_failed_at: 0,
+                    });
+                    if let Some(Json::Arr(records)) = p.get("records") {
+                        for r in records {
+                            match r.get("verdict").and_then(Json::as_str) {
+                                Some("SUPPORTED") => {
+                                    agg.attempts.push((*seq, false, None, *ts_ms));
+                                }
+                                Some("DRIFT") | Some("UNSUPPORTED") => {
+                                    agg.attempts.push((*seq, true, None, *ts_ms));
+                                    agg.last_failed_at = *ts_ms;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            continue;
+        }
         let Some(id) = p.get("model_call_id").and_then(Json::as_str) else {
             continue;
         };
@@ -1584,12 +1623,15 @@ pub fn project_health(
 pub trait PricingView {
     /// The table's per-call cost estimate for `candidate` under
     /// `pricing_table_ref` at `max_output_tokens` reserve size (the table's
-    /// smallest currency unit).
+    /// smallest currency unit). `now_ms` lets a dated view refuse stale —
+    /// a view past its declared freshness answers `None`, never a price
+    /// it can no longer vouch for (R4.5e).
     fn estimate_call_cost(
         &self,
         candidate: &RouteCandidate,
         pricing_table_ref: &str,
         max_output_tokens: u64,
+        now_ms: u64,
     ) -> Option<i64>;
 }
 
@@ -1603,8 +1645,145 @@ impl PricingView for NoPricing {
         _candidate: &RouteCandidate,
         _pricing_table_ref: &str,
         _max_output_tokens: u64,
+        _now_ms: u64,
     ) -> Option<i64> {
         None
+    }
+}
+
+/// `PriceRate` — one declared rate pair in the pinned table's smallest
+/// currency unit (μUSD per 1k tokens, as `pricing.json` spells).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PriceRate {
+    /// Prompt (input) tokens per 1k.
+    pub prompt_per_1k_uusd: i64,
+    /// Completion (output) tokens per 1k.
+    pub completion_per_1k_uusd: i64,
+}
+
+/// `days_from_civil_ms(y, m, d)` — UTC-midnight ms for a civil date
+/// (Howard Hinnant's days-from-civil — deterministic, no time lib).
+fn days_from_civil_ms(y: i64, m: i64, d: i64) -> Option<u64> {
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || y < 1970 {
+        return None;
+    }
+    let y2 = if m <= 2 { y - 1 } else { y };
+    let era = if y2 >= 0 { y2 } else { y2 - 399 } / 400;
+    let yoe = y2 - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719_468;
+    Some((days.max(0) as u64) * 86_400_000)
+}
+
+/// `DeclaredPricing` — the dated declared `PricingView` the `router`
+/// slot's `pricing` member arms (R4.5e; ADR-0367 D2). A provider price
+/// *API* is not probed — the view is the dated declared table (the
+/// pinned `pricing.json`'s `{source, retrieved}` provenance) and its
+/// freshness is a declared bound: past `retrieved + max_age` every read
+/// answers `None` — `NoPrice`, never a zero-cost or invented price.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredPricing {
+    /// The table coordinate `policy.params.pricing_table_ref` names.
+    pub table_ref: String,
+    /// The table's declared provenance (`source` member verbatim).
+    pub source: String,
+    /// The declared retrieval stamp (ms since epoch, UTC date).
+    pub retrieved_ms: u64,
+    /// The declared freshness window (ms) — `retrieved + max_age` is
+    /// the view's fresh-through instant.
+    pub max_age_ms: u64,
+    /// `provider_model_id → rate`.
+    pub rates: BTreeMap<String, PriceRate>,
+}
+
+impl DeclaredPricing {
+    /// Decode the slot member `{table_ref, source, retrieved,
+    /// max_age_days, models{provider_model_id → {prompt_per_1k_uusd,
+    /// completion_per_1k_uusd}}}`. `retrieved` is the `YYYY-MM-DD` date
+    /// stamp the pinned table carries. Missing provenance is malformed —
+    /// a view that can't name its date is no declared view.
+    pub fn from_json(j: &Json) -> Result<DeclaredPricing, String> {
+        let req = |k: &str| {
+            j.get(k)
+                .and_then(Json::as_str)
+                .ok_or_else(|| format!("pricing.{k} missing"))
+        };
+        let table_ref = req("table_ref")?.to_string();
+        let source = req("source")?.to_string();
+        let retrieved = req("retrieved")?;
+        let mut it = retrieved.split('-');
+        let (y, m, d) = (
+            it.next().and_then(|s| s.parse::<i64>().ok()),
+            it.next().and_then(|s| s.parse::<i64>().ok()),
+            it.next().and_then(|s| s.parse::<i64>().ok()),
+        );
+        let retrieved_ms = match (y, m, d, it.next()) {
+            (Some(y), Some(m), Some(d), None) => days_from_civil_ms(y, m, d),
+            _ => None,
+        }
+        .ok_or_else(|| format!("pricing.retrieved malformed: {retrieved}"))?;
+        let max_age_ms = j
+            .get("max_age_days")
+            .and_then(Json::as_int)
+            .map(|d| (d.max(0) as u64).saturating_mul(86_400_000))
+            .ok_or_else(|| "pricing.max_age_days missing".to_string())?;
+        let mut rates = BTreeMap::new();
+        if let Some(Json::Obj(models)) = j.get("models") {
+            for (model, row) in models {
+                let rate = |k: &str| {
+                    row.get(k)
+                        .and_then(Json::as_int)
+                        .ok_or_else(|| format!("pricing.models.{model}.{k} missing"))
+                };
+                rates.insert(
+                    model.clone(),
+                    PriceRate {
+                        prompt_per_1k_uusd: rate("prompt_per_1k_uusd")?,
+                        completion_per_1k_uusd: rate("completion_per_1k_uusd")?,
+                    },
+                );
+            }
+        }
+        Ok(DeclaredPricing {
+            table_ref,
+            source,
+            retrieved_ms,
+            max_age_ms,
+            rates,
+        })
+    }
+
+    /// `true` once `now_ms` passes the declared freshness bound — the
+    /// view then answers `None` on every read (`NoPrice`).
+    pub fn stale(&self, now_ms: u64) -> bool {
+        now_ms > self.retrieved_ms.saturating_add(self.max_age_ms)
+    }
+}
+
+impl PricingView for DeclaredPricing {
+    /// The reserve-size bound: `max_output` tokens charged at both the
+    /// prompt and completion rates — a bounded worst-case call under the
+    /// declared table (the reservation sizes only the output leg; the
+    /// prompt leg's honest bound is the same reserve, never a guess).
+    /// A wrong `table_ref`, a stale table, or an unpriced model answers
+    /// `None` — `NoPrice`.
+    fn estimate_call_cost(
+        &self,
+        candidate: &RouteCandidate,
+        pricing_table_ref: &str,
+        max_output_tokens: u64,
+        now_ms: u64,
+    ) -> Option<i64> {
+        if pricing_table_ref != self.table_ref || self.stale(now_ms) {
+            return None;
+        }
+        let rate = self.rates.get(&candidate.model_ref.provider_model_id)?;
+        Some(
+            (max_output_tokens as i64).saturating_mul(rate.prompt_per_1k_uusd) / 1000
+                + (max_output_tokens as i64).saturating_mul(rate.completion_per_1k_uusd) / 1000,
+        )
     }
 }
 
@@ -1978,7 +2157,7 @@ fn admit_candidate(
                 .get("max_spend_per_call")
                 .and_then(Json::as_int);
             let pricing: &dyn PricingView = views.pricing.unwrap_or(&NoPricing);
-            match pricing.estimate_call_cost(cand, table_ref, max_output) {
+            match pricing.estimate_call_cost(cand, table_ref, max_output, now_ms) {
                 None => {
                     return reject(
                         CandidateRejectReason::NoPrice,
@@ -2059,13 +2238,32 @@ fn admit_candidate(
             }
         }
         RoutingPolicyKind::HealthAware => {
-            // Rank by observed failure rate (lower is better); unobserved
-            // candidates rank first (fresh is not failed — the view never
-            // penalises what it hasn't seen).
+            // Rank by observed failure rate (lower is better); an
+            // unobserved candidate carries `None` and sorts below every
+            // observed score — the arm never defaults a candidate it has
+            // no signal on ahead of a measured one, and a wholly
+            // unobserved arm refuses outright (`select_with` below).
             score = health
                 .stats(&cand.model_ref)
                 .and_then(|s| s.failure_rate_ppm())
                 .map(|r| -r);
+        }
+        RoutingPolicyKind::Learned => {
+            // AC-R-2.3.2-14/R4.5e (ADR-0367 D3) — the learned score is
+            // the pipeline's recorded outcome, replayed verbatim:
+            // `params.evolution.scores{model_ref → score}`. A candidate
+            // with no recorded outcome is `policy_excluded` — the arm
+            // never invents a score.
+            let scores = policy.params.get("evolution").and_then(|e| e.get("scores"));
+            match scores.and_then(|s| s.get(&spelling)).and_then(Json::as_int) {
+                Some(v) => score = Some(v),
+                None => {
+                    return reject(
+                        CandidateRejectReason::PolicyExcluded,
+                        RoutingRefusal::ChainExhausted { attempted: vec![] },
+                    );
+                }
+            }
         }
         RoutingPolicyKind::Bandit => {
             // ADR-0312 d.1 — `score = reward_ppm + bonus`:
@@ -2181,11 +2379,14 @@ fn candidate_list(
         // evolution pipeline: `params.evolution` must carry the campaign
         // evidence `{search_budget_ref, artifact_benefit_ref,
         // match_mode: "matched_total", expiry_condition[] ∋
-        // "model_version_change", budget_match: "matched"}`. Anything
-        // else stays a declared tier refusal — never a fall-through.
-        // Once admitted, the runtime binds the role's sealed candidate
-        // list (`binding()`): the learned choice is the accepted
-        // candidate's frozen selection, not an in-router learner.
+        // "model_version_change", budget_match: "matched",
+        // scores{model_ref → score}}` (R4.5e — the replayable recorded
+        // outcomes the arm ranks by; a missing table is the same typed
+        // refusal as every other missing input). Anything else stays a
+        // declared refusal — never a fall-through. Once admitted, the
+        // runtime binds the role's sealed candidate list (`binding()`):
+        // the learned choice is the accepted candidate's recorded
+        // selection, not an in-router learner.
         RoutingPolicyKind::Learned => {
             let ev = policy.params.get("evolution").ok_or_else(|| {
                 malformed("learned without params.evolution — not pipeline-bound")
@@ -2216,6 +2417,11 @@ fn candidate_list(
             if !expiry_ok {
                 return Err(malformed(
                     "learned policy without expiry_condition ∋ model_version_change",
+                ));
+            }
+            if !matches!(ev.get("scores"), Some(Json::Obj(_))) {
+                return Err(malformed(
+                    "learned policy without evolution.scores — the recorded outcomes the arm replays",
                 ));
             }
             binding()
@@ -2428,6 +2634,22 @@ pub fn select_with(
         }
     }
 
+    // R4.5e (ADR-0367 D4) — a `health_aware` arm whose admitted set
+    // carries no health observation at all never defaults healthy: the
+    // missing signal is a `PolicyInvalid` refusal, not a binding-order
+    // pick.
+    if matches!(policy.kind, RoutingPolicyKind::HealthAware)
+        && rows.iter().any(|r| r.admitted.is_some())
+        && rows
+            .iter()
+            .all(|r| r.admitted.as_ref().and_then(|a| a.score).is_none())
+    {
+        return Err(RoutingRefusal::PolicyInvalid {
+            rule_id: policy.policy_id.clone(),
+            reason: "health_aware: no candidate carries a health observation".to_string(),
+        });
+    }
+
     // Selection order — ranked kinds order admissible candidates by score
     // (desc), binding order breaking ties; all others keep binding order
     // (`cost_cap`/`latency_cap` are *filters* — the cap binds, the binding's
@@ -2438,6 +2660,7 @@ pub fn select_with(
         RoutingPolicyKind::QualityTarget
             | RoutingPolicyKind::HealthAware
             | RoutingPolicyKind::Bandit
+            | RoutingPolicyKind::Learned
     );
     let order: Vec<usize> = {
         let mut ix: Vec<usize> = (0..rows.len()).collect();
@@ -2570,6 +2793,7 @@ pub fn select_with(
         RoutingPolicyKind::CostCap => inputs_read.push("pricing_table".to_string()),
         RoutingPolicyKind::QualityTarget => inputs_read.push("quality_prior".to_string()),
         RoutingPolicyKind::Bandit => inputs_read.push("bandit_view".to_string()),
+        RoutingPolicyKind::Learned => inputs_read.push("recorded_outcomes".to_string()),
         _ => {}
     }
     if request.source_profile_ref.is_some() {

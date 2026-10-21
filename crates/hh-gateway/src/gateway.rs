@@ -39,26 +39,34 @@ pub trait Transport {
         endpoint_ref: &str,
     ) -> Result<Vec<(u64, WireFrame)>, ModelError>;
 
-    /// `discover(endpoint_ref)` — the `model_listing` probe (the endpoint's
-    /// declared listing member; Stage-3 probing is deferred — C0 reads the
-    /// member).
-    fn discover(&mut self, _endpoint_ref: &str) -> Result<Json, ModelError> {
+    /// `discover(credential, endpoint_ref)` — the `model_listing` probe
+    /// (the endpoint's declared listing member; R4.5e executes it live —
+    /// the credential handle rides every call exactly as `send`'s does).
+    fn discover(
+        &mut self,
+        _credential: &CredentialHandle,
+        _endpoint_ref: &str,
+    ) -> Result<Json, ModelError> {
         Err(ModelError::new(
             ModelErrorClass::UnsupportedFeature,
             "transport has no discover primitive",
         ))
     }
 
-    /// `probe_capability(capability, endpoint_ref)` — the §5b.3 transport
-    /// probe: a request that elicits the named claim. The returned Json is
-    /// the endpoint's *observed* value for the capability
-    /// (`run_transport_probes` folds it against the pin). The default
-    /// `UnsupportedFeature` means "no probe primitive" — the conformance
-    /// row's observed is `skipped`, never fabricated.
+    /// `probe_capability(capability, credential, endpoint_ref, model)` —
+    /// the §5b.3 transport probe: a request that elicits the named claim.
+    /// `model` is the lane's provider model id for claim-shaping calls
+    /// (a listing read ignores it). The returned Json is the endpoint's
+    /// *observed* value for the capability (`run_transport_probes` folds
+    /// it against the pin). The default `UnsupportedFeature` means "no
+    /// probe primitive" — the conformance row's observed is `skipped`,
+    /// never fabricated.
     fn probe_capability(
         &mut self,
         _capability: &str,
+        _credential: &CredentialHandle,
         _endpoint_ref: &str,
+        _model: &str,
     ) -> Result<Json, ModelError> {
         Err(ModelError::new(
             ModelErrorClass::UnsupportedFeature,
@@ -202,8 +210,8 @@ impl<'a> ModelGateway<'a> {
             .insert(Self::key(&d.dialect_id, &d.version), d);
     }
 
-    /// `check_compatibility_token(endpoint_ref, pinned_token, profile_ref,
-    /// model_id)` — run `discover` and compare the claim's
+    /// `check_compatibility_token(credential, endpoint_ref, pinned_token,
+    /// profile_ref, model_id)` — run `discover` and compare the claim's
     /// `capabilities.compatibility_token` against the profile's pinned token
     /// (§5b.3 observable (ii), AC-R-2.3.3-9). A change mints the synthetic
     /// `SnapshotClaim{kind: compatibility_token_changed}` *and* marks the
@@ -214,16 +222,18 @@ impl<'a> ModelGateway<'a> {
     /// `runtime_plan` unchanged, asserted inside `relower`).
     pub fn check_compatibility_token(
         &mut self,
+        credential: &CredentialHandle,
         endpoint_ref: &str,
         pinned_token: Option<&Json>,
         profile_ref: &str,
         model_id: &str,
     ) -> Result<Option<crate::snapshot::SnapshotClaim>, GatewayError> {
-        let descriptor = self.transport.discover(endpoint_ref).map_err(|_| {
-            GatewayError::EndpointUnavailable {
+        let descriptor = self
+            .transport
+            .discover(credential, endpoint_ref)
+            .map_err(|_| GatewayError::EndpointUnavailable {
                 endpoint: endpoint_ref.to_string(),
-            }
-        })?;
+            })?;
         let claim = crate::snapshot::compatibility_token_claim(pinned_token, &descriptor, model_id);
         if claim.is_some() {
             self.pending_relower.insert(profile_ref.to_string());
@@ -567,13 +577,17 @@ impl<'a> ModelGateway<'a> {
         Ok(codec::estimate_tokens(dialect, plan))
     }
 
-    /// `discover(endpoint_ref)` — H4 admission, then the transport's
-    /// `model_listing` read. Refuses endpoints outside the allow-list before
-    /// any bytes leave.
-    pub fn discover(&mut self, endpoint_ref: &str) -> Result<Json, GatewayError> {
+    /// `discover(credential, endpoint_ref)` — H4 admission, then the
+    /// transport's `model_listing` read. Refuses endpoints outside the
+    /// allow-list before any bytes leave.
+    pub fn discover(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+    ) -> Result<Json, GatewayError> {
         self.endpoints.admit(endpoint_ref)?;
         self.transport
-            .discover(endpoint_ref)
+            .discover(credential, endpoint_ref)
             .map_err(GatewayError::ModelError)
     }
 }

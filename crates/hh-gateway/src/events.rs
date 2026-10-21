@@ -681,13 +681,23 @@ pub fn profile_status_changed(
 
 /// `model.profile.probed{profile_ref, probe_run_id, records[]}` — a profile
 /// probe's `ConformanceRecord`s (Stage-3 wiring; the class is registered now
-/// so the schema is sealed).
-pub fn profile_probed(profile_ref: &str, probe_run_id: &str, records: &[Json]) -> Json {
-    Json::obj([
-        ("profile_ref", Json::str(profile_ref)),
-        ("probe_run_id", Json::str(probe_run_id)),
-        ("records", Json::Arr(records.to_vec())),
-    ])
+/// so the schema is sealed). `observed` — R4.5e's executed-probe facts
+/// (`{usage:{input_tokens, output_tokens, calls}}` measured by the live
+/// probe call) — `None` for declared-record rows.
+pub fn profile_probed(
+    profile_ref: &str,
+    probe_run_id: &str,
+    records: &[Json],
+    observed: Option<Json>,
+) -> Json {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert("profile_ref".into(), Json::str(profile_ref));
+    m.insert("probe_run_id".into(), Json::str(probe_run_id));
+    m.insert("records".into(), Json::Arr(records.to_vec()));
+    if let Some(o) = observed {
+        m.insert("observed".into(), o);
+    }
+    Json::Obj(m)
 }
 
 /// `model.profile.expired_used{profile_ref, intent_ref}` — appended to any

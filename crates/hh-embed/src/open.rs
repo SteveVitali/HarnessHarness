@@ -1004,6 +1004,7 @@ impl EmbedService {
                     &role_table,
                     &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
                     &configuration_version_id,
+                    true,
                 )
                 .map_err(|e| EmbedError::Refused {
                     reason: format!("router_slot: {e}"),
@@ -2865,6 +2866,7 @@ impl EmbedService {
                             .clone()
                             .unwrap_or_default()
                             .as_str(),
+                        false,
                     )
                     .map_err(|e| EmbedError::Refused {
                         reason: format!("router_resume: {e}"),
@@ -2879,28 +2881,72 @@ impl EmbedService {
         Ok((driver, arm, model_fail_plan))
     }
 
-    /// `arm_routing_lane(params, table, budget_id, cfg_version_id)` —
-    /// the R-2.7 `router` slot's arm: the lane decodes under
-    /// `router_arm_from_params` over the registry's `registered()`
-    /// snapshot (CF-046's snapshot-confined read — the arm reads the
-    /// records, never a live registry) and the arm-time `now_ms`.
+    /// `arm_routing_lane(params, table, budget_id, cfg_version_id,
+    /// execute_probe_execs)` — the R-2.7 `router` slot's arm: the lane
+    /// decodes under `router_arm_from_params` over the registry's
+    /// `registered()` snapshot (CF-046's snapshot-confined read — the
+    /// arm reads the records, never a live registry) and the arm-time
+    /// `now_ms`. `execute_probe_execs` — the open path only — runs the
+    /// declared `probe_exec[]` lanes live (`hh_gateway::probes::
+    /// exec_probe_decl` — R4.5e) and appends their
+    /// `model.profile.probed`/`model.profile.status.changed` rows to the
+    /// arm's mint set; resume passes `false` (a resume re-folds the
+    /// durable rows, never re-probes).
     pub(crate) fn arm_routing_lane(
         &self,
         params: &Json,
         table: &hh_gateway::router::ModelRoleTable,
         budget_id: &str,
         configuration_version_id: &str,
+        execute_probe_execs: bool,
     ) -> Result<crate::runtime::RouterArm, String> {
         use hh_compiler::profile::SelectorView;
         let profiles = crate::bundle_ops::RegistryProfiles(&self.registry).registered();
-        crate::runtime::router_arm_from_params(
+        let mut arm = crate::runtime::router_arm_from_params(
             params,
             table,
             budget_id,
             configuration_version_id,
             profiles,
             self.store.now_ms(),
-        )
+        )?;
+        if execute_probe_execs {
+            let now_ms = self.store.now_ms();
+            for decl in &arm.probe_execs {
+                let out = hh_gateway::probes::exec_probe_decl(decl, now_ms)
+                    .map_err(|e| format!("probe_exec: {e}"))?;
+                let records: Vec<Json> = out
+                    .records
+                    .iter()
+                    .map(hh_registry::schema::hosted_entry_json)
+                    .collect();
+                arm.probe_rows.push((
+                    "model.profile.probed".to_string(),
+                    hh_gateway::events::profile_probed(
+                        &decl.profile_ref,
+                        &out.probe_run_id,
+                        &records,
+                        out.usage.map(|u| Json::obj([("usage", u)])),
+                    ),
+                ));
+                if out.status_flip {
+                    // §5b.3 — a dependency-set contradiction flips the
+                    // profile's status (`probe_failure`), never silently.
+                    arm.probe_rows.push((
+                        "model.profile.status.changed".to_string(),
+                        hh_gateway::events::profile_status_changed(
+                            &decl.profile_ref,
+                            None,
+                            &decl.status_declared,
+                            "expired",
+                            "probe_failure",
+                            Some(&out.probe_run_id),
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(arm)
     }
 
     /// Persist the resume-by-leaf pair (S2.3) — `leaf.checkpoint` (the

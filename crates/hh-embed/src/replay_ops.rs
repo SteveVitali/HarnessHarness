@@ -240,6 +240,9 @@ impl EmbedService {
                     .clone()
                     .unwrap_or_default()
                     .as_str(),
+                // A replay re-folds the durable probe rows — it never
+                // re-executes live probes (R4.5e's open-path gate).
+                false,
             )
             .map_err(|e| EmbedError::Refused {
                 reason: format!("replay_router_slot: {e}"),

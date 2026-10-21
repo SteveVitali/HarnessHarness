@@ -153,6 +153,62 @@ fn map_tls(e: TlsError) -> ModelError {
 trait ReadWrite: Read + Write {}
 impl<T: Read + Write> ReadWrite for T {}
 
+/// `ProbeObservation` — the raw-fact bundle one measured probe call
+/// collects over the provider's *own* documents (R4.5e): members scanned
+/// before normalization so `cap.snapshot_id_exposed` /
+/// `cap.cache_state_visible` read what the wire actually carried, never
+/// what the translator kept.
+#[derive(Debug, Clone)]
+struct ProbeObservation {
+    /// The response answered `text/event-stream`.
+    sse: bool,
+    /// Any response document carried a snapshot/fingerprint member
+    /// (`system_fingerprint`/`fingerprint`).
+    snapshot_member: bool,
+    /// Any usage object carried a cache member (`cached_tokens` /
+    /// `cache_*_input_tokens` / `prompt_tokens_details.cached_tokens`).
+    cache_member: bool,
+    /// The largest observed input-token count across usage objects.
+    input_tokens: u64,
+    /// The largest observed output-token count across usage objects.
+    output_tokens: u64,
+}
+
+/// `probe_observe(doc, o)` — fold one raw provider document's members
+/// into the observation (usage objects read at `usage` or Messages'
+/// `message.usage`; token counts take the largest value seen — the
+/// stream's terminal usage is cumulative per family).
+fn probe_observe(doc: &Json, o: &mut ProbeObservation) {
+    if doc.get("system_fingerprint").is_some() || doc.get("fingerprint").is_some() {
+        o.snapshot_member = true;
+    }
+    let int = |j: &Json, k: &str| j.get(k).and_then(Json::as_int).unwrap_or(0).max(0) as u64;
+    let usages = [
+        doc.get("usage").cloned(),
+        doc.get("message").and_then(|m| m.get("usage")).cloned(),
+    ];
+    for u in usages.iter().flatten() {
+        if u.get("cache_read_input_tokens").is_some()
+            || u.get("cache_creation_input_tokens").is_some()
+            || u.get("cache_creation_tokens").is_some()
+            || u.get("cached_tokens").is_some()
+            || u.get("prompt_tokens_details")
+                .and_then(|d| d.get("cached_tokens"))
+                .is_some()
+        {
+            o.cache_member = true;
+        }
+        o.input_tokens = o
+            .input_tokens
+            .max(int(u, "input_tokens"))
+            .max(int(u, "prompt_tokens"));
+        o.output_tokens = o
+            .output_tokens
+            .max(int(u, "output_tokens"))
+            .max(int(u, "completion_tokens"));
+    }
+}
+
 /// `HttpModelTransport` — the live `Transport` for `http://`/`https://`
 /// model endpoints. `dialect` is held for `classify_http_error`/
 /// `read_retry_after` (the boundary's own rules, not re-declared); `tls`
@@ -178,6 +234,11 @@ pub struct HttpModelTransport {
     rw_ms: u64,
     /// Whole-body byte bound.
     max_body: usize,
+    /// The cached probe-call observation, keyed `(endpoint, model)` — one
+    /// measured tiny call serves `cap.streaming` /
+    /// `cap.snapshot_id_exposed` / `cap.cache_state_visible`; the probe
+    /// never re-bills a call per capability (R4.5e).
+    probe_cache: Option<(String, Result<ProbeObservation, ModelError>)>,
 }
 
 impl HttpModelTransport {
@@ -212,6 +273,7 @@ impl HttpModelTransport {
             credentials,
             connect_ms: 5_000,
             max_body: 16 * 1024 * 1024,
+            probe_cache: None,
         }
     }
 
@@ -245,6 +307,254 @@ impl HttpModelTransport {
                 self.tls.connect(sock, &url.host).map_err(map_tls)?,
             )),
         }
+    }
+
+    /// `error_reply(head, raw)` — the shared non-2xx classification a
+    /// probe request reuses (the provider's error envelope → the typed
+    /// `ModelError`, never a fabricated probe value).
+    fn error_reply(&self, head: &http::ResponseHead, raw: &[u8]) -> ModelError {
+        let body_j =
+            hh_wire::json::parse_provider(&String::from_utf8_lossy(raw)).unwrap_or_else(|_| {
+                Json::obj([(
+                    "error",
+                    Json::obj([(
+                        "message",
+                        Json::str(String::from_utf8_lossy(raw).into_owned()),
+                    )]),
+                )])
+            });
+        let body_j = match self.family {
+            Family::Messages => anthropic::error_body_for_classify(&body_j),
+            Family::ChatCompletions => body_j,
+        };
+        codec::classify_http_error(&self.dialect, head.status as u32, &body_j)
+    }
+
+    /// `probe_call(credential, endpoint_ref, model)` — the one measured
+    /// tiny streaming call the claim-shaping capability probes share
+    /// (`max_tokens:1`/`max_completion_tokens:8`, `stream:true` +
+    /// `include_usage`). The observation is cached per `(endpoint,
+    /// model)` — the conformance walk never re-bills a call.
+    fn probe_call(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        model: &str,
+    ) -> Result<ProbeObservation, ModelError> {
+        let key = format!("{endpoint_ref}|{model}");
+        if let Some((k, cached)) = &self.probe_cache {
+            if *k == key {
+                return cached.clone();
+            }
+        }
+        let out = self.probe_call_once(credential, endpoint_ref, model);
+        self.probe_cache = Some((key, out.clone()));
+        out
+    }
+
+    /// The cached probe call's measured usage (`None` before any probe
+    /// call) — the probe leg's spend record reads it, never an estimate.
+    pub fn probe_usage(&self) -> Option<Json> {
+        self.probe_cache.as_ref().and_then(|(_, r)| {
+            r.as_ref().ok().map(|o| {
+                Json::obj([
+                    ("input_tokens", Json::Int(o.input_tokens as i64)),
+                    ("output_tokens", Json::Int(o.output_tokens as i64)),
+                    ("calls", Json::Int(1)),
+                ])
+            })
+        })
+    }
+
+    /// `probe_count_tokens` — the Messages family's
+    /// `POST /messages/count_tokens` primitive (the dialect's
+    /// `count_tokens` member names it; a family without the member is
+    /// `UnsupportedFeature` — `run_transport_probes` reads `skipped`).
+    fn probe_count_tokens(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        model: &str,
+    ) -> Result<Json, ModelError> {
+        if self.family != Family::Messages {
+            return Err(ModelError::new(
+                ModelErrorClass::UnsupportedFeature,
+                "count_tokens probe has no Chat Completions primitive",
+            ));
+        }
+        let body = Json::obj([
+            ("model", Json::str(model)),
+            (
+                "messages",
+                Json::Arr(vec![Json::obj([
+                    ("role", Json::str("user")),
+                    ("content", Json::str("hh.probe")),
+                ])]),
+            ),
+        ])
+        .to_canonical_string()
+        .into_bytes();
+        let doc = self.probe_post(credential, endpoint_ref, "messages/count_tokens", &body)?;
+        Ok(doc)
+    }
+
+    /// The raw `POST {endpoint}/{op}` leg probe requests share —
+    /// `{status, doc}` on success, the dialect's typed refusal class on a
+    /// non-2xx.
+    fn probe_post(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        op: &str,
+        body: &[u8],
+    ) -> Result<Json, ModelError> {
+        let url =
+            http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        let mut sock = self.dial(&url)?;
+        let target = join(&url.target, op);
+        let host_header = url.host_header();
+        let mut headers: Vec<(&str, &str)> = vec![
+            ("Host", host_header.as_str()),
+            ("Content-Type", "application/json"),
+            ("Accept", "application/json"),
+            ("Connection", "close"),
+        ];
+        let auth_pair;
+        if let Some((name, value)) = self.auth_header(credential)? {
+            auth_pair = (name, value);
+            headers.push((auth_pair.0.as_str(), auth_pair.1.as_str()));
+        }
+        if self.family == Family::Messages {
+            headers.push(("anthropic-version", "2023-06-01"));
+        }
+        http::write_request(&mut sock, "POST", &target, &headers, body)
+            .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let mut r = BufReader::new(sock);
+        let head = http::read_response_head(&mut r).map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let raw = http::read_body(&mut r, &head, self.max_body)
+            .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        if !(200..300).contains(&head.status) {
+            return Err(self.error_reply(&head, &raw));
+        }
+        hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+            .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))
+    }
+
+    /// `probe_call_once` — issue the family's tiny streaming call and
+    /// collect the raw-member observation (SSE `data:` documents or the
+    /// one completion document — read by content-type, never assumed).
+    fn probe_call_once(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        model: &str,
+    ) -> Result<ProbeObservation, ModelError> {
+        let mut o = ProbeObservation {
+            sse: false,
+            snapshot_member: false,
+            cache_member: false,
+            input_tokens: 0,
+            output_tokens: 0,
+        };
+        let body = match self.family {
+            Family::Messages => Json::obj([
+                ("model", Json::str(model)),
+                ("max_tokens", Json::Int(1)),
+                ("stream", Json::Bool(true)),
+                (
+                    "messages",
+                    Json::Arr(vec![Json::obj([
+                        ("role", Json::str("user")),
+                        ("content", Json::str("hh.probe")),
+                    ])]),
+                ),
+            ]),
+            Family::ChatCompletions => Json::obj([
+                ("model", Json::str(model)),
+                ("max_completion_tokens", Json::Int(8)),
+                ("stream", Json::Bool(true)),
+                (
+                    "stream_options",
+                    Json::obj([("include_usage", Json::Bool(true))]),
+                ),
+                (
+                    "messages",
+                    Json::Arr(vec![Json::obj([
+                        ("role", Json::str("user")),
+                        ("content", Json::str("hh.probe")),
+                    ])]),
+                ),
+            ]),
+        }
+        .to_canonical_string()
+        .into_bytes();
+        let url =
+            http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        let mut sock = self.dial(&url)?;
+        let target = join(
+            &url.target,
+            match self.family {
+                Family::Messages => "messages",
+                Family::ChatCompletions => "chat/completions",
+            },
+        );
+        let host_header = url.host_header();
+        let mut headers: Vec<(&str, &str)> = vec![
+            ("Host", host_header.as_str()),
+            ("Content-Type", "application/json"),
+            ("Accept", "text/event-stream"),
+            ("Connection", "close"),
+        ];
+        let auth_pair;
+        if let Some((name, value)) = self.auth_header(credential)? {
+            auth_pair = (name, value);
+            headers.push((auth_pair.0.as_str(), auth_pair.1.as_str()));
+        }
+        if self.family == Family::Messages {
+            headers.push(("anthropic-version", "2023-06-01"));
+        }
+        http::write_request(&mut sock, "POST", &target, &headers, &body)
+            .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let mut r = BufReader::new(sock);
+        let head = http::read_response_head(&mut r).map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        o.sse = head
+            .headers
+            .get("content-type")
+            .is_some_and(|v| v.contains("text/event-stream"));
+        if !(200..300).contains(&head.status) {
+            let raw = http::read_body(&mut r, &head, self.max_body)
+                .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+            return Err(self.error_reply(&head, &raw));
+        }
+        if o.sse {
+            let mut sse = SseDecoder::new(self.max_body);
+            let mut rd = BodyReader::new(&mut r, &head, self.max_body);
+            loop {
+                match rd.next_chunk() {
+                    Ok(Some(bytes)) => {
+                        for ev in sse.push(&bytes)? {
+                            if let SseEvent::Data(data) = ev {
+                                if let Ok(doc) = hh_wire::json::parse_provider(&data) {
+                                    probe_observe(&doc, &mut o);
+                                }
+                            }
+                        }
+                        if sse.terminated() {
+                            break;
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(e) => return Err(map_io(e, TimeoutKind::StreamIdle)),
+                }
+            }
+        } else {
+            let raw = http::read_body(&mut r, &head, self.max_body)
+                .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+            let doc = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+                .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
+            probe_observe(&doc, &mut o);
+        }
+        Ok(o)
     }
 }
 
@@ -415,10 +725,16 @@ impl Transport for HttpModelTransport {
         Ok(frames)
     }
 
-    /// `discover(endpoint_ref)` — `GET {endpoint}/models` → the listing
-    /// envelope verbatim (the dialect's `model_listing` member names the
-    /// list member; callers read `["data"]` — observed, never fabricated).
-    fn discover(&mut self, endpoint_ref: &str) -> Result<Json, ModelError> {
+    /// `discover(credential, endpoint_ref)` — `GET {endpoint}/models` →
+    /// the listing envelope verbatim (the dialect's `model_listing`
+    /// member names the list member; callers read `["data"]` — observed,
+    /// never fabricated). The credential's auth header attaches exactly
+    /// as `send`'s does (the hosted listing refuses an anonymous read).
+    fn discover(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+    ) -> Result<Json, ModelError> {
         let url =
             http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
         let mut sock = self.dial(&url)?;
@@ -429,6 +745,11 @@ impl Transport for HttpModelTransport {
             ("Accept", "application/json"),
             ("Connection", "close"),
         ];
+        let auth_pair;
+        if let Some((name, value)) = self.auth_header(credential)? {
+            auth_pair = (name, value);
+            headers.push((auth_pair.0.as_str(), auth_pair.1.as_str()));
+        }
         if self.family == Family::Messages {
             // The Messages API's version header is required on every call.
             headers.push(("anthropic-version", "2023-06-01"));
@@ -449,5 +770,55 @@ impl Transport for HttpModelTransport {
             ));
         }
         Ok(doc)
+    }
+
+    /// `probe_capability(capability, credential, endpoint_ref, model)` —
+    /// the §5b.3 live probes (R4.5e): `cap.model_listing` rides
+    /// `discover`; `cap.count_tokens` rides the Messages count primitive;
+    /// `cap.streaming` / `cap.snapshot_id_exposed` /
+    /// `cap.cache_state_visible` read the one cached tiny probe call's
+    /// raw-member observation. A capability with no primitive is
+    /// `UnsupportedFeature` — the conformance row records `skipped`.
+    fn probe_capability(
+        &mut self,
+        capability: &str,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        model: &str,
+    ) -> Result<Json, ModelError> {
+        let unsupported = || {
+            ModelError::new(
+                ModelErrorClass::UnsupportedFeature,
+                format!("no probe primitive for {capability}"),
+            )
+        };
+        match capability {
+            "cap.model_listing" => {
+                if self.dialect.model_listing.is_none() {
+                    return Err(unsupported());
+                }
+                self.discover(credential, endpoint_ref)?;
+                Ok(Json::Bool(true))
+            }
+            "cap.count_tokens" => {
+                if self.dialect.count_tokens.is_none() {
+                    return Err(unsupported());
+                }
+                self.probe_count_tokens(credential, endpoint_ref, model)?;
+                Ok(Json::Bool(true))
+            }
+            "cap.streaming" => Ok(Json::Bool(
+                self.probe_call(credential, endpoint_ref, model)?.sse,
+            )),
+            "cap.snapshot_id_exposed" => Ok(Json::Bool(
+                self.probe_call(credential, endpoint_ref, model)?
+                    .snapshot_member,
+            )),
+            "cap.cache_state_visible" => Ok(Json::Bool(
+                self.probe_call(credential, endpoint_ref, model)?
+                    .cache_member,
+            )),
+            _ => Err(unsupported()),
+        }
     }
 }

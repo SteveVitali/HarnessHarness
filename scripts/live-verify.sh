@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -66,6 +66,13 @@ leg_field() { # $1 leg, $2 field
     openai-call:test)     printf 'hh-embed:r4_5d_live:r45d_live_openai_call';;
     openai-call:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
     openai-call:host)     printf 'api.openai.com:443';;
+    routing-probe:ticket)   printf 'R4.5e';;
+    routing-probe:provider) printf 'multi-provider';;
+    routing-probe:kind)     printf 'script';;
+    routing-probe:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL ANTHROPIC_API_KEY OPENAI_API_KEY';;
+    routing-probe:test)     printf 'hh-embed:r4_5e_live:r45e_live_routing_probe';;
+    routing-probe:pricekey.anthropic) printf 'anthropic/claude-haiku-4-5-20251001';;
+    routing-probe:pricekey.openai)    printf 'openai/gpt-4.1-mini-2025-04-14';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -322,6 +329,81 @@ PY
 
 run_leg_anthropic_call() { run_leg_hosted_call "anthropic-call"; }
 run_leg_openai_call() { run_leg_hosted_call "openai-call"; }
+
+# R4.5e — the `routing-probe` leg (ADR-0363 D7; DF-S1.18-1 / ADR-0284 (b)):
+# `probe_profile` executed against all three admitted families at open —
+# the authenticated model listing folds the `served_model.<id>` pin and
+# the capability walk rides the one measured tiny probe call per family —
+# then one routed run the `health_aware` arm selects from the
+# probe-derived health. The test's `LIVE_PROBE_USAGE: <dialect> <json>`
+# markers carry the measured probe usage per family; the hosted
+# families' spend prices against the pinned `pricing.json` rows (the
+# local family's probe rides the zero-spend leg).
+run_leg_routing_probe() { routing_probe_exec "routing-probe"; }
+
+routing_probe_exec() { # $1 leg — sets the leg globals from the test run
+  require cargo; require python3
+  local spec crate tbin filt
+  spec=$(leg_field "$1" test) \
+    || { RESULT="skipped(no-test-field)"; TRANSCRIPT_RAW=""; RESP_HDRS=""; return; }
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  # The credential NAMEs export to the cargo child — values never print.
+  local n
+  for n in $(leg_field "$1" names); do export "$n"; done
+  ENDPOINT_HOST=""
+  ASSERTIONS="probe_exec executed for all three families at open: model.profile.probed{records[],observed.usage} durable before the first model.call.requested; the health_aware arm selects from the probe-derived health (model.route.decided, LIVE_SELECTED); the routed local call completes with usage; no provisioned value in any payload/blob; ledger verifies; the hosted families' measured probe usage prices against the pinned rows"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local rc=0
+  if {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local usage model
+  usage=$(grep '^LIVE_USAGE: ' "$TRANSCRIPT_RAW" | head -1 | sed 's/^LIVE_USAGE: //' || true)
+  model=$(grep '^LIVE_MODEL: ' "$TRANSCRIPT_RAW" | head -1 | sed 's/^LIVE_MODEL: //' || true)
+  if [ $rc -eq 0 ]; then
+    RESULT="pass"; MODEL_REPORTED="$model"
+    [ -n "$usage" ] && LEG_TOKEN_USAGE="$usage"
+    # Price the hosted families' measured probe-call usage — the local
+    # family's probe is the declared zero-spend leg.
+    local lines ka ko
+    ka=$(leg_field "$1" pricekey.anthropic)
+    ko=$(leg_field "$1" pricekey.openai)
+    lines=$(grep '^LIVE_PROBE_USAGE: ' "$TRANSCRIPT_RAW" | sed 's/^LIVE_PROBE_USAGE: //' || true)
+    if [ -n "$lines" ]; then
+      LEG_COST_MEASURED=$(python3 - "$PRICING" "$ka" "$ko" "$lines" <<'PY'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+key = {"anthropic-messages@1": sys.argv[2], "openai@1": sys.argv[3]}
+total, seen = 0.0, set()
+for line in sys.argv[4].splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    dialect, _, uj = line.partition(" ")
+    u = json.loads(uj)
+    seen.add(dialect)
+    pk = key.get(dialect)
+    if pk is None:
+        continue  # the local family's zero-spend leg
+    row = pricing["models"].get(pk)
+    if row is None:
+        sys.exit("live-verify: NoPrice — no pinned row for " + pk)
+    total += (u.get("input_tokens", 0) * row["prompt_per_1k_usd"]
+              + u.get("output_tokens", 0) * row["completion_per_1k_usd"]) / 1000.0
+if not {"anthropic-messages@1", "openai@1"} <= seen:
+    sys.exit("live-verify: missing LIVE_PROBE_USAGE for a hosted family")
+print("%.6f" % total)
+PY
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    fi
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
 emit_record() { # $1 leg $2 ticket $3 out.json — python writer, all inputs via env
