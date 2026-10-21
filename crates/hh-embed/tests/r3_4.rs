@@ -1337,7 +1337,10 @@ fn obs_run(tag: &str, n: usize, pad: usize) -> (Store, String, hh_ledger::store:
 fn golden_plan_reproduces_over_the_real_port() {
     let (store, run, _lease) = obs_run("golden", 8, 120);
     let prefix = store.events(&run).unwrap().to_vec();
-    let mut asm = KernelAssembler { ctx: None };
+    let mut asm = KernelAssembler {
+        ctx: None,
+        ..Default::default()
+    };
     let inputs = AssembleInputs {
         model_call_id: "mc-1",
         prefix: &prefix,
@@ -1396,7 +1399,10 @@ fn stress_candidates_evict_deterministically_and_account() {
     let (store, run, _lease) = obs_run("stress", 48, 160);
     let prefix = store.events(&run).unwrap().to_vec();
     let cap = 400u64;
-    let mut asm = KernelAssembler { ctx: None };
+    let mut asm = KernelAssembler {
+        ctx: None,
+        ..Default::default()
+    };
     let inputs = AssembleInputs {
         model_call_id: "mc-s",
         prefix: &prefix,
@@ -1476,7 +1482,10 @@ fn stress_candidates_evict_deterministically_and_account() {
 fn per_slot_occupancy_projects_from_the_durable_row() {
     let (store, run, _lease) = obs_run("occupancy", 10, 100);
     let prefix = store.events(&run).unwrap().to_vec();
-    let mut asm = KernelAssembler { ctx: None };
+    let mut asm = KernelAssembler {
+        ctx: None,
+        ..Default::default()
+    };
     let inputs = AssembleInputs {
         model_call_id: "mc-o",
         prefix: &prefix,

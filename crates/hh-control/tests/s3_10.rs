@@ -1001,6 +1001,7 @@ fn assert_replay_reproduces(
         &mut asm,
         Some("hh.submit"),
         "replay",
+        hh_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     assert!(out.reproduced(), "replay diverged: {:?}", out.diverged);
@@ -1172,6 +1173,7 @@ fn t_lcd_03_paired_replay_reproduces_identically() {
         &mut asm_a,
         Some("hh.submit"),
         "replay-a",
+        hh_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     let mut asm_b = NullAssembler;
@@ -1186,6 +1188,7 @@ fn t_lcd_03_paired_replay_reproduces_identically() {
         &mut asm_b,
         Some("hh.submit"),
         "replay-b",
+        hh_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     assert!(

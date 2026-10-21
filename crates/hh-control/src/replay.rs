@@ -62,12 +62,37 @@ pub struct RecordedInputs {
     pub effect_order: VecDeque<String>,
     /// The recorded terminal per effect id.
     pub effect_terminals: BTreeMap<String, GateOutcome>,
-    /// The external cue stream in seq order (`human_input` substituted).
-    pub external_cues: VecDeque<Cue>,
+    /// The external cue stream in enqueue order (`human_input`
+    /// substituted) — `(mark, cue)` pairs where `mark` is the recorded
+    /// durable-prefix length at the cue's arrival row; the re-drive
+    /// injects a cue once its replayed prefix reaches the mark (R4.5b —
+    /// a pre-drive `human_input` lands behind `RunOpened`, not at the
+    /// park boundary).
+    pub external_cues: VecDeque<(u64, Cue)>,
+    /// The recorded seqs of driver-emitted rows, in order — the replayed
+    /// sink's seq lattice (R4.5b): service-side rows interleave the
+    /// drive, and the driver's `observe` watermark folds seqs — an
+    /// emitted row must land on the recorded seq or `last_cue_seq`
+    /// (and every `checkpoint_ref` downstream of it) skews.
+    pub driver_seqs: VecDeque<u64>,
+    /// The recorded non-driver envelopes in seq order (`hh-env`/`hh-ledger`
+    /// producers — artefact deliveries, lifecycle/env rows the re-drive
+    /// never re-emits). The replayed sink flushes them into the prefix
+    /// just ahead of the emitted row that passes their seq, so the
+    /// driver's durable folds see the recorded content at the recorded
+    /// positions.
+    pub external_events: VecDeque<EventEnvelope>,
     /// The recorded `control.decision` payloads `(seq, payload)` in order.
     pub decisions: Vec<(u64, Json)>,
     /// The recorded `context.assembled` payloads `(seq, payload)` in order.
     pub assembled: Vec<(u64, Json)>,
+    /// The recorded `assembly_ms` values in `context.assembled` order
+    /// (R4.5b): the assembler stamps a *measured wall* into the plan —
+    /// `plan_id`/`view_hash` hash it — so a re-measure can never be
+    /// byte-identical. The replayed assembler substitutes the recorded
+    /// value per row, the same substitution discipline `clock_reads`
+    /// applies to `control.clock.read`.
+    pub assembly_ms: VecDeque<u64>,
     /// The recorded `control.clock.read` values in order (the declaring
     /// variant's wall-clock reads — served verbatim at replay).
     pub clock_reads: VecDeque<Json>,
@@ -109,8 +134,24 @@ pub fn extract_recorded(
     let mut out = RecordedInputs::default();
     let in_window =
         |e: &EventEnvelope| e.seq > from_seq && until.map(|u| e.seq <= u).unwrap_or(true);
+    // The mark for an external cue anchored at seq `a`: the recorded
+    // prefix length once the anchor row is durable — every recorded
+    // envelope at `seq <= a` lands in the replayed prefix (seed region +
+    // flushed externals + re-emitted driver rows), so the count fixes
+    // the enqueue position.
+    let mark_for = |a: u64| -> u64 { prefix.iter().filter(|e| e.seq <= a).count() as u64 };
     let prefix: Vec<&EventEnvelope> = prefix.iter().filter(|e| in_window(e)).collect();
     let prefix: &[&EventEnvelope] = &prefix;
+    // R4.5b — the seq lattice + the non-driver rows: `hh-control`-produced
+    // envelopes are the rows the re-drive re-emits; everything else is an
+    // external row the replayed prefix must carry at its recorded seq.
+    for e in prefix.iter().copied() {
+        if e.producer.component_variant_ref == "hh-control" {
+            out.driver_seqs.push_back(e.seq);
+        } else {
+            out.external_events.push_back((*e).clone());
+        }
+    }
 
     // ── model rounds ─────────────────────────────────────────────────────
     // `model.call.requested` opens a round; `completed`/`failed` closes it
@@ -279,7 +320,8 @@ pub fn extract_recorded(
                 let kind = sget(&e.payload, "kind").unwrap_or("");
                 if matches!(kind, "instruction" | "capability") {
                     if let Some(id) = sget(&e.payload, "artefact_id") {
-                        out.external_cues.push_back(artefact_cue(id, e.seq));
+                        out.external_cues
+                            .push_back((mark_for(e.seq), artefact_cue(id, e.seq)));
                     }
                 }
             }
@@ -291,22 +333,27 @@ pub fn extract_recorded(
                         .clone()
                         .or_else(|| sget(&e.payload, "effect_id").map(str::to_string))
                         .unwrap_or_default();
-                    out.external_cues
-                        .push_back(Cue::HumanInput(HumanInput::Approval {
+                    out.external_cues.push_back((
+                        mark_for(e.seq),
+                        Cue::HumanInput(HumanInput::Approval {
                             effect_id,
                             allow: sget(&e.payload, "decision") == Some("allow"),
-                        }));
+                        }),
+                    ));
                 }
             }
             "lifecycle.run.resumed" => {
-                out.external_cues.push_back(Cue::Resumed {
-                    last_durable: iget(&e.payload, "from_seq").unwrap_or(0),
-                    recovery_decision: e
-                        .payload
-                        .get("recovery_decision")
-                        .cloned()
-                        .unwrap_or_else(|| e.payload.clone()),
-                });
+                out.external_cues.push_back((
+                    mark_for(e.seq),
+                    Cue::Resumed {
+                        last_durable: iget(&e.payload, "from_seq").unwrap_or(0),
+                        recovery_decision: e
+                            .payload
+                            .get("recovery_decision")
+                            .cloned()
+                            .unwrap_or_else(|| e.payload.clone()),
+                    },
+                ));
             }
             "control.budget.amended" => {
                 // The `amend` op's follow-up cue carries a session-alloc'd
@@ -324,8 +371,10 @@ pub fn extract_recorded(
                         break;
                     }
                 }
-                out.external_cues
-                    .push_back(Cue::HumanInput(HumanInput::FollowUp { payload_ref }));
+                out.external_cues.push_back((
+                    mark_for(e.seq),
+                    Cue::HumanInput(HumanInput::FollowUp { payload_ref }),
+                ));
             }
             "control.decision" => {
                 // The recorded `stop`'s `submission_ref` — the fallback
@@ -349,7 +398,7 @@ pub fn extract_recorded(
                         == Some("principal");
                     if cancelled {
                         out.external_cues
-                            .push_back(Cue::HumanInput(HumanInput::Interrupt));
+                            .push_back((mark_for(e.seq), Cue::HumanInput(HumanInput::Interrupt)));
                     }
                 }
             }
@@ -366,6 +415,16 @@ pub fn extract_recorded(
         .iter()
         .filter(|e| e.class == "context.assembled")
         .map(|e| (e.seq, e.payload.clone()))
+        .collect();
+    out.assembly_ms = out
+        .assembled
+        .iter()
+        .filter_map(|(_, p)| {
+            p.get("assembly_ms")
+                .and_then(|m| m.get("value"))
+                .and_then(Json::as_int)
+                .map(|v| v.max(0) as u64)
+        })
         .collect();
     out.clock_reads = prefix
         .iter()
@@ -570,13 +629,39 @@ impl EffectGate for ReplayGate {
     }
 }
 
+/// The post-`prepared` effect classes whose `fencing_token` the live
+/// `KernelSink` stamps from the lease generation (hh-embed `runtime.rs`
+/// `FENCED_EFFECT_CLASSES` — the replay sink stamps the generation it
+/// mints every envelope under: `1`).
+const REPLAY_FENCED_CLASSES: [&str; 7] = [
+    "action.effect.committed",
+    "action.effect.observed",
+    "action.effect.unknown",
+    "action.effect.probed",
+    "action.effect.compensated",
+    "action.effect.reverted",
+    "action.effect.abandoned",
+];
+
 /// `LedgerSink` absorbing the re-driven rows in memory — the replay's
 /// product is the prefix it produces (the comparison input); the source
 /// run is never appended to.
 pub struct ReplaySink {
-    /// The replayed envelopes.
+    /// The replayed envelopes (seq-ordered once `configure` lays the
+    /// lattice — externals flush just-in-time ahead of the emitted row
+    /// that passes them).
     pub events: Vec<EventEnvelope>,
     seq: u64,
+    /// R4.5b — the recorded seqs the emitted rows take, in order. A
+    /// live ledger interleaves service-side rows (`hh-env` deliveries,
+    /// `hh-ledger` lifecycle) with the drive; the driver's `observe`
+    /// watermark folds seqs, so an emitted row renumbered into a
+    /// compressed replay-local space skews `last_cue_seq` — and every
+    /// `checkpoint_ref` downstream — into a spurious divergence.
+    lattice: VecDeque<u64>,
+    /// The recorded non-driver rows, in seq order — flushed into the
+    /// prefix just before the emitted row whose lattice seq passes them.
+    pending_external: VecDeque<EventEnvelope>,
     run_id: String,
 }
 
@@ -586,6 +671,8 @@ impl ReplaySink {
         ReplaySink {
             events: Vec::new(),
             seq: 0,
+            lattice: VecDeque::new(),
+            pending_external: VecDeque::new(),
             run_id: run_id.to_string(),
         }
     }
@@ -597,16 +684,75 @@ impl ReplaySink {
         self.seq = seed.last().map(|e| e.seq).unwrap_or(0);
         self.events = seed.to_vec();
     }
+
+    /// `configure` — lay the recorded seq lattice + the non-driver rows
+    /// (see `RecordedInputs::driver_seqs`/`external_events`). Externals
+    /// preceding the first driver row are the pre-drive prefix — they
+    /// flush now so `Driver::open`'s envelope arm folds them.
+    pub fn configure(&mut self, lattice: VecDeque<u64>, externals: VecDeque<EventEnvelope>) {
+        self.lattice = lattice;
+        self.pending_external = externals;
+        self.flush_external();
+    }
+
+    /// Flush pending external rows ahead of the next emitted row —
+    /// every external whose recorded seq precedes the lattice front.
+    /// Drains fully once the lattice is exhausted (post-drive rows like
+    /// `lifecycle.run.finished` land after the last emitted row).
+    fn flush_external(&mut self) {
+        loop {
+            let flush = match (self.pending_external.front(), self.lattice.front()) {
+                (Some(x), Some(&s)) => x.seq < s,
+                (Some(_), None) => true,
+                _ => false,
+            };
+            if !flush {
+                break;
+            }
+            let x = self.pending_external.pop_front().unwrap();
+            self.events.push(x);
+        }
+    }
+
+    /// Drain any unflushed externals (post-drive service rows) after the
+    /// re-drive — the replayed prefix then carries the full recorded
+    /// record in seq order.
+    pub fn drain_external(&mut self) {
+        while let Some(x) = self.pending_external.pop_front() {
+            self.events.push(x);
+        }
+    }
 }
 
 impl LedgerSink for ReplaySink {
     fn append(&mut self, events: Vec<Event>) -> Result<(), String> {
-        for e in events {
-            self.seq += 1;
+        for mut e in events {
+            self.flush_external();
+            let seq = self.lattice.pop_front().unwrap_or_else(|| {
+                // Past the recorded lattice (a diverging re-drive emits
+                // rows the record never had) — continue monotone; the
+                // sequence comparison flags the overrun honestly.
+                self.seq + 1
+            });
+            self.seq = self.seq.max(seq);
+            // The sink owns the kernel-provenance/`fencing_token` stamps
+            // the live `KernelSink` applies (hh-embed `runtime.rs`) — a
+            // bare emitted `Event` would otherwise land with
+            // `provenance: None` where the record carries the kernel
+            // record, skewing every `view_hash` the observation fold
+            // hashes (authority/readers are view members).
+            if e.provenance.is_none() {
+                e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("hh-embed", seq));
+            }
+            if REPLAY_FENCED_CLASSES.contains(&e.class.as_str()) {
+                if let Json::Obj(m) = &mut e.payload {
+                    m.entry("fencing_token".to_string()).or_insert(Json::Int(1));
+                }
+            }
             self.events.push(EventEnvelope {
                 event_id: e.event_id,
                 run_id: self.run_id.clone(),
-                seq: self.seq,
+                seq,
                 ts: e.ts,
                 hlc: e.hlc,
                 plane: hh_ledger::event::EventPlane::of_class(&e.class)
@@ -726,6 +872,21 @@ fn compare_sequences(
 /// External cues are submitted in recorded order whenever the driver
 /// parks — the cue stream is the `human_input` substitution (ADR-0135
 /// §2), never a re-ask.
+/// The port arms a deterministic re-drive binds — only the *pure* legs:
+/// the `router` slot's `RoutingPort` (the consult's `d-N` allocations and
+/// `model.route.decided` folds must re-run for id parity with the record —
+/// the consult is a pure fold over the replayed prefix, never a live
+/// dial) and the `response_cache` leg when the run bound one. The model
+/// port itself is always `ReplayModel`; a replayed run dials nothing.
+#[derive(Default)]
+pub struct ReplayPorts {
+    /// The bound `router` slot's port — `None` for an unbound/scripted
+    /// lane (no consult rows exist in the record to reproduce).
+    pub routing: Option<Box<dyn crate::driver::RoutingPort>>,
+    /// The declared `response_cache` leg.
+    pub cache: Option<Box<dyn crate::driver::ResponseCachePort>>,
+}
+
 #[allow(clippy::too_many_arguments)] // the port set's arity is the driver's
 pub fn deterministic_replay<S: ControlStrategy>(
     strategy: S,
@@ -737,10 +898,15 @@ pub fn deterministic_replay<S: ControlStrategy>(
     assembler: &mut dyn AssemblerPort,
     submit_surface: Option<&str>,
     replay_run_id: &str,
+    ports: ReplayPorts,
 ) -> Result<ReplayOutcome, DriverError> {
     let mut sink = ReplaySink::new(replay_run_id);
     let seed_len = seed.len();
     sink.seed(seed);
+    sink.configure(
+        recorded.driver_seqs.clone(),
+        recorded.external_events.clone(),
+    );
     // `open` for a whole-run replay (the `run_opened` cue + `e-0` opener
     // mint fresh, exactly as the live run did); `replay_from` for a branch
     // — the seed prefix is already-executed state (cold-folded), never
@@ -750,9 +916,18 @@ pub fn deterministic_replay<S: ControlStrategy>(
     } else {
         Driver::replay_from(strategy, ctx, policy, &mut sink, config)?
     };
+    if let Some(r) = ports.routing {
+        driver.set_routing_port(r);
+    }
+    if let Some(c) = ports.cache {
+        driver.set_cache_port(c);
+    }
     let mut model = ReplayModel::new(recorded.model_rounds.clone());
     let mut gate = ReplayGate::new(recorded, submit_surface);
-    let mut cues = recorded.external_cues.clone();
+    // The external cue stream is scheduled onto the driver at its
+    // recorded enqueue marks — a cue that arrived mid-drive in the
+    // record is re-fed at the same point, not parked-boundary-late.
+    driver.schedule_replay_cues(recorded.external_cues.clone());
 
     let mut run_result = None;
     let mut parked = false;
@@ -762,9 +937,11 @@ pub fn deterministic_replay<S: ControlStrategy>(
                 run_result = Some(r);
                 break;
             }
-            // The parked loop is the cue boundary — submit the next
-            // recorded input; none left ⇒ the replay is done.
-            Err(DriverError::Port { port: "inbox", .. }) => match cues.pop_front() {
+            // The parked loop is the cue boundary — feed the next
+            // recorded external cue (record order — a mark the diverging
+            // re-drive never reached still lands honestly); none left ⇒
+            // the replay is done.
+            Err(DriverError::Port { port: "inbox", .. }) => match driver.pop_replay_cue() {
                 Some(c) => driver.submit(c),
                 None => {
                     parked = true;
@@ -775,6 +952,7 @@ pub fn deterministic_replay<S: ControlStrategy>(
         }
     }
 
+    sink.drain_external();
     // The comparison is the re-driven suffix — the seed prefix is the
     // branch's recorded state, not replay output.
     let replayed_decisions: Vec<Json> = sink
@@ -803,11 +981,11 @@ pub fn deterministic_replay<S: ControlStrategy>(
             "context.assembled",
         );
     }
-    if diverged.is_none() && !cues.is_empty() {
+    if diverged.is_none() && driver.replay_cues_len() > 0 {
         diverged = Some(ReplayDivergence {
             at_seq: 0,
             expected: "recorded cue stream fully consumed".to_string(),
-            got: format!("{} cue(s) unconsumed", cues.len()),
+            got: format!("{} cue(s) unconsumed", driver.replay_cues_len()),
         });
     }
     if diverged.is_none() && !model.rounds.is_empty() {
@@ -825,7 +1003,7 @@ pub fn deterministic_replay<S: ControlStrategy>(
         replayed_assembled,
         dispatches: gate.dispatches,
         model_calls_served: model.served,
-        cues_exhausted: cues.is_empty(),
+        cues_exhausted: driver.replay_cues_len() == 0,
         diverged,
     })
 }
@@ -1069,6 +1247,7 @@ mod tests {
             &mut asm,
             Some("hh.submit"),
             "replay:run",
+            ReplayPorts::default(),
         )
         .unwrap();
         assert!(out.reproduced(), "diverged: {:?}", out.diverged);
@@ -1101,6 +1280,7 @@ mod tests {
             &mut asm,
             Some("hh.submit"),
             "replay:run",
+            ReplayPorts::default(),
         )
         .unwrap();
         let d = out.diverged.expect("tampered record must diverge");

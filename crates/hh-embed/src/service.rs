@@ -267,6 +267,10 @@ pub(crate) struct SessionState {
     pub next_completion: String,
     /// The response ref staged for the next model call.
     pub next_response_ref: String,
+    /// The `model_port` slot's realized live lane (R4.5b; DF-S1.18-1) —
+    /// the manifest's `model_lane` member re-read on resume/takeover;
+    /// `None` ⇒ the scripted `EmbedModel` lane, byte-identical.
+    pub model_lane: Option<crate::gateway_model::ModelLane>,
     /// The `router` slot's `model_fail` script remainder (R-2.7) — each
     /// `drive` hands it to `EmbedModel` and takes back what the calls did
     /// not consume (the plan is the session's, the port only borrows it).
@@ -481,6 +485,15 @@ impl EmbedService {
                 // runs the offline-decidable policy arms (DF-S1.18-1).
                 hh_registry::suites::routing_policy_class(),
                 "router_static",
+                BTreeMap::new(),
+            ),
+            (
+                // R4.5b — the `model_port` slot's live lane: the arm
+                // decodes `dialect`/`endpoint`/`model` (+ optional
+                // `provider_params`/`substitution_allowed`) into the
+                // gateway-backed `GatewayModel` (DF-S1.18-1; ADR-0364).
+                hh_registry::suites::model_port_class(),
+                "gateway_http",
                 BTreeMap::new(),
             ),
         ] {
@@ -1468,6 +1481,12 @@ impl EmbedService {
         // retrieve decision there still fails `UnbackedPort`, honestly).
         let mem_ctx = self.session(sess_id)?.mem_ctx.clone();
         let fail_plan = std::mem::take(&mut self.session_mut(sess_id)?.model_fail_plan);
+        // R4.5b (DF-S1.18-1) — the realized `model_port` lane selects
+        // the model port at drive: `Some` ⇒ `GatewayModel` (the
+        // gateway-backed live lane), `None` ⇒ the scripted `EmbedModel`
+        // byte-identical (AC1).
+        let model_lane = self.session(sess_id)?.model_lane.clone();
+        let model_surfaces = self.session(sess_id)?.leaf_arm.surfaces.clone();
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
@@ -1475,12 +1494,30 @@ impl EmbedService {
             envs: self.env_drivers.get_mut(&run_id),
             env_handle,
         };
-        let mut model = EmbedModel {
-            invoke,
-            completion,
+        let mut scripted = EmbedModel {
+            invoke: invoke.clone(),
+            completion: completion.clone(),
             response_ref,
             calls_made: 0,
             fail_plan,
+        };
+        let mut live = match &model_lane {
+            Some(lane) => Some(
+                crate::gateway_model::GatewayModel::new(
+                    lane.clone(),
+                    completion,
+                    invoke,
+                    model_surfaces,
+                )
+                .ok_or_else(|| EmbedError::Refused {
+                    reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
+                })?,
+            ),
+            None => None,
+        };
+        let model: &mut dyn hh_control::driver::ModelPort = match live.as_mut() {
+            Some(g) => g,
+            None => &mut scripted,
         };
         let mut gate = EmbedGate {
             host_surfaces,
@@ -1488,19 +1525,20 @@ impl EmbedService {
         };
         let mut asm = KernelAssembler {
             ctx: mem_ctx.clone(),
+            recorded_assembly_ms: None,
         };
         if let Some(ctx) = &mem_ctx {
             driver.set_memory_port(Box::new(crate::runtime::KernelMemory::new(ctx.clone())));
             driver
                 .set_compaction_port(Box::new(crate::runtime::KernelCompaction::new(ctx.clone())));
         }
-        let outcome = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        let outcome = driver.run(model, &mut gate, &mut asm, &mut sink);
         // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
         // env's idle boundary; the declared cadence take lands durable
         // below while the run is still open.
         let parked = matches!(&outcome, Err(DriverError::Port { .. }));
         let asks = std::mem::take(&mut gate.host_asks);
-        let fail_left = std::mem::take(&mut model.fail_plan);
+        let fail_left = std::mem::take(&mut scripted.fail_plan);
         let s = self.session_mut(sess_id)?;
         s.driver = Some(driver);
         s.model_fail_plan = fail_left;

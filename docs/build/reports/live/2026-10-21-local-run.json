@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "the ignored live test(s) pass under cargo test -- --ignored"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": null,
+  "git_head": "aeed5a329990329acb0cdfa0d58735ae50f1c8bc",
+  "harness": "unknown",
+  "leg": "local-run",
+  "model_reported": null,
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-21T18:02:41Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5b.md",
+    "sha256": "98c8db5d80eb371d5e4c7203e21ae73bfbf40b0ea0c67a5324d4f5fb09ac0aaf"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 0.0,
+  "ticket": "R4.5b",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-21-local-run.transcript.txt",
+  "transcript_sha256": "461838c2744de6f555299ea325bdc5fda56f7a28b718a9384be7593c448469c3"
+}

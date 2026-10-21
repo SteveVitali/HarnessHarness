@@ -207,6 +207,56 @@ pub fn routing_policy_class() -> ClassRecord {
     }
 }
 
+/// `model_port` — the §5b `ModelPort` component class (R4.5b;
+/// DF-S1.18-1; ADR-0364 D4). Optional single binding: absent ⇒ the
+/// scripted `EmbedModel` lane; the seeded `hh/gateway_http` variant binds
+/// the gateway-backed live lane (`endpoint`/`model`/`dialect` params —
+/// `env:` indirection for provisioned names). `required_inputs ⊇
+/// {ModelProfile}` — the lane binds the realized profile coordinate.
+pub fn model_port_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "model_port".to_string(),
+        contract: vec![ContractOperation {
+            name: "call".to_string(),
+            inputs: Json::obj([
+                ("model_call_id", Json::str("String")),
+                ("request", Json::str("Json")),
+            ]),
+            outputs: Json::obj([("outcome", Json::str("ModelOutcome"))]),
+            invariants: vec![
+                "durable-before-visible — terminal rows carry the port's members".to_string(),
+                "typed refusals — a failed call carries ModelErrorClass, never a panic".to_string(),
+                "the wire is the dialect's render — no ad-hoc provider fields".to_string(),
+            ],
+            failure_modes: vec!["refuse".to_string()],
+        }],
+        cardinality: crate::kinds::Cardinality::Optional,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: true,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            ("properties", Json::obj([("deterministic", Json::Null)])),
+            ("additionalProperties", Json::Bool(false)),
+            ("required", Json::Arr(vec![Json::str("deterministic")])),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec!["control.model_call".to_string()],
+        metrics_declared: vec!["refusals".to_string()],
+        slot_key: "model_port".to_string(),
+        tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+    }
+}
+
 /// `validator` — the verification-plane `Validator` component class
 /// (spec §5f.1; ADR-0110/0111; S1.21). Ordered-many: several validators may
 /// bind at once (the kernel local checks (a)–(c) ride the reference

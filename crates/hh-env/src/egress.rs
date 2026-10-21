@@ -28,7 +28,6 @@
 //! consume-once (the value crosses exactly one wire, kernel-side only).
 
 use std::collections::BTreeSet;
-use std::io::{Read, Write};
 use std::net::{IpAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -181,54 +180,37 @@ impl EgressTransport for LocalHttpTransport {
         headers: &[(String, String)],
         body: Option<&[u8]>,
     ) -> Result<WireResponse, String> {
+        // R4.5b (ADR-0364 D1) — the wire shape is `hh_wire::http`'s one
+        // codec: request write + head parse + body per the declared mode
+        // (`Content-Length`/`chunked`/close-delimited — the fixtures'
+        // `Connection: close` answer reads the same). The dial stays here:
+        // the mediator dials a *resolved* address, never a name.
         let mut s =
             TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
         s.set_read_timeout(Some(self.timeout)).ok();
         s.set_write_timeout(Some(self.timeout)).ok();
-        let body_bytes = body.unwrap_or(&[]);
-        let mut req = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\nContent-Length: {}\r\n",
-            body_bytes.len()
-        );
+        let host_header = format!("{host}:{port}");
+        let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
+        hdrs.push(("Host", &host_header));
+        hdrs.push(("Connection", "close"));
         for (k, v) in headers {
-            req.push_str(&format!("{k}: {v}\r\n"));
+            hdrs.push((k.as_str(), v.as_str()));
         }
-        req.push_str("\r\n");
-        s.write_all(req.as_bytes())
-            .and_then(|_| s.write_all(body_bytes))
+        hh_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
-        let mut buf = Vec::new();
-        s.read_to_end(&mut buf)
+        let mut r = std::io::BufReader::new(s);
+        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
             .map_err(|e| format!("read {addr}:{port}: {e}"))?;
-        parse_response(&buf)
+        Ok(WireResponse {
+            status: head.status,
+            headers: head
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            body,
+        })
     }
-}
-
-/// A minimal HTTP/1.1 response parse (status line + headers + the rest as
-/// body — enough for the hermetic fixtures).
-fn parse_response(buf: &[u8]) -> Result<WireResponse, String> {
-    let text = String::from_utf8_lossy(buf);
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| "malformed response (no header/body split)".to_string())?;
-    let mut lines = head.split("\r\n");
-    let status_line = lines.next().unwrap_or("");
-    let status = status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|s| s.parse::<u16>().ok())
-        .ok_or_else(|| format!("malformed status line: {status_line}"))?;
-    let mut headers = Vec::new();
-    for l in lines {
-        if let Some((k, v)) = l.split_once(':') {
-            headers.push((k.trim().to_string(), v.trim().to_string()));
-        }
-    }
-    Ok(WireResponse {
-        status,
-        headers,
-        body: body.as_bytes().to_vec(),
-    })
 }
 
 // ── the inspect-hook seam (R2.9b; ADR-0341 D3/D4) ─────────────────────────────

@@ -424,6 +424,21 @@ impl EffectGate for EmbedGate {
 pub struct KernelAssembler {
     /// The shared context/memory fold (`None` — replay/legacy arms).
     pub ctx: Option<Rc<RefCell<KernelContext>>>,
+    /// R4.5b — deterministic-replay substitution: the recorded
+    /// `assembly_ms` values in `context.assembled` order. `Some` arms the
+    /// replay arm — the stamp is a measured wall a re-drive can never
+    /// reproduce, so the recorded value is served instead of a fresh
+    /// `Instant` measure (`plan_id`/`view_hash` hash it — re-measuring
+    /// is a guaranteed divergence, never evidence).
+    pub recorded_assembly_ms: Option<std::collections::VecDeque<u64>>,
+}
+
+impl KernelAssembler {
+    /// Arm the replay substitution — `recorded` is the run's
+    /// `RecordedInputs` (`assembly_ms` in `context.assembled` order).
+    pub fn replay_assembly_ms(&mut self, recorded: &hh_control::replay::RecordedInputs) {
+        self.recorded_assembly_ms = Some(recorded.assembly_ms.clone());
+    }
 }
 
 /// The pinned C0 estimator the embed-boundary plan records
@@ -586,18 +601,25 @@ impl AssemblerPort for KernelAssembler {
             .unwrap_or_else(|| Rc::new(DefaultPolicy::default()));
         // `assembly_ms` is the measured wall the record stamps — measured
         // on a discarded run so the stamped value is true; `assemble` is
-        // pure (I-DET) so `plan_id` is identical across the pair.
-        let mut probe_sink = CollectSink::default();
-        let t0 = std::time::Instant::now();
-        let _ = hh_context::assemble(
-            &req,
-            policy.as_ref(),
-            ASSEMBLER_LAYOUT_REF,
-            "none",
-            0,
-            &mut probe_sink,
-        );
-        let assembly_ms = t0.elapsed().as_millis() as u64;
+        // pure (I-DET) so `plan_id` is identical across the pair. The
+        // replay arm substitutes the recorded value instead (`R4.5b` —
+        // a re-measure can never be byte-identical).
+        let assembly_ms = match &mut self.recorded_assembly_ms {
+            Some(recorded) => recorded.pop_front().unwrap_or(0),
+            None => {
+                let mut probe_sink = CollectSink::default();
+                let t0 = std::time::Instant::now();
+                let _ = hh_context::assemble(
+                    &req,
+                    policy.as_ref(),
+                    ASSEMBLER_LAYOUT_REF,
+                    "none",
+                    0,
+                    &mut probe_sink,
+                );
+                t0.elapsed().as_millis() as u64
+            }
+        };
         let mut sink = CollectSink::default();
         match hh_context::assemble(
             &req,
