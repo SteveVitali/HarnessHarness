@@ -34,7 +34,7 @@ benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-21T14:52:00Z
+updatedAt:       2026-10-21T14:49:27Z
 ```
 
 ## OPEN FINDINGS
