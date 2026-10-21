@@ -66,6 +66,11 @@
 //!   the one construction (CC1) over the ADR-admitted `ring =0.17.14`
 //!   — the workspace's single external runtime crate. Fixture-verified:
 //!   real signatures generated at test time, never live-attested.
+//! - **`aead`** — R3.8's `RingBlobCipher`: the workspace's one blob-pool
+//!   AEAD (`ring::aead::AES_256_GCM` + `ring::rand` — ADR-0359's reserved
+//!   scope consumed; ADR-0361). `hh-ledger` installs it through the
+//!   `BlobCipher` custody seam; key material resolves through the broker,
+//!   never enters ledger state (`n/a{custody}` — OQ-170).
 //! - **`deliver_wrapped` / `probe_wrapped`** — the `wrapped_long_lived`
 //!   delivery half: `security.credential.wrapped{compensation_plan_id}`
 //!   registers the compensating revocation (ADR-0032's `prepare` hook at
@@ -76,6 +81,7 @@
 //! `leak_scan` is a **test battery** — a static/contract verifier, never a
 //! live-path interceptor (ADR-0059 D2).
 
+pub mod aead;
 pub mod broker;
 pub mod channel;
 mod codec;
@@ -92,6 +98,7 @@ pub mod patterns;
 pub mod redact;
 pub mod types;
 
+pub use aead::{RingBlobCipher, BLOB_AEAD_ALG};
 pub use broker::{
     coord_key, path_is_ambiguous, BindRequest, CompositeResolver, CredentialBinding,
     CredentialBroker, Delivery, DenyAllResolver, ForkVirtualization, LaunchEnvResolver,

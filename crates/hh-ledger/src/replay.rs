@@ -541,7 +541,7 @@ pub fn validity(
         match b.env {
             EnvBinding::Snapshot => match &b.snapshot_ref {
                 Some(sref) => match store.blob_status(sref) {
-                    crate::audit::BlobStatus::Present => {
+                    crate::audit::BlobStatus::Present | crate::audit::BlobStatus::Sealed { .. } => {
                         coupled_sources.push(SourceKind::EnvironmentState.as_str().to_string());
                         coupling_agreement = Some(true);
                     }
@@ -897,7 +897,9 @@ pub fn reconstruct(
     let env_snapshot_ref = match branch.as_ref().map(|b| b.env) {
         Some(EnvBinding::Snapshot) => match branch.as_ref().and_then(|b| b.snapshot_ref.clone()) {
             Some(sref) => match store.blob_status(&sref) {
-                crate::audit::BlobStatus::Present => Some(sref),
+                crate::audit::BlobStatus::Present | crate::audit::BlobStatus::Sealed { .. } => {
+                    Some(sref)
+                }
                 status => {
                     return Err(LedgerError::SnapshotUnavailable {
                         kind: "fs_tree".to_string(),

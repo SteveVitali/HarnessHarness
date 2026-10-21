@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.8   # round-3 chain (rows 137-149); row 145 = audit-event encryption (BL-45; per-event AEAD — consumes ADR-0359's ring pin for aead/rand or authors a sibling ADR); 143 is the human row itself
-lastCompleted:   R3.7
+nextTicket:      R3.9   # round-3 chain (rows 137-149); row 146 = DebtPolicy CF-489 conform (60d/30d constants + caller/test sweep + dated CF note); 143 is the human row itself
+lastCompleted:   R3.8
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.7  # R3.7 tip — stacked PR #143 against svitali/harnessharness-r3.6; operator merges
+chainTip:        svitali/harnessharness-r3.8  # R3.8 tip — stacked PR #144 against svitali/harnessharness-r3.7; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           3
-updatedAt:       2026-10-15
+updatedAt:       2026-10-16
 ```
 
 ## OPEN FINDINGS
@@ -627,3 +627,47 @@ updatedAt:       2026-10-15
   `nextTicket: R3.8` (row 145 — audit-event AEAD; consumes the
   ADR-0359 pin or authors a sibling), `chainTip:
   svitali/harnessharness-r3.7`. Operator merges.
+- 2026-10-16 · **R3.8 done** — branch `svitali/harnessharness-r3.8` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/144 · base
+  `svitali/harnessharness-r3.7` (@0c7a44d). Discharged BL-45 —
+  per-event blob encryption at rest in the blob pool (manifest row
+  145; DF-S1.15-3's last cell → DONE) plus the non-custody R-2.8.6
+  emission legs, consuming ADR-0359's reserved `ring::aead`/`rand`
+  scope exactly (no sibling dep ADR, zero new Cargo.toml lines).
+  **ADR-0361** owns the construction: **`hh-ledger`** —
+  `cipher.rs` (new): the `BlobCipher` custody seam (seal/open keyed
+  by the plaintext `ContentAddress`; no key bytes enter ledger state)
+  + the `HHBE` v1 frame codec (`"HHBE" ‖ ver ‖ {alg, key_id, nonce} ‖
+  ciphertext‖tag`, header = AEAD AAD); `store.rs` — `set_blob_cipher`
+  (mirrors `set_audit_key_resolver`), `put_blob` seals over the
+  plaintext digest (I-A8 — the pool stays plaintext-addressed),
+  `get_blob` types malformed → `BlobCorrupt`, every open failure →
+  `Missing{key_unavailable}` (never `Tampered` — ADR-0068 R3), a
+  refusing seal → `CipherFault` (never silent plaintext); HHZ1 skips
+  sealed frames; `BlobStatus::Sealed{key_id}` residency.
+  **`hh-secrets`** — `aead.rs` (new): `RingBlobCipher` over
+  `ring::aead::AES_256_GCM`, per-blob HMAC-SHA256-derived keys + fresh
+  `SystemRandom` nonces. **Emission legs:** durable
+  `manifest.blob_encryption{alg, key_id}` (spawn inherits via
+  hh-subagent), `audit_view.encryption` (`enforced`/`unenforced`/
+  `undeclared`/`n/a` + `completeness.encryption_ok` veto); hh-results
+  + replay treat `Sealed` as resolvable. **Verify:** `cargo test
+  --workspace --no-fail-fast` 344 blocks / 3,505 passed / 0 failed /
+  1 ignored (pre-existing latency fixture; ~3.4 h wall under the
+  host's `syspolicyd` first-exec stall — green, not wedged); r3_8
+  batteries hh-ledger 17/17 + hh-secrets 6/6; fmt clean; clippy
+  `--all-targets -D warnings` clean on the four touched crates;
+  check-drift in sync; check-removability all stanzas green under
+  the R3.7 deadline env overrides (defaults unchanged);
+  check-backlog exit 0 (157 sources, 54/66 engineering-closed, 53/66
+  requirement-satisfied); check-build-memory 0 violations / 7
+  pre-existing warnings; `^||` empty. **ci:** pass #144@fd19ac9
+  (build · test · fmt · drift 38891950511 pull_request; 38891939795
+  push), logs/ci-R3.8.json. **Deferrals:** DF-S1.15-3 → DONE; none
+  opened. **Backlog:** BL-45 closed; R-2.8.6 + ADR-0345 re-homed to
+  BL-30 (custody-riding legs stay open on DF-S2.5-1/BL-30 +
+  DF-S1.15-1/BL-05); BL-42 sources += ADR-0361. **ADRs:**
+  ADR-0361 (+ dated fired-answered note on ADR-0345 trigger (a)).
+  Ledger advanced `lastCompleted: R3.8`, `nextTicket: R3.9` (row
+  146 — DebtPolicy CF-489 conform, 60d/30d), `chainTip:
+  svitali/harnessharness-r3.8`. Operator merges.

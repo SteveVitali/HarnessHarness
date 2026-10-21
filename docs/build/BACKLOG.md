@@ -67,8 +67,9 @@
 | BL-29 | DEFERRALS bookkeeping flips | R2.1 |
 | BL-40 | spec-debt register first revalidation sweep | R2.25 |
 | BL-46 | DF-DOC.1-1 traceability id (DOC.2 owed a BL id to the next reconcile) | bookkeeping — the work discharged at R2.1 |
+| BL-45 | Audit residual — per-event blob encryption + R-2.8.6 emission legs | R3.8 (ADR-0361 — `BlobCipher`/`HHBE` seam + `RingBlobCipher`; ADR-0359 scope consumed; custody-riding legs stay on BL-30/BL-05) |
 
-### round-2 — carried open (10 rows to GATE-G4)
+### round-2 — carried open (9 rows to GATE-G4 — BL-45 discharged at R3.8)
 
 | BL | Item | Sources | Carried reason |
 |---|---|---|---|
@@ -83,7 +84,6 @@
 | BL-26 | Benchmark/measurement legs — live foreign-manifest import | R-2.9.4, R-2.9.6, DF-S1.24-2, ADR-0349 | `env` — foreign toolchain (HUMAN-H3) |
 | BL-27 | Embed/MCP residual — oauth/mtls CallerCredential exchange legs | R-2.11.3, DF-S4.11-2, ADR-0303, ADR-0351 | `env` — live provider leg |
 | BL-44 | Durable-execution residual — DF-S2.3-1 remaining producer legs (resume_set / defer / child-lease / non-fleet ingress / heal surface) | R-2.2.3, DF-S2.3-1, ADR-0265 | `in-build` — carried residual (new id at R2.26; the legs belong to rows whose requirement verdicts already landed — GATE-G4 dispositions) |
-| BL-45 | Audit residual — per-event blob encryption (no conforming pure-std AEAD) + R-2.8.6 emission legs | R-2.8.6, DF-S1.15-3, ADR-0345 | `dep` — crypto-primitive absence (new id at R2.26) |
 
 ### REC.2 — 1 row (spec reconciliation; stays open)
 
@@ -443,7 +443,7 @@ fired-unanswered on their open homes; the rest read in the table).
 | ADR-0342 | fired-unanswered | credential-broker residual (dpop / wrapped_long_lived); unchanged | BL-19 |
 | ADR-0343 | quiet | the modify arm landed at R2.11; the remaining triggers are spec-amendment conditionals | BL-42 |
 | ADR-0344 | quiet | the IFC walk landed at R2.12; triggers are spec-amendment conditionals | BL-42 |
-| ADR-0345 | fired-unanswered | trigger (a) awaits a conforming pure-std AEAD (DF-S1.15-3/BL-45); (b) rides signer custody (OQ-170/BL-30) | BL-45 |
+| ADR-0345 | fired-answered | trigger (a) answered 2026-10-16 (R3.8/ADR-0361 — the AEAD arrived via ADR-0359's admitted `ring` pin, the pure-std qualifier obsoleted by HUMAN-H5; per-event encryption graduated); (b) still rides signer custody (OQ-170/BL-30) | BL-45 (closed); BL-30 for (b) |
 | ADR-0346 | fired-unanswered | the loopback subscriber landed (R2.14); reopens when a real external observability backend lands (BL-31) | BL-31 |
 | ADR-0347 | fired-unanswered | live-judge admissibility is the offline-ceiling lift (DF-S1.21-3/BL-17) | BL-17 |
 | ADR-0348 | fired-unanswered | same live-judge condition as ADR-0347 (+ OQ-377 / third-granularity conditionals) | BL-17 |

@@ -3,8 +3,9 @@
 # candidate (compiled, memory-safe systems ecosystem) and is the one place, alongside the
 # build ADRs, that names it concretely. Hermetic modulo one ADR-admitted dep: the workspace's
 # external crates are the `tempfile` dev-dependency of `hh-varhost` and the `ring =0.17.14`
-# dependency of `hh-secrets` admitted by ADR-0359 (the closed DPoP-verifier scope; `ring::aead`
-# + `ring::rand` reserved for R3.8 — nothing else imports the crate). All other runtime code is
+# dependency of `hh-secrets` admitted by ADR-0359 (the DPoP-verifier scope plus `ring::aead`
+# + `ring::rand`, consumed by R3.8's blob-pool AEAD under ADR-0361 — nothing else imports the
+# crate). All other runtime code is
 # pure standard library; builds are lockfile-pinned and reproducible, and `cargo build
 # --offline` works on a warm cache (ADR-0359 D4 — a cold build performs one pinned fetch).
 [workspace]

@@ -1,7 +1,8 @@
 //! The typed refusal set (§5a.1 §2/§6 — "every violation is a typed validation or append
 //! error, never a warning"). Variants are named for the spec's error column where the spec
 //! names them; the few additions (`KernelOriginRequired`, `UnresolvedEventRef`,
-//! `BlobCorrupt`, `AttestationInvalid`, `RunFinished`, `Io`) are documented in ADR-0233.
+//! `BlobCorrupt`, `AttestationInvalid`, `RunFinished`, `Io`) are documented in ADR-0233,
+//! `CipherFault` (the blob-seal refusal) in ADR-0361.
 
 use std::fmt;
 
@@ -424,6 +425,13 @@ pub enum LedgerError {
     /// A store-level io failure outside the append path.
     Io {
         /// The io detail.
+        detail: String,
+    },
+    /// `put_blob`'s installed cipher refused or faulted — the write fails
+    /// rather than storing plaintext under a declared seam (CC3: never a
+    /// silent plaintext degrade; ADR-0361).
+    CipherFault {
+        /// The cipher detail.
         detail: String,
     },
 

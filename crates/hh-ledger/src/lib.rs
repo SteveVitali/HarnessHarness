@@ -28,6 +28,7 @@
 pub mod audit;
 pub mod branch;
 pub mod branch_ops;
+pub mod cipher;
 pub mod classes;
 pub mod effect;
 pub mod errors;
@@ -61,6 +62,7 @@ pub use branch::{
     BranchInfo, BranchKind, BranchRecord, CompensationEntry, EnvBinding, ForkOpts, NavigateTarget,
     ReplayMode, RollbackRecord,
 };
+pub use cipher::BlobCipher;
 pub use effect::{CommitOutcome, CommitToken, EffectFold, EffectPhase};
 pub use errors::{LedgerError, MissingReason, Tampered, TamperedKind};
 pub use hlc::Hlc;
