@@ -458,6 +458,22 @@ fn lower_provider(
         .and_then(Json::as_str)
         == Some("require");
 
+    // The `provider_tool_api` deferral flags (R3.5 / DF-S1.17-1;
+    // AC-R-2.5.2-12's profile half): the bound leaf profile's
+    // `deferred_tools`/`tool_search` capability states carried verbatim —
+    // `declared|probed|unknown`, never coerced. A consumer meets them
+    // against each tool's deferral admission fail-closed (`unknown`
+    // refuses the deferred leg).
+    let leaf = linked.profile.chain.last();
+    let cap_state = |name: &str| -> &'static str {
+        leaf.and_then(|p| p.capabilities.capability_state(name))
+            .unwrap_or(crate::profile::CapabilityState::Unknown)
+            .name()
+    };
+    let deferred_tools_state = cap_state("deferred_tools");
+    let tool_search_state = cap_state("tool_search");
+    let deferred_declared = matches!(deferred_tools_state, "declared" | "probed");
+
     let mut entries = Vec::new();
     let mut tools = Vec::new();
     let mut sorted: Vec<&crate::lower::CompiledToolSurface> = surface.tools.iter().collect();
@@ -467,6 +483,27 @@ fn lower_provider(
     });
     for t in &sorted {
         let schema = narrow_schema(&t.schema, "", strict, &t.binding.hir_node_id, &mut entries)?;
+        // The deferral flag: the surface admits `deferred` delivery — the
+        // provider request flags it so the run-side selection can defer.
+        // Under an unestablished `deferred_tools` capability the deferred
+        // leg has no provider slot — a declared `no_slot` loss, never a
+        // silent direct-only narrowing (the refusal shape §3.2.5 owns).
+        if t.binding
+            .admitted_modes
+            .contains(&hh_hir::tools::ExposureMode::Deferred)
+            && !deferred_declared
+        {
+            entries.push(LossEntry {
+                hir_node_id: t.binding.hir_node_id.clone(),
+                field: format!("deferral.{}", t.binding.surface_name),
+                class: LossKind::NoSlot,
+                severity: LossSeverity::Narrowed,
+                detail: format!(
+                    "surface admits `deferred` but the bound profile's deferred_tools is `{deferred_tools_state}` — the provider tool-API has no deferral slot; deferred delivery refuses"
+                ),
+                debt_ref: None,
+            });
+        }
         // A `truncate` result renderer is a declared `truncated` loss.
         if let Some(rr) = &t.result_render {
             if let crate::surface::RenderMode::Truncate { .. } = rr.mode {
@@ -487,6 +524,14 @@ fn lower_provider(
             }
         }
         tools.push(Json::obj([
+            (
+                "deferrable",
+                Json::Bool(
+                    t.binding
+                        .admitted_modes
+                        .contains(&hh_hir::tools::ExposureMode::Deferred),
+                ),
+            ),
             ("description", Json::str(t.description.clone())),
             ("name", Json::str(t.binding.surface_name.clone())),
             ("parameters", schema),
@@ -517,6 +562,13 @@ fn lower_provider(
     entries.sort_by(|a, b| (&a.hir_node_id, &a.field).cmp(&(&b.hir_node_id, &b.field)));
     let artefact = Json::obj([
         ("dialect", Json::str(PROVIDER_ARTEFACT_DIALECT)),
+        (
+            "deferral",
+            Json::obj([
+                ("deferred_tools", Json::str(deferred_tools_state)),
+                ("tool_search", Json::str(tool_search_state)),
+            ]),
+        ),
         (
             "interaction_mode",
             Json::str(surface.interaction_mode.clone()),

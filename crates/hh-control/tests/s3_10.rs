@@ -256,6 +256,7 @@ fn plan_surface() -> SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 
@@ -275,6 +276,7 @@ fn fs_read() -> SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 
@@ -294,6 +296,7 @@ fn submit_surface() -> SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 

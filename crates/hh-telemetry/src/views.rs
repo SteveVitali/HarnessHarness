@@ -1699,6 +1699,100 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
                 ),
             ])
         }
+        "surface_rejection_rate" => {
+            // §5d.2 (ADR-0092 D7; AC-R-2.5.2-12; R3.5 / DF-S1.17-1):
+            // `surface_rejected ÷ model-emitted calls` per
+            // (profile, family). A *call* is the tool_call scope — the
+            // env mints `proposed` before the arg-eval refusal that mints
+            // `surface_rejected` for the same call, so rows dedupe on
+            // `tool_call_id` (scope or payload; the driver's
+            // parser-detected rejects mint `surface_rejected` alone).
+            // `profile` joins the producing `model.call.requested`'s
+            // `profile_ref` (`model_ref.profile_ref` second); `family`
+            // is the payload member the emitters stamp from the binding's
+            // `family_id`. Both read `unknown` absent — never fabricated.
+            let mut profile_by_call: BTreeMap<String, String> = BTreeMap::new();
+            for e in ev.iter().filter(|e| e.class == "model.call.requested") {
+                let mc = e
+                    .scope
+                    .model_call_id
+                    .as_deref()
+                    .or_else(|| payload_str(e, "model_call_id"));
+                let p = payload_str(e, "profile_ref").or_else(|| {
+                    e.payload
+                        .get("model_ref")
+                        .and_then(|m| m.get("profile_ref"))
+                        .and_then(Json::as_str)
+                });
+                if let (Some(mc), Some(p)) = (mc, p) {
+                    profile_by_call.insert(mc.to_string(), p.to_string());
+                }
+            }
+            // call key → (rejected, stratum key)
+            let mut calls: BTreeMap<String, (bool, String)> = BTreeMap::new();
+            for e in ev.iter().filter(|e| {
+                matches!(
+                    e.class.as_str(),
+                    "action.tool.proposed" | "action.tool.surface_rejected"
+                )
+            }) {
+                let mc = e
+                    .scope
+                    .model_call_id
+                    .as_deref()
+                    .or_else(|| payload_str(e, "model_call_id"));
+                let key = e
+                    .scope
+                    .tool_call_id
+                    .as_deref()
+                    .or_else(|| payload_str(e, "tool_call_id"))
+                    .map(str::to_string)
+                    .unwrap_or_else(|| {
+                        format!(
+                            "{}|{}|{}",
+                            mc.unwrap_or(""),
+                            payload_str(e, "surface_id").unwrap_or(""),
+                            e.seq
+                        )
+                    });
+                let profile = payload_str(e, "profile")
+                    .map(str::to_string)
+                    .or_else(|| mc.and_then(|m| profile_by_call.get(m).cloned()))
+                    .unwrap_or_else(|| "unknown".to_string());
+                let family = payload_str(e, "family").unwrap_or("unknown").to_string();
+                let ent = calls
+                    .entry(key)
+                    .or_insert((false, format!("{profile}|{family}")));
+                if e.class == "action.tool.surface_rejected" {
+                    ent.0 = true;
+                }
+            }
+            if calls.is_empty() {
+                return na(NaReason::EstimatorUndefined);
+            }
+            let total = calls.len() as i64;
+            let rejected = calls.values().filter(|(r, _)| *r).count() as i64;
+            let mut strata: BTreeMap<String, (i64, i64)> = BTreeMap::new();
+            for (r, k) in calls.values() {
+                let ent = strata.entry(k.clone()).or_default();
+                ent.1 += 1;
+                if *r {
+                    ent.0 += 1;
+                }
+            }
+            Json::obj([
+                ("ppm", Json::Int(rejected * ppm / total)),
+                (
+                    "by_profile_family",
+                    Json::Obj(
+                        strata
+                            .iter()
+                            .map(|(k, (r_, t_))| (k.clone(), Json::Int(r_ * ppm / *t_)))
+                            .collect(),
+                    ),
+                ),
+            ])
+        }
         "duplicate_effect_count" => {
             // A second `committed` row for the same `effect_id` is the vetoed
             // duplicate — the dedupe contract means `commit` returns the

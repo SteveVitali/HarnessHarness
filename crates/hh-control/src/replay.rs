@@ -978,6 +978,7 @@ mod tests {
                     .collect(),
 
                     risk_class: None,
+                    family: None,
                 },
                 crate::output::SurfaceSpec {
                     surface_id: "hh.submit".into(),
@@ -985,6 +986,7 @@ mod tests {
                     params: Default::default(),
 
                     risk_class: None,
+                    family: None,
                 },
             ],
             ..DriverConfig::default()

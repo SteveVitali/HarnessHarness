@@ -153,8 +153,9 @@ impl SurfaceFailure {
 }
 
 /// The `action.tool.surface_rejected` payload — `{surface_id, binding_ref,
-/// failure_class, raw_call_hash, model_call_id, rendering_ref}` (ADR-0092 D5;
-/// ADR-0026 P2 log). Content by `raw_call_hash`, never the call (Rule C).
+/// failure_class, raw_call_hash, model_call_id, rendering_ref, family}`
+/// (ADR-0092 D5; ADR-0026 P2 log). Content by `raw_call_hash`, never the
+/// call (Rule C).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceRejected {
     /// The surface the call named, when it resolved.
@@ -169,6 +170,10 @@ pub struct SurfaceRejected {
     pub model_call_id: String,
     /// The error rendering used (`rendering_ref` names surface + mode).
     pub rendering_ref: Option<String>,
+    /// The binding's shape family (`family_id`) — `surface_rejection_rate`'s
+    /// per-(profile, family) stratum member (R3.5); `None` on an
+    /// unresolved/never-bound call, never guessed.
+    pub family: Option<String>,
 }
 
 /// The payload JSON of a `surface_rejected` row.
@@ -189,6 +194,7 @@ pub fn surface_rejected_payload(r: &SurfaceRejected) -> Json {
             "rendering_ref",
             r.rendering_ref.clone().map_or(Json::Null, Json::str),
         ),
+        ("family", r.family.clone().map_or(Json::Null, Json::str)),
     ])
 }
 

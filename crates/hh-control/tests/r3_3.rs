@@ -142,6 +142,7 @@ fn submit_surface() -> SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 
