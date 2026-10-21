@@ -65,6 +65,13 @@ VERIFY_OUT="$TMP/verify.out"
 VERIFY_STATUS=0
 "$XCHECK" verify "$BUNDLE" "$ANSWERS" >"$VERIFY_OUT" 2>&1 || VERIFY_STATUS=$?
 cat "$VERIFY_OUT"
+# verify's exit contract: 0 all-green, 1 named case failures, anything
+# else = the check itself could not run (read/parse/bundle error) —
+# never read a non-result as a pass.
+if [ "$VERIFY_STATUS" -gt 1 ]; then
+  echo "xcheck-e3: verify could not run (exit $VERIFY_STATUS)" >&2
+  exit 1
+fi
 
 # Every FAIL must be a `missing answer` on an arm the tree did NOT answer
 # (the pending R4.4a cells). A covered-arm fail, or a non-"missing answer"
