@@ -40,6 +40,13 @@ jobs:
         run: bash scripts/check-drift.sh
 
       - name: S2 boundary spike (AC-R-2.11.4-9 first measurement, non-gating)
+        # Non-gating by design (this is an internal tier-B measurement, not a gate
+        # threshold — see the step name and the generated sheet's header). The step
+        # was missing `continue-on-error`, so a spike-only failure (e.g. the
+        # throwaway spike binary lagging a generated-client API change) still failed
+        # the whole job. Honor the documented intent: a spike failure is reported but
+        # does not gate CI.
+        continue-on-error: true
         run: bash scripts/spike-s2-boundary.sh
 
       - name: Upload boundary measurement sheet
