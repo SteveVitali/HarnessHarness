@@ -19,3 +19,15 @@ The real tracker + signed webhook are provisioned and the fleet adapter's capabi
 A ticket that depends on this row but runs before it is ticked opens a `D-<TICKET>-<n>` row in
 `DEFERRALS.md` (why deferred = "HUMAN-H2 pending", unblocked-by = "HUMAN-H2", how-to-verify) and
 reports "gate pending" — never a failure, never a fabricated pass.
+
+> **RULED 2026-10-20 (operator): "GitHub Issues + tunnel"** (LEDGER GATE DECISIONS, verbatim;
+> Devin CLI structured question, received 14:21Z). **R4.7**
+> (`156_R4.7__github-issues-tracker-webhook.md`) lands the code legs: the `github-issues`
+> `work_source_adapter` variant, the `hmac-sha256:` ingress config via `key_ref` through the
+> H3 broker, the tunnel-ingress configuration + bring-up note, and the capability-probe legs
+> — all hermetic-verified. **Concretized operator checklist (appended 2026-10-20):**
+> (a) register the GitHub webhook on this repo (Issues events) + the signing secret through
+> the broker (`provided: yes/no` only — secrets never enter a ledger);
+> (b) bring up the cloudflared/ngrok-class tunnel to the local hh ingress and record the
+> endpoint; (c) run the live capability probe + confirm a live signed delivery. The live
+> legs report `gate pending` on these steps — never a fabricated pass.

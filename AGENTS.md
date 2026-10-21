@@ -6,8 +6,9 @@ The E1 reference build of the MetaHarness program: a kernel + Laboratory for
 *harness engineering* — durable, observable, model-conditioned runtimes for
 goal-directed agents, with provenance, budgets and governance carried as
 load-bearing contracts rather than conventions. The system is a 51-crate
-pure-std-modulo-ADR-0359 Rust workspace (one named, pinned `ring` dep for
-the DPoP verifier) plus committed contract, spec and build records.
+pure-std-modulo-ADR-0359 Rust workspace (one named, pinned `ring` dep —
+the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361) plus
+committed contract, spec and build records.
 Human-facing overview: `README.md`. The behavioural contract:
 `spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
 
@@ -47,8 +48,11 @@ Human-facing overview: `README.md`. The behavioural contract:
   `hh-xcheck-bundle/1` corpus (six arms — identity trees/records, ledger
   transcript+WAL, registry snapshot, plugin manifests, canonical-parse
   frames) plus the E1 `self_check` and the foreign-answers `verify`
-  comparator (R2.21, ADR-0353). The foreign replay legs are
-  environment-pending on HUMAN-H3 — packaged, never claimed.
+  comparator (R2.21, ADR-0353). The foreign replay legs stay
+  environment-pending on HUMAN-H3 — packaged, never claimed; the E2 legs
+  carry `foreign-run-verified` evidence (PR #136 — `hh-xcheck verify`
+  49/49 over the six arms), a distinct class that does not lift the
+  in-tree ceiling.
 
 Full per-crate map and workspace rules: `crates/AGENTS.md`.
 
@@ -73,7 +77,7 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 ```sh
 cargo build --workspace               # all crates + binaries
 cargo build --workspace --all-targets # what CI builds
-cargo test --workspace                # the full suite (~3.4k tests)
+cargo test --workspace                # the full suite (~3.5k tests)
 cargo test -p hh-<crate>              # one crate's tests
 cargo fmt --all --check               # CI gate
 cargo clippy -p hh-<crate> -- -D warnings   # convention: clean on touched crates
@@ -137,6 +141,9 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 5. **Offline/hermetic by design.** The verified ceiling is fixture-verified —
    never write `staging-verified`, `live-executed` or `public` claims
    (`docs/build/OPERATIONAL_READINESS.md` is the capability account).
+   `foreign-run-verified` — a foreign toolchain's recorded replay of the
+   committed `hh-xcheck` bundle (PR #136's E2 legs) — is a distinct
+   evidence class, below the in-tree ceiling and never conflated with it.
 6. **The manifest chain is a stack, not a queue:** work forks from the
    previous ticket's branch; append-only history; a gate is a pause, not a
    block; secrets never enter a ledger (`provided: yes/no` only).
@@ -145,14 +152,23 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 8. **DEFERRALS status cells are token-led, marker-governed:** the cell opens
    with a status token (`OPEN`/`PARTIAL`/…) and discharges append dated
    `**DONE** — YYYY-MM-DD (ticket)` evidence. Read owed state from the dated
-   markers — ~17 discharged cells still begin `OPEN` (GATE-G4 flag G4-4, a
-   round-3 chore). Environment-gated legs carry dated
+   markers — the G4-4 drift (discharged cells still leading `OPEN`) was
+   swept at R3.1/R3.10 (16 + 5 cells; DF-S0.3-3's `PARTIAL` lead is
+   genuinely scoped — machine cells DONE, the human signature owed), and
+   LEDGER-OF-6 makes the lead-token/machine-readable re-sweep a standing
+   round-closure rule (BL-41). Environment-bound legs carry dated
    `environment-pending on HUMAN-*` notes — `gate pending` is a recorded
-   state, never a fabricated pass (the GATE-G4 named set stays carried).
+   state, never a fabricated pass (the GATE-G5 named set stays carried).
 9. **A stale `hh-helper` binary lies to `helper_live`.** An interrupted
    `check-removability.sh` can leave a tier-off `hh-helper` in
    `target/debug`; `helper_live` then fails honestly on the `tier-c1`
    absence. `cargo build -p hh-helper` restores the default binary.
+10. **A loaded host stalls helper spawns.** On a `syspolicyd`-saturated
+    host each fresh test binary's first `exec` can block for minutes —
+    `check-removability.sh`'s `helper_live` legs then time out.
+    `HH_HELPER_SPAWN_DEADLINE_MS` / `HH_HELPER_CONNECT_DEADLINE_MS`
+    stretch the bounds (defaults stay the contract's 10 s / 5 s —
+    `hh-env/src/helper.rs`; recorded at R3.7–R3.10).
 
 ## Terminology
 
@@ -171,6 +187,7 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 | C0…C5, `tier-c*` | spec maturity tiers; mapped to cargo features |
 | `n/a{reason}` | the typed not-applicable lattice — claims carry their reason |
 | fixture-verified | the build's honesty ceiling: exercised end-to-end against fixtures, never a live service |
+| foreign-run-verified | a foreign toolchain's recorded replay of the committed `hh-xcheck` bundle (PR #136) — a distinct class below the ceiling, never conflated |
 
 ## Build memory
 

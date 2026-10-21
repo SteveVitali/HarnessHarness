@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.11   # manifest row 149 — round-3 docs refresh (final row); rows 61/82/127/128 remain HUMAN-H1/H2/H3/H4 (operator work)
-lastCompleted:   GATE-G5
+nextTicket:      R4.0   # round 4 amended (launch re-charter + critic fixes): 50 rows 149a-167b; GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+lastCompleted:   R3.11
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.10  # R3.10 tip — stacked PR against svitali/harnessharness-r3.9; operator merges
+chainTip:        svitali/harnessharness-r3.11  # R3.11 tip — round-4 rows fork from here; stacked PR #147 against svitali/harnessharness-r3.10; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
-round:           3
-updatedAt:       2026-10-16
+round:           4
+updatedAt:       2026-10-20T16:42:03Z
 ```
 
 ## OPEN FINDINGS
@@ -132,6 +132,36 @@ updatedAt:       2026-10-16
 | 2026-10-14 | R3.9 | CF-489 direction (WS-I6/OQ-441 interim) | direction ruling | **CONFORM CODE TO SPEC** — `DebtPolicy::default()` → §5h.6's proposed 60 d runway / 30 d warn | R3.9 un-gated skeleton → ticket: constants + fidelity comment + caller/test sweep + dated CF-489 resolution note; the `[[DEFERRED ADR-0214: OQ-441]]` markers stand for WS-I6's Stage-5 re-pin; BL-30/BL-37 get dated progress notes, stay open on their other rulings |
 | 2026-10-14 | round-3 plan | environment provisioning path | statement | HUMAN-H1/H2/H3 are provisionable (operator) | env-gated rows (BL-01/17/26/27/31/32 + dependents) stay excluded until provisioning lands; they unblock on the H-rows and a future mode=extend round schedules them; recorded in `## Decomposition decisions → Round 3` |
 | 2026-10-16 | GATE-G5 | Round-3 discharge review | disposition (reading 1) | **PASSED** — operator verbatim "passed, proceed" (Devin CLI session, received 2026-10-16T19:54Z); blanket acceptance, all 21 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/dep+env/window → CARRY; accepted/ruling/standing → ACCEPT); the 19 owed DEFERRALS rows inherit their BL home's disposition; no SEND-BACKs; readouts/GATE-G5.md dated decision block recorded (frozen Reading-1 agent-drafted block sha256:85a016814722 confirmed); zero unlanded R3-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; GATE-G4 §9 not re-litigated; named-set human/env rows gate-pending; foreign-run-verified (PR #136) distinct from fixture-verified ceiling. R3.11 released (nextTicket → R3.11). |
+| 2026-10-20 | HUMAN-H1 | surface (E3) ecosystem binding | direction ruling | **CONFIRMED — TypeScript** (operator's verbatim selection: "Confirm TypeScript" — Devin CLI structured question, received 2026-10-20T14:21Z) | E3 bound to TypeScript per ADR-0050 D1's declared default / ADR-0179 D4: an ADR-0050 amendment-log row + a schema-source TS surface client building under `check-drift.sh` discharges DF-S4.10-1/BL-03 — buildable round-4 work, no longer gate-pending |
+| 2026-10-20 | HUMAN-H2 | real tracker + signed-webhook provisioning | direction ruling | **GitHub Issues + tunnel** (operator's verbatim selection: "GitHub Issues + tunnel" — same channel/time) | provisioning path fixed: this repo's GitHub Issues + signed webhooks over a cloudflared/ngrok-class tunnel to the local hh ingress; credentials broker-held (`provided: yes/no`); the fleet-adapter capability-probe legs (DF-S5.6-1/BL-04) schedulable — webhook registration + secret remain operator steps |
+| 2026-10-20 | HUMAN-H3 | foreign-verification environment | provisioning ruling | **Toolchains + online corpus** (operator's verbatim selection: "Toolchains + online corpus" — same channel/time) | the toolchain legs become buildable tickets (E3-TS foreign impl over the committed `hh-xcheck-bundle/1` arms, two-toolchain clean CI + far-side parse timing, HIR/ledger corpus extension); the online legs (LT-03 live corpus, DF-S1.24-2 live foreign-manifest import) are authorized for corpus access + verification budget — accounts/spend remain operator provisioning steps; DF-S0.3-2/-S1.2-2/-S1.5-3/-S1.8-1/-S1.27-1 and BL-01/BL-26 legs schedulable |
+| 2026-10-20 | HUMAN-H4 | R2 cross-camp signature | direction | **reviewer to be named** (operator's verbatim selection: "I'll name a reviewer" — same channel/time) | DF-S0.3-3/BL-02 stays OPEN pending the named reviewer's signature (or recorded decline) appended to the measurement-sheet readout with `date -u` + pointer; gates no code ticket |
+
+### Round 4
+
+| date | ticket | gate | item | answer (verbatim) | consequence | kind |
+|---|---|---|---|---|---|---|
+| 2026-10-20 | HUMAN-H3 | foreign-verification environment | H3 online legs — corpus access + verification budget | "Toolchains + online corpus" (Devin CLI structured question, received 2026-10-20T14:21Z) | scoped authorization — item ids: DF-S1.24-2 (live foreign-manifest import) + the LT-03 live-corpus arm (BL-05 member): corpus access + verification budget authorized in principle; accounts/keys and actual spend remain operator provisioning steps (skeleton R4.6 carries them); expires: GATE-G6 disposition · voided-by: the operator's recorded words | pre-authorization |
+| 2026-10-20 | round-4 charter | launch charter amendment | round-4 objective | "so that we can be certain that by the end of this next orchestrate-build drive we have a fully ready public open-source GitHub repo launch, with no remaining deferred work and deep end to end live verification and so on" (Devin CLI chat, received after 14:21Z and before 15:22Z) + earlier "I'll merge the stack later. For now, we work off the latest chain tip." (same channel, received after 14:21Z) | round 4 is re-chartered as the launch round: zero OPEN DEFERRALS / zero open BL debt at GATE-G6 (standing rows converted to policy), live end-to-end evidence on every live leg, OSS launch hardening; the committed rows 150–167 are amended (dated notes) and new rows inserted (suffix letters) — no file renamed | decision |
+| 2026-10-20 | round-4 live | TLS dependency posture | HTTPS/mTLS stack | "Admit rustls (ring backend)" (Devin CLI structured question, received 2026-10-20T15:22Z) | the TLS ticket owns a dep-admission ADR in the ADR-0359 pattern: rustls (+ its minimal deps, webpki roots) over the already-admitted ring, pinned, closed scope (HTTPS client/server, mTLS, `tls.terminate`); never a silent Cargo.toml edit | decision |
+| 2026-10-20 | round-4 live | model providers | live provider set | "Anthropic + OpenAI + local" (Devin CLI structured question, received 2026-10-20T15:22Z) | live dialects: Anthropic Messages + OpenAI + a local OpenAI-compatible server (Ollama) as the zero-spend, offline-repeatable live leg; judge legs may use any of them | decision |
+| 2026-10-20 | round-4 live | live spend | spend cap | "$100" (Devin CLI structured question, received 2026-10-20T15:22Z) | total live model/judge spend across round 4 capped at USD 100; tickets record per-run cost; a leg that would exceed the remaining cap stops and asks — never silently continues; expires: GATE-G6 · voided-by: the operator's recorded words | pre-authorization |
+| 2026-10-20 | round-4 launch | license | OSS license | "MIT OR Apache-2.0" (Devin CLI structured question, received 2026-10-20T15:22Z) | dual license replaces Cargo.toml's Apache-2.0; ADR-0210's licensing leg (R-2.12.4) is ruled — the launch ticket lands LICENSE-MIT + LICENSE-APACHE + per-crate `license = "MIT OR Apache-2.0"` + third-party notices (ring/rustls) | decision |
+| 2026-10-20 | round-4 launch | standing rows | BL-41/BL-42/BL-43 policy | "Convert to maintainer policy" (Devin CLI structured question, received between 15:22Z and 15:30Z) | the standing write-integrity rules and the ADR revisit-trigger catalogues land as maintainer policy docs; BL-41/42/43 close as converted-to-policy — no standing debt rows at launch | decision |
+| 2026-10-20 | round-4 launch | provenance posture | public build records | "Keep provenance, fix living docs" (Devin CLI structured question, received between 15:22Z and 15:30Z) | docs/build + research stay as append-only provenance; personal paths scrubbed from living human-facing docs only; README explains the build record | decision |
+| 2026-10-20 | round-4 launch | distribution | release channels | "Also publish to crates.io" (Devin CLI structured question, received between 15:22Z and 15:30Z) | GitHub Release binaries + crates.io publication; crate metadata, publish ordering and dry-run land as tickets; the actual publish is an operator act at launch | decision |
+| 2026-10-20 | round-4 live | live CI posture | where live legs run | "Local + manual workflow" (Devin CLI structured question, received between 15:22Z and 15:30Z) | `scripts/live-verify.sh` on the operator machine commits redacted evidence records; plus a workflow_dispatch job bound to a protected GitHub Environment (secrets + required reviewer) — never on pull_request/fork events | decision |
+| 2026-10-20 | round-4 launch | naming | project name | "Keep name, distinct crate prefix" (Devin CLI structured question, received between 15:22Z and 15:30Z) | project/repo stay HarnessHarness; same-domain crates.io collision (`harnessharness`, rellfy) recorded; published crates take a distinct uniform prefix (prefix choice pending — see next row) | decision |
+| 2026-10-20 | round-4 launch | naming | crate names | "New uniform prefix" (Devin CLI structured question, received between 15:22Z and 15:30Z) | every published crate renames to one available prefix (`hh-cli`/`hh` are taken on crates.io); binaries may keep short names; the prefix itself is pending the operator's pick | decision |
+| 2026-10-20 | HUMAN-H4 | R2 cross-camp signature | decline | "Record a decline instead" (Devin CLI structured question, received between 15:22Z and 15:30Z) | supersedes the 14:21Z "I'll name a reviewer" direction: no cross-camp signature will be sought; a round-4 ticket records the decline verbatim on the measurement-sheet readout and closes DF-S0.3-3 / BL-02 waived-by-ADR (GATE-ACCEPT item 7 discharged by the operator's decline, not re-litigated) | decision |
+| 2026-10-20 | round-4 live | OAuth live leg | DF-S4.11-2 oauth provider | "GitHub OAuth App" (Devin CLI structured question, received between 15:22Z and 15:30Z) | the operator registers a GitHub OAuth App (device flow); the mediator ticket lands hermetic local-issuer fixtures + one live device-flow leg (operator present to enter the code); mTLS verified over a local CA | decision |
+| 2026-10-20 | round-4 rulings | rulings venue | when rulings are taken | "Mid-round rulings gate" (Devin CLI structured question, received between 15:22Z and 15:30Z) | window-package + BL-30 briefs run early; a rulings gate (GATE-R4R) stops the chain for the operator's adopt/amend/decline rows; conform tickets (skeletons until then) land the adopted set before closure; GATE-G6 no longer carries ruling conforms | decision |
+| 2026-10-20 | round-4 live | provisioning timing | live-leg provisioning | "Now, interactively" (Devin CLI structured question, received between 15:22Z and 15:30Z) | provisioning walked through before the drive resumes; `provided: yes/no` recorded per item; no secret value enters any ledger or chat | decision |
+| 2026-10-20 | round-4 re-charter | ledger vocabulary | kind cells of the 14 rows above (a4e0f36) | (orchestrator repair — no operator words) | the rows were committed with kind `ruling`/`charter`, outside BM-GATE-05's closed set; the kind cell alone was repaired in place to `decision` (G4-3 precedent: own-defect repair, every other byte unchanged, `git diff`-verified) | correction |
+| 2026-10-20 | round-4 launch | naming | crate naming scheme | "Yes — adopt it" to: umbrella crate `hharness`, components `hharness-<component>` (hh-wire → hharness-wire, …), binaries keep short names (hh, hh-kernel, hh-helper) (Devin CLI structured question, received 2026-10-20T15:37Z) | the uniform prefix pending in the "crate names" row above is `hharness`; a rename ticket lands package/lib renames workspace-wide before the publish dry-run; binary names unchanged | decision |
+| 2026-10-20 | round-4 launch | distribution | crates.io publish set | "Libraries + installable bins" (Devin CLI structured question, received before 15:37Z) | publish = true only for reusable libraries + crates carrying installable binaries; fixtures/plugins/test-support crates renamed for consistency but `publish = false` | decision |
+| 2026-10-20 | round-4 live | live GitHub legs | where live tracker/webhook/OAuth legs run | "Private sandbox repo" (Devin CLI structured question, received before 15:37Z) | live GitHub Issues/webhook/OAuth legs run against a private sandbox repo; the fine-grained token is scoped to it alone; the public launch repo's Issues stay clean | decision |
+| 2026-10-20 | HUMAN-H6 | live-leg provisioning | exit criterion | "Yes — H6 complete" (Devin CLI structured question, received 2026-10-20T16:55Z) | all 11 checklist items provided: yes — verified by presence bits / HTTP status only (table in 149b); secrets by NAME in the gitignored main-checkout `.env` via the `live.env` symlink; the orchestrator still runs the names-only pre-flight before R4.5a | confirmation |
 
 ## RETURN PASS
 
@@ -763,3 +793,82 @@ updatedAt:       2026-10-16
   operator readout decides), `chainTip: svitali/harnessharness-r3.10`.
   Operator merges.
 - 2026-10-16 · GATE-G5 PASSED — operator blanket acceptance (reading 1): verbatim "passed, proceed" (Devin CLI session, received 19:54Z). All 21 §9 carried backlog rows dispositioned per reason code (human/env/dep+env/window → CARRY ×16: BL-01/02/03/04/17/26/27/31/32/33–39; accepted/ruling/standing → ACCEPT ×5: BL-05/30/41/42/43); the 19 owed DEFERRALS rows inherit their home's disposition (ACCEPT: DF-S1.15-1, DF-S1.21-2, DF-S2.5-1, DF-S4.13-1; the rest CARRY); no SEND-BACKs. Thresholds green: zero unlanded R3-chartered rows; check-build-memory 0 violations / 7 warnings (honest flag G5-1: operator pre-check reported 51 — not reproducible under any tested invocation, recorded not hidden); check-backlog exit 0 (156 sources, 55/66 eng · 53/66 req); `^||` empty; 10 GATE-ACCEPT deviations re-confirmed unchanged; GATE-G4 §9 not re-litigated. Named set (HUMAN-H1–H4 + foreign-verification cells) recorded gate-pending; HUMAN-H5 discharged under ruling (b); foreign-run-verified evidence (PR #136) kept distinct from the fixture-verified readiness ceiling. Readout `docs/build/readouts/GATE-G5.md` dispositioned via dated Signature block (Reading-1 block frozen, sha256:85a016814722); GATE DECISIONS row appended; nextTicket → R3.11.
+- 2026-10-16 · **R3.11 done** — branch `svitali/harnessharness-r3.11` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/147 · base
+  `svitali/harnessharness-r3.10` (@`c45196b`). Round-3 docs refresh
+  (final manifest row, 149 of 149 — `refresh-repo-docs` +
+  `agent-docs` to closeout, live_verification=false, docs-only):
+  README toolchain/layout/status paragraphs now state the
+  hermetic-modulo-ADR-0359 truth (`ring =0.17.14` — DPoP + the
+  blob-pool AEAD R3.8 landed under ADR-0361), the 3,505-test count,
+  `foreign-run-verified` (PR #136) as a class distinct from the
+  fixture-verified ceiling, env rows "excluded pending
+  HUMAN-H1/H2/H3 provisioning" (paths live, nothing provisioned),
+  and the Build-state paragraph gains Round 3 — R3.1–R3.10 landed as
+  the open stacked chain #137–#146 (operator merges); GATE-G5 PASSED
+  2026-10-16, operator verbatim "passed, proceed" (received 19:54Z);
+  16 CARRY / 5 ACCEPT / 0 WAIVE over the 21-row carried set; the 19
+  owed DEFERRALS rows inherit (15 CARRY / 4 ACCEPT); coverage 47 MET
+  / 11 PARTIAL / 6 MET-DIFFERENTLY / 2 MET-ENGINEERED — 55/66
+  engineering-closed, 53/66 requirement-satisfied.
+  OPERATIONAL_READINESS preamble records the G5 disposition with the
+  dated Signature block cited verbatim, the live-read row advanced to
+  `ci-R3.10.json` (#146@bdc0a9b, stack all pass), the env rows re-read
+  as excluded-pending-provisioning, and a dated in-place amendment
+  note. AGENTS.md: ring dep scope completed; hh-xcheck bullet gains
+  the E2 foreign-run-verified note; ~3.4k → ~3.5k tests; gotcha 5
+  gains the distinct evidence class; gotcha 8's stale "~17 discharged
+  cells still begin `OPEN`" claim replaced by the swept truth (16 + 5
+  cells swept at R3.1/R3.10; DF-S0.3-3's `PARTIAL` lead genuinely
+  scoped; LEDGER-OF-6's standing re-sweep rule, BL-41); new gotcha 10
+  — loaded-host helper-spawn stalls + the documented
+  `HH_HELPER_{SPAWN,CONNECT}_DEADLINE_MS` overrides (earned at
+  R3.7–R3.10, verified in `hh-env/src/helper.rs`); terminology table
+  gains `foreign-run-verified`. crates/AGENTS.md: `hh-secrets` gains
+  DPoP + AEAD `ring` scope; `hh-ledger` gains `BlobCipher`/`HHBE`
+  (ADR-0361); `hh-ir-op` added to the thin-binaries list (verified
+  present: `crates/hh-hir/src/bin/hh-ir-op.rs`). docs/README,
+  CLAUDE.md, docs/build/README, spikes/README audited — no drift.
+  **Verify:** repo-docs detector 782 docs / 0 broken refs / 0 stale
+  suspects post-run; agent-docs detector 2 docs / 0 issues;
+  check-backlog exit 0 (156 sources, 55/66 eng + 53/66 req);
+  check-build-memory 0 violations / 7 pre-existing warnings; fmt
+  clean; drift in sync; `^||` empty; cargo test n/a — docs-only, no
+  behaviour changed (suite last green R3.9: 344 blocks / 3,505 / 0
+  failed / 1 ignored). **Deferrals/ADRs:** none opened or closed; no
+  ADR owed (docs refresh — no owned decision or deviation).
+  **Closing state:** the 149-row chain is complete — nextTicket →
+  DONE parked on the GATE-G5 carried set (16 BL + 15 DF inherit
+  CARRY; 5 BL + 4 DF ACCEPTED; HUMAN-H1–H4 stay operator work);
+  projectStatus stays **IN_PROGRESS** — the DONE precondition is the
+  operator's decision per the row-149 note, surfaced here not decided
+  by the agent. chainTip → svitali/harnessharness-r3.11 · layer:
+  fixture-verified (docs-only; detectors + records) · ci: pass
+  #147@b0a2108 (build · test · fmt · drift 38966041555;
+  38966034126 — stack #137–#146 + #135 all pass; impl-head
+  05cf266 also pass) · harness: devin-cli (worker subagent).
+  Operator merges.
+- 2026-10-20 · Operator direction rulings for the round-4 carry set — four verbatim selections (Devin CLI structured questions, received 14:21Z): H1 → **TypeScript confirmed** as the E3 surface binding; H2 → **GitHub Issues + tunnel** webhook ingress; H3 → **toolchains + online corpus** (fullest discharge incl. corpus-access/budget authorization); H4 → **reviewer to be named** (DF-S0.3-3 stays OPEN). GATE DECISIONS rows appended. Env-gated CARRY rows (BL-01/03/04/26 + homed DF set) become schedulable engineering for the round-4 decomposition; BL-17/31 live-provider legs still need per-leg provisioning scope beyond the corpus authorization.
+
+### Round 4
+
+- 2026-10-20 · **round 4 seeded** — `decompose-spec mode=extend`: rows 150–167 appended
+  to the manifest (13 implementable rows R4.1–R4.5, R4.7, R4.8, R4.10–R4.15 + R4.16
+  closure + R4.17 docs; 2 skeletons R4.6 gated on H3 provisioning and R4.9 gated on the
+  BL-33 trust rulings + remote env; 1 gate GATE-G6); partition + Phase-4 review in
+  `## Decomposition decisions → Round 4` and
+  `docs/build/planning/2026-10-20_round4-decomposition.md`. Scope: the 2026-10-20 rulings
+  (H1 TypeScript bind → R4.2; H2 GitHub Issues + tunnel legs → R4.7; H3 toolchain legs →
+  R4.3–R4.5) + the reopened `window` packages (BL-33–BL-39 → R4.8–R4.14) + BL-30
+  adjudication prep → R4.15 + hygiene → R4.1. `round: 3 → 4`; `nextTicket: R4.1`;
+  `lastCompleted` stays `R3.11`; `chainTip` stays `svitali/harnessharness-r3.11` so
+  Round-4 tickets fork from the r3.11 tip. GATE DECISIONS gains `### Round 4` (7-column
+  form) with the scoped `pre-authorization` row for the H3 corpus/budget authorization
+  (expires: GATE-G6). The 19 owed DEFERRALS rows are mapped in the planning record —
+  12 to round-4 rows, 7 carried with fresh dated residual notes. Round-1/2/3 history
+  unchanged.
+- 2026-10-20 · Round-4 re-charter (launch round) — operator's verbatim charter + 15 structured rulings recorded in GATE DECISIONS ### Round 4 (received between 14:21Z and 15:30Z): rustls over ring; Anthropic+OpenAI+local; $100 live spend cap (pre-authorization, expires GATE-G6); MIT OR Apache-2.0; BL-41/42/43 → maintainer policy; keep provenance; crates.io publish under a new uniform prefix (prefix pending); live CI local + protected workflow_dispatch; H4 → decline (supersedes 14:21Z); GitHub OAuth App; mid-round rulings gate; provisioning now. Plan amendment of rows 150–167 follows.
+- 2026-10-20 — round-4 inserted — branch svitali/harnessharness-r3.11 · PR none (records-only amend on the chain tip) · base 2f6f8a5 · decompose-spec mode=extend amendment (launch re-charter, precedent 75d61ab): rows 150-167 rewritten before execution (R4.6/R4.9 skeleton→ticket, GATE-G6 → the charter's zero-deferral/live/launch thresholds, R4.17 conform leg dropped); 31 suffix rows inserted — R4.0 main→chain sync, HUMAN-H6, R4.4a, live track R4.5a-e + R4.7a-f, R4.12a/R4.13a pre-splits, GATE-G7 rulings gate (alias GATE-R4R), R4.15a-e conform skeletons, launch track L4.1-L4.7, HUMAN-H7, R4.18; zero-deferral matrix (19 DF rows / 21 BL ids / 18 non-MET reqs / 10 GATE-ACCEPT deviations — none unplaced) + Phase-4 review in docs/build/planning/2026-10-20_round4-decomposition.md §Amendment; $100 spend allocated (R4.5d 5 · R4.5e 5 · R4.6 15 · R4.7b 5 · R4.7e 15 · L4.6 30 · reserve 25) · **Verify:** check-build-memory 0 violations (7 baseline warnings) · **Deferrals:** opened none, closed none (10 dated amendment notes) · **Deviations:** GATE-R4R recorded as GATE-G7 (id grammar); evidence under docs/build/reports/live/ · chainTip → svitali/harnessharness-r3.11 (unchanged) · next → R4.0
+- 2026-10-20 — round-4 amended (b) — branch svitali/harnessharness-r3.11 · PR none (records-only amend on the chain tip) · base 02e37fe · decompose-spec mode=extend same-round amendment (precedents 75d61ab, 02e37fe): independent critic's 4 MAJOR + 8 MINOR findings applied in place to unexecuted contracts (dated > Amended 2026-10-20 (b) banners; no file renamed) — crates.io availability check first in L4.4 (stop-and-ask), enumerated in R4.8, stop-and-ask in L4.5 (baseline hharness + 51 hharness-<x> → 404, 16:31Z–16:33Z); gitleaks staged-diff gate + full-history baseline + .gitleaks.toml in R4.5a, reused by L4.3; HUMAN-H7 checks-required merges + green main SHA before tag (R4.18 records it); R4.16/GATE-G6 thresholds: every public surface/binding/plugin live-executed or operator n/a{reason}, origin/main containment, DF-S1.15-1 full enumeration; L4.5 rust-version/docs.rs/target-set ADR; HUMAN-H6 names-only pre-flight; live.env = symlink to a gitignored .env in the operator's main checkout. One insert: 164w L4.6a (capstone part 2 — hh-acp, hh-mcp-lab, SDK/embed, packaged plugins; USD 0) — round 4 now 50 rows · **Verify:** check-build-memory 0 violations (7 baseline warnings) · **Deferrals:** opened none, closed none · chainTip → svitali/harnessharness-r3.11 (unchanged) · next → R4.0
+- 2026-10-20 · HUMAN-H6 confirmed complete (operator verbatim "Yes — H6 complete", 16:55Z): local Ollama, Anthropic, OpenAI, sandbox repo + scoped fine-grained token, webhook secret, OAuth App (device flow), cloudflared, node/python3/gitleaks, Jaeger 2.22.0 collector, GitHub Environment `live-verify` — all provided: yes (status-only verification, 149b table). ci-boundary pass #147@7502bc6 (39459846891/39459836833; stack #139–#146 pass). Round 4 = 50 rows; next R4.0.
+- 2026-10-20 · harness-switch — devin-cli/claude-opus-5.5-high (round-4 critique + planning session) → devin-cli/swe-2-high (round-4 implementation drive), at the R4.0 ticket boundary on the operator's words verbatim: "Switched back to SWE-2 High. Please proceed with the orchestrate-build drive as you suggest" (received 2026-10-20T17:15:19Z, channel: chat). Per BM-HARNESS-01 the first ticket after the switch re-runs orient + validator + the CI read before dispatch; worker run-ledger headers stamp harness: devin-cli/swe-2-high/subagent.
