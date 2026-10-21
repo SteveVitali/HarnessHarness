@@ -152,3 +152,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0360](ADR-0360-r3.7-dpop-proof-wire-shape-and-wrapped-long-lived-delivery-registration.md) | R3.7 `dpop` proof wire-shape and the `wrapped_long_lived` delivery registration | R3.7 | Accepted |
 | [ADR-0361](ADR-0361-r3.8-blob-pool-aead-the-hhbe-frame-the-blobcipher-custody-seam-and-the-plaintext-address-rule.md) | R3.8 blob-pool AEAD — the `HHBE` frame, the `BlobCipher` custody seam, and the plaintext-address rule | R3.8 | Accepted |
 | [ADR-0362](ADR-0362-r4.2a-ci-docs-only-fast-path-artifact-anchor-and-full-run-cadence.md) | R4.2a — CI fast path (docs-only heads), artifact anchors, and the full-run cadence | R4.2a | Proposed |
+| [ADR-0363](ADR-0363-r4.5a-live-executed-evidence-class-spend-ledger-and-live-verify-gating.md) | R4.5a `live-executed` evidence class — `hh-live-evidence/1` records, the $100 spend ledger, `live-verify.sh` gating | R4.5a | Accepted |

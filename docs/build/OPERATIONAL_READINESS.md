@@ -11,7 +11,12 @@
 > person. **One evidence class exists between nothing and the in-tree runs:
 > `foreign-run-verified`** — produced by a foreign toolchain's recorded run
 > over the committed replay bundle (the PR #136 E2 legs), distinct from and
-> never conflated with `fixture-verified`. No production claim is made
+> never conflated with `fixture-verified`. **(2026-10-21, R4.5a /
+> ADR-0363): `live-executed` is now claimable — only with a cited
+> `hh-live-evidence/1` record under `docs/build/reports/live/` written by
+> `scripts/live-verify.sh`; the first is `2026-10-21-local-reachability.json`
+> (local Ollama, USD 0). `staging-verified`/`public` remain unearned until
+> L4.6/R4.18.** No production claim is made
 > without a citation; where nothing above `fixture-verified` can be cited,
 > the row says so. This document supersedes the R2.26 (2026-10-10) account —
 > the delta is stated row-by-row below and summarized in the Round-3

@@ -34,12 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ci-mode: both — the fast-path machinery's self-tests run on every head,
-      # so the machinery itself can never ship broken on a fast path.
+      # ci-mode: both — the fast-path machinery's and the live-evidence
+      # runner's self-tests run on every head, so the machinery itself can
+      # never ship broken on a fast path.
       - name: CI scripts self-test
         run: |
           bash scripts/ci/test-fast-path.sh
           bash scripts/ci/test-check-ci-gating.sh
+          bash scripts/ci/test-live-verify.sh
 
       # ci-mode: both — the step-mode lint reads this file and the working tree.
       - name: CI step-mode lint
@@ -103,6 +105,12 @@ jobs:
       # spec sections), so it runs on the fast path too.
       - name: Build-memory row-tool self-test (BM-ORIENT-01)
         run: bash scripts/check-bm-tools.sh
+
+      # ci-mode: both — validates committed hh-live-evidence/1 records under
+      # docs/build/reports/live/; a docs-only head that touches them must not
+      # skip this check (ADR-0363 D9).
+      - name: Live-evidence validator (hh-live-evidence/1)
+        run: bash scripts/check-live-evidence.sh
 
       - name: S2 boundary spike (AC-R-2.11.4-9 first measurement, non-gating)
         # Non-gating by design (this is an internal tier-B measurement, not a gate
