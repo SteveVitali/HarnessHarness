@@ -1,0 +1,11 @@
+crates/hh-containment/tests/acceptance.rs	    p2.fs.read.allow = vec!["docs".into()];	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-containment/tests/acceptance.rs	    i.fs_paths = vec!["docs/a".into()];	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-containment/tests/acceptance.rs	        &input(EffectDomain::FsRead, &["docs/a"], &[]),	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-context/tests/acceptance_s28.rs	        &trig_req("docs/readme.md", 1),	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-embed/src/evolution_ops.rs	    /// table; T-LCD-14); store `WouldBlock` maps native; schema/docs	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-evolution/tests/s6_2.rs	// ── fixture plumbing (the s6_1a shape — same store/docs/doc machinery) ──	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-lab/src/exemplars.rs	        ("research-longctx", "research/long-context suite"),	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-lab/src/exemplars.rs	                            "research/long-context suite",	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-lab/src/exemplars.rs	                        "research/long-context suite",	# string literal or comment in test/source; never opened as a checkout path
+scripts/spike-s2-boundary.sh	# stamped measurement sheet to docs/build/reports/. The full comparative spike (E5a/E5b/	# comment
+scripts/spike-s2-boundary.sh	SHEET="$ROOT/docs/build/reports/S0.1-boundary-spike.md"	# write-only job output

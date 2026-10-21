@@ -3,16 +3,29 @@
 # build failure). The toolchain is pinned by rust-toolchain.toml; the only fetched crates are
 # ADR-0359's `ring` graph (lockfile-pinned — `cargo fetch --locked` below) plus `hh-varhost`'s
 # `tempfile` dev-dep; everything else is pure standard library.
+#
+# R4.2a / ADR-0362 step-mode convention: the `id: path` decision step classifies
+# the head `fast` (docs-only, covered by an unexpired same-repository anchor) or
+# `full` (the fail-closed default). Every later step either carries
+# `if: steps.path.outputs.mode != 'fast'` or a `# ci-mode: both — <reason>`
+# comment — a step that reads committed content under docs/ or research/ is never
+# gated (a job's own output written there is not a read). check-ci-gating.sh
+# enforces this file's convention.
 name: ci
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'x' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   build-test-drift:
@@ -21,29 +34,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ci-mode: both — the fast-path machinery's self-tests run on every head,
+      # so the machinery itself can never ship broken on a fast path.
+      - name: CI scripts self-test
+        run: |
+          bash scripts/ci/test-fast-path.sh
+          bash scripts/ci/test-check-ci-gating.sh
+
+      # ci-mode: both — the step-mode lint reads this file and the working tree.
+      - name: CI step-mode lint
+        run: bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml
+
+      - name: Docs-only fast-path decision
+        id: path
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_REPOSITORY: ${{ github.repository }}
+          CI_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          CI_REPOSITORY_ID: ${{ github.repository_id }}
+          CI_ANCHOR_JOB: build-test-drift
+        run: |
+          decide_out=$(bash scripts/ci/fast-path.sh decide) || decide_out=full
+          mode=$(tail -n 1 <<<"$decide_out")
+          [ "$mode" = fast ] || mode=full
+          printf '%s\n' "$decide_out" | grep '^::notice' || true
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain
+        if: steps.path.outputs.mode != 'fast'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.94"
           components: rustfmt
 
       - name: Format check
+        if: steps.path.outputs.mode != 'fast'
         run: cargo fmt --all --check
 
       # ADR-0359: the one admitted registry read, made explicit + locked.
       - name: Fetch pinned dependencies
+        if: steps.path.outputs.mode != 'fast'
         run: cargo fetch --locked
 
       - name: Build
+        if: steps.path.outputs.mode != 'fast'
         run: cargo build --workspace --all-targets
 
       - name: Test
+        if: steps.path.outputs.mode != 'fast'
         run: cargo test --workspace
 
       - name: Schema drift check (CC7)
+        if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-drift.sh
 
+      # ci-mode: both — reads committed content under docs/ (DEFERRALS rows and
+      # spec sections), so it runs on the fast path too.
       - name: Build-memory row-tool self-test (BM-ORIENT-01)
         run: bash scripts/check-bm-tools.sh
 
@@ -53,13 +102,37 @@ jobs:
         # was missing `continue-on-error`, so a spike-only failure (e.g. the
         # throwaway spike binary lagging a generated-client API change) still failed
         # the whole job. Honor the documented intent: a spike failure is reported but
-        # does not gate CI.
+        # does not gate CI. R4.2a / ADR-0362 (D3): the spike runs only on
+        # workflow_dispatch full runs.
+        if: steps.path.outputs.mode != 'fast' && github.event_name == 'workflow_dispatch'
         continue-on-error: true
         run: bash scripts/spike-s2-boundary.sh
 
       - name: Upload boundary measurement sheet
+        if: steps.path.outputs.mode != 'fast' && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: s0.1-boundary-spike
           path: docs/build/reports/S0.1-boundary-spike.md
           if-no-files-found: warn
+          overwrite: true
+
+      - name: Compute anchor
+        id: anchor
+        if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_ANCHOR_JOB: build-test-drift
+        run: |
+          bash scripts/ci/fast-path.sh record ci-anchor.txt > anchor-name.txt
+          echo "name=$(cat anchor-name.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload anchor
+        if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.anchor.outputs.name }}
+          path: ci-anchor.txt
+          retention-days: 14
+          overwrite: true
+          if-no-files-found: error
