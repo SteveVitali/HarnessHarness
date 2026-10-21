@@ -199,6 +199,7 @@ impl AssemblerPort for NullAssembler {
             assembled_payload: Some(Json::obj([("context_request", req.clone())])),
             side_events: Vec::new(),
             pre_events: Vec::new(),
+            overflow: None,
         }
     }
 }
@@ -1242,6 +1243,7 @@ impl AssemblerPort for ItemAssembler {
             ])),
             side_events: Vec::new(),
             pre_events: Vec::new(),
+            overflow: None,
         }
     }
 }

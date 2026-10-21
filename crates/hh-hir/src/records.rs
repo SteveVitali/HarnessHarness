@@ -828,7 +828,7 @@ pub struct HarnessRuleRecord {
 /// `RuleAction` — the closed action sum (§1.5/§3.1.3):
 /// `insert_context_item | restrict_tool_set | set_compaction_policy |
 /// set_retry_stop_policy | require_validator | request_approval | flow_policy |
-/// declassify | sanitize`.
+/// declassify | sanitize | pre_authorize | auto_review | consolidate_memories`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleAction {
     /// `insert_context_item(ContextItem)` — insert a context item.
@@ -869,6 +869,17 @@ pub enum RuleAction {
     /// never the hook. `conditioned_on` + `assumption_debt` are mandatory on
     /// the carrying `HarnessRule` (the conditioned-rule discipline applies).
     AutoReview(Json),
+    /// `consolidate_memories{scope, cadence, guards, consolidator, retention?}`
+    /// — the §5c.3 memory-consolidation declaration (ADR-0080 d4–d7; OQ-205's
+    /// cadence-rule home): the structured record §5c owns (`scope` ∈ the
+    /// `PersistenceScope` sum, `cadence ∈ {session_start, idle,
+    /// rate_limit{floor_per_seq}}`, `guards{require_current_lease,
+    /// skip_conflicted, max_versions?}`, `consolidator ∈ {dedupe}`, optional
+    /// `retention` — the R-2.2 `RetentionPolicy` record the memory-body
+    /// reclamation legs run under). The runtime executes the *resolved* rule —
+    /// the record is a declaration, never a cadence the kernel invents.
+    /// (CC8 — a member added to the closed sum; landed spellings unchanged.)
+    ConsolidateMemories(Json),
 }
 
 /// `AssumptionDebtRecord/1` — the complete record `{rule_id, hypothesis: Text,
