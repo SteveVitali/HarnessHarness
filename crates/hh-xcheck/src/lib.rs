@@ -113,8 +113,11 @@ pub const PENDING_CELLS: &[(&str, &str, &str)] = &[
     ("plugin-manifests.foreign-checker", "DF-S1.27-1", "HUMAN-H3"),
     ("canonical-parse.foreign-timing", "DF-S0.3-2", "HUMAN-H3"),
     ("polyglot-ci.two-toolchain", "DF-S0.3-2", "HUMAN-H3"),
-    ("bench-manifest.live-import", "DF-S1.24-2", "HUMAN-H3"),
-    ("lt-03.live-corpus-arm", "DF-S1.13-3", "HUMAN-H3"),
+    // R4.6 discharged `bench-manifest.live-import` (DF-S1.24-2) and
+    // `lt-03.live-corpus-arm` (DF-S1.13-3) — both executed live under
+    // H3's "Toolchains + online corpus" authorization; the
+    // `hh-live-evidence/1` records are `…/live/2026-10-21-lt03-live.json`
+    // and `…-bench-manifest-live.json`.
     (
         "hir-documents.e2-replay",
         "DF-S1.2-2",

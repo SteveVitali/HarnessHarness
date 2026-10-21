@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "real upstream manifest (Harbor Index registry.json at the committed pin) sha256-verified then imported: L1 record.validate per task, L2 manifest.validate + split_assignment.validate, task_id stable through import round-trips (BENCH_IMPORT marker); USD 0 public read-only fetch; BENCH_IMPORT entries=1 tasks=64 refused=0 l1=ok l2=1 ids_stable=ok"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "raw.githubusercontent.com:443",
+  "git_head": "0c39584f65c56dc6b85cd100d17553f6432436eb",
+  "harness": "r4.6",
+  "leg": "bench-manifest-live",
+  "model_reported": null,
+  "provided": {},
+  "provider": "public-upstream",
+  "recorded_at": "2026-10-21T23:12:19Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.6.md",
+    "sha256": "dd76c4110187c6cb9b6c5762e2297b319fba3a1d714493785b6848830f750dcf"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.200633,
+  "ticket": "R4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-21-bench-manifest-live.transcript.txt",
+  "transcript_sha256": "62323df30b7f6d2b430825aa1ca660c910346f8fb69cee77c2421cff05ce66d1"
+}

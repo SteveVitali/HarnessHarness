@@ -1,0 +1,43 @@
+GET https://raw.githubusercontent.com/harbor-framework/harbor/dd8815755a61e849ad0f146ae85eb4aaff4fe61f/registry.json
+sha256-pin da1446bce05eabbd72a25eb9eef5a2f5db94645ce88c28e2497581433b3d2e60
+sha256-got da1446bce05eabbd72a25eb9eef5a2f5db94645ce88c28e2497581433b3d2e60
+
+HTTP/2 200 
+cache-control: max-age=300
+content-security-policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
+content-type: text/plain; charset=utf-8
+etag: "309149cc4ddd80a9921336ca040c986e21eb282ae340a5224a25b4e89e84c922"
+strict-transport-security: max-age=31536000
+x-content-type-options: nosniff
+x-frame-options: deny
+x-xss-protection: 1; mode=block
+x-github-request-id: C1F8:1F68B:9A53:AC92:6AD946D0
+x-github-edge-region: iad
+accept-ranges: bytes
+date: Wed, 21 Oct 2026 23:12:17 GMT
+via: 1.1 varnish
+x-served-by: cache-nyc-kteb1890060-NYC
+x-cache: MISS
+x-cache-hits: 0
+x-timer: S1792624338.694806,VS0,VE111
+vary: Authorization,Accept-Encoding
+access-control-allow-origin: *
+cross-origin-resource-policy: cross-origin
+x-fastly-request-id: 44316ff8e591a0dfe93cfc8a3a16af4afad08a8c
+expires: Wed, 21 Oct 2026 23:17:17 GMT
+source-age: 0
+content-length: 13654627
+
+
+$ HH_FOREIGN_MANIFEST=<verified-fetch> cargo test -p hh-bench --test r4_6 r46_live_manifest_import-- --ignored --nocapture
+
+   Compiling hh-bench v0.0.1 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running tests/r4_6.rs (target/debug/deps/r4_6-9016a01dbaa93a67)
+
+running 1 test
+BENCH_IMPORT entries=1 tasks=64 refused=0 l1=ok l2=1 ids_stable=ok
+test r46_live_manifest_import ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.54s
+

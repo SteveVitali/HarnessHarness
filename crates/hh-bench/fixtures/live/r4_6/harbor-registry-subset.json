@@ -1,0 +1,70 @@
+{
+ "entry": {
+  "description": "A polyglot coding benchmark that evaluates AI agents' ability to perform code editing and generation tasks across multiple programming languages.",
+  "name": "aider-polyglot",
+  "tasks": [
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_zipper",
+    "path": "datasets/aider_polyglot/polyglot_java_zipper"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_zebra-puzzle",
+    "path": "datasets/aider_polyglot/polyglot_java_zebra-puzzle"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_wordy",
+    "path": "datasets/aider_polyglot/polyglot_java_wordy"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_word-search",
+    "path": "datasets/aider_polyglot/polyglot_java_word-search"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_variable-length-quantity",
+    "path": "datasets/aider_polyglot/polyglot_java_variable-length-quantity"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_two-bucket",
+    "path": "datasets/aider_polyglot/polyglot_java_two-bucket"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_twelve-days",
+    "path": "datasets/aider_polyglot/polyglot_java_twelve-days"
+   },
+   {
+    "git_commit_id": "f30b14415dd733c83627204bad0af69a89ceb46f",
+    "git_url": "https://github.com/laude-institute/harbor-datasets.git",
+    "name": "polyglot_java_tree-building",
+    "path": "datasets/aider_polyglot/polyglot_java_tree-building"
+   }
+  ],
+  "version": "1.0"
+ },
+ "note": "Committed slice of the upstream manifest for the offline import re-run; the live leg fetches + sha256-verifies the full registry.json at this pin.",
+ "schema": "foreign-manifest-subset/1",
+ "upstream": {
+  "commit": "dd8815755a61e849ad0f146ae85eb4aaff4fe61f",
+  "license": "Apache-2.0",
+  "manifest_entries": 80,
+  "manifest_tasks": 51625,
+  "repo": "harbor-framework/harbor",
+  "source_file": "registry.json",
+  "source_sha256": "da1446bce05eabbd72a25eb9eef5a2f5db94645ce88c28e2497581433b3d2e60",
+  "subset": "entries[0].tasks[0:8]",
+  "url": "https://raw.githubusercontent.com/harbor-framework/harbor/dd8815755a61e849ad0f146ae85eb4aaff4fe61f/registry.json"
+ }
+}
