@@ -10,9 +10,11 @@
 //
 // Reads a cross-impl bundle directory, replays the arms present, and
 // writes an `answers.json` that `hh-xcheck verify <bundle> <answers>`
-// compares against the bundle's committed E1 expectations. The arms R4.4a
-// owns are absent — `verify` reports their cells `missing answer` by
-// name (honest pending, never a fabricated or vacuous answer).
+// compares against the bundle's committed E1 expectations. R4.4a wires
+// plugin-manifests and ledger-scenarios; the hir-documents arm is pending
+// a size-budget split decision (docs/build/runs/R4.4a.md) — `verify`
+// reports its cells `missing answer` by name (honest pending, never a
+// fabricated or vacuous answer).
 //
 // Honesty note: this is a *candidate* implementation. Its answers are
 // evidence the foreign run produced; a green `verify` does not mint E1
@@ -24,9 +26,10 @@ import { canonical } from "./lib/core.ts";
 import type { Json } from "./lib/core.ts";
 import { armIdentityTrees } from "./lib/trees.ts";
 import { armIdentityRecords } from "./lib/records.ts";
-import { armLedgerTranscript } from "./lib/ledger.ts";
+import { armLedgerTranscript, armLedgerScenarios } from "./lib/ledger.ts";
 import { armRegistrySnapshot } from "./lib/registry.ts";
 import { armCanonicalParse } from "./lib/canonical_parse.ts";
+import { armPluginManifests } from "./lib/plugin.ts";
 
 function main(argv: string[]): number {
   if (argv.length !== 2) {
@@ -42,7 +45,9 @@ function main(argv: string[]): number {
       "identity-records": armIdentityRecords(join(armsDir, "identity-records")),
       "ledger-transcript": armLedgerTranscript(join(armsDir, "ledger-transcript")),
       "registry-snapshot": armRegistrySnapshot(join(armsDir, "registry-snapshot")),
+      "plugin-manifests": armPluginManifests(join(armsDir, "plugin-manifests"), bundle),
       "canonical-parse": armCanonicalParse(join(armsDir, "canonical-parse")),
+      "ledger-scenarios": armLedgerScenarios(join(armsDir, "ledger-scenarios")),
     },
   };
   writeFileSync(out, Buffer.concat([canonical(answers as Json), Buffer.from("\n")]));
