@@ -4,7 +4,7 @@
 //! `answers.json`, `scripts/xcheck-e3.sh`).
 //!
 //! Invariants: the committed `foreign/e3-typescript/answers.json`
-//! verifies green on every arm it answers and fails the R4.4a-owned arms
+//! verifies green on every arm it answers and fails the R4.4b-owned arm
 //! only as `missing answer` (pending, never a fabricated or vacuous
 //! pass); the tree carries no npm dependency and only `node:`/relative
 //! `.ts` imports; `xcheck-e3.sh` reports `skipped(node-absent)` (exit 3)
@@ -13,8 +13,8 @@
 //! which is also what proves the tree is erasable-TypeScript (node's own
 //! type-stripping rejects enums/namespaces/parameter properties).
 //!
-//! The pending cells (plugin-manifests, hir-documents, ledger-scenarios)
-//! are R4.4a's scope — recorded `missing answer`, never claimed.
+//! The pending cells (hir-documents, five cases) are R4.4b's scope —
+//! recorded `missing answer`, never claimed.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -38,14 +38,17 @@ fn load(p: &Path) -> Json {
     hh_wire::json::parse(&String::from_utf8_lossy(&std::fs::read(p).unwrap())).unwrap()
 }
 
-/// The arms the E3 part-1 tree answers (the rest are R4.4a's pending
-/// cells — `missing answer`, honestly recorded).
+/// The arms the E3 tree answers (R4.4's five + R4.4a's plugin-manifests
+/// and ledger-scenarios; `hir-documents` stays R4.4b's pending arm —
+/// `missing answer`, honestly recorded).
 const COVERED_ARMS: &[&str] = &[
     "identity-trees",
     "identity-records",
     "ledger-transcript",
     "registry-snapshot",
+    "plugin-manifests",
     "canonical-parse",
+    "ledger-scenarios",
 ];
 
 /// The committed `answers.json` verifies every covered case and reports
