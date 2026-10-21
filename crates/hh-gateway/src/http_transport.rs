@@ -25,17 +25,76 @@ use hh_tls::{ClientTls, TlsError};
 use hh_wire::http::{self, BodyReader, HttpError, Scheme};
 use hh_wire::json::Json;
 
+use crate::anthropic::{self, MessagesTranslator};
 use crate::codec::{self, WireFrame};
+use crate::credentials::header_secret;
 use crate::dialect::WireDialect;
 use crate::gateway::{CredentialHandle, Transport};
 use crate::openai::{self, ChunkTranslator, SseDecoder, SseEvent};
 use crate::vocab::{ModelError, ModelErrorClass, TimeoutKind};
+use hh_secrets::{CompositeResolver, SecretSourceResolver};
 
 /// The request-path join for the family's operations — `endpoint_ref`'s
 /// path is the API base (`/v1`, or `/`); the operation path appends.
 fn join(base_target: &str, op: &str) -> String {
     let base = base_target.trim_end_matches('/');
     format!("{base}/{op}")
+}
+
+/// The dialect's provider family — the wire shape a bound dialect's bytes
+/// follow (operation path, SSE payload grammar, auth-header form). Keyed
+/// on the dialect *id* — the document's own identity, never a model id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Family {
+    /// Chat Completions (`chat/completions` op, `chat.completion.chunk`
+    /// SSE payloads, `Authorization: Bearer`).
+    ChatCompletions,
+    /// Anthropic Messages (`messages` op, Messages SSE event payloads,
+    /// `x-api-key` + `anthropic-version`).
+    Messages,
+}
+
+/// `family_of(dialect)` — the family a loaded dialect document declares
+/// through its `dialect_id`.
+pub fn family_of(dialect: &WireDialect) -> Family {
+    match dialect.dialect_id.as_str() {
+        "anthropic-messages" => Family::Messages,
+        _ => Family::ChatCompletions,
+    }
+}
+
+/// `Translator` — the family's SSE payload → `WireFrame` fold, one
+/// spelling per family (the `data:` payload document goes in; normalized
+/// frames come out; [`Translator::finish`] emits the terminal at the
+/// family's own end-of-stream).
+enum Translator {
+    /// `chat.completion.chunk` payloads.
+    Chat(ChunkTranslator),
+    /// Messages event payloads.
+    Messages(MessagesTranslator),
+}
+
+impl Translator {
+    fn push(&mut self, doc: &Json) -> Result<Vec<WireFrame>, ModelError> {
+        match self {
+            Translator::Chat(t) => t.push_chunk(doc),
+            Translator::Messages(t) => t.push_event(doc),
+        }
+    }
+
+    fn finish(&mut self) -> Vec<WireFrame> {
+        match self {
+            Translator::Chat(t) => t.finish(),
+            Translator::Messages(t) => t.finish(),
+        }
+    }
+
+    fn for_family(family: Family) -> Translator {
+        match family {
+            Family::ChatCompletions => Translator::Chat(ChunkTranslator::default()),
+            Family::Messages => Translator::Messages(MessagesTranslator::default()),
+        }
+    }
 }
 
 /// `HttpError → ModelError` — the boundary's typed refusal classes
@@ -103,9 +162,16 @@ pub struct HttpModelTransport {
     /// The bound dialect (error classification + retry-after + body bounds
     /// derive from it).
     dialect: WireDialect,
+    /// The provider family the dialect's bytes follow (operation path,
+    /// SSE payload grammar, auth-header form — derived at bind).
+    family: Family,
     /// The client TLS configuration (R4.5c; ADR-0365 — verification
     /// always on; extra roots only via the lane's explicit file).
     tls: ClientTls,
+    /// The credential resolver the auth header's value is resolved
+    /// through *inside* `send` (R4.5d; ADR-0366 D4 — the value never
+    /// leaves this call's scope).
+    credentials: Box<dyn SecretSourceResolver>,
     /// Dial deadline (ms).
     connect_ms: u64,
     /// Per-operation read/write deadline (ms).
@@ -117,7 +183,8 @@ pub struct HttpModelTransport {
 impl HttpModelTransport {
     /// `new(dialect)` — the transport bound to a loaded dialect document.
     /// Defaults: 5 s dial, `stream_idle_timeout_ms` read/write bound
-    /// (clamped to ≥ 30 s), 16 MiB bodies, public webpki roots for TLS.
+    /// (clamped to ≥ 30 s), 16 MiB bodies, public webpki roots for TLS,
+    /// the launch-env credential composition.
     pub fn new(dialect: WireDialect) -> HttpModelTransport {
         Self::with_tls(dialect, ClientTls::webpki_roots())
     }
@@ -126,13 +193,44 @@ impl HttpModelTransport {
     /// local-CA extra-roots hook and/or the mTLS client identity the
     /// `model_port` slot's `tls{}` params resolved — ADR-0365).
     pub fn with_tls(dialect: WireDialect, tls: ClientTls) -> HttpModelTransport {
+        Self::with_credentials(dialect, tls, Box::<CompositeResolver>::default())
+    }
+
+    /// `with_credentials(dialect, tls, resolver)` — the transport with an
+    /// explicit credential resolver (tests pin a `StaticVault`; the lane
+    /// rides the launch-env composition the default arms).
+    pub fn with_credentials(
+        dialect: WireDialect,
+        tls: ClientTls,
+        credentials: Box<dyn SecretSourceResolver>,
+    ) -> HttpModelTransport {
         HttpModelTransport {
+            family: family_of(&dialect),
             rw_ms: dialect.stream_idle_timeout_ms.clamp(30_000, 600_000),
             dialect,
             tls,
+            credentials,
             connect_ms: 5_000,
             max_body: 16 * 1024 * 1024,
         }
+    }
+
+    /// The auth header the family's `send` attaches for a `provided`
+    /// credential — the value resolved inside this call and dropped on
+    /// return (`(header-name, header-value)`; the value never lands in a
+    /// frame, a log, or a record).
+    fn auth_header(
+        &self,
+        credential: &CredentialHandle,
+    ) -> Result<Option<(String, String)>, ModelError> {
+        if !credential.provided {
+            return Ok(None);
+        }
+        let secret = header_secret(&*self.credentials, credential)?;
+        Ok(Some(match self.family {
+            Family::Messages => ("x-api-key".to_string(), secret),
+            Family::ChatCompletions => ("Authorization".to_string(), format!("Bearer {secret}")),
+        }))
     }
 
     /// `dial(url)` — the transport beneath the codec: TCP on `http`,
@@ -154,7 +252,7 @@ impl Transport for HttpModelTransport {
     fn send(
         &mut self,
         bytes: &[u8],
-        _credential: &CredentialHandle,
+        credential: &CredentialHandle,
         endpoint_ref: &str,
     ) -> Result<Vec<(u64, WireFrame)>, ModelError> {
         // The serialized plan carries the request body verbatim
@@ -175,19 +273,38 @@ impl Transport for HttpModelTransport {
         let url =
             http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
         let mut sock = self.dial(&url)?;
-        let target = join(&url.target, "chat/completions");
+        let target = join(
+            &url.target,
+            match self.family {
+                Family::Messages => "messages",
+                Family::ChatCompletions => "chat/completions",
+            },
+        );
         let accept = if streaming {
             "text/event-stream"
         } else {
             "application/json"
         };
+        // The auth header is resolved + attached inside this call — the
+        // credential value's lifetime is this `send`; it never lands in a
+        // frame, a record, or a log (R4.5d; ADR-0366 D4).
+        let auth = self.auth_header(credential)?;
         let host_header = url.host_header();
-        let headers = [
+        let mut headers: Vec<(&str, &str)> = vec![
             ("Host", host_header.as_str()),
             ("Content-Type", "application/json"),
             ("Accept", accept),
             ("Connection", "close"),
         ];
+        let auth_pair;
+        if let Some((name, value)) = &auth {
+            auth_pair = (name.as_str(), value.as_str());
+            headers.push(auth_pair);
+        }
+        if self.family == Family::Messages {
+            // The Messages API's version header is required on every call.
+            headers.push(("anthropic-version", "2023-06-01"));
+        }
         http::write_request(&mut sock, "POST", &target, &headers, &body_bytes)
             .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
         let t0 = std::time::Instant::now();
@@ -208,6 +325,12 @@ impl Transport for HttpModelTransport {
                         )]),
                     )])
                 });
+            // The Messages family's `error.type` is the class signal —
+            // the adapter copies it to `error.code` for the shared rules.
+            let body_j = match self.family {
+                Family::Messages => anthropic::error_body_for_classify(&body_j),
+                Family::ChatCompletions => body_j,
+            };
             let mut err = codec::classify_http_error(&self.dialect, head.status as u32, &body_j);
             // `retry_after_sources` — header spelling (seconds per RFC —
             // `read_retry_after` caps at `retry_after_cap_ms`, R-RT-4).
@@ -229,7 +352,7 @@ impl Transport for HttpModelTransport {
             .is_some_and(|v| v.contains("text/event-stream"));
 
         let mut frames: Vec<(u64, WireFrame)> = Vec::new();
-        let mut tr = ChunkTranslator::default();
+        let mut tr = Translator::for_family(self.family);
         if is_sse {
             let mut sse = SseDecoder::new(self.max_body);
             let mut rd = BodyReader::new(&mut r, &head, self.max_body);
@@ -248,7 +371,7 @@ impl Transport for HttpModelTransport {
                                                 format!("sse chunk: {e}"),
                                             )
                                         })?;
-                                    for f in tr.push_chunk(&chunk)? {
+                                    for f in tr.push(&chunk)? {
                                         frames.push((stamp, f));
                                     }
                                 }
@@ -282,7 +405,10 @@ impl Transport for HttpModelTransport {
             let doc = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
                 .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
             let stamp = at();
-            for f in openai::completion_frames(&doc)? {
+            for f in match self.family {
+                Family::Messages => anthropic::completion_frames(&doc)?,
+                Family::ChatCompletions => openai::completion_frames(&doc)?,
+            } {
                 frames.push((stamp, f));
             }
         }
@@ -298,11 +424,15 @@ impl Transport for HttpModelTransport {
         let mut sock = self.dial(&url)?;
         let target = join(&url.target, "models");
         let host_header = url.host_header();
-        let headers = [
+        let mut headers: Vec<(&str, &str)> = vec![
             ("Host", host_header.as_str()),
             ("Accept", "application/json"),
             ("Connection", "close"),
         ];
+        if self.family == Family::Messages {
+            // The Messages API's version header is required on every call.
+            headers.push(("anthropic-version", "2023-06-01"));
+        }
         http::write_request(&mut sock, "GET", &target, &headers, &[])
             .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
         let mut r = BufReader::new(sock);

@@ -4,7 +4,10 @@
 //! `provider_params`); `drive` selects `GatewayModel` over the scripted
 //! `EmbedModel` and the ledger gains the live members — `plan_hash`,
 //! `endpoint_ref`, `model_ref{profile_ref, provider_model_id}`,
-//! `usage{record{raw,view,normalizer_ref}}`, `timing`, `served_model`,
+//! `usage{record{view,normalizer_ref}}` (the provider's verbatim raw
+//! document rides `outcome.usage_raw` on the model_io blob — the row's
+//! OPEN_AUDIT bound keeps bulky provider documents off the inline audit
+//! field), `timing`, `served_model`,
 //! `credential_binding_id` — plus the `hh.model_io/1` blob the
 //! `response_ref` resolves to.
 //!

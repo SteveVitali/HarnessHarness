@@ -96,6 +96,25 @@ fn main() {
             std::process::exit(0);
         }
     };
+    // `{"command":"dialect","id":"<id>@<ver>"}` → the bound dialect
+    // document — the request-assembly half of the live/OOP legs reads the
+    // exact document the stub will load (no second spelling of the
+    // contract).
+    if str_member(&req, "command").as_deref() == Some("dialect") {
+        let doc = match str_member(&req, "id").as_deref() {
+            Some(hh_gateway::dialects::OPENAI_COMPATIBLE_ID) => hh_gateway::openai_compatible_doc(),
+            Some(hh_gateway::dialects::OPENAI_ID) => hh_gateway::openai_doc(),
+            Some(hh_gateway::dialects::ANTHROPIC_MESSAGES_ID) => {
+                hh_gateway::anthropic_messages_doc()
+            }
+            other => {
+                println!("{{\"result\":\"refused\",\"refusal\":\"unknown dialect id {other:?}\"}}");
+                std::process::exit(0);
+            }
+        };
+        println!("{}", doc.to_canonical_string());
+        return;
+    }
     if str_member(&req, "command").as_deref() != Some("run_call") {
         println!("{{\"result\":\"refused\",\"refusal\":\"unknown command\"}}");
         std::process::exit(0);
@@ -159,7 +178,10 @@ fn main() {
         endpoint_ref: str_member(&plan_j, "endpoint_ref").unwrap_or_else(|| "ep.test".into()),
         model_ref: model_ref.provider_model_id.clone(),
         body: plan_j.get("body").cloned().unwrap_or(Json::Null),
-        provider_params: Extensions::default(),
+        provider_params: match plan_j.get("provider_params") {
+            Some(Json::Obj(m)) => m.clone(),
+            _ => Extensions::default(),
+        },
         capabilities: Capabilities {
             streaming: true,
             tool_use: true,
@@ -194,13 +216,33 @@ fn main() {
         participant_class: None,
         identity: None,
     };
-    let mut transport = FakeTransport { frames };
-    let mut credentials = StubCredentials;
+    // `transport` — the wire this call rides. `replay` (default) feeds
+    // the request's `frames` through `FakeTransport`; `live` binds the
+    // real `HttpModelTransport` + `BrokerCredentialPort` — the OOP live
+    // variant AC-R-2.3.1-11 requires: the gateway's own decode/attempt
+    // path runs out-of-process over this same canonical JSON boundary,
+    // against the provider's real socket. Only the *coordinate* crosses
+    // (`plan.credential_ref: "env:NAME"`); the material lives in this
+    // process's launch env — provisioned by the runner, never named on
+    // the boundary, and resolved inside `send` immediately before bytes
+    // leave (ADR-0366 D4). A `live` request needs an `http(s)` endpoint;
+    // TLS failure/connection refusal lands `failed` honestly.
+    let live = str_member(&req, "transport").as_deref() == Some("live");
+    let mut replay_transport = FakeTransport { frames };
+    let mut live_transport =
+        live.then(|| hh_gateway::http_transport::HttpModelTransport::new(dialect.clone()));
+    let mut stub_credentials = StubCredentials;
+    let mut broker_credentials = hh_gateway::credentials::BrokerCredentialPort::default();
+    let (transport, credentials): (&mut dyn Transport, &mut dyn CredentialPort) =
+        match &mut live_transport {
+            Some(t) => (t, &mut broker_credentials),
+            None => (&mut replay_transport, &mut stub_credentials),
+        };
     let mut gateway = ModelGateway {
         dialects: Default::default(),
         endpoints,
-        credentials: &mut credentials,
-        transport: &mut transport,
+        credentials,
+        transport,
         now_ms: Box::new(|| 0),
         normalizer_ref: str_member(&req, "normalizer_ref")
             .unwrap_or_else(|| "profile:stub#usage_mapping".into()),

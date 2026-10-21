@@ -39,9 +39,11 @@
 //! - [`errors`] — `GatewayError`, `CodecError` (typed refusals, never
 //!   warnings).
 
+pub mod anthropic;
 pub mod attempts;
 pub mod cache;
 pub mod codec;
+pub mod credentials;
 pub mod dialect;
 pub mod dialects;
 pub mod errors;
@@ -75,11 +77,15 @@ pub use codec::{
     parse_provider_opaque, read_retry_after, serialize, validate_plan, Estimate,
     EstimateConfidence, EstimateMethod, WireFrame,
 };
+pub use credentials::{header_secret, source_from_binding, source_from_ref, BrokerCredentialPort};
 pub use dialect::{
     AuthKind, DebtEvidence, DebtRecord, DialectRule, Framing, PlanSchema, RetryAfterSource,
     UsageMapping, UsageMappingDefault, WireDialect,
 };
-pub use dialects::{openai_compatible, openai_compatible_doc, OPENAI_COMPATIBLE_ID};
+pub use dialects::{
+    anthropic_messages, anthropic_messages_doc, openai, openai_compatible, openai_compatible_doc,
+    openai_doc, ANTHROPIC_MESSAGES_ID, OPENAI_COMPATIBLE_ID, OPENAI_ID,
+};
 pub use errors::{CodecError, GatewayError};
 pub use gateway::{
     charge_model, stamp_participant, CallHandle, CredentialHandle, CredentialPort,
@@ -89,7 +95,7 @@ pub use grammar::{
     decode_frame, DecodeState, Delta, GrammarViolation, ModelEvent, ModelEventKind, Timing,
     UsageArrivalKind,
 };
-pub use http_transport::HttpModelTransport;
+pub use http_transport::{family_of, Family, HttpModelTransport};
 pub use layout::{
     check_layout, check_marker_carriers, check_prefix_affecting, check_purpose_isolation,
     check_static_stability, check_tool_order_prefix, check_transcript_append, is_volatile_kind,

@@ -1,0 +1,43 @@
+{
+  "assertions": [
+    "one minimal hosted call through GatewayModel: model.call.requested carries the launch_env:* coordinate binding_id; model.call.completed lands with usage{available,record{view,raw}}; the credential value appears in no payload/blob; ledger verifies; measured usage rides token_usage + the pinned-rate cost_usd"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.000575,
+  "endpoint_host": "api.anthropic.com:443",
+  "git_head": "0d01088b2f3213f1fb5e20415893caeaa39b9f64",
+  "harness": "devin-cli/swe-2-high/subagent",
+  "leg": "anthropic-call",
+  "model_reported": "claude-haiku-4-5-20251001",
+  "provided": {
+    "ANTHROPIC_API_KEY": "yes"
+  },
+  "provider": "anthropic",
+  "recorded_at": "2026-10-21T20:08:02Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5d.md",
+    "sha256": "6f68380ad4d0f842c301b76b1aa194982ada3ede9f21f0ad91dc8e87283de5df"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 0.200575,
+  "ticket": "R4.5d",
+  "token_usage": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "convention": "hh-inclusive/1",
+    "input_total": 555,
+    "input_uncached": 555,
+    "normalizer_ref": "anthropic-messages@1",
+    "output_reasoning": 0,
+    "output_total": 4
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-21-anthropic-call.transcript.txt",
+  "transcript_sha256": "19fd211bf73958d849f5d8728eaa18fd21c87e0871b2ba4228e6a6eb518e48b1"
+}

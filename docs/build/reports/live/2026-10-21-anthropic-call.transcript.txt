@@ -1,0 +1,17 @@
+$ cargo test -p hh-embed --test r4_5d_live r45d_live_anthropic_call-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running tests/r4_5d_live.rs (target/debug/deps/r4_5d_live-086cb350446f9385)
+
+running 1 test
+live run opened: run-1792613279570-000000-af5be0d0
+rows: model.call.requested,model.call.completed,model.call.requested,model.call.completed,model.call.requested,model.call.completed,model.call.requested,model.call.completed
+live call completed: stop_reason=end_turn
+LIVE_USAGE: {"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":555,"input_uncached":555,"normalizer_ref":"anthropic-messages@1","output_reasoning":0,"output_total":4}
+LIVE_MODEL: claude-haiku-4-5-20251001
+leak sweep clean — the value appears in no payload/blob
+ledger verified
+test r45d_live_anthropic_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 2.89s
+

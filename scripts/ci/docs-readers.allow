@@ -9,4 +9,5 @@ crates/hh-lab/src/exemplars.rs	                            "research/long-contex
 crates/hh-lab/src/exemplars.rs	                        "research/long-context suite",	# string literal or comment in test/source; never opened as a checkout path
 scripts/spike-s2-boundary.sh	# stamped measurement sheet to docs/build/reports/. The full comparative spike (E5a/E5b/	# comment
 scripts/spike-s2-boundary.sh	SHEET="$ROOT/docs/build/reports/S0.1-boundary-spike.md"	# write-only job output
-crates/hh-gateway/src/dialects.rs	            reference: "https://platform.openai.com/docs/api-reference".to_string(),	# string literal — provider API reference URL; never opened as a checkout path
+crates/hh-gateway/src/dialects.rs	        "https://platform.openai.com/docs/api-reference",	# string literal — provider API reference URL; never opened as a checkout path
+crates/hh-gateway/src/dialects.rs	const OPENAI_REF: &str = "https://platform.openai.com/docs/api-reference/chat";	# string literal — provider API reference URL; never opened as a checkout path

@@ -26,9 +26,11 @@ use hh_control::driver::{ModelOutcome, ModelPort};
 use hh_control::output::ParsedCall;
 use hh_control::output::SurfaceSpec;
 use hh_gateway::codec::{self, WireFrame};
+use hh_gateway::credentials::BrokerCredentialPort;
 use hh_gateway::dialect::WireDialect;
-use hh_gateway::gateway::{CredentialPort, EndpointAllowlist, NoCredentials, Transport};
+use hh_gateway::gateway::{CredentialHandle, CredentialPort, EndpointAllowlist, Transport};
 use hh_gateway::grammar::{self, DecodeState, ModelEventKind};
+use hh_gateway::http_transport::Family;
 use hh_gateway::message::{ModelBlock, ToolArgs};
 use hh_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
 use hh_gateway::vocab::{ModelError, ModelErrorClass, StopReason};
@@ -44,13 +46,20 @@ use hh_embed_schema::errors::EmbedError;
 /// lane — never re-derived from a definition that may have drifted).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelLane {
-    /// `{dialect_id}@{version}` — `openai-compatible@1` is the only
-    /// admitted coordinate at R4.5b.
+    /// `{dialect_id}@{version}` — the admitted coordinates at R4.5d:
+    /// `openai-compatible@1` (local family), `openai@1`, and
+    /// `anthropic-messages@1` (the hosted pair — ADR-0366).
     pub dialect_ref: String,
-    /// The resolved endpoint base URL (`http://host[:port][/base]`).
+    /// The resolved endpoint base URL (`http(s)://host[:port][/base]`).
     pub endpoint_ref: String,
     /// The provider's model spelling (`HH_LOCAL_MODEL` for the local leg).
     pub provider_model_id: String,
+    /// `credential_ref` — the broker credential *coordinate* (`env:NAME` —
+    /// the `launch_env` `SecretSource` spelling). Carried literally:
+    /// resolving it to a value is the credential port's bind-time work
+    /// inside the transport, never this member's (the value lands in no
+    /// lane document, manifest member, or ledger row — ADR-0366 D4).
+    pub credential_ref: Option<String>,
     /// `substitution_allowed` — a served-model mismatch is a terminal
     /// `served_model_mismatch` error unless declared `true`.
     pub substitution_allowed: bool,
@@ -161,6 +170,9 @@ impl ModelLane {
             Json::Bool(self.substitution_allowed),
         );
         m.insert("profile_ref".into(), Json::str(self.profile_ref.clone()));
+        if let Some(cr) = &self.credential_ref {
+            m.insert("credential_ref".into(), Json::str(cr.clone()));
+        }
         if !self.tls.is_empty() {
             m.insert("tls".into(), self.tls.to_json());
         }
@@ -180,6 +192,10 @@ impl ModelLane {
             dialect_ref: j.get("dialect")?.as_str()?.to_string(),
             endpoint_ref: j.get("endpoint")?.as_str()?.to_string(),
             provider_model_id: j.get("provider_model_id")?.as_str()?.to_string(),
+            credential_ref: j
+                .get("credential_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string),
             substitution_allowed: matches!(j.get("substitution_allowed"), Some(Json::Bool(true))),
             profile_ref: j
                 .get("profile_ref")
@@ -230,27 +246,49 @@ fn resolve_value(member: &str, v: Option<&Json>) -> Result<String, EmbedError> {
     Ok(s.to_string())
 }
 
+/// The admitted `model_port.dialect` coordinates at R4.5d — the local
+/// family plus the two hosted dialects (ADR-0366).
+const ADMITTED_DIALECTS: [&str; 3] = [
+    hh_gateway::dialects::OPENAI_COMPATIBLE_ID,
+    hh_gateway::dialects::OPENAI_ID,
+    hh_gateway::dialects::ANTHROPIC_MESSAGES_ID,
+];
+
+/// `dialect_by_id(ref)` — bind a dialect coordinate to its document. An
+/// unknown coordinate answers `None` (the caller names it
+/// `InvalidDefinition` — never a silent fallback to another dialect).
+fn dialect_by_id(dialect_ref: &str) -> Option<WireDialect> {
+    match dialect_ref {
+        hh_gateway::dialects::OPENAI_COMPATIBLE_ID => {
+            Some(hh_gateway::dialects::openai_compatible())
+        }
+        hh_gateway::dialects::OPENAI_ID => Some(hh_gateway::dialects::openai()),
+        hh_gateway::dialects::ANTHROPIC_MESSAGES_ID => {
+            Some(hh_gateway::dialects::anthropic_messages())
+        }
+        _ => None,
+    }
+}
+
 /// `decode_model_lane(params, profile_ref)` — the `model_port` slot's
 /// `params` → the lane. Typed refusals at arm, never silent defaults:
 /// unknown dialect, missing members, non-`http(s):` endpoints, an
 /// unpaired or unknown-keyed `tls{}` member (R4.5c — `tls_pending`
-/// retired), and `provider_params` outside the dialect's
-/// `plan_schema.allowed_keys`.
+/// retired), a malformed or unset `credential_ref` coordinate (R4.5d —
+/// coordinate checked, value never touched), and `provider_params`
+/// outside the dialect's `plan_schema.allowed_keys`.
 pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, EmbedError> {
     let dialect_ref = params
         .get("dialect")
         .and_then(Json::as_str)
         .unwrap_or(hh_gateway::dialects::OPENAI_COMPATIBLE_ID)
         .to_string();
-    if dialect_ref != hh_gateway::dialects::OPENAI_COMPATIBLE_ID {
-        return Err(EmbedError::InvalidDefinition {
-            diagnostics: vec![format!(
-                "model_port.dialect `{dialect_ref}` unknown — admitted: {}",
-                hh_gateway::dialects::OPENAI_COMPATIBLE_ID
-            )],
-        });
-    }
-    let dialect = hh_gateway::dialects::openai_compatible();
+    let dialect = dialect_by_id(&dialect_ref).ok_or_else(|| EmbedError::InvalidDefinition {
+        diagnostics: vec![format!(
+            "model_port.dialect `{dialect_ref}` unknown — admitted: {}",
+            ADMITTED_DIALECTS.join(", ")
+        )],
+    })?;
     let endpoint_ref = resolve_value("endpoint", params.get("endpoint"))?;
     if !(endpoint_ref.starts_with("http://") || endpoint_ref.starts_with("https://")) {
         return Err(EmbedError::InvalidDefinition {
@@ -307,6 +345,46 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
             });
         }
     }
+    // `credential_ref` — the hosted families' key coordinate, a *name*
+    // never a value. Two lanes admitted: absent (the local family's
+    // `AuthKind::None` path) or `env:NAME`. The `env:` prefix is the
+    // `launch_env` SecretSource spelling — the arm checks the coordinate's
+    // shape and the name's presence (`EnvironmentUnavailable` before the
+    // run, never a mid-call surprise), but the *value* is not resolved
+    // here — that is `BrokerCredentialPort::bind`'s work at call time,
+    // and only the transport reads it. A non-`env:` coordinate refuses
+    // `InvalidDefinition` (R4.5d admits `launch_env` only — keyring/
+    // vault sources are future lanes, not silent defaults).
+    let credential_ref = match params.get("credential_ref") {
+        None | Some(Json::Null) => None,
+        Some(Json::Str(s)) => {
+            let name = s
+                .strip_prefix("env:")
+                .ok_or_else(|| EmbedError::InvalidDefinition {
+                    diagnostics: vec![format!(
+                        "model_port.credential_ref `{s}` — `env:NAME` coordinate required"
+                    )],
+                })?;
+            if name.is_empty() {
+                return Err(EmbedError::InvalidDefinition {
+                    diagnostics: vec![
+                        "model_port.credential_ref `env:` names an empty variable".to_string()
+                    ],
+                });
+            }
+            if std::env::var_os(name).is_none() {
+                return Err(EmbedError::EnvironmentUnavailable {
+                    reason: format!("model_port.credential_ref: env {name} unset"),
+                });
+            }
+            Some(s.clone())
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.credential_ref is not a string".to_string()],
+            })
+        }
+    };
     let provider_model_id = resolve_value("provider_model_id", params.get("provider_model_id"))?;
     if provider_model_id.is_empty() {
         return Err(EmbedError::InvalidDefinition {
@@ -335,6 +413,7 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
         dialect_ref,
         endpoint_ref,
         provider_model_id,
+        credential_ref,
         substitution_allowed: matches!(params.get("substitution_allowed"), Some(Json::Bool(true))),
         profile_ref: profile_ref.to_string(),
         provider_params,
@@ -372,6 +451,10 @@ struct PendingPlan {
     wire_to_surface: BTreeMap<String, String>,
     /// The request body (re-recorded on the `model_io` blob).
     body: Json,
+    /// The bound credential — `binding_id` + `provided` only, resolved at
+    /// `requested_members` and handed to the transport at `call`. The
+    /// handle never carries material (ADR-0366 D4).
+    credential: CredentialHandle,
 }
 
 /// `GatewayModel` — the gateway-backed `ModelPort` (R4.5b). One instance
@@ -382,10 +465,18 @@ pub struct GatewayModel {
     /// The bound dialect document.
     dialect: WireDialect,
     /// The HTTP transport (plain or TLS-terminated — the lane's `tls{}`
-    /// declaration armed at construction; R4.5c).
+    /// declaration armed at construction; R4.5c). Auth material is
+    /// injected here and only here (R4.5d — ADR-0366 D4).
     transport: hh_gateway::http_transport::HttpModelTransport,
-    /// The credential port — `NoCredentials` for the local family.
-    credentials: NoCredentials,
+    /// The credential port — the broker-backed bind for every family.
+    /// `credential_ref: None` answers `provided: no` (the local lane's
+    /// `AuthKind::None` contract); `env:NAME` resolves through the
+    /// `launch_env` source — a missing name is a `credential_unavailable`
+    /// failure, never a silently-unauthenticated send.
+    credentials: BrokerCredentialPort,
+    /// The provider family the dialect maps to — selects the request
+    /// render, the SSE translator, and the wire path.
+    family: Family,
     /// The armed endpoint admission set (the bound endpoint, only).
     endpoints: EndpointAllowlist,
     /// The `normalizer_ref` stamped on usage vectors.
@@ -421,12 +512,10 @@ impl GatewayModel {
         invoke: Option<(String, Json)>,
         surfaces: Vec<SurfaceSpec>,
     ) -> Result<GatewayModel, EmbedError> {
-        if lane.dialect_ref != hh_gateway::dialects::OPENAI_COMPATIBLE_ID {
-            return Err(EmbedError::Refused {
-                reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
-            });
-        }
-        let dialect = hh_gateway::dialects::openai_compatible();
+        let dialect = dialect_by_id(&lane.dialect_ref).ok_or_else(|| EmbedError::Refused {
+            reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
+        })?;
+        let family = hh_gateway::family_of(&dialect);
         let client_tls = lane.tls.client_tls()?;
         let transport =
             hh_gateway::http_transport::HttpModelTransport::with_tls(dialect.clone(), client_tls);
@@ -435,13 +524,18 @@ impl GatewayModel {
             ..Default::default()
         };
         endpoints.endpoints.insert(lane.endpoint_ref.clone());
+        // The `usage_mapping` ref stamped on every emitted vector —
+        // the bound dialect's coordinate (R4.5b's spelling; the hosted
+        // families stamp their own).
+        let normalizer_ref = lane.dialect_ref.clone();
         Ok(GatewayModel {
             lane,
             dialect,
             transport,
-            credentials: NoCredentials,
+            credentials: BrokerCredentialPort::default(),
+            family,
             endpoints,
-            normalizer_ref: "openai-compatible@1".to_string(),
+            normalizer_ref,
             instruction,
             invoke,
             surfaces,
@@ -450,6 +544,93 @@ impl GatewayModel {
             terminal: BTreeMap::new(),
             model_io: Vec::new(),
         })
+    }
+
+    /// `text_msg(role, text)` — a family-rendered plain-text turn.
+    /// Both families' user/kernel-note messages carry one text body; the
+    /// Messages spelling wraps it in a `text` content block.
+    fn text_msg(&self, role: &str, text: &str) -> Json {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::text_msg(role, text),
+            Family::ChatCompletions => hh_gateway::openai::text_msg(role, text),
+        }
+    }
+
+    /// `assistant_tool_msg(calls)` — the prior assistant turn carrying
+    /// the tool calls (`(id, wire_name, args_raw)` — the args are the
+    /// provider's own argument spelling, verbatim). Chat-completions
+    /// renders `tool_calls[]`; Messages renders `tool_use` content blocks.
+    /// Prior-turn text is not carried — the completed row's `calls[]`
+    /// member is the pair source, matching the family's tool-result
+    /// pairing contract (the wire id is consistent within the body).
+    fn assistant_tool_msg(&self, calls: &[(String, String, String)]) -> Json {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::assistant_tool_use_msg(calls),
+            Family::ChatCompletions => hh_gateway::openai::assistant_tool_call_msg(None, calls),
+        }
+    }
+
+    /// `wire_call_id(id)` — the kernel's `tool_call_id` rendered into the
+    /// family's call-id alphabet. Chat Completions passes it verbatim;
+    /// Messages lowers non-conforming chars (the kernel's `mc.t.tc0`
+    /// spelling carries dots the `tool_use.id` alphabet refuses) — the
+    /// render is deterministic so `tool_use.id`/`tool_result.tool_use_id`
+    /// pair inside the body.
+    fn wire_call_id(&self, id: &str) -> String {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::wire_call_id(id),
+            Family::ChatCompletions => id.to_string(),
+        }
+    }
+
+    /// `tool_result_msg(id, content)` — the observation the kernel
+    /// recorded for one tool call: `role:"tool"` under chat-completions,
+    /// a `user` turn carrying a `tool_result` block under Messages.
+    fn tool_result_msg(&self, id: &str, content: Json) -> Json {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::tool_result_msg(id, content),
+            Family::ChatCompletions => hh_gateway::openai::tool_result_msg(id, content),
+        }
+    }
+
+    /// `tool_entry(name, desc, schema)` — one `tools[]` member:
+    /// `{type:"function", function:{…}}` under chat-completions,
+    /// `{name, description, input_schema}` under Messages.
+    fn tool_entry(&self, name: &str, desc: &str, schema: Json) -> Json {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::tool_entry(name, desc, schema),
+            Family::ChatCompletions => hh_gateway::openai::tool_entry(name, desc, schema),
+        }
+    }
+
+    /// `request_body(messages, tools, params)` — the plan's `body`: the
+    /// family request render over the *effective* `provider_params` (the
+    /// same map the plan records — `build_plan` applies the family's own
+    /// augmentations before this call). The renders are the family's own
+    /// `provider_params` contract: they merge verbatim and the family's
+    /// `plan_schema` bounds the set.
+    fn request_body(
+        &self,
+        messages: &[Json],
+        tools: &[Json],
+        params: &BTreeMap<String, Json>,
+    ) -> Json {
+        match self.family {
+            Family::Messages => hh_gateway::anthropic::messages_request_body(
+                &self.lane.provider_model_id,
+                messages,
+                tools,
+                true,
+                params,
+            ),
+            Family::ChatCompletions => hh_gateway::openai::chat_request_body(
+                &self.lane.provider_model_id,
+                messages,
+                tools,
+                true,
+                params,
+            ),
+        }
     }
 
     /// The transcript render — instruction + recorded rounds from the
@@ -463,7 +644,7 @@ impl GatewayModel {
     fn transcript(&self, prefix: &[EventEnvelope]) -> Vec<Json> {
         let mut messages = Vec::new();
         if let Some((cap, args)) = &self.invoke {
-            messages.push(hh_gateway::openai::text_msg(
+            messages.push(self.text_msg(
                 "user",
                 &format!(
                     "The caller directed: invoke `{cap}` with arguments {}",
@@ -471,7 +652,7 @@ impl GatewayModel {
                 ),
             ));
         } else {
-            messages.push(hh_gateway::openai::text_msg("user", &self.instruction));
+            messages.push(self.text_msg("user", &self.instruction));
         }
         // Observation rows keyed by the kernel tool_call_id.
         let mut observations: BTreeMap<String, Vec<Json>> = BTreeMap::new();
@@ -508,34 +689,34 @@ impl GatewayModel {
                     if calls.is_empty() {
                         continue;
                     }
+                    // The wire call id is the family's render of the
+                    // kernel id (Messages lowers to its `[a-zA-Z0-9_-]`
+                    // alphabet); the result pairs on the *wire* id.
                     let wire_calls: Vec<(String, String, String)> = calls
                         .iter()
                         .map(|(id, surface, args)| {
                             (
-                                id.clone(),
+                                self.wire_call_id(id),
                                 hh_gateway::openai::wire_name(surface),
                                 args.clone(),
                             )
                         })
                         .collect();
-                    messages.push(hh_gateway::openai::assistant_tool_call_msg(
-                        None,
-                        &wire_calls,
-                    ));
-                    for (id, _, _) in &calls {
+                    messages.push(self.assistant_tool_msg(&wire_calls));
+                    for ((id, _, _), (wid, _, _)) in calls.iter().zip(&wire_calls) {
                         let obs = observations.remove(id).unwrap_or_default();
                         if obs.is_empty() {
                             // No `context.observation.recorded` joined —
                             // the call was refused or interpret-rejected;
                             // the honest content is the ledger's own
                             // absence (never a fabricated result).
-                            messages.push(hh_gateway::openai::tool_result_msg(
-                                id,
+                            messages.push(self.tool_result_msg(
+                                wid,
                                 Json::obj([("kind", Json::str("no_observation_recorded"))]),
                             ));
                         } else {
                             for o in obs {
-                                messages.push(hh_gateway::openai::tool_result_msg(id, o));
+                                messages.push(self.tool_result_msg(wid, o));
                             }
                         }
                     }
@@ -547,7 +728,7 @@ impl GatewayModel {
                         .and_then(|er| er.get("class"))
                         .and_then(Json::as_str)
                         .unwrap_or("unknown");
-                    messages.push(hh_gateway::openai::text_msg(
+                    messages.push(self.text_msg(
                         "user",
                         &format!("kernel_note: the prior model call failed ({class})"),
                     ));
@@ -559,7 +740,7 @@ impl GatewayModel {
                         .or_else(|| e.payload.get("reason"))
                         .and_then(Json::as_str)
                         .unwrap_or("declined");
-                    messages.push(hh_gateway::openai::text_msg(
+                    messages.push(self.text_msg(
                         "user",
                         &format!(
                             "kernel_note: the prior output was declined by the kernel ({kind}); correct it"
@@ -612,7 +793,7 @@ impl GatewayModel {
                     required.push(Json::str(name.clone()));
                 }
             }
-            tools.push(hh_gateway::openai::tool_entry(
+            tools.push(self.tool_entry(
                 &wire,
                 &s.semantic_id,
                 Json::obj([
@@ -634,19 +815,18 @@ impl GatewayModel {
         let messages = self.transcript(prefix);
         let (tools, wire_to_surface) = self.render_tools()?;
         let mut params = self.lane.provider_params.clone();
-        if !params.contains_key("stream_options") {
+        // The family's own augmentations: chat-completions requests
+        // `stream_options.include_usage` (the trailing usage chunk the
+        // grammar expects); Messages usage rides `message_start`/
+        // `message_delta` natively — `stream_options` is outside the
+        // Messages `plan_schema` and never inserted.
+        if self.family == Family::ChatCompletions && !params.contains_key("stream_options") {
             params.insert(
                 "stream_options".into(),
                 Json::obj([("include_usage", Json::Bool(true))]),
             );
         }
-        let body = hh_gateway::openai::chat_request_body(
-            &self.lane.provider_model_id,
-            &messages,
-            &tools,
-            true,
-            &params,
-        );
+        let body = self.request_body(&messages, &tools, &params);
         let plan = ProviderRequestPlan {
             dialect_id: self.dialect.dialect_id.clone(),
             dialect_version: self.dialect.version.clone(),
@@ -673,11 +853,26 @@ impl GatewayModel {
         self.endpoints
             .admit(&plan.endpoint_ref)
             .map_err(|e| ModelError::new(ModelErrorClass::Forbidden, format!("{e}")))?;
+        // Credential bind — the lane's `credential_ref` coordinate to a
+        // safe handle (`binding_id` + `provided` only). The port resolves
+        // the `env:NAME` coordinate *here* — call-site of dispatch — and a
+        // missing secret is a typed `credential_unavailable` refusal the
+        // plan-error channel carries to `model.call.failed{auth}`; the
+        // wire is never touched (ADR-0366 D4).
+        let credential = self
+            .credentials
+            .bind(
+                self.lane.credential_ref.as_deref(),
+                &self.lane.endpoint_ref,
+                &self.dialect.auth_kinds,
+            )
+            .map_err(|e| ModelError::new(ModelErrorClass::Auth, format!("{e}")))?;
         let _ = mc;
         Ok(PendingPlan {
             body: plan.body.clone(),
             plan,
             wire_to_surface,
+            credential,
         })
     }
 
@@ -754,10 +949,9 @@ impl GatewayModel {
                     }
                 }
                 let text_empty = message.text().is_empty();
-                let response_ref = self.record_io(mc, &pending, frames, message);
-                let up = usage
-                    .clone()
-                    .map(|v| (v, state.raw_usage.clone().unwrap_or(Json::Null)));
+                let raw_usage = state.raw_usage.clone().unwrap_or(Json::Null);
+                let response_ref = self.record_io(mc, &pending, frames, message, &raw_usage);
+                let up = usage.clone();
                 (
                     ModelOutcome {
                         stop_reason: message.stop_reason,
@@ -774,9 +968,7 @@ impl GatewayModel {
             }
             Some(ModelEventKind::Failed { error, usage, .. }) => {
                 let response_ref = self.record_io_err(mc, &pending, frames, error);
-                let up = usage
-                    .clone()
-                    .map(|v| (v, state.raw_usage.clone().unwrap_or(Json::Null)));
+                let up = usage.clone();
                 (
                     ModelOutcome {
                         stop_reason: StopReason::Error,
@@ -803,15 +995,22 @@ impl GatewayModel {
                 return self.error_outcome(mc, &pending, frames, &err);
             }
         };
-        // Terminal members — `usage{record{raw,view,normalizer_ref},
-        // arrival,available}`, `timing`, `served_model`.
+        // Terminal members — `usage{record{view,normalizer_ref},
+        // arrival,available}`, `timing`, `served_model`. The provider's
+        // *raw* usage document stays one hop off the row — `outcome.
+        // usage_raw` on the `model_io` blob `response_ref` resolves to —
+        // because `model.call.completed` is an OPEN_AUDIT class (every
+        // member is an inline audit field bounded at 512 canonical
+        // bytes) and a provider's verbatim usage object can exceed the
+        // bound (Anthropic's cache/service-tier members push it past).
+        // The blob keeps it durable and verbatim; the row keeps the
+        // normalized vector + its provenance.
         let mut members: Vec<(&'static str, Json)> = Vec::new();
         let mut u = std::collections::BTreeMap::new();
         match &usage_pair {
-            Some((v, raw)) => {
+            Some(v) => {
                 u.insert("available".into(), Json::Bool(true));
                 let mut rec = std::collections::BTreeMap::new();
-                rec.insert("raw".into(), raw.clone());
                 rec.insert("view".into(), v.to_json());
                 rec.insert("normalizer_ref".into(), Json::str(v.normalizer_ref.clone()));
                 u.insert("record".into(), Json::Obj(rec));
@@ -864,6 +1063,10 @@ impl GatewayModel {
             },
             wire_to_surface: BTreeMap::new(),
             body: Json::Null,
+            credential: CredentialHandle {
+                binding_id: None,
+                provided: false,
+            },
         }
     }
 
@@ -874,12 +1077,16 @@ impl GatewayModel {
 
     /// Stage the `model_io` blob + answer the `response_ref` (the blob's
     /// `idp` address — the driver deposits before the terminal row lands).
+    /// `raw_usage` rides `outcome.usage_raw` — the provider's verbatim
+    /// usage document, durable off the audit-bounded row (see
+    /// `finish_call`).
     fn record_io(
         &mut self,
         mc: &str,
         pending: &PendingPlan,
         frames: &[(u64, WireFrame)],
         message: &hh_gateway::message::ModelMessage,
+        raw_usage: &Json,
     ) -> String {
         let doc = Json::obj([
             ("schema", Json::str("hh.model_io/1")),
@@ -913,6 +1120,7 @@ impl GatewayModel {
                             .map(Json::str)
                             .unwrap_or(Json::Null),
                     ),
+                    ("usage_raw", raw_usage.clone()),
                 ]),
             ),
         ]);
@@ -1007,12 +1215,20 @@ impl ModelPort for GatewayModel {
                         Json::str(self.lane.provider_model_id.clone()),
                     ),
                 ]);
+                // The row carries the binding's *id* — the coordinate's
+                // binding record, never the material. An unbound handle
+                // (the local lane) records `credentials:none`.
+                let binding_id = p
+                    .credential
+                    .binding_id
+                    .clone()
+                    .unwrap_or_else(|| "credentials:none".to_string());
                 self.pending.insert(mc.to_string(), p);
                 vec![
                     ("plan_hash", Json::str(plan_hash)),
                     ("endpoint_ref", Json::str(self.lane.endpoint_ref.clone())),
                     ("model_ref", model_ref),
-                    ("credential_binding_id", Json::str("credentials:none")),
+                    ("credential_binding_id", Json::str(binding_id)),
                     (
                         "token_estimate",
                         Json::obj([
@@ -1061,25 +1277,17 @@ impl ModelPort for GatewayModel {
                 retry_after_ms: None,
             };
         };
-        // Credential bind — `NoCredentials` on the local family; the
-        // handle's `binding_id` is the member the call's rows carry.
-        if let Err(e) =
-            self.credentials
-                .bind(None, &self.lane.endpoint_ref, &self.dialect.auth_kinds)
-        {
-            let err = ModelError::new(ModelErrorClass::Auth, format!("{e}"));
-            return self.error_outcome(mc, &pending, &[], &err);
-        }
+        // The credential was bound at `requested_members` (the plan's
+        // `credential` member) — the handle carries `binding_id` +
+        // `provided` only; `send` resolves the header material through
+        // the binding's source inside the transport, immediately before
+        // the write, and the value lands nowhere else.
         let bytes = codec::serialize(&pending.plan);
         let t0 = std::time::Instant::now();
-        match self.transport.send(
-            &bytes,
-            &hh_gateway::gateway::CredentialHandle {
-                binding_id: None,
-                provided: false,
-            },
-            &pending.plan.endpoint_ref,
-        ) {
+        match self
+            .transport
+            .send(&bytes, &pending.credential, &pending.plan.endpoint_ref)
+        {
             Ok(frames) => {
                 let ms = t0.elapsed().as_millis() as u64;
                 self.finish_call(mc, pending, &frames, ms)
