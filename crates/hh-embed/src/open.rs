@@ -932,7 +932,7 @@ impl EmbedService {
             budget,
             &control_variant,
             &compute_variant,
-            Some(&sealed.document),
+            Some(&sealed),
         )?;
         // R-2.7 — the bound `router` slot (§5b.2/§5b.4; DF-S1.18-1's
         // machine cells): `router_arm_from_params` decodes the lane, the
@@ -2358,6 +2358,36 @@ impl EmbedService {
         Ok((Some(handle.env_handle_id.clone()), env_json))
     }
 
+    /// R3.3 — the compiled-plan projection: `ctx.plan` is the sealed
+    /// definition's `RuntimePlan/1` control spine, produced by the one
+    /// honest producer (`link` → `lower_native`) rather than re-spelled
+    /// here. The link binds the document's own pinned profile refs (no
+    /// fallback, no targets — the run needs only the control spine); a
+    /// doc that won't link or lower refuses the arm with a typed
+    /// reason, never a zero-step `plan`.
+    fn project_compiled_plan(
+        &self,
+        sealed: &hh_hir::document::SealedDefinition,
+    ) -> Result<Vec<hh_compiler::plan::PlanNode>, EmbedError> {
+        let linked = hh_compiler::link::link(
+            sealed,
+            &crate::bundle_ops::pinned_profile_refs(&sealed.document),
+            None,
+            &[],
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.kernel_prov,
+            None,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("plan_link: {e:?}"),
+        })?;
+        let plan = hh_compiler::plan::lower_native(&linked).map_err(|e| EmbedError::Refused {
+            reason: format!("plan_lower: {e:?}"),
+        })?;
+        Ok(plan.control)
+    }
+
     /// Arm the session driver over the session's run — the bound
     /// `control_strategy` slot selects the variant (`strategy_for`; the
     /// canonical control loop under `KernelSink` + the writer lease).
@@ -2371,8 +2401,9 @@ impl EmbedService {
         budget: Option<&BudgetInput>,
         control_variant: &str,
         compute_variant: &str,
-        doc: Option<&hh_hir::document::HirDocument>,
+        sealed: Option<&hh_hir::document::SealedDefinition>,
     ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
+        let doc = sealed.map(|s| &s.document);
         // §5e.4 — the bound `compute_policy` variant must resolve at arm
         // time (`policy_for` is the admission check; a `bandit`/
         // `surface_prior`/`predictor` ref or an unknown spelling refuses
@@ -2420,19 +2451,29 @@ impl EmbedService {
             parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
             parameters.max_continue_nudges = 1;
         }
-        // The boundary is the *variant's* preset (S3.10) — `plan_execute`
-        // assigns `plan`/`delegate` to the model; react keeps its own.
-        let boundary = if is_plan_execute {
-            hh_control::plan_exec::PlanExecute::new()
-                .capabilities()
-                .boundary_preset
-                .clone()
-        } else {
-            hh_control::react::react_preset()
+        // The boundary is the *armed variant's* own preset (S3.10 —
+        // `plan_execute` assigns `plan`/`delegate` to the model; R3.3 —
+        // the compiled-plan family's all-`code`-but-`escalate` preset
+        // binds through the same slot; never a shared fallback).
+        let strategy = strategy_for(control_variant).ok_or_else(|| EmbedError::Refused {
+            reason: format!("unknown_control_variant: {control_variant}"),
+        })?;
+        let boundary = strategy.capabilities().boundary_preset.clone();
+        // R3.3 — a `requires.procedure` variant (`hh/workflow@1`,
+        // `hh/program@1`) binds `ctx.plan` to the sealed definition's
+        // `RuntimePlan/1` control spine, projected through the one
+        // honest producer (link → `lower_native`). A sealed doc that
+        // won't lower refuses at arm; a procedure variant with no
+        // sealed doc leaves `plan` empty — the driver then refuses
+        // `missing_procedure`, never a staged substitute or a
+        // zero-step success.
+        let plan = match (strategy.capabilities().requires.procedure, sealed) {
+            (true, Some(s)) => self.project_compiled_plan(s)?,
+            _ => vec![],
         };
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
-            plan: vec![],
+            plan,
             boundary,
             profile: Json::Null,
             account_ref: manifest
@@ -2479,9 +2520,7 @@ impl EmbedService {
             env_handle: None,
         };
         Driver::open(
-            strategy_for(control_variant).ok_or_else(|| EmbedError::Refused {
-                reason: format!("unknown_control_variant: {control_variant}"),
-            })?,
+            strategy,
             &ctx,
             policy,
             &mut sink,
@@ -2530,27 +2569,39 @@ impl EmbedService {
         // the `TaskContract` re-projects from the persisted sealed
         // definition (`manifest.harness_def_ref`), never from a side file.
         let is_plan_execute = arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
-        let boundary = if is_plan_execute {
-            hh_control::plan_exec::PlanExecute::new()
-                .capabilities()
-                .boundary_preset
-                .clone()
-        } else {
-            hh_control::react::react_preset()
-        };
+        // The boundary re-binds from the armed variant's own preset —
+        // the R3.3 compiled-plan family's code-but-`escalate` preset
+        // rides the same slot.
+        let strategy = strategy_for(&arm.control_variant).ok_or_else(|| EmbedError::Refused {
+            reason: format!("unknown_control_variant: {}", arm.control_variant),
+        })?;
+        let boundary = strategy.capabilities().boundary_preset.clone();
         let mut parameters = StrategyParams::default();
         if is_plan_execute {
             parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
             parameters.max_continue_nudges = 1;
         }
-        let task_contract = manifest
+        let sealed = manifest
             .harness_def_ref
             .as_deref()
-            .and_then(|r| self.persisted_definition(r).ok())
-            .and_then(|sealed| project_task_contract(&sealed.document));
+            .and_then(|r| self.persisted_definition(r).ok());
+        let task_contract = sealed
+            .as_ref()
+            .and_then(|s| project_task_contract(&s.document));
+        // R3.3 — the resumed leaf's `ctx.plan` re-projects the compiled
+        // `RuntimePlan/1` control spine from the persisted sealed
+        // definition (the same `link` → `lower_native` projection
+        // `arm_driver` runs); the walker's position rides the
+        // checkpoint bytes, the plan itself re-derives — a doc that no
+        // longer lowers refuses the resume, never restores a stale
+        // walk silently.
+        let plan = match (strategy.capabilities().requires.procedure, sealed.as_ref()) {
+            (true, Some(s)) => self.project_compiled_plan(s)?,
+            _ => vec![],
+        };
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
-            plan: vec![],
+            plan,
             boundary,
             profile: Json::Null,
             account_ref: manifest
@@ -2619,9 +2670,7 @@ impl EmbedService {
         let mut ceiling = arm.budget_ceiling.clone();
         let mut remaining = arm.remaining.clone();
         let driver = Driver::resume_from(
-            strategy_for(&arm.control_variant).ok_or_else(|| EmbedError::Refused {
-                reason: format!("unknown_control_variant: {}", arm.control_variant),
-            })?,
+            strategy,
             &ctx,
             policy,
             checkpoint,

@@ -86,6 +86,23 @@ pub fn decision_payload(
             m.push(("context_request", context_request.clone()));
         }
     }
+    // A `delegate`'s ask rides the audit row (S4.6; ADR-0186 D4): `spec`
+    // is the bounded record the spawn kernel resolves (inline or a
+    // `spec_ref` member) and `delegation_reason` is the declared reason —
+    // the member is omitted, never fabricated, when the ask carries none
+    // (a reason-less proposal is refused upstream, so an admitted row
+    // always carries it).
+    if let crate::vocab::DecisionKind::Delegate {
+        spec,
+        delegation_reason,
+        ..
+    } = &d.kind
+    {
+        m.push(("spec", spec.clone()));
+        if let Some(r) = delegation_reason {
+            m.push(("delegation_reason", r.clone()));
+        }
+    }
     Json::obj(m)
 }
 
