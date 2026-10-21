@@ -138,7 +138,14 @@ impl HelperClient {
             .map_err(|e| EnvError::Blob(format!("helper spawn: {e}")))?;
         // Wait for the socket (bounded — a helper that can't start is a
         // spawn failure carrying its verbatim stderr, never a hang).
-        let deadline = Instant::now() + Duration::from_secs(10);
+        // `HH_HELPER_SPAWN_DEADLINE_MS` stretches the bound on a heavily
+        // loaded host (first-exec security assessment / scheduler
+        // contention); the default stays the contract's 10s.
+        let deadline_ms = std::env::var("HH_HELPER_SPAWN_DEADLINE_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(10_000);
+        let deadline = Instant::now() + Duration::from_millis(deadline_ms);
         while !sock.exists() {
             if let Ok(Some(status)) = child.try_wait() {
                 let mut err = String::new();
@@ -159,10 +166,16 @@ impl HelperClient {
         // bind(2) creates the socket file before listen(2) arms it — a
         // `connect` inside that window is ECONNREFUSED; retry briefly
         // rather than misreport a healthy helper as a spawn failure.
+        // `HH_HELPER_CONNECT_DEADLINE_MS` stretches the bound on the same
+        // loaded-host leg (default stays 5s).
+        let connect_deadline_ms = std::env::var("HH_HELPER_CONNECT_DEADLINE_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(5_000);
         let stream = {
             let mut last = None;
             let mut stream = None;
-            let retry_deadline = Instant::now() + Duration::from_secs(5);
+            let retry_deadline = Instant::now() + Duration::from_millis(connect_deadline_ms);
             while Instant::now() < retry_deadline {
                 match UnixStream::connect(&sock) {
                     Ok(s) => {

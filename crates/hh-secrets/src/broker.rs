@@ -30,6 +30,7 @@ use hh_wire::json::Json;
 
 use crate::channel::{SecretChannel, SecretChannelSpec, SecretSource, SenderConstraint};
 use crate::decisions;
+use crate::dpop::{self, DpopProof};
 use crate::env::{EnvBinding, EnvSpec};
 use crate::errors::{BrokerError, Refused, RefusedCode};
 use crate::events;
@@ -207,6 +208,12 @@ pub struct CredentialBinding {
     pub expires_at: String,
     /// The lifecycle state (`bound | active | expired | revoked` — SV-6).
     pub state: BindingState,
+    /// The bound proof-of-possession key coordinate — `Some(_)` only on a
+    /// `dpop`-constrained channel (R3.7): `bind` verified the holder's
+    /// signature over `dpop::bind_preimage` and pinned
+    /// `proof.sender_key()`; every subsequent delivery verb requires a
+    /// proof *by that key* over the verb's own preimage.
+    pub sender_key: Option<String>,
 }
 
 impl CredentialBinding {
@@ -240,6 +247,13 @@ impl CredentialBinding {
                 ),
             ),
             ("issued_at", Json::str(self.issued_at.clone())),
+            (
+                "sender_key",
+                self.sender_key
+                    .as_ref()
+                    .map(|k| Json::str(k.clone()))
+                    .unwrap_or(Json::Null),
+            ),
         ])
     }
 
@@ -271,6 +285,11 @@ pub struct BindRequest {
     pub monitor_decision_ref: String,
     /// The destinations the binding may deliver to (⊆ channel scope).
     pub destinations: BTreeSet<String>,
+    /// The holder's `dpop` proof-of-possession — required when the channel
+    /// declares `sender_constraint = dpop` (R3.7): `bind` verifies it over
+    /// `dpop::bind_preimage(channel, holder, env, mode, decision_ref)` and
+    /// pins `proof.sender_key()` on the binding; ignored for `audience`/`none`.
+    pub dpop_proof: Option<DpopProof>,
 }
 
 /// `RequestDescriptor` — `mediate`'s staged request `{effect_id, destination,
@@ -296,6 +315,12 @@ pub struct RequestDescriptor {
     /// The request path, when there is one — checked for ambiguity
     /// (dot-segments, encoded separators, backslashes → `ambiguous_path`).
     pub path: Option<String>,
+    /// The request's `dpop` proof-of-possession — required when the
+    /// binding's channel declares `sender_constraint = dpop` (R3.7): the
+    /// signature must verify under the binding's pinned `sender_key` over
+    /// `dpop::request_preimage(binding, method, destination, path,
+    /// effect_id)`; anything else is `sender_constraint_unmet`.
+    pub dpop_proof: Option<DpopProof>,
 }
 
 /// Whether a request path is ambiguous — a dot-segment (`..`, `.`), an
@@ -444,6 +469,114 @@ pub struct MintedRecord {
     pub audience: String,
     /// Expiry (run ms).
     pub expires_at_ms: u64,
+    /// The bound `sender_key` the binding carried at mint (`Some` on
+    /// `dpop` channels — `verify_minted` requires a presentation proof by
+    /// that key; R3.7).
+    pub sender_key: Option<String>,
+}
+
+/// `deliver_wrapped`'s request — the `wrapped_long_lived` delivery
+/// descriptor (R3.7; DF-S1.13-4). Distinct from `RequestDescriptor`: a
+/// wrap is installed *at a destination binding*, it is not an egress
+/// request — there is no method/path to prove over (the destination is
+/// what the `dpop` proof binds).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WrapDeliveryRequest {
+    /// The `action.effect.*` scope the wrap is charged to (the `used` row
+    /// references it — SV-5).
+    pub effect_id: String,
+    /// The env the wrap installs on — checked against the binding's
+    /// `env_handle` (the same anti-laundering rule `mediate` enforces).
+    pub env_handle: String,
+    /// The destination the wrap is delivered to (∈ the binding's declared
+    /// destinations — `out_of_scope` otherwise).
+    pub destination: String,
+    /// The holder's `dpop` proof — required when the channel declares
+    /// `sender_constraint = dpop`: the signature must verify under the
+    /// binding's pinned `sender_key` over
+    /// `dpop::request_preimage(binding, None, destination, None, effect)`.
+    pub dpop_proof: Option<DpopProof>,
+}
+
+/// The record of a landed `wrapped_long_lived` delivery — coordinates
+/// plus the wrapped value itself (the wrap; **caller-held** — the kernel
+/// hands it to the destination seam the caller represents; no record this
+/// crate emits carries it — SV-2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WrappedDelivery {
+    /// The binding the wrap delivered under.
+    pub binding_id: String,
+    /// The channel.
+    pub channel_id: String,
+    /// The destination the wrap was delivered to.
+    pub destination: String,
+    /// The effect the delivery was charged to.
+    pub effect_id: String,
+    /// The `wrap-<n>` registration coordinate.
+    pub wrap_id: String,
+    /// The registered compensating-revocation plan coordinate —
+    /// `idp_digest("credential.wrap.compensation", binding ∥ destination ∥
+    /// revocation_paths)`, durable on the `security.credential.wrapped`
+    /// row *before* the value crossed (ADR-0032's `prepare` hook at the
+    /// credential plane; the plan is the `RevokeIntent` set `revoke`
+    /// dispatches).
+    pub compensation_plan_id: String,
+    /// The durable `security.credential.wrapped` row's event id (the
+    /// registration).
+    pub wrapped_event_id: String,
+    /// The durable `security.credential.used` row's event id (the
+    /// delivery itself).
+    pub used_event_id: String,
+    /// The wrapped credential — the resolved secret handed to the
+    /// destination (the mode's own semantics: the value travels wrapped
+    /// to the destination, never a placeholder; caller-held, never
+    /// durable).
+    pub value: String,
+}
+
+/// `probe_wrapped`'s closed verdict — the wrap's application at the
+/// destination as the kernel's own records establish it. This is a pure
+/// fold over broker state (a read — the probe mints no row): `applied`
+/// while the backing binding is live, `not_applied` once the binding is
+/// dead (the registered compensating revocation has run — `revoke`'s
+/// destination intents are its dispatch half, LT-05), `undeterminable`
+/// when no wrap was ever delivered on the binding. The verdict spellings
+/// mirror `hh-ledger`'s `ProbeVerdict` (`applied | not_applied |
+/// undeterminable`) — the probe is honest as a kernel-state verdict, not
+/// a live destination query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WrapProbe {
+    /// The wrap is applied at the destination (the binding is live).
+    Applied,
+    /// The wrap is not applied — the compensating revocation ran (the
+    /// backing binding is dead).
+    NotApplied,
+    /// No wrap was ever delivered on this binding — nothing to probe.
+    Undeterminable,
+}
+
+impl WrapProbe {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WrapProbe::Applied => "applied",
+            WrapProbe::NotApplied => "not_applied",
+            WrapProbe::Undeterminable => "undeterminable",
+        }
+    }
+}
+
+/// The kernel-held wrap registration (in-memory; the durable fact is the
+/// `security.credential.wrapped` row — this map backs `probe_wrapped`'s
+/// `undeterminable` leg).
+#[derive(Debug, Clone)]
+pub struct WrapRecord {
+    /// The registration coordinate.
+    pub wrap_id: String,
+    /// The destination the wrap was delivered to.
+    pub destination: String,
+    /// The registered compensating-revocation plan coordinate.
+    pub compensation_plan_id: String,
 }
 
 /// `virtualize_for_fork`'s result (LT-09) — the old→new placeholder spelling
@@ -501,6 +634,11 @@ pub struct CredentialBroker {
     /// `verify_minted` liveness/audience table (S2.4). In-memory; a dead
     /// binding's records are dropped on revoke/rotate/run-terminal.
     minted: BTreeMap<String, MintedRecord>,
+    /// Kernel-held wrap registrations (`binding_id → record`) — the
+    /// `probe_wrapped` verdict table (R3.7). A dead binding's record is
+    /// **retained**: the wrap *was* delivered — the probe answers
+    /// `not_applied`, never `undeterminable` (LT-05's revoked-wrap leg).
+    wraps: BTreeMap<String, WrapRecord>,
     /// The binding/claim counters.
     seq: u64,
 }
@@ -519,6 +657,7 @@ impl CredentialBroker {
             rotated: BTreeMap::new(),
             pending: BTreeMap::new(),
             minted: BTreeMap::new(),
+            wraps: BTreeMap::new(),
             seq: 0,
         }
     }
@@ -740,25 +879,48 @@ impl CredentialBroker {
             ));
         }
         // A declared sender constraint must *verify* — never silently admit
-        // one the runtime cannot check (R2.10; DF-S1.13-1):
+        // one the runtime cannot check (R2.10/R3.7; DF-S1.13-1):
         //   `audience` — verifiable offline. A `minted_scoped` bind admits:
         //     the minted token binds the audience (`mint` scopes it to the
         //     binding's declared destinations; `verify_minted` checks it
         //     destination-side). Injected modes admit: the audience *is*
         //     the destination, fenced by the scope check below.
-        //   `dpop` — proof-of-possession needs an asymmetric signature
-        //     verification pure-std does not have; it refuses on **every**
-        //     delivery mode, never a fabricated accept.
-        if ch.spec.sender_constraint == SenderConstraint::Dpop {
-            return Err(Refused::new(
-                RefusedCode::SenderConstraintUnmet,
-                format!(
-                    "channel {}'s sender_constraint dpop cannot be verified — \
-                     pure-std has no asymmetric proof-of-possession verifier",
-                    req.channel_id
-                ),
-            ));
-        }
+        //   `dpop` — proof-of-possession verifies through `dpop` (R3.7;
+        //     ADR-0359's `ring` admission): `bind` requires the holder's
+        //     signature over `bind_preimage(channel, holder, env, mode,
+        //     decision_ref)` and pins `proof.sender_key()` on the binding.
+        //     An absent proof or an unverifying signature refuses
+        //     `sender_constraint_unmet` — the fail-closed posture stands.
+        let sender_key = if ch.spec.sender_constraint == SenderConstraint::Dpop {
+            let Some(proof) = req.dpop_proof.as_ref() else {
+                return Err(Refused::new(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!(
+                        "channel {}'s sender_constraint dpop requires a proof — none presented",
+                        req.channel_id
+                    ),
+                ));
+            };
+            let preimage = dpop::bind_preimage(
+                &req.channel_id,
+                &req.holder,
+                &req.env_handle_ref,
+                req.mode.as_str(),
+                &req.monitor_decision_ref,
+            );
+            if !proof.verify(&preimage) {
+                return Err(Refused::new(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!(
+                        "channel {}'s dpop proof does not verify over the bind preimage",
+                        req.channel_id
+                    ),
+                ));
+            }
+            Some(proof.sender_key())
+        } else {
+            None
+        };
         if req.mode == SecretTransport::WrappedLongLived
             && req.env_isolation.strength() < IsolationClass::ProcessSandbox.strength()
         {
@@ -822,6 +984,7 @@ impl CredentialBroker {
             req.mode.as_str(),
             &req.monitor_decision_ref,
             &expires_at,
+            sender_key.as_deref(),
         );
         self.append_security(store, run_id, lease, "security.credential.bound", payload)
             .map_err(|e| {
@@ -845,6 +1008,7 @@ impl CredentialBroker {
             issued_at: store.ts_now(),
             expires_at,
             state: BindingState::Bound,
+            sender_key,
         };
         let ph = Placeholder::mint(run_id, &binding);
         self.placeholders.insert(binding_id.clone(), ph);
@@ -909,8 +1073,8 @@ impl CredentialBroker {
             Ok(MediationOutcome::Refused(Refused::new(code, detail)))
         };
         // The normative refusal order (§5g.3 §5): revoked → expired →
-        // out_of_scope → ambiguous_path → canary → decision_missing →
-        // broker_unavailable.
+        // out_of_scope → ambiguous_path → canary → sender_constraint_unmet
+        // (R3.7) → decision_missing → broker_unavailable.
         if !binding.is_live() || self.revoked_channels.contains(&binding.channel_id) {
             if let Some(b) = self.bindings.get_mut(binding_id) {
                 b.state = BindingState::Revoked;
@@ -1011,6 +1175,50 @@ impl CredentialBroker {
                 ),
             );
         }
+        // Sender constraint (R3.7 — `dpop`; ADR-0359): the request must
+        // carry a proof *by the binding's pinned key* over
+        // `request_preimage(binding, method, destination, path, effect)` —
+        // an absent proof, a key that differs from the bound `sender_key`
+        // (a binding that predates the pin or names another key), or an
+        // unverifying signature all refuse `sender_constraint_unmet`,
+        // durable-denied before the refusal is visible (CC3 — never a
+        // skipped check).
+        if ch.spec.sender_constraint == SenderConstraint::Dpop {
+            let Some(proof) = request.dpop_proof.as_ref() else {
+                return deny(
+                    self,
+                    store,
+                    lease,
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("binding {binding_id}'s dpop channel requires a request proof"),
+                );
+            };
+            if binding.sender_key.as_deref() != Some(proof.sender_key().as_str()) {
+                return deny(
+                    self,
+                    store,
+                    lease,
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("request proof key does not match binding {binding_id}'s sender_key"),
+                );
+            }
+            let preimage = dpop::request_preimage(
+                binding_id,
+                request.method.as_deref(),
+                &request.destination,
+                request.path.as_deref(),
+                &request.effect_id,
+            );
+            if !proof.verify(&preimage) {
+                return deny(
+                    self,
+                    store,
+                    lease,
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("request dpop proof does not verify on binding {binding_id}"),
+                );
+            }
+        }
         // PDP re-check — a covering decided-allow must still exist.
         let view = decisions::fold(store.events(run_id).map_err(|e| BrokerError::Ledger {
             detail: format!("events fold: {e}"),
@@ -1089,20 +1297,25 @@ impl CredentialBroker {
 
     // ── mint (S2.4 — minted_scoped) ──────────────────────────────────────
 
-    /// `mint(binding_id, audience, ttl_ms)` — the `minted_scoped` verb
-    /// (S2.4; ADR-0266 D4). The minted token is a kernel-keyed capability —
+    /// `mint(binding_id, audience, ttl_ms, dpop_proof)` — the
+    /// `minted_scoped` verb (S2.4; ADR-0266 D4). The minted token is a
+    /// kernel-keyed capability —
     /// `mh_mint:v1:<binding_id>:<expires_ms>:<mac>` — carrying **no secret
     /// material**; `verify_minted` re-derives the MAC and checks
     /// audience/expiry/binding-liveness (LT-05: expired ⇒ `Expired`,
     /// revoked binding ⇒ `Revoked`). A `security.credential.used` row is
     /// durable before the token is returned (SV-5 — minting *is* the use).
     ///
-    /// A `sender_constraint = dpop` channel still refuses
-    /// `SenderConstraintUnmet` (pure-std has no asymmetric
-    /// proof-of-possession verifier — DF-S1.13-1's residual). `audience`
-    /// channels verify: the requested audience must sit inside the
-    /// binding's declared destinations (`out_of_scope` otherwise) — the
-    /// token *is* the audience binding `verify_minted` checks.
+    /// A `sender_constraint = dpop` channel verifies through `dpop` (R3.7;
+    /// ADR-0359): `mint` requires a bound-key signature over
+    /// `mint_preimage(binding, audience)` and the token records the bound
+    /// `sender_key` — `verify_minted` then requires a presentation proof
+    /// by that key (an absent/mismatched/unverifying proof refuses
+    /// `SenderConstraintUnmet`, never mints an unverifiable claim).
+    /// `audience` channels verify: the requested audience must sit inside
+    /// the binding's declared destinations (`out_of_scope` otherwise) —
+    /// the token *is* the audience binding `verify_minted` checks.
+    #[allow(clippy::too_many_arguments)] // the verb's record is the §5g.3 mint shape — the arity is the record's.
     pub fn mint(
         &mut self,
         store: &mut Store,
@@ -1111,6 +1324,7 @@ impl CredentialBroker {
         binding_id: &str,
         audience: &str,
         ttl_ms: u64,
+        dpop_proof: Option<&DpopProof>,
     ) -> Result<MintedToken, BrokerError> {
         let Some(binding) = self.bindings.get(binding_id).cloned() else {
             return Err(BrokerError::Refused(Refused::new(
@@ -1132,10 +1346,29 @@ impl CredentialBroker {
             })?
             .clone();
         if ch.spec.sender_constraint == SenderConstraint::Dpop {
-            return Err(BrokerError::Refused(Refused::new(
-                RefusedCode::SenderConstraintUnmet,
-                "dpop proof-of-possession is not verifiable at this stage".to_string(),
-            )));
+            // R3.7 — the mint requires a bound-key signature over
+            // `mint_preimage(binding, audience)`; the token then records
+            // the bound `sender_key` for `verify_minted`'s presentation
+            // check. An absent/mismatched/unverifying proof refuses
+            // `sender_constraint_unmet` — never an unverifiable claim.
+            let Some(proof) = dpop_proof else {
+                return Err(BrokerError::Refused(Refused::new(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("binding {binding_id}'s dpop channel requires a mint proof"),
+                )));
+            };
+            if binding.sender_key.as_deref() != Some(proof.sender_key().as_str()) {
+                return Err(BrokerError::Refused(Refused::new(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("mint proof key does not match binding {binding_id}'s sender_key"),
+                )));
+            }
+            if !proof.verify(&dpop::mint_preimage(binding_id, audience)) {
+                return Err(BrokerError::Refused(Refused::new(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("mint dpop proof does not verify on binding {binding_id}"),
+                )));
+            }
         }
         if ch.spec.canary {
             let leak = Leak::at_mediation(
@@ -1204,6 +1437,7 @@ impl CredentialBroker {
                 channel_id: binding.channel_id.clone(),
                 audience: audience.to_string(),
                 expires_at_ms,
+                sender_key: binding.sender_key.clone(),
             },
         );
         Ok(MintedToken {
@@ -1215,10 +1449,22 @@ impl CredentialBroker {
         })
     }
 
-    /// `verify_minted(token, audience, now_ms)` — the destination-side (or
-    /// test-side) check: re-derive the MAC, confirm the audience, the
-    /// expiry (LT-05) and the backing binding's liveness.
-    pub fn verify_minted(&self, token: &str, audience: &str, now_ms: u64) -> MintedVerdict {
+    /// `verify_minted(token, audience, now_ms, dpop_proof)` — the
+    /// destination-side (or test-side) check: re-derive the MAC, confirm
+    /// the audience, the expiry (LT-05) and the backing binding's
+    /// liveness. A token minted on a `dpop` channel additionally requires
+    /// a presentation proof *by the recorded `sender_key`* over
+    /// `dpop::presentation_preimage(token, audience)` (R3.7 — the proof is
+    /// bound to *this* token spelling, never replayable); an absent,
+    /// mismatched or unverifying proof is `Invalid` — never a
+    /// fabricated accept.
+    pub fn verify_minted(
+        &self,
+        token: &str,
+        audience: &str,
+        now_ms: u64,
+        dpop_proof: Option<&DpopProof>,
+    ) -> MintedVerdict {
         let Some(rec) = self.minted.get(token) else {
             return MintedVerdict::Invalid;
         };
@@ -1256,6 +1502,22 @@ impl CredentialBroker {
             && !self.revoked_channels.contains(&rec.channel_id);
         if !live {
             return MintedVerdict::Revoked;
+        }
+        // R3.7 — a `dpop`-bound token verifies only under a presentation
+        // proof by the recorded `sender_key` over
+        // `presentation_preimage(token, audience)`: the proof is bound to
+        // this token spelling, so a stolen token presented under another
+        // key (or no key) is `Invalid`.
+        if rec.sender_key.is_some() {
+            let Some(proof) = dpop_proof else {
+                return MintedVerdict::Invalid;
+            };
+            if rec.sender_key.as_deref() != Some(proof.sender_key().as_str()) {
+                return MintedVerdict::Invalid;
+            }
+            if !proof.verify(&dpop::presentation_preimage(token, audience)) {
+                return MintedVerdict::Invalid;
+            }
         }
         MintedVerdict::Valid
     }
@@ -1360,6 +1622,7 @@ impl CredentialBroker {
                 nb.mode.as_str(),
                 &nb.decision_ref,
                 &nb.expires_at,
+                nb.sender_key.as_deref(),
             );
             self.append_security(store, run_id, lease, "security.credential.bound", payload)
                 .map_err(|e| BrokerError::Ledger {
@@ -1381,6 +1644,254 @@ impl CredentialBroker {
             rewrites,
             bindings: new_ids,
         })
+    }
+
+    // ── deliver_wrapped / probe_wrapped (R3.7 — wrapped_long_lived) ─────
+
+    /// `deliver_wrapped(binding_id, request)` — the `wrapped_long_lived`
+    /// delivery half (R3.7; DF-S1.13-4's last residual; ADR-0360). The
+    /// wrap's compensating revocation is *registered* durable-before-
+    /// visible: `security.credential.wrapped{wrap_id, destination,
+    /// compensation_plan_id}` lands in the same append as the delivery's
+    /// `security.credential.used` — the ADR-0032 `prepare` hook at the
+    /// credential plane (`compensation_plan_id` is the derived idp/1
+    /// coordinate naming the `RevokeIntent` set `revoke` dispatches to the
+    /// destination's `revocation_path`s — the S2.4 machinery). Only then
+    /// is the wrapped value returned — the value is caller-held, never
+    /// recorded (SV-2).
+    ///
+    /// The refusal order mirrors `mediate`: revoked → mode_not_allowed →
+    /// env/destination out_of_scope → canary → sender_constraint_unmet →
+    /// decision_missing → broker_unavailable → audit_unavailable. The
+    /// `isolation ≥ process_sandbox` gate stays `bind`'s (a wrap-mode
+    /// binding cannot exist below it — `EnvironmentNotIsolated` fired
+    /// there); `probe_wrapped` reports the wrap's applied state.
+    pub fn deliver_wrapped(
+        &mut self,
+        store: &mut Store,
+        run_id: &str,
+        lease: &Lease,
+        binding_id: &str,
+        request: &WrapDeliveryRequest,
+    ) -> Result<WrappedDelivery, BrokerError> {
+        let refuse = |code: RefusedCode, detail: String| {
+            Err(BrokerError::Refused(Refused::new(code, detail)))
+        };
+        let Some(binding) = self.bindings.get(binding_id).cloned() else {
+            return refuse(RefusedCode::Revoked, format!("no binding {binding_id}"));
+        };
+        if !binding.is_live() || self.revoked_channels.contains(&binding.channel_id) {
+            return refuse(
+                RefusedCode::Revoked,
+                format!("binding {binding_id} is revoked"),
+            );
+        }
+        if binding.mode != SecretTransport::WrappedLongLived {
+            return refuse(
+                RefusedCode::ModeNotAllowed,
+                format!(
+                    "binding {binding_id}'s mode is {} — not wrapped_long_lived",
+                    binding.mode.as_str()
+                ),
+            );
+        }
+        if binding.env_handle != request.env_handle {
+            return refuse(
+                RefusedCode::OutOfScope,
+                format!(
+                    "binding {binding_id} is bound to env {} — not {}",
+                    binding.env_handle, request.env_handle
+                ),
+            );
+        }
+        if !binding.destinations.contains(&request.destination) {
+            return refuse(
+                RefusedCode::OutOfScope,
+                format!(
+                    "destination {} is outside binding {binding_id}'s scope",
+                    request.destination
+                ),
+            );
+        }
+        let ch = self
+            .channels
+            .get(&binding.channel_id)
+            .ok_or_else(|| BrokerError::UnknownChannel {
+                channel_id: binding.channel_id.clone(),
+            })?
+            .clone();
+        if ch.spec.canary {
+            let leak = Leak::at_mediation(
+                format!("deliver_wrapped:{}", binding.channel_id),
+                DetectorKind::Canary,
+                Some(binding.channel_id.clone()),
+            );
+            self.append_security(
+                store,
+                run_id,
+                lease,
+                "security.secret.leak_detected",
+                events::leak_detected_payload(&leak),
+            )
+            .map_err(|e| BrokerError::Ledger {
+                detail: format!("leak_detected row not durable: {e}"),
+            })?;
+            return refuse(
+                RefusedCode::Canary,
+                format!("channel {} is a canary — never wrapped", binding.channel_id),
+            );
+        }
+        if ch.spec.sender_constraint == SenderConstraint::Dpop {
+            let Some(proof) = request.dpop_proof.as_ref() else {
+                return refuse(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("binding {binding_id}'s dpop channel requires a wrap proof"),
+                );
+            };
+            if binding.sender_key.as_deref() != Some(proof.sender_key().as_str()) {
+                return refuse(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("wrap proof key does not match binding {binding_id}'s sender_key"),
+                );
+            }
+            if !proof.verify(&dpop::request_preimage(
+                binding_id,
+                None,
+                &request.destination,
+                None,
+                &request.effect_id,
+            )) {
+                return refuse(
+                    RefusedCode::SenderConstraintUnmet,
+                    format!("wrap dpop proof does not verify on binding {binding_id}"),
+                );
+            }
+        }
+        // PDP re-check — a covering decided-allow must still exist.
+        let view = decisions::fold(store.events(run_id).map_err(|e| BrokerError::Ledger {
+            detail: format!("events fold: {e}"),
+        })?);
+        if decisions::covering_secret_access(&view, None, &binding.channel_id, &binding.holder)
+            .is_none()
+        {
+            return refuse(
+                RefusedCode::DecisionMissing,
+                format!(
+                    "no covering decided{{allow}} for secret_access on {}",
+                    binding.channel_id
+                ),
+            );
+        }
+        // Resolve the source — the wrapped value is the real credential
+        // (the mode's semantics), fail closed.
+        let value = self.resolver.resolve(&ch.spec.source).map_err(|e| {
+            BrokerError::Refused(Refused::new(
+                RefusedCode::BrokerUnavailable,
+                format!("source {} unavailable: {}", e.kind, e.detail),
+            ))
+        })?;
+        // The compensating-revocation plan coordinate — the idp/1-derived
+        // name of "POST every channel `revocation_path` + the kernel
+        // `revoked` row" (the `RevokeIntent` set `revoke` produces for
+        // this binding). Deterministic: the plan is a pure function of
+        // the binding + the channel's declared revocation paths.
+        let mut material = format!("{binding_id}\u{1f}{}\u{1f}", request.destination);
+        let mut paths: Vec<&str> = ch
+            .spec
+            .destinations
+            .iter()
+            .filter_map(|d| d.revocation_path.as_deref())
+            .collect();
+        paths.sort_unstable();
+        for p in paths {
+            material.push_str(p);
+            material.push('\u{1f}');
+        }
+        let compensation_plan_id =
+            hh_identity::idp::idp_id("credential.wrap.compensation", material.as_bytes());
+        let wrap_id = self.alloc("wrap");
+        let wrapped_event_id = store.alloc_id("evt");
+        let used_event_id = store.alloc_id("evt");
+        // The registration and the delivery are one durable fact (the
+        // `rotate` batch precedent): `wrapped{compensation_plan_id}` +
+        // `used`, both durable before the value is visible.
+        let mut wrapped_ev = self.kernel_event(
+            store,
+            run_id,
+            "security.credential.wrapped",
+            events::wrapped_payload(
+                &wrap_id,
+                binding_id,
+                &binding.channel_id,
+                binding.channel_revision,
+                &request.destination,
+                &request.effect_id,
+                &binding.expires_at,
+                binding.sender_key.as_deref(),
+                &compensation_plan_id,
+            ),
+        )?;
+        wrapped_ev.event_id = wrapped_event_id.clone();
+        let mut used_ev = self.kernel_event(
+            store,
+            run_id,
+            "security.credential.used",
+            events::used_payload(
+                binding_id,
+                &binding.channel_id,
+                binding.channel_revision,
+                &request.destination,
+                &request.effect_id,
+                "allow",
+                Some(&binding.decision_ref),
+                ProvidedSecret { provided: true },
+            ),
+        )?;
+        used_ev.event_id = used_event_id.clone();
+        store
+            .append(run_id, lease, vec![wrapped_ev, used_ev])
+            .map_err(|e| BrokerError::Ledger {
+                detail: format!("wrapped/used rows not durable: {e}"),
+            })?;
+        self.wraps.insert(
+            binding_id.to_string(),
+            WrapRecord {
+                wrap_id: wrap_id.clone(),
+                destination: request.destination.clone(),
+                compensation_plan_id: compensation_plan_id.clone(),
+            },
+        );
+        if let Some(b) = self.bindings.get_mut(binding_id) {
+            b.state = BindingState::Active;
+        }
+        Ok(WrappedDelivery {
+            binding_id: binding_id.to_string(),
+            channel_id: binding.channel_id.clone(),
+            destination: request.destination.clone(),
+            effect_id: request.effect_id.clone(),
+            wrap_id,
+            compensation_plan_id,
+            wrapped_event_id,
+            used_event_id,
+            value,
+        })
+    }
+
+    /// `probe_wrapped(binding_id)` — the wrap's application verdict at the
+    /// destination (LT-05's revoked-wrap leg): a pure fold over the
+    /// wrap-registration table and the binding's liveness — `Applied`
+    /// while the backing binding lives, `NotApplied` once the registered
+    /// compensating revocation has run (the binding is dead — `revoke`'s
+    /// destination intents are its dispatch half), `Undeterminable` when
+    /// no wrap was delivered on the binding.
+    pub fn probe_wrapped(&self, binding_id: &str) -> WrapProbe {
+        if !self.wraps.contains_key(binding_id) {
+            return WrapProbe::Undeterminable;
+        }
+        match self.bindings.get(binding_id) {
+            Some(b) if b.is_live() => WrapProbe::Applied,
+            _ => WrapProbe::NotApplied,
+        }
     }
 
     // ── revoke ───────────────────────────────────────────────────────────

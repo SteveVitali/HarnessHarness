@@ -82,13 +82,16 @@ impl CredentialKind {
 /// `destinations` (the audience *is* the destination) and `minted_scoped`
 /// carries the audience on the token — `mint` scopes it to the binding's
 /// destinations and `verify_minted` checks it at the destination. `dpop`
-/// refuses `Refused{sender_constraint_unmet}` on every delivery mode —
-/// proof-of-possession needs an asymmetric signature verification pure-std
-/// does not have; an unverifiable constraint never fabricates an accept.
+/// verifies through `crate::dpop` (R3.7 — ADR-0359 admits `ring =0.17.14`
+/// for the asymmetric signature check; the HUMAN-H5 ruling + ADR-0342 D2's
+/// revisit trigger): an absent/mismatched/unverifiable proof still refuses
+/// `Refused{sender_constraint_unmet}` — the fail-closed posture is kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SenderConstraint {
-    /// DPoP-bound (sender key verified at the destination) — unverifiable
-    /// pure-std; `bind`/`mint` refuse `SenderConstraintUnmet` (fail closed).
+    /// DPoP-bound — `bind` verifies a proof over `dpop::bind_preimage` and
+    /// pins the bound `sender_key` on the binding; every delivery verb
+    /// requires a bound-key proof over its verb preimage (a proof that does
+    /// not verify is `SenderConstraintUnmet`, never an admit).
     Dpop,
     /// Audience-bound (the token names the destination) — verified via the
     /// destination scope (injected modes) / the minted token's `audience`
@@ -437,9 +440,10 @@ pub struct SecretChannelSpec {
     /// The rotation policy tag (e.g. `manual`, `per_run`) — the rotation
     /// *mechanism* (`rotate`) is the broker verb.
     pub rotation_policy: Option<String>,
-    /// The sender constraint — `audience` verifies (R2.10); `dpop` refuses
-    /// `sender_constraint_unmet` on every delivery mode (no pure-std
-    /// proof-of-possession verifier).
+    /// The sender constraint — `audience` verifies (R2.10); `dpop` verifies
+    /// through `crate::dpop` (R3.7; ADR-0359's `ring` admission) — an absent,
+    /// mismatched or unverifiable proof still refuses
+    /// `sender_constraint_unmet`.
     pub sender_constraint: SenderConstraint,
     /// The default grant constraints (`budget`, `time`, `count`).
     pub constraints: GrantConstraints,

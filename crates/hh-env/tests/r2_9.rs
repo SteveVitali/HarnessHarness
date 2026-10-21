@@ -1306,6 +1306,7 @@ fn r29_rebind_credentials_for_fork_cross_run() {
             &run,
             &lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: parent_env.clone(),

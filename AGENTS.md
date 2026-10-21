@@ -6,7 +6,8 @@ The E1 reference build of the MetaHarness program: a kernel + Laboratory for
 *harness engineering* — durable, observable, model-conditioned runtimes for
 goal-directed agents, with provenance, budgets and governance carried as
 load-bearing contracts rather than conventions. The system is a 51-crate
-pure-std Rust workspace plus committed contract, spec and build records.
+pure-std-modulo-ADR-0359 Rust workspace (one named, pinned `ring` dep for
+the DPoP verifier) plus committed contract, spec and build records.
 Human-facing overview: `README.md`. The behavioural contract:
 `spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
 
@@ -89,8 +90,11 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 
 ## Code conventions
 
-- **Pure std, hermetic.** No external runtime crates; the single exception is
-  the `tempfile` dev-dep of `hh-varhost` tests. Do not add dependencies.
+- **Pure std, hermetic — modulo ADR-0359.** No external runtime crates
+  except (a) the `tempfile` dev-dep of `hh-varhost` tests and (b) the
+  `ring =0.17.14` dep of `hh-secrets` admitted by ADR-0359 for the closed
+  DPoP-verifier scope (`ring::aead`/`ring::rand` reserved for R3.8). Do
+  not add dependencies — any further crate or `ring` surface is its own ADR.
 - **CC1 — one canonical implementation.** Reuse the existing codec, store,
   canonicalizer or class table; a second spelling of a contract is a defect.
 - **CC7 — the schema source owns both directions.** Change `hh-embed-schema`
@@ -201,7 +205,9 @@ any ledger (record `provided: yes/no`). Validate with
 
 ## Don't
 
-- Don't add runtime dependencies — the workspace is hermetic by contract.
+- Don't add runtime dependencies — the workspace is hermetic by contract
+  modulo ADR-0359's one named, pinned, scoped admission (`ring` in
+  `hh-secrets`); anything beyond its scope needs its own ADR first.
 - Don't hand-edit generated artifacts, `docs/adr/README.md`, or anything under
   `docs/build/` history regions.
 - Don't merge PRs — `mergePolicy: OPERATOR`; the operator merges.

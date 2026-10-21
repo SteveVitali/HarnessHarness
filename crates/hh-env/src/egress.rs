@@ -1226,6 +1226,7 @@ impl<'a> EgressMediator<'a> {
         let mut applied: Vec<String> = Vec::new();
         for sentinel in &sentinel_refs {
             let desc = RequestDescriptor {
+                dpop_proof: None,
                 effect_id: effect_id.to_string(),
                 env_handle: req.env_handle.clone(),
                 destination: host_norm.clone(),

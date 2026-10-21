@@ -55,6 +55,24 @@
 //! - The **mask set** covers minted spellings too (a dead token on a durable
 //!   surface is still a leak).
 //!
+//! # The R3.7 additions (ADR-0359/0360 — the HUMAN-H5 ruling)
+//!
+//! - **`dpop`** — `SenderConstraint::Dpop` verifies: `bind` checks a
+//!   proof-of-possession over `dpop::bind_preimage` and pins
+//!   `sender_key`; `mediate`/`mediate_sentinel`, `mint`/`verify_minted`
+//!   and `deliver_wrapped` require a bound-key proof over their verb
+//!   preimages — every failure mode is still
+//!   `Refused{sender_constraint_unmet}`. The verifier is `crate::dpop`,
+//!   the one construction (CC1) over the ADR-admitted `ring =0.17.14`
+//!   — the workspace's single external runtime crate. Fixture-verified:
+//!   real signatures generated at test time, never live-attested.
+//! - **`deliver_wrapped` / `probe_wrapped`** — the `wrapped_long_lived`
+//!   delivery half: `security.credential.wrapped{compensation_plan_id}`
+//!   registers the compensating revocation (ADR-0032's `prepare` hook at
+//!   the credential plane) durable-before-visible in the same append as
+//!   `used`; `probe_wrapped` folds to `applied | not_applied |
+//!   undeterminable` (a revoked wrap probes `not_applied` — LT-05).
+//!
 //! `leak_scan` is a **test battery** — a static/contract verifier, never a
 //! live-path interceptor (ADR-0059 D2).
 
@@ -63,6 +81,7 @@ pub mod channel;
 mod codec;
 pub mod decisions;
 pub mod defscan;
+pub mod dpop;
 pub mod encoded;
 pub mod env;
 pub mod errors;
@@ -77,7 +96,8 @@ pub use broker::{
     coord_key, path_is_ambiguous, BindRequest, CompositeResolver, CredentialBinding,
     CredentialBroker, Delivery, DenyAllResolver, ForkVirtualization, LaunchEnvResolver,
     MediationOutcome, MintedToken, MintedVerdict, RequestDescriptor, RevokeIntent, RevokeOutcome,
-    RevokeTarget, SecretSourceResolver, SourceError, StaticVault, COMPONENT,
+    RevokeTarget, SecretSourceResolver, SourceError, StaticVault, WrapDeliveryRequest, WrapProbe,
+    WrapRecord, WrappedDelivery, COMPONENT,
 };
 pub use channel::{
     AuthCarrier, CredentialKind, DestinationBinding, SecretChannel, SecretChannelSpec,
@@ -85,6 +105,7 @@ pub use channel::{
 };
 pub use decisions::{covering_secret_access, fold, CoveringDecision, DecidedRow, DecisionView};
 pub use defscan::{check_diff, scan_document, seal_checked};
+pub use dpop::{DpopAlg, DpopProof};
 pub use env::{
     env_apply, env_snapshot, env_sweep, is_inheritable, EnvBinding, EnvSpec, ProjectedEnv,
     KERNEL_NONINHERITABLE,
