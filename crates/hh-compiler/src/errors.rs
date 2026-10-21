@@ -88,6 +88,11 @@ pub enum CompileError {
     AmbiguousSelector {
         /// The tied coordinates.
         detail: String,
+        /// The minted `C-LINK-8` diagnostic — `link` attaches it with the
+        /// caller's kernel provenance (the `LinkError{diagnostics}` carriage
+        /// convention; empty only where the error was raised outside the
+        /// link pipeline — e.g. `resolve_chain` standalone).
+        diagnostics: Vec<AssemblyDiagnostic>,
     },
     /// `PlanError{unsupported_construct(node)}` — the expressiveness ceiling surfaces as
     /// an error (ADR-0019 D3).
@@ -119,6 +124,10 @@ pub enum CompileError {
     DialectNarrowingUndeclared {
         /// The narrowing observed.
         detail: String,
+        /// The minted `C-LINK-9` diagnostic — `link` (and the op-set's own
+        /// `check_dialect_transform`) attach it with the refusal (the
+        /// `LinkError{diagnostics}` carriage convention).
+        diagnostics: Vec<AssemblyDiagnostic>,
     },
     /// `AuthorityWidening` — a surface/PlanMap/synthesis step widens authority:
     /// `effects_bound ⊄ effects(capability_refs)`, an `Invoke` outside
@@ -175,7 +184,7 @@ impl std::fmt::Display for CompileError {
                 write!(f, "LinkError{{{}:{detail}}}", kind.name())
             }
             CompileError::NoProfile { detail } => write!(f, "NoProfile: {detail}"),
-            CompileError::AmbiguousSelector { detail } => {
+            CompileError::AmbiguousSelector { detail, .. } => {
                 write!(f, "AmbiguousSelector: {detail}")
             }
             CompileError::PlanError { node, detail } => {
@@ -192,7 +201,7 @@ impl std::fmt::Display for CompileError {
             CompileError::AuthorityWidening { detail } => {
                 write!(f, "AuthorityWidening: {detail}")
             }
-            CompileError::DialectNarrowingUndeclared { detail } => {
+            CompileError::DialectNarrowingUndeclared { detail, .. } => {
                 write!(f, "DialectNarrowingUndeclared: {detail}")
             }
             CompileError::TargetError { detail } => write!(f, "TargetError: {detail}"),

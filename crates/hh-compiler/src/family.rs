@@ -11,6 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hh_hir::records::{AssumptionDebtRecord, ToolSurface};
+use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
 use crate::equiv::{ArgMapEntry, ArgTransform, EvidenceVerdict, Inclusion, SurfaceBinding};
@@ -445,6 +446,22 @@ pub struct SchemaDialectTransform {
     pub ops: Vec<DialectOp>,
 }
 
+/// The `DialectNarrowingUndeclared` refusal carries the minted `C-LINK-9` row
+/// (R3.6) — the op-check has no kernel provenance of its own, so the
+/// compiler's own record stamps `detail` (the `link_precheck`
+/// `ProvenanceRecord::kernel("assembly", 0)` convention).
+fn dn_diag(dialect: &str, detail: &str) -> hh_assembly::AssemblyDiagnostic {
+    crate::link::diag(
+        hh_assembly::Code::LinkDialectNarrowing,
+        hh_assembly::Severity::Error,
+        "/assembly",
+        dialect,
+        detail,
+        "declare the narrowing — under a bound profile's `schema_dialect` rule, or the op's `narrowed` set for the transform check",
+        &ProvenanceRecord::kernel("compiler", 0),
+    )
+}
+
 /// `check_dialect_transform(transform, capability_schema,
 /// surface_schema)` — AC-R-2.5.2-5: run the op set's declared narrowings
 /// against the observed schema diff (`schema_includes` per member): an op
@@ -463,12 +480,16 @@ pub fn check_dialect_transform(
         .flat_map(|o| o.narrowed.iter().map(String::as_str))
         .collect();
     match verdict {
-        Inclusion::Widened => Err(CompileError::DialectNarrowingUndeclared {
-            detail: format!(
+        Inclusion::Widened => {
+            let detail = format!(
                 "dialect transform to {} widens the schema — undeclared type invention (AC-R-2.5.2-5)",
                 transform.dialect
-            ),
-        }),
+            );
+            Err(CompileError::DialectNarrowingUndeclared {
+                diagnostics: vec![dn_diag(&transform.dialect, &detail)],
+                detail,
+            })
+        }
         Inclusion::Narrowed => {
             // A narrowing occurred — at least one op must declare a
             // narrowing effect covering the touched keywords; a nullability
@@ -482,17 +503,21 @@ pub fn check_dialect_transform(
                     .and_then(Json::as_str)
                     .is_some_and(|t| t.contains("null"));
             if nullability_lost && !declared.contains("nullability_lost") {
+                let detail =
+                    "nullability loss without a declared `nullability_lost` narrowing".to_string();
                 return Err(CompileError::DialectNarrowingUndeclared {
-                    detail: "nullability loss without a declared `nullability_lost` narrowing"
-                        .to_string(),
+                    diagnostics: vec![dn_diag(&transform.dialect, &detail)],
+                    detail,
                 });
             }
             if declared.is_empty() {
+                let detail = format!(
+                    "dialect transform to {} narrowed the schema with no declared narrowing effect",
+                    transform.dialect
+                );
                 return Err(CompileError::DialectNarrowingUndeclared {
-                    detail: format!(
-                        "dialect transform to {} narrowed the schema with no declared narrowing effect",
-                        transform.dialect
-                    ),
+                    diagnostics: vec![dn_diag(&transform.dialect, &detail)],
+                    detail,
                 });
             }
             Ok(declared.iter().map(|s| s.to_string()).collect())

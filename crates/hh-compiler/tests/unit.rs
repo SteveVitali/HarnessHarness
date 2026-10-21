@@ -634,8 +634,17 @@ fn link_refuses_undeclared_dialect_narrowing() {
         &kernel(),
         None,
     ) {
-        Err(CompileError::DialectNarrowingUndeclared { detail }) => {
+        Err(CompileError::DialectNarrowingUndeclared {
+            detail,
+            diagnostics,
+        }) => {
             assert!(detail.contains("token-optimized-notation"), "{detail}");
+            // R3.6 — the refusal carries the minted `C-LINK-9` diagnostic.
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            let d = &diagnostics[0];
+            assert_eq!(d.code.code(), "C-LINK-9");
+            assert_eq!(d.stage, hh_assembly::Stage::Link);
+            assert_eq!(d.severity, hh_assembly::Severity::Error);
         }
         other => panic!("expected DialectNarrowingUndeclared, got {other:?}"),
     }
@@ -732,7 +741,44 @@ fn chain_ambiguous_selector_tie_refuses() {
     let b = profile_with("p-b", "1.0", vec![]);
     let profiles = MapProfileView::of(vec![a.clone(), b.clone()]);
     match resolve_chain(&[profile_coordinate(&a), profile_coordinate(&b)], &profiles) {
-        Err(CompileError::AmbiguousSelector { .. }) => {}
+        Err(CompileError::AmbiguousSelector { diagnostics, .. }) => {
+            // The pure resolver mints nothing — `link` attaches the row.
+            assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        }
+        other => panic!("expected AmbiguousSelector, got {other:?}"),
+    }
+}
+
+#[test]
+fn link_ambiguous_selector_tie_mints_c_link_8() {
+    // R3.6 — the same tie through `link` carries the minted `C-LINK-8`
+    // diagnostic (the `LinkError{diagnostics}` carriage convention).
+    let a = profile_with("p-a", "1.0", vec![]);
+    let b = profile_with("p-b", "1.0", vec![]);
+    let profiles = MapProfileView::of(vec![a.clone(), b.clone()]);
+    let (store, sealed, _vids) = sealed_doc("link-tie");
+    match link(
+        &sealed,
+        &[profile_coordinate(&a), profile_coordinate(&b)],
+        None,
+        &[mcp_target()],
+        &profiles,
+        &store,
+        &kernel(),
+        None,
+    ) {
+        Err(CompileError::AmbiguousSelector {
+            detail,
+            diagnostics,
+        }) => {
+            assert!(detail.contains("tie"), "{detail}");
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            let d = &diagnostics[0];
+            assert_eq!(d.code.code(), "C-LINK-8");
+            assert_eq!(d.stage, hh_assembly::Stage::Link);
+            assert_eq!(d.severity, hh_assembly::Severity::Error);
+            assert_eq!(d.path, "/assembly/profile_binding");
+        }
         other => panic!("expected AmbiguousSelector, got {other:?}"),
     }
 }

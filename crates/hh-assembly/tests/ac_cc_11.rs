@@ -232,10 +232,13 @@ fn index() -> BTreeMap<&'static str, Row> {
         true,
         &[],
     ));
-    put(x("C-REF-2", "ResolveOutcome::Ambiguous has no producer in the current NameIndex — the mapping waits on the resolver's arrival"));
-    put(x(
+    put(u(
+        "C-REF-2",
+        "armed mapping, no producible trigger: `resolve`'s `reg_err` maps `RegistryError::Ambiguous` here and `RegistryStore::resolve` produces it from `ResolveOutcome::Ambiguous`, but the one resolver — `hh_identity::names::NameIndex::resolve` — deterministically selects the latest live head, and `resolve_extensions`' `latest` selector takes max(registered_at, version_id); no document yields a multi-candidate ambiguity. Re-opens when a name-index or selector path returns >1 admissible candidate (e.g. a divergent-history rule in `NameIndex` or an extension-selector tie rule).",
+    ));
+    put(u(
         "C-REF-3",
-        "RegistryError::NameCollision is a publish-time error — assembly resolve never publishes",
+        "publish-admission owned: `RegistryStore::publish` raises `RegistryError::NameCollision` on a contested (namespace, name) — assembly `resolve` never publishes, so `reg_err`'s arm is unreachable, and the one in-tree publish surface (`hh_lab::assembly::service::apply`) spells every publish refusal `C-PLAN-1`. Re-opens if resolve gains a collision check or the publish refusal gains per-kind spellings.",
     ));
     put(f(
         "C-REF-4",
@@ -322,7 +325,10 @@ fn index() -> BTreeMap<&'static str, Row> {
         false,
         &[],
     ));
-    put(u("C-CLASS-7", "register-time `dialect_covers` refuses the incompatible record before a document stage can mint the code"));
+    put(u(
+        "C-CLASS-7",
+        "registry-admission owned: `RegistryStore::register`/`check_variant` refuse a record whose dialect range excludes `registry/1` (`RegistryError::DialectIncompatible`) before any document can carry it to resolve — `reg_err`'s arm for the variant is unreachable on the read path. Re-opens if resolve gains a per-record dialect audit over the consumed snapshot (a stale-index admission leg).",
+    ));
     put(f(
         "C-CLASS-8",
         f_class_mismatch,
@@ -416,8 +422,14 @@ fn index() -> BTreeMap<&'static str, Row> {
         &[],
     ));
     put(x("C-PROF-2", "hh-compiler::lower + hh-lab::assembly::service — the expressibility refusal is minted downstream"));
-    put(u("C-PROF-3", "the §3.3.2 pin-across-profile-factors rule has no landed check — a registered code awaiting its emitter"));
-    put(u("C-LCD-1", "no C0 `EdgeKind` spelling contains `host` — the 7-L4 check binds when a hosting edge kind lands"));
+    put(u(
+        "C-PROF-3",
+        "experiment-plane owned: the §3.3.2/§6.3 rule (a `non_portable` — pinned-profile — level must not vary across the harness factor) is enforced at `hh_lab::experiment` registration as `ExperimentRefusal::ProfilePinnedAcrossProfiles`; the experiment plane reports its own refusal taxonomy, never an `AssemblyDiagnostic`. Re-opens if an experiment-plane refusal is ever bridged into a `ValidationReport`, or a plan-time `non_portable` check lands in `validate`.",
+    ));
+    put(u(
+        "C-LCD-1",
+        "armed but unreachable: `validate`'s 7-L4 scan emits `LcdHostingEdge` for any edge kind whose spelling contains `host`, but HIR/1's closed `EdgeKind` set (`hh_hir::kinds`) carries no hosting kind — an authored `host` edge dies earlier as a `C-KERN-*` parse/validate refusal. Re-opens when a hosting `EdgeKind` lands in a future dialect (the C1+ hosted-binding work) or a hosting-edge member encoding lands that the scan reads.",
+    ));
     put(f(
         "C-LCD-2",
         f_lcd_surface,
@@ -461,9 +473,12 @@ fn index() -> BTreeMap<&'static str, Row> {
     // ── locator / trust / secrets / extensions. ────────────────────────────
     put(u(
         "C-LOC-1",
-        "no emitter — registered for the locator-class refusal (C1+ source locators)",
+        "instantiate-owned: `hh_assembly::instantiate` records `BindFailure{locality_unsupported}` plus a `component_bound` lifecycle event when a bound variant's `implementation.placement` is not `in_process` (Stage-1 binds in-process only — DF-S1.9-1 names the out-of-process host the Stage-2 slice); bind failures are lifecycle events and a `BindFailure`, never `AssemblyDiagnostic`s. Re-opens if the bind pass gains a diagnostic surface (a plan/validate placement admission check, or a reporting instantiate verb).",
     ));
-    put(u("C-TRUST-1", "no emitter — `instantiate`'s `BindReason::TrustDenied` is a bind-failure spelling, not this diagnostic"));
+    put(u(
+        "C-TRUST-1",
+        "runtime-owned: a `VariantRuntime::bind` refusal (`BindReason::TrustDenied` — the bound runtime's trust-posture check) surfaces through `instantiate` as `BindFailure` plus a `component_bound{outcome: trust_denied}` lifecycle event, never an `AssemblyDiagnostic`. Re-opens when a trust-gated `VariantRuntime` is bound into a diagnostic-reporting bind path, or a validation-stage trust-posture check lands.",
+    ));
     put(f(
         "C-SEC-1",
         f_sec_inline,
@@ -543,10 +558,13 @@ fn index() -> BTreeMap<&'static str, Row> {
     ));
     put(x("C-LINK-6", "hh-compiler::link"));
     put(x("C-LINK-7", "hh-compiler::link"));
-    put(u("C-LINK-8", "`CompileError::AmbiguousSelector` exists; the diagnostic code is never minted — the refusal reports via the error kind"));
-    put(u(
+    put(x(
+        "C-LINK-8",
+        "hh-compiler::link — minted with the `AmbiguousSelector` refusal at the `resolve_chain` call (R3.6); `hh-lab::assembly::service` stage-6b reports it verbatim (suites: hh-compiler `link_ambiguous_selector_tie_mints_c_link_8`, hh-lab `r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8`)",
+    ));
+    put(x(
         "C-LINK-9",
-        "`CompileError::DialectNarrowingUndeclared` exists; the diagnostic code is never minted",
+        "hh-compiler::link + hh-compiler::family — minted with the `DialectNarrowingUndeclared` refusal at both producers (R3.6); stage-6b reports it verbatim (suites: hh-compiler `link_refuses_undeclared_dialect_narrowing`, `ac_r_2_5_2_5_dialect_narrowing_must_be_declared`)",
     ));
     put(x(
         "C-PLAN-1",
@@ -555,9 +573,12 @@ fn index() -> BTreeMap<&'static str, Row> {
     put(x("C-PLAN-2", "hh-lab::assembly::service"));
     put(u(
         "C-SEAL-1",
-        "`CompileError::NonCanonicalInput` exists; the diagnostic code is never minted",
+        "defect-gated: `CompileError::SealError{non_canonical}` fires only when stage-5's re-encode self-check catches the compiler's own output failing to round-trip — no authored document reaches it; `hh-lab::assembly::service` stage-6b is armed to spell it `C-SEAL-1` if it ever fires (the row reports `validate:6b` as its producing stage — §3.3.8's closed stage set carries no `seal` spelling, CF-492). Re-opens when a content-dependent seal check lands or the stage taxonomy gains `seal`.",
     ));
-    put(u("C-RES-1", "a results-plane status spelling; no emitter"));
+    put(u(
+        "C-RES-1",
+        "resume-verdict owned: `hh_assembly::verify_resume` returns `ResumeVerdict::Incompatible{reasons}` — a typed verdict, and its one consumer (`hh-embed::open`'s resume leg) reports it as `EmbedError::DefinitionChanged{reasons}` (boundary-error strings), never an `AssemblyDiagnostic`. Re-opens if the resume-incompatible surface is bridged to diagnostics — a reporting resume verb or a diagnostics payload on `DefinitionChanged`.",
+    ));
     put(n(
         "C-INT-1",
         "hh-lab::assembly::service — the residual floor; a fixture yielding it is a defect",
