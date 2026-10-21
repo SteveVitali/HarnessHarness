@@ -50,7 +50,8 @@ export function treeCanonicalDoc(manifest: Json): [{ [key: string]: Json }, stri
 
 /** `identity-trees`: `id` string per `<n>.input.json` case. */
 export function armIdentityTrees(armDir: string): { [key: string]: Json } {
-  const answers: { [key: string]: Json } = {};
+  // `Object.create(null)` — a `__proto__`-named case lands as a real key.
+  const answers: { [key: string]: Json } = Object.create(null);
   const cases = readdirSync(armDir)
     .filter((f) => f.endsWith(".input.json"))
     .sort();

@@ -10,7 +10,8 @@ import { canonical, parseJson, sha256Hex } from "./core.ts";
 import type { Json } from "./core.ts";
 
 export function armCanonicalParse(armDir: string): { [key: string]: Json } {
-  const answers: { [key: string]: Json } = {};
+  // `Object.create(null)` — a `__proto__`-named case lands as a real key.
+  const answers: { [key: string]: Json } = Object.create(null);
   const framesDir = join(armDir, "frames");
   const cases = readdirSync(framesDir)
     .filter((f) => f.endsWith(".json"))

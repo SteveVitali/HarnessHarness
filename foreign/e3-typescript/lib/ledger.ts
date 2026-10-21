@@ -10,7 +10,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonical, idpId, parseJson, sha256Hex } from "./core.ts";
+import { canonical, decodeUtf8, idpId, parseJson, sha256Hex } from "./core.ts";
 import type { Json } from "./core.ts";
 
 function isObj(v: Json | undefined): v is { [key: string]: Json } {
@@ -30,7 +30,7 @@ export function replayWal(walPath: string): {
   const wal = readFileSync(walPath);
   let prev = "genesis";
   const eventHashes: string[] = [];
-  for (const line of wal.toString("utf8").split("\n")) {
+  for (const line of decodeUtf8(wal).split("\n")) {
     if (line === "") continue;
     const frame = parseJson(line);
     if (!canonical(frame).equals(Buffer.from(line, "utf8"))) {

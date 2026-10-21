@@ -6,9 +6,9 @@
 //   Primitive 3 — `tree/1` addressing over the `<n>.input.json` manifest shape
 //
 // Implemented from CHECKER.md's spec text plus the committed fixture
-// shapes — no Rust code was transliterated. Stdlib only: `node:crypto`,
-// `node:buffer`, `node:util`. Erasable-TypeScript only (node type
-// stripping): type annotations and `import type` — never enums,
+// shapes — no Rust code was transliterated. Stdlib only: `node:crypto`
+// (+ the `Buffer`/`TextDecoder` globals). Erasable-TypeScript only (node
+// type stripping): type annotations and `import type` — never enums,
 // namespaces or parameter properties.
 //
 // Honesty note: this is a *candidate* implementation. Its answers are
@@ -165,8 +165,16 @@ function checkNumbers(value: Json): Json {
 
 /** Parse a JSON document into the canonical value model. Non-integer
  *  numbers and unpaired surrogates are refused, never silently coerced. */
+/** Bytes → text: `fatal: true` refuses invalid UTF-8 honestly
+ *  (`Buffer.toString("utf8")` would silently mint U+FFFD replacements —
+ *  a degrade, never allowed). The one decoding spelling (CC1). */
+const UTF8_FATAL = new TextDecoder("utf-8", { fatal: true });
+export function decodeUtf8(data: Buffer): string {
+  return UTF8_FATAL.decode(data);
+}
+
 export function parseJson(data: Buffer | string): Json {
-  const text = Buffer.isBuffer(data) ? data.toString("utf8") : data;
+  const text = Buffer.isBuffer(data) ? decodeUtf8(data) : data;
   // JSON.parse already rejects non-JSON literals (NaN, Infinity) and
   // joins `\uXXXX` surrogate pairs into real code points.
   const value = JSON.parse(text) as Json;

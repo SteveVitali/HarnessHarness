@@ -32,38 +32,40 @@ function referencedVersionIds(kind: Json | undefined, body: Json | undefined): s
   if (!isObj(body)) return [];
   const out: string[] = [];
   if (kind === "class") {
-    if (typeof body["conformance_suite_ref"] === "string") {
-      out.push(body["conformance_suite_ref"]);
+    if (body["conformance_suite_ref"]) {
+      out.push(body["conformance_suite_ref"] as string);
     }
-    for (const dep of (body["depends_on"] as Json[]) ?? []) {
-      if (isObj(dep) && typeof dep["version_id"] === "string") {
-        out.push(dep["version_id"]);
+    const deps = body["depends_on"];
+    for (const dep of Array.isArray(deps) ? deps : []) {
+      if (isObj(dep) && dep["version_id"]) {
+        out.push(dep["version_id"] as string);
       }
     }
   } else if (kind === "variant") {
-    if (typeof body["class_ref"] === "string") out.push(body["class_ref"]);
+    if (body["class_ref"]) out.push(body["class_ref"] as string);
   } else if (kind === "conformance_suite") {
-    if (typeof body["class_ref"] === "string") out.push(body["class_ref"]);
+    if (body["class_ref"]) out.push(body["class_ref"] as string);
   } else if (kind === "conformance_report") {
     for (const k of ["subject_ref", "suite_ref"]) {
-      if (typeof body[k] === "string") out.push(body[k]);
+      if (body[k]) out.push(body[k] as string);
     }
   } else if (kind === "registry_snapshot") {
-    for (const m of (body["members"] as Json[]) ?? []) {
+    const members = body["members"];
+    for (const m of Array.isArray(members) ? members : []) {
       out.push(m as string);
     }
   } else if (kind === "extension") {
-    for (const r of (body["contributes"] as Json[]) ?? []) {
-      if (isObj(r) && typeof r["version_id"] === "string") {
-        out.push(r["version_id"]);
+    const contributes = body["contributes"];
+    for (const r of Array.isArray(contributes) ? contributes : []) {
+      if (isObj(r) && r["version_id"]) {
+        out.push(r["version_id"] as string);
       }
     }
     const trust = body["trust"];
-    if (isObj(trust)) {
-      for (const r of (trust["grants"] as Json[]) ?? []) {
-        if (isObj(r) && typeof r["version_id"] === "string") {
-          out.push(r["version_id"]);
-        }
+    const grants = isObj(trust) ? trust["grants"] : undefined;
+    for (const r of Array.isArray(grants) ? grants : []) {
+      if (isObj(r) && r["version_id"]) {
+        out.push(r["version_id"] as string);
       }
     }
   } else if (kind === "environment_record") {
@@ -98,7 +100,7 @@ export class RegistryReplay {
 
   constructor(log: Json[]) {
     for (const line of log) {
-      if (!isObj(line)) continue;
+      if (!isObj(line)) throw new Error("registry log line must be an object");
       const ty = line["type"];
       if (ty === "record") {
         const env = line["envelope"] as { [key: string]: Json };
@@ -198,8 +200,9 @@ export class RegistryReplay {
         );
       }
     }
+    const membersArr = isObj(body) ? body["members"] : undefined;
     const members = new Set<string>(
-      isObj(body) ? ((body["members"] as Json[]) ?? []).map((m) => m as string) : [],
+      (Array.isArray(membersArr) ? membersArr : []).map((m) => m as string),
     );
     return { members, nameBindings: bindings };
   }
@@ -352,7 +355,7 @@ export function armRegistrySnapshot(armDir: string): { [key: string]: Json } {
         rec.env["kind"] === "class" &&
         isObj(rec.body) &&
         rec.body["class_id"] === cid &&
-        typeof rec.body["conformance_suite_ref"] === "string"
+        !!rec.body["conformance_suite_ref"]
       ) {
         hasSuite = true;
         break;
