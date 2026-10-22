@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -94,6 +94,13 @@ leg_field() { # $1 leg, $2 field
     oauth-device:provider) printf 'github-oauth';;
     oauth-device:kind)     printf 'script';;
     oauth-device:names)    printf 'HH_GITHUB_OAUTH_CLIENT_ID';;
+    context-adapters:ticket)   printf 'R4.7b';;
+    context-adapters:provider) printf 'multi-provider';;
+    context-adapters:kind)     printf 'script';;
+    context-adapters:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY ANTHROPIC_API_KEY';;
+    context-adapters:test)     printf 'hh-embed:r4_7b_live';;
+    context-adapters:pricekey.openai)    printf 'openai/text-embedding-3-small';;
+    context-adapters:pricekey.anthropic) printf 'anthropic/claude-haiku-5-5';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -105,7 +112,7 @@ known_leg() { local l; for l in $(legs); do [ "$l" = "$1" ] && return 0; done; r
 # Every NAME the framework can report on (leg requirements + the HUMAN-H6
 # provision set later legs consume).
 all_names() {
-  printf '%s\n' HH_LOCAL_BASE_URL HH_LOCAL_MODEL \
+  printf '%s\n' HH_LOCAL_BASE_URL HH_LOCAL_MODEL HH_LOCAL_EMBED_MODEL \
     OPENAI_API_KEY ANTHROPIC_API_KEY \
     HH_GITHUB_OAUTH_CLIENT_ID HH_GITHUB_SANDBOX_REPO \
     HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_WEBHOOK_SECRET HH_SELFTEST_TOKEN | sort -u
@@ -627,6 +634,79 @@ run_leg_oauth_device() {
   # `if`, never `&&` as the function's last statement — an empty $subj
   # would exit-1 under `set -e` and kill cmd_run before emit_record.
   if [ -n "$subj" ]; then ASSERTIONS="$ASSERTIONS; subject_login_sha256=$subj"; fi
+}
+
+
+# R4.7b — `context-adapters` (BL-31's adapter member; ADR-0253/ADR-0313
+# fired-answered): the lane-backed adapters over real providers — the
+# local lane's embedding batch (llama.cpp/Ollama `openai-compatible@1`;
+# a capability-absent endpoint answers the provider's own typed refusal,
+# recorded — never a fabricated vector) + local summarization through
+# `LaneSummarizer`/`GatewayModel`, then the hosted legs: `openai@1`
+# `POST /v1/embeddings` over the benchset corpus slice (the recorded
+# vectors are the committed `hh-embedding-cache/1` fixture the hermetic
+# battery replays — `HH_EMBED_CACHE_OUT`) and `anthropic-messages@1`'s
+# provider-native compaction (`anthropic-beta: compact-2026-09-04`).
+# `LIVE_EMBED_USAGE`/`LIVE_COMPACT_USAGE` markers price against the
+# pinned rows; the local cells are the declared zero-spend legs.
+run_leg_context_adapters() {
+  require cargo; require python3
+  local spec crate tbin filt
+  spec=$(leg_field "context-adapters" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "context-adapters" names); do export "$n"; done
+  # The optional embedding-model name reaches the test only when set —
+  # absent it is not a required name (the local lane may already name a
+  # model that serves embeddings).
+  [ -n "${HH_LOCAL_EMBED_MODEL:-}" ] && export HH_LOCAL_EMBED_MODEL
+  ENDPOINT_HOST=""; MODEL_REPORTED=""
+  ASSERTIONS="the lane-backed adapters over real providers: local embedding batch (or the endpoint's own typed refusal, recorded) + local summarization through LaneSummarizer/GatewayModel; hosted openai@1 embeddings over the benchset corpus slice — the recorded vectors land the committed hh-embedding-cache/1 fixture the hermetic battery replays; anthropic-messages@1 provider-native compaction (compact-2026-09-04) — stop_reason:compaction, no structured forgotten ranges (all_prior verbatim); usage rides the charge records; provided names only"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local cache="$REPO/crates/hh-embed/tests/fixtures/r4_7b/embedding_cache.json"
+  mkdir -p "$(dirname "$cache")"
+  local rc=0
+  if {
+    printf '$ HH_EMBED_CACHE_OUT=<fixture> HH_LOCAL_EMBED_MODEL=<optional> cargo test -p %s --test %s -- --ignored --nocapture --test-threads=1\n\n' "$crate" "$tbin"
+    (cd "$REPO" && HH_EMBED_CACHE_OUT="$cache" \
+      cargo test -p "$crate" --test "$tbin" -- --ignored --nocapture --test-threads=1) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local usage model
+  # Markers are unanchored — libtest may prefix a line with
+  # `test <name> ...` while the ignored cell prints.
+  model=$(grep -o 'LIVE_MODEL: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_MODEL: //' || true)
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"; MODEL_REPORTED="$model"
+    local eu cu ka ko
+    eu=$(grep -o 'LIVE_EMBED_USAGE: .*' "$TRANSCRIPT_RAW" | head -1 | sed 's/.*LIVE_EMBED_USAGE: //' || true)
+    cu=$(grep -o 'LIVE_COMPACT_USAGE: .*' "$TRANSCRIPT_RAW" | head -1 | sed 's/.*LIVE_COMPACT_USAGE: //' || true)
+    ka=$(leg_field "context-adapters" pricekey.anthropic)
+    ko=$(leg_field "context-adapters" pricekey.openai)
+    LEG_COST_MEASURED=$(python3 - "$PRICING" "$ko" "$ka" "$eu" "$cu" <<'PRICE'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+def price(key, uj):
+    if not uj:
+        return 0.0
+    row = pricing["models"].get(key)
+    if row is None:
+        sys.exit("live-verify: NoPrice — no pinned row for " + key)
+    u = json.loads(uj)
+    return (u.get("input_total", 0) * row["prompt_per_1k_usd"]
+            + u.get("output_total", 0) * row["completion_per_1k_usd"]) / 1000.0
+print("%.6f" % (price(sys.argv[2], sys.argv[4]) + price(sys.argv[3], sys.argv[5])))
+PRICE
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    [ -n "$eu" ] && LEG_TOKEN_USAGE="$eu"
+    local marks
+    marks=$(grep -oE 'LIVE_(EMBED|SUMM|COMPACT)[ :].*' "$TRANSCRIPT_RAW" | sed 's/^test [^ ]* \.\.\. //' | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+    grep -q 'cache-recorded' "$TRANSCRIPT_RAW"       || ASSERTIONS="$ASSERTIONS; WARN no cache-recorded marker — the hermetic cache fixture was not rewritten this leg"
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

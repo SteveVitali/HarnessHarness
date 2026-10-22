@@ -27,11 +27,23 @@
       "cache_read_per_1k_usd": 0.0001,
       "note": "Anthropic published pricing — Claude Haiku 4.5 $1.00/$5.00 per MTok; prompt cache write 1.25x base input, read 0.1x base input — pinned 2026-10-21 (R4.5d)"
     },
+    "anthropic/claude-haiku-5-5": {
+      "prompt_per_1k_usd": 0.0001,
+      "completion_per_1k_usd": 0.0005,
+      "cache_write_per_1k_usd": 0.000125,
+      "cache_read_per_1k_usd": 0.00001,
+      "note": "Anthropic published pricing — Claude Haiku 5.5 $0.10/$0.50 per MTok (<=100K prompt); cache write 1.25x base input, read 0.1x — pinned 2026-10-22 (R4.7b; the compact-2026-09-04 supported-models list names claude-haiku-5-5, not haiku-4.5)"
+    },
     "openai/gpt-4.1-mini-2025-04-14": {
       "prompt_per_1k_usd": 0.0004,
       "completion_per_1k_usd": 0.0016,
       "cache_read_per_1k_usd": 0.0001,
       "note": "OpenAI published pricing — gpt-4.1-mini $0.40/$1.60 per MTok, cached input $0.10 per MTok; the dated snapshot id the provider serves — pinned 2026-10-21 (R4.5d)"
+    },
+    "openai/text-embedding-3-small": {
+      "prompt_per_1k_usd": 0.00002,
+      "completion_per_1k_usd": 0.0,
+      "note": "OpenAI published pricing — text-embedding-3-small $0.02 per MTok input, no output leg — pinned 2026-10-22 (R4.7b)"
     }
   }
 }

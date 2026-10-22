@@ -408,6 +408,27 @@ impl HttpModelTransport {
         op: &str,
         body: &[u8],
     ) -> Result<Json, ModelError> {
+        self.post_op(credential, endpoint_ref, op, body, &[])
+    }
+
+    /// `post_op(credential, endpoint_ref, op, body, extra_headers)` — the
+    /// raw single-shot `POST {endpoint}/{op}` primitive the non-chat
+    /// operations ride (R4.7b: `embeddings`, the Messages `compaction`
+    /// request, `messages/count_tokens`). `extra_headers` are literal
+    /// `(name, value)` pairs appended after the family's own headers (the
+    /// `anthropic-beta` a beta-gated Messages op needs) — call sites spell
+    /// them, this transport never invents them. The credential's value is
+    /// resolved inside this call for the auth header and dropped on
+    /// return (ADR-0366 D4); a non-2xx answers the dialect's typed
+    /// refusal class, never a fabricated document.
+    pub fn post_op(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        op: &str,
+        body: &[u8],
+        extra_headers: &[(&str, &str)],
+    ) -> Result<Json, ModelError> {
         let url =
             http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
         let mut sock = self.dial(&url)?;
@@ -427,6 +448,7 @@ impl HttpModelTransport {
         if self.family == Family::Messages {
             headers.push(("anthropic-version", "2023-06-01"));
         }
+        headers.extend_from_slice(extra_headers);
         http::write_request(&mut sock, "POST", &target, &headers, body)
             .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
         let mut r = BufReader::new(sock);
