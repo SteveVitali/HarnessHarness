@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "otel-live" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -101,6 +101,10 @@ leg_field() { # $1 leg, $2 field
     context-adapters:test)     printf 'hh-embed:r4_7b_live';;
     context-adapters:pricekey.openai)    printf 'openai/text-embedding-3-small';;
     context-adapters:pricekey.anthropic) printf 'anthropic/claude-haiku-5-5';;
+    otel-live:ticket)   printf 'R4.7c';;
+    otel-live:provider) printf 'local-otel-collector';;
+    otel-live:kind)     printf 'script';;
+    otel-live:names)    printf '';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -707,6 +711,96 @@ PRICE
   elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:live-tests rc=$rc"; fi
+}
+
+# R4.7c — the OTLP live-sink leg (ADR-0346 revisit trigger (a); BL-31;
+# R-2.9.1; USD 0 loopback): the operator-provisioned collector (HUMAN-H6:
+# `jaegertracing/jaeger:2.22.0`, OTLP/HTTP :4318, query API :16686 —
+# container stopped; the leg starts it) runs on loopback; the gated test
+# exports a short local run's convention spans through the real
+# `EgressMediator`; the leg then queries the collector's trace API for
+# the run's `LIVE_TRACE_ID:` marker — read-back is the delivery proof.
+# Absent docker/image/collector readiness records `skipped(<reason>)`,
+# never a pass.
+run_leg_otel_live() {
+  require curl; require cargo
+  local image="jaegertracing/jaeger:2.22.0" cname="hh-r47c-otel"
+  ENDPOINT_HOST="127.0.0.1:4318"; MODEL_REPORTED=""
+  ASSERTIONS="the operator-provisioned collector starts on loopback; the run's OTLP/HTTP ExportTraceServiceRequest rides the EgressMediator to :4318/v1/traces (measurement.export.delivered lands on the 2xx ack); GET :16686/api/v3/traces/{traceId} answers the exported trace — collector read-back is the delivery proof"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  {
+    printf '$ docker image inspect %s\n' "$image"
+    if command -v docker >/dev/null 2>&1 && docker image inspect "$image" >/dev/null 2>&1; then
+      printf 'image: present\n'
+    else
+      printf 'image: ABSENT (or docker absent)\n'
+    fi
+  } > "$TRANSCRIPT_RAW"
+  if ! command -v docker >/dev/null 2>&1; then
+    RESULT="skipped(docker absent — the HUMAN-H6 collector runtime)"
+    return
+  fi
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    RESULT="skipped(collector image absent: $image — provision via HUMAN-H6)"
+    return
+  fi
+  docker rm -f "$cname" >/dev/null 2>&1 || true
+  if ! docker run -d --name "$cname" \
+      -p 127.0.0.1:4318:4318 -p 127.0.0.1:16686:16686 \
+      "$image" >"$TMPD_L/cid" 2>"$TMPD_L/run.err"; then
+    RESULT="skipped(collector start failed)"
+    cat "$TMPD_L/run.err" >> "$TRANSCRIPT_RAW"
+    return
+  fi
+  printf '$ docker run -d --name %s -p 127.0.0.1:4318:4318 -p 127.0.0.1:16686:16686 %s\ncontainer: %s\n' \
+    "$cname" "$image" "$(cat "$TMPD_L/cid")" >> "$TRANSCRIPT_RAW"
+  local ready="" i
+  for i in $(seq 1 45); do
+    curl -sf -o /dev/null "http://127.0.0.1:16686/api/v3/services" && { ready=1; break; }
+    sleep 1
+  done
+  printf 'readiness: GET :16686/api/v3/services → %s\n\n' \
+    "${ready:+200}" >> "$TRANSCRIPT_RAW"
+  if [ -z "$ready" ]; then
+    RESULT="skipped(collector never answered :16686/api/v3/services)"
+    docker rm -f "$cname" >>"$TRANSCRIPT_RAW" 2>&1 || true
+    return
+  fi
+  local rc=0
+  {
+    printf '$ cargo test -p hh-embed --test r4_7c_live -- --ignored --nocapture\n\n'
+    (cd "$REPO" && cargo test -p hh-embed --test r4_7c_live -- --ignored --nocapture) 2>&1
+  } >> "$TRANSCRIPT_RAW" || rc=$?
+  local tid
+  tid=$(grep -o 'LIVE_TRACE_ID: [0-9a-f]*' "$TRANSCRIPT_RAW" | head -1 | sed 's/.*LIVE_TRACE_ID: //')
+  if [ $rc -ne 0 ]; then
+    RESULT="fail:live-export rc=$rc"
+    docker rm -f "$cname" >>"$TRANSCRIPT_RAW" 2>&1 || true
+    return
+  fi
+  if [ -z "$tid" ]; then
+    RESULT="skipped(no LIVE_TRACE_ID marker — the export leg produced no trace)"
+    docker rm -f "$cname" >>"$TRANSCRIPT_RAW" 2>&1 || true
+    return
+  fi
+  # Collector read-back — the delivery proof. The collector indexes
+  # asynchronously; bound the wait, then require the same trace ID.
+  local tries=0 body=""
+  while [ $tries -lt 30 ]; do
+    body=$(curl -sf "http://127.0.0.1:16686/api/v3/traces/$tid" 2>/dev/null) && break
+    sleep 1; tries=$((tries+1))
+  done
+  {
+    printf '\n$ curl -sf http://127.0.0.1:16686/api/v3/traces/%s  (after %ss)\n' "$tid" "$tries"
+    printf '%s\n' "$body" | head -c 8192; printf '\n'
+    printf '\n$ docker rm -f %s\n' "$cname"
+    docker rm -f "$cname" 2>&1 || true
+  } >> "$TRANSCRIPT_RAW"
+  if printf '%s' "$body" | grep -q "\"traceId\":\"$tid\""; then
+    RESULT="pass"
+  else
+    RESULT="fail:assertion — trace $tid absent from the collector's trace API (read-back failed)"
+  fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

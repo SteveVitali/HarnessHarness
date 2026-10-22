@@ -25,3 +25,6 @@
 {"ts":"2026-10-22T03:45:26Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252119,"record":"2026-10-22-context-adapters.json"}
 {"ts":"2026-10-22T03:46:37Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252121,"record":"2026-10-22-context-adapters.json"}
 {"ts":"2026-10-22T03:46:59Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000131,"cumulative_usd":15.252252,"record":"2026-10-22-context-adapters.json"}
+{"ts":"2026-10-22T04:32:05Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
+{"ts":"2026-10-22T04:32:49Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
+{"ts":"2026-10-22T04:33:00Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}

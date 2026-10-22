@@ -81,8 +81,10 @@ impl ExportBatch {
 
 /// The deterministic keep decision — `H(domain, key)[0:8]` as a u32 ppm below
 /// `ratio_ppm` keeps the row. `parent_based` keys on the trace root (the whole
-/// run's rows share the decision).
-fn sampled_keep(mode: SamplingMode, ratio_ppm: i64, event_id: &str, run_id: &str) -> bool {
+/// run's rows share the decision). `pub` so a wire-level fold (the OTLP span
+/// path) applies *the same* keep rule the batch lowering does — one sampling
+/// decision spelling, never a second (CC1).
+pub fn sampled_keep(mode: SamplingMode, ratio_ppm: i64, event_id: &str, run_id: &str) -> bool {
     let key = match mode {
         SamplingMode::Ratio => event_id,
         SamplingMode::ParentBased => run_id,
@@ -316,8 +318,16 @@ fn pseudo_leaf(v: &Json, event_id: &str, path: &str, loss: &mut Vec<LossEntry>) 
 }
 
 /// `max_field_bytes` — a string leaf over the cap truncates with a loss entry
-/// (the marker keeps the truncation visible downstream).
-fn cap_strings(max: u64, event_id: &str, path: &str, v: Json, loss: &mut Vec<LossEntry>) -> Json {
+/// (the marker keeps the truncation visible downstream). `pub` so a
+/// wire-level fold (the OTLP span path) applies *the same* cap the batch
+/// lowering does — one truncation rule, never a second (CC1).
+pub fn cap_strings(
+    max: u64,
+    event_id: &str,
+    path: &str,
+    v: Json,
+    loss: &mut Vec<LossEntry>,
+) -> Json {
     match v {
         Json::Str(s) if s.len() as u64 > max => {
             loss.push(LossEntry {

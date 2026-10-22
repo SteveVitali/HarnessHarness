@@ -1,0 +1,26 @@
+$ docker image inspect jaegertracing/jaeger:2.22.0
+image: present
+$ docker run -d --name hh-r47c-otel -p 127.0.0.1:4318:4318 -p 127.0.0.1:16686:16686 jaegertracing/jaeger:2.22.0
+container: 38ee7da74c0c434f9dacaa2740a65dd7e97f50362acb94e12959ba490624e3f3
+readiness: GET :16686/api/v3/services → 200
+
+$ cargo test -p hh-embed --test r4_7c_live -- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/r4_7c_live.rs (target/debug/deps/r4_7c_live-d2e0bce59c268bdd)
+
+running 1 test
+LIVE_RUN_ID: run-000001
+LIVE_TRACE_ID: 89cde720dfc6ac8099cb44a1ee2adf5e
+LIVE_DELIVERED_SEQ: 10
+test r47c_live_otlp_export ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+$ curl -sf http://127.0.0.1:16686/api/v3/traces/89cde720dfc6ac8099cb44a1ee2adf5e  (after 1s)
+{"result":{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"hh.exporter.live"}}]},"scopeSpans":[{"scope":{"name":"hh.telemetry","version":"1"},"spans":[{"traceId":"89cde720dfc6ac8099cb44a1ee2adf5e","spanId":"d1ca6181c3e3d229","name":"gen_ai.chat","kind":3,"startTimeUnixNano":"1000000000","endTimeUnixNano":"1088000000","attributes":[{"key":"gen_ai.operation.name","value":{"stringValue":"chat"}},{"key":"gen_ai.response.finish_reasons","value":{"arrayValue":{"values":[{"stringValue":"stop"}]}}},{"key":"gen_ai.response.model","value":{"stringValue":"m-live"}},{"key":"gen_ai.usage.input_tokens","value":{"intValue":"42"}},{"key":"gen_ai.usage.output_tokens","value":{"intValue":"7"}},{"key":"hh.event_id","value":{"stringValue":"evt-000007"}},{"key":"hh.run_id","value":{"stringValue":"run-000001"}},{"key":"hh.seq","value":{"intValue":"4"}},{"key":"hh.span_id","value":{"stringValue":"mc-1"}}],"status":{}}]}]}]}}
+
+
+$ docker rm -f hh-r47c-otel
+hh-r47c-otel

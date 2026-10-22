@@ -9,11 +9,21 @@
 //! *persisted* writer-lease generation, so a closed run still exports —
 //! the same append site `kernel.bundle{deliver_sink}` exercises).
 //!
+//! R4.7c (ADR-0346 revisit trigger (a); BL-31's live-sink member): the
+//! sink's wire widens from the loopback batch POST to OTLP/HTTP (JSON) —
+//! `SinkWire::OtlpTraces` folds the same durable delta through the
+//! `gen_ai` convention lowering into an OTLP `ExportTraceServiceRequest`
+//! for a real local OTel-compatible collector. The mediation contract is
+//! unchanged — the same `net_egress` request, the same durable ordering —
+//! and the delivery row now requires the sink's acknowledgement: a
+//! forwarded non-2xx answer is [`PollOutcome::NotAcknowledged`], never a
+//! delivered row (USD-0 loopback only; a collector-absent leg is the leg
+//! runner's honest `skipped(<reason>)`, never a fabricated delivery).
+//!
 //! An unlisted sink is an egress fact, not a telemetry event: a refused
 //! destination leaves `security.egress.decided{deny}` rows and *no*
 //! `measurement.export.delivered` — the subscriber reports the refusal,
-//! never a fabricated delivery (fixture-verified ceiling: loopback
-//! fixtures only; no live backend claim).
+//! never a fabricated delivery.
 
 use std::collections::BTreeSet;
 
@@ -21,23 +31,51 @@ use hh_containment::egress::EgressRequest;
 use hh_containment::policy::EgressProtocol;
 use hh_env::egress::{EgressError, EgressMediator, MediatedOutcome};
 use hh_env::events::ScopeChain;
-use hh_ledger::event::{Cursor, Direction};
+use hh_ledger::event::{Cursor, Direction, EventEnvelope};
 use hh_telemetry::events::{export_delivered_payload, ExportDelivered};
-use hh_telemetry::export::export_events;
-use hh_telemetry::sinks::SinkPolicy;
+use hh_telemetry::export::{cap_strings, export_events, sampled_keep, ExportBatch, LossEntry};
+use hh_telemetry::sinks::{ContentClass, SamplingMode, SinkPolicy};
+use hh_telemetry::{genai, otlp};
 use hh_wire::json::Json;
 
-/// The fixture sink's wire coordinate — `net_egress` destination triple.
+/// The sink's wire coordinate — `net_egress` destination triple plus the
+/// dialect the body is spelled in.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SinkDestination {
     /// The destination host as spelled (`host_raw` — the mediator
     /// normalizes).
     pub host: String,
-    /// The destination port (loopback fixture ports only — the
-    /// fixture-verified ceiling).
+    /// The destination port (loopback only at this stage — a live sink
+    /// stays `127.0.0.1`, USD 0).
     pub port: u16,
-    /// The request path the batch POSTs to.
+    /// The request path the delivery POSTs to (`/v1/traces` for an
+    /// OTLP/HTTP collector).
     pub path: String,
+    /// The wire dialect (the batch `Json::Arr` or the OTLP trace
+    /// request).
+    pub wire: SinkWire,
+}
+
+/// One wire fold's payload: the request `body`, the content `classes`
+/// the delivery row declares, and the `loss_report_ref` the batch
+/// carries (None when the fold lost nothing).
+type WireFold = (String, BTreeSet<ContentClass>, Option<String>);
+
+/// The sink's wire dialect — how the durable delta is spelled on the
+/// wire. `BatchJson` is the landed Stage-1 form; `OtlpTraces` is the
+/// R4.7c live-sink form — both ride the same `net_egress` request and
+/// the same delivered-on-acknowledgement rule.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum SinkWire {
+    /// `Json::Arr(batch.rows)` — the landed loopback-fixture body.
+    #[default]
+    BatchJson,
+    /// An OTLP `ExportTraceServiceRequest` document — the
+    /// convention-lowered spans (R4.7c; ADR-0346 trigger (a)).
+    OtlpTraces {
+        /// The `service.name` the collector attributes the spans to.
+        service_name: String,
+    },
 }
 
 /// The exporter participant's own egress attribution — its `net_egress`
@@ -102,6 +140,17 @@ pub enum PollOutcome {
         /// The refusal detail.
         detail: String,
     },
+    /// The wire fired (`decided{allow}` + the `network.calls` charge
+    /// are durable) but the sink did not acknowledge the delivery — no
+    /// `measurement.export.delivered` is appended (R4.7c: delivered
+    /// means sink-acknowledged — a 2xx wire answer — never merely
+    /// forwarded).
+    NotAcknowledged {
+        /// The decided row's event id.
+        decided_ref: String,
+        /// The wire's HTTP status.
+        status: u16,
+    },
 }
 
 /// The subscriber's failure modes — typed, never a warning.
@@ -165,9 +214,9 @@ impl ExportSubscriber {
         if page.events.is_empty() {
             return Ok(PollOutcome::Quiet);
         }
-        // 2. The §5h.1 §7 lowering — consent/rate-limit gates inside
-        //    `deliver`'s pre-wire contract run here too (the consent
-        //    check is explicit; the rate cap applies to the batch).
+        // 2. The §5h.1 §7 policy gates — consent/rate-limit run before
+        //    any wire, on both dialects (the mediation contract is
+        //    unchanged).
         if self.policy.requires_consent && !self.consents.contains(&self.policy.sink_id) {
             return Err(SubscriberError::Telemetry {
                 detail: format!("consent missing for sink {}", self.policy.sink_id),
@@ -184,14 +233,21 @@ impl ExportSubscriber {
                 });
             }
         }
-        let batch =
-            export_events(&self.policy, &page.events).map_err(|e| SubscriberError::Telemetry {
-                detail: format!("export_events: {e}"),
-            })?;
-        // 3. The egress leg — one `net_egress` request carrying the
-        //    canonical batch (the body is content-free under the
-        //    policy's own content-class gate — the mediator scans it
-        //    for sentinels like any other payload).
+        let page_lo = page.events.iter().map(|e| e.seq).min().unwrap_or(0);
+        let page_hi = page.events.iter().map(|e| e.seq).max().unwrap_or(0);
+        // 3. The wire fold — the destination's dialect spells the same
+        //    durable delta. `None` means the delta is entirely outside
+        //    the wire's projection (no span, no loss — an OTLP sink
+        //    tailing a model-free prefix): consumed quietly, never
+        //    sent, never claimed — the watermark still advances.
+        let Some((body, classes, loss_report_ref)) = self.wire_fold(&page.events)? else {
+            self.watermark = page_hi;
+            return Ok(PollOutcome::Quiet);
+        };
+        // 4. The egress leg — one `net_egress` request carrying the
+        //    wire body (content-free under the policy's own gates —
+        //    the mediator scans it for sentinels like any other
+        //    payload).
         let req = EgressRequest {
             token: self.egress.token.clone(),
             effect_id: Some(self.egress.effect_id.clone()),
@@ -204,12 +260,26 @@ impl ExportSubscriber {
             method: Some("POST".to_string()),
             path: Some(self.destination.path.clone()),
             headers: vec![("content-type".to_string(), "application/json".to_string())],
-            body: Some(Json::Arr(batch.rows.clone()).to_canonical_string()),
+            body: Some(body),
             body_readers: None,
             credential_sentinels: vec![],
         };
         match med.handle(&req, chain).map_err(SubscriberError::Egress)? {
-            MediatedOutcome::Forwarded { .. } => {}
+            MediatedOutcome::Forwarded {
+                decided_ref,
+                response,
+                ..
+            } => {
+                // A delivered row requires the sink's acknowledgement
+                // (R4.7c) — forwarded-but-not-acknowledged is durable
+                // egress, never a claimed delivery.
+                if !(200..300).contains(&response.status) {
+                    return Ok(PollOutcome::NotAcknowledged {
+                        decided_ref,
+                        status: response.status,
+                    });
+                }
+            }
             MediatedOutcome::Refused {
                 decided_ref,
                 reason,
@@ -239,15 +309,16 @@ impl ExportSubscriber {
                 });
             }
         }
-        // 4. The delivery row — kernel-provenance, audit-grade, on the
+        // 5. The delivery row — kernel-provenance, audit-grade, on the
         //    run's persisted writer-lease generation (the S3.1 append
         //    site; works on closed runs).
+        let seq_range = (page_lo, page_hi);
         let record = ExportDelivered {
             sink_id: self.policy.sink_id.clone(),
             view_kind: "events".to_string(),
-            seq_range: batch.seq_range,
-            content_classes: batch.classes.clone(),
-            loss_report_ref: batch.loss_report_ref(),
+            seq_range,
+            content_classes: classes,
+            loss_report_ref,
         };
         let env = med
             .store
@@ -262,11 +333,138 @@ impl ExportSubscriber {
             .map_err(|e| SubscriberError::Ledger {
                 detail: format!("delivered append: {e}"),
             })?;
-        self.watermark = batch.seq_range.1;
+        self.watermark = page_hi;
         Ok(PollOutcome::Delivered {
             seq: env.seq,
-            seq_range: batch.seq_range,
+            seq_range,
             loss_report_ref: record.loss_report_ref,
         })
+    }
+
+    /// `wire_fold(events)` — the destination's dialect over the durable
+    /// delta: `Some((body, classes, loss_report_ref))` to send, or
+    /// `None` when the delta is entirely outside the wire's projection
+    /// (consumed quietly — the caller advances the watermark). Both
+    /// dialects run the policy's gates: `BatchJson` inside
+    /// `export_events`; `OtlpTraces` here — the same `sampled_keep`
+    /// decision, the same `max_field_bytes` cap (CC1 — one spelling per
+    /// rule), and the declared content classes withhold the one
+    /// free-text-adjacent convention member
+    /// (`gen_ai.evaluation.explanation` — named `content_class_withheld`
+    /// loss, never silent).
+    fn wire_fold(&self, events: &[EventEnvelope]) -> Result<Option<WireFold>, SubscriberError> {
+        match &self.destination.wire {
+            SinkWire::BatchJson => {
+                let batch = export_events(&self.policy, events).map_err(|e| {
+                    SubscriberError::Telemetry {
+                        detail: format!("export_events: {e}"),
+                    }
+                })?;
+                Ok(Some((
+                    Json::Arr(batch.rows.clone()).to_canonical_string(),
+                    batch.classes.clone(),
+                    batch.loss_report_ref(),
+                )))
+            }
+            SinkWire::OtlpTraces { service_name } => {
+                self.policy
+                    .validate()
+                    .map_err(|e| SubscriberError::Telemetry {
+                        detail: format!("sink policy: {e}"),
+                    })?;
+                let mut loss = Vec::new();
+                let mut refs = Vec::with_capacity(events.len());
+                let mut ts_by_seq = std::collections::BTreeMap::new();
+                for env in events {
+                    ts_by_seq.insert(env.seq, env.ts.as_str());
+                    if let SamplingMode::Ratio | SamplingMode::ParentBased =
+                        self.policy.sampling.mode
+                    {
+                        let ratio = self.policy.sampling.ratio_ppm.unwrap_or(0);
+                        if !sampled_keep(
+                            self.policy.sampling.mode,
+                            ratio,
+                            &env.event_id,
+                            &env.run_id,
+                        ) {
+                            loss.push(LossEntry {
+                                kind: "sampled_out",
+                                detail: env.event_id.clone(),
+                            });
+                            continue;
+                        }
+                    }
+                    refs.push((
+                        env.seq,
+                        env.run_id.as_str(),
+                        env.event_id.as_str(),
+                        env.class.as_str(),
+                        &env.payload,
+                    ));
+                }
+                let export = genai::lower_run_refs(&refs);
+                if export.spans.is_empty() && export.loss.is_empty() {
+                    // The delta is entirely outside the span projection
+                    // — consumed, never sent, never claimed.
+                    return Ok(None);
+                }
+                loss.extend(export.loss);
+                let mut pairs = Vec::with_capacity(export.spans.len());
+                for s in &export.spans {
+                    let mut s = s.clone();
+                    let event_id = s
+                        .get("attributes")
+                        .and_then(|a| a.get(hh_telemetry::lift::hh_attr::EVENT_ID))
+                        .and_then(Json::as_str)
+                        .unwrap_or("span")
+                        .to_string();
+                    if let Json::Obj(m) = &mut s {
+                        if let Some(Json::Obj(a)) = m.get_mut("attributes") {
+                            if !self.policy.content_classes.contains(&ContentClass::Content)
+                                && a.remove("gen_ai.evaluation.explanation").is_some()
+                            {
+                                loss.push(LossEntry {
+                                    kind: "content_class_withheld",
+                                    detail: format!("{event_id}.gen_ai.evaluation.explanation"),
+                                });
+                            }
+                            let capped = cap_strings(
+                                self.policy.max_field_bytes,
+                                &event_id,
+                                "attributes",
+                                Json::Obj(a.clone()),
+                                &mut loss,
+                            );
+                            m.insert("attributes".to_string(), capped);
+                        }
+                    }
+                    // `seq` names the source event's anchor `ts`; a
+                    // span without it anchors at "" — `otlp` names the
+                    // loss, never guesses an instant.
+                    let ts = s
+                        .get("seq")
+                        .and_then(Json::as_int)
+                        .and_then(|seq| ts_by_seq.get(&(seq as u64)))
+                        .copied()
+                        .unwrap_or("")
+                        .to_string();
+                    pairs.push((s, ts));
+                }
+                let (doc, mut wire_loss) = otlp::trace_service_request(&pairs, service_name);
+                loss.append(&mut wire_loss);
+                let batch = ExportBatch {
+                    rows: Vec::new(),
+                    loss,
+                    classes: self.policy.content_classes.clone(),
+                    seq_range: (0, 0),
+                };
+                let loss_report_ref = batch.loss_report_ref();
+                Ok(Some((
+                    doc.to_canonical_string(),
+                    batch.classes,
+                    loss_report_ref,
+                )))
+            }
+        }
     }
 }

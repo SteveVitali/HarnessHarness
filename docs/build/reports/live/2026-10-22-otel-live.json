@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "the operator-provisioned collector starts on loopback; the run's OTLP/HTTP ExportTraceServiceRequest rides the EgressMediator to :4318/v1/traces (measurement.export.delivered lands on the 2xx ack); GET :16686/api/v3/traces/{traceId} answers the exported trace \u2014 collector read-back is the delivery proof"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:4318",
+  "git_head": "16c259866e920b3200f0b0f1c68af47b41367aac",
+  "harness": "hh-embed",
+  "leg": "otel-live",
+  "model_reported": null,
+  "provided": {},
+  "provider": "local-otel-collector",
+  "recorded_at": "2026-10-22T04:33:00Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.7c.md",
+    "sha256": "20c2dd838f7ce6f6e07a3b3d09a9943d9b54a4e315ea19e56d21688ed2688f91"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.252252,
+  "ticket": "R4.7c",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-22-otel-live.transcript.txt",
+  "transcript_sha256": "8c60331c45a9100add21f4bc6ec7aea4fa8d6120fed169dbfdf523aeaa0df2f3"
+}
