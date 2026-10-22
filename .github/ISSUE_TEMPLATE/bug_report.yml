@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a defect in the kernel, Lab, surfaces, or build tooling
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: The behaviour you saw vs. the behaviour the contract promises.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: The exact command(s) and observed output. `hh doctor` output helps.
+      render: sh
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit / version
+      description: `git rev-parse HEAD`, or the release tag.
+      placeholder: e.g. d7c99d4
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - kernel / boundary (hh-kernel, hh-embed)
+        - CLI (hh)
+        - Lab (experiment / results / eval / bench)
+        - services (subagent / orchestrator / fleet / evolution / debt)
+        - surfaces (hh-web, hh-mcp, hh-acp, plugins)
+        - build tooling / CI / docs
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment
+      description: OS + arch, `cargo --version`, anything unusual about the setup.

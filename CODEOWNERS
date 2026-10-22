@@ -1,0 +1,6 @@
+# CODEOWNERS — default review ownership.
+# Everything lands through the manifest ticket chain; the repository owner
+# reviews all paths. Refine per-area when additional maintainers join (L4.2
+# owns the maintainer-policy posture).
+
+* @SteveVitali
