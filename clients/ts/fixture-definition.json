@@ -1,0 +1,179 @@
+{
+    "assembly": {
+        "constraints": [],
+        "dialect": "HIR/1",
+        "entities": {},
+        "ext": {},
+        "parameters": {},
+        "profile_binding": "unbound",
+        "slots": {
+            "context_policy": {
+                "one": {
+                    "enabled": true,
+                    "params": {},
+                    "variant": {
+                        "class_id": "context_policy",
+                        "variant_id": "hh/full_window",
+                        "version_selector": "latest"
+                    }
+                }
+            },
+            "control_strategy": {
+                "one": {
+                    "enabled": true,
+                    "params": {},
+                    "variant": {
+                        "class_id": "control_strategy",
+                        "variant_id": "hh/round_robin",
+                        "version_selector": "latest"
+                    }
+                }
+            }
+        },
+        "values": {}
+    },
+    "edges": [],
+    "hir_version": "HIR/1",
+    "nodes": [
+        {
+            "dialect": "HIR/1",
+            "kind": "AgentProcess",
+            "provenance": {
+                "authority": "principal",
+                "created_at": 4,
+                "origin": {
+                    "author_ref": "test:author",
+                    "kind": "human",
+                    "role": "author"
+                },
+                "scope": "definition"
+            },
+            "semantic": {
+                "body": {
+                    "native": {
+                        "budget": {
+                            "semantic_id": "test:budget",
+                            "version_selector": "latest"
+                        },
+                        "control_boundary": {
+                            "assignments": {},
+                            "guards": {}
+                        },
+                        "environment": {
+                            "environment": "env:test"
+                        },
+                        "harness_def": {
+                            "semantic_id": "test:agent",
+                            "version_selector": "latest"
+                        },
+                        "permissions": {
+                            "semantic_id": "test:perm",
+                            "version_selector": "latest"
+                        },
+                        "profile": {
+                            "pinned": true,
+                            "profile_ref": "sha256:profile"
+                        },
+                        "slots": {}
+                    }
+                }
+            },
+            "version": {
+                "sealed": false,
+                "semantic_id": "test:agent"
+            }
+        },
+        {
+            "dialect": "HIR/1",
+            "kind": "Budget",
+            "provenance": {
+                "authority": "principal",
+                "created_at": 2,
+                "origin": {
+                    "author_ref": "test:author",
+                    "kind": "human",
+                    "role": "author"
+                },
+                "scope": "definition"
+            },
+            "semantic": {
+                "accounting": {
+                    "semantic_id": "test:rule",
+                    "version_selector": "latest"
+                },
+                "dimensions": {
+                    "tokens.blended": {
+                        "hard": 1000
+                    }
+                },
+                "scope": "*"
+            },
+            "version": {
+                "sealed": false,
+                "semantic_id": "test:budget"
+            }
+        },
+        {
+            "dialect": "HIR/1",
+            "kind": "HarnessRule",
+            "provenance": {
+                "authority": "principal",
+                "created_at": 1,
+                "origin": {
+                    "author_ref": "test:author",
+                    "kind": "human",
+                    "role": "author"
+                },
+                "scope": "definition"
+            },
+            "semantic": {
+                "action": {
+                    "request_approval": null
+                },
+                "rule_id": "test:rule.rule",
+                "scope": null,
+                "trigger": null
+            },
+            "version": {
+                "sealed": false,
+                "semantic_id": "test:rule"
+            }
+        },
+        {
+            "dialect": "HIR/1",
+            "kind": "Permission",
+            "provenance": {
+                "authority": "principal",
+                "created_at": 3,
+                "origin": {
+                    "author_ref": "test:author",
+                    "kind": "human",
+                    "role": "author"
+                },
+                "scope": "definition"
+            },
+            "semantic": {
+                "grants": [],
+                "holder": {
+                    "semantic_id": "test:agent",
+                    "version_selector": "latest"
+                },
+                "issuer": {
+                    "authority": "kernel",
+                    "reference": "test:issuer"
+                },
+                "validity": {
+                    "from": 0
+                }
+            },
+            "version": {
+                "sealed": false,
+                "semantic_id": "test:perm"
+            }
+        }
+    ],
+    "root": {
+        "semantic_id": "test:agent",
+        "version_selector": "latest"
+    }
+}

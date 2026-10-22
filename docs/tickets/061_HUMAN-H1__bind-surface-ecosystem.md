@@ -26,3 +26,16 @@ reports "gate pending" — never a failure, never a fabricated pass.
 > ADR-0050 amendment-log row + the schema-source TypeScript surface client under
 > `check-drift.sh` — this marker's exit criterion verbatim. The checkbox stays the
 > operator's to tick (BM-GATE-07).
+
+> **Discharged 2026-10-20 by R4.2** (the recorded ruling's machine half — the checklist
+> boxes above stay the operator's to tick, BM-GATE-07): the ADR-0050 amendment-log row
+> landed (`research/decisions/ADR-0050.md` `## Amendment log (R4.2 — E3 = TypeScript
+> surface bind, 2026-10-20)` — the ruling quoted verbatim) and the schema-source
+> TypeScript surface client is generated (`hh-codegen` → `clients/ts/hh-embed.ts`),
+> drift-checked under `check-drift.sh` TARGETS (CC7 — regeneration stays
+> `cargo run -p hh-codegen`), and **executed** end to end — `scripts/e3-smoke.sh` +
+> `clients/ts/smoke.ts` drive it against a spawned `hh-kernel serve --http`
+> (hello + open/submit/read + event-stream read; `crates/hh-codegen/tests/r4_2.rs`
+> wraps the leg, honest `skipped(node-absent)` when node < 22 is absent).
+> DF-S4.10-1 → DONE; ADR-0319's revisit-trigger conjunct recorded (the in-tree
+> generated client stops being the declared proxy).

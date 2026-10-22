@@ -1,10 +1,14 @@
 //! `hh-codegen` — the schema-export → codegen pipeline (ADR-0050 (e); CC7).
 //!
-//! Reads the single schema source ([`hh_embed_schema`]) and emits two checked-in artifacts:
+//! Reads the single schema source ([`hh_embed_schema`]) and emits the checked-in artifacts:
 //!   1. `schema/hh-embed-1.schema.json` — the canonical schema export.
 //!   2. `crates/hh-embed-client-generated/src/generated.rs` — the generated client bindings
 //!      (typed structs + the `hello` negotiation glue), asserting `(contract_major,
 //!      schema_hash)` so a mismatch is typed, never a silent fallback (ADR-0178 D2).
+//!   3. `clients/ts/hh-embed.ts` — the E3 (TypeScript) surface binding: the same op surface
+//!      over binding (c) (`node:http`, node ≥ 22 type-stripping, stdlib only — no npm
+//!      dependencies; `fetch` cannot satisfy the gate's no-`Sec-Fetch-*` posture, R4.2;
+//!      ADR-0050's late-bound surface layer — HUMAN-H1's "Confirm TypeScript" ruling).
 //!
 //! The generator is schema-driven: it reads field names/types/`required` from the exported
 //! schema and fails loudly if a Stage-0 type is missing — so the generated bindings cannot
@@ -19,6 +23,7 @@ use hh_embed_schema as embed;
 use hh_wire::json::Json;
 
 mod emit;
+mod emit_ts;
 
 fn main() -> std::process::ExitCode {
     let mut root = PathBuf::from(".");
@@ -91,7 +96,21 @@ pub fn generate(root: &Path) -> Result<Vec<PathBuf>, String> {
     // disagree. rustfmt is a pinned toolchain component (rust-toolchain.toml).
     rustfmt(&client_path)?;
 
-    Ok(vec![schema_path, plugin_abi_path, matrix_path, client_path])
+    // 3. The E3 (TypeScript) surface binding (R4.2; ADR-0050 D1's
+    // late-bound surface layer, bound by HUMAN-H1's 2026-10-20 ruling).
+    // Emitted from the same schema source with the same op surface;
+    // no node in the generation path — the artifact is bytes.
+    let ts_path = root.join("clients").join("ts").join("hh-embed.ts");
+    let ts_body = emit_ts::generated_ts_client(&schema, &schema_hash)?;
+    write(&ts_path, &ts_body)?;
+
+    Ok(vec![
+        schema_path,
+        plugin_abi_path,
+        matrix_path,
+        client_path,
+        ts_path,
+    ])
 }
 
 fn rustfmt(path: &Path) -> Result<(), String> {
