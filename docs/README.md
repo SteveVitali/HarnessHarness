@@ -34,6 +34,8 @@ by hand falsifies the record; only *living* docs are edited in place.
 | Entry | Mode | What it is |
 |---|---|---|
 | `../README.md` | living | the repo's front door |
+| `../MAINTAINING.md` | living | maintainer policy — releases, evidence classes, write integrity, revisit-trigger triage (L4.2) |
+| `../GOVERNANCE.md` | living | decision authority — the ADR process, the amendment protocol, the maintainer role (L4.2) |
 | `../AGENTS.md` | living | agent-facing docs — refreshed under `agent-docs` (DOC.2), not `refresh-repo-docs` |
 | `../spec/` | living → frozen | `CANONICAL_SPEC.md` + `sections/` + `READINESS_REPORT.md`; amend via the manifest protocol + an ADR |
 | `../research/` | frozen | the program ledger (`LEDGER.md`), research ADRs (`decisions/ADR-0001…`), registers, dossiers, briefs — frozen at the readiness gate |

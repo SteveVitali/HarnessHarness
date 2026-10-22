@@ -139,6 +139,7 @@ readouts (`docs/build/readouts/GATE-G4.md`,
 - What shipped, per ticket: `docs/build/BUILD_INDEX.md`.
 - The build chain a human can drive: `docs/tickets/00_MANIFEST.md`.
 - Working on the repo as an agent: `AGENTS.md`.
+- The maintainer + decision policy: `MAINTAINING.md`, `GOVERNANCE.md`.
 
 ## About the build record
 

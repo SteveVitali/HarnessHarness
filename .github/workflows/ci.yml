@@ -43,6 +43,7 @@ jobs:
           bash scripts/ci/test-check-ci-gating.sh
           bash scripts/ci/test-live-verify.sh
           bash scripts/ci/test-check-living-docs.sh
+          bash scripts/ci/test-gen-revisit-triggers.sh
 
       # ci-mode: both — the step-mode lint reads this file and the working tree.
       - name: CI step-mode lint
@@ -129,6 +130,12 @@ jobs:
       # skip this check (ADR-0363 D9).
       - name: Live-evidence validator (hh-live-evidence/1)
         run: bash scripts/check-live-evidence.sh
+
+      # ci-mode: both — the generated catalogue reads committed docs/adr
+      # `## Revisit trigger` sections + docs/build/BACKLOG.csv; a docs-only
+      # head that adds or re-homes a trigger must not skip this check (L4.2).
+      - name: Revisit-trigger catalogue drift check (L4.2)
+        run: bash scripts/gen-revisit-triggers.sh --check
 
       - name: S2 boundary spike (AC-R-2.11.4-9 first measurement, non-gating)
         # Non-gating by design (this is an internal tier-B measurement, not a gate
