@@ -42,10 +42,19 @@ jobs:
           bash scripts/ci/test-fast-path.sh
           bash scripts/ci/test-check-ci-gating.sh
           bash scripts/ci/test-live-verify.sh
+          bash scripts/ci/test-check-living-docs.sh
 
       # ci-mode: both — the step-mode lint reads this file and the working tree.
       - name: CI step-mode lint
         run: bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml
+
+      # ci-mode: both — the guard reads committed living human-facing files
+      # (markdown, manifests, workflows), which a docs-only head can change;
+      # the provenance trees (docs/build, docs/tickets, docs/adr, research/)
+      # are exempt by the launch ruling. Placed before `id: path` so the
+      # check can never sit behind the gate.
+      - name: Living-docs personal-path guard
+        run: bash scripts/check-living-docs.sh
 
       - name: Docs-only fast-path decision
         id: path
@@ -80,6 +89,15 @@ jobs:
       - name: Fetch pinned dependencies
         if: steps.path.outputs.mode != 'fast'
         run: cargo fetch --locked
+
+      # L4.1 (R-2.12.4 licensing leg): every workspace package licensed
+      # "MIT OR Apache-2.0" + the notices file regenerated drift-free.
+      # Reads manifests/lockfile only — gated like the other build legs.
+      - name: License metadata + third-party notices check
+        if: steps.path.outputs.mode != 'fast'
+        run: |
+          bash scripts/check-licenses.sh
+          bash scripts/gen-third-party-notices.sh --check
 
       - name: Build
         if: steps.path.outputs.mode != 'fast'
