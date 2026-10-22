@@ -624,7 +624,9 @@ run_leg_oauth_device() {
   esac
   local subj
   subj=$(grep '^OAUTH_SUBJECT_SHA256 ' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.* //' || true)
-  [ -n "$subj" ] && ASSERTIONS="$ASSERTIONS; subject_login_sha256=$subj"
+  # `if`, never `&&` as the function's last statement — an empty $subj
+  # would exit-1 under `set -e` and kill cmd_run before emit_record.
+  if [ -n "$subj" ]; then ASSERTIONS="$ASSERTIONS; subject_login_sha256=$subj"; fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

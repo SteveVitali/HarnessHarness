@@ -1,0 +1,34 @@
+{
+  "assertions": [
+    "GitHub device flow over hh-tls+hh-wire: initiate \u2192 operator-facing code file (gitignored, never a transcript/ledger); complete \u2192 poll (pending/slow_down/denied/expired handled) \u2192 access token held exchange-scope only \u2192 GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "github.com:443",
+  "git_head": "ce656bf49487d2de73cd48c0b16b00289e20f0bc",
+  "harness": "unknown",
+  "leg": "oauth-device",
+  "model_reported": null,
+  "provided": {
+    "HH_GITHUB_OAUTH_CLIENT_ID": "yes"
+  },
+  "provider": "github-oauth",
+  "recorded_at": "2026-10-22T02:19:48Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "skipped(pending \u2014 operator did not authorize in window \u2014 awaiting operator device-code entry)",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.7a.md",
+    "sha256": "760abedbea0673bdbf35cb45447786b0400b9d2eea496ec551b95794cba04005"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.202117,
+  "ticket": "R4.7a",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-22-oauth-device.transcript.txt",
+  "transcript_sha256": "675d33caaefbf84c178e777b975f8e72e335038cd1a40ccad205e96319e6c3ef"
+}

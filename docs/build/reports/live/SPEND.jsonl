@@ -18,3 +18,4 @@
 {"ts":"2026-10-21T23:59:38Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-21-github-live.json"}
 {"ts":"2026-10-22T00:00:30Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}
 {"ts":"2026-10-22T00:01:47Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}
+{"ts":"2026-10-22T02:19:48Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
