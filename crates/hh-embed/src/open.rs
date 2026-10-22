@@ -876,6 +876,11 @@ impl EmbedService {
                 event_id: se.event_id.clone(),
             });
         }
+        // R4.15e (OQ-170) — the kernel-held signer set is *conferred*,
+        // never caller-declared: stamp the custody key ids so the run's
+        // signed checkpoints verify (empty under the unprovisioned
+        // posture — `audit_view` keeps reporting its `n/a` reason).
+        manifest.signer_key_ids = self.signer_key_ids();
         let holder = self.holder.clone();
         let (run_id, lease) = self
             .store
@@ -2067,6 +2072,11 @@ impl EmbedService {
                 .map(|e| e.iter().any(|ev| ev.class == "lifecycle.run.finished"))
                 .unwrap_or(false);
             if sealed {
+                // R4.15e — a run that finished before this `close` (the
+                // post-crash/resume path where `post_drive_scan` never
+                // re-observes the row) still earns its `kind = final`
+                // checkpoint while the writer lease is held.
+                self.emit_final_checkpoint(&run_id, &lease);
                 self.store.release_silent(&lease).map_err(ledger_err)?;
             } else {
                 self.store.release(&lease, &p.reason).map_err(ledger_err)?;

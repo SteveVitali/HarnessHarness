@@ -62,6 +62,7 @@ pub(crate) mod registry_ops;
 pub(crate) mod replay_ops;
 pub mod runtime;
 pub mod service;
+pub(crate) mod signer;
 pub mod stdio;
 pub mod subscriber;
 pub mod work;
