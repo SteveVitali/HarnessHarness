@@ -1885,6 +1885,11 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     // it. Those two are admitted only when that upstream measured drift
     // is present; every observation row the view covers is itself
     // diffed above, so no attendance-driven content can hide behind them.
+    // (Flake history, per R4.0: R3.1 first admitted
+    // `derived_from.view_hash` for the #133 CI flake, run 38020320703;
+    // R3.3 added `plan_id` for the #139 CI flake, run 38703040017 — both
+    // under the older per-member allowlist this measured-drift gate,
+    // landed on main as eac030a/d9074a4, now supersedes.)
     let measured_drift = diffs
         .iter()
         .any(|d| d.ends_with("assembly_ms.value") || d.ends_with("assembly_ms.measured_at"));
