@@ -394,3 +394,5 @@ No new CF row.
 
 <!-- Part 2 (R4.12a) appended 2026-10-22 — the adopt-all-except line at the head covers
      both parts; GATE-G7's act performs the ratifications; R4.15a conforms the adopted set. -->
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* the `R4.15a` conform cells name the pre-split row — this package's records conform lands at **R4.15a2** (164c); the OQ-170 pointer cell is written there.

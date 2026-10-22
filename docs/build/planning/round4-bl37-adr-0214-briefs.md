@@ -639,3 +639,5 @@ preserved verbatim as a re-entry trigger — including OQ-441's Stage-5
 `DebtIndex` re-pin, which this proposal resolves as *adopt the conformed
 defaults now, re-pin by amendment when the index data exists*. BL-37's flip
 stays R4.16's accounting after the adopted set conforms.
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* the `R4.15a` conform cells name the pre-split row — this package's records conform lands at **R4.15b** (164e) per the ADR-0214 package scoping; OQ-430's code leg at **R4.15c** (164h) as tabled.

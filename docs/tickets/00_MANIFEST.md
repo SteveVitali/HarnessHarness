@@ -320,11 +320,13 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 163 | `163_R4.14__bl38-adr-0215-package.md` | Round 4 | ticket | BL-38 brief: ADR-0215 (15 OQs incl. OQ-440, HIR/2 backlog) + the 24 READINESS_REPORT §10 minors — final proposals | — |
 | 164 | `164_R4.15__bl30-adjudication-prep.md` | Round 4 | ticket | BL-30 brief (7 CFs + concrete OQ-170 custody + OQ-388 ratification) + H4 decline → DF-S0.3-3 waived-by-ADR + CF-490 fix | — |
 | 164a | `164a_GATE-G7__round4-rulings.md` | Round 4 | gate | Round-4 rulings gate ("GATE-R4R"): operator adopts/amends/declines every brief proposal; scoped extend fleshes R4.15a–e | STOP |
-| 164b | `164b_R4.15a__conform-records-packages-a.md` | Round 4 | skeleton | Adopted-ruling records conform — ADR-0210/0211/0212/0213/0216 packages — gated on GATE-G7 | — |
-| 164e | `164e_R4.15b__conform-records-packages-b.md` | Round 4 | skeleton | Adopted-ruling records conform — ADR-0214/0215, BL-30 CF records, OQ-388 ratification (DF-S4.13-1) — gated on GATE-G7 | — |
-| 164h | `164h_R4.15c__conform-code-adopted-legs.md` | Round 4 | skeleton | Adopted-ruling code conform — CF-492, CF-493, adopted needs-code-leg items — gated on GATE-G7 | — |
-| 164k | `164k_R4.15d__remote-fetch-trust-fields.md` | Round 4 | skeleton | Remote fetch transports with the adopted trust fields (DF-S4.2-1) — gated on GATE-G7 | — |
-| 164m | `164m_R4.15e__signer-key-custody.md` | Round 4 | skeleton | Signer-key custody per the adopted OQ-170 ruling (DF-S2.5-1, DF-S1.15-1 custody; R-2.8.6) — gated on GATE-G7 | — |
+| 164b | `164b_R4.15a__conform-records-packages-a.md` | Round 4 | ticket | Adopted-ruling records conform part 1 — BL-33 (WS-L6 records) + BL-34 (ADR-0211 descope ADR) — fleshed at GATE-G7 | — |
+| 164c | `164c_R4.15a2__conform-records-packages-a2.md` | Round 4 | ticket | Adopted-ruling records conform part 2 — BL-35/39 (ADR-0212/0216) + BL-36 (ADR-0213) — GATE-G7 insert | — |
+| 164e | `164e_R4.15b__conform-records-packages-b.md` | Round 4 | ticket | Adopted-ruling records conform part 3 — BL-37 (ADR-0214) + BL-30 records + OQ-388 ratification (DF-S4.13-1) — fleshed at GATE-G7 | — |
+| 164f | `164f_R4.15b2__conform-records-packages-b2.md` | Round 4 | ticket | Adopted-ruling records conform part 4 — BL-38 (ADR-0215 + §10 minors) + the adopted spec-text legs — GATE-G7 insert | — |
+| 164h | `164h_R4.15c__conform-code-adopted-legs.md` | Round 4 | ticket | Adopted-ruling code conform — OQ-468, OQ-430, CF-492, CF-493, OQ-173 legal_hold — fleshed at GATE-G7 | — |
+| 164k | `164k_R4.15d__remote-fetch-trust-fields.md` | Round 4 | ticket | Remote fetch transports with the adopted trust fields (DF-S4.2-1, OQ-332) — fleshed at GATE-G7 | — |
+| 164m | `164m_R4.15e__signer-key-custody.md` | Round 4 | ticket | Signer-key custody per the adopted OQ-170 ruling (DF-S2.5-1, DF-S1.15-1 custody; R-2.8.6) — fleshed at GATE-G7 | — |
 | 164p | `164p_L4.1__oss-repo-files-licensing.md` | Round 4 | ticket | OSS files: LICENSE-MIT/APACHE + per-crate license + notices + SECURITY/CONTRIBUTING/CoC/CHANGELOG + templates + CODEOWNERS + living-doc scrub (R-2.12.4) | — |
 | 164q | `164q_L4.2__maintainer-policy.md` | Round 4 | ticket | MAINTAINING/GOVERNANCE + generated revisit-trigger catalogue; BL-41/42/43 closed converted-to-policy | — |
 | 164r | `164r_L4.3__ci-supply-chain-hardening.md` | Round 4 | ticket | CI: ubuntu+macOS matrix, cargo-deny, gitleaks (reusing R4.5a's `.gitleaks.toml`), `cargo doc -D warnings`, dependabot, protected dispatch-only `live-verify` workflow | — |
@@ -909,3 +911,20 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   amendment appended to the R4.4a file (executed-contract rule); Phase-4 fresh-context review recorded in
   `docs/build/planning/2026-10-21_R4.4b-split-review.md`. No file renamed; no row superseded; round 4 is
   now 52 rows.
+
+- 2026-10-22 · **GATE-G7 fleshing (scoped `decompose-spec mode=extend`)** — the operator's
+  "Adopt all" (GATE DECISIONS `### Round 4`, 2026-10-22) adopted all 146 brief proposals. The
+  five R4.15a–e skeletons fleshed; the two records-conform tickets split by their own fleshing
+  notes (~146 acts ≫ the ~900 ceiling): **R4.15a** → BL-33/BL-34 + the ADR-0211 descope ADR;
+  insert **R4.15a2** (164c) → BL-35/39 + BL-36; **R4.15b** → BL-37 + BL-30 records + OQ-388;
+  insert **R4.15b2** (164f) → BL-38 + the eight spec-text legs; **R4.15c** → the five code legs
+  (OQ-468, OQ-430, CF-492, CF-493, OQ-173 legal_hold); **R4.15d** → OQ-332 + DF-S4.2-1 (USD-0
+  live fetch); **R4.15e** → OQ-170 kernel-held Ed25519 custody. `R4.15a2`/`R4.15b2` use the
+  digit suffix because letters a–e were pre-assigned to the skeleton set while the 164c/164f
+  row slots were reserved for exactly this split (the 164-letter-spacing note). Phase-4
+  fresh-context review applied: M1 (these manifest rows + this entry), M2 (LEDGER correction +
+  `nextTicket: R4.15a`), M3 (OQ-445's L4.2 leg amended onto 164q), MINOR-1–11 (contract
+  numbering/act-count/spec-mechanics/OQ-170 ownership/evidence_max_age disambiguation/164s's
+  OQ-068 Load line/brief-table reconciliation notes). Round 4 is now **54 rows**; the two
+  densest tickets (164f, 164h) carry a split-ready note — further suffix splits are sanctioned
+  at run time if their budgets trip. Rows are not renumbered (insert convention).
