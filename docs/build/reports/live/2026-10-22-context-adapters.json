@@ -1,0 +1,40 @@
+{
+  "assertions": [
+    "the lane-backed adapters over real providers: local embedding batch (or the endpoint's own typed refusal, recorded) + local summarization through LaneSummarizer/GatewayModel; hosted openai@1 embeddings over the benchset corpus slice \u2014 the recorded vectors land the committed hh-embedding-cache/1 fixture the hermetic battery replays; anthropic-messages@1 provider-native compaction (compact-2026-09-04) \u2014 stop_reason:compaction, no structured forgotten ranges (all_prior verbatim); usage rides the charge records; provided names only; LIVE_COMPACT: anthropic chars=486 tokens=232 stop=compaction;LIVE_EMBED: skipped(local-endpoint-refused: embeddings: ModelError{class: server_error, retry_class: transient}: This server does not support embeddings. Start it with `--embeddings`);LIVE_SUMM: local chars=216 tokens=37 usage={\"arrival\":\"final_frame\",\"available\":true,\"record\":{\"normalizer_ref\":\"openai-compatible@1\",\"view\":{\"cache_read\":0,\"cache_write\":0,\"convention\":\"hh-inclusive/1\",\"input_total\":90,\"input_uncached\":90,\"normalizer_ref\":\"openai-compatible@1\",\"output_reasoning\":0,\"output_total\":37}}};LIVE_EMBED: cache-recorded /Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed/tests/fixtures/r4_7b/embedding_cache.json;LIVE_EMBED: hosted model=text-embedding-3-small dim=1536 usage={\"prompt_tokens\":91,\"total_tokens\":91};"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.000131,
+  "endpoint_host": null,
+  "git_head": "fa169a5c748cf791f3b6b8d48e5509d30fcdbe4a",
+  "harness": "devin-cli/swe-2-high/subagent",
+  "leg": "context-adapters",
+  "model_reported": "text-embedding-3-small",
+  "provided": {
+    "ANTHROPIC_API_KEY": "yes",
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes",
+    "OPENAI_API_KEY": "yes"
+  },
+  "provider": "multi-provider",
+  "recorded_at": "2026-10-22T03:46:59Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.7b.md",
+    "sha256": "69a2afa67940a21a58b397553881784118b19f08ccfc8aedcd3544d8aabc8c0a"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.252252,
+  "ticket": "R4.7b",
+  "token_usage": {
+    "input_total": 91,
+    "output_total": 0
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-22-context-adapters.transcript.txt",
+  "transcript_sha256": "80b099b9c3d63ef261fb06b7e996b1e1c198591094248797ac31ef5b12b7e780"
+}

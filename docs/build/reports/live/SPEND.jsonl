@@ -21,3 +21,7 @@
 {"ts":"2026-10-22T02:19:48Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
 {"ts":"2026-10-22T02:20:58Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
 {"ts":"2026-10-22T02:58:06Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
+{"ts":"2026-10-22T03:44:39Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.05,"cumulative_usd":15.252117,"record":"2026-10-22-context-adapters.json"}
+{"ts":"2026-10-22T03:45:26Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252119,"record":"2026-10-22-context-adapters.json"}
+{"ts":"2026-10-22T03:46:37Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252121,"record":"2026-10-22-context-adapters.json"}
+{"ts":"2026-10-22T03:46:59Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000131,"cumulative_usd":15.252252,"record":"2026-10-22-context-adapters.json"}
