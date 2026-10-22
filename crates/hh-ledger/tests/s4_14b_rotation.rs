@@ -253,6 +253,7 @@ fn hosted_events_only_view_renders_ledger_components_na_observability() {
         None,
         &manifest,
         |_, _| None,
+        |_| None,
         Some(&keys()),
         None,
     );
