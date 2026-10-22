@@ -38,7 +38,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
 use hh_mcp::http::OriginPolicy;
@@ -462,9 +462,37 @@ pub fn serve_http_mtls(
     })
 }
 
+/// `OrderlyClose` — the refuse-then-close transport hook. The terminal
+/// reply has already flushed; the write half closes (the TLS arm sends
+/// `close_notify` first) while the read half drains the peer's
+/// in-flight bytes to EOF — a bare `close()` on a socket still holding
+/// unread input answers RST on BSD loopback and can discard the queued
+/// reply (the L4.3 macOS leg read ECONNRESET in place of the `401`
+/// challenge). `TcpStream` never takes a `TlsPeer` arm; the impl exists
+/// to satisfy the generic bound.
+trait OrderlyClose {
+    fn orderly_close(&mut self);
+}
+
+impl OrderlyClose for TcpStream {
+    fn orderly_close(&mut self) {
+        let _ = self.shutdown(std::net::Shutdown::Write);
+        let _ = self.set_read_timeout(Some(Duration::from_millis(500)));
+        let _ = self.set_nonblocking(false);
+        let mut sink = [0u8; 8192];
+        while matches!(self.read(&mut sink), Ok(n) if n > 0) {}
+    }
+}
+
+impl OrderlyClose for hh_embed::service::ServerTlsStream {
+    fn orderly_close(&mut self) {
+        self.release();
+    }
+}
+
 /// The shared multiplex — `accept` yields `(stream, transport-verdict)`
 /// pairs; the per-arm accept closures own handshake policy.
-fn serve_loop<S: Read + Write>(
+fn serve_loop<S: Read + Write + OrderlyClose>(
     srv: &mut LabServer,
     listener: &TcpListener,
     origins: &OriginPolicy,
@@ -488,6 +516,7 @@ fn serve_loop<S: Read + Write>(
                 PreAuth::TlsPeer(None) => {
                     let _ = stream.write_all(challenge(None).as_bytes());
                     let _ = stream.flush();
+                    stream.orderly_close();
                     continue;
                 }
                 PreAuth::TlsPeer(Some(peer)) => match srv.resolve_mtls_peer(&peer) {
@@ -495,6 +524,7 @@ fn serve_loop<S: Read + Write>(
                     Err(refusal) => {
                         let _ = stream.write_all(challenge(Some(refusal)).as_bytes());
                         let _ = stream.flush();
+                        stream.orderly_close();
                         continue;
                     }
                 },
