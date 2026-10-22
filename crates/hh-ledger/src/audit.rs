@@ -262,6 +262,17 @@ pub const DEFERRED_OBLIGATIONS: &[&str] = &[];
 /// is the seam, never a second spelling in the meantime.
 pub const CHECKPOINT_ALG: &str = "hmac-sha256";
 
+/// The Ed25519 checkpoint signature construction (R4.15e; OQ-170;
+/// ADR-0376 — the ADR-0359 D2 scope extension): `alg_ref` spells
+/// `"ed25519"`; `sig` spells `"ed25519:<hex>"` over the same unsigned-claim
+/// preimage. The resolver holds **public** bytes only — a verifier cannot
+/// forge (the asymmetric upgrade the adopted custody ruling names).
+pub const ED25519_ALG: &str = "ed25519";
+
+/// The admitted checkpoint-signature `alg_ref` spellings — additive (CC8):
+/// the C0 HMAC construction plus R4.15e's Ed25519 admission.
+pub const CHECKPOINT_ALGS: &[&str] = &[CHECKPOINT_ALG, ED25519_ALG];
+
 /// The checkpoint kind vocabulary — `{periodic, effect_terminal, final,
 /// rotation, on_demand}` (§5g.6 checkpoint contract).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -301,6 +312,13 @@ impl CheckpointKind {
 pub trait AuditSigner {
     /// The key id — must be a member of the run manifest's `signer_key_ids`.
     fn key_id(&self) -> &str;
+    /// The `alg_ref` this signer's signatures mint under — defaults to the
+    /// C0 `hmac-sha256` construction; the kernel-held Ed25519 signer
+    /// (R4.15e) overrides to `ed25519`. One explicit spelling — never a
+    /// second informal alg name (CC1).
+    fn alg_ref(&self) -> &'static str {
+        CHECKPOINT_ALG
+    }
     /// Sign the canonical unsigned-claim bytes → the raw signature bytes.
     fn sign(&mut self, preimage: &[u8]) -> Result<Vec<u8>, String>;
 }
@@ -312,6 +330,15 @@ pub trait AuditSigner {
 pub trait AuditKeyResolver {
     /// The key bytes for `key_id`, or `None` when not held.
     fn verify_key(&self, key_id: &str) -> Option<Vec<u8>>;
+    /// Verify `sig` over `preimage` under `alg_ref`/`key` — `Some(true)`/
+    /// `Some(false)` when the resolver implements the declared algorithm,
+    /// `None` when it does not (the caller treats an unimplemented alg as
+    /// unverifiable, never as a pass). The default arm implements the C0
+    /// HMAC construction only; a resolver holding Ed25519 public keys
+    /// overrides to dispatch both spellings.
+    fn verify_sig(&self, alg_ref: &str, key: &[u8], preimage: &[u8], sig: &[u8]) -> Option<bool> {
+        (alg_ref == CHECKPOINT_ALG).then(|| hmac_sha256(key, preimage).to_vec() == sig)
+    }
 }
 
 /// A fixed `hmac-sha256` key pair — the resolved key material wrapped for
@@ -360,30 +387,196 @@ impl AuditKeyResolver for KeyTable {
     }
 }
 
+/// The expected raw signature size per admitted `alg_ref` — HMAC-SHA-256
+/// digests are 32 bytes, Ed25519 signatures 64 bytes (R4.15e).
+fn alg_sig_bytes(alg_ref: &str) -> Option<usize> {
+    match alg_ref {
+        CHECKPOINT_ALG => Some(32),
+        ED25519_ALG => Some(64),
+        _ => None,
+    }
+}
+
 /// Render raw signature bytes as the canonical `sig` spelling.
 pub fn render_sig(sig: &[u8]) -> String {
-    let mut hex = String::with_capacity(64);
+    render_sig_alg(CHECKPOINT_ALG, sig)
+}
+
+/// Render raw signature bytes under an explicit `alg_ref` — the one
+/// `<alg>:<hex>` spelling every admitted algorithm shares (CC1).
+pub fn render_sig_alg(alg_ref: &str, sig: &[u8]) -> String {
+    let mut hex = String::with_capacity(sig.len() * 2);
     for b in sig {
         hex.push_str(&format!("{b:02x}"));
     }
-    format!("{CHECKPOINT_ALG}:{hex}")
+    format!("{alg_ref}:{hex}")
 }
 
 /// Parse a `sig` member back to bytes — `None` for a wrong `alg_ref` spelling
 /// or malformed hex (the caller maps that to `BadSignature`).
 pub fn parse_sig(sig: &str) -> Option<Vec<u8>> {
-    let hex = sig.strip_prefix("hmac-sha256:")?;
-    if hex.len() != 64 {
+    parse_sig_alg(CHECKPOINT_ALG, sig)
+}
+
+/// Parse a `sig` member under an explicit `alg_ref` — `None` when the
+/// `sig` does not carry the declared `<alg>:` prefix, the hex is malformed,
+/// or the decoded length is not the algorithm's signature size.
+pub fn parse_sig_alg(alg_ref: &str, sig: &str) -> Option<Vec<u8>> {
+    let n = alg_sig_bytes(alg_ref)?;
+    let hex = sig.strip_prefix(alg_ref)?.strip_prefix(':')?;
+    if hex.len() != n * 2 {
         return None;
     }
-    let mut out = Vec::with_capacity(32);
+    let mut out = Vec::with_capacity(n);
     let bytes = hex.as_bytes();
-    for i in (0..64).step_by(2) {
+    for i in (0..n * 2).step_by(2) {
         let hi = (bytes[i] as char).to_digit(16)?;
         let lo = (bytes[i + 1] as char).to_digit(16)?;
         out.push(((hi << 4) | lo) as u8);
     }
     Some(out)
+}
+
+/// A defect the primary-signature check found on a claim — one shared
+/// vocabulary ([`check_checkpoint_signatures`]) the three verify surfaces
+/// map onto their own: `verify_run` → `Tampered`/`SignerUnavailable`,
+/// `Auditor` → `AuditFault`, `audit_view` → the per-checkpoint status
+/// lattice (the `WitnessDefect` pattern, R4.15e).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignatureDefect {
+    /// The claim carries no `signatures` entries — a stripped claim.
+    Missing,
+    /// A `signatures` entry's shape is wrong (missing/mistyped members).
+    Malformed,
+    /// `key_id` is not admitted — not in the effective signer set (the
+    /// manifest's `signer_key_ids` plus the `to_key_id`s verified
+    /// key-rotation claims introduced on this run).
+    UndeclaredKeyId(String),
+    /// `alg_ref` is not an admitted construction.
+    UnsupportedAlg(String),
+    /// The `sig` member does not parse under the declared `alg_ref`.
+    MalformedSig(String),
+    /// The key does not resolve through the supplied resolver — a custody
+    /// gap, never a fabricated pass.
+    Unresolvable(String),
+    /// The signature does not verify under the resolved key — wrong key,
+    /// wrong bytes, or a forged claim.
+    Mismatch(String),
+    /// The `key_rotation` member's shape is wrong, its `from_key_id` is
+    /// not an admitted signer, or the required incumbent/successor
+    /// co-signatures are absent — a rotation without the incumbent's
+    /// co-signature is a custody refusal, never a silent re-key.
+    BadRotation(String),
+}
+
+/// The `key_rotation{from_key_id, to_key_id}` member of a claim — `Ok(None)`
+/// absent; a malformed member is `BadRotation` (the claim's `kind` says
+/// rotation, so a corrupt custody record is a defect, never ignored).
+pub fn key_rotation_members(
+    claim: &CheckpointClaim,
+) -> Result<Option<(String, String)>, SignatureDefect> {
+    let Some(rot) = &claim.key_rotation else {
+        return Ok(None);
+    };
+    let bad = |m: &str| SignatureDefect::BadRotation(format!("key_rotation member malformed: {m}"));
+    let Some(from) = rot.get("from_key_id").and_then(Json::as_str) else {
+        return Err(bad("from_key_id missing/not a string"));
+    };
+    let Some(to) = rot.get("to_key_id").and_then(Json::as_str) else {
+        return Err(bad("to_key_id missing/not a string"));
+    };
+    Ok(Some((from.to_string(), to.to_string())))
+}
+
+/// Check a checkpoint claim's `signatures[]` against the *effective* signer
+/// set — the run manifest's `signer_key_ids` extended by the `to_key_id`s
+/// of verified key-rotation claims on this run (R4.15e; OQ-170; ADR-0376).
+/// Returns the set to carry forward: a verified co-signed `key_rotation`
+/// claim inserts its `to_key_id` (retired ids stay members, so historical
+/// checkpoints keep verifying).
+///
+/// Each signature entry must name an admitted `alg_ref`
+/// ([`CHECKPOINT_ALGS`]), an admitted `key_id` (the effective set plus the
+/// claim's own `to_key_id` — the successor signs its introduction), and a
+/// `sig` that parses under the declared alg; when `keys` is supplied the
+/// `key_id` must resolve and `verify_sig` must return `Some(true)`. A
+/// `key_rotation` claim additionally requires `from_key_id` ∈ the
+/// pre-claim effective set, at least one signature under `from_key_id`
+/// (the incumbent's attestation) and at least one under `to_key_id` — the
+/// co-signed window the adopted ruling names.
+pub fn check_checkpoint_signatures(
+    claim: &CheckpointClaim,
+    preimage: &[u8],
+    effective: &BTreeSet<String>,
+    keys: Option<&dyn AuditKeyResolver>,
+) -> Result<BTreeSet<String>, SignatureDefect> {
+    if claim.signatures.is_empty() {
+        return Err(SignatureDefect::Missing);
+    }
+    let rotation = key_rotation_members(claim)?;
+    let mut admitted = effective.clone();
+    if let Some((_, to)) = &rotation {
+        admitted.insert(to.clone());
+    }
+    for s in &claim.signatures {
+        let (Some(kid), Some(alg), Some(sig)) = (
+            s.get("key_id").and_then(Json::as_str),
+            s.get("alg_ref").and_then(Json::as_str),
+            s.get("sig").and_then(Json::as_str),
+        ) else {
+            return Err(SignatureDefect::Malformed);
+        };
+        if !CHECKPOINT_ALGS.contains(&alg) {
+            return Err(SignatureDefect::UnsupportedAlg(alg.to_string()));
+        }
+        if !admitted.contains(kid) {
+            return Err(SignatureDefect::UndeclaredKeyId(kid.to_string()));
+        }
+        let Some(sig_bytes) = parse_sig_alg(alg, sig) else {
+            return Err(SignatureDefect::MalformedSig(kid.to_string()));
+        };
+        if let Some(resolver) = keys {
+            let Some(key) = resolver.verify_key(kid) else {
+                return Err(SignatureDefect::Unresolvable(kid.to_string()));
+            };
+            match resolver.verify_sig(alg, &key, preimage, &sig_bytes) {
+                Some(true) => {}
+                Some(false) => return Err(SignatureDefect::Mismatch(kid.to_string())),
+                None => {
+                    return Err(SignatureDefect::Unresolvable(format!(
+                        "resolver does not implement alg {alg} (key_id {kid})"
+                    )))
+                }
+            }
+        }
+    }
+    if let Some((from, to)) = rotation {
+        if !effective.contains(&from) {
+            return Err(SignatureDefect::BadRotation(format!(
+                "from_key_id {from} is not an admitted signer"
+            )));
+        }
+        let kids: BTreeSet<&str> = claim
+            .signatures
+            .iter()
+            .filter_map(|s| s.get("key_id").and_then(Json::as_str))
+            .collect();
+        if !kids.contains(from.as_str()) {
+            return Err(SignatureDefect::BadRotation(format!(
+                "rotation lacks the incumbent co-signature ({from})"
+            )));
+        }
+        if !kids.contains(to.as_str()) {
+            return Err(SignatureDefect::BadRotation(format!(
+                "rotation lacks the successor co-signature ({to})"
+            )));
+        }
+        let mut out = effective.clone();
+        out.insert(to);
+        Ok(out)
+    } else {
+        Ok(effective.clone())
+    }
 }
 
 /// A checkpoint witness — an [`AuditSigner`] that also names itself
@@ -600,6 +793,12 @@ pub struct Auditor {
     held_heads: Vec<(u64, String)>,
     /// The checkpoint claims observed, in order (event seq, claim).
     claims: Vec<(u64, CheckpointClaim)>,
+    /// The effective signer-key set — the seq-0 manifest's
+    /// `signer_key_ids` extended by verified `key_rotation` claims
+    /// (R4.15e). `None` until the first checkpoint seeds it from the
+    /// auditor's own event record (never a caller-supplied set — the
+    /// auditor reads only its own durable record, ADR-0345 D3's posture).
+    signer_set: Option<BTreeSet<String>>,
 }
 
 impl Auditor {
@@ -612,6 +811,7 @@ impl Auditor {
             range: tree::CompactRange::default(),
             held_heads: Vec::new(),
             claims: Vec::new(),
+            signer_set: None,
         }
     }
 
@@ -749,11 +949,15 @@ impl Auditor {
         if claim.chain_hash.as_deref() != Some(expect_chain.as_str()) {
             return Err(inconsistent("chain_hash ≠ the covered tip".into()));
         }
-        // `kind = rotation` — the `rehash` member re-verifies under the
-        // claim profile and `bridge_record_ref` names a committed
-        // `security.audit.bridge` row in the covered prefix (the claim is
-        // self-evidencing — §5g.6 §2).
-        if claim.kind == CheckpointKind::Rotation.as_str() {
+        // `kind = rotation` — two distinct rotations share the kind
+        // spelling: a `key_rotation` claim is the *custody* rotation
+        // (R4.15e — its `from`/`to` members and co-signatures are checked
+        // by `check_checkpoint_signatures` below); a claim without
+        // `key_rotation` is the idp-rotation, whose `rehash` member
+        // re-verifies under the claim profile and `bridge_record_ref`
+        // names a committed `security.audit.bridge` row in the covered
+        // prefix (the claim is self-evidencing — §5g.6 §2).
+        if claim.kind == CheckpointKind::Rotation.as_str() && claim.key_rotation.is_none() {
             let rehash_ok = match &claim.rehash {
                 Some(r) => {
                     r.get("idp").and_then(Json::as_str) == Some(claim_profile_name.as_str())
@@ -818,56 +1022,46 @@ impl Auditor {
                 }
             }
         }
-        if let Some(resolver) = keys {
-            if claim.signatures.is_empty() {
+        // Primary signatures — the shared check over the *effective* key
+        // set: the seq-0 manifest's `signer_key_ids` plus every `to_key_id`
+        // a verified `key_rotation` claim has admitted so far (R4.15e;
+        // OQ-170). The set is seeded from the auditor's own durable record
+        // (`lifecycle.run.created`'s manifest), never a caller input.
+        if self.signer_set.is_none() {
+            let ids = self
+                .events
+                .first()
+                .filter(|e| e.class == "lifecycle.run.created")
+                .and_then(|e| RunManifest::from_json(&e.payload).ok())
+                .map(|m| m.signer_key_ids.into_iter().collect::<BTreeSet<_>>())
+                .unwrap_or_default();
+            self.signer_set = Some(ids);
+        }
+        let preimage = tree::checkpoint_sig_preimage(&event.payload);
+        let effective = self.signer_set.clone().unwrap_or_default();
+        match check_checkpoint_signatures(&claim, &preimage, &effective, keys) {
+            Ok(set) => self.signer_set = Some(set),
+            Err(d) => {
                 return Err(AuditFault::BadSignature {
                     at_seq: seq,
-                    detail: "no signatures on the claim".into(),
-                });
-            }
-            let preimage = tree::checkpoint_sig_preimage(&event.payload);
-            let mut any = false;
-            for s in &claim.signatures {
-                let (Some(kid), Some(alg), Some(sig)) = (
-                    s.get("key_id").and_then(Json::as_str),
-                    s.get("alg_ref").and_then(Json::as_str),
-                    s.get("sig").and_then(Json::as_str),
-                ) else {
-                    return Err(AuditFault::BadSignature {
-                        at_seq: seq,
-                        detail: "signature entry malformed".into(),
-                    });
-                };
-                if alg != CHECKPOINT_ALG {
-                    return Err(AuditFault::BadSignature {
-                        at_seq: seq,
-                        detail: format!("alg_ref {alg} unsupported"),
-                    });
-                }
-                let Some(sig_bytes) = parse_sig(sig) else {
-                    return Err(AuditFault::BadSignature {
-                        at_seq: seq,
-                        detail: "sig malformed".into(),
-                    });
-                };
-                let Some(key) = resolver.verify_key(kid) else {
-                    return Err(AuditFault::BadSignature {
-                        at_seq: seq,
-                        detail: format!("key_id {kid} unresolvable"),
-                    });
-                };
-                if hmac_sha256(&key, &preimage).to_vec() != sig_bytes {
-                    return Err(AuditFault::BadSignature {
-                        at_seq: seq,
-                        detail: format!("key_id {kid} signature mismatch"),
-                    });
-                }
-                any = true;
-            }
-            if !any {
-                return Err(AuditFault::BadSignature {
-                    at_seq: seq,
-                    detail: "no signatures on the claim".into(),
+                    detail: match d {
+                        SignatureDefect::Missing => "no signatures on the claim".into(),
+                        SignatureDefect::Malformed => "signature entry malformed".into(),
+                        SignatureDefect::UndeclaredKeyId(k) => {
+                            format!("key_id {k} is not an admitted signer")
+                        }
+                        SignatureDefect::UnsupportedAlg(a) => {
+                            format!("alg_ref {a} unsupported")
+                        }
+                        SignatureDefect::MalformedSig(_) => "sig malformed".into(),
+                        SignatureDefect::Unresolvable(k) => {
+                            format!("key_id {k} unresolvable")
+                        }
+                        SignatureDefect::Mismatch(k) => {
+                            format!("key_id {k} signature mismatch")
+                        }
+                        SignatureDefect::BadRotation(d) => d,
+                    },
                 });
             }
         }
@@ -1592,6 +1786,10 @@ pub fn audit_view(
     let mut checkpoints_ok = true;
     let mut prev_claim: Option<(u64, CheckpointClaim)> = None;
     let mut final_seen = false;
+    // The effective signer-key set folds forward across the run's claims —
+    // a verified `key_rotation` admits its `to_key_id` for later claims
+    // (R4.15e; OQ-170).
+    let mut effective_keys: BTreeSet<String> = manifest.signer_key_ids.iter().cloned().collect();
     for e in &events {
         if e.class != "security.audit.checkpoint" {
             continue;
@@ -1633,34 +1831,37 @@ pub fn audit_view(
         let idp_ok = claim_profile
             .map(|p| claim.idp.as_deref() == Some(tree::checkpoint_idp_in(p, &e.payload).as_str()))
             .unwrap_or(false);
-        // `kind = rotation` — `rehash` recomputes under the claim profile
-        // and `bridge_record_ref` names a covered `security.audit.bridge`
-        // row (§5g.6 §2).
-        let rotation_ok = if claim.kind == CheckpointKind::Rotation.as_str() {
-            let rehash_ok = match &claim.rehash {
-                Some(r) => {
-                    r.get("idp").and_then(Json::as_str) == Some(claim_profile_name.as_str())
-                        && crate::rotation::verify_rehash(
-                            r,
-                            events.iter().take(e.seq as usize).copied(),
-                        ) == Some(true)
-                }
-                None => false,
+        // `kind = rotation` — two rotations share the spelling (R4.15e): a
+        // `key_rotation` claim is the *custody* rotation — its co-signature
+        // rules run in the signature arm below; a claim without
+        // `key_rotation` is the idp-rotation — `rehash` recomputes under
+        // the claim profile and `bridge_record_ref` names a covered
+        // `security.audit.bridge` row (§5g.6 §2).
+        let rotation_ok =
+            if claim.kind == CheckpointKind::Rotation.as_str() && claim.key_rotation.is_none() {
+                let rehash_ok = match &claim.rehash {
+                    Some(r) => {
+                        r.get("idp").and_then(Json::as_str) == Some(claim_profile_name.as_str())
+                            && crate::rotation::verify_rehash(
+                                r,
+                                events.iter().take(e.seq as usize).copied(),
+                            ) == Some(true)
+                    }
+                    None => false,
+                };
+                rehash_ok
+                    && claim
+                        .bridge_record_ref
+                        .as_deref()
+                        .map(|bref| {
+                            events.iter().take(e.seq as usize).any(|ev| {
+                                ev.event_id == bref && ev.class == "security.audit.bridge"
+                            })
+                        })
+                        .unwrap_or(false)
+            } else {
+                true
             };
-            rehash_ok
-                && claim
-                    .bridge_record_ref
-                    .as_deref()
-                    .map(|bref| {
-                        events
-                            .iter()
-                            .take(e.seq as usize)
-                            .any(|ev| ev.event_id == bref && ev.class == "security.audit.bridge")
-                    })
-                    .unwrap_or(false)
-        } else {
-            true
-        };
         let link_ok = match &prev_claim {
             None => claim
                 .prev_checkpoint
@@ -1681,46 +1882,21 @@ pub fn audit_view(
         if !(size_ok && head_ok && chain_hash_ok && idp_ok && link_ok && rotation_ok) {
             status = "failed";
         }
-        // Signatures — shape always; value when a resolver is held.
+        // Signatures — the shared check over the effective key set (the
+        // manifest's `signer_key_ids` + verified `key_rotation` admits —
+        // R4.15e). Shape always; the signature value when a resolver is
+        // held (`verified`/`unverified` — an unverifiable signature is
+        // never "ok"; a defect is `failed`).
         if status == "verified" {
-            if claim.signatures.is_empty() {
-                status = "failed";
-            } else if let Some(resolver) = keys {
-                let preimage = tree::checkpoint_sig_preimage(&e.payload);
-                for s in &claim.signatures {
-                    let ok = (|| -> Option<bool> {
-                        let kid = s.get("key_id")?.as_str()?;
-                        if s.get("alg_ref")?.as_str()? != CHECKPOINT_ALG {
-                            return None;
-                        }
-                        if !manifest.signer_key_ids.iter().any(|k| k == kid) {
-                            return None;
-                        }
-                        let sig = parse_sig(s.get("sig")?.as_str()?)?;
-                        let key = resolver.verify_key(kid)?;
-                        Some(hmac_sha256(&key, &preimage).to_vec() == sig)
-                    })()
-                    .unwrap_or(false);
-                    if !ok {
-                        status = "failed";
-                        break;
+            let preimage = tree::checkpoint_sig_preimage(&e.payload);
+            match check_checkpoint_signatures(&claim, &preimage, &effective_keys, keys) {
+                Ok(set) => {
+                    effective_keys = set;
+                    if keys.is_none() {
+                        status = "unverified";
                     }
                 }
-            } else {
-                // Shape-check only — key ids must be registered, alg must be
-                // the C0 construction; the HMAC itself reports unverified.
-                let shape_ok = claim.signatures.iter().all(|s| {
-                    s.get("key_id")
-                        .and_then(Json::as_str)
-                        .map(|k| manifest.signer_key_ids.iter().any(|r| r == k))
-                        .unwrap_or(false)
-                        && s.get("alg_ref").and_then(Json::as_str) == Some(CHECKPOINT_ALG)
-                        && s.get("sig")
-                            .and_then(Json::as_str)
-                            .and_then(parse_sig)
-                            .is_some()
-                });
-                status = if shape_ok { "unverified" } else { "failed" };
+                Err(_) => status = "failed",
             }
         }
         // Witness cosignatures (§5g.6 §2 C2; S-320; ADR-0345 D3) — the

@@ -32,7 +32,7 @@ use hh_provenance::{ContentKind, Origin, ProvenanceRecord};
 use hh_wire::json::{self, Json};
 
 use crate::audit::{
-    AuditFault, AuditKeyResolver, AuditSigner, Auditor, BlobStatus, CheckpointKind, CHECKPOINT_ALG,
+    AuditFault, AuditKeyResolver, AuditSigner, Auditor, BlobStatus, CheckpointKind,
 };
 use crate::cipher::{self, BlobCipher};
 use crate::classes::{self, Durability, ScopeKind};
@@ -246,6 +246,12 @@ pub(crate) struct CheckpointExtras {
     pub bridge_record_ref: Option<String>,
     /// The attestation binding the rotation (signed claim member).
     pub attestation_ref: Option<String>,
+    /// The signer-key custody rotation `(from_key_id, to_key_id)` — minted
+    /// as the signed `key_rotation{from_key_id, to_key_id}` member on a
+    /// `kind = rotation` claim (R4.15e; OQ-170). Distinct from
+    /// `rotation_to`/`rehash`/`bridge_record_ref`, which belong to the
+    /// idp-rotation claim shape.
+    pub key_rotation: Option<(String, String)>,
 }
 
 impl CheckpointExtras {
@@ -2168,6 +2174,12 @@ impl Store {
         // ── the checkpoint layer ────────────────────────────────────────
         let manifest = &self.runs[run_id].manifest;
         let mut prev_claim: Option<(&EventEnvelope, crate::tree::CheckpointClaim)> = None;
+        // The effective signer-key set — the manifest's `signer_key_ids`
+        // extended by verified `key_rotation` claims (R4.15e; OQ-170). A
+        // rotation's `to_key_id` is admitted for later claims only after
+        // its own co-signed claim verifies.
+        let mut effective_keys: BTreeSet<String> =
+            manifest.signer_key_ids.iter().cloned().collect();
         let mut final_seq: Option<u64> = None;
         let mut finished_seq: Option<u64> = None;
         for (_, env) in committed.iter() {
@@ -2216,12 +2228,16 @@ impl Store {
             if claim.chain_hash.as_deref() != Some(expect_chain) {
                 return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
             }
-            // `kind = rotation` — the `rehash` member must recompute under
-            // the rotated-to profile and the claim's own digests must be
-            // under that profile too (the rotation claim is
-            // self-evidencing); `bridge_record_ref` must name a committed
+            // `kind = rotation` — two rotations share the spelling
+            // (R4.15e): a `key_rotation` claim is the *custody* rotation —
+            // its co-signature/admission rules run in the signature arm
+            // below; a claim without `key_rotation` is the idp-rotation —
+            // the `rehash` member must recompute under the rotated-to
+            // profile and the claim's own digests must be under that
+            // profile too (the rotation claim is self-evidencing);
+            // `bridge_record_ref` must name a committed
             // `security.audit.bridge` row (§5g.6 §2's claim shape).
-            if claim.kind == CheckpointKind::Rotation.as_str() {
+            if claim.kind == CheckpointKind::Rotation.as_str() && claim.key_rotation.is_none() {
                 let rehash_ok = match &claim.rehash {
                     Some(r) => {
                         let same_profile = r.get("idp").and_then(Json::as_str)
@@ -2290,37 +2306,35 @@ impl Store {
                 }
             }
             // Signatures — a checkpoint with none is a stripped claim; each
-            // entry must name a declared key and the C0 construction, and
-            // (with a resolver) the HMAC must match the unsigned claim.
-            if claim.signatures.is_empty() {
-                return Err(tampered(env.seq, TamperedKind::SigMissing));
-            }
+            // entry must name an admitted key and construction, and (with a
+            // resolver) the signature must verify over the unsigned claim.
+            // The admitted set is the *effective* one — the manifest's
+            // `signer_key_ids` plus each verified `key_rotation`'s
+            // `to_key_id` (R4.15e; OQ-170): a co-signed custody rotation
+            // extends the set mid-run, and a rotation lacking the
+            // incumbent's co-signature is `BadSignature`.
             let preimage = crate::tree::checkpoint_sig_preimage(&env.payload);
-            for s in &claim.signatures {
-                let bad_sig = || tampered(env.seq, TamperedKind::BadSignature);
-                let kid = s.get("key_id").and_then(Json::as_str).ok_or_else(bad_sig)?;
-                if s.get("alg_ref").and_then(Json::as_str) != Some(CHECKPOINT_ALG) {
-                    return Err(bad_sig());
+            match crate::audit::check_checkpoint_signatures(
+                &claim,
+                &preimage,
+                &effective_keys,
+                keys,
+            ) {
+                Ok(set) => effective_keys = set,
+                Err(crate::audit::SignatureDefect::Missing) => {
+                    return Err(tampered(env.seq, TamperedKind::SigMissing));
                 }
-                if !manifest.signer_key_ids.iter().any(|k| k == kid) {
-                    return Err(bad_sig());
+                Err(crate::audit::SignatureDefect::Unresolvable(kid)) => {
+                    return Err(LedgerError::SignerUnavailable {
+                        run_id: run_id.to_string(),
+                        detail: format!(
+                            "signer key_id {kid} does not resolve through \
+                             the supplied key resolver"
+                        ),
+                    });
                 }
-                let sig = crate::audit::parse_sig(
-                    s.get("sig").and_then(Json::as_str).ok_or_else(bad_sig)?,
-                )
-                .ok_or_else(bad_sig)?;
-                if let Some(resolver) = keys {
-                    let key = resolver.verify_key(kid).ok_or_else(|| {
-                        LedgerError::SignerUnavailable {
-                            run_id: run_id.to_string(),
-                            detail: format!(
-                                "signer_key_ids member {kid} does not resolve through                                  the supplied key resolver"
-                            ),
-                        }
-                    })?;
-                    if hh_wire::sha256::hmac_sha256(&key, &preimage).to_vec() != sig {
-                        return Err(bad_sig());
-                    }
+                Err(_) => {
+                    return Err(tampered(env.seq, TamperedKind::BadSignature));
                 }
             }
             // Witness cosignatures (§5g.6 §2 C2; S-320; ADR-0345 D3) — the
@@ -2453,10 +2467,13 @@ impl Store {
     ) -> Result<EventEnvelope, LedgerError> {
         if kind == CheckpointKind::Rotation {
             // A rotation claim without its `rehash`/`bridge_record_ref`
-            // members would be a forged boundary — the dedicated op mints
-            // them (§5g.6 §2; ADR-0307).
+            // (idp-rotation) or `key_rotation` (custody rotation) members
+            // would be a forged boundary — the dedicated ops mint them
+            // (§5g.6 §2; ADR-0307; R4.15e).
             return Err(LedgerError::SchemaViolation {
-                detail: "kind = rotation is minted through rotation_checkpoint".into(),
+                detail: "kind = rotation is minted through rotation_checkpoint \
+                         or signer_rotation_checkpoint"
+                    .into(),
             });
         }
         self.checkpoint_inner(
@@ -2464,6 +2481,7 @@ impl Store {
             lease,
             kind,
             signer,
+            &mut [],
             &mut [],
             &CheckpointExtras::none(),
         )
@@ -2488,7 +2506,9 @@ impl Store {
     ) -> Result<EventEnvelope, LedgerError> {
         if kind == CheckpointKind::Rotation {
             return Err(LedgerError::SchemaViolation {
-                detail: "kind = rotation is minted through rotation_checkpoint_witnessed".into(),
+                detail: "kind = rotation is minted through rotation_checkpoint_witnessed \
+                         or signer_rotation_checkpoint"
+                    .into(),
             });
         }
         self.checkpoint_inner(
@@ -2496,22 +2516,28 @@ impl Store {
             lease,
             kind,
             signer,
+            &mut [],
             witnesses,
             &CheckpointExtras::none(),
         )
     }
 
     /// The claim-emit core shared by [`Store::checkpoint`] /
-    /// [`Store::checkpoint_witnessed`] and the rotation pair. `witnesses`
-    /// carries the C2 cosigners (empty for the pre-C2 ops); `extras`
-    /// carries the rotation-only members (`rotation_to`, `rehash`,
-    /// `bridge_record_ref`, `attestation_ref`).
+    /// [`Store::checkpoint_witnessed`] and the rotation pair. `cosigners`
+    /// carries additional primary signers whose signature entries ride the
+    /// same claim — the custody-rotation successor (R4.15e; empty on every
+    /// other op); `witnesses` carries the C2 cosigners (empty for the
+    /// pre-C2 ops); `extras` carries the rotation-only members
+    /// (`rotation_to`, `rehash`, `bridge_record_ref`, `attestation_ref`,
+    /// `key_rotation`).
+    #[allow(clippy::too_many_arguments)] // the claim's parts are the op's record.
     fn checkpoint_inner(
         &mut self,
         run_id: &str,
         lease: &Lease,
         kind: CheckpointKind,
         signer: &mut dyn AuditSigner,
+        cosigners: &mut [&mut dyn AuditSigner],
         witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
         extras: &CheckpointExtras,
     ) -> Result<EventEnvelope, LedgerError> {
@@ -2524,11 +2550,29 @@ impl Store {
                 detail: "the run manifest declares no signer_key_ids".into(),
             });
         }
-        if !manifest.signer_key_ids.iter().any(|k| k == signer.key_id()) {
+        // The admitted set is *effective*: the manifest's `signer_key_ids`
+        // plus every `to_key_id` a previously-minted `key_rotation` claim
+        // admitted (its `from` had to be admitted itself — the mint's own
+        // fold, shape-level; `verify_run` rechecks the co-signatures).
+        let mut admitted: BTreeSet<String> = manifest.signer_key_ids.iter().cloned().collect();
+        for e in state
+            .events
+            .iter()
+            .filter(|e| e.class == "security.audit.checkpoint")
+        {
+            if let Some(c) = crate::tree::parse_checkpoint(&e.payload) {
+                if let Ok(Some((from, to))) = crate::audit::key_rotation_members(&c) {
+                    if admitted.contains(&from) {
+                        admitted.insert(to);
+                    }
+                }
+            }
+        }
+        if !admitted.contains(signer.key_id()) {
             return Err(LedgerError::SignerUnavailable {
                 run_id: run_id.to_string(),
                 detail: format!(
-                    "signer key_id {} is not a manifest signer_key_ids member",
+                    "signer key_id {} is not an admitted signer_key_ids member",
                     signer.key_id()
                 ),
             });
@@ -2802,6 +2846,19 @@ impl Store {
         if let Some(att) = &extras.attestation_ref {
             members.insert("attestation_ref".to_string(), Json::str(att));
         }
+        // The signer-key custody rotation member — inside the signed
+        // preimage, so the incumbent's and successor's signatures both
+        // cover `{from_key_id, to_key_id}` (R4.15e; OQ-170): a tampered
+        // successor id fails verification, never silently re-keys.
+        if let Some((from, to)) = &extras.key_rotation {
+            members.insert(
+                "key_rotation".to_string(),
+                Json::obj([
+                    ("from_key_id", Json::str(from)),
+                    ("to_key_id", Json::str(to)),
+                ]),
+            );
+        }
         let unsigned = Json::Obj(members);
         let preimage = crate::tree::checkpoint_sig_preimage(&unsigned);
         let sig_bytes = signer
@@ -2872,14 +2929,35 @@ impl Store {
             Json::Obj(m) => m,
             _ => BTreeMap::new(),
         };
-        members.insert(
-            "signatures".to_string(),
-            Json::Arr(vec![Json::obj([
-                ("key_id", Json::str(signer.key_id())),
-                ("alg_ref", Json::str(CHECKPOINT_ALG)),
-                ("sig", Json::str(crate::audit::render_sig(&sig_bytes))),
-            ])]),
-        );
+        // `signatures[]` — the primary signer plus every co-signer (the
+        // custody-rotation successor — R4.15e): each entry carries its
+        // signer's own `alg_ref` (the explicit spelling, CC8 additive).
+        let mut sig_entries = Vec::with_capacity(1 + cosigners.len());
+        sig_entries.push(Json::obj([
+            ("key_id", Json::str(signer.key_id())),
+            ("alg_ref", Json::str(signer.alg_ref())),
+            (
+                "sig",
+                Json::str(crate::audit::render_sig_alg(signer.alg_ref(), &sig_bytes)),
+            ),
+        ]));
+        for cs in cosigners.iter_mut() {
+            let csig = cs
+                .sign(&preimage)
+                .map_err(|e| LedgerError::SignerUnavailable {
+                    run_id: run_id.to_string(),
+                    detail: format!("co-signer {}: {e}", cs.key_id()),
+                })?;
+            sig_entries.push(Json::obj([
+                ("key_id", Json::str(cs.key_id())),
+                ("alg_ref", Json::str(cs.alg_ref())),
+                (
+                    "sig",
+                    Json::str(crate::audit::render_sig_alg(cs.alg_ref(), &csig)),
+                ),
+            ]));
+        }
+        members.insert("signatures".to_string(), Json::Arr(sig_entries));
         if let Some(cosignatures) = witness_cosignatures {
             members.insert("witness_cosignatures".to_string(), cosignatures);
         }
@@ -2964,12 +3042,14 @@ impl Store {
             )),
             bridge_record_ref: bridge_record_ref.map(str::to_string),
             attestation_ref: plan.attestation_ref.clone(),
+            key_rotation: None,
         };
         self.checkpoint_inner(
             run_id,
             lease,
             CheckpointKind::Rotation,
             signer,
+            &mut [],
             &mut [],
             &extras,
         )
@@ -3024,13 +3104,55 @@ impl Store {
             )),
             bridge_record_ref: bridge_record_ref.map(str::to_string),
             attestation_ref: plan.attestation_ref.clone(),
+            key_rotation: None,
         };
         self.checkpoint_inner(
             run_id,
             lease,
             CheckpointKind::Rotation,
             signer,
+            &mut [],
             witnesses,
+            &extras,
+        )
+    }
+
+    /// `signer_rotation_checkpoint(run, lease, incumbent, successor)` —
+    /// the `security.audit.checkpoint{kind = rotation,
+    /// key_rotation{from_key_id, to_key_id}}` row: the **custody**
+    /// rotation (R4.15e; OQ-170; ADR-0376). Incumbent and successor
+    /// co-sign the same unsigned claim over the *unchanged* identity
+    /// profile (a signer `key_id` is a custody coordinate, never an
+    /// identity — idp-rotation moves content addressing and neither
+    /// rotation forces the other). The incumbent must already be an
+    /// admitted signer on this run (the manifest's `signer_key_ids` or a
+    /// prior verified rotation's `to_key_id` — the mint's own fold enforces
+    /// it, `SignerUnavailable` otherwise); a verifier admits `to_key_id`
+    /// into the effective set from this row forward, and a rotation claim
+    /// lacking the incumbent's co-signature fails `BadSignature`. Retired
+    /// keys stay resolvable through the resolver so historical checkpoints
+    /// keep verifying.
+    pub fn signer_rotation_checkpoint(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        incumbent: &mut dyn AuditSigner,
+        successor: &mut dyn AuditSigner,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let extras = CheckpointExtras {
+            key_rotation: Some((
+                incumbent.key_id().to_string(),
+                successor.key_id().to_string(),
+            )),
+            ..CheckpointExtras::none()
+        };
+        self.checkpoint_inner(
+            run_id,
+            lease,
+            CheckpointKind::Rotation,
+            incumbent,
+            &mut [successor],
+            &mut [],
             &extras,
         )
     }

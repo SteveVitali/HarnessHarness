@@ -950,6 +950,10 @@ const CHECKPOINT_FIELDS: &[AuditField] = &[
     afb("rehash", AUDIT_FIELD_LIST_BYTES),
     af("bridge_record_ref"),
     af("attestation_ref"),
+    // R4.15e (R-2.8.6; OQ-170) — the signer-key *custody* rotation member
+    // `key_rotation{from_key_id, to_key_id}` (key ids only — coordinates,
+    // never key material).
+    afb("key_rotation", AUDIT_FIELD_LIST_BYTES),
     afb("signatures", AUDIT_FIELD_LIST_BYTES),
     afb("witness_cosignatures", AUDIT_FIELD_LIST_BYTES),
     af("audit_policy_ref"),

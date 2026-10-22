@@ -102,6 +102,23 @@ pub struct EmbedService {
     /// (R4.15d; the fetch act is the kernel's own, so its audit lands on
     /// the kernel's run, never on a fabricated subject write).
     pub(crate) fetch_run: Option<(String, Lease)>,
+    /// The kernel-held Ed25519 ledger-signer custody (R4.15e; OQ-170;
+    /// ADR-0376) — file-backed under `<store_root>/secrets/`, provisioned
+    /// at `open` through `CredentialBroker::kernel_use(LedgerSigning)`.
+    /// `None` is the honest unprovisioned posture: `signer_key_ids` stays
+    /// empty and `audit_view` reports `n/a{no signer_key_ids declared}` —
+    /// never a fabricated signer.
+    pub(crate) signer_custody: Option<hh_secrets::LedgerSignerCustody>,
+    /// The provisioned signer (built from the `kernel_use` value).
+    pub(crate) signer: Option<hh_secrets::LedgerSignerKey>,
+    /// Every custody key id — active + retired (manifest `signer_key_ids`
+    /// accumulates them).
+    pub(crate) signer_ids: std::collections::BTreeSet<String>,
+    /// The kernel-internal custody run — carries the
+    /// `security.credential.used{kernel:ledger_signing}` provisioning rows
+    /// and the co-signed `key_rotation` checkpoints; lazily created like
+    /// `registry_run`.
+    pub(crate) signer_run: Option<(String, Lease)>,
     /// Experiment-run writer leases held across `lab.experiment.*` calls
     /// (`experiment_run_id → Lease`; the fence still lives in the ledger —
     /// this map only avoids release/re-acquire churn per call).
@@ -354,7 +371,7 @@ impl EmbedService {
         // (ADR-0332 D1 — DF-DOC.1-1).
         let kernel_version =
             hh_embed_schema::kernel_version_label(&config.kernel_version_id).to_string();
-        Ok(EmbedService {
+        let svc = EmbedService {
             kernel_version,
             kernel_prov: ProvenanceRecord::kernel("hh-embed", 0),
             store,
@@ -380,6 +397,10 @@ impl EmbedService {
             registry_run: None,
             contract_run: None,
             fetch_run: None,
+            signer_custody: None,
+            signer: None,
+            signer_ids: std::collections::BTreeSet::new(),
+            signer_run: None,
             client_desc: None,
             hosting_plane: None,
             experiment_engines: BTreeMap::new(),
@@ -393,7 +414,14 @@ impl EmbedService {
             coevolution_cycles: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
             binding_label: "embedded".to_string(),
-        })
+        };
+        let mut svc = svc;
+        // The OQ-170 custody install — loads `<store_root>/secrets/` at
+        // boot; a mis-permissioned or corrupt custody refuses the open
+        // (typed — `EmbedError::Refused`), an absent one leaves the
+        // honest unsigned posture.
+        svc.install_signer_custody()?;
+        Ok(svc)
     }
 
     /// Set the binding label — the (c) server calls this before serving so
@@ -405,10 +433,24 @@ impl EmbedService {
     /// Install the composed credential-broker resolver (R2.9a; DF-S2.4-1c)
     /// — the default `DenyAllResolver` is fail-closed, so a sentinel/
     /// rebind against an unwired host answers the broker's typed refusal,
-    /// never a fabricated claim.
+    /// never a fabricated claim. The OQ-170 signer channel survives the
+    /// swap (R4.15e): the custody source composes in front of the host's
+    /// resolver and the `kernel_only` channel is redeclared, so
+    /// `kernel_use(LedgerSigning)` keeps resolving after the swap.
     pub fn set_credential_resolver(&mut self, resolver: Box<dyn hh_secrets::SecretSourceResolver>) {
+        let resolver: Box<dyn hh_secrets::SecretSourceResolver> = match &self.signer_custody {
+            Some(custody) => Box::new(custody.source_resolver(Some(resolver))),
+            None => resolver,
+        };
         self.credential_broker =
             hh_secrets::CredentialBroker::new(resolver, "hh-embed/credentials");
+        if self.signer_custody.is_some() {
+            let _ = self.credential_broker.register_channel(
+                hh_secrets::SIGNER_CHANNEL_ID,
+                hh_secrets::LedgerSignerCustody::channel_spec(),
+                self.kernel_prov.clone(),
+            );
+        }
     }
 
     /// Seed the embedded registry with the kernel's Stage-1 suite — the
@@ -1755,6 +1797,7 @@ impl EmbedService {
         for (ef, attempt, intent) in asks {
             asks_by_effect.insert(ef, (attempt, intent));
         }
+        let mut run_just_finished = false;
         for (_seq, class, _hash, effect_id, model_call, turn_id, payload) in
             events.iter().filter(|(seq, ..)| *seq > watermark)
         {
@@ -1765,6 +1808,7 @@ impl EmbedService {
                         s.finished = true;
                         s.turn_active = false;
                     }
+                    run_just_finished = true;
                 }
                 "action.effect.intended" => {
                     let ef = effect_id.clone().unwrap_or_default();
@@ -1906,6 +1950,18 @@ impl EmbedService {
                 s.scan_seq = h.0;
             }
         }
+        // DF-S2.5-1's emission leg (R4.15e) — the `kind = final` checkpoint
+        // covering `lifecycle.run.finished`, minted the moment the scan
+        // observes the terminal row while custody is provisioned (a
+        // run the manifest never declared signer keys for stays unsigned —
+        // the honest posture).
+        if run_just_finished {
+            if let Some(s) = self.sessions.get(sess_id) {
+                if let Some(lease) = s.lease.clone() {
+                    self.emit_final_checkpoint(&run_id, &lease);
+                }
+            }
+        }
     }
 
     /// Build the run summary ref `{run_id, seq, hash}` at the current head.
@@ -2000,8 +2056,16 @@ impl EmbedService {
     /// open exactly like a session-opened run (a dangling ref refuses).
     pub fn surface_open_run(
         &mut self,
-        manifest: hh_ledger::manifest::RunManifest,
+        mut manifest: hh_ledger::manifest::RunManifest,
     ) -> Result<(String, hh_ledger::store::Lease), EmbedError> {
+        // R4.15e (OQ-170) — union the kernel-held custody key ids into the
+        // surface-declared set (conferred facts are additive; a surface
+        // cannot subtract the kernel's signer set).
+        for kid in self.signer_key_ids() {
+            if !manifest.signer_key_ids.contains(&kid) {
+                manifest.signer_key_ids.push(kid);
+            }
+        }
         let holder = self.holder.clone();
         self.store.open_run(manifest, &holder).map_err(ledger_err)
     }
