@@ -867,8 +867,11 @@ impl EmbedService {
     }
 
     /// `kernel.export{path | container, target, policy?, dir}` — the
-    /// export-target lowering (§5h.3 §6; AC-R-2.9.3-7). `target ∈
-    /// {ledger_native, harbor_job_dir, interchange_trajectory}`; the
+    /// export-target lowering (§5h.3 §6; AC-R-2.9.3-7; DF-S4.2-2/R4.9).
+    /// `target ∈ {ledger_native} ∪ ForeignFormat::exports()` — the
+    /// closed sum; a known-but-import-only format refuses
+    /// `ForeignDirectionRefused`, an unknown spelling `FormatUnknown`;
+    /// the
     /// `PublicationPolicy` gates member classes (withheld members land
     /// `no_slot` loss rows — never silently absent). `dir` receives the
     /// artefact's file tree; `measurement.export.delivered` rows land
@@ -1780,15 +1783,27 @@ impl EmbedService {
         format: &str,
         holder: &str,
     ) -> Result<Json, EmbedError> {
-        if !hh_bundle::import::FOREIGN_FORMATS.contains(&format) {
-            return Err(bundle_err(BundleError::FormatUnknown {
-                detail: format!(
-                    "{format} — supported: {} + {:?}",
-                    NATIVE_FORMAT,
-                    hh_bundle::import::FOREIGN_FORMATS
-                ),
-            }));
-        }
+        // The closed `ForeignFormat` sum is the one grammar (CC1): a
+        // spelling outside it is `FormatUnknown`, a known format asked
+        // the wrong direction is `ForeignDirectionRefused` (R4.9).
+        let ftype = match hh_bundle::ForeignFormat::parse(format) {
+            Some(f) if f.lifts() => f,
+            Some(_) => {
+                return Err(bundle_err(BundleError::ForeignDirectionRefused {
+                    format: format.to_string(),
+                    direction: "import",
+                }))
+            }
+            None => {
+                return Err(bundle_err(BundleError::FormatUnknown {
+                    detail: format!(
+                        "{format} — supported: {} + {:?}",
+                        NATIVE_FORMAT,
+                        hh_bundle::ForeignFormat::liftable_spellings()
+                    ),
+                }))
+            }
+        };
         let dir = params
             .get("path")
             .and_then(Json::as_str)
@@ -1834,7 +1849,7 @@ impl EmbedService {
             &self.store,
             &run_id,
             &files,
-            format,
+            ftype,
             ProvenanceRecord::kernel(IMPORT_COMPONENT, self.store.now_ms()).to_json(),
             hh_ledger::store::rfc3339_ms(self.store.now_ms()),
             &self.kernel_version,

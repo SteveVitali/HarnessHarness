@@ -700,7 +700,7 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
         &rig.store,
         &rig.other,
         &files,
-        "harbor_trial_dir",
+        hh_bundle::ForeignFormat::HarborTrialDir,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",
@@ -784,21 +784,26 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
             .and_then(Json::as_str),
         Some("unverified")
     );
-    // Unknown formats refuse typed.
-    let err = hh_bundle::import::lift_foreign(
+    // Unknown formats refuse typed — since R4.9 the spelling gate is
+    // the closed `ForeignFormat` sum (`parse` never guesses); a known
+    // export-only format refuses `ForeignDirectionRefused` (OQ-030).
+    assert!(hh_bundle::ForeignFormat::parse("bogus").is_none());
+    match hh_bundle::import::lift_foreign(
         &rig.store,
         &rig.other,
         &files,
-        "swebench_submission",
+        hh_bundle::ForeignFormat::InterchangeTrajectory,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",
         0,
-    );
-    match err {
-        Err(BundleError::FormatUnknown { .. }) => {}
+    ) {
+        Err(BundleError::ForeignDirectionRefused { format, direction }) => {
+            assert_eq!(format, "interchange_trajectory");
+            assert_eq!(direction, "import");
+        }
         Err(other) => panic!("unexpected lift error: {other}"),
-        Ok(_) => panic!("unknown format lifted"),
+        Ok(_) => panic!("export-only format lifted"),
     }
 }
 
@@ -823,7 +828,7 @@ fn foreign_import_mints_no_experiment_binding() {
         &rig.store,
         &rig.other,
         &files,
-        "harbor_trial_dir",
+        hh_bundle::ForeignFormat::HarborTrialDir,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",

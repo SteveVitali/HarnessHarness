@@ -70,6 +70,14 @@ pub enum BundleError {
     /// `ReaderViolation`, `BundleNotValid`, …; S6.4 — the projection's
     /// closed refusal set, never a warning).
     CoevolutionRefused { reason: String },
+    /// A known `ForeignFormat` asked the direction it does not support
+    /// (e.g. `interchange_trajectory` at `import`, `harbor_trial_dir` at
+    /// `export`; R4.9) — typed, never `FormatUnknown` (the format IS
+    /// known) and never a silent skip.
+    ForeignDirectionRefused {
+        format: String,
+        direction: &'static str,
+    },
     /// A malformed record decode.
     Malformed { detail: String },
 }
@@ -136,6 +144,12 @@ impl fmt::Display for BundleError {
             }
             BundleError::CoevolutionRefused { reason } => {
                 write!(f, "coevolution_refused: {reason}")
+            }
+            BundleError::ForeignDirectionRefused { format, direction } => {
+                write!(
+                    f,
+                    "foreign_direction_refused: {format} does not {direction}"
+                )
             }
             BundleError::Io { detail } => write!(f, "io: {detail}"),
             BundleError::Malformed { detail } => write!(f, "malformed: {detail}"),

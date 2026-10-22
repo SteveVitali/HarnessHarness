@@ -31,6 +31,7 @@ pub mod diff;
 pub mod error;
 pub mod export;
 pub mod fetch;
+pub mod foreign;
 pub mod import;
 pub mod levels;
 pub mod lifecycle;
@@ -48,6 +49,7 @@ pub use diff::{bundle_diff, BundleDiff, MemberDelta};
 pub use error::BundleError;
 pub use export::{build_ledger_export, export_target, ExportOutcome, PublicationPolicy};
 pub use fetch::{fetch, member_bytes_or_refused, FetchOutcome};
+pub use foreign::ForeignFormat;
 pub use import::{lift, ImportEvent, ImportLift, NATIVE_FORMAT};
 pub use lifecycle::{lineage_edges, migrate_bundle, migrate_document, supersede_bundle};
 pub use manifest::{

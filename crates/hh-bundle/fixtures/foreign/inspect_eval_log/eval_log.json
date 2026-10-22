@@ -1,0 +1,57 @@
+{
+ "version": 2,
+ "status": "success",
+ "eval": {
+  "eval_id": "inspect-fixture-eval",
+  "run_id": "inspect-fixture-run",
+  "task": "hh.standin.task",
+  "model": "hh-standin-model",
+  "created": "2026-10-22T00:00:00Z",
+  "dataset": {
+   "name": "standin",
+   "samples": 1
+  }
+ },
+ "plan": {
+  "name": "hh-standin-plan",
+  "steps": []
+ },
+ "results": {
+  "total_samples": 1,
+  "completed_samples": 1,
+  "scores": [
+   {
+    "name": "accuracy",
+    "metrics": {
+     "accuracy": {
+      "value": 1.0
+     }
+    },
+    "scorer": "standin"
+   }
+  ]
+ },
+ "stats": {
+  "started_at": "2026-10-22T00:00:00Z",
+  "completed_at": "2026-10-22T00:00:01Z"
+ },
+ "samples": [
+  {
+   "id": 1,
+   "epoch": 1,
+   "input": "standin input",
+   "target": "standin target",
+   "scores": {
+    "accuracy": {
+     "value": 1.0
+    }
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  }
+ ]
+}
