@@ -14,7 +14,7 @@
 //! `control.*`/`measurement.*` families and the wildcard families land with their owning
 //! producers (additive rows — CC8).
 //!
-//! The Hosting-ABI lowering column lands with R-2.10.6⁰/ADR-0164: [`HOSTED_LOWERING`]
+//! The Hosting-ABI lowering column lands with R-2.10.6⁰/ADR-0164: `HOSTED_LOWERING`
 //! names, per class, how a native row presents on the hosted side — a typed
 //! `hh-hosting/1` kind spelling, `"passthrough"` (the native spelling carries
 //! verbatim — the `security.egress.*`/`security.credential.*` families),
@@ -1548,7 +1548,7 @@ const fn str_eq(a: &str, b: &str) -> bool {
 }
 
 /// The hosted-lowering lookup: `"none"` for anything not listed in
-/// [`HOSTED_LOWERING`] — the default is "does not cross to the hosted
+/// `HOSTED_LOWERING` — the default is "does not cross to the hosted
 /// presentation", so a new class is opt-in for hosted visibility (ADR-0164 D5:
 /// the loss record is declared, not silent — the projection reports `"none"`
 /// classes as `no_slot` entries).

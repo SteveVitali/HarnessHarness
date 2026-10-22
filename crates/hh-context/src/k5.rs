@@ -125,7 +125,7 @@ impl K5Key {
 /// The three contract dependencies every K5 entry carries (§5b.4):
 /// `{model_snapshot}, {profile_version}, {definition_version}` — `row`
 /// granularity, `revalidation = never` (declared on
-/// [`K5Entry::contract_revalidation`], which is a constant).
+/// [`K5Entry::dependencies`] stamps, where it is a constant).
 pub fn k5_dependencies(
     snapshot_id: &str,
     snapshot_ref: &str,

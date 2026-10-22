@@ -30,13 +30,13 @@
 //!   `effective_authority` (P3), the `HirDiff.authority_delta` gate (P6).
 //! - [`record`] — `ProvenanceRecord`, `Derivation`, `Attestation`, `verify_attestation`,
 //!   `validate`.
-//! - [`derive`] — P1 `derive` (multi-input join), `ingest_child_result` (P2), check 7.
-//! - [`endorse`] — `EndorsementBasis` (closed list), `endorse`/`declassify`/`seal`/
+//! - [`mod@derive`] — P1 `derive` (multi-input join), `ingest_child_result` (P2), check 7.
+//! - [`mod@endorse`] — `EndorsementBasis` (closed list), `endorse`/`declassify`/`seal`/
 //!   `apply_label`, the `security.label.*` payloads, check 5.
 //! - [`mandatory`] — the §8.1 #7 mandatory-provenance ledger event table.
 //! - [`monitor`] — checks 1 (`operand ⊆ envelope`), 2 (monotonic label), 7 (delegate
 //!   attenuation).
-//! - [`lower`] — P7 `lower`/`lift` (lossy-explicit carriers) and RP `render_role`.
+//! - [`mod@lower`] — P7 `lower`/`lift` (lossy-explicit carriers) and RP `render_role`.
 //! - [`decode`] — the canonical `from_json` decoders (added for S1.5): the schema source
 //!   owns both directions (CC7), so a stored/endorsed record parses back byte-identically.
 //! - [`flow`] — the C2 slice (§5g.2, R-2.8.2): `FlowContract` + its codec, `L⁺(p)`,

@@ -9,7 +9,7 @@
 //!
 //! The render-purity boundary (I-RENDER): a `Text` leaf inside a procedure may
 //! never carry a declared exec marker — the registered marker set is the
-//! OpenHands-style bang-backtick form `` !` ``<cmd>`` ` ``. Detection scans
+//! OpenHands-style bang-backtick form `` !` ``&lt;cmd&gt;`` ` ``. Detection scans
 //! *inline* content only: a hash-addressed `Text` leaf (`content: None`) was
 //! scanned when authored/lifted (`lift_skill` refuses the marker before the
 //! leaf is ever addressed).

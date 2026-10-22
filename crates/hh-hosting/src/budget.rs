@@ -3,7 +3,7 @@
 //!
 //! `budget_enforcement` is a map `dimension → {enforced, advisory,
 //! unenforceable}` the **Lab derives** — never the participant's claim
-//! ([`HostingExt::budget_enforcement`] is the *declared claim* the adapter
+//! ([`crate::HostingExt::budget_enforcement`] is the *declared claim* the adapter
 //! asserts; this module computes what the Lab can actually enforce from
 //! mechanism × placement × interception × environment ownership).
 //!

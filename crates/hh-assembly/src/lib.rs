@@ -5,12 +5,12 @@
 //! ([`grammar`]): `Assembly{dialect, profile_binding, slots, parameters, values,
 //! entities, constraints, layers?, resolved?, ext}` — data only, never host-language
 //! content (Q-L1-09). [`schema`] declares the per-field merge policy and the
-//! byte-level `encode`/`load` codec pair; [`load`] is the §3.3.4 document-level `load`
+//! byte-level `encode`/`load` codec pair; [`mod@load`] is the §3.3.4 document-level `load`
 //! op. The op set: `validate_assembly` stages 1–5 + 7 with complete, never-fail-fast
 //! diagnostic reports ([`validate`]), `resolve` — the one resolver feeding `hh-hir`'s
-//! `seal` (CF-056) — `identity` ([`identity`]), `diff` via `HirDiff` ([`diff`], not a
+//! `seal` (CF-056) — `identity` ([`mod@identity`]), `diff` via `HirDiff` ([`mod@diff`], not a
 //! separate object), in-process `instantiate` with `lifecycle.component.bound`
-//! ([`instantiate`]), `verify_resume` with `lifecycle.definition.changed`
+//! ([`mod@instantiate`]), `verify_resume` with `lifecycle.definition.changed`
 //! ([`resume`]), and `link_precheck` — the `C-LINK-1` refusal the compiler's stage 1
 //! applies (AC-CC-10). The closed `AssemblyDiagnostic` taxonomy is [`diagnostics`]
 //! (ADR-0148 + the ADR-0143 L2 code; `C-INT-1` is reserved — an uncoded rejection is a
@@ -22,8 +22,8 @@
 //! report through `hh-provenance`, the single fenced writer through `hh-ledger`, the
 //! `ResourceAccount` input through `hh-budget`.
 //!
-//! `compose` with layers + monotone `authority_cap` ([`compose`]),
-//! `space`/`enumerate` + the ADR-0025 override grammar ([`space`]),
+//! `compose` with layers + monotone `authority_cap` ([`mod@compose`]),
+//! `space`/`enumerate` + the ADR-0025 override grammar ([`mod@space`]),
 //! `validate_assembly` stage 6a (declaration-level profile compatibility —
 //! `C-PROF-1`) and `validate_batch` — the ADR-0147 pre-spend gate — are
 //! implemented (C0/Stage 3). Staged later (§3.3.13): stage 6b `C-PROF-2`

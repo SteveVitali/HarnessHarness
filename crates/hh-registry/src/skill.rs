@@ -25,8 +25,8 @@
 //! - `metadata` keys → `ext["<ns>/metadata"]`; `metadata.version` → a
 //!   `version_label` claim (CF-087);
 //! - render purity is `validate`'s gate: a body carrying the declared
-//!   render-time exec marker (`` !` ``<cmd>`` ` ``) fails
-//!   [`hh_hir::validate`] with `RenderTimeExecution` — the lift produces the
+//!   render-time exec marker (`` !` ``&lt;cmd&gt;`` ` ``) fails
+//!   [`mod@hh_hir::validate`] with `RenderTimeExecution` — the lift produces the
 //!   doc faithfully, the gate refuses it.
 //!
 //! The registry never performs I/O: the caller supplies the read tree

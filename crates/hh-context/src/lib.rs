@@ -33,7 +33,7 @@
 //! (R-TEXT). [`lifecycle`] carries the `R-2.4.4⁰` pure functions —
 //! `lifecycle_state`, `check_contract`, `filter_for_slot`, `write` semantics
 //! (E1–E4), deterministic conflict sets, `promote`/`revalidate` and the
-//! `MemoryStaleIndex` fold. [`retrieve`] is the one retrieval pipeline —
+//! `MemoryStaleIndex` fold. [`mod@retrieve`] is the one retrieval pipeline —
 //! `enumerate` → validity → authority → readers → `deterministic_default`
 //! ranker → budgeted whole-item cut — with `lexical_index` as the C0
 //! materialized view (stamped through `hh-ledger`'s `View` — one view shape,

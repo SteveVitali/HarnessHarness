@@ -1,0 +1,16 @@
+# Dependabot — L4.3 (R-2.12.4 supply-chain half).
+# github-actions: keeps the SHA-pinned actions current (the `# v…`
+# comments ride the bump). cargo: the workspace is hermetic modulo the
+# named ADR admissions — `open-pull-requests-limit: 0` disables routine
+# version bumps; security-update PRs still open against advisories.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0

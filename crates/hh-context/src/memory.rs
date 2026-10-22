@@ -14,7 +14,7 @@
 //!
 //! `enumerate`/`retrieve`/`lexical_index`/`stale_index`/`memory_usage` are
 //! materialized views — derived, rebuild-equal under the same append order
-//! (§5c.3; [`crate::retrieve`]).
+//! (§5c.3; [`mod@crate::retrieve`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -3,7 +3,7 @@
 //! and `scope_kind` closed sum, the scoped-domain table the scope-totality
 //! invariant reads, the run-time `ExposureMode` sum, the `discover_surfaces`
 //! capability declaration, and the record-level half of the V-E1 invariant
-//! battery (the document-level half lives in [`crate::validate`]).
+//! battery (the document-level half lives in [`mod@crate::validate`]).
 //!
 //! One schema source (CC7): `hh_monitor::args` re-exports [`ScopeKind`],
 //! [`ScopeBinding`] and [`scope_bindings`] from here — no second reader of the
@@ -379,7 +379,7 @@ pub fn capability_needs_flow_contract(rec: &ToolCapabilityRecord) -> bool {
 
 /// The record-level V-E1 battery (§5d.1 §3; ADR-0087 D6) — checks 1, 3, 4, 7, 8
 /// (`authority` is the node's `provenance.authority` — conferred, never read
-/// from content). The document-level checks live in [`crate::validate`]: V-E1-2
+/// from content). The document-level checks live in [`mod@crate::validate`]: V-E1-2
 /// (closed sums — the codec refuses unknown members), V-E1-5 (T-LCD-01
 /// model-identity statics), V-E1-6 (`Text` provenance), V-E1-9 (identity
 /// projection — `exposure_hint`/`cost_model.measured_ref` excluded),

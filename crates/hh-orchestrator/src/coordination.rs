@@ -3,7 +3,7 @@
 //!
 //! The four-preset `topology` factor × `merge_policy` ×
 //! `default_isolation` under `MatchSpec{matched_total}` — child spend is
-//! `charged_to = subject` (the arm's `usage` fold is [`fold_arm_usage`]'s,
+//! `charged_to = subject` (the arm's `usage` fold is [`crate::lab::fold_arm_usage`]'s,
 //! never a new accounting dimension), and every "multi-agent helps"
 //! statement reports through the conditional `budget_match` evidence
 //! row the `ComparisonReport` consumes. The arm's merge instrumentation

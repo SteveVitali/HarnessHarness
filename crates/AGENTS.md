@@ -82,8 +82,8 @@ cargo build -p hh-embed --no-default-features    # tier-c4 off
   verification + test-time fixture signing + `ring::aead`/`ring::rand`,
   the blob-pool AEAD R3.8 consumed under ADR-0361's `BlobCipher` seam);
   and only `hh-tls` may name the admitted rustls graph
-  (`rustls =0.23.46` on the `ring` backend + `rustls-webpki =0.103.15`
-  + `webpki-roots =1.0.9` — the closed HTTPS-client / TLS-server / mTLS
+  (`rustls =0.23.46` on the `ring` backend + `rustls-webpki =0.103.16`
+  + `webpki-roots =1.0.10` — the closed HTTPS-client / TLS-server / mTLS
   scope). Every
   other crate and every other admitted surface stays hermetic.
 - A crate's public contract is its `src/lib.rs` doc header — it names the spec

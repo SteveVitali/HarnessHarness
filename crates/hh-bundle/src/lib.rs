@@ -14,7 +14,7 @@
 //! - **layer A** — [`codec`]: the archive bytes (directory layout and
 //!   the deterministic `HHB1` container), transport only.
 //!
-//! [`assemble::assemble`] is `bundle(kind = run)`; [`validate`] is the
+//! [`assemble::assemble`] is `bundle(kind = run)`; [`mod@validate`] is the
 //! staged `validate_bundle`/`check_completeness` (S1–S8, no fail-fast;
 //! S9 is publication-time, Stage 4). [`levels::derive`] is the shared
 //! closed `B-R*` requirement evaluator used by both assembly and

@@ -217,7 +217,7 @@ pub fn probe_holder(holder: &str) -> HolderProbe {
 }
 
 /// Compose a probeable holder spelling — `label;host=<local>;pid=<self>`
-/// (callers append `;start=<…>` via [`holder_start_id`] when they want the
+/// (callers append `;start=<…>` via `pid_start_id` when they want the
 /// reuse check).
 pub fn holder_spelling(label: &str, pid: u32) -> String {
     let host = local_hostname().unwrap_or_else(|| "unknown".to_string());

@@ -5,7 +5,7 @@
 //! [`ForeignTaskId`], [`EnvironmentSpec`], [`TaskVisible`], [`TaskHeldOut`],
 //! [`TaskInstrument`], [`AdapterGraderSpec`], [`TaskValidity`],
 //! [`TaskContamination`]), [`SuiteManifest`], [`SuiteValidityRecord`],
-//! [`SplitAssignmentRecord`] and [`ParityReport`].
+//! [`SplitAssignmentRecord`] and [`crate::analysis::ParityReport`].
 //!
 //! The import-side checks land here as deterministic pure functions
 //! ([`TaskRecord::validate`]): the `visible`/`held_out`/`instrument` surfaces

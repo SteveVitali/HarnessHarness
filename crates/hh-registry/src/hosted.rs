@@ -9,7 +9,7 @@
 //! stratum (P0 quarantine is the boundary's act — `RegistryStore::quarantine`).
 //!
 //! This module is **records-in/records-out** — it reads `ConformanceRecord`s
-//! the caller collected ([`RegistryStore::hosted_conformance_entries`]) and the
+//! the caller collected ([`crate::RegistryStore::hosted_conformance_entries`]) and the
 //! declaration map off the participant record body. No `hh-hosting` dependency:
 //! the reconcile speaks the registry's own types (CC5/CC6 — `hh-hosting`
 //! stays a removable tier).
