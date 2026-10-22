@@ -17,8 +17,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R4.15a2 # round 4: 54 rows 149a-167b (164c/164f inserts at GATE-G7) (R4.2a CI insert at 151a; R4.4a→a+b split at 153a/153b); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
-lastCompleted:   R4.15a
+nextTicket:      R4.15b  # round 4: 54 rows 149a-167b (164c/164f inserts at GATE-G7) (R4.2a CI insert at 151a; R4.4a→a+b split at 153a/153b); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+lastCompleted:   R4.15a2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -29,12 +29,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r4.15a # R4.15a tip — round-4 rows fork from here; stacked PR #180 against svitali/harnessharness-gate-g7; operator merges
+chainTip:        svitali/harnessharness-r4.15a2 # R4.15a2 tip — round-4 rows fork from here; stacked PR #181 against svitali/harnessharness-r4.15a; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-22T14:35:00Z
+updatedAt:       2026-10-22T15:22:00Z
 ```
 
 ## OPEN FINDINGS
@@ -937,3 +937,4 @@ updatedAt:       2026-10-22T14:35:00Z
 | 2026-10-22T11:20Z | gate | GATE-G7 | **gate pause** — readout  written: 7/7 briefs verified, 146 proposals (21 resolve / 82 interim / 12 descope / 27 code-leg / 4 pointer), recording acts named, carries surfaced. full-run: `workflow_dispatch 39765822939` on svitali/harnessharness-r4.15 → build · test · fmt · drift **success** (D4). Awaiting operator dispositions before the R4.15a–e fleshing. | chain svitali/harnessharness-gate-g7 |
 | 2026-10-22T11:24Z | gate | GATE-G7 | correction — the gate-pause row above dropped the readout path (shell backtick expansion ate the literal): the readout is `docs/build/readouts/GATE-G7.md`, committed at `2416657` on svitali/harnessharness-gate-g7. | — |
 | 2026-10-22T13:05Z | gate | GATE-G7 | **PASSED** (operator — "Adopt all", GATE DECISIONS 2026-10-22) — readout `docs/build/readouts/GATE-G7.md` Status: PASSED. Scoped mode=extend fleshed R4.15a–e + inserted R4.15a2 (164c) / R4.15b2 (164f) per the fleshing notes; Phase-4 review applied (3 MAJOR + 11 MINOR fixes landed). lastCompleted → GATE-G7 · chainTip svitali/harnessharness-gate-g7 · next → R4.15a. full-run: `workflow_dispatch 39765822939` success (D4). | — |
+- 2026-10-22 · R4.15a2 done — branch `svitali/harnessharness-r4.15a2` · PR https://github.com/SteveVitali/HarnessHarness/pull/181 · base `svitali/harnessharness-r4.15a` (@f31831f). GATE-G7 "Adopt all" records conform — **BL-35 (13 acts):** OQ-131 + OQ-402 `resolve-with-evidence` (OQ-131's human residual discharged by the H4 decline landed at R4.15: S0.3-sheet record + ADR-0371, DF-S0.3-3/BL-02 waived-by-ADR; OQ-402's S2 values are the §2.4 constants at S1.25) + ten `adopt-interim-as-final` on ADR-0212's log (interims verbatim) + OQ-235/240 drafted ratification text byte-faithful on ADR-0026's log + OQ-468→R4.15c dated pointer. **BL-39 (3 acts):** OQ-465 + OQ-467 adopted (named per-class audit_fields/content_refs table spelled on ADR-0066's log; fifteen-row IR_ENTITY_KINDS ratified on ADR-0012/0016 logs); OQ-468 pointer shared with BL-35. **BL-36 (23 acts):** 22 `adopt-interim-as-final` on ADR-0213's log + OQ-170→R4.15e dated pointer naming contract 164m. Register cells: open-questions ×38 (35 flips to `resolved`, OQ-465 second-half note, OQ-468/OQ-170 pointers stay `open`), spec-debt ADR-0212/0213/0216 notes, BACKLOG BL-35/36/39 landing notes (status `open` — flips R4.16). **Verify:** check-drift in sync; check-build-memory 0 violations / 7 pre-existing warnings; gitleaks clean; strict 11-field CSV re-parse (BL-31's pre-existing unquoted landing field quoted — content unchanged); 283 insertions / 45 deletions vs 800 — inside. **Deferrals:** opened none, closed none. chainTip → svitali/harnessharness-r4.15a2 · next → R4.15b · ci: pass #181@dd8f8b6 (build · test · fmt · drift 39803758588) · stack: #180 pass · layer: engineered · harness: devin-cli/swe-2/subagent
