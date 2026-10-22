@@ -1,0 +1,4 @@
+> **OPERATING MODE.** Fresh session: read this ledger, then `docs/tickets/00_MANIFEST.md`,
+> then `docs/tickets/DEFERRALS.md`. Run the row named by `nextTicket` via `implement-spec`;
+> a gate is a pause, not a block. Resume line:
+> `implement-spec spec=docs/tickets/<nextTicket file> worktree=<buildWorktree> base_branch=<chainTip>`

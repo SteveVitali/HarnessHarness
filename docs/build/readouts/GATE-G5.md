@@ -311,6 +311,17 @@ state, never a fabricated pass.
   25/25). Each is a downstream `idp/1` stamp of the measured-wall prefix — the family is a class,
   not three accidents: a fourth derived member would fire identically. The adjudications named the
   derivation input each time; flagged as a recurring-class candidate alongside LEDGER-OF-6.
+  **2026-10-20 (R4.1 — reconciled on the merged state):** main's derivation-aware predicate
+  (eac030a/d9074a4, in the R4.0 base) is verified to cover the whole class as one rule: the
+  measured wall is `assembly_ms{value, measured_at}` on `context.assembled`; `context_view`
+  hashes every prior observation-row payload, so `derived_from.view_hash` on any later assembly
+  drifts exactly when measured drift is present, and `plan_id` — the content address over
+  `derived_from{seq, view_hash}` — drifts with it. Enumerating the members derivable from a
+  measured wall closes the class: no further idp/1 member is content-addressed over an
+  observation-row payload (chain `hash`/`prev_hash` are admitted unconditionally; the event
+  envelope carries no other payload-derived stamp). The predicate admits the two downstream
+  members *only under present `measured_drift`*, and the diff loop still visits every
+  difference — enumeration retained, per-member accretion ended.
 - **G5-8 · R3.3 landed ~1,410 changed lines vs its 1,200 budget.** Recorded in ADR-0355 rather than
   split post-hoc (a split would orphan the acceptance batteries); flagged in `runs/R3.3.md` for
   operator adjudication — surfaced here so the gate sees it.

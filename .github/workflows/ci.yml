@@ -44,6 +44,9 @@ jobs:
       - name: Schema drift check (CC7)
         run: bash scripts/check-drift.sh
 
+      - name: Build-memory row-tool self-test (BM-ORIENT-01)
+        run: bash scripts/check-bm-tools.sh
+
       - name: S2 boundary spike (AC-R-2.11.4-9 first measurement, non-gating)
         # Non-gating by design (this is an internal tier-B measurement, not a gate
         # threshold — see the step name and the generated sheet's header). The step

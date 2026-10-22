@@ -291,6 +291,23 @@ Findings and resolutions:
 R4.16 appends the dated landed-vs-carried accounting here; GATE-G6's readout
 reads it.
 
+**2026-10-20 (R4.1) — G5-1 root cause, dated record.** The GATE-G5 flag: the operator's pre-check
+reported "no violations (51 warnings)"; every subsequent invocation reports 0 violations / 7 warnings.
+Reproduced under R4.1 on this tree (`bash ~/.claude/skills/build-memory/scripts/check-build-memory.sh .`,
+exit 0): **0 violations, 7 warnings** — the same seven aggregated classes the gate named (manifest banner
+debt ×108, ADR appendix drift, `nextTicket`-vs-lowest-unlanded ordering, PHASE-LOG >2 KiB ×109, BUILD_INDEX
+column-count ×2, pre-guard readouts ×2, pre-Harness-header run ledgers ×82). The gate's own sweep already
+covered the candidate invocations — the build worktree (7), the main checkout @ `85a3960` (2), two sibling
+repos (21, 34), the older vendored copy at `~/Eleutheria` (4 violations/6 warnings, a stricter vintage),
+history mode `--range` (emits violations, not warnings) — and none yields 51. The remaining explanations,
+unchanged in order of plausibility: the pre-check ran against a transiently different tree (the crashed
+session's partial artifacts), a different working directory, or a miscount/alternate invocation. **No
+defect exists in this repository** — the ledger text, the seven warning classes and the mechanical
+predicate (0 violations, exit 0) are all correct as committed; the validator script lives outside the repo
+(`~/agent-skills`, per ticket out-of-scope — not edited) and its counting over this tree is mechanically
+right. If the operator's 51 ever names its invocation, the repro above is the reconcile path; absent that,
+the flag is explained, not hidden.
+
 ## Amendment 2026-10-20 — launch re-charter
 
 **Mode:** `decompose-spec mode=extend` amendment of round 4 on `svitali/harnessharness-r3.11` (head `2f6f8a5`), records only,
