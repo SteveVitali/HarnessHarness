@@ -48,6 +48,10 @@ use crate::service::{ledger_err, EmbedService};
 /// §5h.3 record's producer).
 const BUNDLE_COMPONENT: &str = "kernel:bundle";
 
+/// The producer component the `kernel.fetch` fetched-rows stamp
+/// (`kernel:fetch` — R4.15d's `bundle.member.fetched` ledgered arrival).
+const FETCH_COMPONENT: &str = "kernel:fetch";
+
 /// The producer component the import receipt row stamps.
 const IMPORT_COMPONENT: &str = "kernel:import";
 
@@ -801,16 +805,31 @@ impl EmbedService {
         ]))
     }
 
-    /// `kernel.fetch{path | container, addresses[]}` — materialize the
-    /// manifest's `status = fetch` members. The kernel's fetcher
-    /// resolves bytes from the content-addressed blob pool (the same
-    /// pool member deposit writes); a member whose bytes the pool does
-    /// not hold reports `fetch_error:no_transport` — the kernel never
-    /// fabricates payload bytes and never trusts a location without the
-    /// `idp/1` digest re-check `fetch` performs. Materialized bytes
-    /// deposit into the pool and the bundle's `fetch[]` intent is
-    /// unchanged (the manifest is immutable — the reader's *view* gains
-    /// bytes).
+    /// `kernel.fetch{path | container, addresses[], trust?,
+    /// tls_extra_roots_file?}` — materialize the manifest's
+    /// `status = fetch` members (§5h.3 §2; R4.15d — OQ-332, DF-S4.2-1,
+    /// the GATE-G7-adopted §trust-fields set).
+    ///
+    /// Pool/local locations resolve from the content-addressed blob
+    /// pool as before; remote `locations[]` members materialise through
+    /// the declared `trust` MUST-data (a `FetchTrustPolicy` document —
+    /// the fetch site's declared admission classes, origin allowlist,
+    /// signers and `require_ledgered_arrival`), each attempt riding the
+    /// `hh_env` `EgressMediator` (the fetch is a `net_egress` effect
+    /// under Π mediation — `security.egress.{requested,decided}` rows
+    /// land durable-before-wire on the kernel's fetch run, the
+    /// `https:` GET terminates TLS at the R4.5c `hh-tls` home). Every
+    /// remote attempt — admitted or refused — produces a
+    /// `bundle.member.fetched` row appended before the member's bytes
+    /// deposit (durable-before-visible, `require_ledgered_arrival`);
+    /// refusals are typed (`transport_refused` / `location_expired` /
+    /// `origin_not_admitted` / `class_not_admitted` / `policy_absent` /
+    /// `transport_unsupported`), cleartext `http:` and credentialed
+    /// locators are never admitted, `expires` is enforced, and every
+    /// fetched byte set re-verifies to its address — a location's claim
+    /// is never trusted. `tls_extra_roots_file` names an explicit PEM
+    /// file of extra trust anchors (verification stays on — a private
+    /// issuer is a declared root, never an insecure skip).
     pub(crate) fn kernel_fetch(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let decoded = decode_bundle_arg(params, "kernel.fetch")?;
         let addresses: Vec<String> = arr_at(params, "addresses")
@@ -828,25 +847,155 @@ impl EmbedService {
                     .map(|m| m.address.clone())
                     .collect()
             });
-        let outcome = hh_bundle::fetch::fetch(
-            &decoded,
-            &addresses,
-            Some(&|entry: &hh_bundle::manifest::FetchEntry| {
-                // Pool-backed fetcher — `entry.address` is the
-                // content address the bytes must recompute to.
-                let parsed = hh_identity::idp::parse_id(&entry.address)
-                    .map_err(|e| format!("bad_address:{e:?}"))?;
+        // The adopted MUST-data: `trust` is the fetch site's declared
+        // `FetchTrustPolicy` document (the hh/ record the site pins into
+        // `resolved_dependencies` — supplied verbatim; absent ⇒ every
+        // remote location answers `policy_absent`, pool legs unaffected).
+        let trust = params
+            .get("trust")
+            .map(hh_bundle::FetchTrustPolicy::from_json)
+            .transpose()
+            .map_err(bundle_err)?;
+        // The TLS half: webpki roots, plus the explicitly named extra
+        // anchors file — never an insecure-skip flag.
+        let tls = match params.get("tls_extra_roots_file").and_then(Json::as_str) {
+            Some(p) => hh_tls::ClientTls::webpki_roots()
+                .extra_roots_file(Path::new(p))
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("tls_extra_roots: {e}"),
+                })?,
+            None => hh_tls::ClientTls::webpki_roots(),
+        };
+        let now_ms = self.store.now_ms();
+        // A remote leg exists whenever a requested entry names a
+        // non-pool location — the fetch run is the ledgered-arrival home
+        // for *every* remote attempt's `bundle.member.fetched` row,
+        // admitted or refused (a `policy_absent` refusal is a durable row
+        // too). The wire machinery itself builds only when a policy is
+        // declared; without one every remote leg refuses at `admit` and
+        // no socket ever opens.
+        let remote_present = decoded.manifest.fetch.iter().any(|e| {
+            addresses.contains(&e.address)
+                && e.locations.iter().any(|l| {
+                    !matches!(
+                        hh_bundle::location_scheme(l).as_deref(),
+                        None | Some("pool") | Some("mem") | Some("bundle")
+                    )
+                })
+        });
+        // The borrow split: the pool fetcher reads `self.store` while the
+        // mediated leg writes it — when a leg exists both closures drive
+        // a `RefCell<FetchLeg>` (sequentially inside `fetch`; the pool
+        // read goes through `mediator.store`, never a second borrow).
+        let blob_addr = |entry: &hh_bundle::manifest::FetchEntry| {
+            hh_identity::idp::parse_id(&entry.address)
+                .map(|p| hh_identity::idp::ContentAddress {
+                    idp: "idp/1",
+                    algorithm: "sha256",
+                    digest: p.digest_hex,
+                    media_type: String::new(),
+                    size: 0,
+                })
+                .map_err(|e| format!("bad_address:{e:?}"))
+        };
+        let outcome = if remote_present {
+            self.ensure_fetch_run()?;
+            if let Some(trust) = trust.as_ref() {
+                let cell = {
+                    let (run_id, lease) = self.fetch_run.as_ref().unwrap();
+                    let mut transport = crate::fetch_transport::FetchTransport::with_tls(tls);
+                    std::cell::RefCell::new(transport.leg(
+                        &mut self.store,
+                        run_id,
+                        lease,
+                        &mut self.credential_broker,
+                        trust,
+                        now_ms,
+                    ))
+                };
+                let outcome = {
+                    let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
+                        cell.borrow()
+                            .mediator
+                            .store
+                            .get_blob(&blob_addr(entry)?)
+                            .map_err(|_| "no_transport:pool_miss".to_string())
+                    };
+                    let mut remote_f = |url: &str| cell.borrow_mut().get(url);
+                    hh_bundle::fetch::fetch(
+                        &decoded,
+                        &addresses,
+                        Some(&pool_f),
+                        Some(trust),
+                        Some(&mut remote_f),
+                        now_ms,
+                    )
+                };
+                drop(cell);
+                outcome
+            } else {
+                // No declared policy: remote legs refuse `policy_absent`
+                // (their rows still land on the fetch run); pool legs
+                // resolve straight from the blob pool.
+                let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
+                    self.store
+                        .get_blob(&blob_addr(entry)?)
+                        .map_err(|_| "no_transport:pool_miss".to_string())
+                };
+                hh_bundle::fetch::fetch(&decoded, &addresses, Some(&pool_f), None, None, now_ms)
+            }
+        } else {
+            let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
                 self.store
-                    .get_blob(&hh_identity::idp::ContentAddress {
-                        idp: "idp/1",
-                        algorithm: "sha256",
-                        digest: parsed.digest_hex,
-                        media_type: String::new(),
-                        size: 0,
-                    })
+                    .get_blob(&blob_addr(entry)?)
                     .map_err(|_| "no_transport:pool_miss".to_string())
-            }),
-        );
+            };
+            hh_bundle::fetch::fetch(
+                &decoded,
+                &addresses,
+                Some(&pool_f),
+                trust.as_ref(),
+                None,
+                now_ms,
+            )
+        };
+        let fetch_run_id = self.fetch_run.as_ref().map(|(r, _)| r.clone());
+        // `bundle.member.fetched` — durable-before-visible: every remote
+        // attempt's row appends before any verified bytes deposit. When
+        // the declared policy requires ledgered arrival, an append
+        // failure refuses the op with the bytes still undeposited (the
+        // rows that did land are honest); under a `false` declaration the
+        // append is still attempted, never skipped.
+        if !outcome.records.is_empty() {
+            let run_id = fetch_run_id.ok_or_else(|| EmbedError::Refused {
+                reason: "fetch_run_absent:records_without_home".to_string(),
+            })?;
+            let mut ledger_failed: Option<String> = None;
+            for rec in &outcome.records {
+                if let Err(e) = self.store.commit_kernel_row_for(
+                    FETCH_COMPONENT,
+                    &run_id,
+                    "bundle.member.fetched",
+                    rec.clone(),
+                    vec![],
+                    vec![],
+                ) {
+                    ledger_failed = Some(format!("{e:?}"));
+                    break;
+                }
+            }
+            if let Some(detail) = ledger_failed {
+                let required = trust
+                    .as_ref()
+                    .map(|t| t.require_ledgered_arrival)
+                    .unwrap_or(true);
+                if required {
+                    return Err(EmbedError::Refused {
+                        reason: format!("fetch_ledger: {detail}"),
+                    });
+                }
+            }
+        }
         // Deposit the verified materializations.
         for addr in &outcome.materialized {
             if let Some(bytes) = outcome.bytes.get(addr) {

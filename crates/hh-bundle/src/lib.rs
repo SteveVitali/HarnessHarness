@@ -39,6 +39,7 @@ pub mod manifest;
 pub mod repro;
 pub mod runrefs;
 pub mod scoped;
+pub mod trust;
 pub mod validate;
 
 pub use assemble::{assemble, AssembleInputs, Assembled, CompileOutcome};
@@ -48,7 +49,7 @@ pub use codec::{decode, decode_container, decode_dir, encode_container, encode_d
 pub use diff::{bundle_diff, BundleDiff, MemberDelta};
 pub use error::BundleError;
 pub use export::{build_ledger_export, export_target, ExportOutcome, PublicationPolicy};
-pub use fetch::{fetch, member_bytes_or_refused, FetchOutcome};
+pub use fetch::{fetch, member_bytes_or_refused, FetchOutcome, Fetcher, LocationFetcher};
 pub use foreign::ForeignFormat;
 pub use import::{lift, ImportEvent, ImportLift, NATIVE_FORMAT};
 pub use lifecycle::{lineage_edges, migrate_bundle, migrate_document, supersede_bundle};
@@ -64,6 +65,10 @@ pub use repro::{
 pub use runrefs::{declared_run_refs, manifest_refs, run_refs_index};
 pub use scoped::{
     assemble_scoped, ChildBundle, ScopedInputs, KIND_ARM, KIND_EXPERIMENT, KIND_LINEAGE,
+};
+pub use trust::{
+    admit, location_scheme, member_fetched_payload, AdmissionClass, FetchRefusal, FetchTrustPolicy,
+    LocationLeg, FETCH_TRUST_SCHEMA,
 };
 pub use validate::{
     check_completeness, validate, validate_publication, BundleValidationReport, CheckRow,

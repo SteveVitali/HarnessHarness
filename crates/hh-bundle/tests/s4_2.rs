@@ -622,6 +622,9 @@ fn fetch_is_digest_checked_and_missing_bytes_refuse() {
         &decoded,
         std::slice::from_ref(&member_addr),
         Some(&|_| Ok(b"wrong-bytes".to_vec())),
+        None,
+        None,
+        0,
     );
     assert!(out.materialized.is_empty());
     assert_eq!(
@@ -633,6 +636,9 @@ fn fetch_is_digest_checked_and_missing_bytes_refuse() {
         &decoded,
         std::slice::from_ref(&member_addr),
         Some(&|_| Err("no_transport".to_string())),
+        None,
+        None,
+        0,
     );
     assert!(out.failed[0]
         .get("reason")
@@ -640,7 +646,14 @@ fn fetch_is_digest_checked_and_missing_bytes_refuse() {
         .unwrap()
         .starts_with("fetch_error:"));
     // No fetcher → not materialized.
-    let out = fetch(&decoded, std::slice::from_ref(&member_addr), None);
+    let out = fetch(
+        &decoded,
+        std::slice::from_ref(&member_addr),
+        None,
+        None,
+        None,
+        0,
+    );
     assert_eq!(
         out.failed[0].get("reason").and_then(Json::as_str),
         Some("no_fetcher")

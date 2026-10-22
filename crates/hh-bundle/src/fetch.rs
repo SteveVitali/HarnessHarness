@@ -4,8 +4,25 @@
 //! verified on arrival (S3 — the address *is* the digest; a location's
 //! claim is never trusted), fetched bytes are never executed, and the
 //! manifest is never mutated — the caller materializes the bytes into
-//! its own pool. OQ-332 (location trust/expiry semantics) stays
-//! DEFERRED (ADR-0210); what lands here is the deterministic core.
+//! its own pool.
+//!
+//! R4.15d (OQ-332; DF-S4.2-1; the GATE-G7-adopted §trust-fields set):
+//! `locations[]` remote members materialise through the declared
+//! [`FetchTrustPolicy`] — every location is classified + admitted
+//! ([`trust::admit`]) before any wire is touched, cleartext `http:` is
+//! `transport_refused`, `expires` is enforced, `ipfs:`/CID-class
+//! locations admit `content_addressed` then answer typed
+//! `transport_unsupported` (no IPFS wire in the ADR-0365 scope), and a
+//! remote location with no declared policy is `policy_absent` — an
+//! unmediated fetch is never attempted. Every remote *attempt* yields a
+//! [`trust::member_fetched_payload`] row in [`FetchOutcome::records`] —
+//! the caller lands those `bundle.member.fetched` events durable before
+//! the member reads `present` (`require_ledgered_arrival`).
+//!
+//! The `transport_pending` interim is gone: remote locations answer the
+//! typed arms (`transport_refused` / `location_expired` /
+//! `origin_not_admitted` / `class_not_admitted` / `policy_absent` /
+//! `transport_unsupported`), never a silent miss.
 
 use std::collections::BTreeMap;
 
@@ -15,6 +32,7 @@ use crate::codec::Decoded;
 use crate::error::BundleError;
 use crate::export::MemberBytes;
 use crate::manifest::MemberStatus;
+use crate::trust::{self, FetchTrustPolicy, LocationLeg};
 
 /// The `fetch` outcome — `{materialized[], failed[]}` (the operation's
 /// own record; refusals land per-address, never panic).
@@ -24,10 +42,14 @@ pub struct FetchOutcome {
     /// the caller for deposit).
     pub materialized: Vec<String>,
     /// `{address, reason}` per failure (`not_fetchable`, `no_fetcher`,
-    /// `digest_mismatch`, `fetch_error`).
+    /// `digest_mismatch`, `fetch_error`, `refused:<arm>`).
     pub failed: Vec<Json>,
     /// The verified bytes per materialized address.
     pub bytes: MemberBytes,
+    /// The `bundle.member.fetched` payload per remote location attempt
+    /// (admissions + refusals alike — the caller appends them before the
+    /// member reads `present`; R4.15d, `require_ledgered_arrival`).
+    pub records: Vec<Json>,
 }
 
 impl FetchOutcome {
@@ -39,24 +61,48 @@ impl FetchOutcome {
                 Json::Arr(self.materialized.iter().map(Json::str).collect()),
             ),
             ("failed", Json::Arr(self.failed.clone())),
+            ("fetched", Json::Arr(self.records.clone())),
         ])
     }
 }
 
-/// `fetch(decoded, addresses, fetcher)` — for each requested address:
-/// the manifest must list the member with `status = fetch` (a `present`
-/// member needs no fetch; `redacted`/`gc`/unknown fail `not_fetchable`),
-/// a `fetch[]` entry must exist, and the fetcher's returned bytes must
-/// recompute to the address (`digest_mismatch` — the location's claim is
-/// never trusted).
-/// The fetch seam: `FetchEntry → bytes`. `None` in a store with no fetch
-/// mechanism — every request fails `no_fetcher`, never fabricates.
+/// `fetch(decoded, addresses, pool, trust, remote, now_ms)` — for each
+/// requested address: the manifest must list the member with
+/// `status = fetch` (a `present` member needs no fetch;
+/// `redacted`/`gc`/unknown fail `not_fetchable`) and a `fetch[]` entry
+/// must exist. Each `locations[]` entry is then tried in order:
+///
+/// - pool/local locations (or an empty `locations[]`) resolve through
+///   the pool fetcher by address — the landed S4.2 path;
+/// - remote locations admit under `trust` ([`trust::admit`]) and ride
+///   the `remote` fetcher — an admitted `https:` leg with no remote
+///   fetcher reports `transport_unavailable`;
+/// - the returned bytes recompute to the address on every arm
+///   (`digest_mismatch` — the location's claim is never trusted).
+///
+/// The first verified location wins; a member whose locations all fail
+/// lands `failed` with the last attempt's typed reason (every attempt
+/// is in `records`).
+///
+/// The seams: `pool` — `FetchEntry → bytes` (the blob-pool path; `None`
+/// fails `no_fetcher`); `remote` — `location URI → bytes` (the TLS GET
+/// transport; `None` fails remote legs `transport_unavailable`, never
+/// fabricates).
 pub type Fetcher<'a> = dyn Fn(&crate::manifest::FetchEntry) -> Result<Vec<u8>, String> + 'a;
+
+/// The remote-location seam — `location URI → bytes` (the `https:` TLS
+/// GET; `hh-embed`'s `fetch_transport` drives it over the `hh_env`
+/// egress wire). `FnMut` — a mediated wire is stateful (each attempt
+/// appends its own durable rows).
+pub type LocationFetcher<'a> = dyn FnMut(&str) -> Result<Vec<u8>, String> + 'a;
 
 pub fn fetch(
     decoded: &Decoded,
     addresses: &[String],
-    fetcher: Option<&Fetcher<'_>>,
+    pool: Option<&Fetcher<'_>>,
+    trust: Option<&FetchTrustPolicy>,
+    mut remote: Option<&mut LocationFetcher<'_>>,
+    now_ms: u64,
 ) -> FetchOutcome {
     let m = &decoded.manifest;
     let mut out = FetchOutcome::default();
@@ -92,21 +138,111 @@ pub fn fetch(
                 continue;
             }
         };
-        let Some(fetcher) = fetcher else {
-            fail(&mut out, "no_fetcher");
-            continue;
+        // `locations[]` in declared order — the first verified arm wins;
+        // every remote attempt lands a `bundle.member.fetched` payload.
+        let locations: Vec<String> = if entry.locations.is_empty() {
+            vec![String::new()]
+        } else {
+            entry.locations.clone()
         };
-        match fetcher(entry) {
-            Ok(bytes) => {
-                let recomputed = hh_identity::idp_id("blob", &bytes);
-                if recomputed != *addr {
-                    fail(&mut out, "digest_mismatch");
-                } else {
-                    out.materialized.push(addr.clone());
-                    out.bytes.insert(addr.clone(), bytes);
+        let mut last_reason = String::new();
+        for loc in &locations {
+            match trust::admit(trust, entry, loc, now_ms) {
+                Ok(LocationLeg::Pool) => match pool {
+                    Some(p) => match p(entry) {
+                        Ok(bytes) => {
+                            let recomputed = hh_identity::idp_id("blob", &bytes);
+                            if recomputed != *addr {
+                                last_reason = "digest_mismatch".to_string();
+                            } else {
+                                out.materialized.push(addr.clone());
+                                out.bytes.insert(addr.clone(), bytes);
+                                last_reason.clear();
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            last_reason = format!("fetch_error:{e}");
+                        }
+                    },
+                    None => {
+                        last_reason = "no_fetcher".to_string();
+                    }
+                },
+                Ok(LocationLeg::HttpsGet { url, .. }) => {
+                    let transport = "https";
+                    match remote.as_deref_mut() {
+                        Some(r) => match r(&url) {
+                            Ok(bytes) => {
+                                let recomputed = hh_identity::idp_id("blob", &bytes);
+                                if recomputed != *addr {
+                                    out.records.push(trust::member_fetched_payload(
+                                        addr,
+                                        loc,
+                                        transport,
+                                        "digest_mismatch",
+                                        now_ms,
+                                    ));
+                                    last_reason = "digest_mismatch".to_string();
+                                } else {
+                                    out.records.push(trust::member_fetched_payload(
+                                        addr, loc, transport, "verified", now_ms,
+                                    ));
+                                    out.materialized.push(addr.clone());
+                                    out.bytes.insert(addr.clone(), bytes);
+                                    last_reason.clear();
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                out.records.push(trust::member_fetched_payload(
+                                    addr,
+                                    loc,
+                                    transport,
+                                    &format!("error:{e}"),
+                                    now_ms,
+                                ));
+                                last_reason = format!("fetch_error:{e}");
+                            }
+                        },
+                        None => {
+                            out.records.push(trust::member_fetched_payload(
+                                addr,
+                                loc,
+                                transport,
+                                "refused:transport_unavailable",
+                                now_ms,
+                            ));
+                            last_reason = "refused:transport_unavailable".to_string();
+                        }
+                    }
+                }
+                Ok(LocationLeg::Unsupported { scheme, .. }) => {
+                    out.records.push(trust::member_fetched_payload(
+                        addr,
+                        loc,
+                        &scheme,
+                        "refused:transport_unsupported",
+                        now_ms,
+                    ));
+                    last_reason = "refused:transport_unsupported".to_string();
+                }
+                Err(r) => {
+                    let transport =
+                        trust::location_scheme(loc).unwrap_or_else(|| "local".to_string());
+                    out.records.push(trust::member_fetched_payload(
+                        addr,
+                        loc,
+                        &transport,
+                        &format!("refused:{}", r.as_str()),
+                        now_ms,
+                    ));
+                    last_reason = format!("refused:{}", r.as_str());
                 }
             }
-            Err(e) => fail(&mut out, &format!("fetch_error:{e}")),
+        }
+        if !last_reason.is_empty() {
+            fail(&mut out, &last_reason);
         }
     }
     out

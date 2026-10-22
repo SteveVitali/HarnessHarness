@@ -1220,6 +1220,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.world_state.discontinuity", "hint"),
     ("action.world_state.patch", "hint"),
     ("action.world_state.snapshot", "hint"),
+    // ── bundle:member (R4.15d — kernel bookkeeping; never hosted) ──
+    ("bundle.member.fetched", "none"),
     // ── context:artefact ──
     ("context.artefact.activated", "hint"),
     ("context.artefact.delivered", "artefact.delivered"),
@@ -2272,6 +2274,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // audit-grade (§5g.6 §3) — the gate verdicts are consequential decisions.
     row_audit("verification.gate.evaluated",      O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("verification.completion.decided",  O::Events, true,  OPEN_AUDIT, &[], None, None),
+
+    // ── bundle (§5h.3; R4.15d; OQ-332; the GATE-G7-adopted
+    // §trust-fields set) — `bundle.member.fetched{address,
+    // location_uri, fetched_at, transport, outcome}` is the ledgered-
+    // arrival row every remote `locations[]` attempt emits before the
+    // member reads `present` (`require_ledgered_arrival`). Durable +
+    // provenance-mandatory like `measurement.experiment.bundle_assembled`
+    // — a kernel-origin fetch fact (the seam is `commit_kernel_row_for`
+    // on the fetch run); not audit-grade (§5g.6's set is closed).
+    row_prov("bundle.member.fetched", Led, O::Events, false, false, true,  None, None),
 ];
 
 const fn row(
