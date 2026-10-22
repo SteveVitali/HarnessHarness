@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "one kernel.fetch{trust:FetchTrustPolicy(first_party, admitted_origins=[raw.githubusercontent.com], require_ledgered_arrival)} materializing the pinned harbor-framework/harbor README.md member (commit dd88157): admit \u2192 security.egress.requested/decided durable on the kernel fetch run \u2192 hh_tls webpki-roots GET \u2192 content-address re-verify \u2192 bundle.member.fetched{verified} durable-before-deposit \u2192 blob-pool read-back byte-identical; USD 0 read-only, no secrets; LIVE_FETCH: https://raw.githubusercontent.com/harbor-framework/harbor/dd8815755a61e849ad0f146ae85eb4aaff4fe61f/README.md bytes=2990 member=sha256:4c6a2aec86baeb2d297faa183135cef7ad8196bdb17bc46f1c0d2edb7e91498b"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "raw.githubusercontent.com:443",
+  "git_head": "bffe21b6e747ded13999a174a1d5b2afc394bf4d",
+  "harness": "devin-r4.15d",
+  "leg": "r4-15d-fetch",
+  "model_reported": null,
+  "provided": {},
+  "provider": "public-https",
+  "recorded_at": "2026-10-22T18:56:13Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.15d.md",
+    "sha256": "194bc5234b6903b9c92976ef541889bc76e208eaad56cc8d3b91bfd627138860"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 21.257705,
+  "ticket": "R4.15d",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-22-r4-15d-fetch.transcript.txt",
+  "transcript_sha256": "faf47ec50708b522d7f74e88acf41e8f9a85e6ea4396f40cdd626b4edac6f5a2"
+}

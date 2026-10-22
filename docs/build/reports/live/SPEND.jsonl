@@ -39,3 +39,4 @@
 {"ts":"2026-10-22T06:08:35Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":20.25576,"record":"2026-10-22-judge-run.json"}
 {"ts":"2026-10-22T06:09:20Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":21.25576,"record":"2026-10-22-judge-run.json"}
 {"ts":"2026-10-22T06:11:40Z","ticket":"R4.7e","leg":"judge-run","cost_usd":0.001945,"cumulative_usd":21.257705,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T18:56:13Z","ticket":"R4.15d","leg":"r4-15d-fetch","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-22-r4-15d-fetch.json"}

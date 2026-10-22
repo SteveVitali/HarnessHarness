@@ -41,6 +41,10 @@ pub(crate) mod eval_ops;
 pub(crate) mod evolution_ops;
 pub(crate) mod experiment_ops;
 pub(crate) mod extension_ops;
+// R4.15d — `pub` so the hermetic/live fetch batteries drive the same
+// `FetchTransport`/`FetchLeg` the boundary wires (one wire spelling —
+// the test arm never re-implements the transport).
+pub mod fetch_transport;
 pub(crate) mod fleet_ops;
 pub mod frames;
 // R4.7e — `pub` so the lane-backed adapter batteries (and their live

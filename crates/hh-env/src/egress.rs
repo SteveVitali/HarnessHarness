@@ -1394,8 +1394,18 @@ impl<'a> EgressMediator<'a> {
         )?;
         let decided_ref = decided_ev.event_id.clone();
 
-        // (f) Drain the claims consume-once and substitute into the headers.
+        // (f) Drain the claims consume-once and substitute into the
+        //     headers, the path and the body — `collect_sentinels` already
+        //     *detects* `mh_secret:` spellings in all three (the staging
+        //     above mediates them); the drain completes the substitution
+        //     for every member the collector scanned, so a credential
+        //     riding the query (R4.15d's `signed_url` carrier — the URI
+        //     stays `credential_free_uri` while the broker supplies the
+        //     signature) is substituted at the wire, never forwarded as a
+        //     literal sentinel.
         let mut headers = req.headers.clone();
+        let mut path = req.path.clone();
+        let mut body = req.body.clone();
         for (sentinel, claim_id) in &staged {
             let Some((_bid, value)) = self.broker.drain_claim(claim_id) else {
                 return Err(EgressError::Broker {
@@ -1406,6 +1416,11 @@ impl<'a> EgressMediator<'a> {
                 if v.contains(sentinel.as_str()) {
                     *v = v.replace(sentinel.as_str(), &value);
                     let _ = k;
+                }
+            }
+            for text in [&mut path, &mut body].into_iter().flatten() {
+                if text.contains(sentinel.as_str()) {
+                    *text = text.replace(sentinel.as_str(), &value);
                 }
             }
         }
@@ -1421,9 +1436,9 @@ impl<'a> EgressMediator<'a> {
                 req.port,
                 &host_norm,
                 req.method.as_deref().unwrap_or("GET"),
-                req.path.as_deref().unwrap_or("/"),
+                path.as_deref().unwrap_or("/"),
                 &headers,
-                req.body.as_deref().map(|b| b.as_bytes()),
+                body.as_deref().map(|b| b.as_bytes()),
             )
             .map_err(|e| EgressError::Transport {
                 detail: format!("forward {addr}:{}: {e}", req.port),

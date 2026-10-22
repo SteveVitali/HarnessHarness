@@ -315,11 +315,18 @@ pub enum EventFamily {
     Model,
     /// `lifecycle.*` → run_lifecycle (instrument level).
     Lifecycle,
+    /// `bundle.*` → run_lifecycle (R4.15d; OQ-332; the GATE-G7-adopted
+    /// §trust-fields set): the §5h.3 bundle plane's rows are run-envelope
+    /// facts — the bundle *is* the run's reproducibility instrument, so a
+    /// member-arrival row is lifecycle bookkeeping, never a new plane
+    /// (§2.2.2's codomain admits `run_lifecycle`; the rule bounds each
+    /// *kind* to one home, never each home to one kind).
+    Bundle,
 }
 
 impl EventFamily {
     /// All registered event families.
-    pub const ALL: [EventFamily; 8] = [
+    pub const ALL: [EventFamily; 9] = [
         EventFamily::Context,
         EventFamily::Action,
         EventFamily::Control,
@@ -328,6 +335,7 @@ impl EventFamily {
         EventFamily::Measurement,
         EventFamily::Model,
         EventFamily::Lifecycle,
+        EventFamily::Bundle,
     ];
 
     /// The identifier prefix (`context`, `action`, …).
@@ -341,6 +349,7 @@ impl EventFamily {
             EventFamily::Measurement => "measurement",
             EventFamily::Model => "model",
             EventFamily::Lifecycle => "lifecycle",
+            EventFamily::Bundle => "bundle",
         }
     }
 
@@ -355,6 +364,7 @@ impl EventFamily {
             EventFamily::Measurement => Home::Plane(Plane::Measurement),
             EventFamily::Model => Home::Boundary(Boundary::Model),
             EventFamily::Lifecycle => Home::RunLifecycle,
+            EventFamily::Bundle => Home::RunLifecycle,
         }
     }
 

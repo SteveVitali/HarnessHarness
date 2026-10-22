@@ -80,6 +80,10 @@ impl EventPlane {
             EventFamily::Measurement => EventPlane::Measurement,
             EventFamily::Model => EventPlane::Model,
             EventFamily::Lifecycle => EventPlane::Lifecycle,
+            // `bundle.*` rows are run-envelope bookkeeping — the run-
+            // lifecycle plane spelling carries them (the family's home is
+            // `run_lifecycle`; R4.15d).
+            EventFamily::Bundle => EventPlane::Lifecycle,
         })
     }
 }

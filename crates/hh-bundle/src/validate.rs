@@ -209,6 +209,13 @@ impl BundleValidationReport {
 
 /// A credentialed locator check (R-ID-7): a URI with a userinfo component
 /// or a credential-ish query parameter is never a legal `fetch` location.
+/// The `signed_url` exception (R4.15d; the GATE-G7-adopted §trust-fields
+/// set): a credential-ish parameter whose value is an `mh_secret:`
+/// placeholder is the *safe* form — the URI stays `credential_free_uri`
+/// while the signature rides `hh-secrets` at the fetch site under
+/// mediated egress (the same `placeholder_passthrough` shape `has_secret`
+/// already treats as safe). A literal value after the key is still a
+/// credential in the locator.
 fn credentialed(locator: &str) -> bool {
     let lower = locator.to_lowercase();
     if let Some(rest) = lower.split("://").nth(1) {
@@ -225,8 +232,14 @@ fn credentialed(locator: &str) -> bool {
         "password=",
         "secret=",
     ] {
-        if lower.contains(key) {
-            return true;
+        let mut from = 0usize;
+        while let Some(at) = lower[from..].find(key).map(|i| i + from) {
+            let value = &lower[at + key.len()..];
+            let value = value.split('&').next().unwrap_or("");
+            if !hh_secrets::Placeholder::is_placeholder(value) {
+                return true;
+            }
+            from = at + key.len();
         }
     }
     false
