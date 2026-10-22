@@ -22,3 +22,15 @@ the operator's disposition at GATE-G4.
 > verbatim; Devin CLI structured question, received 14:21Z). DF-S0.3-3/BL-02 stays
 > OPEN pending the named reviewer's signature (or recorded decline); the marker carries
 > forward through round 4 — it gates no code ticket.
+
+> **RECORDED 2026-10-22 (R4.15) — decline branch taken.** The operator declined the
+> cross-camp signature: **"Record a decline instead"** (LEDGER GATE DECISIONS
+> 2026-10-20 H4 row, verbatim; Devin CLI structured question, received between
+> 15:22Z and 15:30Z — superseding the 14:21Z "I'll name a reviewer" direction).
+> The decline is recorded verbatim on `docs/build/reports/S0.3-measurement-sheet.md`
+> (§"R2 cross-camp signature — recorded decline"); **ADR-0371** waives the
+> human-signature cell and discharges GATE-ACCEPT item 7. DF-S0.3-3 closed
+> `WONTFIX`-class waived-by-ADR; BL-02's flip is R4.16's closure accounting.
+> This marker's checklist is satisfied by the decline branch of its own exit
+> criterion — a signature may still be appended at any time (the waiver is not a
+> refusal to accept one).
