@@ -68,6 +68,7 @@ fn policy(residency_ms: u64, bundle_ms: u64) -> RetentionPolicy {
         blob_residency_ms: residency_ms,
         bundle_retention_ms: bundle_ms,
         compress_cold: true,
+        legal_hold: false,
     }
 }
 
@@ -239,14 +240,7 @@ fn ac_r221_3_gc_row_durable_before_delete_and_typed_missing_after() {
     s.evaluate_retention(&run, &lease, &policy(0, 0), &BTreeSet::new())
         .unwrap();
     let env = s
-        .gc(
-            &run,
-            &lease,
-            vec![id.clone()],
-            "policy:r2.2-test",
-            "cold",
-            None,
-        )
+        .gc(&run, &lease, vec![id.clone()], &policy(0, 0), "cold", None)
         .unwrap();
     assert_eq!(env.class, "lifecycle.ledger.gc");
     assert_eq!(
@@ -276,14 +270,7 @@ fn ac_r221_3_gc_honours_fork_pin_and_bound_set() {
         "writer-a",
     )
     .unwrap();
-    match s.gc(
-        &run,
-        &lease,
-        vec![blob.id()],
-        "policy:r2.2-test",
-        "hot",
-        None,
-    ) {
+    match s.gc(&run, &lease, vec![blob.id()], &policy(0, 0), "hot", None) {
         Err(LedgerError::Pinned { reason, .. }) => {
             assert!(reason.starts_with("referenced_by_run:"), "{reason}")
         }
@@ -297,7 +284,7 @@ fn ac_r221_3_gc_honours_fork_pin_and_bound_set() {
         &run,
         &lease,
         vec![cited.id()],
-        "policy:r2.2-test",
+        &policy(0, 0),
         "hot",
         None,
         &bound,
@@ -437,15 +424,8 @@ fn ac_r221_4_subscribe_replays_the_specd_rewind_and_never_fabricates() {
     assert!(matches!(frames.last(), Some(EventFrame::Sync { .. })));
     // Typed n/a — compacted bytes answer; after gc the typed `Missing{gc}`.
     assert_eq!(s.get_blob(&blob).unwrap(), b"prefix content");
-    s.gc(
-        &run,
-        &lease,
-        vec![blob.id()],
-        "policy:r2.2-test",
-        "cold",
-        None,
-    )
-    .unwrap();
+    s.gc(&run, &lease, vec![blob.id()], &policy(0, 0), "cold", None)
+        .unwrap();
     match s.get_blob(&blob) {
         Err(LedgerError::Missing { reason, .. }) => assert_eq!(reason, MissingReason::Gc),
         other => panic!("expected Missing{{gc}}, got {other:?}"),
@@ -541,15 +521,8 @@ fn ac_r221_transition_rows_do_not_pin_their_subjects() {
     let blob = blob_with_ref(&mut s, &run, &lease, b"subject", "with-ref");
     s.evaluate_retention(&run, &lease, &policy(0, 0), &BTreeSet::new())
         .unwrap();
-    s.gc(
-        &run,
-        &lease,
-        vec![blob.id()],
-        "policy:r2.2-test",
-        "cold",
-        None,
-    )
-    .unwrap();
+    s.gc(&run, &lease, vec![blob.id()], &policy(0, 0), "cold", None)
+        .unwrap();
     match s.get_blob(&blob) {
         Err(LedgerError::Missing {
             reason: MissingReason::Gc,
@@ -557,4 +530,127 @@ fn ac_r221_transition_rows_do_not_pin_their_subjects() {
         }) => {}
         other => panic!("expected Missing{{gc}}, got {other:?}"),
     }
+}
+
+// ── OQ-173 (R4.15c) — `legal_hold` blocks every gc path ─────────────────────
+
+/// OQ-173 (GATE-G7 "Adopt all"; ADR-0068 R2 as amended): a `RetentionPolicy`
+/// whose `legal_hold` is held at `authority ≥ principal` refuses *every* gc
+/// path — `gc` and `gc_bounded` (the lab-wide record's whole-run delete
+/// shares this admission) — with the typed refusal
+/// `Refused{gc = legal_hold}`, before any durable row or byte mutation.
+#[test]
+fn oq173_legal_hold_refuses_every_gc_path() {
+    let (mut s, run, lease, _c) = open("legal-hold");
+    let blob = s.put_blob(b"held evidence", "text/plain").unwrap();
+    let id = blob.id();
+
+    // A held policy — set at `principal` authority (the gate's floor).
+    let mut held = policy(0, 0);
+    held.set_legal_hold(true, hh_provenance::AuthorityClass::Principal)
+        .unwrap();
+    assert!(held.legal_hold);
+
+    // `gc` refuses — `Refused{gc = legal_hold}`.
+    match s.gc(&run, &lease, vec![id.clone()], &held, "cold", None) {
+        Err(LedgerError::Refused { op, reason }) => {
+            assert_eq!((op, reason), ("gc", "legal_hold"))
+        }
+        other => panic!("expected Refused{{gc = legal_hold}}, got {other:?}"),
+    }
+    // `gc_bounded` — the shared admission every gc route passes through —
+    // refuses identically (the lab-wide record's whole-run gc lands here).
+    match s.gc_bounded(
+        &run,
+        &lease,
+        vec![id.clone()],
+        &held,
+        "cold",
+        None,
+        &BTreeSet::new(),
+    ) {
+        Err(LedgerError::Refused { op, reason }) => {
+            assert_eq!((op, reason), ("gc", "legal_hold"))
+        }
+        other => panic!("expected Refused{{gc = legal_hold}}, got {other:?}"),
+    }
+    // Nothing was recorded or deleted by the refused attempts — the
+    // admission check precedes the durable row.
+    let page = s
+        .read(
+            &run,
+            hh_ledger::event::Cursor::Seq(0),
+            None,
+            hh_ledger::event::Direction::Fwd,
+            usize::MAX,
+        )
+        .unwrap();
+    assert!(
+        !page.events.iter().any(|e| e.class == "lifecycle.ledger.gc"),
+        "a refused gc commits no durable row"
+    );
+    assert_eq!(s.get_blob(&blob).unwrap(), b"held evidence");
+
+    // Cleared at principal authority — gc proceeds normally.
+    held.set_legal_hold(false, hh_provenance::AuthorityClass::Principal)
+        .unwrap();
+    s.gc(&run, &lease, vec![id.clone()], &held, "cold", None)
+        .unwrap();
+    match s.get_blob(&blob) {
+        Err(LedgerError::Missing {
+            reason: MissingReason::Gc,
+            ..
+        }) => {}
+        other => panic!("expected Missing{{gc}}, got {other:?}"),
+    }
+}
+
+/// OQ-173's authority gate: `legal_hold` is settable/clearable only at
+/// `authority ≥ principal` — `delegate`/`external` set and clear attempts
+/// answer the typed refusal `Refused{legal_hold = authority_below_principal}`.
+#[test]
+fn oq173_legal_hold_set_clear_needs_principal_authority() {
+    use hh_provenance::AuthorityClass as A;
+    let mut p = policy(0, 0);
+    for a in [A::Unverified, A::External, A::Environment, A::Delegate] {
+        match p.set_legal_hold(true, a) {
+            Err(LedgerError::Refused { op, reason }) => {
+                assert_eq!((op, reason), ("legal_hold", "authority_below_principal"))
+            }
+            other => {
+                panic!("expected Refused{{legal_hold = authority_below_principal}}, got {other:?}")
+            }
+        }
+        assert!(!p.legal_hold, "a refused set never flips the member");
+    }
+    // `definition`/`kernel` — above principal — also pass the gate.
+    p.set_legal_hold(true, A::Kernel).unwrap();
+    assert!(p.legal_hold);
+    match p.set_legal_hold(false, A::Delegate) {
+        Err(LedgerError::Refused { op, reason }) => {
+            assert_eq!((op, reason), ("legal_hold", "authority_below_principal"))
+        }
+        other => panic!("a sub-principal clear is refused, got {other:?}"),
+    }
+    assert!(p.legal_hold, "a refused clear never drops the hold");
+    p.set_legal_hold(false, A::Principal).unwrap();
+    assert!(!p.legal_hold);
+}
+
+/// The `legal_hold` member round-trips through the canonical codec; a landed
+/// (pre-OQ-173) record that lacks the member decodes `false` — never coerced.
+#[test]
+fn oq173_legal_hold_codec() {
+    let mut p = policy(1_000, 2_000);
+    p.legal_hold = true;
+    assert_eq!(RetentionPolicy::from_json(&p.to_json()).unwrap(), p);
+    // Absent member ⇒ `false` (additive decode — same convention as
+    // `compress_cold`).
+    let j = Json::obj([
+        ("policy_ref", Json::str("p")),
+        ("blob_residency_ms", Json::Int(1)),
+        ("bundle_retention_ms", Json::Int(1)),
+        ("compress_cold", Json::Bool(false)),
+    ]);
+    assert!(!RetentionPolicy::from_json(&j).unwrap().legal_hold);
 }

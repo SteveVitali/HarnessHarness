@@ -122,3 +122,20 @@ extension, if wanted, is a separate operator-visible change — and the
 bundle's `hir-documents.e2-replay` cell stays `environment-pending`
 (its `needs` names the e2-tree arm extension). This note records the
 absence; `foreign.py` itself is unchanged.
+
+### Dated note — 2026-10-22 (CF-493 / R4.15c)
+
+`bundle.json` now carries the CF-493 `verified_by[]` member on every
+`arms[]` and `pending_cells[]` entry: `{candidate, evidence_class,
+evidence_ref}` triples naming the candidates whose recorded evidence
+covers the arm or partially discharges the cell. The six original arms
+and their six `*.foreign-*` cells carry this tree's entry —
+`{candidate: "E2-candidate", evidence_class: "foreign-run-verified",
+evidence_ref: "foreign/e2-python — PR #136 (49/49)"}`. The honesty
+ceiling is unchanged: `foreign-run-verified` stays a distinct class
+below the in-tree `fixture-verified` ceiling, and a pending cell's
+`verified_by[]` is partial discharge only — `status` stays
+`environment-pending` while its `needs` prerequisite stands. The R4.3
+extension arms still carry no E2 entry — this tree cannot answer them;
+their `*.e2-replay` cells' `verified_by[]` is empty and their `needs`
+still names `e2-tree arm extension`.

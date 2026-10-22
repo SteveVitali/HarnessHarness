@@ -810,7 +810,7 @@ fn gc_and_redact_stay_durable_before_delete_alongside_new_rows() {
             &run,
             &lease,
             vec![claim_blob.id()],
-            "policy:test",
+            &gc_policy("policy:test"),
             "warm",
             None,
         )
@@ -858,4 +858,14 @@ fn gc_and_redact_stay_durable_before_delete_alongside_new_rows() {
         Some(Json::Bool(true)),
         "{comp:?}"
     );
+}
+
+fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
+    hh_ledger::retention::RetentionPolicy {
+        policy_ref: policy_ref.to_string(),
+        blob_residency_ms: 0,
+        bundle_retention_ms: 0,
+        compress_cold: false,
+        legal_hold: false,
+    }
 }

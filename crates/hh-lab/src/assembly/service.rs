@@ -278,12 +278,11 @@ fn stage6b_diags(
         // `SealError{non_canonical}` is defect-gated — the stage-5
         // re-encode self-check only fires when the compiler's own output
         // fails to round-trip; when it does, the refusal spells `C-SEAL-1`
-        // (the stage-6b check's producing stage, per this function's
-        // convention — §3.3.8's closed stage set carries no `seal` spelling,
-        // CF-492).
+        // at its own producing stage `seal` (§3.3.8's closed stage set
+        // carries `seal` — CF-492 conformed at R4.15c).
         CompileError::SealError { detail } => vec![sdiag(
             Code::SealNonCanonical,
-            Stage::Validate(6),
+            Stage::Seal,
             "/assembly",
             "seal",
             &format!("stage-5 seal refused: {detail}"),

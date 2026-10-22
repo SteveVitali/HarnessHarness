@@ -413,6 +413,17 @@ pub enum LedgerError {
         /// Which pin fired.
         reason: String,
     },
+    /// `Refused{op = reason}` — a typed refusal on a policy act (OQ-173;
+    /// ADR-0068 R2 as amended + ADR-0210's amendment log; R4.15c):
+    /// `Refused{gc = legal_hold}` while a `RetentionPolicy.legal_hold` is
+    /// held, and the `legal_hold` set/clear act at an authority below
+    /// `principal`.
+    Refused {
+        /// The refused operation (`gc`, `legal_hold`).
+        op: &'static str,
+        /// The refusal reason (`legal_hold`, `authority_below_principal`).
+        reason: &'static str,
+    },
     /// `redact` named a target that is not redactable: an `audit_fields`
     /// member of an audit-grade event (AC-R-2.8.6-2's `NotRedactable`), an
     /// undeclared field, or a non-address value.

@@ -221,3 +221,18 @@ existing `hir-documents` arm to port from — there is still none (the
 dated note appended to `foreign/e2-python/README.md` records the
 absence); `hir-documents.e2-replay` stays `environment-pending` and the
 e2 tree is unchanged apart from that note.
+
+### Dated note — 2026-10-22 (CF-493 / R4.15c)
+
+CF-493 landed the `verified_by[]` member it named: every `bundle.json`
+`arms[]` and `pending_cells[]` entry now carries
+`{candidate, evidence_class, evidence_ref}` records. This tree's entry —
+`{candidate: "E3-candidate", evidence_class: "foreign-run-verified",
+evidence_ref: "foreign/e3-typescript — R4.4b (57/57)"}` — appears on all
+eight arms and on the six original `*.foreign-*` cells plus
+`hir-documents.e3-replay` / `ledger-scenarios.e3-replay`. The honesty
+vocabulary is unchanged: `status` stays `environment-pending` — a
+pending cell's `verified_by[]` records partial discharge, never the
+cell's closure; the HUMAN-H3 `needs` prerequisite still stands.
+`foreign-run-verified` remains a class below `fixture-verified`, and
+nothing here is `staging-verified`, `live-executed` or `public`.

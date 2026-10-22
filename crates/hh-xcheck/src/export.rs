@@ -743,6 +743,23 @@ fn write_manifest(dir: &Path) -> Result<(), XcheckError> {
             }
         }
     }
+    // CF-493 — `verified_by[]`: the candidate/evidence record, rendered
+    // `{candidate, evidence_class, evidence_ref}` on both `arms[]` and
+    // `pending_cells[]`. A pending cell's `verified_by[]` is the *partial*
+    // discharge record — `status` stays `environment-pending`.
+    let verified_by = |vs: &[crate::CandidateEvidence]| {
+        Json::Arr(
+            vs.iter()
+                .map(|v| {
+                    Json::obj([
+                        ("candidate", Json::str(v.candidate)),
+                        ("evidence_class", Json::str(v.evidence_class)),
+                        ("evidence_ref", Json::str(v.evidence_ref)),
+                    ])
+                })
+                .collect(),
+        )
+    };
     let arms = Json::Arr(
         ARMS.iter()
             .map(|a| {
@@ -751,6 +768,7 @@ fn write_manifest(dir: &Path) -> Result<(), XcheckError> {
                     ("df", Json::str(a.df)),
                     ("id", Json::str(a.id)),
                     ("status", Json::str("e1-self-checked")),
+                    ("verified_by", verified_by(a.verified_by)),
                 ])
             })
             .collect(),
@@ -758,12 +776,13 @@ fn write_manifest(dir: &Path) -> Result<(), XcheckError> {
     let pending = Json::Arr(
         PENDING_CELLS
             .iter()
-            .map(|(cell, df, needs)| {
+            .map(|(cell, df, needs, by)| {
                 Json::obj([
                     ("cell", Json::str(*cell)),
                     ("df", Json::str(*df)),
                     ("needs", Json::str(*needs)),
                     ("status", Json::str("environment-pending")),
+                    ("verified_by", verified_by(by)),
                 ])
             })
             .collect(),
