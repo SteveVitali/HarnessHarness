@@ -78,7 +78,7 @@ Storage-class properties the kernel ecosystem must satisfy (properties, no techn
 
 **Persistence-policy table.** One declared table (never producer-local code) stating per class `durability` and offload threshold; ephemeral at C0: `model.stream.delta`, `security.permission.requested{rendering}`, executor `output_chunk`/`progress`, UI presentation facts; `security.permission.pending` is `ledger` (ADR-0026 §3 and Phase 2 log; ADR-0102 §8).
 
-**Retention.** Tiered by experiment membership (hot active; warm bundle-bound; cold unbound with GC-able blobs); *hashes survive, bytes may not*; referenced fork prefixes and snapshots are pinned; retention order `audit_envelope_floor ≥ experiment/bundle retention ≥ blob tier` (WS-B1 §6.5; ADR-0068 R1–R4; ADR-0163). Durations and legal hold are OQ-173 (WS-L6).
+**Retention.** Tiered by experiment membership (hot active; warm bundle-bound; cold unbound with GC-able blobs); *hashes survive, bytes may not*; referenced fork prefixes and snapshots are pinned; retention order `audit_envelope_floor ≥ experiment/bundle retention ≥ blob tier` (WS-B1 §6.5; ADR-0068 R1–R4; ADR-0163). Durations and legal hold are ruled ([[ANSWERED OQ-173 (2026-10-22; GATE-G7 "Adopt all" — the ADR-0068 R2 authorization row + ADR-0210's amendment log): audit envelopes default **indefinite**; experiment-ledger envelopes sit below audit envelopes and above ordinary rows; `RetentionPolicy.legal_hold` is settable/clearable only at `authority ≥ principal` and while set every gc path — including the lab-wide record — refuses `Refused{gc = legal_hold}`]]).
 
 #### 4. Dependencies
 
