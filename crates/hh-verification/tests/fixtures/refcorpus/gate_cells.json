@@ -1,0 +1,66 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d gate-fact cells — completion decisions, holds budget, kill/resume re-entry, honest-failure strata, judged-only facts (AC-R-2.7.1-7; AC-R-2.7.2a-4/-5/-6; DF-S1.21-2).",
+  "cells": [
+    {
+      "name": "completion_refused_required_unmet",
+      "ac": "AC-R-2.7.1-7",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "required_criteria": [{"criterion_ref": "crit:1", "state": "unmet", "bound_validators": ["val:1"], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["contract_gap"], "actions": ["require_validator(val:1)"], "hold_count": 1, "honest_failure": false}
+    },
+    {
+      "name": "completion_refused_required_unrun",
+      "ac": "AC-R-2.7.1-7",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "required_criteria": [{"criterion_ref": "crit:2", "state": "unrun", "bound_validators": ["val:2"], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["contract_gap"], "hold_count": 1}
+    },
+    {
+      "name": "clean_pass_all_met",
+      "ac": "AC-R-2.7.1-7",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "required_criteria": [{"criterion_ref": "crit:1", "state": "met", "bound_validators": ["val:1"], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "hold_count": 0, "honest_failure": false}
+    },
+    {
+      "name": "unverifiable_reason_never_holds",
+      "ac": "AC-R-2.7.1-7",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "required_criteria": [{"criterion_ref": "crit:u", "state": "unverifiable", "bound_validators": [], "unverifiable_reason": true}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "hold_count": 0}
+    },
+    {
+      "name": "kill_resume_committed_unobserved",
+      "ac": "AC-R-2.7.2a-4",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "open_effects": [{"effect_id": "e-9", "state": "committed", "detachable": false}], "required_criteria": [{"criterion_ref": "crit:1", "state": "met", "bound_validators": ["val:1"], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["open_effect_at_completion"], "actions": ["resolve_effect(e-9)"], "hold_count": 1}
+    },
+    {
+      "name": "detachable_children_annotate_only",
+      "ac": "AC-R-2.7.2a-4",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "open_effects": [{"effect_id": "e-c", "state": "committed", "detachable": true}], "required_criteria": [{"criterion_ref": "crit:1", "state": "met", "bound_validators": [], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "hold_count": 0}
+    },
+    {
+      "name": "abandoned_effect_success_with_veto",
+      "ac": "AC-R-2.7.2a-4",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "abandoned_effects": ["e-9"], "required_criteria": [{"criterion_ref": "crit:1", "state": "met", "bound_validators": [], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "success_with_veto": "inconsistent_durable_state"}
+    },
+    {
+      "name": "holds_budget_exhausted",
+      "ac": "AC-R-2.7.2a-5",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "required_criteria": [{"criterion_ref": "crit:1", "state": "unmet", "bound_validators": ["val:1"], "unverifiable_reason": false}], "holds_consumed": 3, "holds_cap": 3},
+      "expect": {"verdict": "hold", "hold_count": 4, "holds_exhausted": true, "stratum": "unreconciled_claims"}
+    },
+    {
+      "name": "honest_failure_unachievable",
+      "ac": "AC-R-2.7.2a-5",
+      "facts": {"completion_claim_kind": "unachievable", "agreement": "unverifiable", "required_criteria": [{"criterion_ref": "crit:1", "state": "unmet", "bound_validators": ["val:1"], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "honest_failure": true, "stratum": "failed_honestly"}
+    },
+    {
+      "name": "claim_evidence_divergence_holds",
+      "ac": "AC-R-2.7.2a-4",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "claim_evidence_divergences": ["phantom_effect"], "required_criteria": [{"criterion_ref": "crit:1", "state": "met", "bound_validators": [], "unverifiable_reason": false}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["phantom_effect"], "hold_count": 1}
+    }
+  ]
+}

@@ -132,7 +132,7 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
                     Some("diverge") => {
                         let class = r
                             .payload
-                            .get("class")
+                            .get("divergence_class")
                             .and_then(Json::as_str)
                             .unwrap_or("unknown");
                         *diverges.entry(class.to_string()).or_default() += 1;
@@ -293,13 +293,16 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
     let nfr = ppm(followed, notices);
 
     // Local-check summary (never a headline — charged_to = subject).
+    // AC-R-2.7.1-8 — a non-`decided` verdict (`oracle_failure`/
+    // `inconclusive`) counts beside the rate, never in its denominator:
+    // a crashed oracle is not a failed check.
     let local_checks = verdicts
         .iter()
-        .filter(|v| v.charged_to == "subject")
+        .filter(|v| v.charged_to == "subject" && v.status == "decided")
         .count() as u64;
     let local_affirm = verdicts
         .iter()
-        .filter(|v| v.charged_to == "subject" && v.affirmative)
+        .filter(|v| v.charged_to == "subject" && v.status == "decided" && v.affirmative)
         .count() as u64;
     let visible_pass_rate = ppm(local_affirm, local_checks);
 

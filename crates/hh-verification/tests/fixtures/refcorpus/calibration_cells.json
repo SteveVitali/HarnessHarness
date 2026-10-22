@@ -1,0 +1,21 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d calibration cells — the status fold (AC-R-2.7.3-8; DF-S1.21-2).",
+  "record": {
+    "calibration_id": "cal:1",
+    "critic_ref": "sha256:crt",
+    "judge_snapshot_fingerprint": "fp:a",
+    "labelled_set_ref": "set:1",
+    "calibrated_at": 1000,
+    "recalibration_period_ms": 10000,
+    "expiry": ["rubric_version:rubric:1", "task_family:fam:1"]
+  },
+  "cells": [
+    {"name": "active", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:a", "rubric_ref": "rubric:1", "task_family": "fam:1", "now_ms": 2000}, "expect": "active"},
+    {"name": "fingerprint_changed_expires", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:b", "rubric_ref": "rubric:1", "task_family": "fam:1", "now_ms": 2000}, "expect": "expired"},
+    {"name": "rubric_changed_expires", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:a", "rubric_ref": "rubric:2", "task_family": "fam:1", "now_ms": 2000}, "expect": "expired"},
+    {"name": "family_changed_expires", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:a", "rubric_ref": "rubric:1", "task_family": "fam:2", "now_ms": 2000}, "expect": "expired"},
+    {"name": "age_expires", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:a", "rubric_ref": "rubric:1", "task_family": "fam:1", "now_ms": 12000}, "expect": "expired"},
+    {"name": "expiring_tail", "ac": "AC-R-2.7.3-8", "ctx": {"judge_snapshot_fingerprint": "fp:a", "rubric_ref": "rubric:1", "task_family": "fam:1", "now_ms": 10500}, "expect": "expiring"}
+  ]
+}

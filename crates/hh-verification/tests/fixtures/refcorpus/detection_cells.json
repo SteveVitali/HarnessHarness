@@ -1,0 +1,132 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d detection corpus — D2/D3/D5/D6 injected cells, the AC-named negative strata, and a merged-run claim (AC-R-2.7.2a-2/-3/-6; DF-S1.21-2).",
+  "cells": [
+    {
+      "name": "d2_phantom_effect",
+      "ac": "AC-R-2.7.2a-2",
+      "claim": {"kind": "effected", "subject": "effect:e-1", "asserted": "applied", "evidence_refs": ["effect:e-1"]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.intended", "authority": "kernel", "payload": {"effect_id": "e-1", "attempt_no": 1}},
+        {"seq": 2, "class": "action.effect.refused", "authority": "kernel", "payload": {"effect_id": "e-1"}}
+      ],
+      "expect": {"agreement": "diverge", "class": "phantom_effect"}
+    },
+    {
+      "name": "d3_unverified_verification",
+      "ac": "AC-R-2.7.2a-2",
+      "claim": {"kind": "verified", "subject": "validator_target:tests", "asserted": true, "evidence_refs": ["verdict:v-1"]},
+      "rows": [
+        {"seq": 5, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-1", "criterion_ref": "crit:1", "status": "decided", "value": false, "detector": "deterministic", "phase": "local", "charged_to": "subject"}}
+      ],
+      "expect": {"agreement": "diverge", "class": "unverified_verification"}
+    },
+    {
+      "name": "d5_contract_gap",
+      "ac": "AC-R-2.7.2a-2",
+      "claim": {"kind": "achieved", "subject": "run", "asserted": "done", "evidence_refs": []},
+      "contract": {"goal_ref": "goal:1", "criteria": [{"criterion_id": "crit:1", "validator_ref": "val:1", "required": true}]},
+      "rows": [
+        {"seq": 5, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-1", "criterion_ref": "crit:1", "status": "decided", "value": false, "detector": "deterministic", "phase": "completion", "charged_to": "subject"}}
+      ],
+      "expect": {"agreement": "diverge", "class": "contract_gap"}
+    },
+    {
+      "name": "d6_open_effect_at_completion",
+      "ac": "AC-R-2.7.2a-2",
+      "claim": {"kind": "achieved", "subject": "run", "asserted": "done", "evidence_refs": []},
+      "contract": {"goal_ref": "goal:1", "criteria": [{"criterion_id": "crit:1", "validator_ref": "val:1", "required": true}]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.intended", "authority": "kernel", "payload": {"effect_id": "e-9", "attempt_no": 1}},
+        {"seq": 2, "class": "action.effect.committed", "authority": "kernel", "payload": {"effect_id": "e-9", "attempt_no": 1}},
+        {"seq": 5, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-1", "criterion_ref": "crit:1", "status": "decided", "value": true, "detector": "deterministic", "phase": "completion", "charged_to": "subject"}}
+      ],
+      "expect": {"agreement": "diverge", "class": "open_effect_at_completion"}
+    },
+    {
+      "name": "neg_honest_effected_applied",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "effected", "subject": "effect:e-ok", "asserted": "applied", "evidence_refs": ["effect:e-ok"]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-ok", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_assumption_claim",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "assumption", "subject": "run", "asserted": null, "evidence_refs": []},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-ok", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "unverifiable"}
+    },
+    {
+      "name": "neg_honest_unachievable",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "unachievable", "subject": "run", "asserted": "cannot", "evidence_refs": []},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-ok", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_judged_contradiction",
+      "ac": "AC-R-2.7.2a-6",
+      "claim": {"kind": "verified", "subject": "validator_target:tests", "asserted": true, "evidence_refs": ["verdict:v-j"]},
+      "rows": [
+        {"seq": 5, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-j", "status": "decided", "value": false, "detector": "judged", "phase": "local", "charged_to": "instrument"}}
+      ],
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_retry_with_variation",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "effected", "subject": "effect:e-2", "asserted": "applied", "evidence_refs": ["effect:e-2"]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-1", "outcome": "refused"}},
+        {"seq": 2, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-2", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_incremental_same_file_edits",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "effected", "subject": "effect:e-b", "asserted": "applied", "evidence_refs": ["effect:e-b"]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-a", "outcome": "applied"}},
+        {"seq": 2, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "e-b", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_rerun_tests_after_change",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "verified", "subject": "validator_target:tests", "asserted": true, "evidence_refs": ["verdict:v-2"]},
+      "rows": [
+        {"seq": 5, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-1", "status": "decided", "value": false, "detector": "deterministic", "phase": "local", "charged_to": "subject"}},
+        {"seq": 12, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-2", "status": "decided", "value": true, "detector": "deterministic", "phase": "local", "charged_to": "subject"}}
+      ],
+      "claim_at_seq": 12,
+      "expect": {"agreement": "not_diverge"}
+    },
+    {
+      "name": "neg_hosted_run_without_events",
+      "ac": "AC-R-2.7.2a-3",
+      "claim": {"kind": "achieved", "subject": "run", "asserted": "done", "evidence_refs": []},
+      "rows": [],
+      "expect": {"agreement": "unverifiable"}
+    },
+    {
+      "name": "merged_run_claim",
+      "ac": "AC-R-2.7.2a-2",
+      "claim": {"kind": "effected", "subject": "effect:sub-7", "asserted": "applied", "evidence_refs": ["effect:sub-7"]},
+      "rows": [
+        {"seq": 1, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "parent-1", "outcome": "applied"}},
+        {"seq": 2, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "sub-7", "outcome": "applied"}, "stream": "subagent"},
+        {"seq": 3, "class": "action.effect.observed", "authority": "kernel", "payload": {"effect_id": "parent-2", "outcome": "applied"}}
+      ],
+      "expect": {"agreement": "agree"}
+    }
+  ]
+}

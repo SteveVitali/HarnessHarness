@@ -1,0 +1,68 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d metric/run-row cells — headline-independence, the FCR veto, oracle_failure exclusion, succeeded_unverified terminality, followed-share (AC-R-2.7.1-7/-8/-9; AC-R-2.7.2a-7; DF-S1.21-2).",
+  "cells": [
+    {
+      "name": "fcr_veto_row",
+      "ac": "AC-R-2.7.1-8",
+      "rows": [
+        {"seq": 1, "class": "verification.gate.evaluated", "authority": "kernel", "payload": {"verdict": "veto", "vetoed_invariants": ["false_completion"]}},
+        {"seq": 2, "class": "verification.completion.decided", "authority": "kernel", "payload": {"decision": "succeeded_with_veto"}}
+      ],
+      "expect": {"false_completion_rate": 1000000, "fcr_veto": true}
+    },
+    {
+      "name": "fcr_diverge_after_pass",
+      "ac": "AC-R-2.7.1-8",
+      "rows": [
+        {"seq": 1, "class": "verification.claim.recorded", "authority": "kernel", "payload": {}},
+        {"seq": 2, "class": "verification.claim.reconciled", "authority": "kernel", "payload": {"agreement": "diverge", "divergence_class": "phantom_effect"}},
+        {"seq": 3, "class": "verification.completion.decided", "authority": "kernel", "payload": {"decision": "succeeded"}}
+      ],
+      "expect": {"false_completion_rate": 1000000}
+    },
+    {
+      "name": "subject_verdict_never_headline",
+      "ac": "AC-R-2.7.1-8",
+      "rows": [
+        {"seq": 1, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-s", "status": "decided", "value": true, "detector": "deterministic", "phase": "local", "charged_to": "subject"}},
+        {"seq": 2, "class": "verification.claim.recorded", "authority": "kernel", "payload": {}},
+        {"seq": 3, "class": "verification.claim.reconciled", "authority": "kernel", "payload": {"agreement": "diverge", "divergence_class": "contract_gap"}},
+        {"seq": 4, "class": "verification.completion.decided", "authority": "kernel", "payload": {"decision": "succeeded"}}
+      ],
+      "expect": {"false_completion_rate": 1000000, "visible_pass_rate": 1000000, "execution_alignment_failure_rate": 1000000, "divergence_profile": {"contract_gap": 1000000}}
+    },
+    {
+      "name": "oracle_failure_excluded_from_denominator",
+      "ac": "AC-R-2.7.1-8",
+      "rows": [
+        {"seq": 1, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-1", "status": "decided", "value": true, "detector": "deterministic", "phase": "local", "charged_to": "subject"}},
+        {"seq": 2, "class": "verification.validator.verdict", "authority": "kernel", "payload": {"verdict_id": "v-2", "status": "oracle_failure", "status_detail": "unparseable", "detector": "deterministic", "phase": "local", "charged_to": "subject"}}
+      ],
+      "expect": {"visible_pass_rate": 1000000, "visible_denominator": 1}
+    },
+    {
+      "name": "succeeded_unverified_is_terminal",
+      "ac": "AC-R-2.7.1-7",
+      "rows": [
+        {"seq": 1, "class": "verification.completion.decided", "authority": "kernel", "payload": {"decision": "succeeded_unverified"}},
+        {"seq": 2, "class": "verification.claim.recorded", "authority": "kernel", "payload": {}},
+        {"seq": 3, "class": "verification.claim.reconciled", "authority": "kernel", "payload": {"agreement": "agree"}}
+      ],
+      "expect": {"decision": "succeeded_unverified", "honest_failure_rate": 0, "false_completion_rate": 0, "claim_state_agreement": 1000000}
+    },
+    {
+      "name": "followed_share_two_profiles",
+      "ac": "AC-R-2.7.1-9",
+      "rows": [
+        {"seq": 1, "class": "context.artefact.delivered", "authority": "kernel", "payload": {"delivery_id": "d-1", "rule_id": "profile:react", "kind": "tool_surface"}},
+        {"seq": 2, "class": "context.artefact.delivered", "authority": "kernel", "payload": {"delivery_id": "d-2", "rule_id": "profile:react", "kind": "procedure"}},
+        {"seq": 3, "class": "context.artefact.delivered", "authority": "kernel", "payload": {"delivery_id": "d-3", "rule_id": "profile:steer", "kind": "rule"}},
+        {"seq": 4, "class": "verification.artefact.followed", "authority": "kernel", "payload": {"delivery_id": "d-1", "detector": "deterministic"}},
+        {"seq": 5, "class": "verification.artefact.followed", "authority": "kernel", "payload": {"delivery_id": "d-2", "detector": "deterministic"}},
+        {"seq": 6, "class": "verification.artefact.followed", "authority": "kernel", "payload": {"delivery_id": "d-3", "detector": "parsed"}}
+      ],
+      "expect": {"share": {"profile:react": 1000000, "profile:steer": 0}}
+    }
+  ]
+}
