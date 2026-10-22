@@ -213,3 +213,184 @@ row.
 
 <!-- R4.12a appends Part 2 (OQ-307 OQ-336 OQ-338 OQ-342 OQ-360 OQ-363 OQ-366 OQ-367
      OQ-375 OQ-387 OQ-407) below this line — the adopt-all-except line covers both parts. -->
+
+## Part 2 (R4.12a) — batch-adoptable table
+
+| id | proposed disposition | one-line basis | conform row |
+|---|---|---|---|
+| OQ-307 | adopt-interim-as-final | `static_hash` = `idp` over the static-tier `context_item_id`s — membership resolves to item *identities* (`version_id`), never rendered bytes; the `role_map` collapse and demotion wrappers are render-time transforms declared out of hash scope; `prefix_affecting_params` enter per LC-5 | R4.15a |
+| OQ-336 | adopt-interim-as-final | a benchmark-supplied verifier rides as a `foreign.digest_claim` — a claim, never a `ContentAddress` or vendored executable tree member; unpinned ⇒ `unpinned[]` caps `claimed_level` at {R0, R1, R3} — R2 requires the pinned `image_digest`; the N13 "integrate, never author" answer is integrate-by-claim | R4.15a |
+| OQ-338 | adopt-interim-as-final | stratum B's launch anchor is the committed `adapter_b` FreshTemporal corpus whose `SuiteValidityRecord` (the manifest's committed `audit` block) is supplied by the suite author — N13 holds by construction (the instrument validates, never produces it); `headline_admissible` gates on `audited_at`; a named third-party pool enters only as a new suite manifest through the same gate — pool identity is suite-authoring data | R4.15a |
+| OQ-342 | adopt-interim-as-final | the parity margin is the R3-style pre-registered margin per OQ-113's part-1 adoption (`PreRegistration` data, never kernel constants); subset design is the `ParityReport`'s declared `original_runs`/`replay_verdicts`; `estimated{…}` is adaptive-strategy-only and never a headline discharge; `parity = none` keeps the I-5 product-granularity restriction | R4.15a |
+| OQ-360 | adopt-interim-as-final | `ReattemptPolicy{max_per_plan = 2, max_fraction_of_plans_ppm = 100_000}` + the declared `backoff` member are the packaged defaults, engine-enforced at both bounds; the Stage-3 infrastructure-failure-rate measurement stays the verbatim re-entry trigger | R4.15a |
+| OQ-363 | adopt-interim-as-final | the duplicate-run control is final — `iso_cost`/`matched_cap` arms never share subject runs (ADR-0278's landed ruling shape; GATE-G2's recorded "OQ-363 interim rule stands"); cross-mode `compare` stays `IncommensurableMatch`; ADR-0278's revisit trigger preserves "one run, two views" for a later S-2/E-2-preserving ADR | R4.15a |
+| OQ-366 | adopt-interim-as-final | `confirmatory` requires ≥ 2000 `resampling_draws` + pre-registration coverage; `preview` never persists as confirmatory; draws are caller-declared `AnalysisInput` data (no per-report-class default table ships); the >10⁴-row resample-index caching rule resolves to no cache — a report resamples | R4.15a |
+| OQ-367 | adopt-interim-as-final | the global floors `T_CLT = 100`, `T_BCA = 30` (ADR-0158's values via the S3.4c ADR-0280 correction; KA-1/KA-2 coverage ≥93% at nominal) are the packaged defaults — floors are not per metric family; a per-family set lands only by amendment (`EstimatorSelection.floors`/`substituted` already record the applied set) | R4.15a |
+| OQ-375 | adopt-interim-as-final | the per-stage defaults are the landed pair: `new` = `Validated` admission + no claimed-level gate (Stage-3 lab-internal), `public` = `Reproduced` (Stage-4 published); `min_replicates` stays suite-declared disclosure data (OQ-121's replicate interaction); `unadmitted[]{reason}` canonical | R4.15a |
+| OQ-387 | adopt-interim-as-final | the claim is recorded verbatim — absent ⇒ `unknown`, never inferred, inherited at subagent spawn; `unknown` narrows as `untrusted` (interim verbatim); the narrowed Π set is empty at launch — the interim names no rows and no `hh-monitor` row consumes it; a leaf naming rows lands only by ADR amendment | R4.15a |
+| OQ-407 | adopt-interim-as-final | the landed measurement form is final: per-invocation `boundary_overhead_ms` (M19) with the ceiling an absolute-p95 `AssumptionDebtRecord` per class (`OQ-075.hot_path_ceiling.{class_id}`, removal `probe:m19_boundary_overhead`) — the fraction-of-`model_latency_ms` form rejected for the landed absolute bound; the per-step op list is each class's declared `hot_path_operations[]`; breach refuses `LocalityTooSlow` (the interim's named refusal adopted) | R4.15a |
+
+## Part 2 — per-OQ basis (ADR-0213 interim quoted; landed evidence re-checked)
+
+Each proposal is `adopt-interim-as-final`: the ratified interim rule is quoted; the landed
+shape is the interim already in force; the outstanding workstream legs fold into the
+adoption — the WS-* ruling venues no longer run, so GATE-G7's act *is* the ratification the
+entry tests awaited. The ADR-0213 spec-debt entry tests stay preserved verbatim as
+re-entry triggers; R4.15a lands the adopted rulings as register/ADR amendment-log appends.
+
+- **OQ-307 — `static_hash` membership.** Interim (quoted): "`static_hash` per ADR-0127
+  LC-2 over static-tier bytes, tool surfaces and dialect-listed parameters; `role_map`
+  collapse and demotion wrappers not yet in scope". Landed: `static_hash` is `idp` over
+  the static-tier slots' `context_item_id`s (`crates/hh-context/src/assemble.rs:734-735,
+  787`; the `context_static.1` domain at `plan.rs:41`); `prefix_affecting_params` is the
+  LC-5 dialect-listed member (`crates/hh-gateway/src/dialect.rs:428-430`); demotion
+  wrappers are profile-declared `prompt_layout` data recorded on
+  `AssemblyOutcome.demotions` (`assemble.rs:89-93, 250-254`) and never enter the hash; the
+  `role_map` collapse is `hh-provenance`'s `role_map_collapse` applied at lower-profile
+  (`crates/hh-provenance/src/lower.rs:465-489`) — a render-time transform. The final
+  answer: `static_hash` covers static-tier item *identities* — `definition`-slot `Text`
+  leaves hash by `version_id`, never by rendered bytes (the provider's rendered-bytes
+  cache key is the dialect layer's own `cache_markers`/`prefix_affecting_params` concern);
+  `role_map` collapse and demotion wrappers stay out of the hash — the rendered form is a
+  profile projection while the LC-2 run half is identity.
+- **OQ-336 — foreign-verifier carrying.** Interim (quoted, the shared OQ-336/338/342 row):
+  "a benchmark-supplied verifier is carried as a `foreign` digest (R2 unsupported for
+  it)". Landed: `foreign{name, version, source_ref, digest_claim}` — `digest_claim` a
+  `ForeignRef` claim, never a `ContentAddress` (I-2; `crates/hh-lab/src/bench.rs:38-40`);
+  a non-pinned `image_digest` (tag, empty, foreign version string) is a claim landing the
+  task in `unpinned[]`, capping `claimed_level` at {R0, R1, R3} — R2 requires the pinned
+  image digest (`crates/hh-bench/src/adapter.rs:217-219, 467-491`); `verifier_isolation`
+  is per-family with `separate` the stratum-B default (`adapters.rs`, `benchset.rs:
+  581-594`). The final answer: digest-only carrying is the ratified N13 answer — the
+  instrument integrates the foreign verifier by claim and never authors it as a vendored
+  executable tree member; a digest-only verifier suite supports {R0, R1, R3} — R2 stays
+  gated on the pinned `image_digest`; vendoring lands only by a new ADR.
+- **OQ-338 — stratum-B pool + `SuiteValidityRecord` custodian.** Interim (quoted, the
+  shared row): "stratum B's pool is unnamed (headline issue-resolution capability blocked,
+  not Stage-3 acceptance)". Landed: stratum B is `adapter_b` — `FreshTemporal`,
+  `coding_terminal`, mandatory `separate` isolation (`crates/hh-bench/src/adapters.rs:
+  351-371`); the `SuiteValidityRecord` is the suite manifest's committed `audit` block
+  (`benchset.rs:533-547, 771-773`); `headline_admissible` requires `audited_at` — an
+  undated audit loads but never headlines (`benchset.rs:211-216`; S4.15). The final
+  answer: the launch anchor is the committed `adapter_b` corpus; the custodian resolves
+  to the suite author — the `audit` block is corpus-declared data the instrument
+  validates, never instrument-produced, so N13 holds by construction; a named third-party
+  pool (the S-496/S-495 fork) enters only as a new suite manifest carrying its own
+  `SuiteValidityRecord` through the same `audited_at` gate — pool identity is
+  suite-authoring data, never a kernel ruling.
+- **OQ-342 — parity margin + subset design.** Interim (quoted, the shared row): "adapter
+  parity uses the R3-style pre-registered margin (ADR-0142 D3; ADR-0144 D5/option 2;
+  ADR-0146 D3)". Landed: `AdapterDeclaration.parity` is the `ParityReport` ref — `None`
+  spells `parity = none` restricting the adapter to product-granularity rows (I-5;
+  `crates/hh-bench/src/adapter.rs:319-331`); `ParityReport` is a
+  `ComparisonReport{benefit_kind = artifact_benefit}` plus
+  `{original_runner_ref, original_runs, replay_verdicts}` (`crates/hh-lab/src/
+  analysis.rs:1288-1303`); `estimated{estimator, inclusion_probabilities_ref}` is set on
+  adaptive-strategy rows only (`search_time_benefit`; `analysis.rs:961-965`) — a
+  `full_set` comparison carries no `estimated` member. The final answer: the margin is
+  the R3-style pre-registered margin — per-suite `PreRegistration` data per OQ-113's
+  part-1 adoption, never a kernel constant and never stricter-by-default; the subset
+  design (minimum n per task) is suite-authoring data declared on the `ParityReport`;
+  `estimated{…}` rows never suffice for headline eligibility — the member is scoped to
+  adaptive-strategy comparisons and cannot discharge an `artifact_benefit` parity claim.
+- **OQ-360 — re-attempt defaults.** Interim (quoted, the shared OQ-360/366/367/375 row):
+  "`ReattemptPolicy{max_per_plan = 2, max_fraction_of_plans = 0.10}`". Landed:
+  `ReattemptPolicy{max_per_plan: 2, max_fraction_of_plans_ppm: 100_000}` is the packaged
+  exemplar default (`crates/hh-lab/src/exemplars.rs:98-102`) with `backoff` a declared
+  member (`crates/hh-lab/src/experiment.rs:548-557`); the engine enforces both bounds
+  (`crates/hh-experiment/src/engine.rs:1618-1663`). The final answer: the interim values
+  are the packaged defaults — the Stage-3 infrastructure-failure-rate measurement per
+  environment class (with the OQ-121/OQ-339 replicate interaction) stays the ADR-0213
+  entry test, preserved verbatim as the re-entry trigger that re-pins the values by
+  amendment when the measurement exists.
+- **OQ-363 — `iso_cost`/`matched_cap` run-sharing.** Interim (quoted): "the engine
+  duplicates subject runs for `iso_cost` and `matched_cap` arms (ADR-0155 S-2; ADR-0156
+  D2); AC-R-2.10.3-9 waits". Re-ruled: ADR-0278 (accepted, S3.4a) kept the OQ under
+  ADR-0213's interim rule with the landed ruling shape — the `iso_cost` companion
+  duplicates runs rather than sharing across `MatchSpec`s, cross-mode `compare`
+  stays `IncommensurableMatch` (CF-334; the
+  unenforced-`matched_cap`-dimension arm CF-350), and GATE-G2's disposition recorded
+  "OQ-363 interim rule stands". Landed: the engine's doc contract states the rule
+  verbatim — arms never share subject runs, each arm's cells expand independently
+  (`crates/hh-experiment/src/engine.rs:42-44`); `lab/control-strategy-family-v1` rides
+  one `iso_cost` companion arm sharing a design point with the `matched_cap` group with
+  duplicated runs (`crates/hh-lab/src/exemplars.rs:858-895`). The final answer: the
+  duplicate-run control is the ratified answer — one run never serves two `MatchSpec`s
+  (S-2 and E-2 hold by construction); ADR-0278's revisit trigger is preserved verbatim —
+  a "one run, two views" ruling lands only by a later ADR that preserves S-2 and E-2.
+- **OQ-366 — `draws` defaults + preview policy + resample caching.** Interim (quoted, the
+  shared row): "`draws` 2000/200". Landed: `report_label` forces `preview` below
+  `CONFIRMATORY_DRAWS = 2000` `resampling_draws`; `confirmatory` additionally needs
+  pre-registration coverage (ADR-0157 D5); `preview` never persists as confirmatory
+  (`crates/hh-analysis/src/report.rs:213-236`); `resampling_draws` is a declared
+  `AnalysisInput` member (`kernel.rs:97-98`); no resample-index cache exists in
+  `hh-analysis`. The final answer: the 2000 confirmatory floor is the ratified gate and
+  `preview` stays the reduced-draws, never-persisted class; per-report-class defaults
+  resolve to caller-declared `resampling_draws` — the 2000/200 labels stay the guidance
+  values, not a second constant table; the >10⁴-row caching rule resolves to no cache —
+  a report resamples, and an index cache lands only by ADR amendment.
+- **OQ-367 — `T_CLT`/`T_BCA` floors.** Interim (quoted, the shared row): "`T_clt = 100`,
+  `T_bca = 30`". Landed: `T_CLT = 100`, `T_BCA = 30` constants
+  (`crates/hh-eval/src/scorecard.rs:49-51` — the S3.4c ADR-0280 correction to the
+  ADR-0158 placeholder); a floor violation substitutes the first admissible fallback and
+  records it in `EstimatorSelection.substituted` with the applied set on
+  `EstimatorSelection.floors` (`scorecard.rs:165-251`); the KA-1/KA-2 coverage sims
+  landed ≥93% recovery at nominal (`crates/hh-analysis/tests/kernel.rs:1364, 1435`). The
+  final answer: the global floors {100, 30} are the packaged defaults — the measured
+  coverage already backs them; floors are global, not per metric family; a per-family
+  set lands only by amendment (the applied floors are already declared data on
+  `EstimatorSelection.floors`).
+- **OQ-375 — `AdmissionPolicy` per-stage defaults.** Interim (quoted, the shared row):
+  "`AdmissionPolicy` defaults `validated`/R0" (the ADR-0163 D2 segment). Landed:
+  `LeaderboardDefinition::new` — `min_status = Validated`, `min_claimed_level = None`
+  (no claimed-level gate — the R0 floor), all splits (`crates/hh-results/src/
+  leaderboard.rs:164-184`); `::public` — `min_status = Reproduced`, the C2/Stage-5
+  published tier (`leaderboard.rs:186-194`); `disclosure_policy.min_replicates` is the
+  L6 replicate floor failing `insufficient_replicates` (`leaderboard.rs:43-60, 851-852`);
+  `unadmitted[]{reason}` canonical (`leaderboard.rs:463-510`). The final answer: the
+  per-stage pair is the landed default set — Stage-3 lab-internal `Validated` admission
+  with no claimed-level gate, Stage-4 published `Reproduced`; `min_replicates` stays
+  suite-declared disclosure data — OQ-121's replicate interaction folds into the suite's
+  own declared floor, never a kernel constant.
+- **OQ-387 — `workspace_trust` Π leaf.** Interim (quoted): "`workspace_trust` is a
+  manifest claim from the H5 trust store; `unknown` narrows as `untrusted`; no Π rows
+  named (ADR-0168 D7)". Landed: `WorkspaceTrust ∈ {trusted, untrusted, unknown}` on
+  `RunManifest` (`crates/hh-ledger/src/manifest.rs:199-228, 436`), recorded verbatim from
+  the H5 trust store — absent, unreadable or malformed ⇒ `unknown`, never inferred
+  (`crates/hh-cli/src/trust.rs:40-64`; `crates/hh-embed/src/open.rs:666-670`); subagent
+  spawn inherits it (`crates/hh-subagent/src/spawn.rs:1457`); `manifest.rs:199` documents
+  "never a Π input at this layer" — no `hh-monitor`/`hh-control`/`hh-containment` row
+  consumes it (grep-verified at base 23ccfbd). The final answer: `unknown` narrows as
+  `untrusted` is adopted verbatim; the narrowed Π set is the empty set at launch — the
+  claim is run-scoped audit data (recorded, inherited, never consumed), and a Π leaf
+  naming its rows lands only by an ADR amendment — the ADR-0213 entry test preserved
+  verbatim as re-entry.
+- **OQ-407 — OQ-075 measurement design.** Interim (quoted, the shared OQ-407/075 row):
+  "first-party `hot_path` variants stay in process; out-of-process admissibility for
+  `hot_path` classes is subject to a ceiling recorded as an assumption-debt record;
+  `LocalityTooSlow` proposed (ADR-0181 D8)". Landed: `boundary_overhead_ms` (M19) is
+  kernel-measured per invocation on `lifecycle.component.invoked`
+  (`crates/hh-varhost/src/host.rs:281`); the ceiling lands as an absolute-p95-ms
+  `AssumptionDebtRecord` keyed `OQ-075.hot_path_ceiling.{class_id}` with
+  `removal_test_ref: probe:m19_boundary_overhead` (`crates/hh-varhost/tests/
+  overhead.rs:301-343`; AC-R-2.12.2-9); `hot_path` is a declared `CapabilityClass` member
+  and `hot_path_operations[]` a manifest claim lowered to `Permission`
+  (`crates/hh-registry/src/records.rs:120`, `extension/plugin.rs:251-268`);
+  `LocalityTooSlow` stays proposed-only in spec text (§8 crossings table — never a
+  landed typed refusal). The final answer: the landed absolute-p95 form is the ceiling —
+  the `model_latency_ms` fraction is rejected in favour of the recorded debt bound; the
+  per-step op list is each class's declared `hot_path_operations[]`, measured per
+  invocation; refusal-vs-stratification resolves to refusal — `LocalityTooSlow` is
+  adopted as the named typed refusal for ceiling breach (the spec-text "proposed" marker
+  becomes the adopted name); stratification-only would leave a breach unenforced.
+
+## Conflicts (part 2)
+
+None registered. The two conflict rows the OQ-363 answer rides — CF-334 (cross-mode
+`compare` incommensurable) and CF-350 (an unenforced `matched_cap` dimension refuses) —
+are already-registered conflicts the proposal cites, not new divergences; every other
+row's landed shape is consistent with its interim text per the R2.23 revalidation cell.
+No new CF row.
+
+<!-- Part 2 (R4.12a) appended 2026-10-22 — the adopt-all-except line at the head covers
+     both parts; GATE-G7's act performs the ratifications; R4.15a conforms the adopted set. -->
