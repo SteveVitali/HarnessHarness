@@ -60,6 +60,7 @@ below; the root AGENTS.md has the layering narrative.
 | `hh-fleet` | the C4 fleet reconciler — human-agent org layer over durable `FleetSpec`/`WorkItem` rows |
 | `hh-fleet-adapter` | the `work_source_adapter` plugin-class contract (the tracker boundary codec) |
 | `hh-tracker-fixture` | the packaged reference tracker variant — the honest fixture proxy for HUMAN-H2 |
+| `hh-github-issues` | the packaged GitHub Issues tracker variant (R4.7; DF-S5.6-1) — `GithubTracker` out of process |
 | `hh-evolution` | the C5 evolution pipeline: S0–S10 candidate state machine over durable rows |
 | `hh-debt` | the C4 assumption-debt manager service (sweep/settle/retire, `tier-c4` on `hh-embed`) |
 | `hh-xcheck` | the cross-implementation replay/checker packaging (spec §10.7, R2.21, ADR-0353): `hh-xcheck-bundle/1` export + E1 self-check + foreign-answers `verify`; `hh-xcheck` binary |

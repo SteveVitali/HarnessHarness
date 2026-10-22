@@ -15,3 +15,6 @@
 {"ts":"2026-10-21T23:12:11Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200633,"record":"2026-10-21-bench-manifest-live.json"}
 {"ts":"2026-10-21T23:12:19Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200633,"record":"2026-10-21-bench-manifest-live.json"}
 {"ts":"2026-10-21T23:15:10Z","ticket":"R4.6","leg":"lt03-live","cost_usd":0.001489,"cumulative_usd":15.202122,"record":"2026-10-21-lt03-live.json"}
+{"ts":"2026-10-21T23:59:38Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-21-github-live.json"}
+{"ts":"2026-10-22T00:00:30Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}
+{"ts":"2026-10-22T00:01:47Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}

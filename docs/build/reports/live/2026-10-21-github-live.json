@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    "sandbox-scoped: capability probe + list/get over the live repo; one webhook (pre-state GET, unconditional DELETE in trap); signed X-Hub-Signature-256 issues/issue_comment deliveries admitted at fleet.webhook_ingress and folded to a WorkItem at fleet.reconcile; replay dedupe + stale-window no-op; out-of-process subprocess_confined capability probe over the live snapshot; rollback = hook deleted + issue closed+hh-live-test; GH_* markers carry the assertion view; credentials broker-resolved \u2014 provided: yes only"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "api.github.com:443",
+  "git_head": "248e54f345c0887a5abe4e189993f6f29d707eff",
+  "harness": "unknown",
+  "leg": "github-live",
+  "model_reported": null,
+  "provided": {
+    "HH_GITHUB_SANDBOX_REPO": "yes",
+    "HH_GITHUB_SANDBOX_TOKEN": "yes",
+    "HH_GITHUB_WEBHOOK_SECRET": "yes"
+  },
+  "provider": "github-sandbox",
+  "recorded_at": "2026-10-21T23:59:38Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "fail:live-tests rc=2",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.7.md",
+    "sha256": "f43a05409c026a93b5c43b1ed0ef00e80275d03e86ca805f4fb0fccd35bb027d"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.202117,
+  "ticket": "R4.7",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-21-github-live.transcript.txt",
+  "transcript_sha256": "6ef78c92e4d9f5db5780a6be13f17a4e7a639303c3aed6a0d039adb7f96bd65a"
+}

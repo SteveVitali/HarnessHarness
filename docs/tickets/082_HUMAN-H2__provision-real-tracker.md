@@ -31,3 +31,19 @@ reports "gate pending" — never a failure, never a fabricated pass.
 > (b) bring up the cloudflared/ngrok-class tunnel to the local hh ingress and record the
 > endpoint; (c) run the live capability probe + confirm a live signed delivery. The live
 > legs report `gate pending` on these steps — never a fabricated pass.
+
+
+> **EXECUTED 2026-10-22 (R4.7):** the provisioned environment carried the full
+> live leg — `github-live` (`scripts/live-verify.sh github-live`) ran the real
+> GitHub Issues adapter end-to-end on `SteveVitali/hh-live-sandbox`: one webhook
+> registered (pre-state `GET`, `DELETE` + verified-absent re-`GET` in the trap),
+> a signed `X-Hub-Signature-256` `issues` delivery admitted at
+> `fleet.webhook_ingress` (secret resolved by `key_ref` through the real
+> `CredentialBroker`), `fleet.reconcile` folded it to `WorkItem`
+> `gh-SteveVitali-hh-live-sandbox-2` (`dispatching`), replay dedupe +
+> stale-window no-op verified, and the packaged `hh-github-issues` variant ran
+> `subprocess_confined` capability-probe + `list`/`get` over the live snapshot.
+> The test issue is closed + `hh-live-test`-labeled (issues are undeletable).
+> Evidence: `hh-live-evidence/1` `docs/build/reports/live/2026-10-22-github-live.json`;
+> credentials `provided: yes` only — no value in any artifact. ADR-0369;
+> DF-S5.6-1 DONE; BL-04 closed.

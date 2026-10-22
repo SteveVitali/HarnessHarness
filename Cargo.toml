@@ -455,6 +455,10 @@ members = [
     # `crates/hh-tracker-fixture` — the packaged `work_source_adapter`
     # reference variant binary (the L5 lane's fixture half; S5.6).
     "crates/hh-tracker-fixture",
+    # `crates/hh-github-issues` — the packaged `work_source_adapter`
+    # GitHub Issues variant binary (the L5 lane's real tracker half;
+    # R4.7, HUMAN-H2 "GitHub Issues + tunnel").
+    "crates/hh-github-issues",
     # `crates/hh-evolution` — the §05h evolution-pipeline fold/driver
     # (R-2.9.5; ticket S6.1a; ADR-0195/0196): the closed S0–S10 candidate
     # state machine over durable `measurement.evolution.*` rows (kernel

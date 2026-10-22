@@ -287,6 +287,7 @@ dependencies = [
  "hh-evolution",
  "hh-experiment",
  "hh-fleet",
+ "hh-fleet-adapter",
  "hh-gateway",
  "hh-hir",
  "hh-hosting",
@@ -302,6 +303,7 @@ dependencies = [
  "hh-secrets",
  "hh-telemetry",
  "hh-tls",
+ "hh-varhost",
  "hh-verification",
  "hh-wire",
 ]
@@ -428,6 +430,17 @@ dependencies = [
  "hh-secrets",
  "hh-telemetry",
  "hh-tls",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-github-issues"
+version = "0.0.1"
+dependencies = [
+ "hh-embed-schema",
+ "hh-fleet-adapter",
+ "hh-plugin-fixture",
+ "hh-varhost",
  "hh-wire",
 ]
 

@@ -337,7 +337,7 @@ impl SignedWebhookIngress {
             .ok_or_else(|| IngressError::MalformedPayload {
                 detail: "item required".into(),
             })?;
-        let mut init =
+        let init =
             WorkItemInit::from_json(item_json).map_err(|e| IngressError::MalformedPayload {
                 detail: format!("item: {e:?}"),
             })?;
@@ -345,6 +345,27 @@ impl SignedWebhookIngress {
             .get("delivery_id")
             .and_then(Json::as_str)
             .map(str::to_string);
+        let occurred_at = o
+            .get("occurred_at_ms")
+            .and_then(Json::as_int)
+            .map(|i| i.max(0) as u64)
+            .unwrap_or(now_ms);
+        Ok(self.accept_occurrence(init, item_json, delivery_id, occurred_at, now_ms))
+    }
+
+    /// The shared verify→key→enqueue tail (`receive` and the GitHub
+    /// raw-body lane ride it — one OQ-313 keying + window table, CC1):
+    /// the namespaced occurrence key, the volatile-stripped content-hash
+    /// idempotency key, the `ingress(source_ref)` provenance stamp, the
+    /// window label, and the queue push.
+    pub(crate) fn accept_occurrence(
+        &mut self,
+        mut init: WorkItemInit,
+        item_json: &Json,
+        delivery_id: Option<String>,
+        occurred_at: u64,
+        now_ms: u64,
+    ) -> IngressOutcome {
         if delivery_id.is_some() {
             self.saw_delivery_id = true;
         }
@@ -381,11 +402,6 @@ impl SignedWebhookIngress {
         if !dup {
             self.seen.insert(occurrence_id.clone(), now_ms);
         }
-        let occurred_at = o
-            .get("occurred_at_ms")
-            .and_then(Json::as_int)
-            .map(|i| i.max(0) as u64)
-            .unwrap_or(now_ms);
         self.queue.push_back(SourceOccurrence {
             occurrence_id: occurrence_id.clone(),
             trigger_kind: "external".to_string(),
@@ -394,11 +410,11 @@ impl SignedWebhookIngress {
             observed_at_ms: occurred_at,
             actor: "webhook".to_string(),
         });
-        Ok(if dup {
+        if dup {
             IngressOutcome::Duplicate { occurrence_id }
         } else {
             IngressOutcome::Received { occurrence_id }
-        })
+        }
     }
 
     /// Drain the queue — the adapter's `occurrences()` seam.
@@ -409,7 +425,7 @@ impl SignedWebhookIngress {
 
 /// Constant-time hex compare (a signature check never short-circuits on
 /// a prefix — the timing channel is real even in-process).
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -438,6 +454,10 @@ pub struct WebhookAdapter {
     /// The pinned records `list`/`get` serve (the adapter's read
     /// minimum — normalized `WorkSourceRecord`s).
     pub records: Vec<Json>,
+    /// The GitHub dialect config (the `github` member — R4.7). Its
+    /// presence arms the raw-body `X-Hub-Signature-256` lane
+    /// (`receive_github`); absent, that lane refuses typed.
+    pub github: Option<crate::github::GithubConfig>,
 }
 
 impl WebhookAdapter {
@@ -454,6 +474,7 @@ impl WebhookAdapter {
         const KNOWN: &[&str] = &[
             "schema_version",
             "webhook",
+            "github",
             "suspended",
             "activate_run",
             "records",
@@ -472,6 +493,10 @@ impl WebhookAdapter {
                 detail: "webhook adapter doc requires the webhook member".into(),
             }
         })?)?;
+        let github = match o.get("github") {
+            None | Some(Json::Null) => None,
+            Some(g) => Some(crate::github::GithubConfig::from_json(g)?),
+        };
         let suspended_set = match o.get("suspended") {
             None | Some(Json::Null) => BTreeSet::new(),
             Some(Json::Arr(a)) => a
@@ -534,6 +559,7 @@ impl WebhookAdapter {
             suspended_set,
             runnable,
             records,
+            github,
         })
     }
 
@@ -549,6 +575,49 @@ impl WebhookAdapter {
         now_ms: u64,
     ) -> Result<IngressOutcome, IngressError> {
         let out = self.ingress.receive(delivery, signature, key, now_ms)?;
+        if self.ingress.saw_delivery_id {
+            self.caps.probe_with("push_delivery_id", true);
+        }
+        Ok(out)
+    }
+
+    /// `receive_github(raw_body, signature, delivery_id, event, key,
+    /// now)` — the GitHub lane (R4.7): `X-Hub-Signature-256`
+    /// (`sha256=<hex>`) over the *raw* request body, then the shared
+    /// verify→key→enqueue tail. The `github` config member arms the
+    /// lane; without it the call refuses typed. `key` is the
+    /// broker-resolved `key_ref` secret — verification only.
+    pub fn receive_github(
+        &mut self,
+        raw_body: &str,
+        signature: &str,
+        delivery_id: Option<&str>,
+        event: &str,
+        key: &[u8],
+        now_ms: u64,
+    ) -> Result<IngressOutcome, IngressError> {
+        let Some(cfg) = &self.github else {
+            return Err(IngressError::MalformedPayload {
+                detail: "the github lane requires the source doc's github member".into(),
+            });
+        };
+        crate::github::verify_sig256(raw_body, signature, key)?;
+        let payload =
+            hh_wire::json::parse(raw_body).map_err(|_| IngressError::MalformedPayload {
+                detail: "github raw body is not JSON".into(),
+            })?;
+        let item_json = crate::github::event_item(event, &payload, cfg)?;
+        let init =
+            WorkItemInit::from_json(&item_json).map_err(|e| IngressError::MalformedPayload {
+                detail: format!("github item: {e:?}"),
+            })?;
+        let out = self.ingress.accept_occurrence(
+            init,
+            &item_json,
+            delivery_id.map(str::to_string),
+            now_ms,
+            now_ms,
+        );
         if self.ingress.saw_delivery_id {
             self.caps.probe_with("push_delivery_id", true);
         }

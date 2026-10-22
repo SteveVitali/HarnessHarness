@@ -1,0 +1,25 @@
+{
+  "note": "Recorded GitHub Issues REST shape — the `GET /repos/{owner}/{repo}/issues` response member shape the R4.7 live leg captures from the private sandbox (secrets and repo-specific identifiers redacted to the fixture coordinate acme/sandbox). Two issues: one open+assigned+labeled, one closed.",
+  "issues": [
+    {
+      "number": 7,
+      "title": "Wire the webhook",
+      "state": "open",
+      "html_url": "https://github.com/acme/sandbox/issues/7",
+      "assignee": { "login": "octocat" },
+      "assignees": [ { "login": "octocat" } ],
+      "labels": [ { "name": "hh-live-test" }, { "name": "bug" } ],
+      "updated_at": "2026-10-21T00:00:07Z"
+    },
+    {
+      "number": 3,
+      "title": "Bootstrap the sandbox",
+      "state": "closed",
+      "html_url": "https://github.com/acme/sandbox/issues/3",
+      "assignee": null,
+      "assignees": [],
+      "labels": [ { "name": "chore" } ],
+      "updated_at": "2026-10-20T23:00:00Z"
+    }
+  ]
+}

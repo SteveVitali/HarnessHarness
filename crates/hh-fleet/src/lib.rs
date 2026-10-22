@@ -18,6 +18,7 @@
 pub mod capabilities;
 pub mod engine;
 pub mod errors;
+pub mod github;
 pub mod identity;
 pub mod ingress;
 pub mod org_policy;
