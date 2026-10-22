@@ -1,6 +1,6 @@
 # GATE-G7 readout — Round-4 rulings gate ("GATE-R4R")
 
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 *Append-only. Each operator reading is a new dated block; never edit an earlier one.*
 
@@ -126,3 +126,17 @@ objection needs words).
 
 - [ ] Operator disposition recorded in `docs/build/LEDGER.md` GATE DECISIONS and this file as
       PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE (+ what would pass it).
+
+## Operator act — 2026-10-22T12:15Z
+
+**"Adopt all"** (Devin CLI structured question — the operator's verbatim selection).
+
+Every proposed disposition in all 7 brief packages is adopted as proposed (146 ids — 21
+resolve-with-evidence / 82 adopt-interim-as-final / 12 descope-by-ADR / 27 needs-code-leg /
+4 pointer-only). Recorded in `docs/build/LEDGER.md` GATE DECISIONS `### Round 4` (the
+2026-10-22 GATE-G7 row). The standing carries (15 size deviations, the DeclaredPricing
+limitation, the open DF/BL accounting rows) stand as recorded — silence on them is the
+operator's acceptance of the recorded state, not a new ruling.
+
+Next: the scoped `decompose-spec mode=extend` fleshes skeletons R4.15a–R4.15e from the
+adopted set; each flesh gets a Phase-4 fresh-context review before its ticket runs.
