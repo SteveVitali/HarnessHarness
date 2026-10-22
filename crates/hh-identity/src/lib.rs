@@ -12,7 +12,7 @@
 //! the one tree rule — [`idp`], [`tree`]), `identify`/`verify` sharing the canonicalizer; the
 //! five identity [`kinds`] and N1–N8; [`refs::VersionedRef`]; both configuration ids ([`config`]);
 //! the local single-namespace [`names`] index with `publish`/`resolve`; `supersede`/`revoke`
-//! records and edges with the derived `StaleIndex` ([`supersede`]); the [`sameness`] ladder
+//! records and edges with the derived `StaleIndex` ([`supersede`]); the [`mod@sameness`] ladder
 //! L0–L4; the reproducibility levels R0–R3 and [`repro::InstrumentRecord`]; the results/audit
 //! [`rowkeys`]; and the golden [`corpus`] (AC-1…-5, -12). Full revocation *enforcement* in
 //! `resolve`/retrieval (Stage 2), `BundleManifest`/`reproduce` (Stage 3) and rotation (Stage 4)

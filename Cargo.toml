@@ -6,8 +6,8 @@
 # dependency of `hh-secrets` admitted by ADR-0359 (the DPoP-verifier scope plus `ring::aead`
 # + `ring::rand`, consumed by R3.8's blob-pool AEAD under ADR-0361 — nothing else imports the
 # crate), and the rustls graph of `hh-tls` admitted by ADR-0365
-# (`rustls =0.23.46` on the ADR-0359 `ring` provider + `rustls-webpki =0.103.15`
-# + `webpki-roots =1.0.9`, default features off — the closed
+# (`rustls =0.23.46` on the ADR-0359 `ring` provider + `rustls-webpki =0.103.16`
+# + `webpki-roots =1.0.10`, default features off — the closed
 # HTTPS-client / TLS-server / mTLS scope; nothing else imports them).
 # All other runtime code is
 # pure standard library; builds are lockfile-pinned and reproducible, and `cargo build

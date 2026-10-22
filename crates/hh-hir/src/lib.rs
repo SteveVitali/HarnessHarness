@@ -12,7 +12,7 @@
 //! `seal`-basis endorsement) and `hh-wire` (the one canonicalizer + `idp/1` hashing). It has
 //! **no** dependency on the Hosting ABI — `OpaqueProcess` is a HIR record (AC-IR-04).
 //!
-//! The wire schema is defined once in [`schema`] (CC7): parse via
+//! The wire schema is defined once in `schema` (CC7): parse via
 //! [`document::parse_document`] (`NonCanonicalInput` / `MissingProvenance` / `UnknownKind` /
 //! `DialectUnsupported`), encode via `to_json`/`canonical_bytes`.
 
@@ -67,7 +67,7 @@ pub use speculation::{SpeculationPolicy, SpeculativeClass};
 pub use validate::validate;
 
 /// The canonical-codec entry points the out-of-process seam needs (`hh-ir-op`; AC-IR-10) —
-/// thin wrappers over the [`schema`] source of truth.
+/// thin wrappers over the `schema` source of truth.
 pub mod wire {
     use hh_wire::json::Json;
 

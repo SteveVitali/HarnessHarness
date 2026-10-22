@@ -3,7 +3,7 @@
 //! P2's "no detail on missing/invalid token" applies to the whole gate).
 //!
 //! Posture map:
-//! - **P1** — loopback by default; [`GateConfig::bind`] is parsed and the
+//! - **P1** — loopback by default; `GateConfig::bind` is parsed and the
 //!   off-loopback rule fires at startup ([`GateConfig::validate`]).
 //! - **P2** — every request carries `Authorization: Bearer <token>`,
 //!   constant-time compare ([`token_eq`]), ≥128-bit token minted by

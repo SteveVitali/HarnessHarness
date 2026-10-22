@@ -394,7 +394,7 @@ impl<'a> ExperimentEngine<'a> {
 
     /// `bind_lease(store, docs, ctx, run_id, lease)` — bind to an already-open
     /// experiment run under a writer lease the *caller* owns (the boundary
-    /// holds leases across ops; [`take_binding`] hands the — possibly
+    /// holds leases across ops; [`Self::take_binding`] hands the — possibly
     /// renewed — lease back). Drop does not release it.
     pub fn bind_lease(
         store: &'a mut Store,

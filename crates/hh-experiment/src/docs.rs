@@ -103,7 +103,7 @@ impl LabDocs {
         }
     }
 
-    /// `put(kind, body) → id` — the kind's identity rule ([`LabDocs::doc_id`]),
+    /// `put(kind, body) → id` — the kind's identity rule (`LabDocs::doc_id`),
     /// durable-before-return, idempotent.
     pub fn put(&self, kind: &str, body: &Json) -> Result<String, ExperimentError> {
         let id = Self::doc_id(kind, body)?;

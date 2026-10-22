@@ -697,7 +697,7 @@ pub fn cost_view(
 // is the tree extension of `cost_view`: the caller supplies the tree's
 // members (each run's durable prefix plus its parent link, the manifest's
 // `parent_run_id`/`spawn_event` coordinate); the view folds each run with
-// the same [`cost_fold`] the single-run view uses, sums every member's
+// the same `cost_fold` the single-run view uses, sums every member's
 // totals into the tree totals (each run's rows enter the sum exactly once
 // — a duplicated member id is a typed refusal, never a silent merge), and
 // renders each child under its parent's `subagent` scope.
@@ -771,7 +771,7 @@ impl std::error::Error for CostTreeError {}
 
 /// `cost_view(run_tree)` — the M12 rollup (AC-R-2.9.1-9). `members` is the
 /// tree walked from `root_run_id`; each member folds through the same
-/// [`cost_fold`] the single-run view uses. The tree `totals` are the sum of
+/// `cost_fold` the single-run view uses. The tree `totals` are the sum of
 /// the members' totals — a grandchild is counted once, under *its* parent's
 /// `subagent` scope; `subagents[parent][child]` carries each child's own-run
 /// totals exactly once (never the subtree sum — nesting composes the same

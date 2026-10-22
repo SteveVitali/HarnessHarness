@@ -2,7 +2,7 @@
 //! sealed [`EnvelopePolicy`] at the six guard points — **stop, refuse,
 //! delay or tighten only**: it never chooses the next action, never grants,
 //! never widens (INV-7; a verdict that would is an
-//! [`InvariantId::Inv7`] violation, not a behaviour).
+//! [`hh_ontology::control::InvariantId::Inv7`] violation, not a behaviour).
 //!
 //! The contract rows land here: `arm(run, envelope_policy_ref, lease)` →
 //! [`EnvelopeState`] (every counter derived from the ledger); `guard(point,
@@ -245,7 +245,7 @@ impl Envelope {
     }
 
     /// `expire(run, lease, scope_id)` — the kind-fixed terminal plus
-    /// `control.timeout.fired` (the payload is a [`GuardEvent`] the driver
+    /// `control.timeout.fired` (the payload is a [`crate::guards::GuardEvent`] the driver
     /// appends in the scope).
     pub fn expire(
         &self,

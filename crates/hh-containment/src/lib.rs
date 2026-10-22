@@ -39,7 +39,7 @@
 //!   It is honest about what it is: a *model*, not a live sandbox — real
 //!   EP2 enforcement lands with the environment record and helper protocol
 //!   (S1.16 / R-2.2.5).
-//! - **`attach`** ([`attach`]) — the handle-slot operation: apply + probe +
+//! - **`attach`** ([`mod@attach`]) — the handle-slot operation: apply + probe +
 //!   report, fail-closed on helper-absent / unsupported-backend /
 //!   unknown-evidence (I-C4); `warn_and_degrade` stamps
 //!   `containment_degraded` and never applies to Lab runs.
@@ -56,7 +56,7 @@
 //!   pass over the mediator's own resolution — the SSRF pivot check) and
 //!   [`egress::ApprovalCache`] (narrowing-only, version-pinned). The runtime
 //!   mediator lives in `hh-env::egress::EgressMediator`.
-//! - **`amend`** ([`amend`]) — the §5g.4 amendment verb: additive
+//! - **`amend`** ([`mod@amend`]) — the §5g.4 amendment verb: additive
 //!   `ContainmentDiff`, basis ∈ `allowed_bases`, endorser authority floor
 //!   per basis, `strict` refusals, persistence-ceiling check, fresh
 //!   `version_id`.

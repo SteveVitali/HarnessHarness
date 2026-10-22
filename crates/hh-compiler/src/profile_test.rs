@@ -16,7 +16,7 @@
 //! * **V2** owned-field discipline against the **null profile**:
 //!   `member_diff(null, profile) ⊆ owned_fields(profile)`.
 //! * **V3** debt completeness: every rule's `debt` and the profile's `expiry`
-//!   record satisfy [`ProfileDebtRecord::is_complete`].
+//!   record satisfy [`crate::profile::ProfileDebtRecord::is_complete`].
 //! * **V4** capability consistency: no rule assumes an `unsupported`
 //!   capability in its declared dependency set
 //!   ([`capability_dependencies`]); `*_required` capabilities *derive*

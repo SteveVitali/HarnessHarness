@@ -12,7 +12,7 @@
 //! - `reserve_mandatory` sums `reservations` + the omission-item reserve +
 //!   the kernel's advisory items.
 //! - `policy.select` sees admitted candidates only; the kernel re-checks the
-//!   `Selection` ([`policy::check_selection`]) — any widening is
+//!   `Selection` ([`crate::policy::check_selection`]) — any widening is
 //!   `PolicyViolation` with no plan (AC-R-2.4.1-4).
 //! - `enforce_budget` evicts optional items in `evict_order`
 //!   (`unfit-alone` first, then `(PriorityClass, age)`); required-only

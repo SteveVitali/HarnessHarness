@@ -1,6 +1,6 @@
 //! The canonical **decoders** — the `from_json` half of the one provenance schema
 //! (CC7: the schema source owns both directions). These mirror the `to_json` renderings
-//! in [`crate::record`], [`crate::label`] and [`crate::endorse`] exactly: a decoded value
+//! in [`crate::record`], [`crate::label`] and [`mod@crate::endorse`] exactly: a decoded value
 //! re-encodes byte-identically under the same canonicalizer (`hh-wire`).
 //!
 //! Added for S1.5 (the run ledger needs typed provenance out of stored envelopes, and the

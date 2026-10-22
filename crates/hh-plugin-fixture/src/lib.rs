@@ -5,7 +5,7 @@
 //! framed channel → strict decode → dispatch to a [`VariantLogic`] →
 //! typed replies. It owns nothing else — the *logic* is the variant.
 //!
-//! [`FixtureLogic`] is the conformance fixture: `null` (well-behaved),
+//! [`crate::fixture::FixtureLogic`] is the conformance fixture: `null` (well-behaved),
 //! `hostile` (the AC-4/AC-6 probe set — authority crossings, peer reads,
 //! forged verbs, seq gaps, oversized frames, `allow` verdicts), `guard`
 //! (canned verdicts), `crash` (die at a named phase), `slow` (sleep past

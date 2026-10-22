@@ -5,7 +5,7 @@
 //! stable core shape — `initialize`, `session/new`, `session/prompt`,
 //! `session/cancel`, `session/set_config_option`, `session/load`,
 //! `session/resume`, `session/request_permission` upcall, `session/update`
-//! notifications) and lifts the protocol observations into [`HostedEvent`]s.
+//! notifications) and lifts the protocol observations into [`crate::HostedEvent`]s.
 //!
 //! Honesty rules the adapter obeys (I-6):
 //!

@@ -10,7 +10,7 @@
 //!   facts projection;
 //! - [`vetoes`], [`compliance`], [`opacity`], [`faults`] — the metric
 //!   families over facts;
-//! - [`compare`]/[`benefits`]/[`scorecard`] — `compare`, the three benefit
+//! - [`mod@compare`]/[`benefits`]/[`scorecard`] — `compare`, the three benefit
 //!   kinds, `equivalence_run`, and `render_scorecard`;
 //! - [`oracle`] — the deterministic-oracle boundary shared by in-process
 //!   callers and the `hh-eval-oracle` subprocess (AC-R-2.9.2-11).

@@ -267,7 +267,7 @@ fn respond(
 ///
 /// `GET`/`DELETE`/other methods → `405`. Malformed requests → `400`.
 /// JSON-RPC `tools/call` `target` dedup lives in
-/// [`crate::server::handle_message`].
+/// `crate::server::handle_message`.
 pub fn serve_http(
     listener: &TcpListener,
     load: &mut dyn FnMut() -> ServedArtifact,

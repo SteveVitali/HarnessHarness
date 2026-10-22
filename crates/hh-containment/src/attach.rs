@@ -8,7 +8,7 @@
 //! The fail-closed rule (I-C4):
 //!
 //! - helper unavailable (`backend = None`), the backend refusing the policy
-//!   (`apply` → [`UnsupportedBackend`]), a stored report stale on resume, a
+//!   (`apply` → [`crate::backend::UnsupportedBackend`]), a stored report stale on resume, a
 //!   resolved ref not naming the resolved record, or `unknown` evidence on
 //!   a field group the policy *relies on* ⇒ `security.containment.
 //!   unverified` is appended and every non-`read_only` effect is refused

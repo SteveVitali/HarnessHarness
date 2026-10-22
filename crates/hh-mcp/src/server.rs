@@ -390,7 +390,7 @@ pub fn serve_dynamic(
 }
 
 /// For tests: the same loop under a fixed clock is unnecessary — the
-/// expiry probe uses `expires_at_ms` spelled against [`now_ms`]. The
+/// expiry probe uses `expires_at_ms` spelled against `now_ms`. The
 /// constant is exported so tests can spell "already expired" without a
 /// clock.
 pub const EXPIRED_EPOCH_MS: u64 = 0;

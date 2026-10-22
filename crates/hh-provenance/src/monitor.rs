@@ -9,9 +9,9 @@
 //! | 5 | endorsement legitimacy at append                          | ✅ [`crate::endorse::check_endorsement`] |
 //! | 7 | no delegate provenance above `delegate` after delegation  | ✅ [`check_no_delegate_above`] |
 //!
-//! Check 2 delegates the component-wise delta to [`classify_label_delta`] /
+//! Check 2 delegates the component-wise delta to [`crate::label::classify_label_delta`] /
 //! [`check_label_transition`] (P6 — [`crate::label`]); check 7 delegates to
-//! [`check_delegate_attenuation`] (P2 — [`crate::derive`]). Every refusal is a typed error
+//! [`check_delegate_attenuation`] (P2 — [`mod@crate::derive`]). Every refusal is a typed error
 //! (ADR-0033 D7) — never a warning, never a silent pass.
 
 use std::collections::BTreeSet;
