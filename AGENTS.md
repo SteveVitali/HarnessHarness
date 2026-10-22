@@ -70,7 +70,7 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 | `docs/` | the docs corpus — `docs/adr/` (build ADRs), `docs/tickets/` (chain + `DEFERRALS.md`), `docs/build/` (build memory); mode table in `docs/README.md` |
 | `research/` | the program ledger + research ADRs — frozen at the readiness gate |
 | `spikes/` | committed-but-throwaway measurement trees; excluded from the workspace (`exclude = ["spikes"]`) |
-| `.github/workflows/ci.yml` | fmt + build + test + drift |
+| `.github/workflows/ci.yml` | fmt + build + test + drift; docs-only heads take a fail-closed fast path (ADR-0362) |
 
 ## Build & Test
 
@@ -84,6 +84,8 @@ cargo clippy -p hh-<crate> -- -D warnings   # convention: clean on touched crate
 bash scripts/check-drift.sh           # regenerate schema artifacts; fail on drift
 bash scripts/check-removability.sh    # CC6 tier-removability gate
 bash <skills>/build-memory/scripts/check-build-memory.sh .   # build-memory hygiene
+gh workflow run ci.yml --ref <branch>   # a full run (ADR-0362 D4: per gate, never per ticket)
+gh run view <id> --json jobs,conclusion # read a full run by hand (reader lands at L4.3)
 ```
 
 Smoke: `cargo build -p hh-cli -p hh-kernel` then
@@ -176,6 +178,13 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
     `HH_HELPER_SPAWN_DEADLINE_MS` / `HH_HELPER_CONNECT_DEADLINE_MS`
     stretch the bounds (defaults stay the contract's 10 s / 5 s —
     `hh-env/src/helper.rs`; recorded at R3.7–R3.10).
+11. **CI step modes (ADR-0362).** Only `docs/` and `research/` are docs paths
+    (trailing slash included; `docsx/` is not). A `ci.yml` step that reads
+    committed content under them runs on both paths (`# ci-mode: both —
+    <reason>`); every other step after `id: path` carries
+    `if: steps.path.outputs.mode != 'fast'`. A job's own output written under
+    `docs/` (the spike sheet) is not a read. `check-ci-gating.sh` enforces the
+    convention — an unmarked step or an un-allowlisted docs read fails CI.
 
 ## Terminology
 

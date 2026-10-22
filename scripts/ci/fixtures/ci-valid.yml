@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-test-drift:
+    name: build · test · fmt · drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docs-only fast-path decision
+        id: path
+        run: echo full
+
+      - name: Build
+        if: steps.path.outputs.mode != 'fast'
+        run: cargo build
+
+      # ci-mode: both — reads committed docs/ content
+      - name: BM tools
+        run: bash scripts/check-bm-tools.sh
+
+      - name: Spike
+        if: steps.path.outputs.mode != 'fast' && github.event_name == 'workflow_dispatch'
+        run: bash scripts/spike-x.sh
+
+      - name: Compute anchor
+        id: anchor
+        if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: echo x > ci-anchor.txt
+
+      - name: Upload anchor
+        if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4

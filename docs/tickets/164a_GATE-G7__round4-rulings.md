@@ -9,8 +9,13 @@
 
 > **Milestone gate — NOT an `implement-spec` input.** The chain STOPS here until the operator dispositions the readout.
 > Never guessed past. An operator record supplies every decision; an agent must not sign or assume silence is approval.
+> Amended 2026-10-20 (R4.2a, ADR-0362): the gate's CI evidence is the D4 `full-run:`
+> line in its PHASE LOG entry (the `workflow_dispatch` full run on the chain
+> tip, read by `gh run view <id> --json jobs,conclusion` until L4.3 lands
+> `scripts/ci/full-run.sh`).
 
 ## Criterion (the operator's ruling, verbatim)
+
 "Mid-round rulings gate" (Devin CLI structured question, 2026-10-20) — recorded consequence: window-package + BL-30 briefs
 run early; this gate stops the chain for the operator's adopt / amend / decline rows; conform tickets (skeletons until
 then) land the adopted set before closure; GATE-G6 no longer carries ruling conforms.
