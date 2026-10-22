@@ -126,6 +126,16 @@ const STAGED: &[&str] = &[
     "ExperimentalRequired",
     "Refused",
 ];
+/// The staged-but-`stable` error sum (OQ-468; the §7.4 Group-S row):
+/// `Refused{stage_pending}` + the named session refusals — no
+/// `ExperimentalRequired` member (a `stable` op never carries one).
+const STAGED_STABLE: &[&str] = &[
+    "UnknownField",
+    "SchemaViolation",
+    "UnknownSession",
+    "Fenced",
+    "Refused",
+];
 const LAB: &[&str] = &[
     "UnknownField",
     "SchemaViolation",
@@ -203,6 +213,31 @@ const fn staged_exp(
             result,
             STAGED,
             Tier::Experimental,
+            false,
+        )
+    }
+}
+
+/// A declared-but-staged `stable` op — the frozen signature publishes
+/// now; dispatch answers the honest `Refused{stage_pending}` (OQ-468;
+/// the CF-488-adopted Group-S trio keeps its landed staged behaviour at
+/// the `stable` tier).
+const fn staged_stable(
+    name: &'static str,
+    group: &'static str,
+    params: &'static str,
+    result: &'static str,
+) -> OpSpec {
+    OpSpec {
+        tier: Tier::Stable,
+        implemented: false,
+        ..call(
+            name,
+            group,
+            params,
+            result,
+            STAGED_STABLE,
+            Tier::Stable,
             false,
         )
     }
@@ -477,13 +512,17 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        // `amend` — the ADR-0216 OQ-468 interim op is implemented for
-        // the C0 exhaustion path: `target = budget` mints
-        // `control.budget.amended` + lifts the driver's ceiling + wakes
-        // the parked loop (`amend{attendance|approval_mode}` answers the
-        // honest `Refused{stage_pending}` at Stage 1 — DF-S1.26-*).
+        // `amend` — promoted `experimental` → `stable` at R4.15c
+        // (OQ-468; GATE-G7 "Adopt all"; the ADR-0176/0177 amendment-log
+        // act; CF-488's adopted grouping keeps it Group W; the five
+        // `AssumptionDebtRecord`s retire `promoted_to_stable` on
+        // ADR-0216's log). Implemented for the C0 exhaustion path:
+        // `target = budget` mints `control.budget.amended` + lifts the
+        // driver's ceiling + wakes the parked loop
+        // (`amend{attendance|approval_mode}` answers the honest
+        // `Refused{stage_pending}` at Stage 1 — DF-S1.26-*).
         OpSpec {
-            tier: Tier::Experimental,
+            tier: Tier::Stable,
             implemented: true,
             ..call(
                 "amend",
@@ -493,14 +532,15 @@ pub fn registry() -> Vec<OpSpec> {
                 &[
                     "UnknownField",
                     "SchemaViolation",
-                    "ExperimentalRequired",
                     "UnknownSession",
                     "AuthorityWideningRequiresHuman",
+                    "Fenced",
+                    "AlreadyDecided",
                     "Draining",
                     "SessionDetached",
                     "Refused",
                 ],
-                Tier::Experimental,
+                Tier::Stable,
                 true,
             )
         },
@@ -822,9 +862,12 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        staged_exp("archive", "S", "ArchiveParams", "Acknowledged"),
-        staged_exp("grant", "S", "GrantParams", "Recorded"),
-        staged_exp("revoke_lease", "S", "RevokeLeaseParams", "Acknowledged"),
+        // OQ-468 (R4.15c): the Group-S trio promotes to `stable` under
+        // CF-488's adopted grouping, staying honestly staged —
+        // `Refused{stage_pending}` until their slice lands.
+        staged_stable("archive", "S", "ArchiveParams", "Acknowledged"),
+        staged_stable("grant", "S", "GrantParams", "Recorded"),
+        staged_stable("revoke_lease", "S", "RevokeLeaseParams", "Acknowledged"),
         // ── Group R — read ────────────────────────────────────────────
         call(
             "stream_events",
@@ -864,24 +907,17 @@ pub fn registry() -> Vec<OpSpec> {
             Tier::Stable,
             true,
         ),
-        OpSpec {
-            tier: Tier::Experimental,
-            requires_capability: None,
-            ..call(
-                "list_leases",
-                "R",
-                "ListLeasesParams",
-                "ListLeasesResult",
-                &[
-                    "UnknownField",
-                    "SchemaViolation",
-                    "UnknownSession",
-                    "ExperimentalRequired",
-                ],
-                Tier::Experimental,
-                true,
-            )
-        },
+        // `list_leases` — promoted `experimental` → `stable` at R4.15c
+        // (OQ-468; CF-488's adopted grouping keeps it Group R).
+        call(
+            "list_leases",
+            "R",
+            "ListLeasesParams",
+            "ListLeasesResult",
+            SESS,
+            Tier::Stable,
+            true,
+        ),
         call(
             "lineage",
             "R",

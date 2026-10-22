@@ -3322,19 +3322,21 @@ impl Store {
         None
     }
 
-    /// `gc(run, lease, addresses, policy_ref, tier, retained_until?)` — the
+    /// `gc(run, lease, addresses, policy, tier, retained_until?)` — the
     /// retention op (§5g.6 GC contract). **Durable before delete**: the
     /// `lifecycle.ledger.gc` row commits (WAL synced) before any byte leaves
     /// the blob pool, so a crash between the two still leaves the audit fact.
     /// Refusals are typed: non-`idp/1` addresses → `SchemaViolation`; a
-    /// pinned address → `Pinned{reason}` (the whole op is atomic). GC never
-    /// targets events — only blob bytes.
+    /// pinned address → `Pinned{reason}`; a `legal_hold` held on the named
+    /// policy → `Refused{gc = legal_hold}` (OQ-173 — admission order: the
+    /// hold check precedes the durable row, so a refused gc mutates
+    /// nothing). GC never targets events — only blob bytes.
     pub fn gc(
         &mut self,
         run_id: &str,
         lease: &Lease,
         addresses: Vec<String>,
-        policy_ref: &str,
+        policy: &crate::retention::RetentionPolicy,
         tier: &str,
         retained_until: Option<u64>,
     ) -> Result<EventEnvelope, LedgerError> {
@@ -3342,7 +3344,7 @@ impl Store {
             run_id,
             lease,
             addresses,
-            policy_ref,
+            policy,
             tier,
             retained_until,
             &BTreeSet::new(),
@@ -3354,18 +3356,32 @@ impl Store {
     /// Lab side knows and the store cannot see. A bound address refuses
     /// `Pinned{bound_by_retention_policy}` exactly like a live fork prefix
     /// pin — atomic over the whole requested set, durable row only after
-    /// every pin check clears.
+    /// every pin check clears. `legal_hold` is checked at admission here
+    /// (OQ-173): every gc route — `gc` delegates, and the lab-wide
+    /// whole-run record (ADR-0163 D4) has this same admission — refuses
+    /// `Refused{gc = legal_hold}` while the named policy is held.
     #[allow(clippy::too_many_arguments)]
     pub fn gc_bounded(
         &mut self,
         run_id: &str,
         lease: &Lease,
         addresses: Vec<String>,
-        policy_ref: &str,
+        policy: &crate::retention::RetentionPolicy,
         tier: &str,
         retained_until: Option<u64>,
         bound: &BTreeSet<String>,
     ) -> Result<EventEnvelope, LedgerError> {
+        // OQ-173's admission gate (R4.15c): a held policy refuses *before*
+        // the lease/pin checks or the durable row — nothing is recorded or
+        // deleted by a refused gc. `legal_hold` is settable/clearable only
+        // at `authority ≥ principal` (`RetentionPolicy::set_legal_hold`).
+        policy.validate()?;
+        if policy.legal_hold {
+            return Err(LedgerError::Refused {
+                op: "gc",
+                reason: "legal_hold",
+            });
+        }
         let rec = self.active_lease(run_id, lease)?;
         for a in &addresses {
             if !is_pinned_id(a) {
@@ -3395,7 +3411,7 @@ impl Store {
             "addresses".to_string(),
             Json::Arr(addresses.iter().map(Json::str).collect()),
         );
-        members.insert("policy_ref".to_string(), Json::str(policy_ref));
+        members.insert("policy_ref".to_string(), Json::str(&policy.policy_ref));
         members.insert("tier".to_string(), Json::str(tier));
         if let Some(t) = retained_until {
             members.insert("retained_until".to_string(), Json::Int(t as i64));

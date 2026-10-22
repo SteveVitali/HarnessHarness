@@ -588,7 +588,14 @@ fn ac_2_2_4_8_fork_pins_source_prefix_content_against_gc_and_redact() {
         .unwrap();
     assert_eq!(rec.at_seq, cut);
     // GC from the source run — the child's refs pin the address.
-    match s.gc(&run, &lease, vec![blob.id()], "policy:default", "hot", None) {
+    match s.gc(
+        &run,
+        &lease,
+        vec![blob.id()],
+        &gc_policy("policy:default"),
+        "hot",
+        None,
+    ) {
         Err(LedgerError::Pinned { reason, .. }) => {
             assert!(reason.starts_with("referenced_by_run:"), "{reason}");
         }
@@ -652,7 +659,7 @@ fn ac_2_2_4_8_snapshot_ref_is_pinned_into_the_fork_row() {
         &run,
         &lease,
         vec![snap_blob.id()],
-        "policy:default",
+        &gc_policy("policy:default"),
         "hot",
         None,
     ) {
@@ -705,4 +712,14 @@ fn trace_only_marks_the_record_read_only() {
     assert_eq!(rec2.replay_mode, ReplayMode::Exact);
     assert_eq!(rec2.effective_replay, ReplayMode::Observational);
     assert_eq!(rec2.downgrade_reason.as_deref(), Some("coverage"));
+}
+
+fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
+    hh_ledger::retention::RetentionPolicy {
+        policy_ref: policy_ref.to_string(),
+        blob_residency_ms: 0,
+        bundle_retention_ms: 0,
+        compress_cold: false,
+        legal_hold: false,
+    }
 }

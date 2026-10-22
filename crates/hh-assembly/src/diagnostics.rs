@@ -32,8 +32,9 @@ impl Severity {
     }
 }
 
-/// `stage ∈ {desugar, compose, resolve, validate:1..7, link, lower, instantiate, resume}`
-/// (§3.3.8 — the stage that produced the diagnostic).
+/// `stage ∈ {desugar, compose, resolve, validate:1..7, link, lower, instantiate, resume, seal}`
+/// (§3.3.8 — the stage that produced the diagnostic; `seal` added by CF-492 at R4.15c —
+/// the stage-5 seal self-check's producing stage).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stage {
     /// Desugaring (host-surface → assembly; the assembler's front end).
@@ -52,6 +53,8 @@ pub enum Stage {
     Instantiate,
     /// `verify_resume`.
     Resume,
+    /// `seal` — the stage-5 seal self-check's producing stage (CF-492, R4.15c).
+    Seal,
 }
 
 impl Stage {
@@ -73,6 +76,7 @@ impl Stage {
             Stage::Lower => "lower",
             Stage::Instantiate => "instantiate",
             Stage::Resume => "resume",
+            Stage::Seal => "seal",
         }
     }
 }
@@ -745,6 +749,7 @@ fn parse_stage(s: &str) -> Option<Stage> {
         "lower" => Stage::Lower,
         "instantiate" => Stage::Instantiate,
         "resume" => Stage::Resume,
+        "seal" => Stage::Seal,
         _ => {
             if let Some(n) = s.strip_prefix("validate:") {
                 Stage::Validate(n.parse().ok()?)

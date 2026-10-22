@@ -1631,8 +1631,10 @@ fn w_experimental_and_capability_gates() {
         )),
         "CapabilityNotDeclared"
     );
-    // fork/respond_elicitation/report_host_effect/list_leases are
+    // fork/respond_elicitation/report_host_effect/navigate are
     // experimental — the experimental gate precedes the capability gate.
+    // (`list_leases` promoted to `stable` at R4.15c — OQ-468; it no
+    // longer sits in this loop.)
     for (m, p) in [
         (
             "fork",
@@ -1668,10 +1670,6 @@ fn w_experimental_and_capability_gates() {
             ]),
         ),
         (
-            "list_leases",
-            Json::obj(vec![("session_id", Json::str(id.clone()))]),
-        ),
-        (
             "navigate",
             Json::obj(vec![("session_id", Json::str(id.clone()))]),
         ),
@@ -1682,6 +1680,110 @@ fn w_experimental_and_capability_gates() {
             "{m}"
         );
     }
+}
+
+/// OQ-468 (R4.15c; GATE-G7 "Adopt all"; the ADR-0176/0177
+/// amendment-log act) — the five adopted ops are `stable`: callable
+/// with no `experimental` opt-in, in the CF-488-adopted groups, with the
+/// frozen error sums. Removal-sensitive: reverting any op's tier fails
+/// the stability-map assertions; reverting the gate would leave the
+/// five ops `ExperimentalRequired`-refused without opt-in.
+#[test]
+fn r4_15c_oq_468_five_ops_stable() {
+    // The schema source's tiers — the published signature is the
+    // operative contract (CC7).
+    for (name, group) in [
+        ("amend", "W"),
+        ("list_leases", "R"),
+        ("archive", "S"),
+        ("grant", "S"),
+        ("revoke_lease", "S"),
+    ] {
+        let op = hh_embed_schema::ops::registry()
+            .into_iter()
+            .find(|o| o.name == name)
+            .unwrap_or_else(|| panic!("{name} not registered"));
+        assert_eq!(
+            op.tier,
+            hh_embed_schema::ops::Tier::Stable,
+            "{name} promotes to stable (OQ-468)"
+        );
+        assert_eq!(op.group, group, "{name} keeps the CF-488 grouping");
+        assert!(
+            !op.errors.contains(&"ExperimentalRequired"),
+            "{name}'s frozen error sum carries no ExperimentalRequired"
+        );
+    }
+    // No `experimental` capability — a stable op answers its own
+    // contract, never the opt-in gate.
+    let mut svc = service();
+    let r = call(&mut svc, "hello", hello_params(caps_json(&[])));
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    // `list_leases` (Group R, implemented) answers its honest empty set.
+    let r = call(
+        &mut svc,
+        "list_leases",
+        Json::obj(vec![("session_id", Json::str(id.clone()))]),
+    );
+    assert_eq!(
+        r.get("result").and_then(|x| x.get("leases")),
+        Some(&Json::Arr(vec![])),
+        "list_leases answers at stable tier without opt-in"
+    );
+    // The Group-S trio stays honestly staged — `Refused{stage_pending}`,
+    // never `ExperimentalRequired` and never a fabricated result.
+    for (m, p) in [
+        (
+            "archive",
+            Json::obj(vec![("session_id", Json::str(id.clone()))]),
+        ),
+        (
+            "grant",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                (
+                    "grant",
+                    Json::obj(vec![("kind", Json::str("approver_grant"))]),
+                ),
+                ("idempotency_key", Json::str("g-1")),
+            ]),
+        ),
+        (
+            "revoke_lease",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                ("lease_id", Json::str("l-1")),
+                ("idempotency_key", Json::str("r-1")),
+            ]),
+        ),
+    ] {
+        let e = err_kind(&call(&mut svc, m, p));
+        assert_eq!(e, "Refused", "{m}: staged stable op refuses typed");
+        assert_ne!(e, "ExperimentalRequired", "{m} is not gated");
+    }
+    // `amend` (Group W, implemented) reaches its own refusal shape —
+    // an unknown session is `UnknownSession`, not the opt-in gate.
+    let e = call(
+        &mut svc,
+        "amend",
+        Json::obj(vec![
+            ("session_id", Json::str("sess-missing")),
+            ("target", Json::str("budget")),
+            ("value", Json::obj(vec![])),
+            ("idempotency_key", Json::str("a-1")),
+        ]),
+    );
+    assert_ne!(
+        err_kind(&e),
+        "ExperimentalRequired",
+        "amend is not gated at stable tier"
+    );
 }
 
 #[test]
