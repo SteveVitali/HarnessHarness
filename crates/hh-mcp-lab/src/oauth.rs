@@ -119,7 +119,7 @@ pub fn open(t: Transport, url: &HttpUrl) -> Result<Box<dyn Io>, OAuthError> {
 }
 
 /// One round-trip under the codec — `write_request` + `read_response_full`.
-fn call(
+fn http_call(
     t: Transport,
     url: &str,
     method: &str,
@@ -227,7 +227,7 @@ pub fn initiate(
     client_id: &str,
 ) -> Result<DeviceGrant, OAuthError> {
     let body = form(&[("client_id", client_id), ("scope", "")]);
-    let (status, j) = call(
+    let (status, j) = http_call(
         t,
         &flow.device_code_url,
         "POST",
@@ -287,7 +287,7 @@ pub fn poll_once(
         ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
         ("device_code", device_code),
     ]);
-    let (status, j) = call(
+    let (status, j) = http_call(
         t,
         &flow.token_url,
         "POST",
@@ -389,7 +389,7 @@ impl OAuthIssuer {
     /// Bearer`. The subject is the provider's answer, never a guess.
     pub fn verify_bearer(&self, token: &str) -> BearerVerdict {
         let auth = format!("Bearer {token}");
-        match call(
+        match http_call(
             self.transport,
             &self.user_url,
             "GET",
