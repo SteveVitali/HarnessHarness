@@ -285,7 +285,7 @@ Every concept is one of three things (ADR-0012 decision 8; Ontology §4g): deriv
 | AC | Criterion | Discharged by |
 |---|---|---|
 | AC-A2-1 | §2 contains the two-level statement, the seven planes with core questions, the two boundaries, the three cross-cutting attributes, and a `home` assignment for every entity kind, component class and event family named anywhere in the spec; a missing row fails readiness (the interim rows of §3.1.3 under ADR-0216 count as rows until OQ-467 closes). | §2.1–§2.4; §2.2.3; §3.1.3 `classify_home` table |
-| AC-A2-2 | The formal model of §2.5 is present; every symbol used elsewhere (κ, B, β, Δ, Ψ, θ, M, J) resolves to §2. | §2.5 |
+| AC-A2-2 | The formal model of §2.5 is present; every symbol used elsewhere (θ, M, E, D, B, κ, β, Δ, 𝒟, Ψ, J, π_M, π_system) resolves to §2. | §2.5 |
 | AC-A2-3 (T-LCD-13) | The taxonomy contains the three chain events with `detector` provenance; a per-profile compliance metric is computable from ledger events alone for deterministic stages. | ADR-0026; ADR-0045; §5, §10 |
 | AC-A2-4 (T-LCD-15) | Every metric carries `applies_to_classes` and `requires_observability`; a mixed-class comparison renders `n/a` on inadmissible cells; a one-native-one-hosted fixture demonstrates it. | ADR-0045; ADR-0013; §6, §10 |
 | AC-A2-5 (T-LCD-09) | A configuration record has all six factors explicit and β is representable as a factor; "does variant V help M₁ more than M₂?" is expressible against the data model. | ADR-0036; ADR-0045; ADR-0160 |
