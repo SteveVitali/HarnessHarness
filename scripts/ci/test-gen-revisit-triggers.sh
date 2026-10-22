@@ -62,7 +62,8 @@ else
 fi
 
 # 2. place it, regenerate, assert the three classes + verbatim trigger text
-sed -i '' 's/^BL-47,quiet,process,ADR-0001/BL-47,quiet,process,ADR-0001; ADR-0009/' "$FIX/docs/build/BACKLOG.csv"
+CSV_FIX="$FIX/docs/build/BACKLOG.csv"
+sed 's/^BL-47,quiet,process,ADR-0001/BL-47,quiet,process,ADR-0001; ADR-0009/' "$CSV_FIX" > "$CSV_FIX.tmp" && mv "$CSV_FIX.tmp" "$CSV_FIX"
 GEN_TRIGGERS_ROOT="$FIX" GEN_TRIGGERS_OUT="$OUT" bash "$GEN" >/dev/null
 grep -qF '| ADR-0001 | Reopen when the sky falls. |' "$OUT" \
   && grep -qF '| ADR-0009 | Reopen never (unplaced fixture). |' "$OUT" \
@@ -81,7 +82,7 @@ GEN_TRIGGERS_ROOT="$FIX" GEN_TRIGGERS_OUT="$OUT" bash "$GEN" --check >/dev/null 
   && bad "--check passed on planted drift" || say "ok  --check catches drift"
 
 # 4. determinism — regenerate twice, byte-identical
-sed -i '' '$d' "$OUT" 2>/dev/null || true
+sed '$d' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
 GEN_TRIGGERS_ROOT="$FIX" GEN_TRIGGERS_OUT="$OUT" bash "$GEN" >/dev/null
 cp "$OUT" "$TMP/first.md"
 GEN_TRIGGERS_ROOT="$FIX" GEN_TRIGGERS_OUT="$OUT" bash "$GEN" >/dev/null
