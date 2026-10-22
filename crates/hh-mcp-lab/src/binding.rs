@@ -119,8 +119,10 @@ pub enum CallerCredential {
         /// The audience the token must name.
         audience: String,
     },
-    /// Mutual-TLS client certificate (the C2 arm — the record shape is
-    /// declared; resolution is `stage_pending` at this slice).
+    /// Mutual-TLS client certificate — the TLS handshake's verified
+    /// peer identity IS the credential (R4.7a: resolves through the
+    /// declared subject→binding map on the TLS arm; `transport_absent`
+    /// on transports with no handshake).
     Mtls {
         /// The certificate's `SecretRef`-style reference.
         cert_ref: String,
@@ -465,10 +467,18 @@ pub enum CredentialRefusal {
     /// The credential's backing binding is dead — revoked, expired or
     /// rotated (`MintedVerdict::Revoked`).
     CredentialRevoked,
-    /// The credential kind has no exchange at this slice — `mtls` needs
-    /// the TLS handshake's peer identity, which the loopback transport
-    /// never runs (BL-31; environment-gated, never fabricated).
+    /// The credential kind's exchange never ran on this transport —
+    /// `mtls` needs the TLS handshake's peer identity; a bearer-side
+    /// `mtls` grant on the plain HTTP arm has none (R4.7a: the TLS arm
+    /// resolves through `resolve_mtls_peer`; `transport_absent` remains
+    /// only where TLS is not configured).
     TransportAbsent,
+    /// The credential's declared issuer exchange could not run —
+    /// dial/TLS/IO/timeout or a non-refusal status (R4.7a: distinct
+    /// from `credential_invalid`, which is the issuer's *answer*; this
+    /// is the transient no-answer — the caller retries, never a guessed
+    /// subject).
+    IssuerUnreachable,
 }
 
 impl CredentialRefusal {
@@ -481,6 +491,7 @@ impl CredentialRefusal {
             CredentialRefusal::CredentialExpired => "credential_expired",
             CredentialRefusal::CredentialRevoked => "credential_revoked",
             CredentialRefusal::TransportAbsent => "transport_absent",
+            CredentialRefusal::IssuerUnreachable => "issuer_unreachable",
         }
     }
 }
