@@ -109,6 +109,52 @@ order (the E1 driver is `hh-registry::corpus::outputs`):
 
 `expected-outputs.json` is the canonical byte target; answer its digest.
 
+### HIR/1 documents (`hir-documents`, DF-S1.2-2 — R4.3 extension)
+
+Each `<name>.input.json` member is a canonical HIR/1 document (the §3.1
+schema — the same `hh-json/1` encoding every bundle member uses). The
+replay is the §3.1.7 operation pipeline, in order:
+
+1. **parse** — decode the bytes as a HIR/1 document. A malformed
+   encoding, an unknown kind, or a missing mandatory member (e.g. a node
+   without `provenance`) is a refusal: `parse` answers
+   `"refuse:<Kind>"`; every later leg answers `"skipped"` and every
+   digest member `null`.
+2. **canonicalize** — re-emit the parsed document's canonical bytes.
+   `canonical_sha256` answers the SHA-256 of those bytes (for a parse-ok
+   case they equal the input — the input IS the canonical form).
+3. **validate** — run the §3.1.4 invariant set. `validate` answers
+   `"valid"` or `"invalid:<Kind[,Kind…]>"` — the collected
+   `HirError::kind_str()` spellings, first-raised order, duplicates
+   collapsed. An invalid document's seal leg is `"skipped"`.
+4. **seal** — `seal(doc, sealed_at)` under the arm's `scenario.json`
+   `sealed_at`: resolve and pin every ref, keep authored semantic ids
+   (compute them where absent), endorse every member at definition
+   scope, stamp `sealed`, pin a hosted body's `version_identity`,
+   re-validate. `seal` answers `"sealed"` or
+   `"refuse:<Kind[,Kind…]>"`. On `"sealed"`, `sealed_sha256` answers the
+   SHA-256 of the sealed document's canonical bytes and
+   `definition_version_id` the sealed root's `version_id`; both are
+   `null` otherwise.
+
+`<Kind>` is the closed §3.1.4 `HirError` spelling — `UnresolvedRef`,
+`MissingProvenance`, `ContributionUndeclared`, `NonCanonicalInput`, … —
+the variant name with no detail text.
+
+### Ledger WAL scenarios (`ledger-scenarios`, DF-S1.5-3 — R4.3 extension)
+
+Additional transcript/WAL scenarios under `<case>/` — the same replay
+contract as `ledger-transcript` (`events.wal` canonical NDJSON `e`/`c`
+frames, the `0x00 ‖ canonical(envelope − {"hash"}) ‖ prev_hash` fold,
+`prev = "genesis"`), one WAL per case dir. `envelopes.json` decodes the
+`e` frames for reference; `scenario.json` describes the recorded recipe.
+
+`expected.json` answers per case name: `{ "event_hashes": […],
+"head_hash": "sha256:…" }`. The `<case>.event_count` and
+`<case>.wal_sha256` members are informational (integrity pins a foreign
+checker never answers — the same class as `ledger-transcript`'s
+`wal_sha256`/`event_count`).
+
 ## Arm replay
 
 | arm | input | expected answer |
@@ -119,6 +165,8 @@ order (the E1 driver is `hh-registry::corpus::outputs`):
 | `registry-snapshot` | `registry.json` + `scenario.json` | `{"outputs_sha256":…}` |
 | `plugin-manifests` | `valid/…`, `invalid/…` bytes | verdict string per relative path |
 | `canonical-parse` | `frames/*.json` | `{"sha256":…}` per case (`bytes` is informational) |
+| `hir-documents` | `<name>.input.json` + `scenario.json` | the pipeline answer object per case |
+| `ledger-scenarios` | `<case>/events.wal` | `{"head_hash":…,"event_hashes":[…]}` per case |
 
 For `record` inputs: `version_id = idp_id(domain_tag, canonical(canonical_full))`;
 when `canonical_semantic` is non-null, `semantic_id = idp_id(domain_tag + "#semantic",
@@ -135,7 +183,9 @@ canonical(canonical_semantic))`, else `null`.
     "ledger-transcript":{ "head_hash":"…","event_hashes":["…",…] },
     "registry-snapshot":{"outputs_sha256":"…" },
     "plugin-manifests": { "<relpath>": "admit:<id>"|"refuse:<kind>" },
-    "canonical-parse":  { "<case>": {"sha256":"…","parse_ns":N,"rehash_ns":N} }
+    "canonical-parse":  { "<case>": {"sha256":"…","parse_ns":N,"rehash_ns":N} },
+    "hir-documents":    { "<case>": {"parse":"ok"|"refuse:<Kind>","validate":"valid"|"invalid:<Kind>"|"skipped","canonical_sha256":"…"|null,"seal":"sealed"|"refuse:<Kind>"|"skipped","sealed_sha256":"…"|null,"definition_version_id":"…"|null} },
+    "ledger-scenarios": { "<case>": {"head_hash":"…","event_hashes":["…",…]} }
   }
 }
 ```

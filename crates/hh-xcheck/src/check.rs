@@ -102,6 +102,8 @@ pub fn self_check(dir: &Path) -> Result<CheckReport, XcheckError> {
     check_registry_snapshot(dir, &mut results)?;
     check_plugin_manifests(dir, &mut results)?;
     check_canonical_parse(dir, &mut results)?;
+    check_hir_documents(dir, &mut results)?;
+    check_ledger_scenarios(dir, &mut results)?;
     Ok(CheckReport { results })
 }
 
@@ -228,30 +230,27 @@ fn check_identity_records(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), X
     Ok(())
 }
 
-fn check_ledger_transcript(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), XcheckError> {
-    let arm = "arms/ledger-transcript";
-    let expected = expect_map(dir, arm)?;
-    let wal = fs::read(dir.join(arm).join("events.wal"))?;
-    if Json::str(sha256_hex(&wal)) != *expected.get("wal_sha256").unwrap_or(&Json::Null) {
-        push(
-            out,
-            "ledger-transcript",
-            "wal_sha256",
-            Err("WAL bytes drifted from expected".to_string()),
-        );
-        return Ok(());
-    }
-    push(out, "ledger-transcript", "wal_sha256", Ok(()));
-    // Replay the chain: every `k:"e"` frame's `v`, minus `hash`, re-hashed
-    // under the ledger.event domain with the folded prev_hash. Also pin the
-    // frame bytes themselves as canonical documents.
+/// The per-WAL replay both ledger arms share (CC1 — one fold): every
+/// frame must be canonical JSON; every `k:"e"` frame's `v`, minus `hash`,
+/// re-hashes under the `ledger.event` domain against the folded
+/// `prev_hash`. `prefix` namespaces the per-frame case names
+/// (`"frame[i]"` for the transcript arm, `"<case>:frame[i]"` for the
+/// scenario arm). Returns `(folded head hash, recorded e-frame hashes in
+/// order)`.
+fn fold_wal_frames(
+    wal: &[u8],
+    arm: &str,
+    prefix: &str,
+    out: &mut Vec<CaseResult>,
+) -> (String, Vec<String>) {
     let mut prev = GENESIS_HASH.to_string();
+    let mut recorded_hashes = Vec::new();
     let mut seq = 0u64;
     for line in wal.split(|b| *b == b'\n') {
         if line.is_empty() {
             continue;
         }
-        let case = format!("frame[{seq}]");
+        let case = format!("{prefix}frame[{seq}]");
         let res = (|| -> Result<(), String> {
             let text = std::str::from_utf8(line).map_err(|e| format!("{e}"))?;
             let frame = parse(text).map_err(|e| format!("frame parse: {e}"))?;
@@ -287,12 +286,31 @@ fn check_ledger_transcript(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), 
             if got != recorded {
                 return Err(format!("recomputed {got} ≠ recorded {recorded}"));
             }
-            prev = recorded;
+            prev = recorded.clone();
+            recorded_hashes.push(recorded);
             Ok(())
         })();
-        push(out, "ledger-transcript", case, res);
+        push(out, arm, case, res);
         seq += 1;
     }
+    (prev, recorded_hashes)
+}
+
+fn check_ledger_transcript(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), XcheckError> {
+    let arm = "arms/ledger-transcript";
+    let expected = expect_map(dir, arm)?;
+    let wal = fs::read(dir.join(arm).join("events.wal"))?;
+    if Json::str(sha256_hex(&wal)) != *expected.get("wal_sha256").unwrap_or(&Json::Null) {
+        push(
+            out,
+            "ledger-transcript",
+            "wal_sha256",
+            Err("WAL bytes drifted from expected".to_string()),
+        );
+        return Ok(());
+    }
+    push(out, "ledger-transcript", "wal_sha256", Ok(()));
+    let (prev, _hashes) = fold_wal_frames(&wal, "ledger-transcript", "", out);
     let want_head = expected
         .get("head_hash")
         .and_then(Json::as_str)
@@ -307,6 +325,132 @@ fn check_ledger_transcript(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), 
             Err(format!("folded head {prev} ≠ expected {want_head}"))
         },
     );
+    Ok(())
+}
+
+/// The `ledger-scenarios` arm (R4.3 / DF-S1.5-3): every `<case>/` dir's
+/// `events.wal` replays through the shared fold; `expected.json` answers
+/// per case (`{event_hashes, head_hash}`) plus the informational
+/// `<case>.event_count` / `<case>.wal_sha256` members.
+fn check_ledger_scenarios(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), XcheckError> {
+    let arm = "arms/ledger-scenarios";
+    let expected = expect_map(dir, arm)?;
+    let mut cases: Vec<String> = fs::read_dir(dir.join(arm))?
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().to_str().map(String::from))
+        .collect();
+    cases.sort();
+    for case in cases {
+        let wal = match fs::read(dir.join(arm).join(&case).join("events.wal")) {
+            Ok(w) => w,
+            Err(e) => {
+                push(
+                    out,
+                    "ledger-scenarios",
+                    format!("{case}:events.wal"),
+                    Err(format!("{e}")),
+                );
+                continue;
+            }
+        };
+        let want_wal = expected
+            .get(&format!("{case}.wal_sha256"))
+            .and_then(Json::as_str)
+            .unwrap_or("");
+        let got_wal = sha256_hex(&wal);
+        push(
+            out,
+            "ledger-scenarios",
+            format!("{case}:wal_sha256"),
+            if got_wal == want_wal {
+                Ok(())
+            } else {
+                Err(format!("wal sha256 {got_wal} ≠ expected {want_wal}"))
+            },
+        );
+        let (prev, hashes) = fold_wal_frames(&wal, "ledger-scenarios", &format!("{case}:"), out);
+        let want = expected.get(&case).cloned().unwrap_or(Json::Null);
+        let want_head = want.get("head_hash").and_then(Json::as_str).unwrap_or("");
+        push(
+            out,
+            "ledger-scenarios",
+            format!("{case}:head_hash"),
+            if prev == want_head {
+                Ok(())
+            } else {
+                Err(format!("folded head {prev} ≠ expected {want_head}"))
+            },
+        );
+        let want_hashes = want.get("event_hashes").cloned().unwrap_or(Json::Null);
+        let got_hashes = Json::Arr(hashes.iter().map(|h| Json::str(h.clone())).collect());
+        push(
+            out,
+            "ledger-scenarios",
+            format!("{case}:event_hashes"),
+            if got_hashes == want_hashes {
+                Ok(())
+            } else {
+                Err(format!(
+                    "event_hashes {} ≠ expected {}",
+                    got_hashes.to_canonical_string(),
+                    want_hashes.to_canonical_string()
+                ))
+            },
+        );
+    }
+    Ok(())
+}
+
+/// The `hir-documents` arm (R4.3 / DF-S1.2-2's HIR-corpus leg): every
+/// `<name>.input.json` replays through `hir_replay` (the one pipeline
+/// spelling) and compares member-for-member to `expected.json`; a
+/// parse-ok input must re-canonicalize to its own committed bytes.
+fn check_hir_documents(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), XcheckError> {
+    let arm = "arms/hir-documents";
+    let expected = expect_map(dir, arm)?;
+    let scenario = fs::read(dir.join(arm).join("scenario.json")).map_err(XcheckError::from)?;
+    let sealed_at = parse(&String::from_utf8_lossy(&scenario))
+        .map_err(|e| err(format!("scenario.json parse: {e}")))?
+        .get("sealed_at")
+        .and_then(|j| match j {
+            Json::Int(n) => Some(*n as u64),
+            _ => None,
+        })
+        .ok_or_else(|| err("scenario.json missing sealed_at"))?;
+    let mut inputs: Vec<String> = fs::read_dir(dir.join(arm))?
+        .flatten()
+        .filter_map(|e| e.file_name().to_str().map(String::from))
+        .filter(|n| n.ends_with(".input.json"))
+        .collect();
+    inputs.sort();
+    for fname in inputs {
+        let name = fname.trim_end_matches(".input.json").to_string();
+        let res = (|| -> Result<(), String> {
+            let bytes = fs::read(dir.join(arm).join(&fname)).map_err(|e| format!("{e}"))?;
+            let answer = crate::hir_replay::replay(&bytes, sealed_at);
+            // A parse-ok input IS the canonical document — re-canonicalizing
+            // must reproduce the committed bytes (the foreign fold's pin).
+            if answer.get("parse").and_then(Json::as_str) == Some("ok") {
+                let input_sha = sha256_hex(&bytes);
+                if answer.get("canonical_sha256").and_then(Json::as_str) != Some(input_sha.as_str())
+                {
+                    return Err("canonicalized bytes differ from the committed input".to_string());
+                }
+            }
+            let want = expected
+                .get(&name)
+                .ok_or_else(|| "no expected entry".to_string())?;
+            (answer == *want).then_some(()).ok_or_else(|| {
+                format!(
+                    "replay {} ≠ expected {}",
+                    answer.to_canonical_string(),
+                    want.to_canonical_string()
+                )
+            })
+        })();
+        push(out, "hir-documents", name, res);
+    }
     Ok(())
 }
 
@@ -450,6 +594,21 @@ fn check_canonical_parse(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), Xc
 /// verdict string, an `{version_id,semantic_id}` pair). Timing members a
 /// foreign checker adds (`parse_ns`, …) are carried, not gated.
 ///
+/// The `expected.json` members a foreign checker never answers: bundle-
+/// integrity digests and informational members — `registry_sha256`,
+/// `wal_sha256`, `event_count`, and `ledger-scenarios`'s per-case
+/// `<case>.wal_sha256` / `<case>.event_count` spellings (R4.3). One rule
+/// (CC1) — `verify_answers` and the test battery's answer-builder share it.
+pub fn is_informational(arm_id: &str, case: &str) -> bool {
+    matches!(
+        (arm_id, case),
+        ("registry-snapshot", "registry_sha256")
+            | ("ledger-transcript", "wal_sha256")
+            | ("ledger-transcript", "event_count")
+    ) || (arm_id == "ledger-scenarios"
+        && (case.ends_with(".wal_sha256") || case.ends_with(".event_count")))
+}
+
 /// Compare `answers` against the bundle's `expected` per case. A missing or
 /// disagreeing case fails by name — never a vacuous pass. `candidate` is
 /// echoed for the record.
@@ -465,15 +624,7 @@ pub fn verify_answers(dir: &Path, answers: &Json) -> Result<CheckReport, XcheckE
             .cloned()
             .unwrap_or(Json::Obj(BTreeMap::new()));
         for (case, want) in &expected {
-            // Non-case members a foreign checker never answers: bundle-
-            // integrity digests and the informational `event_count`.
-            let informational = matches!(
-                (spec.id, case.as_str()),
-                ("registry-snapshot", "registry_sha256")
-                    | ("ledger-transcript", "wal_sha256")
-                    | ("ledger-transcript", "event_count")
-            );
-            if informational {
+            if is_informational(spec.id, case) {
                 continue;
             }
             let res = match given.get(case) {
