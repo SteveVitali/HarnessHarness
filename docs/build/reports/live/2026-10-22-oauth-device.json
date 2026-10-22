@@ -1,6 +1,6 @@
 {
   "assertions": [
-    "GitHub device flow over hh-tls+hh-wire: initiate \u2192 operator-facing code file (gitignored, never a transcript/ledger); complete \u2192 poll (pending/slow_down/denied/expired handled) \u2192 access token held exchange-scope only \u2192 GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0"
+    "GitHub device flow over hh-tls+hh-wire: initiate \u2192 operator-facing code file (gitignored, never a transcript/ledger); complete \u2192 poll (pending/slow_down/denied/expired handled) \u2192 access token held exchange-scope only \u2192 GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0; subject_login_sha256=f86bcf8a94b44669449f41d4dc9e9607d37ef8ce37b227bf8ea13e41c5d45b65"
   ],
   "cost_pricing": {
     "retrieved": "2026-10-21",
@@ -9,26 +9,26 @@
   },
   "cost_usd": 0.0,
   "endpoint_host": "github.com:443",
-  "git_head": "ce656bf49487d2de73cd48c0b16b00289e20f0bc",
-  "harness": "unknown",
+  "git_head": "f7fd044926b1a5317794c26e95c1b5950c424b37",
+  "harness": "devin-cli/swe-2-high/manual",
   "leg": "oauth-device",
   "model_reported": null,
   "provided": {
     "HH_GITHUB_OAUTH_CLIENT_ID": "yes"
   },
   "provider": "github-oauth",
-  "recorded_at": "2026-10-22T02:19:48Z",
+  "recorded_at": "2026-10-22T02:58:06Z",
   "request_ids": [],
   "response_headers": {},
-  "result": "skipped(pending \u2014 operator did not authorize in window \u2014 awaiting operator device-code entry)",
+  "result": "pass",
   "run_ledger_head": {
     "path": "docs/build/runs/R4.7a.md",
-    "sha256": "760abedbea0673bdbf35cb45447786b0400b9d2eea496ec551b95794cba04005"
+    "sha256": "d8b80d293ba78aefaa25c843712139cb34b5709616aea52af52adb60cf4d9ffb"
   },
   "schema": "hh-live-evidence/1",
   "spend_cumulative_usd": 15.202117,
   "ticket": "R4.7a",
   "token_usage": null,
   "transcript_path": "docs/build/reports/live/2026-10-22-oauth-device.transcript.txt",
-  "transcript_sha256": "675d33caaefbf84c178e777b975f8e72e335038cd1a40ccad205e96319e6c3ef"
+  "transcript_sha256": "639324b83fa1705e472ce3c304576e74a2431d8df7190ff2921567653892df02"
 }
