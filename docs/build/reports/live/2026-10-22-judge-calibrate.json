@@ -1,0 +1,40 @@
+{
+  "assertions": [
+    "the different-family judge pair over real providers: local openai-compatible@1 + hosted openai@1 calibrated on the committed stage3_v1-derived labelled set (measured agreement + self-consistency \u2192 CalibrationRecord per judge \u2014 HH_JUDGE_CAL_OUT evidence on the calibrate leg); link consumes calibration + independence + RedundantJudge on the real bindings; the real Driver run lands judged verification.* rows + idp: model_io through the fenced drain + per-critic claim.reconciled{detector:judged}; RecordedJudge replay answers the recorded verdict byte-identically; usage rides JUDGE_USAGE / LIVE_JUDGE_USAGE; provided names only; JUDGE_CALIBRATE: judge:live-local.v1 agreement_ppm=1000000 consistency_ppm=1000000 decided=6/6;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;LIVE_MODEL: qwen2.5:7b-instruct;JUDGE_CALIBRATE: judge:live-hosted.v1 agreement_ppm=1000000 consistency_ppm=1000000 decided=6/6;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;LIVE_MODEL: gpt-4.1-mini-2025-04-14;JUDGE_CALIBRATE: evidence-recorded -> /Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed/tests/fixtures/r4_7e/live_calibrations.json;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.001722,
+  "endpoint_host": "api.openai.com:443",
+  "git_head": "2e187e578ab4527284d5aa5501be8fd14cb866d3",
+  "harness": "devin-r4_7e",
+  "leg": "judge-calibrate",
+  "model_reported": "gpt-4.1-mini-2025-04-14",
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes",
+    "OPENAI_API_KEY": "yes"
+  },
+  "provider": "multi-provider",
+  "recorded_at": "2026-10-22T05:57:20Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.7e.md",
+    "sha256": "a67c31e59cf014b8feadbcb0678bcac4fed1a7408e4abf658b41daf51f6e79cc"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.253974,
+  "ticket": "R4.7e",
+  "token_usage": {
+    "calls": 12,
+    "input_total": 1660,
+    "output_total": 661
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-22-judge-calibrate.transcript.txt",
+  "transcript_sha256": "4497928fbefff508a4cd66379493e0f595398c1c41102e02f1f5ce69757797a0"
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "hh-r4_7e-labelled-set/1",
+  "set_ref": "labelled:stage3_v1-submission.v1",
+  "rubric_ref": "rubric:submission-oracle-match.v1",
+  "rubric_text": "You are an evaluation judge. Decide whether the OBSERVED submission satisfies the INSTRUCTION and equals the ORACLE-EXPECTED answer. Judge semantic equality, not string equality. Answer JSON only: {\"agree\": true|false, \"confidence\": <0-1000000>, \"evidence\": [<reasons>]}.",
+  "derivation": "Declared labelled calibration set derived from the committed stage3_v1 benchset: three recorded tasks contribute their instruction + recorded hh.submit submission + oracle-expected (label true); each also contributes a distractor variant whose observed submission is the c-flawed task's recorded answer, mismatched to the oracle-expected (label false). Labels are deterministic facts of the recorded corpus (ReferenceOracle::Executable), never judge-produced.",
+  "cases": [
+    {
+      "case_id": "a-hello",
+      "source_task": "suite.tb2/tasks/a-hello.json",
+      "rendered": "Instruction: Write {\"answer\":\"hello\"} to submission.json.\nObserved submission: {\"answer\":\"hello\"}\nOracle-expected: {\"answer\":\"hello\"}",
+      "label_agree": true,
+      "verdict_class": "satisfied"
+    },
+    {
+      "case_id": "a-hello.distractor",
+      "source_task": "suite.tb2/tasks/a-hello.json",
+      "derivation": "observed submission replaced by the c-flawed task's recorded answer ({\"answer\":\"na\"}) \u2014 a benchset-recorded distractor mismatched to this task's oracle-expected",
+      "rendered": "Instruction: Write {\"answer\":\"hello\"} to submission.json.\nObserved submission: {\"answer\":\"na\"}\nOracle-expected: {\"answer\":\"hello\"}",
+      "label_agree": false,
+      "verdict_class": "divergent"
+    },
+    {
+      "case_id": "c-patch-1",
+      "source_task": "suite.swebench/tasks/c-patch-1.json",
+      "rendered": "Instruction: Apply the recorded patch: write {\"answer\":\"patch-1\"} to submission.json.\nObserved submission: {\"answer\":\"patch-1\"}\nOracle-expected: {\"answer\":\"patch-1\"}",
+      "label_agree": true,
+      "verdict_class": "satisfied"
+    },
+    {
+      "case_id": "c-patch-1.distractor",
+      "source_task": "suite.swebench/tasks/c-patch-1.json",
+      "derivation": "observed submission replaced by the c-flawed task's recorded answer ({\"answer\":\"na\"}) \u2014 a benchset-recorded distractor mismatched to this task's oracle-expected",
+      "rendered": "Instruction: Apply the recorded patch: write {\"answer\":\"patch-1\"} to submission.json.\nObserved submission: {\"answer\":\"na\"}\nOracle-expected: {\"answer\":\"patch-1\"}",
+      "label_agree": false,
+      "verdict_class": "divergent"
+    },
+    {
+      "case_id": "d-tool",
+      "source_task": "suite.taubench/tasks/d-tool.json",
+      "rendered": "Instruction: Call the declared tool shape; write {\"answer\":true} to submission.json.\nObserved submission: {\"answer\":true}\nOracle-expected: {\"answer\":true}",
+      "label_agree": true,
+      "verdict_class": "satisfied"
+    },
+    {
+      "case_id": "d-tool.distractor",
+      "source_task": "suite.taubench/tasks/d-tool.json",
+      "derivation": "observed submission replaced by the c-flawed task's recorded answer ({\"answer\":\"na\"}) \u2014 a benchset-recorded distractor mismatched to this task's oracle-expected",
+      "rendered": "Instruction: Call the declared tool shape; write {\"answer\":true} to submission.json.\nObserved submission: {\"answer\":\"na\"}\nOracle-expected: {\"answer\":true}",
+      "label_agree": false,
+      "verdict_class": "divergent"
+    }
+  ]
+}

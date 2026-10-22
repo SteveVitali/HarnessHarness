@@ -786,6 +786,66 @@ pub trait JudgePort: std::fmt::Debug {
     /// (`{seq, event_id, key, version_id, error, turn_without_act}` —
     /// data, never surface text).
     fn judge(&self, spec: &crate::policy::JudgedSpec, window: &[Json]) -> u64;
+
+    /// `assess(claim, evidence)` — the R-2.7.2b judged reconciler arm
+    /// (R4.7e; DF-S1.21-3): each bound `CriticDeclaration{kind = judge}`
+    /// assesses the claim against its bound authoritative handles and
+    /// answers a [`JudgedConsult`] — the assessment plus *that critic's
+    /// own* calibration + independence facts (a panel never renders one
+    /// member's calibration as another's). The caller folds each through
+    /// `reconcile_judged` (veto-admissible records, never
+    /// hold-admissible — F7). An empty answer is an abstention:
+    /// `RecordedJudge` produces none (replay folds the recorded
+    /// `claim.reconciled` rows — never a re-derivation) and a live
+    /// binding abstains rather than guess.
+    fn assess(
+        &self,
+        _claim: &hh_verification::claims::Claim,
+        _evidence: &[Json],
+    ) -> Vec<JudgedConsult> {
+        Vec::new()
+    }
+
+    /// `take_records()` — the `verification.*` rows a *live* binding
+    /// produced since the last drain — `(class, payload, provenance)`
+    /// triples the caller appends through the run's fenced writer
+    /// (durable-before-visible; the port computes, the driver owns the
+    /// fence — the `RoutingPort::take_rows`/`MemoryPort` convention).
+    /// `RecordedJudge` produces none: its answers replay rows already on
+    /// the prefix, so replay stays byte-identical.
+    fn take_records(&self) -> Vec<(String, Json, hh_provenance::record::ProvenanceRecord)> {
+        Vec::new()
+    }
+
+    /// `take_model_io()` — the `hh.model_io/1` blobs a live binding
+    /// produced since the last drain; the caller deposits them through
+    /// its fenced store seam before the verdict rows referencing them
+    /// land (the `ModelPort::take_model_io` convention).
+    fn take_model_io(&self) -> Vec<(String, Vec<u8>)> {
+        Vec::new()
+    }
+}
+
+/// `JudgedConsult` — one bound critic's answer to the R-2.7.2b judged
+/// reconciler arm (R4.7e; DF-S1.21-3): the `JudgedAssessment` plus the
+/// *critic's own* calibration + independence facts the emitted
+/// `verification.claim.reconciled` records carry. A critic without an
+/// active calibration still records its `verification.validator.verdict`
+/// rows but answers `calibration_ref: None` — the caller declines
+/// `reconcile_judged` for it (a judged record without a calibration is
+/// `JudgedWithoutCalibration`, never a fabricated ref) — the exploratory
+/// evidence stays durable.
+#[derive(Debug, Clone)]
+pub struct JudgedConsult {
+    /// The bound critic/validator ref (the record's `detector_ref`).
+    pub judge_ref: String,
+    /// The `CalibrationRecord` the critic ran under — `None` is the
+    /// honest absence (uncalibrated ⇒ exploratory, never gate evidence).
+    pub calibration_ref: Option<String>,
+    /// The critic's re-based independence summary (ADR-0116 D1).
+    pub independence_summary: String,
+    /// The claim assessment.
+    pub assessment: hh_verification::reconciler::JudgedAssessment,
 }
 
 /// `RecordedJudge` — the offline `Validator{kind = judge}` binding (R2.15;

@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "otel-live" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -101,6 +101,18 @@ leg_field() { # $1 leg, $2 field
     context-adapters:test)     printf 'hh-embed:r4_7b_live';;
     context-adapters:pricekey.openai)    printf 'openai/text-embedding-3-small';;
     context-adapters:pricekey.anthropic) printf 'anthropic/claude-haiku-5-5';;
+    judge-calibrate:ticket)   printf 'R4.7e';;
+    judge-calibrate:provider) printf 'multi-provider';;
+    judge-calibrate:kind)     printf 'script';;
+    judge-calibrate:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY';;
+    judge-calibrate:test)     printf 'hh-embed:r4_7e_live:r47e_live_judge_calibrate';;
+    judge-calibrate:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
+    judge-run:ticket)   printf 'R4.7e';;
+    judge-run:provider) printf 'multi-provider';;
+    judge-run:kind)     printf 'script';;
+    judge-run:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY';;
+    judge-run:test)     printf 'hh-embed:r4_7e_live:r47e_live_judge_run';;
+    judge-run:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
     otel-live:ticket)   printf 'R4.7c';;
     otel-live:provider) printf 'local-otel-collector';;
     otel-live:kind)     printf 'script';;
@@ -712,6 +724,80 @@ PRICE
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:live-tests rc=$rc"; fi
 }
+
+# R4.7e — `judge-calibrate` + `judge-run` (DF-S1.21-3's live half;
+# DF-S1.21-2's last member; R-2.7.2b): the different-family judge pair —
+# the local `openai-compatible@1` lane + the hosted `openai@1` lane
+# (`gpt-4.1-mini`, `env:OPENAI_API_KEY` a coordinate) — calibrated over
+# the committed labelled set (`tests/fixtures/r4_7e/labelled_cases.json`,
+# the stage3_v1-derived cases + distractors), then bound at link
+# (independence + RedundantJudge + the calibration fold consumed for
+# real) and driven on a real `Driver` run: judged `verification.*` rows +
+# `idp:` model_io blobs durable through the fenced drain, per-critic
+# `claim.reconciled{detector: judged}` at completion, `RecordedJudge`
+# replay byte-identical. `JUDGE_USAGE` rows carry every call's
+# normalized usage; `LIVE_JUDGE_USAGE` prices the hosted aggregate
+# against the pinned row. The calibrate leg also writes the committed
+# `live_calibrations.json` evidence (`HH_JUDGE_CAL_OUT`).
+run_leg_judge() { # $1 leg — the shared judge-leg runner
+  require cargo; require python3
+  local leg="$1"
+  local spec crate tbin filt
+  spec=$(leg_field "$leg" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "$leg" names); do export "$n"; done
+  ENDPOINT_HOST="api.openai.com:443"; MODEL_REPORTED=""
+  ASSERTIONS="the different-family judge pair over real providers: local openai-compatible@1 + hosted openai@1 calibrated on the committed stage3_v1-derived labelled set (measured agreement + self-consistency → CalibrationRecord per judge — HH_JUDGE_CAL_OUT evidence on the calibrate leg); link consumes calibration + independence + RedundantJudge on the real bindings; the real Driver run lands judged verification.* rows + idp: model_io through the fenced drain + per-critic claim.reconciled{detector:judged}; RecordedJudge replay answers the recorded verdict byte-identically; usage rides JUDGE_USAGE / LIVE_JUDGE_USAGE; provided names only"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local calout="$REPO/crates/hh-embed/tests/fixtures/r4_7e/live_calibrations.json"
+  local rc=0
+  if {
+    printf '$ HH_JUDGE_CAL_OUT=<fixture> cargo test -p %s --test %s %s-- --ignored --nocapture --test-threads=1
+
+'       "$crate" "$tbin" "$filt"
+    (cd "$REPO" && HH_JUDGE_CAL_OUT="$calout"       cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture --test-threads=1) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local usage model
+  model=$(grep -o 'LIVE_MODEL: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_MODEL: //' || true)
+  if grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    # The leg's own honest skip marker — checked before rc: a test that
+    # early-returns exits 0, so the marker (not the code) carries the
+    # verdict (provider-degraded is `skipped`, never a pass).
+    RESULT="skipped(credential-unprovided)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"; MODEL_REPORTED="$model"
+    usage=$(grep -o 'LIVE_JUDGE_USAGE: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_JUDGE_USAGE: //' || true)
+    local pricekey
+    pricekey=$(leg_field "$leg" pricekey)
+    LEG_COST_MEASURED=$(python3 - "$PRICING" "$pricekey" "$usage" <<'PRICE'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+if not sys.argv[3]:
+    print("0.000000"); sys.exit(0)
+row = pricing["models"].get(sys.argv[2])
+if row is None:
+    sys.exit("live-verify: NoPrice — no pinned row for " + sys.argv[2])
+u = json.loads(sys.argv[3])
+cost = (u.get("input_total", 0) * row["prompt_per_1k_usd"]
+        + u.get("output_total", 0) * row["completion_per_1k_usd"]) / 1000.0
+print("%.6f" % cost)
+PRICE
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    [ -n "$usage" ] && LEG_TOKEN_USAGE="$usage"
+    local marks
+    marks=$(grep -oE '(JUDGE_(CALIBRATE|LINK|RUN)|LIVE_MODEL)[: ].*' "$TRANSCRIPT_RAW" | sed 's/^test [^ ]* \.\.\. //' | tr '
+' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+    if [ "$leg" = "judge-calibrate" ]; then
+      grep -q 'evidence-recorded' "$TRANSCRIPT_RAW"         || ASSERTIONS="$ASSERTIONS; WARN no evidence-recorded marker — the live_calibrations.json fixture was not written this leg"
+    fi
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+run_leg_judge_calibrate() { run_leg_judge "judge-calibrate"; }
+run_leg_judge_run() { run_leg_judge "judge-run"; }
 
 # R4.7c — the OTLP live-sink leg (ADR-0346 revisit trigger (a); BL-31;
 # R-2.9.1; USD 0 loopback): the operator-provisioned collector (HUMAN-H6:

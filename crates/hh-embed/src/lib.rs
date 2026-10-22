@@ -43,9 +43,13 @@ pub(crate) mod experiment_ops;
 pub(crate) mod extension_ops;
 pub(crate) mod fleet_ops;
 pub mod frames;
-pub(crate) mod gateway_model;
+// R4.7e — `pub` so the lane-backed adapter batteries (and their live
+// legs) drive the real `GatewayModel` port end-to-end; the service's own
+// arm paths already construct it internally.
+pub mod gateway_model;
 pub(crate) mod hosting_ops;
 pub mod inject;
+pub mod judge_adapters;
 pub(crate) mod lab_c1_ops;
 pub mod net;
 pub mod open;

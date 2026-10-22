@@ -1527,6 +1527,37 @@ impl<S: ControlStrategy> Driver<S> {
         }
     }
 
+    /// R4.7e (DF-S1.21-3) — the bound judge port's buffered facts land
+    /// durable under the run's fenced writer: `hh.model_io/1` blobs
+    /// deposit through `store_seam` before the `verification.validator.*`
+    /// rows referencing them append (the `ModelPort::take_model_io`
+    /// convention — durable-before-visible, CC3). A live binding's rows
+    /// carry the port's own delegate-authority provenance; a seam-less
+    /// sink with buffered `model_io` is a contract violation — surfaced,
+    /// never dropped. `RecordedJudge` buffers nothing — replay is
+    /// byte-identical.
+    fn drain_judge_records(&mut self, sink: &mut dyn LedgerSink) -> Result<(), DriverError> {
+        let Some(judge) = &self.config.judge else {
+            return Ok(());
+        };
+        for (media, bytes) in judge.take_model_io() {
+            if let Some(seam) = sink.store_seam() {
+                let _deposited = seam
+                    .store
+                    .put_blob(&bytes, &media)
+                    .map_err(|e| DriverError::Append(format!("judge model_io deposit: {e}")))?;
+            } else {
+                return Err(DriverError::Append(
+                    "judge model_io produced against a seam-less sink".into(),
+                ));
+            }
+        }
+        for (class, payload, provenance) in judge.take_records() {
+            self.append_prov(sink, &class, payload, None, provenance)?;
+        }
+        Ok(())
+    }
+
     /// `compute_policy.bind(d, ctx)` — the §5e.4 seam. `static` never
     /// reaches the estimator (empty capability set — the driver
     /// short-circuits, so a `static`-bound run appends zero
@@ -2842,6 +2873,14 @@ impl<S: ControlStrategy> Driver<S> {
             },
             &self.guard_ctx(sink.prefix()),
         );
+        // R4.7e (DF-S1.21-3) — a *live* judge binding consulted during
+        // G-INTERPRET buffered its call's durable records: deposit its
+        // `hh.model_io/1` blobs through the fenced seam, then land the
+        // `verification.validator.*` rows under the run's writer. The
+        // `RecordedJudge` replay binding buffers nothing — the recorded
+        // rows are already on the prefix (byte-identical by
+        // construction).
+        self.drain_judge_records(sink)?;
         let mut proposed_tool_calls: Vec<String> = vec![];
         // R2.8 — `check_callable` before the monitor (ADR-0093 D7): every
         // parsed call on a surface that was not `direct` in this call's
@@ -5118,7 +5157,7 @@ impl<S: ControlStrategy> Driver<S> {
             let mut completion_evidence: Vec<String> = vec![];
             for claim in &claims {
                 let handles = bind_claim(&rows, claim, self.config.task_contract.as_ref());
-                let recs: Vec<hh_verification::claims::ReconciliationRecord> =
+                let mut recs: Vec<hh_verification::claims::ReconciliationRecord> =
                     match (&self.config.reconciler, &recon_ctx) {
                         (Some(decl), Some(ctx)) => hh_verification::reconciler::reconcile_c2(
                             claim,
@@ -5136,6 +5175,72 @@ impl<S: ControlStrategy> Driver<S> {
                             kernel_prov.clone(),
                         )],
                     };
+                // R4.7e (DF-S1.21-3; R-2.7.2b's judged arm live): the
+                // declared `judged` detector arm consults the bound judge
+                // port — each critic assesses the claim against its bound
+                // authoritative handles (closed-schema facts, never the
+                // claim's own text) and its `JudgedAssessment` folds
+                // `reconcile_judged`. Judged records are veto-admissible
+                // evidence, never hold-admissible (F7 — the gate's fold
+                // never reads them). An uncalibrated consult is declined
+                // (the critic's own verdict rows stay durable; a judged
+                // record without calibration is `JudgedWithoutCalibration`,
+                // never a fabricated ref). `RecordedJudge` abstains —
+                // replay stays byte-identical.
+                if let Some(decl) = &self.config.reconciler {
+                    if decl
+                        .detector_classes
+                        .contains(&hh_verification::vocab::Detector::Judged)
+                    {
+                        if let Some(judge) = &self.config.judge {
+                            let evidence: Vec<Json> = handles
+                                .iter()
+                                .map(|h| {
+                                    Json::obj([
+                                        ("handle_ref", Json::str(h.handle_ref.clone())),
+                                        ("authority", Json::str(h.authority.as_str())),
+                                        (
+                                            "value",
+                                            h.value
+                                                .as_ref()
+                                                .map(|v| v.to_json())
+                                                .unwrap_or(Json::Null),
+                                        ),
+                                    ])
+                                })
+                                .collect();
+                            for consult in judge.assess(claim, &evidence) {
+                                let Some(calibration_ref) = &consult.calibration_ref else {
+                                    continue;
+                                };
+                                let mut judged_decl = decl.clone();
+                                judged_decl.judge_ref = Some(consult.judge_ref.clone());
+                                judged_decl.calibration_ref = Some(calibration_ref.clone());
+                                judged_decl.independence_summary =
+                                    Some(consult.independence_summary.clone());
+                                let mut judged_recs =
+                                    hh_verification::reconciler::reconcile_judged(
+                                        claim,
+                                        &consult.assessment,
+                                        &judged_decl,
+                                        head_seq,
+                                        kernel_prov.clone(),
+                                    )
+                                    .map_err(|e| {
+                                        DriverError::Arm(format!("reconcile_judged: {e}"))
+                                    })?;
+                                // Two bound critics may assert the same
+                                // class — the record id disambiguates by
+                                // the critic ref so each member's own
+                                // assertion is its own record.
+                                for r in &mut judged_recs {
+                                    r.record_id = format!("{}:{}", r.record_id, consult.judge_ref);
+                                }
+                                recs.extend(judged_recs);
+                            }
+                        }
+                    }
+                }
                 if completion_idx.is_none()
                     && matches!(claim.kind, ClaimKind::Achieved | ClaimKind::Unachievable)
                 {
@@ -5258,6 +5363,13 @@ impl<S: ControlStrategy> Driver<S> {
                 },
             )
         };
+        // R4.7e (DF-S1.21-3) — the completion-gate `judged` arm's assess
+        // consults buffered their own durable records: deposit the
+        // `hh.model_io/1` blobs and land the critics' `verification
+        // .validator.*` rows BEFORE the `claim.reconciled` rows that cite
+        // them (durable-before-visible — the assessed verdict is the
+        // judged record's evidence).
+        self.drain_judge_records(sink)?;
         // Phase 2 — the durable rows.
         for rec in &records {
             self.append_prov(
@@ -5560,11 +5672,21 @@ impl<S: ControlStrategy> Driver<S> {
             }
         };
         for claim in &claims {
+            // R4.7e — the claim row lands at run completion, after the
+            // named `model_call_id` scope has closed (`model.call.
+            // completed` is the closer): an envelope `model_call_id`
+            // stamp on a closed scope is `ScopeNotOpen` on a real store
+            // — the S1.21 claim-ledger obligation was only ever
+            // exercised against lenient sinks before the judged live leg
+            // surfaced it. The claim's model-call reference stays
+            // authoritative on the payload member (`claim.model_call_id`,
+            // `claim_id` — both `mc`-prefixed); the row itself is a
+            // turn-scope completion record.
             self.append_prov(
                 sink,
                 "verification.claim.recorded",
                 hh_verification::events::claim_recorded(claim),
-                Some(&mc),
+                None,
                 claim.provenance.clone(),
             )?;
         }

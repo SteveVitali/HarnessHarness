@@ -112,8 +112,9 @@ impl From<&ModelLane> for AdapterLane {
 
 impl AdapterLane {
     /// The `ModelLane` view (the `model_port` machinery's own shape —
-    /// CC1, never a second lane type).
-    fn model_lane(&self) -> ModelLane {
+    /// CC1, never a second lane type). `pub(crate)` — `judge_adapters`
+    /// arms lanes through the same conversion (R4.7e).
+    pub(crate) fn model_lane(&self) -> ModelLane {
         ModelLane {
             dialect_ref: self.dialect_ref.clone(),
             endpoint_ref: self.endpoint_ref.clone(),
@@ -133,7 +134,8 @@ impl AdapterLane {
     /// Arm `(dialect, transport)` — the dialect document the coordinate
     /// names (unknown → `InvalidDefinition`) plus the lane's TLS client
     /// config (arm-time `Refused`, never a silently weaker session).
-    fn arm_transport(
+    /// `pub(crate)` — `judge_adapters` arms lanes at link (R4.7e).
+    pub(crate) fn arm_transport(
         &self,
     ) -> Result<(hh_gateway::dialect::WireDialect, HttpModelTransport), EmbedError> {
         let dialect =
@@ -150,8 +152,8 @@ impl AdapterLane {
     /// Bind the lane's credential coordinate — `binding_id` + `provided`
     /// only (the value resolves inside the transport at send). An
     /// unset `env:NAME` is a typed refusal at arm, never a mid-call
-    /// surprise.
-    fn bind_credential(
+    /// surprise. `pub(crate)` — `judge_adapters` binds at link (R4.7e).
+    pub(crate) fn bind_credential(
         &self,
         auth_kinds: &[hh_gateway::dialect::AuthKind],
     ) -> Result<CredentialHandle, EmbedError> {
