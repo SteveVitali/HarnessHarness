@@ -32,10 +32,7 @@ const SURFACES: &[(&str, &str)] = &[
         "hh-mcp-lab",
         "in_process (binding a) via EmbedService::handle",
     ),
-    (
-        "hh-acp",
-        "in_process (binding a) via EmbedService::handle",
-    ),
+    ("hh-acp", "in_process (binding a) via EmbedService::handle"),
 ];
 
 fn root() -> PathBuf {
