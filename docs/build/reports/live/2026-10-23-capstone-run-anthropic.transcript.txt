@@ -1,0 +1,27 @@
+$ HH_CAPSTONE_PROVIDER=anthropic cargo test -p hharness-embed --test l4_6_live l46_live_reference_task-- --ignored --nocapture
+
+   Compiling hharness-embed v0.1.0 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-6ed345cbf55eaf9b)
+
+running 1 test
+test l46_live_reference_task ... CAPSTONE_RUN: provider=anthropic binding=in-process run=run-1792725687538-000000-b53fe15e
+hh run start → {"exit_class":"ok","kind":"result","payload":{"configuration_version_id":"sha256:ebc73b2ff0d1e2ec9a377be39d002a10802aa3b3855a98fddc277fd108bd2ac6","outcome_class":"scored","resource_account":{"usage":[]},"run_id":"run-1792725693147-000000-043df6a3","stop_reason":"completed","veto_tripped":[]},"result_kind":"run"}
+CAPSTONE_RUN: provider=anthropic binding=hh-cli run=run-1792725693147-000000-043df6a3
+CAPSTONE_RUN: provider=anthropic binding=http run=run-1792725696651-000000-d116514d
+
+thread 'l46_live_reference_task' (181304828) panicked at crates/hh-embed/tests/l4_6_live.rs:477:5:
+assertion `left == right` failed: hh-cli-attach: deterministic replay: {"driver_mode":"deterministic","mode":"invalid","report":{"coupled_sources":[],"environment":{"binding":"live","coverage":["ledger"],"uncaptured":[]},"external_dependencies":[],"mode":"invalid","model":{},"reasons":["replay_diverged"],"run_id":"run-1792725693147-000000-043df6a3","sources":[{"confined_to_events":true,"source":"provider_sampling","substituted":false},{"confined_to_events":true,"source":"environment_state","substituted":false},{"confined_to_events":true,"source":"filesystem_order","substituted":false},{"confined_to_events":true,"source":"concurrency","substituted":false}],"variant_declares_deterministic_replay":true},"report_ref":"sha256:6c2a668e679b3933c3789d8c58703ad2075f2680deb47a661949de20f79bc648","run_id":"run-1792725693147-000000-043df6a3"}
+  left: Some("invalid")
+ right: Some("deterministic")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    l46_live_reference_task
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 12.74s
+
+error: test failed, to rerun pass `-p hharness-embed --test l4_6_live`

@@ -1,0 +1,21 @@
+$ cargo test -p hharness-env --test helper_live ac_s2_live_exec_streams_and_settles_observed -- --nocapture
+
+   Compiling hharness-env v0.1.0 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-env)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+     Running tests/helper_live.rs (target/debug/deps/helper_live-448b055e2e58e5fb)
+
+running 1 test
+test ac_s2_live_exec_streams_and_settles_observed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.34s
+
+$ cargo test -p hharness-env --test helper_live ac_s2_deadline_is_helper_enforced -- --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/helper_live.rs (target/debug/deps/helper_live-448b055e2e58e5fb)
+
+running 1 test
+test ac_s2_deadline_is_helper_enforced ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.55s
+
