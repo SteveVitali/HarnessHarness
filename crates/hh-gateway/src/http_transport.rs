@@ -1,11 +1,13 @@
 //! `http_transport` — `HttpModelTransport`, the live `Transport` half
-//! (R4.5b; ADR-0364 D1/D3; DF-S1.18-1's local-family leg).
+//! (R4.5b; ADR-0364 D1/D3; DF-S1.18-1's local-family leg; R4.5c TLS).
 //!
-//! Plain HTTP/1.1 over `TcpStream` through the **one** codec home —
-//! `hh_wire::http` (CC1; the `hh-env` egress leg and `hh-mcp` boundary ride
-//! the same module). No TLS: an `https` endpoint_ref answers the typed
-//! `unsupported_feature` refusal carrying `tls_pending` — R4.5c owns
-//! rustls, and this lane never downgrades.
+//! HTTP/1.1 over `TcpStream` — plain or TLS-terminated — through the
+//! **one** codec home `hh_wire::http` (CC1; the `hh-env` egress leg and
+//! `hh-mcp` boundary ride the same module). An `https` endpoint_ref
+//! rides a `hh_tls::ClientTls` session beneath the same codec
+//! (R4.5c/ADR-0365 — webpki verification always on, extra roots only
+//! via the lane's explicit file); `tls_pending` is retired — the lane
+//! never downgrades.
 //!
 //! `send` per the `Transport` contract: serialized `ProviderRequestPlan`
 //! bytes → POST `{endpoint}/chat/completions` → `(arrival_ms, WireFrame)`
@@ -17,9 +19,10 @@
 //! `discover` GETs `{endpoint}/models` and answers the `model_listing`
 //! member (`data[]`) verbatim — observed, never fabricated.
 
-use std::io::BufReader;
+use std::io::{BufReader, Read, Write};
 
-use hh_wire::http::{self, BodyReader, HttpError};
+use hh_tls::{ClientTls, TlsError};
+use hh_wire::http::{self, BodyReader, HttpError, Scheme};
 use hh_wire::json::Json;
 
 use crate::codec::{self, WireFrame};
@@ -47,13 +50,12 @@ fn map_io(e: HttpError, phase: TimeoutKind) -> ModelError {
         HttpError::Eof => ModelError::new(ModelErrorClass::Network, "peer closed mid-message"),
         HttpError::Io(d) => ModelError::new(ModelErrorClass::Network, d),
         HttpError::UnsupportedScheme(s) => {
-            // `https` — R4.5c's lane. The refusal's `kind` member spells
-            // `tls_pending` (the run ledger reads it; never a downgrade).
+            // Outside http/https — a typed refusal, never a downgrade.
             let mut err = ModelError::new(
                 ModelErrorClass::UnsupportedFeature,
-                format!("scheme {s} — TLS pending (R4.5c)"),
+                format!("scheme {s} unsupported"),
             );
-            err.provider_code = Some("tls_pending".to_string());
+            err.provider_code = Some("unsupported_scheme".to_string());
             err
         }
         other => ModelError::new(
@@ -63,13 +65,47 @@ fn map_io(e: HttpError, phase: TimeoutKind) -> ModelError {
     }
 }
 
-/// `HttpModelTransport` — the live `Transport` for `http://` model
-/// endpoints. `dialect` is held for `classify_http_error`/
-/// `read_retry_after` (the boundary's own rules, not re-declared).
+/// `TlsError → ModelError` — the handshake/config refusal classes land on
+/// the boundary's typed set: a failed handshake is `network` (the peer
+/// verification refused — the honest shape; never a downgrade), a bad
+/// lane configuration is `unsupported_feature{tls_config}` (the typed
+/// arm-time defect).
+fn map_tls(e: TlsError) -> ModelError {
+    match e {
+        TlsError::Handshake(d) => ModelError::new(
+            ModelErrorClass::Network,
+            format!("tls handshake refused: {d}"),
+        ),
+        TlsError::Io(d) => ModelError::new(ModelErrorClass::Network, format!("tls io: {d}")),
+        other => {
+            let mut err = ModelError::new(
+                ModelErrorClass::UnsupportedFeature,
+                format!("tls config: {other}"),
+            );
+            err.provider_code = Some("tls_config".to_string());
+            err
+        }
+    }
+}
+
+/// `ReadWrite` — the trait object the codec's stream halves ride:
+/// `TcpStream` on `http`, `hh_tls::TlsStream` on `https` (one codec,
+/// streams beneath it — ADR-0364 D1).
+trait ReadWrite: Read + Write {}
+impl<T: Read + Write> ReadWrite for T {}
+
+/// `HttpModelTransport` — the live `Transport` for `http://`/`https://`
+/// model endpoints. `dialect` is held for `classify_http_error`/
+/// `read_retry_after` (the boundary's own rules, not re-declared); `tls`
+/// is the R4.5c client config (webpki roots by default — an `https:`
+/// lane with no extra roots just verifies against the public set).
 pub struct HttpModelTransport {
     /// The bound dialect (error classification + retry-after + body bounds
     /// derive from it).
     dialect: WireDialect,
+    /// The client TLS configuration (R4.5c; ADR-0365 — verification
+    /// always on; extra roots only via the lane's explicit file).
+    tls: ClientTls,
     /// Dial deadline (ms).
     connect_ms: u64,
     /// Per-operation read/write deadline (ms).
@@ -81,13 +117,35 @@ pub struct HttpModelTransport {
 impl HttpModelTransport {
     /// `new(dialect)` — the transport bound to a loaded dialect document.
     /// Defaults: 5 s dial, `stream_idle_timeout_ms` read/write bound
-    /// (clamped to ≥ 30 s), 16 MiB bodies.
+    /// (clamped to ≥ 30 s), 16 MiB bodies, public webpki roots for TLS.
     pub fn new(dialect: WireDialect) -> HttpModelTransport {
+        Self::with_tls(dialect, ClientTls::webpki_roots())
+    }
+
+    /// `with_tls(dialect, tls)` — the lane's TLS configuration (the
+    /// local-CA extra-roots hook and/or the mTLS client identity the
+    /// `model_port` slot's `tls{}` params resolved — ADR-0365).
+    pub fn with_tls(dialect: WireDialect, tls: ClientTls) -> HttpModelTransport {
         HttpModelTransport {
             rw_ms: dialect.stream_idle_timeout_ms.clamp(30_000, 600_000),
             dialect,
+            tls,
             connect_ms: 5_000,
             max_body: 16 * 1024 * 1024,
+        }
+    }
+
+    /// `dial(url)` — the transport beneath the codec: TCP on `http`,
+    /// TCP+TLS on `https` (the handshake's refusal is typed — never a
+    /// plaintext fallback).
+    fn dial(&self, url: &http::HttpUrl) -> Result<Box<dyn ReadWrite>, ModelError> {
+        let sock = http::connect(url, self.connect_ms, self.rw_ms)
+            .map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        match url.scheme {
+            Scheme::Http => Ok(Box::new(sock)),
+            Scheme::Https => Ok(Box::new(
+                self.tls.connect(sock, &url.host).map_err(map_tls)?,
+            )),
         }
     }
 }
@@ -116,8 +174,7 @@ impl Transport for HttpModelTransport {
 
         let url =
             http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
-        let mut sock = http::connect(&url, self.connect_ms, self.rw_ms)
-            .map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        let mut sock = self.dial(&url)?;
         let target = join(&url.target, "chat/completions");
         let accept = if streaming {
             "text/event-stream"
@@ -238,8 +295,7 @@ impl Transport for HttpModelTransport {
     fn discover(&mut self, endpoint_ref: &str) -> Result<Json, ModelError> {
         let url =
             http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
-        let mut sock = http::connect(&url, self.connect_ms, self.rw_ms)
-            .map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        let mut sock = self.dial(&url)?;
         let target = join(&url.target, "models");
         let host_header = url.host_header();
         let headers = [

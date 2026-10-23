@@ -230,13 +230,33 @@ fn channel_spec(
     env_name: &str,
     revoke_path: Option<&str>,
 ) -> SecretChannelSpec {
+    channel_spec_scheme(host, port, env_name, revoke_path, "http")
+}
+
+/// The `https`-scheme twin — the R4.5c TLS legs' channel declaration.
+fn channel_spec_https(
+    host: &str,
+    port: u16,
+    env_name: &str,
+    revoke_path: Option<&str>,
+) -> SecretChannelSpec {
+    channel_spec_scheme(host, port, env_name, revoke_path, "https")
+}
+
+fn channel_spec_scheme(
+    host: &str,
+    port: u16,
+    env_name: &str,
+    revoke_path: Option<&str>,
+    scheme: &str,
+) -> SecretChannelSpec {
     SecretChannelSpec {
         kind: CredentialKind::Bearer,
         source: SecretSource::OperatorVault {
             vault_ref: format!("vault:{host}"),
         },
         destinations: vec![DestinationBinding {
-            scheme: "http".into(),
+            scheme: scheme.to_string(),
             host_pattern: host.into(),
             port: Some(port),
             path_prefix: None,
@@ -2022,4 +2042,419 @@ fn lt09_snapshot_placeholders_only_fork_virtualizes() {
         .leak_scan_run(med.store, &run, &det)
         .unwrap()
         .is_empty());
+}
+
+// ── R4.5c — LT-02/LT-05 over a real terminated TLS leg (DF-S2.4-2; ADR-0365) ──
+
+/// The committed test PKI (`hh-tls`'s fixture — fake material, the
+/// gitleaks allowlist names the directory).
+fn pki(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../hh-tls/fixtures/pki/{name}"))
+}
+
+/// The TLS twin of `http_fixture` — `hh_tls::ServerTls` terminates the
+/// committed test PKI, captures the *decrypted* request bytes, answers
+/// `200 ok`. Returns (port, captured, join).
+fn https_fixture(n: usize) -> (u16, Arc<Mutex<Vec<String>>>, thread::JoinHandle<()>) {
+    let tls = hh_tls::ServerTls::new(
+        &std::fs::read_to_string(pki("server.pem")).unwrap(),
+        &std::fs::read_to_string(pki("server-key.pem")).unwrap(),
+    )
+    .unwrap();
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let cap = Arc::clone(&captured);
+    let join = thread::spawn(move || {
+        listener.set_nonblocking(true).ok();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        let mut served = 0;
+        while served < n && std::time::Instant::now() < deadline {
+            let Ok((s, _)) = listener.accept() else {
+                thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            };
+            // The nonblocking listener's accept may hand over a nonblocking
+            // socket (platform-dependent) — the handshake's `complete_io`
+            // needs a blocking one.
+            s.set_nonblocking(false).ok();
+            s.set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .ok();
+            let Ok(mut s) = tls.accept(s) else {
+                continue;
+            };
+            served += 1;
+            // Read head + declared body (the same consumed-before-reply
+            // discipline as `http_fixture` — a short read RSTs the leg).
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 8192];
+            loop {
+                match s.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        buf.extend_from_slice(&chunk[..n]);
+                        if let Some(he) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                            let declared: usize = String::from_utf8_lossy(&buf[..he])
+                                .split("\r\n")
+                                .skip(1)
+                                .find_map(|l| {
+                                    let (k, v) = l.split_once(':')?;
+                                    k.trim()
+                                        .eq_ignore_ascii_case("content-length")
+                                        .then(|| v.trim().parse().ok())
+                                        .flatten()
+                                })
+                                .unwrap_or(0);
+                            if buf.len() >= he + 4 + declared {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            cap.lock()
+                .unwrap()
+                .push(String::from_utf8_lossy(&buf).to_string());
+            let _ =
+                s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+            let _ = s.flush();
+        }
+    });
+    (port, captured, join)
+}
+
+/// The `HttpsConnect` twin of `req` — a TLS leg through the mediator.
+#[allow(clippy::too_many_arguments)] // mirrors `req`'s request-record arity.
+fn req_https(
+    token: &str,
+    effect_id: &str,
+    env: &str,
+    host: &str,
+    port: u16,
+    method: &str,
+    path: &str,
+    sentinel: Option<&str>,
+) -> EgressRequest {
+    let mut r = req(token, effect_id, env, host, port, method, path, sentinel);
+    r.protocol = EgressProtocol::HttpsConnect;
+    r
+}
+
+/// The mediator's client-TLS config over the committed test CA — the
+/// explicit extra-roots file is the only path to a private issuer.
+fn test_tls() -> hh_tls::ClientTls {
+    hh_tls::ClientTls::webpki_roots()
+        .extra_roots_file(&pki("hh-test-ca.pem"))
+        .unwrap()
+}
+
+/// A `tls.terminate` mediated policy — the declaration the terminating
+/// transport honours.
+fn mediated_policy_tls(
+    rules: Vec<EgressRule>,
+    unmatched: DefaultUnmatched,
+    non_public: NonPublic,
+) -> ContainmentPolicy {
+    let mut p = mediated_policy(rules, unmatched, non_public);
+    p.net.tls.terminate = true;
+    p.compute_ids();
+    p
+}
+
+/// LT-02 over TLS (R4.5c): a bound `https` destination under
+/// `tls.terminate` receives the **real** carrier over a real terminated
+/// leg — `LocalTlsTransport`'s `terminates_tls()` honours the policy, the
+/// fixture's decrypted capture carries `Authorization: Bearer <value>`,
+/// the decided row records `tls_terminated: true`, and the value is on no
+/// durable surface.
+#[test]
+fn lt02_tls_bound_destination_receives_real_carrier() {
+    let (mut store, run, lease) = open("lt02-tls");
+    let effs = open_scopes(&mut store, &run, &lease, 1);
+    let (port, captured, join) = https_fixture(1);
+    let secret_value = "gho_TLS-VALUE-never-in-ledger";
+
+    let mut broker = broker_with(&[("vault:localhost", secret_value)]);
+    broker
+        .register_channel(
+            "github",
+            channel_spec_https("localhost", port, "GH_TOKEN", None),
+            ProvenanceRecord::kernel("kernel:test", 0),
+        )
+        .unwrap();
+    let binding = bound_binding(
+        &mut broker,
+        &mut store,
+        &run,
+        &lease,
+        "github",
+        "env-1",
+        &["localhost"],
+    );
+    let sentinel = broker
+        .placeholder_for(&binding.binding_id)
+        .unwrap()
+        .spelling
+        .clone();
+
+    let mut tm = minter();
+    let tok = tm.mint(&effs[0], 1, "env-1");
+    let policy = mediated_policy_tls(
+        vec![allow_rule("localhost")],
+        DefaultUnmatched::Deny,
+        NonPublic::AllowListed,
+    );
+    let budget_id = open_budget(&mut store, &run, &lease, 10, 10);
+
+    let mut med = EgressMediator {
+        store: &mut store,
+        run_id: run.clone(),
+        lease: &lease,
+        tokens: tm.resolver(),
+        broker: &mut broker,
+        policy,
+        cache: ApprovalCache::default(),
+        budget_id: Some(budget_id),
+        participant_ref: "agent.main".into(),
+        resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
+        transport: Box::new(hh_env::egress::LocalTlsTransport {
+            tls: test_tls(),
+            ..Default::default()
+        }),
+        inspect_hooks: std::collections::BTreeMap::new(),
+    };
+
+    let out = med
+        .handle(
+            &req_https(
+                &tok.token,
+                &effs[0],
+                "env-1",
+                "localhost",
+                port,
+                "GET",
+                "/data",
+                Some(&sentinel),
+            ),
+            &chain(),
+        )
+        .unwrap();
+    let MediatedOutcome::Forwarded { decided_ref, .. } = out else {
+        panic!("expected Forwarded, got {out:?}");
+    };
+    join.join().unwrap();
+
+    // The real carrier crossed the terminated leg; the sentinel never did.
+    let got = captured.lock().unwrap();
+    assert_eq!(got.len(), 1);
+    assert!(got[0].contains(&format!("Authorization: Bearer {secret_value}")));
+    assert!(!got[0].contains(&sentinel));
+
+    // `decided{allow}` records `tls_terminated: true` — the truth, not the
+    // declaration.
+    let decided = class_where(med.store, &run, "security.egress.decided", |p| {
+        jstr(p, "decision").as_deref() == Some("allow")
+    });
+    assert_eq!(decided.len(), 1);
+    assert_eq!(decided[0].event_id, decided_ref);
+    assert_eq!(
+        decided[0]
+            .payload
+            .get("tls_terminated")
+            .and_then(|j| match j {
+                Json::Bool(b) => Some(*b),
+                _ => None,
+            }),
+        Some(true),
+        "{:?}",
+        decided[0].payload
+    );
+
+    // One `used` row + the network.calls charge; the value stays off the
+    // durable surface.
+    assert_eq!(class_count(med.store, &run, "security.credential.used"), 1);
+    assert_eq!(class_count(med.store, &run, "control.budget.consumed"), 1);
+    let det = DetectorSet::standard(med.broker.mask_set().unwrap());
+    assert!(med
+        .broker
+        .leak_scan_run(med.store, &run, &det)
+        .unwrap()
+        .is_empty());
+}
+
+/// The private-issuer guard over TLS: the mediator's default roots (the
+/// public set only) refuse the test CA — the forward fails typed, never
+/// silently unterminated or silently plain.
+#[test]
+fn tls_leg_private_issuer_needs_declared_roots() {
+    let (mut store, run, lease) = open("tls-roots");
+    let effs = open_scopes(&mut store, &run, &lease, 1);
+    let (port, _captured, _join) = https_fixture(1);
+    let mut broker = broker_with(&[]);
+    let mut tm = minter();
+    let tok = tm.mint(&effs[0], 1, "env-1");
+    let policy = mediated_policy_tls(
+        vec![allow_rule("localhost")],
+        DefaultUnmatched::Deny,
+        NonPublic::AllowListed,
+    );
+    let mut med = EgressMediator {
+        store: &mut store,
+        run_id: run.clone(),
+        lease: &lease,
+        tokens: tm.resolver(),
+        broker: &mut broker,
+        policy,
+        cache: ApprovalCache::default(),
+        budget_id: None,
+        participant_ref: "agent.main".into(),
+        resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
+        // `webpki_roots()` only — the test CA is NOT declared.
+        transport: Box::new(hh_env::egress::LocalTlsTransport::default()),
+        inspect_hooks: std::collections::BTreeMap::new(),
+    };
+    let out = med.handle(
+        &req_https(
+            &tok.token,
+            &effs[0],
+            "env-1",
+            "localhost",
+            port,
+            "GET",
+            "/",
+            None,
+        ),
+        &chain(),
+    );
+    let Err(e) = out else {
+        panic!("expected a typed transport refusal, got {out:?}");
+    };
+    assert!(format!("{e:?}").contains("tls"), "{e:?}");
+}
+
+/// LT-05 over TLS (R4.5c): a revoked binding fences the replay AND the
+/// destination-side revocation POST rides the `https` intent's TLS leg —
+/// the fixture sees it on the terminated wire.
+#[test]
+fn lt05_tls_revoke_fences_replay_and_destination() {
+    let (mut store, run, lease) = open("lt05-tls");
+    let effs = open_scopes(&mut store, &run, &lease, 3);
+    // Two legs: the data forward + the destination revocation POST.
+    let (port, captured, join) = https_fixture(2);
+    let mut broker = broker_with(&[("vault:localhost", "tok-tls-live")]);
+    broker
+        .register_channel(
+            "github",
+            channel_spec_https("localhost", port, "GH_TOKEN", Some("/revoke")),
+            ProvenanceRecord::kernel("kernel:test", 0),
+        )
+        .unwrap();
+    let binding = bound_binding(
+        &mut broker,
+        &mut store,
+        &run,
+        &lease,
+        "github",
+        "env-1",
+        &["localhost"],
+    );
+    let sentinel = broker
+        .placeholder_for(&binding.binding_id)
+        .unwrap()
+        .spelling
+        .clone();
+
+    let mut tm = minter();
+    let tok = tm.mint(&effs[0], 1, "env-1");
+    let policy = mediated_policy_tls(
+        vec![allow_rule_with_methods("localhost", &["GET", "POST"])],
+        DefaultUnmatched::Deny,
+        NonPublic::AllowListed,
+    );
+    let mut med = EgressMediator {
+        store: &mut store,
+        run_id: run.clone(),
+        lease: &lease,
+        tokens: tm.resolver(),
+        broker: &mut broker,
+        policy,
+        cache: ApprovalCache::default(),
+        budget_id: None,
+        participant_ref: "agent.main".into(),
+        resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
+        transport: Box::new(hh_env::egress::LocalTlsTransport {
+            tls: test_tls(),
+            ..Default::default()
+        }),
+        inspect_hooks: std::collections::BTreeMap::new(),
+    };
+    let out = med
+        .handle(
+            &req_https(
+                &tok.token,
+                &effs[0],
+                "env-1",
+                "localhost",
+                port,
+                "GET",
+                "/",
+                Some(&sentinel),
+            ),
+            &chain(),
+        )
+        .unwrap();
+    assert!(matches!(out, MediatedOutcome::Forwarded { .. }), "{out:?}");
+
+    // Revoke — the `https`-scheme destination yields a TLS-bound intent.
+    let outcome = med
+        .broker
+        .revoke(
+            med.store,
+            &run,
+            &lease,
+            RevokeTarget::Binding(binding.binding_id.clone()),
+            "test-revoke",
+        )
+        .unwrap();
+    assert_eq!(outcome.intents.len(), 1);
+    assert_eq!(outcome.intents[0].scheme, "https");
+
+    // The replay refuses `revoked` — the fence holds over the TLS leg.
+    let mut tm2 = minter();
+    let tok2 = tm2.mint(&effs[1], 1, "env-1");
+    med.tokens = tm2.resolver();
+    let out = med
+        .handle(
+            &req_https(
+                &tok2.token,
+                &effs[1],
+                "env-1",
+                "localhost",
+                port,
+                "GET",
+                "/",
+                Some(&sentinel),
+            ),
+            &chain(),
+        )
+        .unwrap();
+    let MediatedOutcome::RefusedCredential { code, .. } = out else {
+        panic!("expected RefusedCredential (revoked), got {out:?}");
+    };
+    assert_eq!(code, RefusedCode::Revoked);
+
+    // The destination revocation POST rides the terminated leg itself.
+    let mut ktm = minter();
+    let ktok = ktm.mint(&effs[2], 1, "kernel");
+    med.tokens = ktm.resolver();
+    let results = med.dispatch_revocations(&outcome.intents, &ktok.token, &chain());
+    assert_eq!(results.len(), 1);
+    assert!(
+        matches!(&results[0], Ok(MediatedOutcome::Forwarded { .. })),
+        "{results:?}"
+    );
+    join.join().unwrap();
+    let got = captured.lock().unwrap();
+    assert_eq!(got.len(), 2, "{got:?}");
+    assert!(got[1].starts_with("POST /revoke"), "{:?}", got[1]);
 }

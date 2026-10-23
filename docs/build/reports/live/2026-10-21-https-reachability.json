@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "one unauthenticated HTTPS GET over the hh-tls rustls client (webpki roots only, full verification); HTTP 200 answer"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "api.github.com:443",
+  "git_head": "0ba449b93666c05d50f70a74182ffc44496a829c",
+  "harness": "devin-cli/swe-2/subagent",
+  "leg": "https-reachability",
+  "model_reported": null,
+  "provided": {},
+  "provider": "public-https",
+  "recorded_at": "2026-10-21T19:04:27Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5c.md",
+    "sha256": "978e078b40fa6cf8b5d47ad5074382187550eda72199e7ecc3a977d908283f1f"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 0.0,
+  "ticket": "R4.5c",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-21-https-reachability.transcript.txt",
+  "transcript_sha256": "a498038ab358771d57dd4535fd35e85d2521270b8e91ccd250ec71372b729415"
+}

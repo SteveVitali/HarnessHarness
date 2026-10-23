@@ -6,11 +6,12 @@
 //!
 //! Deliberately small: request/response head parse + write,
 //! `Content-Length`/`chunked`/close-delimited bodies — no trailers
-//! semantics, no pipelining, no 1xx, no TLS. Every admission refusal (bad
-//! head, bad framing, too large, a scheme that is not `http`) is a typed
-//! [`HttpError`], never a partial read or a silent upgrade. `https` is
-//! refused by [`parse_http_url`] — TLS terminates in R4.5c's lane, and a
-//! caller that needs it must surface `tls_pending`, never downgrade.
+//! semantics, no pipelining, no 1xx, no TLS *in the codec*. Every
+//! admission refusal (bad head, bad framing, too large, a scheme outside
+//! `http`/`https`) is a typed [`HttpError`], never a partial read or a
+//! silent upgrade. `https` parses — the TLS session lives in `hh-tls`
+//! beneath this codec (R4.5c; ADR-0365); a caller that cannot terminate
+//! TLS answers its own typed refusal, never a downgrade.
 
 use std::io::{BufRead, Write};
 use std::net::ToSocketAddrs;
@@ -72,8 +73,8 @@ pub enum HttpError {
     /// A body-bearing message arrived on a verb the binding does not
     /// body-parse (reserved — callers may map to 400).
     Unsupported,
-    /// The URL's scheme is not `http` (`https` terminates TLS — R4.5c's
-    /// lane; callers surface it as `tls_pending`, never a downgrade).
+    /// The URL's scheme is neither `http` nor `https` (TLS terminates in
+    /// `hh-tls` beneath this codec — R4.5c/ADR-0365).
     UnsupportedScheme(String),
     /// The URL did not parse (`http://host[:port]/target` required).
     BadUrl,
@@ -568,15 +569,30 @@ pub fn read_response_full(
     Ok((head, body))
 }
 
-/// A parsed `http://` endpoint — `host` (bare or `[v6]`), `port` (default
-/// 80), `target` (path + query, `/` when absent). `https` and every other
-/// scheme refuse [`HttpError::UnsupportedScheme`] — TLS is R4.5c's lane;
-/// a caller that needs it surfaces `tls_pending`, never downgrades.
+/// The URL scheme — `http` (plain) or `https` (TLS-terminated by the
+/// caller's transport, R4.5c/ADR-0365). Every other scheme refuses
+/// [`HttpError::UnsupportedScheme`] at parse.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scheme {
+    /// Plain HTTP/1.1 over TCP.
+    Http,
+    /// HTTP/1.1 over a TLS session the caller establishes (the codec
+    /// stays transport-agnostic — `connect` still dials TCP).
+    Https,
+}
+
+/// A parsed `http://`/`https://` endpoint — `scheme`, `host` (bare or
+/// `[v6]`), `port` (default 80/443 by scheme), `target` (path + query,
+/// `/` when absent). Every other scheme refuses
+/// [`HttpError::UnsupportedScheme`] — a caller that can't terminate TLS
+/// answers its own typed refusal, never a silent downgrade.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HttpUrl {
+    /// The scheme (`https` ⇒ the caller wraps `connect`'s stream in TLS).
+    pub scheme: Scheme,
     /// The authority's host (brackets stripped on IPv6 literals).
     pub host: String,
-    /// The authority's port (default 80).
+    /// The authority's port (default per scheme).
     pub port: u16,
     /// Path + query (`/…`), the request target.
     pub target: String,
@@ -594,15 +610,20 @@ impl HttpUrl {
     }
 }
 
-/// `parse_http_url(url)` — `http://host[:port][/target]` only.
+/// `parse_http_url(url)` — `http://`/`https://` `host[:port][/target]`.
+/// `https` parses with default port 443 — the caller establishes TLS
+/// beneath the codec (R4.5c); a transport that cannot is expected to
+/// answer its own typed refusal at dial time.
 pub fn parse_http_url(url: &str) -> Result<HttpUrl, HttpError> {
     let rest = url.trim();
     if let Some(scheme_end) = rest.find("://") {
-        if !rest[..scheme_end].eq_ignore_ascii_case("http") {
-            return Err(HttpError::UnsupportedScheme(
-                rest[..scheme_end].to_ascii_lowercase(),
-            ));
-        }
+        let (scheme, default_port) = match &rest[..scheme_end] {
+            s if s.eq_ignore_ascii_case("http") => (Scheme::Http, 80u16),
+            s if s.eq_ignore_ascii_case("https") => (Scheme::Https, 443u16),
+            s => {
+                return Err(HttpError::UnsupportedScheme(s.to_ascii_lowercase()));
+            }
+        };
         let rest = &rest[scheme_end + 3..];
         let (authority, target) = match rest.find('/') {
             Some(i) => (&rest[..i], rest[i..].to_string()),
@@ -614,7 +635,7 @@ pub fn parse_http_url(url: &str) -> Result<HttpUrl, HttpError> {
             let tail = &v6[end + 1..];
             let port = match tail.strip_prefix(':') {
                 Some(p) => p.parse::<u16>().map_err(|_| HttpError::BadUrl)?,
-                None if tail.is_empty() => 80,
+                None if tail.is_empty() => default_port,
                 None => return Err(HttpError::BadUrl),
             };
             (host, port)
@@ -625,7 +646,7 @@ pub fn parse_http_url(url: &str) -> Result<HttpUrl, HttpError> {
                     p.parse::<u16>().map_err(|_| HttpError::BadUrl)?,
                 ),
                 _ if !authority.is_empty() && !authority.contains(':') => {
-                    (authority.to_string(), 80)
+                    (authority.to_string(), default_port)
                 }
                 _ => return Err(HttpError::BadUrl),
             }
@@ -633,7 +654,12 @@ pub fn parse_http_url(url: &str) -> Result<HttpUrl, HttpError> {
         if host.is_empty() {
             return Err(HttpError::BadUrl);
         }
-        return Ok(HttpUrl { host, port, target });
+        return Ok(HttpUrl {
+            scheme,
+            host,
+            port,
+            target,
+        });
     }
     Err(HttpError::BadUrl)
 }
@@ -647,19 +673,32 @@ pub fn connect(
     connect_ms: u64,
     rw_ms: u64,
 ) -> Result<std::net::TcpStream, HttpError> {
-    let addr = format!("{}:{}", url.host, url.port)
+    let addrs: Vec<_> = format!("{}:{}", url.host, url.port)
         .to_socket_addrs()
         .map_err(|e| HttpError::Io(format!("resolve {}: {e}", url.host_header())))?
-        .next()
-        .ok_or_else(|| HttpError::Io(format!("no address for {}", url.host_header())))?;
-    let stream = std::net::TcpStream::connect_timeout(
-        &addr,
-        std::time::Duration::from_millis(connect_ms.max(1)),
-    )
-    .map_err(|e| match e.kind() {
-        std::io::ErrorKind::TimedOut => HttpError::Timeout,
-        _ => HttpError::Io(format!("connect {}: {e}", url.host_header())),
-    })?;
+        .collect();
+    let mut last = HttpError::Io(format!("no address for {}", url.host_header()));
+    let mut stream = None;
+    // Walk the resolved set — a dual-stack `localhost` whose first family
+    // has no listener falls through to the one that answers.
+    for addr in addrs {
+        match std::net::TcpStream::connect_timeout(
+            &addr,
+            std::time::Duration::from_millis(connect_ms.max(1)),
+        ) {
+            Ok(s) => {
+                stream = Some(s);
+                break;
+            }
+            Err(e) => {
+                last = match e.kind() {
+                    std::io::ErrorKind::TimedOut => HttpError::Timeout,
+                    _ => HttpError::Io(format!("connect {}: {e}", url.host_header())),
+                };
+            }
+        }
+    }
+    let stream = stream.ok_or(last)?;
     let rw = std::time::Duration::from_millis(rw_ms.max(1));
     stream
         .set_read_timeout(Some(rw))
@@ -858,9 +897,20 @@ mod tests {
 
     #[test]
     fn https_refuses_with_typed_scheme() {
+        // R4.5c: `https` parses (the caller terminates TLS beneath the
+        // codec) — foreign schemes stay the typed refusal.
         assert_eq!(
-            parse_http_url("https://api.example.com/v1").unwrap_err(),
-            HttpError::UnsupportedScheme("https".to_string())
+            parse_http_url("https://api.example.com/v1").unwrap(),
+            HttpUrl {
+                scheme: Scheme::Https,
+                host: "api.example.com".to_string(),
+                port: 443,
+                target: "/v1".to_string(),
+            }
+        );
+        assert_eq!(
+            parse_http_url("ftp://api.example.com/v1").unwrap_err(),
+            HttpError::UnsupportedScheme("ftp".to_string())
         );
         assert!(parse_http_url("notaurl").is_err());
     }

@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -48,6 +48,10 @@ leg_field() { # $1 leg, $2 field
     local-run:kind)     printf 'cargo-test';;
     local-run:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
     local-run:test)     printf 'hh-embed:r4_5b_live:r45b_live_ollama_run_ledger_verify_replay';;
+    https-reachability:ticket)   printf 'R4.5c';;
+    https-reachability:provider) printf 'public-https';;
+    https-reachability:kind)     printf 'script';;
+    https-reachability:names)    printf '';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -221,6 +225,26 @@ PY
     RESULT="fail:assertion — HH_LOCAL_MODEL not served ($(printf '%s\n' "$ids" | grep -c .) model id(s) listed)"
     MODEL_REPORTED=""
   fi
+}
+
+run_leg_https_reachability() { # R4.5c — the real rustls client, USD 0
+  require cargo
+  ENDPOINT_HOST="api.github.com:443"
+  ASSERTIONS="one unauthenticated HTTPS GET over the hh-tls rustls client (webpki roots only, full verification); HTTP 200 answer"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local rc=0
+  if {
+    printf '$ cargo test -p hh-tls --test r4_5c_live -- --ignored\n\n'
+    (cd "$REPO" && cargo test -p hh-tls --test r4_5c_live -- --ignored) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if grep -q "SKIPPED-UNREACHABLE" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(unreachable: $ENDPOINT_HOST)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+  else
+    RESULT="fail:live-tests rc=$rc"
+  fi
+  MODEL_REPORTED=""
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

@@ -399,6 +399,10 @@ pub struct RevokeIntent {
     pub channel_id: String,
     /// The destination's host pattern (the POST's destination coordinate).
     pub host_pattern: String,
+    /// The destination's declared scheme — the dispatcher picks the
+    /// `https_connect` leg for `https` so the revoke rides the same
+    /// carrier the credential did (R4.5c; ADR-0365).
+    pub scheme: String,
     /// The destination's declared port, when constrained (`None` = the
     /// scheme default — the dispatcher resolves the concrete port).
     pub port: Option<u16>,
@@ -2131,6 +2135,7 @@ impl CredentialBroker {
                         binding_id: bid.clone(),
                         channel_id: b.channel_id.clone(),
                         host_pattern: d.host_pattern.clone(),
+                        scheme: d.scheme.clone(),
                         port: d.port,
                         revocation_path: p.clone(),
                     });
