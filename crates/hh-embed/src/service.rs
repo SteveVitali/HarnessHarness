@@ -1371,6 +1371,16 @@ impl EmbedService {
                     ),
                     ("args_canonical_hash", Json::str("")),
                     ("reason", Json::str(proposal.to_string())),
+                    // The declared offer set is durable too (R-2.11's
+                    // `request.options` spelling — the fold reads it
+                    // there): a surface rendering the ask — the ACP
+                    // `session/request_permission` wire, L4.6a —
+                    // projects the options the ask actually offered,
+                    // never a fabricated default list.
+                    (
+                        "options",
+                        Json::Arr(options.iter().map(|o| Json::str(o.clone())).collect()),
+                    ),
                 ])
             })
             .unwrap_or(Json::Null);

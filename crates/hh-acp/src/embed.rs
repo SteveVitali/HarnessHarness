@@ -99,6 +99,10 @@ struct Sess {
     /// rows — `permission_decision` resolves them in order (the
     /// serve loop's `perm-*` request ids carry no kernel id).
     pending_permissions: VecDeque<String>,
+    /// The last `prompt` returned early on a pre-submit ask — the
+    /// serve loop re-enters `prompt` after the permission exchange to
+    /// run the deferred `submit` (`turn_deferred`).
+    prompt_deferred: bool,
 }
 
 /// The `hh-embed/1`-backed session driver. The `'a` lifetime is the
@@ -405,6 +409,26 @@ impl SessionDriver for EmbedDriver<'_> {
 
     fn prompt(&mut self, session_id: &str, content: &Json) -> Result<TurnDrive, String> {
         let embed_sid = self.sess(session_id)?.embed_session_id.clone();
+        // The pre-submit ask phase: a durable `security.permission.pending`
+        // minted *before* this turn — the open-time
+        // `supplies.host_capabilities[].requires_approval` declaration's
+        // ask — must reach the wire before `submit` drives the model.
+        // Emitting it after the turn raced the run to `lifecycle.run.
+        // finished` is unanswerable (`respond_permission` → `Draining`),
+        // so a deferred continuation marks the session, the queued ask
+        // rides this batch, and the serve loop re-enters `prompt` once
+        // the decision lands (`turn_deferred`).
+        if !self.sess(session_id)?.prompt_deferred {
+            let pre = self.tail(session_id)?;
+            if !self.sess(session_id)?.pending_permissions.is_empty() {
+                self.sess_mut(session_id)?.prompt_deferred = true;
+                return Ok(TurnDrive {
+                    events: pre,
+                    stop_reason: "permission".to_string(),
+                });
+            }
+        }
+        self.sess_mut(session_id)?.prompt_deferred = false;
         // ACP `content` is a block list (`[{type:"text",text}]`) or a
         // bare `{text}` — the kernel's `input[]` wants `text`-member
         // blocks; non-text blocks ride verbatim.
@@ -644,6 +668,13 @@ impl SessionDriver for EmbedDriver<'_> {
         self.tail(session_id)
     }
 
+    fn turn_deferred(&self, session_id: &str) -> bool {
+        self.sessions
+            .get(session_id)
+            .map(|s| s.prompt_deferred)
+            .unwrap_or(false)
+    }
+
     fn ledger_read(&self, from_seq: u64) -> Result<Json, String> {
         // `_hh/ledger/read` — any live session's tail verbatim (the
         // boundary's `read` is session-scoped; the serve loop's
@@ -720,6 +751,7 @@ impl EmbedDriver<'_> {
                 run_id,
                 watermark,
                 pending_permissions: VecDeque::new(),
+                prompt_deferred: false,
             },
         );
         Ok(SessionInfo {
@@ -801,6 +833,8 @@ mod tests {
                 ("run_id", Json::str("run-1")),
                 ("cursor", Json::obj([("seq", Json::Int(3))])),
             ])),
+            // pre-submit tail — no pending asks, `submit` proceeds
+            Ok(Json::obj([("events", Json::Arr(vec![]))])),
             // submit
             Ok(Json::obj([("turn_id", Json::str("turn-1"))])),
             // read → dispatched + completed
@@ -829,7 +863,7 @@ mod tests {
             .iter()
             .map(|(o, _)| o.clone())
             .collect();
-        assert_eq!(ops, vec!["open_session", "submit", "read"]);
+        assert_eq!(ops, vec!["open_session", "read", "submit", "read"]);
     }
 
     #[test]
@@ -839,8 +873,8 @@ mod tests {
                 ("session_id", Json::str("s")),
                 ("run_id", Json::str("r")),
             ])),
-            Ok(Json::obj([("turn_id", Json::str("t"))])),
-            // read → an ask row (durable)
+            // pre-submit tail → an ask row queues `perm-9` and the
+            // prompt defers (`turn_deferred`) before any `submit`
             Ok(Json::obj([(
                 "events",
                 Json::Arr(vec![envelope(

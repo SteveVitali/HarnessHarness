@@ -443,13 +443,27 @@ pub fn extract_recorded(
                         .clone()
                         .or_else(|| sget(&e.payload, "effect_id").map(str::to_string))
                         .unwrap_or_default();
-                    out.external_cues.push_back((
-                        mark_for(e.seq),
-                        Cue::HumanInput(HumanInput::Approval {
-                            effect_id,
-                            allow: sget(&e.payload, "decision") == Some("allow"),
-                        }),
-                    ));
+                    // Only an *effect-tied* approval ever entered the live
+                    // inbox — the boundary submits `HumanInput::Approval`
+                    // solely when the resolved pending carried an
+                    // `effect_id` (the same condition the durable row
+                    // records it under). A human `decided` naming no
+                    // effect is a boundary-level grant (the capability
+                    // ask `permission_decision` settles out of loop —
+                    // L4.6a's open-time `--capability` approval) — the
+                    // row still lands verbatim as an external, but
+                    // re-feeding it as a cue mints a spurious `propose`
+                    // the live drive never decided and skews the shared
+                    // allocator behind every later `mc-N`/`d-N`.
+                    if !effect_id.is_empty() {
+                        out.external_cues.push_back((
+                            mark_for(e.seq),
+                            Cue::HumanInput(HumanInput::Approval {
+                                effect_id,
+                                allow: sget(&e.payload, "decision") == Some("allow"),
+                            }),
+                        ));
+                    }
                 }
             }
             "lifecycle.run.resumed" => {
@@ -1668,5 +1682,52 @@ mod tests {
             .seq;
         let windowed = extract_recorded(&events, 0, Some(second_req - 1));
         assert_eq!(windowed.model_rounds.len(), 1);
+    }
+
+    /// L4.6a — a human `security.permission.decided` naming no `effect_id`
+    /// is a boundary-level grant (the open-time capability ask settled
+    /// through `permission_decision` — never a driver inbox cue). The row
+    /// must land as an external but mint NO `Approval` cue — re-feeding
+    /// one mints a spurious `propose` and skews the shared allocator
+    /// behind every later `mc-N`/`d-N` (the `expected mc-21, got mc-13`
+    /// divergence the ACP leg surfaced).
+    #[test]
+    fn boundary_level_human_decided_mints_no_approval_cue() {
+        let events = ceremony_run();
+        let decided = events
+            .iter()
+            .find(|e| e.class == "security.permission.decided")
+            .expect("fixture carries a decided row")
+            .clone();
+        let mut human = decided;
+        if let Json::Obj(m) = &mut human.payload {
+            m.insert("decider".to_string(), Json::str("human"));
+        }
+        // Effect-tied → the one Approval cue the live inbox carried.
+        let tied = extract_recorded(&[human.clone()], 0, None);
+        assert_eq!(
+            tied.external_cues
+                .iter()
+                .filter(|(_, c)| matches!(c, Cue::HumanInput(HumanInput::Approval { .. })))
+                .count(),
+            1,
+            "an effect-tied human decided mints the approval cue"
+        );
+        // Boundary-level — no effect scope, no payload effect_id → the
+        // durable row lands but no cue re-feeds.
+        let mut boundary = human;
+        boundary.scope.effect_id = None;
+        if let Json::Obj(m) = &mut boundary.payload {
+            m.remove("effect_id");
+        }
+        let untied = extract_recorded(&[boundary], 0, None);
+        assert!(
+            untied
+                .external_cues
+                .iter()
+                .all(|(_, c)| !matches!(c, Cue::HumanInput(HumanInput::Approval { .. }))),
+            "a human decided naming no effect_id mints no approval cue: {:?}",
+            untied.external_cues.len()
+        );
     }
 }

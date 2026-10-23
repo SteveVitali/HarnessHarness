@@ -124,10 +124,15 @@ dependencies = [
 name = "hharness-acp"
 version = "0.1.0"
 dependencies = [
+ "hharness-assembly",
  "hharness-compiler",
+ "hharness-embed-client-generated",
+ "hharness-embed-schema",
+ "hharness-hir",
  "hharness-identity",
  "hharness-ledger",
  "hharness-mcp",
+ "hharness-provenance",
  "hharness-telemetry",
  "hharness-wire",
 ]
@@ -324,6 +329,7 @@ dependencies = [
 name = "hharness-embed"
 version = "0.1.0"
 dependencies = [
+ "hharness",
  "hharness-analysis",
  "hharness-assembly",
  "hharness-budget",

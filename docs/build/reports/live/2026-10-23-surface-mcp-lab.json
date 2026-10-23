@@ -1,0 +1,44 @@
+{
+  "assertions": [
+    "hh-mcp-lab LabServer over loopback HTTP (bearer-granted caller binding): tools/list carries the lab surface verbs; launch_run opens a real child run on the provisioned local lane; submit_input lowers content\u2192input and the turn completes; resources/list+read serve the surface views; a second EmbedService over the same store verifies + replays{deterministic} offline (model.* rows unchanged); client=official-sdk|in-repo recorded verbatim; USD 0 local lane; MCP_LAB_BINDING: era=Modern version=2026-07-28;MCP_LAB_TOOLS: analyze,assembly_adopt,assembly_apply,assembly_explain,assembly_plan,attribution_design,cancel_run,cells,close_experiment,component_targets,diff_reports,distribution,expand_experiment,experiment_status,export_rows,get_bundle,get_row,get_trace,grant_approver,launch_run,leaderboard,leaderboard_define,leaderboard_publish,leaderboard_retract,list_pending_approvals,open_experiment,pause_experiment,power_analysis,query_rows,read_ledger,record_conformance,register_experiment,registry_catalog,registry_publish,registry_query,registry_register,registry_resolve,render_analysis,respond_approval,results_catalogue,resume_experiment,revoke_approver,row_history,run_status,serve_bundle,submit_input,verify_row;MCP_LAB_LAUNCH: run=run-1792743831762-000004-1ee904f8 handle=hnd-run-sha256:ce68a93779466faa8;MCP_LAB_RESOURCES: 2;MCP_LAB_READ: uri=hh://run/hnd-run-sha256:ce68a93779466faa8/ledger;MCP_LAB_SUBMIT: ok;MCP_LAB_STATUS: completed;MCP_LAB_REPLAY: run=run-1792743831762-000004-1ee904f8 deterministic model_rows=10;MCP_LAB_CLIENT: in-repo;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "388704d81e40016f18eb53be3d72c525621c16aa",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "surface-mcp-lab",
+  "model_reported": "qwen2.5:7b-instruct",
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T08:24:02Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6a.md",
+    "sha256": "00050a8e4deb338606d52a6a6de1063cc393a143bc5461a83b3451fc35d24abd"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6a",
+  "token_usage": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "convention": "hh-inclusive/1",
+    "input_total": 174,
+    "input_uncached": 174,
+    "normalizer_ref": "openai-compatible@1",
+    "output_reasoning": 0,
+    "output_total": 20
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-23-surface-mcp-lab.transcript.txt",
+  "transcript_sha256": "8ce714e040516ac27dbec7cc15cfe7e4a5f76c67ed2b8479e690a2ff6ac47bc7"
+}

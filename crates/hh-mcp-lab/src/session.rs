@@ -156,8 +156,30 @@ impl SurfaceSession {
             Scope::default(),
             vec![],
         )?;
-        svc.surface_append(&self.run_id, &self.lease, vec![ev])?;
+        self.append(svc, vec![ev])?;
         Ok(())
+    }
+
+    /// One fenced append under the session's writer lease. The lease
+    /// carries a TTL (60 s at acquisition) — a long-lived surface
+    /// session outlives it mid-run (a live leg polling `run_status`
+    /// through a slow model turn), after which the fenced writer
+    /// answers `SessionDetached{lease expired}`. On `SessionDetached`
+    /// the lease re-acquires through `surface_acquire_writer` — the
+    /// same takeover-reacquire `resume` uses post-crash — and the
+    /// append retries once; a second refusal surfaces verbatim.
+    pub(crate) fn append(
+        &mut self,
+        svc: &mut EmbedService,
+        evs: Vec<hharness_ledger::event::Event>,
+    ) -> Result<hharness_ledger::event::SeqRange, EmbedError> {
+        match svc.surface_append(&self.run_id, &self.lease, evs.clone()) {
+            Err(EmbedError::SessionDetached { .. }) => {
+                self.lease = svc.surface_acquire_writer(&self.run_id, 60_000)?;
+                svc.surface_append(&self.run_id, &self.lease, evs)
+            }
+            other => other,
+        }
     }
 
     /// Rebuild a session over an existing surface run — the post-crash
@@ -216,7 +238,7 @@ impl SurfaceSession {
             },
             vec![],
         )?;
-        let range = svc.surface_append(&self.run_id, &self.lease, vec![ev])?;
+        let range = self.append(svc, vec![ev])?;
         let event_id = svc
             .surface_events(&self.run_id)?
             .get(range.first as usize)
@@ -260,7 +282,7 @@ impl SurfaceSession {
             },
             vec![],
         )?;
-        svc.surface_append(&self.run_id, &self.lease, vec![ev])?;
+        self.append(svc, vec![ev])?;
         Ok(())
     }
 
