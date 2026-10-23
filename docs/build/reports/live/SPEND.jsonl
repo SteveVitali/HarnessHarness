@@ -28,3 +28,14 @@
 {"ts":"2026-10-22T04:32:05Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
 {"ts":"2026-10-22T04:32:49Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
 {"ts":"2026-10-22T04:33:00Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
+{"ts":"2026-10-22T05:55:21Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.000000,"cumulative_usd":15.252252,"record":"2026-10-22-judge-calibrate.json"}
+{"ts":"2026-10-22T05:56:26Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.000000,"cumulative_usd":15.252252,"record":"2026-10-22-judge-calibrate.json"}
+{"ts":"2026-10-22T05:57:20Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.001722,"cumulative_usd":15.253974,"record":"2026-10-22-judge-calibrate.json"}
+{"ts":"2026-10-22T05:57:58Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":16.253974,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T05:58:59Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":17.253974,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:00:42Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":18.253974,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:01:48Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":19.253974,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:05:46Z","ticket":"R4.7e","leg":"judge-run","cost_usd":0.001786,"cumulative_usd":19.25576,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:08:35Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":20.25576,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:09:20Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":21.25576,"record":"2026-10-22-judge-run.json"}
+{"ts":"2026-10-22T06:11:40Z","ticket":"R4.7e","leg":"judge-run","cost_usd":0.001945,"cumulative_usd":21.257705,"record":"2026-10-22-judge-run.json"}
