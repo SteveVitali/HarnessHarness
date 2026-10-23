@@ -1,0 +1,12 @@
+$ cargo test -p hharness-embed --test l4_6_live l46_live_ledger_replay-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-6ed345cbf55eaf9b)
+
+running 1 test
+test l46_live_ledger_replay ... hh run start → {"exit_class":"ok","kind":"result","payload":{"configuration_version_id":"sha256:bdf7d898aa648d97a5b8c521b55eb6e50f4fc9a46345511a78a4fc33b93d4d2b","outcome_class":"scored","resource_account":{"usage":[]},"run_id":"run-1792725050710-000000-7010f291","stop_reason":"format_failure","veto_tripped":[]},"result_kind":"run"}
+CAPSTONE_REPLAY: run=run-1792725050710-000000-7010f291 verify=ok replay=deterministic byte-identical
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 8.03s
+

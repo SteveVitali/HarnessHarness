@@ -1,0 +1,15 @@
+$ HH_CAPSTONE_PROVIDER=local cargo test -p hharness-embed --test l4_6_live l46_live_reference_task-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-6ed345cbf55eaf9b)
+
+running 1 test
+test l46_live_reference_task ... CAPSTONE_RUN: provider=local binding=in-process run=run-1792724968114-000000-346319d1
+hh run start → {"exit_class":"ok","kind":"result","payload":{"configuration_version_id":"sha256:658bc034b31fc8969c8dccbb75b69075d5fc7a3bcb9c1e64847d46e83c27a6d5","outcome_class":"scored","resource_account":{"usage":[]},"run_id":"run-1792724976716-000000-355d0d8b","stop_reason":"format_failure","veto_tripped":[]},"result_kind":"run"}
+CAPSTONE_RUN: provider=local binding=hh-cli run=run-1792724976716-000000-355d0d8b
+CAPSTONE_RUN: provider=local binding=http run=run-1792724984844-000000-15d3be1b
+CAPSTONE_RUN: provider=local binding=hh-cli-verify run=run-1792724976716-000000-355d0d8b
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 22.82s
+

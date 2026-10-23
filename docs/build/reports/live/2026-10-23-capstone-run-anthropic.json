@@ -1,0 +1,34 @@
+{
+  "assertions": [
+    "the reference task live over all three bindings \u2014 (a) in-process EmbedService, (b) the real hh CLI (run start/status/events over spawned hh-kernel serve stdio), (c) hh-kernel serve --http + the generated NetClient, plus a (c) read-only attach onto the hh run's store \u2014 per arm model.call.requested/completed{usage:available} \u2192 verify ok \u2192 replay{deterministic} no divergence and no provider re-call (model.* rows unchanged); hosted arms carry launch_env:* coordinates and pass the payload/blob leak sweep"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 2.0,
+  "endpoint_host": "api.anthropic.com:443",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-run-anthropic",
+  "model_reported": null,
+  "provided": {
+    "ANTHROPIC_API_KEY": "yes"
+  },
+  "provider": "anthropic",
+  "recorded_at": "2026-10-23T03:21:40Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "fail:live-tests rc=101",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.257705,
+  "ticket": "L4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-run-anthropic.transcript.txt",
+  "transcript_sha256": "4635d78081ad0f7842445bb8c9bfb56058a933c7d56d51a8cd14c138d4fac64a"
+}
