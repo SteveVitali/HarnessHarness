@@ -139,3 +139,27 @@ below the in-tree `fixture-verified` ceiling, and a pending cell's
 extension arms still carry no E2 entry — this tree cannot answer them;
 their `*.e2-replay` cells' `verified_by[]` is empty and their `needs`
 still names `e2-tree arm extension`.
+
+### Dated note — 2026-10-23 (R4.16a)
+
+The two R4.3 extension arms now land on this tree — the dated notes above
+recording their absence are history, superseded here (never edited).
+
+`foreign.py` carries eight `arm_*` functions: the six originals plus
+`arm_hir_documents` — a corpus-faithful `parse → canonicalize → validate →
+seal` port of the e3 reference semantics (`foreign/e3-typescript/lib/hir.ts`)
+on this file's own canonical-JSON/`idp_id`/sha256 primitives — and
+`arm_ledger_scenarios`, which rides the shared `_replay_wal` fold with
+`arm_ledger_transcript` (the e3 `replayWal` refactor's shape, CC1). Cases
+reaching corpus-unported machinery (the eight unexercised node kinds, edges,
+`assumption_debt`, `flow_contract`) are omitted honestly — `verify` reports
+`missing answer`, never a fabricated verdict.
+
+The regenerated committed `answers.json` verifies **`hh-xcheck verify`
+57/0** over all eight arms (`foreign-run-verified` — the distinct class
+below `fixture-verified`, never conflated); `scripts/xcheck-foreign.sh`
+runs E1 97/0 + E2 57/0 + E3 57/0 green. The `hir-documents.e2-replay` /
+`ledger-scenarios.e2-replay` pending cells now carry the E2
+`verified_by[]` record — `needs` is `HUMAN-H3` like every foreign cell
+(the `e2-tree arm extension` prerequisite is met); `status` stays
+`environment-pending`.
