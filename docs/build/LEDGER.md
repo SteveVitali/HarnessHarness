@@ -17,9 +17,9 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      GATE-G6 # round 4: 55 rows 149a-167b (151a CI insert; 153a/153b split; 164c/164f GATE-G7 inserts; 164x L4.6b insert 2026-10-23); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+nextTicket:      R4.16a # round 4: 56 rows 149a-167b (151a; 153a/153b; 164c/164f; 164x; 165a); GATE-G6 at 166 re-presents after this insert lands 149a-167b (151a CI insert; 153a/153b split; 164c/164f GATE-G7 inserts; 164x L4.6b insert 2026-10-23); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
 lastCompleted:   R4.16
-blockedOn:       (none — R4.16 landed: the closure record is complete; two OPEN deferral findings (DF-S1.2-2/-S1.5-3 e2 extension cells) are surfaced for GATE-G6, PR #196 open)
+blockedOn:       GATE-G6 pending — the e2 finding dispositioned by insert R4.16a (operator ruling 2026-10-23); was: (none — R4.16 landed: the closure record is complete; two OPEN deferral findings (DF-S1.2-2/-S1.5-3 e2 extension cells) are surfaced for GATE-G6, PR #196 open)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -29,12 +29,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r4.16 # R4.16 tip — round-4 rows fork from here; stacked PR against svitali/harnessharness-l4.6a; operator merges
+chainTip:        svitali/harnessharness-r4.16a # R4.16 tip — round-4 rows fork from here; stacked PR against svitali/harnessharness-l4.6a; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-23T10:17:35Z
+updatedAt:       2026-10-23T12:10:00Z
 ```
 
 ## OPEN FINDINGS
@@ -179,6 +179,8 @@ updatedAt:       2026-10-23T10:17:35Z
 | 2026-10-22 | GATE-G7 | fleshing correction | adopted-set→conform-ticket allocation | (orchestrator repair — no operator words) | the decision row's consequence field carried a pre-fleshing allocation; the fleshed chain is: R4.15a → BL-33/BL-34 records + the ADR-0211 descope ADR; R4.15a2 (insert 164c) → BL-35/39 + BL-36 records; R4.15b → BL-37 + BL-30 records + OQ-388 ratification; R4.15b2 (insert 164f) → BL-38 records + the eight spec-text legs; R4.15c → the five code legs (OQ-468, OQ-430, CF-492, CF-493, OQ-173 legal_hold); R4.15d → OQ-332 + DF-S4.2-1; R4.15e → OQ-170 custody. The brief tables' `R4.15a`/`R4.15b` conform cells carry the documented pre-split naming drift — reconciled by dated notes under each table head | correction |
 
 | 2026-10-23 | L4.6b (insert) | L4.6 surfaced blocker | replay-of-effect-runs contract fix | "I approve inserting the proposed ticket to fix the replay-of-effect-runs contract and so on" (operator chat, received 2026-10-23) | run-time insert `164x_L4.6b__replay-effect-runs-contract.md` at row 164x, after L4.6 (164u), before L4.7 (164v) — the capstone's 3/3 `invalid{replay_diverged}` on effect-dispatching runs is a real kernel-contract defect (shared `next_id` allocator: the live drive mints the dispatch ceremony the ReplayGate does not re-mint → ~4-id skew); the fix is an engineering row with an ADR pinning which contract leg moves (re-drive re-mints the ceremony vs positional/by-content port matching); live re-verify USD 5; round 4 → 55 rows; nextTicket → L4.6b | decision |
+
+| 2026-10-23 | R4.16a (insert) | GATE-G6 finding | e2 extension arms — insert vs descope | "ok insert and proceed" (operator chat, received 2026-10-23) | run-time insert `165a_R4.16a__e2-python-extension-arms.md` at row 165a, after R4.16 (165), before GATE-G6 (166) — implements the `e2-python` `hir-documents`/`ledger-scenarios` replay arms (verified_by[] currently empty), discharging DF-S1.2-2 + DF-S1.5-3 and clearing R-2.12.1's last member; USD 0, foreign-run-verified; round 4 → 56 rows; nextTicket → R4.16a; GATE-G6 signature re-presents after | decision |
 
 ## RETURN PASS
 
