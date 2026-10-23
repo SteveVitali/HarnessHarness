@@ -612,3 +612,288 @@ fn fleet_view_carries_the_spec_members() {
     let v2 = eng.fleet_view(&mut s);
     assert_eq!(v.to_canonical_string(), v2.to_canonical_string());
 }
+
+// ── GitHub dialect: X-Hub-Signature-256 over the raw body (R4.7; ─────
+// DF-S5.6-1; AC-R-2.12.6-9) — the `github` member arms the lane; the
+// same verify→key→enqueue tail (one OQ-313 keying, one window table).
+
+/// A spec whose `external` trigger covers `github.issue` — the live
+/// lane's `external_kind` (deliveries admit only under a covering rule).
+fn gh_spec() -> FleetSpec {
+    let mut sp = spec();
+    sp.triggers = BTreeMap::from([(
+        "observe".to_string(),
+        TriggerRule {
+            name: "observe".into(),
+            trigger: Trigger::External {
+                kind: "github.issue".into(),
+                source_ref: None,
+                filter: None,
+            },
+            policy: WakeupPolicy::default_policy(),
+        },
+    )]);
+    sp
+}
+
+/// The `hh.fleet.webhook_source/1` doc with the `github` member —
+/// `webhook` is the shared IngressPolicy (`key_ref` names the broker
+/// coordinate); `github` carries the dialect config.
+fn github_doc() -> Json {
+    Json::obj([
+        ("schema_version", Json::str("hh.fleet.webhook_source/1")),
+        (
+            "webhook",
+            Json::obj([
+                ("source_id", Json::str("github")),
+                ("key_ref", Json::str("broker:github/webhook")),
+                ("external_kind", Json::str("github.issue")),
+            ]),
+        ),
+        (
+            "github",
+            Json::obj([
+                ("repo", Json::str("acme/sandbox")),
+                ("source_id", Json::str("github")),
+                ("owner_map", Json::obj([("octocat", Json::str("alice"))])),
+                ("owner_default", Json::str("ops")),
+            ]),
+        ),
+    ])
+}
+
+/// A raw GitHub issue object (the REST shape's admission-relevant
+/// members — the mapping reads `number`/`title`/`state`/`html_url`/
+/// `assignee`/`assignees`/`labels`/`updated_at`).
+fn gh_issue(number: i64, state: &str) -> Json {
+    Json::obj([
+        ("number", Json::Int(number)),
+        ("title", Json::str(format!("issue {number}"))),
+        ("state", Json::str(state)),
+        (
+            "html_url",
+            Json::str(format!("https://github.com/acme/sandbox/issues/{number}")),
+        ),
+        ("assignee", Json::obj([("login", Json::str("octocat"))])),
+        (
+            "assignees",
+            Json::Arr(vec![Json::obj([("login", Json::str("octocat"))])]),
+        ),
+        (
+            "labels",
+            Json::Arr(vec![Json::obj([("name", Json::str("hh-live-test"))])]),
+        ),
+        ("updated_at", Json::str("2026-10-21T00:00:00Z")),
+    ])
+}
+
+/// The raw webhook body — the exact bytes GitHub POSTs (the signature
+/// binds these bytes, never a re-encoded projection).
+fn gh_raw(number: i64, state: &str) -> String {
+    Json::obj([
+        ("action", Json::str("opened")),
+        ("issue", gh_issue(number, state)),
+        (
+            "repository",
+            Json::obj([("full_name", Json::str("acme/sandbox"))]),
+        ),
+        ("sender", Json::obj([("login", Json::str("octocat"))])),
+    ])
+    .to_canonical_string()
+}
+
+fn gh_sig(raw: &str, key: &[u8]) -> String {
+    format!("sha256={}", hmac_sha256_hex(key, raw.as_bytes()))
+}
+
+#[test]
+fn github_signed_delivery_maps_the_issue_and_lands_the_item() {
+    let mut s = store("gh-sig", 1_000);
+    let (run, mut eng) = open_engine(&mut s, gh_spec());
+    let mut ad = WebhookAdapter::from_doc(&github_doc(), &run).unwrap();
+    let raw = gh_raw(42, "open");
+    let sig = gh_sig(&raw, KEY);
+    let out = ad
+        .receive_github(&raw, &sig, Some("gh-d-1"), "issues", KEY, 1_000)
+        .unwrap();
+    match out {
+        IngressOutcome::Received { occurrence_id } => {
+            assert!(occurrence_id.ends_with(":gh-d-1"), "{occurrence_id}")
+        }
+        _ => panic!("first delivery must be Received"),
+    }
+    let r = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
+    assert_eq!(r.observed.len(), 1, "the signed delivery admits durably");
+    let it = eng.work_item("gh-acme-sandbox-42").unwrap();
+    assert_eq!(it.title, "issue 42");
+    // `owner_map` — the GitHub login maps to the fleet principal (OQ-462).
+    assert_eq!(it.owner.as_deref(), Some("alice"));
+    let src = &it.source;
+    assert_eq!(src.get("kind").and_then(Json::as_str), Some("github.issue"));
+    assert_eq!(src.get("state").and_then(Json::as_str), Some("open"));
+    assert_eq!(
+        src.get("native_id").and_then(Json::as_str),
+        Some("42"),
+        "the issue number is the native id"
+    );
+    // The ingress provenance stamp (§5i.1 #6 — external, never endorsed).
+    assert_eq!(
+        src.get("authority").and_then(Json::as_str),
+        Some("external")
+    );
+    assert_eq!(src.get("origin").and_then(Json::as_str), Some("ingress"));
+    // The delivered delivery id probed `push_delivery_id` (T-LCD-07).
+    assert_eq!(
+        ad.capabilities().get("push_delivery_id"),
+        Some(CapState::Declared)
+    );
+}
+
+#[test]
+fn github_ingress_fails_closed_on_the_typed_refusal_set() {
+    let mut ad = WebhookAdapter::from_doc(&github_doc(), "fleet-run-1").unwrap();
+    let raw = gh_raw(42, "open");
+    // Bad signature — a wrong-key HMAC refuses, never admits.
+    let bad = gh_sig(&raw, b"wrong-key");
+    assert_eq!(
+        ad.receive_github(&raw, &bad, Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::BadSignature)
+    );
+    // An unsupported scheme spelling (`sha1=…`, `hmac-sha256:…`) refuses
+    // typed — the closed set is `sha256=<hex>` only.
+    let sha1 = format!("sha1={}", hmac_sha256_hex(KEY, raw.as_bytes()));
+    assert!(matches!(
+        ad.receive_github(&raw, &sha1, Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::UnsupportedAlg { .. })
+    ));
+    // Unsigned — the absent/empty header refuses (never a signature
+    // shortcut).
+    assert!(matches!(
+        ad.receive_github(&raw, "", Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::UnsupportedAlg { .. })
+    ));
+    // An event the mapping does not own (`ping` is answered locally at
+    // the listener) refuses typed, signed or not.
+    let ping = Json::obj([("zen", Json::str("keep it logically awesome"))]).to_canonical_string();
+    let psig = gh_sig(&ping, KEY);
+    assert!(matches!(
+        ad.receive_github(&ping, &psig, Some("d-1"), "ping", KEY, 1_000),
+        Err(IngressError::MalformedPayload { .. })
+    ));
+    // A signed `issues` payload missing the issue member — malformed.
+    let bare = Json::obj([("action", Json::str("opened"))]).to_canonical_string();
+    let bsig = gh_sig(&bare, KEY);
+    assert!(matches!(
+        ad.receive_github(&bare, &bsig, Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::MalformedPayload { .. })
+    ));
+    // A well-formed body that is not JSON refuses at the codec boundary.
+    let notjson = "this is not json".to_string();
+    let nsig = gh_sig(&notjson, KEY);
+    assert!(matches!(
+        ad.receive_github(&notjson, &nsig, Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::MalformedPayload { .. })
+    ));
+    // The lane without the `github` member refuses — no silent fallback
+    // to the canonical delivery codec.
+    let mut plain = webhook_adapter("fleet-run-1");
+    let good = gh_sig(&raw, KEY);
+    assert!(matches!(
+        plain.receive_github(&raw, &good, Some("d-1"), "issues", KEY, 1_000),
+        Err(IngressError::MalformedPayload { .. })
+    ));
+    // A refused delivery never enqueues an occurrence.
+    assert!(ad.occurrences(None).is_empty());
+    assert!(plain.occurrences(None).is_empty());
+}
+
+#[test]
+fn github_replay_dedupes_durably_and_stale_is_a_spec_hash_noop() {
+    let mut s = store("gh-dup", 1_000);
+    let (run, mut eng) = open_engine(&mut s, gh_spec());
+    let mut ad = WebhookAdapter::from_doc(&github_doc(), &run).unwrap();
+    let raw = gh_raw(7, "open");
+    let sig = gh_sig(&raw, KEY);
+    ad.receive_github(&raw, &sig, Some("d-1"), "issues", KEY, 1_000)
+        .unwrap();
+    let r = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
+    assert_eq!(r.observed.len(), 1);
+    let created = |s: &Store, run: &str| {
+        s.events(run)
+            .unwrap()
+            .iter()
+            .filter(|e| e.class == "control.work_item.created")
+            .count()
+    };
+    assert_eq!(created(&s, &run), 1);
+    assert_eq!(eng.list().len(), 1);
+
+    // AC-9 dedupe — the same delivery id re-presented on a FRESH adapter
+    // (the boundary rebuilds per call): the process label is `received`
+    // but the durable fold lands the audited `duplicate_occurrence` skip,
+    // never a second observation.
+    let mut ad2 = WebhookAdapter::from_doc(&github_doc(), &run).unwrap();
+    ad2.receive_github(&raw, &sig, Some("d-1"), "issues", KEY, 1_200)
+        .unwrap();
+    let r2 = eng.reconcile(&mut s, &mut ad2, 1_300).unwrap();
+    assert!(r2.observed.is_empty(), "the replay observes nothing new");
+    assert!(
+        s.events(&run).unwrap().iter().any(|e| {
+            e.class == "control.wakeup.skipped"
+                && e.payload
+                    .get("reason")
+                    .and_then(Json::as_str)
+                    .map(|r| r.contains("duplicate_occurrence"))
+                    .unwrap_or(false)
+        }),
+        "the durable duplicate_occurrence audit row must land"
+    );
+    assert_eq!(created(&s, &run), 1);
+
+    // AC-9 stale window — a re-delivery under a *fresh* delivery id with
+    // unchanged content lands a durable-new occurrence but the item's
+    // content-hash idempotency key admits `known` (the `spec_hash`
+    // no-op): no second `control.work_item.created`, one item.
+    let mut ad3 = WebhookAdapter::from_doc(&github_doc(), &run).unwrap();
+    ad3.receive_github(&raw, &sig, Some("d-2"), "issues", KEY, 9_000_000)
+        .unwrap();
+    let r3 = eng.reconcile(&mut s, &mut ad3, 9_000_100).unwrap();
+    assert_eq!(
+        r3.observed.len(),
+        1,
+        "the stale delivery's occurrence is recorded — never dropped"
+    );
+    assert_eq!(
+        created(&s, &run),
+        1,
+        "stale content is a spec_hash no-op at admit"
+    );
+    assert_eq!(eng.list().len(), 1);
+}
+
+#[test]
+fn github_issue_record_normalization() {
+    let rec = hh_fleet::github::issue_record(&gh_issue(7, "closed"));
+    assert_eq!(rec.get("native_id").and_then(Json::as_str), Some("7"));
+    assert_eq!(rec.get("state").and_then(Json::as_str), Some("closed"));
+    assert_eq!(rec.get("title").and_then(Json::as_str), Some("issue 7"));
+    assert_eq!(
+        rec.get("url").and_then(Json::as_str),
+        Some("https://github.com/acme/sandbox/issues/7")
+    );
+    assert_eq!(
+        rec.get("labels")
+            .and_then(|l| match l {
+                Json::Arr(a) => a.first().and_then(Json::as_str).map(str::to_string),
+                _ => None,
+            })
+            .as_deref(),
+        Some("hh-live-test")
+    );
+    // `updated_at` is on the record (volatile — the item's idem hash
+    // never carries it).
+    assert_eq!(
+        rec.get("updated_at").and_then(Json::as_str),
+        Some("2026-10-21T00:00:00Z")
+    );
+}

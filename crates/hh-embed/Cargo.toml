@@ -62,6 +62,11 @@ hh-debt = { path = "../hh-debt", optional = true }
 # production boundary stays records-in/records-out; `hosting_edges = []`).
 [dev-dependencies]
 hh-hosting = { path = "../hh-hosting" }
+# R4.7 (AC-R-2.12.6-9): the `github-live` leg's out-of-process cell drives
+# the packaged `hh-github-issues` variant through the real varhost spawn +
+# `PluginSourceAdapter` seam over the live-captured issue snapshot.
+hh-varhost = { path = "../hh-varhost" }
+hh-fleet-adapter = { path = "../hh-fleet-adapter" }
 
 [features]
 default = ["tier-c4"]

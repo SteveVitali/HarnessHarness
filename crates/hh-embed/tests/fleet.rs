@@ -560,3 +560,288 @@ fn fleet_adapter_surface_through_the_boundary() {
         "fleet_view.metrics missing fleet declarations: {names:?}"
     );
 }
+
+/// R4.7 — the GitHub `X-Hub-Signature-256` lane through the boundary
+/// (`delivery_raw` + `event`/`delivery_id` + the verbatim `sha256=<hex>`
+/// header). A verified delivery is *admitted* durably inside the op
+/// (`observe` folds it); the next `fleet.reconcile` turns the cue into
+/// the WorkItem. Replay and stale-window legs ride the durable fold.
+#[cfg(feature = "tier-c4")]
+#[test]
+fn fleet_github_webhook_lane_through_the_boundary() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    // The activation's external trigger covers `github.issue`.
+    let mut spec = spec_json();
+    if let Json::Obj(ref mut s) = spec {
+        if let Json::Obj(ref mut t) = s.get_mut("triggers").unwrap() {
+            if let Json::Obj(ref mut tr) = t.get_mut("observe").unwrap() {
+                if let Json::Obj(ref mut tg) = tr.get_mut("trigger").unwrap() {
+                    tg.insert("kind".into(), Json::str("github.issue"));
+                }
+            }
+        }
+    }
+    let r = call(&mut svc, "fleet.open", Json::obj([("spec", spec)]));
+    let run = r
+        .get("result")
+        .and_then(|r| r.get("run_id"))
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // `webhook` is the shared IngressPolicy; `github` arms the raw lane.
+    let source = Json::obj([
+        ("schema_version", Json::str("hh.fleet.webhook_source/1")),
+        (
+            "webhook",
+            Json::obj([
+                ("source_id", Json::str("github")),
+                ("key_ref", Json::str("broker:github/webhook")),
+                ("external_kind", Json::str("github.issue")),
+            ]),
+        ),
+        (
+            "github",
+            Json::obj([
+                ("repo", Json::str("acme/sandbox")),
+                ("source_id", Json::str("github")),
+                ("owner_map", Json::obj([("octocat", Json::str("alice"))])),
+                ("owner_default", Json::str("ops")),
+            ]),
+        ),
+    ]);
+    let key = b"boundary-github-key";
+    let raw = Json::obj([
+        ("action", Json::str("opened")),
+        (
+            "issue",
+            Json::obj([
+                ("number", Json::Int(9)),
+                ("title", Json::str("live issue")),
+                ("state", Json::str("open")),
+                (
+                    "html_url",
+                    Json::str("https://github.com/acme/sandbox/issues/9"),
+                ),
+                ("assignee", Json::obj([("login", Json::str("octocat"))])),
+            ]),
+        ),
+        (
+            "repository",
+            Json::obj([("full_name", Json::str("acme/sandbox"))]),
+        ),
+    ])
+    .to_canonical_string();
+    let sig = format!(
+        "sha256={}",
+        hh_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
+    );
+    let ingress = |svc: &mut EmbedService, raw: &str, sig: &str, did: &str| {
+        call(
+            svc,
+            "fleet.webhook_ingress",
+            Json::obj([
+                ("run", Json::str(&run)),
+                ("source", source.clone()),
+                ("delivery_raw", Json::str(raw)),
+                ("signature", Json::str(sig)),
+                ("delivery_id", Json::str(did)),
+                ("event", Json::str("issues")),
+                ("key", Json::str(std::str::from_utf8(key).unwrap())),
+            ]),
+        )
+    };
+    let r = ingress(&mut svc, &raw, &sig, "gh-d-9");
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("status"))
+            .and_then(Json::as_str),
+        Some("received"),
+        "github ingress: {r:?}"
+    );
+    // The verified occurrence is admitted durably inside the op.
+    let observed = r
+        .get("result")
+        .and_then(|r| r.get("observed"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    assert_eq!(
+        match &observed {
+            Json::Arr(a) => a.len(),
+            _ => 0,
+        },
+        1,
+        "the delivery must fold durable at ingress: {r:?}"
+    );
+
+    // `fleet.reconcile` folds the cue → the WorkItem exists.
+    let r = call(
+        &mut svc,
+        "fleet.reconcile",
+        Json::obj([("run", Json::str(&run)), ("source", source.clone())]),
+    );
+    assert!(r.get("result").is_some(), "reconcile: {r:?}");
+    let r = call(
+        &mut svc,
+        "fleet.work_item",
+        Json::obj([
+            ("run", Json::str(&run)),
+            ("item", Json::str("gh-acme-sandbox-9")),
+        ]),
+    );
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("title"))
+            .and_then(Json::as_str),
+        Some("live issue"),
+        "the delivery's item must admit: {r:?}"
+    );
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("owner"))
+            .and_then(Json::as_str),
+        Some("alice")
+    );
+
+    // Replay — same delivery id: the durable fold audits the skip (the
+    // op still answers `received` — the per-call window table is fresh;
+    // `observed` is empty because the fold names it a duplicate).
+    let r = ingress(&mut svc, &raw, &sig, "gh-d-9");
+    let observed = r
+        .get("result")
+        .and_then(|r| r.get("observed"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    assert_eq!(
+        match &observed {
+            Json::Arr(a) => a.len(),
+            _ => 99,
+        },
+        0,
+        "a replayed delivery id observes nothing new: {r:?}"
+    );
+
+    // Stale window — a fresh delivery id with identical content: the
+    // occurrence is durable-new at ingress (`observed` carries it —
+    // recorded, never dropped) but the item's content-hash idem key
+    // admits `known` — `fleet.list` still one item.
+    let r = ingress(&mut svc, &raw, &sig, "gh-d-10");
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("status"))
+            .and_then(Json::as_str),
+        Some("received"),
+        "stale ingress: {r:?}"
+    );
+    let observed = r
+        .get("result")
+        .and_then(|r| r.get("observed"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    assert_eq!(
+        match &observed {
+            Json::Arr(a) => a.len(),
+            _ => 99,
+        },
+        1,
+        "the stale delivery's occurrence is recorded: {r:?}"
+    );
+    let r = call(
+        &mut svc,
+        "fleet.reconcile",
+        Json::obj([("run", Json::str(&run)), ("source", source.clone())]),
+    );
+    let items = r
+        .get("result")
+        .and_then(|r| r.get("observed"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    assert_eq!(
+        match &items {
+            Json::Arr(a) => a.len(),
+            _ => 99,
+        },
+        0,
+        "ingress already folded the occurrence: {r:?}"
+    );
+    let r = call(
+        &mut svc,
+        "fleet.list",
+        Json::obj([("run", Json::str(&run))]),
+    );
+    let items = r
+        .get("result")
+        .and_then(|r| r.get("items"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    assert_eq!(
+        match &items {
+            Json::Arr(a) => a.len(),
+            _ => 99,
+        },
+        1,
+        "stale content admits `known` — no second item: {r:?}"
+    );
+
+    // A bad `sha256=` refuses typed; a `sha1=` header refuses the scheme.
+    let bad = format!(
+        "sha256={}",
+        hh_wire::sha256::hmac_sha256_hex(b"wrong", raw.as_bytes())
+    );
+    assert_eq!(
+        err_kind(&ingress(&mut svc, &raw, &bad, "gh-d-11")),
+        "Refused"
+    );
+    let sha1 = format!(
+        "sha1={}",
+        hh_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
+    );
+    assert_eq!(
+        err_kind(&ingress(&mut svc, &raw, &sha1, "gh-d-12")),
+        "Refused"
+    );
+    // The canonical lane still works on the same doc (`delivery` member).
+    let delivery = Json::obj([
+        ("schema_version", Json::str("hh.fleet.webhook/1")),
+        ("delivery_id", Json::str("d-canon-1")),
+        (
+            "item",
+            Json::obj([
+                ("item_id", Json::str("canon-1")),
+                ("title", Json::str("canonical delivery")),
+                (
+                    "source",
+                    Json::obj([
+                        ("source_id", Json::str("github")),
+                        ("kind", Json::str("ticket")),
+                    ]),
+                ),
+                ("idempotency_key", Json::str("idem:canon-1")),
+                ("owner", Json::str("alice")),
+            ]),
+        ),
+    ]);
+    let csig = format!(
+        "hmac-sha256:{}",
+        hh_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
+    );
+    let r = call(
+        &mut svc,
+        "fleet.webhook_ingress",
+        Json::obj([
+            ("run", Json::str(&run)),
+            ("source", source.clone()),
+            ("delivery", delivery),
+            ("signature", Json::str(&csig)),
+            ("key", Json::str(std::str::from_utf8(key).unwrap())),
+        ]),
+    );
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("status"))
+            .and_then(Json::as_str),
+        Some("received"),
+        "canonical lane on the github doc: {r:?}"
+    );
+}

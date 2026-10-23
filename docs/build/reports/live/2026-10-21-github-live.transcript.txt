@@ -1,0 +1,39 @@
+$ HH_GH_DIR=<tmp> scripts/live-github.sh
+
+HH_GITHUB_SANDBOX_TOKEN provided: yes
+HH_GITHUB_SANDBOX_REPO provided: yes
+HH_GITHUB_WEBHOOK_SECRET provided: yes
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-91411eebc34fed9b)
+
+running 1 test
+
+thread 'r47_github_live' (149911954) panicked at crates/hh-embed/tests/r4_7_live.rs:199:43:
+called `Result::unwrap()` on an `Err` value: DuplicateDecision { effect_id: "eff-bind", attempt_no: 1 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test r47_github_live ... FAILED
+
+failures:
+
+failures:
+    r47_github_live
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p hh-embed --test r4_7_live`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-91411eebc34fed9b)
+
+running 1 test
+issues.json absent — run r47_github_live first; skipped
+test r47_github_plugin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+live-github: GH_RESULT cells-rc=101
+  [cleanup] 
+  [cleanup] running 1 test
+  [cleanup] GH_CLEANUP nothing-pending
+  [cleanup] .
+  [cleanup] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+  [cleanup] 

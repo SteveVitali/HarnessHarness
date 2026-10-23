@@ -1,0 +1,50 @@
+$ HH_GH_DIR=<tmp> scripts/live-github.sh
+
+HH_GITHUB_SANDBOX_TOKEN provided: yes
+HH_GITHUB_SANDBOX_REPO provided: yes
+HH_GITHUB_WEBHOOK_SECRET provided: yes
+   Compiling hh-embed v0.0.1 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-91411eebc34fed9b)
+
+running 1 test
+GH_BROKER token=provided:yes secret=provided:yes
+GH_LISTEN_PORT 59296
+GH_TUNNEL url=https://modems-regulation-electoral-tells.trycloudflare.com
+GH_PRESTATE_HOOKS n=0
+GH_HOOK_CREATED id=701473010
+GH_PRESTATE_ISSUES n=1
+GH_LABEL created=0 (exists)
+GH_ISSUE_CREATED number=2
+GH_COMMENT status=201
+GH_DELIVERY event=issues delivery=b1d03c5c-cdab-11f1-808c-95d4d6684793 status=received
+GH_WORKITEM item=gh-SteveVitali-hh-live-sandbox-2 state=dispatching
+GH_DEDUPE status=received observed=0 (durable skip audited)
+GH_STALE observed=1 items=1
+GH_HOOK_DELETED id=701473010 status=204
+GH_HOOK_GONE verified=1 status=200
+GH_ISSUE_CLOSED number=2 status=200
+GH_RESULT pass
+test r47_github_live ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 40.08s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-91411eebc34fed9b)
+
+running 1 test
+GH_PLUGIN_OOP spawn=subprocess_confined probe=capabilities
+GH_PLUGIN_LIST n=1
+GH_PLUGIN_GET native_id=1 n=1
+GH_PLUGIN_RESULT pass
+test r47_github_plugin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.52s
+
+live-github: GH_RESULT all-cells-pass
+  [cleanup] 
+  [cleanup] running 1 test
+  [cleanup] GH_CLEANUP nothing-pending
+  [cleanup] .
+  [cleanup] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+  [cleanup] 

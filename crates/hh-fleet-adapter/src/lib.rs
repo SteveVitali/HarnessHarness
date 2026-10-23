@@ -27,8 +27,10 @@
 
 pub mod abi;
 pub mod adapter;
+pub mod github;
 pub mod tracker;
 
 pub use abi::{OPS, WORK_SOURCE_CLASS, WORK_SOURCE_CONTRACT};
 pub use adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
+pub use github::GithubTracker;
 pub use tracker::{dispatch, FixtureTracker, TrackerLogic};

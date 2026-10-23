@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -85,6 +85,11 @@ leg_field() { # $1 leg, $2 field
     bench-manifest-live:names)    printf '';;
     bench-manifest-live:test)     printf 'hh-bench:r4_6:r46_live_manifest_import';;
     bench-manifest-live:host)     printf 'raw.githubusercontent.com:443';;
+    github-live:ticket)   printf 'R4.7';;
+    github-live:provider) printf 'github-sandbox';;
+    github-live:kind)     printf 'script';;
+    github-live:names)    printf 'HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_SANDBOX_REPO HH_GITHUB_WEBHOOK_SECRET';;
+    github-live:test)     printf 'hh-embed:r4_7_live:r47_github_live';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -540,6 +545,43 @@ run_leg_bench_manifest_live() {
   elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:live-tests rc=$rc"; fi
+}
+
+# R4.7 — `github-live` (DF-S5.6-1; HUMAN-H2; AC-R-2.12.6-9): the real
+# GitHub Issues adapter + signed webhook lane, exercised against the
+# private sandbox repo `HH_GITHUB_SANDBOX_REPO` names — one runtime
+# `cloudflared` quick tunnel, one webhook (pre-state GET recorded,
+# `DELETE` in the trap), one test issue + comment rolled back by
+# close+`hh-live-test`, the signed X-Hub-Signature-256 deliveries admitted
+# at `fleet.webhook_ingress` → `fleet.reconcile` → WorkItem, plus the
+# capability-probe/source-read and out-of-process plugin cells.
+# `scripts/live-github.sh` is the orchestrator; the cells are the gated
+# `r4_7_live` tests; both credentials resolve through the real broker
+# inside the test (values never print — GH_* markers carry the
+# assertion view). USD 0 — GitHub + Cloudflare quick tunnels are free.
+run_leg_github_live() {
+  require cargo; require python3; require cloudflared
+  local n; for n in $(leg_field "github-live" names); do export "$n"; done
+  ENDPOINT_HOST="api.github.com:443"; MODEL_REPORTED=""
+  ASSERTIONS="sandbox-scoped: capability probe + list/get over the live repo; one webhook (pre-state GET, unconditional DELETE in trap); signed X-Hub-Signature-256 issues/issue_comment deliveries admitted at fleet.webhook_ingress and folded to a WorkItem at fleet.reconcile; replay dedupe + stale-window no-op; out-of-process subprocess_confined capability probe over the live snapshot; rollback = hook deleted + issue closed+hh-live-test; GH_* markers carry the assertion view; credentials broker-resolved — provided: yes only"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local rc=0
+  if {
+    printf '$ HH_GH_DIR=<tmp> %s\n\n' "scripts/live-github.sh"
+    (cd "$REPO" && HH_GH_DIR="$TMPD_L/gh" bash scripts/live-github.sh) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local markers
+    markers=$(grep '^GH_' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$markers" ] && ASSERTIONS="$ASSERTIONS; $markers"
+  elif grep -q "GH_SKIP" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped($(grep 'GH_SKIP' "$TRANSCRIPT_RAW" | head -1 | sed 's/.*GH_SKIP *//'))"
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  else
+    RESULT="fail:live-tests rc=$rc"
+  fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

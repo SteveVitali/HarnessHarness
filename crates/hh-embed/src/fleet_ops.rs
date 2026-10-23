@@ -138,8 +138,9 @@ pub enum BoundaryAdapter {
     /// The pull lane — the pinned fixture document.
     Fixture(FixtureAdapter),
     /// The push lane — signed-webhook ingress plus the shared
-    /// suspended/activate_run/records members.
-    Webhook(hh_fleet::ingress::WebhookAdapter),
+    /// suspended/activate_run/records members. Boxed — the adapter is
+    /// far larger than the fixture lane (clippy::large_enum_variant).
+    Webhook(Box<hh_fleet::ingress::WebhookAdapter>),
 }
 
 #[cfg(feature = "tier-c4")]
@@ -199,6 +200,7 @@ fn adapter(params: &Json, fleet_run: &str) -> Result<BoundaryAdapter, EmbedError
         .unwrap_or_else(|| Json::obj([("schema_version", Json::str("hh.fleet.fixture/1"))]));
     if doc.get("webhook").is_some() {
         hh_fleet::ingress::WebhookAdapter::from_doc(&doc, fleet_run)
+            .map(Box::new)
             .map(BoundaryAdapter::Webhook)
             .map_err(fleet_err)
     } else {
@@ -606,32 +608,81 @@ impl EmbedService {
             // capability probe, and the source read minimum (§5i.1 #3;
             // ADR-0205 D5).
             "fleet.webhook_ingress" => {
-                // `{run, source{webhook{…policy…}}, delivery, signature,
-                // key, now_ms?}` → `{status, occurrence_id}`. The
-                // signature is `hmac-sha256:<hex>` over the delivery's
-                // canonical form; `key` is the broker-resolved secret for
-                // the policy's `key_ref` — verification only, never
-                // copied into a ledger row or a reply record.
+                // `{run, source{webhook{…policy…}[, github{…}]},
+                // signature, key, now_ms?}` plus exactly one of:
+                //   `delivery` — the canonical `hh.fleet.webhook/1`
+                //       record; `signature` is `hmac-sha256:<hex>` over
+                //       its canonical form;
+                //   `delivery_raw` + `event` (+ `delivery_id`) — the
+                //       GitHub lane (R4.7): the raw request body and the
+                //       `X-GitHub-Event`/`X-GitHub-Delivery` header
+                //       values; `signature` is the `X-Hub-Signature-256`
+                //       value verbatim (`sha256=<hex>` over the raw
+                //       body). The `github` member on the source doc
+                //       arms this lane.
+                // `key` is the broker-resolved secret for the policy's
+                // `key_ref` — verification only, never copied into a
+                // ledger row or a reply record. A verified delivery is
+                // *admitted*: the queued occurrence folds durable
+                // (`context.observation.recorded` + `control.wakeup.
+                // occurred`) inside this call, so the next
+                // `fleet.reconcile` turns a live signed delivery into
+                // the WorkItem — the durable fold audits the replay/
+                // stale legs (`skipped{duplicate_occurrence}`, the
+                // `spec_hash` no-op). → `{status, occurrence_id,
+                // observed[]}`.
                 let run = req_str(params, "run")?.to_string();
                 let mut ad = adapter(params, &run)?;
                 let BoundaryAdapter::Webhook(wh) = &mut ad else {
                     return Err(bad("/source", "webhook_lane_required"));
                 };
-                let delivery = req(params, "delivery")?;
                 let signature = req_str(params, "signature")?;
                 let key = req_str(params, "key")?;
                 let now = now_ms(params, self.store.now_ms());
-                match wh.receive(delivery, signature, key.as_bytes(), now) {
-                    Ok(hh_fleet::ingress::IngressOutcome::Received { occurrence_id }) => {
-                        Ok(Json::obj([
-                            ("status", Json::str("received")),
-                            ("occurrence_id", Json::str(&occurrence_id)),
-                        ]))
+                let outcome = match params.get("delivery_raw").and_then(Json::as_str) {
+                    Some(raw) => {
+                        let event = req_str(params, "event")?;
+                        let delivery_id = opt_str(params, "delivery_id");
+                        wh.receive_github(
+                            raw,
+                            signature,
+                            delivery_id.as_deref(),
+                            event,
+                            key.as_bytes(),
+                            now,
+                        )
                     }
-                    Ok(hh_fleet::ingress::IngressOutcome::Duplicate { occurrence_id }) => {
+                    None => {
+                        let delivery = req(params, "delivery")?;
+                        wh.receive(delivery, signature, key.as_bytes(), now)
+                    }
+                };
+                match outcome {
+                    Ok(outcome) => {
+                        // Admit — the transient adapter's queue drains
+                        // through the durable fold (the verified delivery
+                        // reaches the reconciler's intake; a replay lands
+                        // the audited skip, a stale content-match lands
+                        // `known` at the next admit pass).
+                        let observed =
+                            fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                                .observe(&mut self.store, &mut ad, now)
+                                .map_err(fleet_err)?;
+                        let (status, occurrence_id) = match outcome {
+                            hh_fleet::ingress::IngressOutcome::Received { occurrence_id } => {
+                                ("received", occurrence_id)
+                            }
+                            hh_fleet::ingress::IngressOutcome::Duplicate { occurrence_id } => {
+                                ("duplicate", occurrence_id)
+                            }
+                        };
                         Ok(Json::obj([
-                            ("status", Json::str("duplicate")),
+                            ("status", Json::str(status)),
                             ("occurrence_id", Json::str(&occurrence_id)),
+                            (
+                                "observed",
+                                Json::Arr(observed.iter().map(Json::str).collect()),
+                            ),
                         ]))
                     }
                     Err(e) => Err(EmbedError::Refused {
