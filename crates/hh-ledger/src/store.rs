@@ -3845,6 +3845,7 @@ impl Store {
                         (size, crate::tree::mth_prefix(&leaves, size as usize))
                     })
                 },
+                |other| self.runs.get(other).map(|s| s.events.clone()),
                 self.audit_keys.as_deref(),
                 self.blob_cipher.as_deref(),
             ),

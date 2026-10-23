@@ -209,28 +209,50 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
         "hypothesis_ref",
         false,
     ),
+    // R4.7f (§5e.3; ADR-0185/0067; I-A3/I-A6) — `subagent_anchor`
+    // graduates: every `control.subagent.spawned` joins the child run's
+    // seq-0 `lifecycle.run.created` (the manifest's `spawn_event` names
+    // the spawned row; `parent_anchor` is byte-equal to the spawned
+    // row's `parent_head_at_spawn`) and a `result | cancelled` carrying
+    // the child head — verified against the child's durable prefix
+    // through the cross-run resolver. `detached` (the T6 arm) and
+    // `cancelled{failure_kind:spawn_interrupted}` (the recovery
+    // discharge) are the declared non-anchored terminals.
+    obligation(
+        "subagent_anchor",
+        "control.subagent.spawned",
+        ObligationQuantifier::AtLeastOne,
+        "control.subagent.result|control.subagent.cancelled|control.subagent.detached",
+        "child_run_id",
+        true,
+    ),
+    // R4.7f (§5g.5 §6; ADR-0066 D5) — `producer_resolution` graduates:
+    // every non-kernel `producer.component_variant_ref` resolves to a
+    // `security.extension.loaded` pin attestation (its `extension_id`,
+    // `content` or `resolved` member) or a sealed-definition member —
+    // the run's `harness_def_ref` or a `lifecycle.registry.*` row's
+    // `version_id` (the registry fold). Kernel-produced rows are
+    // adjudicated by Rule P — their variant ref is a kernel-internal
+    // component label, a sealed-definition member by construction;
+    // `"none"` is the declared unbound spelling, never a reference.
+    // `class = "*"`: every event's producer envelope is a subject.
+    obligation(
+        "producer_resolution",
+        "*",
+        ObligationQuantifier::AtLeastOne,
+        "security.extension.loaded|lifecycle.registry.registered|lifecycle.registry.published|lifecycle.registry.snapshotted",
+        "component_variant_ref",
+        false,
+    ),
 ];
 
 /// Obligations of the I-A3 set whose link machinery lands at a later stage —
 /// declared (the set is MUST-data) and reported under `obligations_deferred`,
-/// never silently absent:
-/// - `subagent_anchor` (`control.subagent.spawned` ↔ child `lifecycle.run.created`
-///   + `result|cancelled` carrying the child head — cross-run, Stage 2+);
-/// - `producer_resolution` (`component_variant_ref` resolves to a loaded,
-///   pin-attested extension or a sealed-definition member — the registry fold).
-///
-/// `fleet_anchor` graduated at S4.9 — it lives in [`OBLIGATIONS`] now:
-/// `control.work_item.dispatched{verb:"run"}` rows anchor the child's
-/// `lifecycle.run.created` in `causes[]`, and the child's own seq-0 row
-/// carries the same `spawn_event` link in its `causes` (§5i.1 #11).
-///
-/// `evolution_link` graduated at S6.1a — it lives in [`OBLIGATIONS`] now:
-/// the candidate's `transitioned{to:"hypothesized"}` row carries
-/// `hypothesis_ref` + `evidence_refs[]` (§05h §4's S2 binding) — the pair
-/// the deferred note named (`transitioned{to: proposed}` needs no link —
-/// it is the candidate's intake row; `applied` is covered by the
-/// `derived-from` record on the diff itself).
-pub const DEFERRED_OBLIGATIONS: &[&str] = &["subagent_anchor", "producer_resolution"];
+/// never silently absent. **Empty as of R4.7f** — `fleet_anchor` graduated at
+/// S4.9, `evolution_link` at S6.1a, and `subagent_anchor` +
+/// `producer_resolution` at R4.7f; the remaining DF-S1.15-1 residual (real
+/// signer-key custody, OQ-170 → R4.15e) is not an obligation id.
+pub const DEFERRED_OBLIGATIONS: &[&str] = &[];
 
 // ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
 
@@ -932,10 +954,17 @@ fn str_member<'a>(e: &'a EventEnvelope, k: &str) -> Option<&'a str> {
 /// Evaluate [`OBLIGATIONS`] over the durable prefix. Returns `(checked, unmet)`
 /// — `checked` lists every obligation id that ran (the deferred set is declared
 /// in [`DEFERRED_OBLIGATIONS`], reported separately).
+///
+/// `manifest` is the audited run's own manifest (the `producer_resolution`
+/// sealed-definition member); `other_events` resolves a *named* run's durable
+/// prefix — the cross-run half of `subagent_anchor` (`None` = the run is not
+/// held here — honest `unresolvable`, the `cross_run` member's vocabulary).
 pub fn eval_obligations(
     events: &[&EventEnvelope],
     effects: &BTreeMap<String, EffectFold>,
     finished: bool,
+    manifest: &RunManifest,
+    other_events: &dyn Fn(&str) -> Option<Vec<EventEnvelope>>,
 ) -> (Vec<&'static str>, Vec<Unmet>) {
     let mut checked = Vec::new();
     let mut unmet = Vec::new();
@@ -944,7 +973,7 @@ pub fn eval_obligations(
             continue;
         }
         checked.push(ob.id);
-        eval_obligation(ob, events, effects, &mut unmet);
+        eval_obligation(ob, events, effects, manifest, other_events, &mut unmet);
     }
     (checked, unmet)
 }
@@ -953,6 +982,8 @@ fn eval_obligation(
     ob: &AuditObligation,
     events: &[&EventEnvelope],
     effects: &BTreeMap<String, EffectFold>,
+    manifest: &RunManifest,
+    other_events: &dyn Fn(&str) -> Option<Vec<EventEnvelope>>,
     unmet: &mut Vec<Unmet>,
 ) {
     let targets: Vec<&EventEnvelope> = events
@@ -1145,6 +1176,162 @@ fn eval_obligation(
                 }
             }
         }
+        "subagent_anchor" => {
+            for e in events.iter().copied().filter(|e| e.class == ob.class) {
+                // The join's subject member — `child_run_id` is the durable
+                // key the whole link family hangs on.
+                let Some(child) = str_member(e, "child_run_id") else {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                    continue;
+                };
+                // The terminal half — `result|cancelled|detached` naming the
+                // same child, re-citing the spawned row's own
+                // `delegation_ref` (the decision edge).
+                let terminal = targets
+                    .iter()
+                    .find(|t| str_member(t, "child_run_id") == Some(child));
+                let Some(&t) = terminal else {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                    continue;
+                };
+                if str_member(t, "delegation_ref") != str_member(e, "delegation_ref") {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                    continue;
+                }
+                // The creation half — the child's seq-0
+                // `lifecycle.run.created` manifest must name this spawned
+                // row (`spawn_event`), this run (`parent_run_id`), and a
+                // `parent_anchor` byte-equal to the spawned row's
+                // `parent_head_at_spawn{seq,hash}` (I-A6's reciprocal
+                // citation). The resolver answers `None` when the run is
+                // not held — an unresolvable child never discharges an
+                // anchored terminal (the `spawn_interrupted` arm below is
+                // the one place `None` is the *expected* answer).
+                let child_prefix = other_events(child);
+                let child_created_ok = child_prefix
+                    .as_deref()
+                    .and_then(|prefix| {
+                        let created = prefix.first()?;
+                        if created.class != "lifecycle.run.created" {
+                            return Some(false);
+                        }
+                        let m = RunManifest::from_json(&created.payload).ok()?;
+                        let spawn_ok = m
+                            .spawn_event
+                            .as_ref()
+                            .map(|s| s.run_id == e.run_id && s.event_id == e.event_id)
+                            .unwrap_or(false);
+                        let parent_ok = m.parent_run_id.as_deref() == Some(e.run_id.as_str());
+                        let anchor_ok = match (
+                            m.extra.get("parent_anchor"),
+                            e.payload.get("parent_head_at_spawn"),
+                        ) {
+                            (Some(a), Some(h)) => {
+                                a.get("run_id").and_then(Json::as_str) == Some(e.run_id.as_str())
+                                    && a.get("seq") == h.get("seq")
+                                    && a.get("hash") == h.get("hash")
+                            }
+                            _ => false,
+                        };
+                        Some(spawn_ok && parent_ok && anchor_ok)
+                    })
+                    .unwrap_or(false);
+                let ok = match t.class.as_str() {
+                    // T6 (`detach_to_child`) — the child still runs; the
+                    // `child_terminal` subscription the parent retains is
+                    // its anchor path, so the row carries no `child_head`.
+                    // The creation anchor must still verify.
+                    "control.subagent.detached" => child_created_ok,
+                    // The recovery discharge — `spawn_interrupted` records
+                    // that the child never opened; a held child run
+                    // contradicts the record.
+                    _ => {
+                        if str_member(t, "failure_kind") == Some("spawn_interrupted") {
+                            child_prefix
+                                .as_deref()
+                                .map(|p| p.is_empty())
+                                .unwrap_or(true)
+                        } else {
+                            // `result|cancelled` must carry the child head —
+                            // `{seq, hash}` re-verified against the child's
+                            // durable prefix (the `final`-checkpoint citation
+                            // names the same event hash at `tree_size - 1`).
+                            let head_ok =
+                                match (child_prefix.as_deref(), t.payload.get("child_head")) {
+                                    (Some(prefix), Some(h)) => {
+                                        match (
+                                            h.get("seq").and_then(Json::as_int),
+                                            h.get("hash").and_then(Json::as_str),
+                                        ) {
+                                            (Some(seq), Some(hash)) if seq >= 0 => prefix
+                                                .get(seq as usize)
+                                                .map(|ev| ev.hash == hash)
+                                                .unwrap_or(false),
+                                            _ => false,
+                                        }
+                                    }
+                                    _ => false,
+                                };
+                            child_created_ok && head_ok
+                        }
+                    }
+                };
+                if !ok {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                }
+            }
+        }
+        "producer_resolution" => {
+            // The resolution universe — a loaded, pin-attested extension
+            // (`security.extension.loaded`'s `extension_id`/`content`/
+            // `resolved` members — the pin attestation §5g.5 §6 names),
+            // or a sealed-definition member: the run's own
+            // `harness_def_ref` plus the registry fold's `version_id`s.
+            let mut resolvable: BTreeSet<&str> = BTreeSet::new();
+            if let Some(hd) = manifest.harness_def_ref.as_deref() {
+                resolvable.insert(hd);
+            }
+            for t in &targets {
+                for k in ["extension_id", "version_id", "content", "resolved"] {
+                    if let Some(v) = str_member(t, k) {
+                        resolvable.insert(v);
+                    }
+                }
+            }
+            for e in events.iter().copied() {
+                let v = e.producer.component_variant_ref.as_str();
+                // `"none"` is the declared unbound spelling — no reference.
+                if v.is_empty() || v == "none" {
+                    continue;
+                }
+                // Kernel-produced rows are adjudicated by Rule P (the
+                // component-class set + `authority = kernel`); their variant
+                // ref is a kernel-internal component label — a member of the
+                // run's sealed definition by construction, never a
+                // registered-producer reference.
+                if e.producer.component_class == crate::event::KERNEL_COMPONENT {
+                    continue;
+                }
+                if !resolvable.contains(v) {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                }
+            }
+        }
         "persisted_widening" => {
             let human_changed = events.iter().any(|e| {
                 e.class == "lifecycle.definition.changed"
@@ -1180,7 +1367,9 @@ fn eval_obligation(
 /// `blob_status` is the store's tombstone-aware lookup; `other_head` resolves
 /// a cross-run anchor's claimed `{tree_size, tree_head}` against the named
 /// run's durable prefix (`None` = the run is not held — `unresolvable`, an
-/// honest status, not a failure); `keys`, when supplied, lets signature checks
+/// honest status, not a failure); `other_events` resolves a named run's
+/// durable prefix itself (the `subagent_anchor` obligation's child half —
+/// `None` = unresolvable); `keys`, when supplied, lets signature checks
 /// report `verified`/`failed` instead of `unverified`; `cipher`, when a
 /// [`crate::cipher::BlobCipher`] is installed, lets the `encryption` member
 /// report the pool's actual sealing construction against the manifest's
@@ -1195,6 +1384,7 @@ pub fn audit_view(
     until: Option<u64>,
     manifest: &RunManifest,
     other_head: impl Fn(&str, u64) -> Option<(u64, String)>,
+    other_events: impl Fn(&str) -> Option<Vec<EventEnvelope>>,
     keys: Option<&dyn AuditKeyResolver>,
     cipher: Option<&dyn crate::cipher::BlobCipher>,
 ) -> View {
@@ -1333,7 +1523,7 @@ pub fn audit_view(
     for e in &events {
         crate::effect::fold_event(&mut effects, e);
     }
-    let (checked, unmet) = eval_obligations(&events, &effects, finished);
+    let (checked, unmet) = eval_obligations(&events, &effects, finished, manifest, &other_events);
     let coverage = Json::obj([
         (
             "obligations_checked",

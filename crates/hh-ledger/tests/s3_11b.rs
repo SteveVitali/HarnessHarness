@@ -514,7 +514,13 @@ fn evolution_link_obligation() {
             ),
         ),
     ] {
-        let (_, unmet) = eval_obligations(&[&e], &effects, true);
+        let (_, unmet) = eval_obligations(
+            &[&e],
+            &effects,
+            true,
+            &RunManifest::minimal(RunKind::Agent),
+            &|_: &str| -> Option<Vec<EventEnvelope>> { None },
+        );
         assert!(
             unmet.iter().any(|u| u.obligation_id == "evolution_link"),
             "{tag} must be unmet"
@@ -524,7 +530,13 @@ fn evolution_link_obligation() {
     // are not subjects of the obligation at all.
     let intake = mk("e-in", "proposed", vec![]);
     let rejected = mk("e-rj", "rejected", vec![]);
-    let (_, unmet) = eval_obligations(&[&intake, &rejected, &linked("e-ok")], &effects, true);
+    let (_, unmet) = eval_obligations(
+        &[&intake, &rejected, &linked("e-ok")],
+        &effects,
+        true,
+        &RunManifest::minimal(RunKind::Agent),
+        &|_: &str| -> Option<Vec<EventEnvelope>> { None },
+    );
     assert!(
         !unmet.iter().any(|u| u.obligation_id == "evolution_link"),
         "linked hypothesized + non-binding rows must be met: {unmet:?}"
@@ -599,12 +611,24 @@ fn ac_h6_4_persisted_widening_met_by_human_change_row() {
     let effects = BTreeMap::new();
 
     // Grant alone → unmet.
-    let (_, unmet) = eval_obligations(&[&grant], &effects, true);
+    let (_, unmet) = eval_obligations(
+        &[&grant],
+        &effects,
+        true,
+        &RunManifest::minimal(RunKind::Agent),
+        &|_: &str| -> Option<Vec<EventEnvelope>> { None },
+    );
     assert!(unmet
         .iter()
         .any(|u| u.obligation_id == "persisted_widening"));
     // With the human-origin change row → met.
-    let (_, unmet) = eval_obligations(&[&grant, &changed], &effects, true);
+    let (_, unmet) = eval_obligations(
+        &[&grant, &changed],
+        &effects,
+        true,
+        &RunManifest::minimal(RunKind::Agent),
+        &|_: &str| -> Option<Vec<EventEnvelope>> { None },
+    );
     assert!(
         !unmet
             .iter()
@@ -618,7 +642,13 @@ fn ac_h6_4_persisted_widening_met_by_human_change_row() {
         Json::obj([("rule_ref", Json::str("policy/egress/0"))]),
         Some(ProvenanceRecord::kernel("kernel:test", 0)),
     );
-    let (_, unmet) = eval_obligations(&[&grant, &changed_kernel], &effects, true);
+    let (_, unmet) = eval_obligations(
+        &[&grant, &changed_kernel],
+        &effects,
+        true,
+        &RunManifest::minimal(RunKind::Agent),
+        &|_: &str| -> Option<Vec<EventEnvelope>> { None },
+    );
     assert!(unmet
         .iter()
         .any(|u| u.obligation_id == "persisted_widening"));
