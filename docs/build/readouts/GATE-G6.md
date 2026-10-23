@@ -10,7 +10,11 @@
 
 ---
 
-## Verdict — NOT PASSABLE on the zero-deferral threshold (one finding)
+## Verdict — ALL THRESHOLDS MET (reading 1; the operator signs)
+
+_Amended 2026-10-23 (reading 2, after the finding's discharge): the zero-deferral finding below is **resolved** — the operator ruled "ok insert and proceed" (GATE DECISIONS 2026-10-23); insert `R4.16a` (PR #197) implemented the two e2 extension arms `foreign-run-verified` (e2 verify 57/0; xcheck-foreign E1 97/E2 57/E3 57 all green), DF-S1.2-2 + DF-S1.5-3 are `**DONE**`, `scripts/deferrals-open.sh` prints nothing, `R-2.12.1` → MET. All eleven thresholds now read PASS. The reading-1 verdict below is preserved for history._
+
+### Reading 1 (pre-discharge) — NOT PASSABLE on the zero-deferral threshold (one finding)
 
 Ten of the eleven pre-registered thresholds are met on evidence. The **zero OPEN DEFERRALS** threshold is
 **not met**: two rows remain OPEN and R4.16 surfaced them honestly rather than carrying or falsely closing them —
@@ -50,9 +54,9 @@ evidenced but unmerged. The gate's signature re-presents when the ruling lands.
 
 | # | Threshold | Verdict | Evidence |
 |---|---|---|---|
-| 1 | **Zero OPEN DEFERRALS rows** | **✗ FAIL — finding** | `scripts/deferrals-open.sh` prints `DF-S1.2-2` + `DF-S1.5-3` OPEN (the e2 extension cells; the other 99 of 101 rows discharged with dated markers or waived/descoped by ADR). |
+| 1 | **Zero OPEN DEFERRALS rows** | **✗ FAIL at reading 1 → PASS at reading 2** | Reading 1: `deferrals-open.sh` printed `DF-S1.2-2` + `DF-S1.5-3` OPEN. Reading 2: **discharged by insert R4.16a** — `deferrals-open.sh` prints nothing (all 101 rows DONE/waived/descoped). |
 | 2 | Zero open BL rows | **PASS** | `scripts/deferrals-open.sh --bl` prints nothing. R4.16 flipped BL-02/03/05 + BL-30…BL-39 exactly once; end state 41 closed, 3 `accepted` (BL-01 the standing e2 home + BL-47/48 the trigger index homes — `accepted` index rows, not open debt); BL-41/42/43 closed `converted-to-policy` at L4.2. |
-| 3 | Coverage MET or MET-DIFFERENTLY-permanent | **PASS with the one shadow** | Verdict column: **60 MET · 5 MET-DIFFERENTLY** (each cites a permanent-design ADR: ADR-0146, ADR-0050×2, ADR-0210, ADR-0003) **· 1 PARTIAL** — `R-2.12.1`, whose only non-discharged member is the same e2 residual (its other legs: DF-S0.3-2 R4.5, DF-S0.3-3 waived ADR-0371, DF-S1.8-1 R4.16, DF-S1.27-1 R4.4b). The PARTIAL clears when the finding is dispositioned. |
+| 3 | Coverage MET or MET-DIFFERENTLY-permanent | **PASS** | Reading 2: **61 MET · 5 MET-DIFFERENTLY · 0 PARTIAL** — `R-2.12.1` → MET at R4.16a (its last member discharged). Reading 1 showed 60 MET / 1 PARTIAL on the same e2 shadow. |
 | 4 | Live legs evidenced; spend ≤ USD 100; no secret value | **PASS** | 34 `hh-live-evidence/1` records committed under `docs/build/reports/live/`; `SPEND.jsonl` cumulative **$25.259768 / $100**; gitleaks staged + full-history clean (only the 7 allowlisted fake-test-secret hits). |
 | 5 | Launch hardening green | **PASS** | CI matrix ubuntu+macOS green on the chain tip incl. cargo-deny, gitleaks, drift, foreign legs, quickstart; publish dry-run green over the 49-crate publish set (`publish-order.sh`, 49/49 names free); release-workflow dry-mode artifacts produced (aarch64-apple-darwin tarball + sha256 locally — dry-mode dispatch is default-branch-only, recorded); license/notices/community files present (9 living OSS files at repo root). |
 | 6 | Surface coverage — every public surface/binding/plugin live-executed or operator n/a | **PASS** | `docs/build/OPERATIONAL_READINESS.md` R4.16 sweep: `hh` CLI, bindings (a)/(b)/(c) incl. the SDK/embed library API via the `hharness` facade, `hh-web`, `hh-mcp`/`hh-mcp-serve`, `hh-mcp-lab`, `hh-acp` (official ACP SDK client), the TS client (E3), the three packaged plugins OOP, `hh-github-issues` adapter, every provider lane — all `live-executed` with cited records; E2/E3 foreign = `foreign-run-verified` (honest distinct class). No silent gaps. |
@@ -91,8 +95,7 @@ values anywhere — `provided: yes/no` only.) *To be filled by the operator's re
 
 ## D4 full-run CI evidence (the gate's CI line)
 
-`workflow_dispatch` run **39939140505** on chain tip `svitali/harnessharness-r4.16` @ `c5bda1c`
-— **in_progress at read** (cargo-deny + gitleaks legs already green; the two build·test·fmt·drift legs in flight — the verdict is decided by the deferrals finding, not CI; the line is updated when the run lands).
+`workflow_dispatch` run **39939140505** on chain tip `svitali/harnessharness-r4.16` @ `c5bda1c` — **success** (all legs: cargo-deny · gitleaks · build·test·fmt·drift ubuntu+macOS)..
 
 ## Carries (surfaced, accounted — none blocking except the finding above)
 
@@ -109,8 +112,8 @@ values anywhere — `provided: yes/no` only.) *To be filled by the operator's re
 
 ## Operator actions at this gate
 
-1. **Disposition the finding** — insert (implement the e2 extension arms) vs descope/waiver ADR for DF-S1.2-2 +
-   DF-S1.5-3. The gate does not pass while they stay OPEN.
+1. ~~Disposition the finding~~ — **resolved 2026-10-23**: the operator ruled "ok insert and proceed"; insert R4.16a
+   (PR #197) implemented the arms and flipped the rows DONE. No OPEN deferral remains.
 2. **Reconcile spend** — record the console-reconciled figure in §Spend reconciliation.
 3. **Sign the disposition** — PASSED | SKIPPED-BY-OPERATOR | NOT PASSABLE (+ what would pass it), recorded in
    `docs/build/LEDGER.md` GATE DECISIONS and this readout.
