@@ -27,6 +27,8 @@
 //! - [`export`] — the sink lowering (`content_classes`, redaction, sampling,
 //!   `max_field_bytes`, consent) and the `measurement.export.delivered`
 //!   append.
+//! - [`otlp`] — the OTLP/HTTP (JSON) `ExportTraceServiceRequest` wire form
+//!   the mediated live sink POSTs (R4.7c; ADR-0346 trigger (a)).
 
 mod codec;
 
@@ -38,6 +40,7 @@ pub mod export;
 pub mod genai;
 pub mod lift;
 pub mod openinfer;
+pub mod otlp;
 pub mod phase;
 pub mod propagation;
 pub mod scope;

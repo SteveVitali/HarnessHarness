@@ -24,7 +24,9 @@ use hh_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressRule, HostPattern,
     NetMode, NonPublic, RuleDecision,
 };
-use hh_embed::subscriber::{ExportSubscriber, PollOutcome, SinkDestination, SubscriberEgress};
+use hh_embed::subscriber::{
+    ExportSubscriber, PollOutcome, SinkDestination, SinkWire, SubscriberEgress,
+};
 use hh_env::egress::{EgressMediator, LocalHttpTransport, StaticResolver};
 use hh_env::events::{intended_payload, EventMinter, ScopeChain};
 use hh_env::tokens::{TokenMinter, TokenResolver};
@@ -241,6 +243,7 @@ fn subscriber_tails_read_delivers_through_egress_and_appends_delivered() {
             host: "127.0.0.1".into(),
             port,
             path: "/v1/spans".into(),
+            wire: SinkWire::BatchJson,
         },
         egress: SubscriberEgress {
             token,
@@ -338,6 +341,7 @@ fn unlisted_sink_is_an_egress_refusal_never_a_delivered_row() {
             host: "sink.example".into(),
             port: 443,
             path: "/v1/spans".into(),
+            wire: SinkWire::BatchJson,
         },
         egress: SubscriberEgress {
             token,
