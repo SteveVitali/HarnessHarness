@@ -17,9 +17,9 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      GATE-G6 # round 4: 56 rows 149a-167b (151a CI; 153a/153b split; 164c/164f G7; 164x L4.6b; 165a R4.16a); GATE-G6 at 166 re-presents — the e2 finding discharged, zero-deferral met on the ledger; HUMAN-H6 before R4.5a
-lastCompleted:   R4.16a
-blockedOn:       (none — the e2 finding discharged; GATE-G6 signature re-presents)
+nextTicket:      R4.17 # round 4: 56 rows 149a-167b (151a CI; 153a/153b split; 164c/164f G7; 164x L4.6b; 165a R4.16a); GATE-G6 at 166 re-presents — the e2 finding discharged, zero-deferral met on the ledger; HUMAN-H6 before R4.5a
+lastCompleted:   GATE-G6
+blockedOn:       (none — GATE-G6 PASSED 2026-10-23, "accept, proceed")
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -181,6 +181,8 @@ updatedAt:       2026-10-23T14:21:00Z
 | 2026-10-23 | L4.6b (insert) | L4.6 surfaced blocker | replay-of-effect-runs contract fix | "I approve inserting the proposed ticket to fix the replay-of-effect-runs contract and so on" (operator chat, received 2026-10-23) | run-time insert `164x_L4.6b__replay-effect-runs-contract.md` at row 164x, after L4.6 (164u), before L4.7 (164v) — the capstone's 3/3 `invalid{replay_diverged}` on effect-dispatching runs is a real kernel-contract defect (shared `next_id` allocator: the live drive mints the dispatch ceremony the ReplayGate does not re-mint → ~4-id skew); the fix is an engineering row with an ADR pinning which contract leg moves (re-drive re-mints the ceremony vs positional/by-content port matching); live re-verify USD 5; round 4 → 55 rows; nextTicket → L4.6b | decision |
 
 | 2026-10-23 | R4.16a (insert) | GATE-G6 finding | e2 extension arms — insert vs descope | "ok insert and proceed" (operator chat, received 2026-10-23) | run-time insert `165a_R4.16a__e2-python-extension-arms.md` at row 165a, after R4.16 (165), before GATE-G6 (166) — implements the `e2-python` `hir-documents`/`ledger-scenarios` replay arms (verified_by[] currently empty), discharging DF-S1.2-2 + DF-S1.5-3 and clearing R-2.12.1's last member; USD 0, foreign-run-verified; round 4 → 56 rows; nextTicket → R4.16a; GATE-G6 signature re-presents after | decision |
+
+| 2026-10-23 | GATE-G6 | round-4 discharge + launch readiness | the readout's finding + signed disposition | "accept, proceed" (operator chat, received 2026-10-23) | **PASSED** — all eleven pre-registered thresholds met on evidence: deferrals-open empty (101/101 discharged after insert R4.16a), 61 MET + 5 MET-DIFFERENTLY + 0 PARTIAL coverage, 34+ live records + $25.259768/$100 spend, launch hardening green, every surface live-executed, main contained, GATE-ACCEPT ×10 discharged, checkers clean, pre-auths dispositioned, DF-R4.2a-1 honest 64.1% recorded. The e2 finding was discharged by insert R4.16a (PR #197) — deferrals-open empty. Spend reconciliation owed to the consoles by the operator (recorded when received). Full-run 39939140505 success. R4.17 released (nextTicket → R4.17) | decision |
 
 ## RETURN PASS
 
