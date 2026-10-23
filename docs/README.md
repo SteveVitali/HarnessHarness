@@ -34,9 +34,17 @@ by hand falsifies the record; only *living* docs are edited in place.
 | Entry | Mode | What it is |
 |---|---|---|
 | `../README.md` | living | the repo's front door |
+| `../CHANGELOG.md` | living | the human-facing release summary (Keep a Changelog; per-release) |
+| `../CONTRIBUTING.md` | living | contribution policy |
+| `../SECURITY.md` | living | vulnerability-reporting policy |
+| `../CODE_OF_CONDUCT.md` | living | the community covenant |
+| `../LICENSE-MIT` · `../LICENSE-APACHE` | frozen | the dual license texts |
+| `../THIRD_PARTY_NOTICES.md` | generated | the admitted-deps notices — regenerate via `scripts/gen-third-party-notices.sh`, never hand-edit |
 | `../MAINTAINING.md` | living | maintainer policy — releases, evidence classes, write integrity, revisit-trigger triage (L4.2) |
 | `../GOVERNANCE.md` | living | decision authority — the ADR process, the amendment protocol, the maintainer role (L4.2) |
-| `../AGENTS.md` | living | agent-facing docs — refreshed under `agent-docs` (DOC.2), not `refresh-repo-docs` |
+| `../AGENTS.md` · `../crates/AGENTS.md` · `../CLAUDE.md` | living | agent-facing docs — refreshed under `agent-docs` (DOC.2), not `refresh-repo-docs`; `CLAUDE.md` is the `@AGENTS.md` bridge |
+| `../foreign/` | living + append-only evidence | the foreign replay candidates `e2-python`/`e3-typescript` + their committed `answers.json` corpora |
+| `../clients/` | generated + living | `clients/ts` — the generated TypeScript `hh-embed/1` client + fixtures |
 | `../spec/` | living → frozen | `CANONICAL_SPEC.md` + `sections/` + `READINESS_REPORT.md`; amend via the manifest protocol + an ADR |
 | `../research/` | frozen | the program ledger (`LEDGER.md`), research ADRs (`decisions/ADR-0001…`), registers, dossiers, briefs — frozen at the readiness gate |
 | `../spikes/README.md` | living | the throwaway-spike index — kept in sync with the committed trees |
