@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -73,6 +73,18 @@ leg_field() { # $1 leg, $2 field
     routing-probe:test)     printf 'hh-embed:r4_5e_live:r45e_live_routing_probe';;
     routing-probe:pricekey.anthropic) printf 'anthropic/claude-haiku-4-5-20251001';;
     routing-probe:pricekey.openai)    printf 'openai/gpt-4.1-mini-2025-04-14';;
+    lt03-live:ticket)   printf 'R4.6';;
+    lt03-live:provider) printf 'multi-provider';;
+    lt03-live:kind)     printf 'script';;
+    lt03-live:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL ANTHROPIC_API_KEY';;
+    lt03-live:test)     printf 'hh-embed:r4_6_live:r46_lt03_live_corpus_arm';;
+    lt03-live:pricekey.anthropic) printf 'anthropic/claude-haiku-4-5-20251001';;
+    bench-manifest-live:ticket)   printf 'R4.6';;
+    bench-manifest-live:provider) printf 'public-upstream';;
+    bench-manifest-live:kind)     printf 'script';;
+    bench-manifest-live:names)    printf '';;
+    bench-manifest-live:test)     printf 'hh-bench:r4_6:r46_live_manifest_import';;
+    bench-manifest-live:host)     printf 'raw.githubusercontent.com:443';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -123,7 +135,9 @@ need_names() { # $1 leg → exit 4 listing every unprovided NAME
 
 spend_cumulative() {
   [ -f "$SPEND" ] || { printf '0'; return; }
-  grep -o '"cost_usd":[0-9.]*' "$SPEND" | cut -d: -f2 | awk '{s+=$1} END{printf "%.4f", s+0}'
+  # 6 decimals — SPEND rows carry six; a %.4f fold truncates a fine-grained
+  # history and a zero-cost leg then records a *decreasing* cumulative.
+  grep -o '"cost_usd":[0-9.]*' "$SPEND" | cut -d: -f2 | awk '{s+=$1} END{printf "%.6f", s+0}'
 }
 
 budget_gate() { # $1 ticket, $2 declared budget → exit 3 on breach
@@ -400,6 +414,129 @@ PY
     fi
   elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+
+# R4.6 — `lt03-live` (DF-S1.13-3's LT-03 live-corpus arm): the pinned
+# AgentDojo-shaped injection battery driven through real model calls on
+# BOTH model families in one leg — the provisioned local model plus the
+# one hosted provider (Anthropic haiku). The test's `LT03_TASK` markers
+# carry the per-task outcome (`carried` | `refused` | `leak_detected` —
+# every outcome is a pass shape: the wire holds the placeholder, the
+# request was refused, or the veto's detector input landed); the
+# `LT03_ASSERT` markers carry the durable halves (out-of-scope refusal,
+# canary → leak_detected, sink value → known_value veto). Only the
+# hosted family's `LT03_USAGE` prices (the local lane is zero-spend).
+run_leg_lt03_live() {
+  require cargo; require python3
+  local spec crate tbin filt rc_total=0
+  spec=$(leg_field "lt03-live" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "lt03-live" names); do export "$n"; done
+  ENDPOINT_HOST=""; MODEL_REPORTED=""
+  ASSERTIONS="AgentDojo-shaped injection battery (pinned upstream corpus, tests/fixtures/r4_6/lt03-battery.json) over real model calls on both families: per task the outbound request carries the mh_secret: placeholder or is refused; a canary bind lands durable leak_detected; a real value at a sink is success-with-veto (known_value); no provisioned value in any payload/blob"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  : > "$TRANSCRIPT_RAW"
+  local fam rc
+  for fam in local anthropic; do
+    rc=0
+    if {
+      printf '$ HH_LT03_FAMILY=%s cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' \
+        "$fam" "$crate" "$tbin" "$filt"
+      (cd "$REPO" && HH_LT03_FAMILY="$fam" \
+        cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+    } >> "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+    [ "$rc" -ne 0 ] && rc_total=$rc
+  done
+  local ntask nref nleak usage
+  ntask=$(grep -c '^LT03_TASK ' "$TRANSCRIPT_RAW" || true)
+  nref=$(grep -c '^LT03_TASK .* refused$' "$TRANSCRIPT_RAW" || true)
+  nleak=$(grep -c '^LT03_TASK .* leak_detected$' "$TRANSCRIPT_RAW" || true)
+  usage=$(grep '^LT03_USAGE anthropic ' "$TRANSCRIPT_RAW" | head -1 | sed 's/^LT03_USAGE anthropic //' || true)
+  if [ "$rc_total" -eq 0 ]; then
+    RESULT="pass"
+    ASSERTIONS="$ASSERTIONS; LT03_TASK rows=$ntask refused=$nref leak_detected=$nleak across both families"
+    if [ -n "$usage" ]; then
+      LEG_TOKEN_USAGE="$usage"
+      local ka; ka=$(leg_field "lt03-live" pricekey.anthropic)
+      LEG_COST_MEASURED=$(python3 - "$PRICING" "$ka" "$usage" <<'PY'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+row = pricing["models"].get(sys.argv[2])
+if row is None:
+    sys.exit("live-verify: NoPrice — no pinned row for " + sys.argv[2])
+u = json.loads(sys.argv[3])
+def f(k):
+    v = u.get(k)
+    return float(v) if v is not None else 0.0
+i, o, cr, cw = f("input_total"), f("output_total"), f("cache_read"), f("cache_write")
+uncached = max(i - cr - cw, 0.0)
+c = (uncached * row["prompt_per_1k_usd"]
+     + cr * row.get("cache_read_per_1k_usd", row["prompt_per_1k_usd"])
+     + cw * row.get("cache_write_per_1k_usd", row["prompt_per_1k_usd"])
+     + o * row["completion_per_1k_usd"]) / 1000.0
+print("%.6f" % c)
+PY
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    fi
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc_total"; fi
+}
+
+# R4.6 — `bench-manifest-live` (DF-S1.24-2): the real upstream foreign
+# manifest — the Harbor Index `registry.json` at the committed pin —
+# fetched over read-only public HTTPS, sha256-verified against the
+# fixture's recorded provenance, then imported through the canonical
+# importer with L1/L2 admission + `task_id` round-trip stability (the
+# test prints `BENCH_IMPORT …`; USD 0 — public data).
+run_leg_bench_manifest_live() {
+  require curl; require cargo; require python3; require shasum
+  ENDPOINT_HOST=$(leg_field "bench-manifest-live" host); MODEL_REPORTED=""
+  ASSERTIONS="real upstream manifest (Harbor Index registry.json at the committed pin) sha256-verified then imported: L1 record.validate per task, L2 manifest.validate + split_assignment.validate, task_id stable through import round-trips (BENCH_IMPORT marker); USD 0 public read-only fetch"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS="$TMPD_L/hdrs"
+  local fixture="$REPO/crates/hh-bench/fixtures/live/r4_6/harbor-registry-subset.json"
+  local url pin
+  url=$(python3 -c "import json;print(json.load(open('$fixture'))['upstream']['url'])") \
+    || { RESULT="fail:no-pin"; return; }
+  pin=$(python3 -c "import json;print(json.load(open('$fixture'))['upstream']['source_sha256'])")
+  if ! curl -sS --max-time 120 -fL -D "$RESP_HDRS" -o "$TMPD_L/registry.json" "$url" \
+      2>"$TMPD_L/curl.err"; then
+    RESULT="skipped(unreachable: $ENDPOINT_HOST)"
+    { printf 'GET %s\n\n<connection failed>\n' "$url"; cat "$TMPD_L/curl.err"; } \
+      > "$TRANSCRIPT_RAW"
+    return
+  fi
+  local got
+  got=$(shasum -a 256 "$TMPD_L/registry.json" | cut -d' ' -f1)
+  {
+    printf 'GET %s\nsha256-pin %s\nsha256-got %s\n\n' "$url" "$pin" "$got"
+    cat "$RESP_HDRS"; printf '\n'
+  } > "$TRANSCRIPT_RAW"
+  if [ "$got" != "$pin" ]; then
+    RESULT="fail:pin-drift — fetched manifest sha256 != committed pin"
+    return
+  fi
+  local spec crate tbin filt rc=0
+  spec=$(leg_field "bench-manifest-live" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  {
+    printf '$ HH_FOREIGN_MANIFEST=<verified-fetch> cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' \
+      "$crate" "$tbin" "$filt"
+    (cd "$REPO" && HH_FOREIGN_MANIFEST="$TMPD_L/registry.json" \
+      cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } >> "$TRANSCRIPT_RAW" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local row
+    row=$(grep '^BENCH_IMPORT ' "$TRANSCRIPT_RAW" | tail -1 || true)
+    [ -n "$row" ] && ASSERTIONS="$ASSERTIONS; $row"
   elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:live-tests rc=$rc"; fi

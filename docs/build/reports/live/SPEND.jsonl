@@ -12,3 +12,6 @@
 {"ts":"2026-10-21T22:31:52Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":5,"cumulative_usd":10.2006,"record":"2026-10-21-routing-probe.json"}
 {"ts":"2026-10-21T22:33:54Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":5,"cumulative_usd":15.2006,"record":"2026-10-21-routing-probe.json"}
 {"ts":"2026-10-21T22:34:10Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":0.000033,"cumulative_usd":15.200633,"record":"2026-10-21-routing-probe.json"}
+{"ts":"2026-10-21T23:12:11Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200633,"record":"2026-10-21-bench-manifest-live.json"}
+{"ts":"2026-10-21T23:12:19Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200633,"record":"2026-10-21-bench-manifest-live.json"}
+{"ts":"2026-10-21T23:15:10Z","ticket":"R4.6","leg":"lt03-live","cost_usd":0.001489,"cumulative_usd":15.202122,"record":"2026-10-21-lt03-live.json"}
