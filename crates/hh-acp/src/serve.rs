@@ -151,20 +151,41 @@ pub fn serve_session<T: SessionTransport, D: SessionDriver>(
                 }
                 let content = params.get("content").cloned().unwrap_or(Json::obj([]));
                 match driver.prompt(&session_id, &content) {
-                    Ok(drive) => {
+                    Ok(mut drive) => {
                         // Render the durable events in order; a
-                        // `security.permission.requested` event
-                        // becomes a blocking
+                        // `security.permission.requested`/`pending`
+                        // event becomes a blocking
                         // `session/request_permission` — the
-                        // response routes to the driver verbatim.
-                        if let Err(e) = emit_events(
-                            transport,
-                            driver,
-                            &session_id,
-                            &drive.events,
-                            era.dialect(),
-                            &mut perm_seq,
-                        ) {
+                        // response routes to the driver verbatim. A
+                        // deferred drive (`turn_deferred` — a pre-submit
+                        // ask answered inline) re-enters `prompt` so the
+                        // owed `submit` still runs inside this one ACP
+                        // prompt.
+                        let mut prompt_err: Option<String> = None;
+                        loop {
+                            if let Err(e) = emit_events(
+                                transport,
+                                driver,
+                                &session_id,
+                                &drive.events,
+                                era.dialect(),
+                                &mut perm_seq,
+                            ) {
+                                prompt_err = Some(e);
+                                break;
+                            }
+                            if !driver.turn_deferred(&session_id) {
+                                break;
+                            }
+                            match driver.prompt(&session_id, &content) {
+                                Ok(d) => drive = d,
+                                Err(e) => {
+                                    prompt_err = Some(e);
+                                    break;
+                                }
+                            }
+                        }
+                        if let Some(e) = prompt_err {
                             send_error(transport, id, SERVER_ERROR, &e)?;
                             continue;
                         }
@@ -327,8 +348,104 @@ fn emit_events<T: SessionTransport, D: SessionDriver>(
     dialect: AcpDialect,
     perm_seq: &mut u64,
 ) -> Result<(), String> {
+    // The durable ask signal is `security.permission.pending` — the
+    // `requested` row is §5g.7 §3's ephemeral prompt rendering
+    // (subscriber frames only; `read` never returns it), so a wire ask
+    // renders from the durable pending. A pending already answered in
+    // this batch (the policy-decided `bypass`/`unattended` arms mint
+    // pending→decided together under other attendance modes) emits no
+    // request — re-asking a settled permission_id would land an
+    // honest `AlreadyDecided` driver-side.
+    let decided: std::collections::BTreeSet<String> = events
+        .iter()
+        .filter(|(_, c, _)| c == "security.permission.decided")
+        .filter_map(|(_, _, p)| {
+            p.get("permission_id")
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        })
+        .collect();
     for (seq, class, payload) in events {
-        let lowered = lower_event(class, payload);
+        let lowered = if class == "security.permission.pending" {
+            let pid = payload
+                .get("permission_id")
+                .and_then(Json::as_str)
+                .unwrap_or("");
+            if decided.contains(pid) {
+                None
+            } else {
+                // Same rendered shape the `requested` lowering carries:
+                // `options` + `tool_call`. The offered option set is read
+                // off the durable `options` member `mint_permission_ask`
+                // stamps (L4.6a — the official SDK's schema requires
+                // `{optionId,name,kind}` objects; a pending predating the
+                // member renders the Stage-1 empty set, never a
+                // fabricated list).
+                Some((
+                    "session/request_permission".to_string(),
+                    Json::obj([
+                        ("options", wire_options(payload)),
+                        (
+                            // `wire["toolCall"]` is built off the durable
+                            // payload below (`tool_call`/`tool_name`/
+                            // `effect_id` members the pending row does not
+                            // carry) — the merged member overrides it with
+                            // the pending's own coordinates.
+                            "toolCall",
+                            Json::obj([
+                                (
+                                    // The official schema requires
+                                    // `toolCallId` — the ask's own
+                                    // correlation id: the gated effect
+                                    // when one is named, the pending's
+                                    // `permission_id` otherwise.
+                                    "toolCallId",
+                                    payload
+                                        .get("effect_id")
+                                        .cloned()
+                                        .or_else(|| {
+                                            payload.get("effect_ids").and_then(|a| match a {
+                                                Json::Arr(v) => v.first().cloned(),
+                                                _ => None,
+                                            })
+                                        })
+                                        .or_else(|| payload.get("permission_id").cloned())
+                                        .unwrap_or(Json::str("")),
+                                ),
+                                (
+                                    "toolName",
+                                    payload
+                                        .get("request")
+                                        .and_then(|r| r.get("capability_ref"))
+                                        .and_then(|c| c.get("semantic_id"))
+                                        .cloned()
+                                        .unwrap_or(Json::str("permission.ask")),
+                                ),
+                                (
+                                    // `effect_ids[]` on the
+                                    // open-time ask, `effect_id` on the
+                                    // gate-emitted ask — both spellings
+                                    // are the durable pending contract.
+                                    "effectId",
+                                    payload
+                                        .get("effect_id")
+                                        .cloned()
+                                        .or_else(|| {
+                                            payload.get("effect_ids").and_then(|a| match a {
+                                                Json::Arr(v) => v.first().cloned(),
+                                                _ => None,
+                                            })
+                                        })
+                                        .unwrap_or(Json::str("")),
+                                ),
+                            ]),
+                        ),
+                    ]),
+                ))
+            }
+        } else {
+            lower_event(class, payload)
+        };
         if let Some((kind, rendered)) = lowered {
             if kind == "session/request_permission" {
                 if !dialect.admits(&kind) {
@@ -359,6 +476,21 @@ fn emit_events<T: SessionTransport, D: SessionDriver>(
                 if let Json::Obj(m) = &rendered {
                     for (k, v) in m {
                         wire.insert(k.clone(), v.clone());
+                    }
+                }
+                // The official `session/request_permission` schema
+                // requires `toolCall.toolCallId` — stamp it wherever the
+                // assembled object lacks one (the ask's own coordinate:
+                // the gated effect id, else the permission id).
+                if let Some(Json::Obj(tc)) = wire.get_mut("toolCall") {
+                    if !tc.contains_key("toolCallId") {
+                        let corr = payload
+                            .get("effect_id")
+                            .and_then(Json::as_str)
+                            .or_else(|| payload.get("permission_id").and_then(Json::as_str))
+                            .unwrap_or("")
+                            .to_string();
+                        tc.insert("toolCallId".to_string(), Json::str(corr));
                     }
                 }
                 transport.send(Json::obj([
@@ -399,6 +531,45 @@ fn emit_events<T: SessionTransport, D: SessionDriver>(
         }
     }
     Ok(())
+}
+
+/// The ACP `PermissionOption` list a durable pending renders — the
+/// pending's own `options` member (the declared offer, kernel spellings
+/// verbatim under `optionId` so the client's `selected` answer
+/// round-trips into the pending's option set); `kind` is the ACP
+/// projection (`deny_*` → `reject_*`, the official enum carries no
+/// `deny` spelling). A pending with no durable offer renders the empty
+/// set — never a fabricated default.
+fn wire_options(payload: &Json) -> Json {
+    // The R-2.11 pending contract records the offer under
+    // `request.options` (ADR-0343 D4 — the `PendingAsk` fold's own
+    // read); a `requested`-era row may still spell it top-level.
+    let opts = match payload
+        .get("request")
+        .and_then(|r| r.get("options"))
+        .or_else(|| payload.get("options"))
+    {
+        Some(Json::Arr(v)) => v.clone(),
+        _ => return Json::Arr(vec![]),
+    };
+    Json::Arr(
+        opts.iter()
+            .filter_map(|o| {
+                let id = o.as_str()?;
+                let kind = match id {
+                    "allow_once" => "allow_once",
+                    "allow_always" => "allow_always",
+                    "deny_always" => "reject_always",
+                    _ => "reject_once",
+                };
+                Some(Json::obj([
+                    ("optionId", Json::str(id)),
+                    ("name", Json::str(id.replace('_', " "))),
+                    ("kind", Json::str(kind)),
+                ]))
+            })
+            .collect(),
+    )
 }
 
 /// Drain the channel until the response to `request_id` arrives —

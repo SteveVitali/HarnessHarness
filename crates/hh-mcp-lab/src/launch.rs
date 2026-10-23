@@ -333,6 +333,25 @@ fn control_passthrough(
     if tool.name == "cancel_run" && !params.contains_key("scope") {
         params.insert("scope".into(), Json::obj([("kind", Json::str("run"))]));
     }
+    // `submit_input`'s public `content` arg lowers to the embed
+    // `submit` op's strict `input[]` block list (L4.6a — a verbatim
+    // `content` member forward never reached the op: `SubmitParams`
+    // refused the unknown member at parse). A string becomes the
+    // canonical `{kind:"text",text}` block; a non-string rides
+    // verbatim and `submit`'s own typed params refusal stays the
+    // authority on its shape.
+    if tool.name == "submit_input" && !params.contains_key("input") {
+        if let Some(content) = params.remove("content") {
+            let input = match content.as_str() {
+                Some(t) => Json::Arr(vec![Json::obj([
+                    ("kind", Json::str("text")),
+                    ("text", Json::str(t)),
+                ])]),
+                None => content,
+            };
+            params.insert("input".into(), input);
+        }
+    }
     if !params.contains_key("idempotency_key") {
         params.insert(
             "idempotency_key".into(),
@@ -350,15 +369,31 @@ fn control_passthrough(
         .get("run_id")
         .and_then(Json::as_str)
         .map(String::from);
+    // The closed `*Params` decoders refuse any member they do not own —
+    // the surface's public handle names (`run` → `session_id` already
+    // resolved upstream), the resolution's `run_id` coordinate, and
+    // the `permission` legacy alias are surface-facing spellings, never
+    // op params. Strip them or `submit`/`cancel`/`respond_permission`
+    // answer `UnknownField` before the op runs (L4.6a).
+    for a in &tool.handle_args {
+        params.remove(a);
+    }
+    params.remove("run_id");
+    params.remove("permission");
     let result = op_call(svc, op, &Json::Obj(params.clone()));
     match result {
         Err(e)
             if e.kind == "unknown_session"
                 || e.kind == "SessionUnknown"
+                || e.kind == "SessionDetached"
                 || e.message.contains("unknown session") =>
         {
             // The recorded session died — re-attach take_over and retry
-            // with the fresh session id.
+            // with the fresh session id. `SessionDetached` covers the
+            // takeover-fenced writer too (e.g. a `resources/read` ledger
+            // page that attached `take_over` between mutations): the
+            // surface's next mutation re-takes-over rather than leaking
+            // the fencing to the caller.
             let Some(run) = run_id else {
                 return Err(e);
             };

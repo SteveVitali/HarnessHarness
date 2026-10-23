@@ -1,0 +1,53 @@
+$ npm install --prefix <tmp> @zed-industries/agent-client-protocol  (bounded)
+
+added 2 packages in 866ms
+$  cargo test -p hharness-acp --test l4_6a l46a_live_acp_stdio-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/l4_6a.rs (target/debug/deps/l4_6a-c8e72a885825162f)
+
+running 1 test
+test l46a_live_acp_stdio ... ACP_PROFILE: test:l46a-local@1.0 version_id=sha256:b741235b2c0b1b3a0f46101de95b0531d52d54af03b352a12cd8f99daf093090
+ACP_INIT_REFUSED: offered=1 [object Object]
+ACP_INIT: offered="v1-compat" negotiated="v1-compat"
+ACP_SESSION: sess-1
+ACP_PERMISSION: [{"kind":"allow_once","name":"allow once","optionId":"allow_once"},{"kind":"reject_once","name":"deny once","optionId":"deny_once"}]
+ACP_PROMPT: stop=end_turn updates=0 permissions=1
+ACP_ACCOUNT: {"account":{"account_ref":"acct:unbudgeted","run_id":"run-1792744268385-000000-b6c44568","until_seq":42,"usage":[]}}
+ACP_LEDGER_READ: 48414 bytes
+Error handling notification {
+  jsonrpc: '2.0',
+  method: 'session/update',
+  params: {
+    sessionId: 'sess-1',
+    update: {
+      _meta: [Object],
+      sessionUpdate: 'state_update',
+      state: 'idle',
+      stop_reason: [Object]
+    }
+  }
+} {
+  code: -32602,
+  message: 'Invalid params',
+  data: {
+    _errors: [],
+    update: {
+      _errors: [],
+      content: [Object],
+      sessionUpdate: [Object],
+      title: [Object],
+      toolCallId: [Object],
+      entries: [Object],
+      availableCommands: [Object],
+      currentModeId: [Object]
+    }
+  }
+}
+ACP_CLIENT: official-sdk
+ACP_RUN: run-1792744268385-000000-b6c44568 client=official-sdk
+ACP_REPLAY: run=run-1792744268385-000000-b6c44568 deterministic model_rows=8
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.44s
+

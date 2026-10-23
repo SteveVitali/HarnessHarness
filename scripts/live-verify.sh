@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -193,6 +193,42 @@ leg_field() { # $1 leg, $2 field
     quickstart-live:kind)     printf 'script';;
     quickstart-live:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
     quickstart-live:host)     printf '127.0.0.1:11434';;
+    surface-acp:ticket)   printf 'L4.6a';;
+    surface-acp:provider) printf 'local-ollama';;
+    surface-acp:kind)     printf 'script';;
+    surface-acp:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    surface-acp:test)     printf 'hharness-acp:l4_6a:l46a_live_acp_stdio';;
+    surface-acp:host)     printf '127.0.0.1:11434';;
+    surface-mcp-lab:ticket)   printf 'L4.6a';;
+    surface-mcp-lab:provider) printf 'local-ollama';;
+    surface-mcp-lab:kind)     printf 'script';;
+    surface-mcp-lab:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    surface-mcp-lab:test)     printf 'hharness-mcp-lab:l4_6a:l46a_live_mcp_lab';;
+    surface-mcp-lab:host)     printf '127.0.0.1';;
+    embed-sdk-live:ticket)   printf 'L4.6a';;
+    embed-sdk-live:provider) printf 'local-ollama';;
+    embed-sdk-live:kind)     printf 'script';;
+    embed-sdk-live:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    embed-sdk-live:test)     printf 'hharness-embed:l4_6a:l46a_live_embed_sdk';;
+    embed-sdk-live:host)     printf '127.0.0.1';;
+    plugin-memory-store:ticket)   printf 'L4.6a';;
+    plugin-memory-store:provider) printf 'local-varhost';;
+    plugin-memory-store:kind)     printf 'script';;
+    plugin-memory-store:names)    printf '';;
+    plugin-memory-store:test)     printf 'hharness-varhost:l4_6a:l46a_plugin_memory_store';;
+    plugin-memory-store:host)     printf '127.0.0.1';;
+    plugin-compact-evict-oldest:ticket)   printf 'L4.6a';;
+    plugin-compact-evict-oldest:provider) printf 'local-varhost';;
+    plugin-compact-evict-oldest:kind)     printf 'script';;
+    plugin-compact-evict-oldest:names)    printf '';;
+    plugin-compact-evict-oldest:test)     printf 'hharness-varhost:l4_6a:l46a_plugin_compact_evict_oldest';;
+    plugin-compact-evict-oldest:host)     printf '127.0.0.1';;
+    plugin-tracker-fixture:ticket)   printf 'L4.6a';;
+    plugin-tracker-fixture:provider) printf 'local-varhost';;
+    plugin-tracker-fixture:kind)     printf 'script';;
+    plugin-tracker-fixture:names)    printf '';;
+    plugin-tracker-fixture:test)     printf 'hharness-varhost:l4_6a:l46a_plugin_tracker_fixture';;
+    plugin-tracker-fixture:host)     printf '127.0.0.1';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -317,7 +353,8 @@ run_leg_cargo_test() { # $1 leg — sets the leg globals from the test run
     (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored) 2>&1
   } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
   if [ $rc -eq 0 ]; then RESULT="pass"; MODEL_REPORTED=""
-  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW" \
+       && grep -q "0 failed" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:live-tests rc=$rc"; fi
   ENDPOINT_HOST=""; MODEL_REPORTED=""
@@ -1317,6 +1354,140 @@ PY
     RESULT="fail:quickstart-live rc=$rc"
   fi
 }
+
+# ── L4.6a (164w) — the surface & plugin sweep ────────────────────────────
+# Six USD-0 legs: the `hh-acp` verb on a real pty, `hh-mcp-lab`'s HTTP
+# binding by a real MCP client, the public generated SDK + `hharness`
+# facade over bindings (b)+(c), and the three packaged variants spawned
+# `subprocess_confined` through the live `hh-helper` boundary. Hosted
+# providers stay L4.6's scope — the local lane only.
+
+# Bounded official-SDK install into a temp dir; prints the populated dir
+# when the package lands (never a repo dep, never committed).
+live_sdk_install() { # $1 package $2 dir → 0 on populated install
+  local pkg="$1" dir="$2" npmwrap=""
+  command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 || return 1
+  command -v timeout >/dev/null 2>&1 && npmwrap="timeout 120"
+  printf '$ npm install --prefix <tmp> %s  (bounded)\n' "$pkg" >>"$TRANSCRIPT_RAW"
+  (cd "$TMPD_L" && $npmwrap npm install --prefix "$dir" \
+      --no-audit --no-fund --loglevel=error "$pkg") >>"$TRANSCRIPT_RAW" 2>&1 \
+    && [ -d "$dir/node_modules" ]
+}
+
+# The shared cargo-cell half for the L4.6a legs: run the gated test,
+# classify pass/skip/fail, fold the leg's marker family into ASSERTIONS.
+run_leg_l46a_cell() { # $1 leg $2 marker-regex $3 extra-env…
+  local leg="$1" marks_re="$2"; shift 2
+  local spec crate tbin filt
+  spec=$(leg_field "$leg" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "$leg" names); do export "$n"; done
+  ENDPOINT_HOST=$(leg_field "$leg" host); RESP_HDRS=""
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  local rc=0
+  if {
+    printf '$ %s cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' \
+      "$*" "$crate" "$tbin" "$filt"
+    (cd "$REPO" && env "$@" \
+      cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture --test-threads=1) 2>&1
+  } >> "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks usage model
+    marks=$(grep -oE "$marks_re" "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+    usage=$(grep -o 'LIVE_USAGE: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_USAGE: //' || true)
+    model=$(grep -o 'LIVE_MODEL: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_MODEL: //' || true)
+    [ -n "$usage" ] && LEG_TOKEN_USAGE="$usage"
+    [ -n "$model" ] && MODEL_REPORTED="$model"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW" \
+       && grep -q "0 failed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+  # The globals carry the outcome — never let a trailing `[ -n ]` guard
+  # leak a non-zero status to `set -e` at the call site.
+  return 0
+}
+
+# `surface-acp` — the shipped `hh acp` verb over a real pty: the official
+# `@zed-industries/agent-client-protocol` client when it installs bounded,
+# else the in-repo `AcpClient` — initialize → session/new → prompt → the
+# permission round-trip → verify + deterministic replay on the run.
+run_leg_surface_acp() {
+  require cargo
+  ASSERTIONS="the shipped hh acp verb on a real pty (BSD script, stty -echo — the interactive transport shape, never a pipe): initialize → session/new → session/prompt → session/request_permission round-trip → security.permission.decided{allow} → state.turn.completed, then a fresh hh-kernel serve attach verifies + replays{deterministic} the run offline (model.* rows unchanged); _hh/account + _hh/ledger/read exercised; client=official-sdk|in-repo recorded verbatim; USD 0 local lane"
+  (cd "$REPO" && cargo build -q -p hharness-cli -p hharness-kernel -p hharness-acp) \
+    || { RESULT="fail:binary-build"; return; }
+  # The official arm needs a populated SDK dir — bounded install, any
+  # failure degrades to the stated in-repo client (the cell prints which
+  # ran on ACP_CLIENT).
+  local sdk="$TMPD_L/acp-sdk"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; : > "$TRANSCRIPT_RAW"
+  if live_sdk_install "@zed-industries/agent-client-protocol" "$sdk"; then
+    export HH_LIVE_ACP_SDK="$sdk"
+  fi
+  run_leg_l46a_cell "surface-acp" 'ACP_[A-Z_]*[: ].*'
+}
+
+# `surface-mcp-lab` — `hh-mcp-lab`'s LabServer over loopback HTTP: the
+# official `@modelcontextprotocol/sdk` StreamableHTTPClientTransport when
+# it installs bounded, else the in-repo `McpClient` — tools/list →
+# launch_run → submit_input → resources/list+read → a second service
+# verifies + replays{deterministic} the child run offline.
+run_leg_surface_mcp_lab() {
+  require cargo
+  ASSERTIONS="hh-mcp-lab LabServer over loopback HTTP (bearer-granted caller binding): tools/list carries the lab surface verbs; launch_run opens a real child run on the provisioned local lane; submit_input lowers content→input and the turn completes; resources/list+read serve the surface views; a second EmbedService over the same store verifies + replays{deterministic} offline (model.* rows unchanged); client=official-sdk|in-repo recorded verbatim; USD 0 local lane"
+  local sdk="$TMPD_L/mcp-sdk"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; : > "$TRANSCRIPT_RAW"
+  if live_sdk_install "@modelcontextprotocol/sdk" "$sdk"; then
+    export HH_LIVE_MCP_LAB_SDK="$sdk"
+  fi
+  run_leg_l46a_cell "surface-mcp-lab" 'MCP_LAB_[A-Z_]*[: ].*'
+}
+
+# `embed-sdk-live` — the public generated client + the `hharness` facade
+# driven like a real consumer over both spawned bindings: stdio
+# `hh-kernel serve` via `hharness::embed_client::Client`, loopback HTTP
+# via `NetClient` — open_session → submit → model.call.completed{usage}
+# → verify{ok} → replay{deterministic} offline on each arm.
+run_leg_embed_sdk_live() {
+  require cargo
+  ASSERTIONS="the public SDK/embed surface a downstream integrator consumes — the generated client through the hharness facade (hharness::embed_client::Client over spawned hh-kernel serve stdio; NetClient over serve --http + token-file): hello → open_session → submit → model.call.requested/completed{usage:available} → verify ok → replay{deterministic} byte-identical, no provider re-call — on both bindings; USD 0 local lane"
+  (cd "$REPO" && cargo build -q -p hharness-kernel) \
+    || { RESULT="fail:binary-build"; return; }
+  run_leg_l46a_cell "embed-sdk-live" 'EMBED_SDK[A-Z_]*[: ].*'
+}
+
+# `plugin-*` — the packaged-variant OOP cells: pack → seal → load
+# (code_pointer pins re-verified), spawn `subprocess_confined` through the
+# live `hh-helper` boundary, bind the class contract, drive the contract
+# ops, close — the host's lifecycle.component.* rows persisted onto a real
+# run ledger (the varhost SessionEvents seam). USD 0, no names.
+run_leg_plugin_oop() { # $1 leg
+  require cargo
+  local variant="${1#plugin-}"
+  case "$1" in
+    plugin-memory-store)
+      ASSERTIONS="packaged hh-memory-store out of process: pack→seal→load (real code_pointer pins), spawn subprocess_confined via hh-helper, bind memory_store 1.0, the shared memory_abi conformance battery + a typed UnknownName refusal over the live session, close; lifecycle.component.bound{bind_result:ok,placement:subprocess_confined} + invoked rows durable on a real run ledger; USD 0";;
+    plugin-compact-evict-oldest)
+      ASSERTIONS="packaged hh-compact-evict-oldest out of process: pack→seal→load, spawn subprocess_confined via hh-helper, bind compaction_strategy 1.0, assess→propose→execute over the live session (V1 host-stamped provenance on the wire, remaining_tokens ≤ cap), close; lifecycle.component.* rows durable on a real run ledger; USD 0";;
+    plugin-tracker-fixture)
+      ASSERTIONS="packaged hh-tracker-fixture out of process: pack→seal→load, spawn subprocess_confined via hh-helper, bind work_source_adapter 1.0, PluginSourceAdapter drives the WorkSourceAdapter seam (capabilities→occurrences→activate_run→list/get) over the live session, close; lifecycle.component.* rows durable on a real run ledger; USD 0";;
+    *) ASSERTIONS="packaged variant OOP cell";;
+  esac
+  # The cells need the variant binaries + the helper the spawn rides.
+  (cd "$REPO" && cargo build -q -p hharness-helper \
+      -p hharness-memory-store -p hharness-compact-evict-oldest \
+      -p hharness-tracker-fixture -p hharness-plugin-fixture) \
+    || { RESULT="fail:binary-build"; return; }
+  run_leg_l46a_cell "$1" 'PLUGIN_OOP[A-Z_]*[: ].*' "L4_6A_LIVE=1"
+}
+run_leg_plugin_memory_store() { run_leg_plugin_oop "plugin-memory-store"; }
+run_leg_plugin_compact_evict_oldest() { run_leg_plugin_oop "plugin-compact-evict-oldest"; }
+run_leg_plugin_tracker_fixture() { run_leg_plugin_oop "plugin-tracker-fixture"; }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
 emit_record() { # $1 leg $2 ticket $3 out.json — python writer, all inputs via env

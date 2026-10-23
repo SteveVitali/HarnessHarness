@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "packaged hh-tracker-fixture out of process: pack\u2192seal\u2192load, spawn subprocess_confined via hh-helper, bind work_source_adapter 1.0, PluginSourceAdapter drives the WorkSourceAdapter seam (capabilities\u2192occurrences\u2192activate_run\u2192list/get) over the live session, close; lifecycle.component.* rows durable on a real run ledger; USD 0; PLUGIN_OOP variant=hh-tracker-fixture class=work_source_adapter placement=subprocess_confined bound_rows=1 invoked_rows=5 run=run-1792743880043-000000-7f4062dd;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "388704d81e40016f18eb53be3d72c525621c16aa",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "plugin-tracker-fixture",
+  "model_reported": "none",
+  "provided": {},
+  "provider": "local-varhost",
+  "recorded_at": "2026-10-23T08:24:40Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6a.md",
+    "sha256": "00050a8e4deb338606d52a6a6de1063cc393a143bc5461a83b3451fc35d24abd"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6a",
+  "token_usage": {
+    "input_total": 0,
+    "output_total": 0
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-23-plugin-tracker-fixture.transcript.txt",
+  "transcript_sha256": "c16428aca55f20ded414dd5263a4fa4802756b542225c34c126ec49a73baca1e"
+}

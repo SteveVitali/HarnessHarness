@@ -1,0 +1,44 @@
+{
+  "assertions": [
+    "the public SDK/embed surface a downstream integrator consumes \u2014 the generated client through the hharness facade (hharness::embed_client::Client over spawned hh-kernel serve stdio; NetClient over serve --http + token-file): hello \u2192 open_session \u2192 submit \u2192 model.call.requested/completed{usage:available} \u2192 verify ok \u2192 replay{deterministic} byte-identical, no provider re-call \u2014 on both bindings; USD 0 local lane; EMBED_SDK_STDIO: run=run-1792743844368-000000-2a0fde6d;EMBED_SDK_HTTP: run=run-1792743849732-000000-681d1f8a;EMBED_SDK: arms=stdio+http+consumer-crate client=generated+facade run=run-1792743844368-000000-2a0fde6d;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "388704d81e40016f18eb53be3d72c525621c16aa",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "embed-sdk-live",
+  "model_reported": "qwen2.5:7b-instruct",
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T08:24:35Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6a.md",
+    "sha256": "00050a8e4deb338606d52a6a6de1063cc393a143bc5461a83b3451fc35d24abd"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6a",
+  "token_usage": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "convention": "hh-inclusive/1",
+    "input_total": 174,
+    "input_uncached": 174,
+    "normalizer_ref": "openai-compatible@1",
+    "output_reasoning": 0,
+    "output_total": 20
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-23-embed-sdk-live.transcript.txt",
+  "transcript_sha256": "4eaa9e3f3b954fa5e11ac31fd68e52359915ecd736fe7031e6f6f1cf3bf8ef1f"
+}

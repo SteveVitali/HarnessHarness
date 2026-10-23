@@ -1,0 +1,26 @@
+$ npm install --prefix <tmp> @modelcontextprotocol/sdk  (bounded)
+
+added 95 packages in 3s
+$  cargo test -p hharness-mcp-lab --test l4_6a l46a_live_mcp_lab-- --ignored --nocapture
+
+   Compiling hharness-mcp-lab v0.1.0 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-mcp-lab)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.14s
+     Running tests/l4_6a.rs (target/debug/deps/l4_6a-4ba5794acd302768)
+
+running 1 test
+test l46a_live_mcp_lab ... official-sdk driver failed: Error: Server's protocol version is not supported: 2026-07-28
+MCP_LAB_BINDING: era=Modern version=2026-07-28
+MCP_LAB_TOOLS: analyze,assembly_adopt,assembly_apply,assembly_explain,assembly_plan,attribution_design,cancel_run,cells,close_experiment,component_targets,diff_reports,distribution,expand_experiment,experiment_status,export_rows,get_bundle,get_row,get_trace,grant_approver,launch_run,leaderboard,leaderboard_define,leaderboard_publish,leaderboard_retract,list_pending_approvals,open_experiment,pause_experiment,power_analysis,query_rows,read_ledger,record_conformance,register_experiment,registry_catalog,registry_publish,registry_query,registry_register,registry_resolve,render_analysis,respond_approval,results_catalogue,resume_experiment,revoke_approver,row_history,run_status,serve_bundle,submit_input,verify_row
+MCP_LAB_LAUNCH: run=run-1792743831762-000004-1ee904f8 handle=hnd-run-sha256:ce68a93779466faa8
+MCP_LAB_RESOURCES: 2
+MCP_LAB_READ: uri=hh://run/hnd-run-sha256:ce68a93779466faa8/ledger
+MCP_LAB_SUBMIT: ok
+MCP_LAB_STATUS: completed
+LIVE_USAGE: {"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":174,"input_uncached":174,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":20}
+LIVE_MODEL: qwen2.5:7b-instruct
+MCP_LAB_REPLAY: run=run-1792743831762-000004-1ee904f8 deterministic model_rows=10
+MCP_LAB_CLIENT: in-repo
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 10.92s
+

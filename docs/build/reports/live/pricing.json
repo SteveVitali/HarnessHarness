@@ -1,50 +1,51 @@
 {
-  "schema": "hh-live-pricing/1",
-  "retrieved": "2026-10-21",
-  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
-  "authority": "SPEND.jsonl is an estimate from this table; the provider consoles' billing is the spend authority — the operator reconciles the ledger total against the consoles at GATE-G6 (ADR-0363 D4)",
-  "cap_usd": 100,
+  "allocation_note": "every ticket not listed allocates USD 0; the reserve spends only on the operator's recorded words",
   "allocations_usd": {
+    "L4.6": 30,
+    "L4.6a": 0,
+    "L4.6b": 5,
     "R4.5d": 5,
     "R4.5e": 5,
     "R4.6": 15,
     "R4.7b": 5,
     "R4.7e": 15,
-    "L4.6": 30,
-    "L4.6b": 5,
     "reserve": 20
   },
-  "allocation_note": "every ticket not listed allocates USD 0; the reserve spends only on the operator's recorded words",
+  "authority": "SPEND.jsonl is an estimate from this table; the provider consoles' billing is the spend authority \u2014 the operator reconciles the ledger total against the consoles at GATE-G6 (ADR-0363 D4)",
+  "cap_usd": 100,
   "models": {
-    "local/*": {
-      "prompt_per_1k_usd": 0,
-      "completion_per_1k_usd": 0,
-      "note": "local Ollama — the zero-spend offline-repeatable leg (2026-10-20 providers ruling)"
-    },
     "anthropic/claude-haiku-4-5-20251001": {
-      "prompt_per_1k_usd": 0.001,
-      "completion_per_1k_usd": 0.005,
-      "cache_write_per_1k_usd": 0.00125,
       "cache_read_per_1k_usd": 0.0001,
-      "note": "Anthropic published pricing — Claude Haiku 4.5 $1.00/$5.00 per MTok; prompt cache write 1.25x base input, read 0.1x base input — pinned 2026-10-21 (R4.5d)"
+      "cache_write_per_1k_usd": 0.00125,
+      "completion_per_1k_usd": 0.005,
+      "note": "Anthropic published pricing \u2014 Claude Haiku 4.5 $1.00/$5.00 per MTok; prompt cache write 1.25x base input, read 0.1x base input \u2014 pinned 2026-10-21 (R4.5d)",
+      "prompt_per_1k_usd": 0.001
     },
     "anthropic/claude-haiku-5-5": {
-      "prompt_per_1k_usd": 0.0001,
-      "completion_per_1k_usd": 0.0005,
+      "cache_read_per_1k_usd": 1e-05,
       "cache_write_per_1k_usd": 0.000125,
-      "cache_read_per_1k_usd": 0.00001,
-      "note": "Anthropic published pricing — Claude Haiku 5.5 $0.10/$0.50 per MTok (<=100K prompt); cache write 1.25x base input, read 0.1x — pinned 2026-10-22 (R4.7b; the compact-2026-09-04 supported-models list names claude-haiku-5-5, not haiku-4.5)"
+      "completion_per_1k_usd": 0.0005,
+      "note": "Anthropic published pricing \u2014 Claude Haiku 5.5 $0.10/$0.50 per MTok (<=100K prompt); cache write 1.25x base input, read 0.1x \u2014 pinned 2026-10-22 (R4.7b; the compact-2026-09-04 supported-models list names claude-haiku-5-5, not haiku-4.5)",
+      "prompt_per_1k_usd": 0.0001
+    },
+    "local/*": {
+      "completion_per_1k_usd": 0,
+      "note": "local Ollama \u2014 the zero-spend offline-repeatable leg (2026-10-20 providers ruling)",
+      "prompt_per_1k_usd": 0
     },
     "openai/gpt-4.1-mini-2025-04-14": {
-      "prompt_per_1k_usd": 0.0004,
-      "completion_per_1k_usd": 0.0016,
       "cache_read_per_1k_usd": 0.0001,
-      "note": "OpenAI published pricing — gpt-4.1-mini $0.40/$1.60 per MTok, cached input $0.10 per MTok; the dated snapshot id the provider serves — pinned 2026-10-21 (R4.5d)"
+      "completion_per_1k_usd": 0.0016,
+      "note": "OpenAI published pricing \u2014 gpt-4.1-mini $0.40/$1.60 per MTok, cached input $0.10 per MTok; the dated snapshot id the provider serves \u2014 pinned 2026-10-21 (R4.5d)",
+      "prompt_per_1k_usd": 0.0004
     },
     "openai/text-embedding-3-small": {
-      "prompt_per_1k_usd": 0.00002,
       "completion_per_1k_usd": 0.0,
-      "note": "OpenAI published pricing — text-embedding-3-small $0.02 per MTok input, no output leg — pinned 2026-10-22 (R4.7b)"
+      "note": "OpenAI published pricing \u2014 text-embedding-3-small $0.02 per MTok input, no output leg \u2014 pinned 2026-10-22 (R4.7b)",
+      "prompt_per_1k_usd": 2e-05
     }
-  }
+  },
+  "retrieved": "2026-10-21",
+  "schema": "hh-live-pricing/1",
+  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared"
 }

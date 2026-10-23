@@ -674,6 +674,16 @@ impl<T: Transport> McpClient<T> {
         }
     }
 
+    /// `request_raw(method, params)` — the raw request/response half
+    /// the typed helpers share, public for the catalogue-free methods
+    /// (`resources/*`, `subscriptions/listen`, tasks) a caller drives
+    /// directly (L4.6a's lab-surface leg): the answer is the `result`
+    /// member verbatim; JSON-RPC error frames surface as the typed
+    /// [`ClientError::JsonRpc`], never an `isError` conflation.
+    pub fn request_raw(&mut self, method: &str, params: Json) -> Result<Json, ClientError> {
+        self.request(method, params)
+    }
+
     /// A request whose error frame is a typed refusal, not an outcome
     /// (the `tools/call` path uses it — everything else goes through
     /// [`Self::request`]).

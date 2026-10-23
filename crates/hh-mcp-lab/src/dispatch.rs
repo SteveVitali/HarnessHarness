@@ -326,7 +326,7 @@ fn dispatch_lab(
     );
     if let Err(e) = fx.intended(
         &mut srv.svc,
-        srv.sessions.get(&bid).expect("session"),
+        srv.sessions.get_mut(&bid).expect("session"),
         &turn_id,
         binding,
         &tool.name,
@@ -384,7 +384,7 @@ fn dispatch_lab(
                 let mut fail = None;
                 if let Err(e) = fx.authorize(
                     &mut srv.svc,
-                    srv.sessions.get(&bid).expect("session"),
+                    srv.sessions.get_mut(&bid).expect("session"),
                     &turn_id,
                 ) {
                     fail = Some(SurfaceError::new(
@@ -396,7 +396,7 @@ fn dispatch_lab(
                 if fail.is_none() {
                     if let Err(e) = fx.prepared(
                         &mut srv.svc,
-                        srv.sessions.get(&bid).expect("session"),
+                        srv.sessions.get_mut(&bid).expect("session"),
                         &turn_id,
                     ) {
                         fail = Some(SurfaceError::new(
@@ -419,7 +419,7 @@ fn dispatch_lab(
                 let mut fail = None;
                 if let Err(e) = fx.decide_and_authorize(
                     &mut srv.svc,
-                    srv.sessions.get(&bid).expect("session"),
+                    srv.sessions.get_mut(&bid).expect("session"),
                     &turn_id,
                     binding,
                     "allow",
@@ -434,7 +434,7 @@ fn dispatch_lab(
                 if fail.is_none() {
                     if let Err(e) = fx.prepared(
                         &mut srv.svc,
-                        srv.sessions.get(&bid).expect("session"),
+                        srv.sessions.get_mut(&bid).expect("session"),
                         &turn_id,
                     ) {
                         fail = Some(SurfaceError::new(
@@ -447,7 +447,7 @@ fn dispatch_lab(
                 if fail.is_none() {
                     if let Err(e) = fx.committed(
                         &mut srv.svc,
-                        srv.sessions.get(&bid).expect("session"),
+                        srv.sessions.get_mut(&bid).expect("session"),
                         &turn_id,
                     ) {
                         fail = Some(SurfaceError::new(
@@ -482,7 +482,7 @@ fn dispatch_lab(
             if authorized {
                 let _ = fx.observed(
                     &mut srv.svc,
-                    srv.sessions.get(&bid).expect("session"),
+                    srv.sessions.get_mut(&bid).expect("session"),
                     &turn_id,
                     "not_applied",
                     None,
@@ -490,7 +490,7 @@ fn dispatch_lab(
             }
             let _ = fx.refused(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
                 &e.kind,
                 e.detail.clone(),
@@ -499,7 +499,7 @@ fn dispatch_lab(
         Ok(_) => {
             let _ = fx.observed(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
                 outcome,
                 Some(&result_json),

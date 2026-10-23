@@ -75,6 +75,19 @@ pub trait SessionDriver {
         decision: &Json,
     ) -> Result<Vec<(u64, String, Json)>, String>;
 
+    /// Whether the last `prompt` returned early with an unanswered ask
+    /// queued and the turn's `submit` still owed — the serve loop
+    /// re-enters `prompt` after the permission exchange drains it
+    /// (an open-time `requires_approval` declaration's ask must reach
+    /// the wire *before* the turn races the run to `finished` —
+    /// `respond_permission` against a drained run is an honest
+    /// `Draining` refusal, not a round-trip). Defaults `false` — a
+    /// driver without the deferred phase never re-enters.
+    fn turn_deferred(&self, session_id: &str) -> bool {
+        let _ = session_id;
+        false
+    }
+
     /// `_hh/ledger/read{from_seq}` → the durable tail verbatim.
     fn ledger_read(&self, from_seq: u64) -> Result<Json, String>;
 

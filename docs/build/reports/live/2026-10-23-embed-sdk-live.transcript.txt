@@ -1,0 +1,19 @@
+$  cargo test -p hharness-embed --test l4_6a l46a_live_embed_sdk-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running tests/l4_6a.rs (target/debug/deps/l4_6a-ea5685ea2069a819)
+
+running 1 test
+test l46a_live_embed_sdk ... EMBED_SDK_STDIO: run=run-1792743844368-000000-2a0fde6d
+EMBED_SDK_HTTP: run=run-1792743849732-000000-681d1f8a
+CONSUMER_RUN: run-1792743867307-000000-84671443
+LIVE_USAGE: {"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":174,"input_uncached":174,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":20}
+LIVE_MODEL: qwen2.5:7b-instruct
+CONSUMER: pass
+EMBED_SDK: arms=stdio+http+consumer-crate client=generated+facade run=run-1792743844368-000000-2a0fde6d
+LIVE_USAGE: {"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":174,"input_uncached":174,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":20}
+LIVE_MODEL: qwen2.5:7b-instruct
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.42s
+
