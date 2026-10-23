@@ -33,6 +33,9 @@
 //! - [`supply`] — the hosted-participant Π deny/ask/reveal path;
 //! - [`dispatch`] — the `tools/call` orchestration + the typed
 //!   `surface_error` refusal records;
+//! - [`oauth`] — the WS-H3 mediator's provider exchange (R4.7a —
+//!   GitHub device flow + bearer→subject verify over the one TLS
+//!   home's client);
 //! - [`server`] — `LabServer`, the message dispatch, the stdio loop;
 //! - [`http`] — the Streamable HTTP arm (`/mcp`, bearer auth,
 //!   `Mcp-Session-Id`).
@@ -44,6 +47,7 @@ pub mod exposure;
 pub mod handles;
 pub mod http;
 pub mod launch;
+pub mod oauth;
 pub mod reads;
 pub mod resources;
 pub mod server;

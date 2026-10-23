@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -90,6 +90,10 @@ leg_field() { # $1 leg, $2 field
     github-live:kind)     printf 'script';;
     github-live:names)    printf 'HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_SANDBOX_REPO HH_GITHUB_WEBHOOK_SECRET';;
     github-live:test)     printf 'hh-embed:r4_7_live:r47_github_live';;
+    oauth-device:ticket)   printf 'R4.7a';;
+    oauth-device:provider) printf 'github-oauth';;
+    oauth-device:kind)     printf 'script';;
+    oauth-device:names)    printf 'HH_GITHUB_OAUTH_CLIENT_ID';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -582,6 +586,47 @@ run_leg_github_live() {
   else
     RESULT="fail:live-tests rc=$rc"
   fi
+}
+
+# R4.7a — `oauth-device` (DF-S4.11-2; the 2026-10-20 "GitHub OAuth App"
+# ruling; operator present to enter the code): the resumable GitHub
+# device flow over the admitted hh-tls/hh-wire stack — `initiate` writes
+# the operator-facing code file + resumable state under the gitignored
+# logs/ subtree (the user_code NEVER enters a transcript/record/ledger),
+# `complete` polls → access token → `GET /user` subject →
+# `OAUTH_SUBJECT_SHA256`. `HH_OAUTH_PHASE` selects
+# initiate|complete|auto (default auto — initiate then poll up to
+# `HH_OAUTH_POLL_CAP_S`, default 840s inside GitHub's ~900s window).
+# USD 0 — the device flow needs no client secret.
+run_leg_oauth_device() {
+  require cargo; require python3
+  local n; for n in $(leg_field "oauth-device" names); do export "$n"; done
+  export HH_OAUTH_STATE="${HH_OAUTH_STATE:-$REPO/docs/build/logs/oauth-device.state.json}"
+  export HH_OAUTH_CODE_FILE="${HH_OAUTH_CODE_FILE:-$REPO/docs/build/logs/oauth-device.code}"
+  ENDPOINT_HOST="github.com:443"; MODEL_REPORTED=""
+  ASSERTIONS="GitHub device flow over hh-tls+hh-wire: initiate → operator-facing code file (gitignored, never a transcript/ledger); complete → poll (pending/slow_down/denied/expired handled) → access token held exchange-scope only → GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local rc=0
+  if {
+    printf '$ HH_OAUTH_PHASE=%s %s\n\n' "${HH_OAUTH_PHASE:-auto}" "scripts/live-oauth-device.sh"
+    (cd "$REPO" && bash scripts/live-oauth-device.sh "${HH_OAUTH_PHASE:-auto}") 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local verdict
+  verdict=$(grep '^OAUTH_RESULT ' "$TRANSCRIPT_RAW" | tail -1 | sed 's/^OAUTH_RESULT //' || true)
+  case "$verdict" in
+    pass) RESULT="pass";;
+    initiated) RESULT="skipped(environment-pending — awaiting operator device-code entry)";;
+    skipped\(*)
+      RESULT="skipped($(printf '%s' "$verdict" | sed 's/^skipped(//;s/)$//') — awaiting operator device-code entry)";;
+    skipped*) RESULT="$verdict";;
+    "") RESULT="fail:live-tests rc=$rc";;
+    *) RESULT="fail:$verdict";;
+  esac
+  local subj
+  subj=$(grep '^OAUTH_SUBJECT_SHA256 ' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.* //' || true)
+  # `if`, never `&&` as the function's last statement — an empty $subj
+  # would exit-1 under `set -e` and kill cmd_run before emit_record.
+  if [ -n "$subj" ]; then ASSERTIONS="$ASSERTIONS; subject_login_sha256=$subj"; fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

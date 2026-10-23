@@ -38,7 +38,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::time::Duration;
 
 use hh_mcp::http::OriginPolicy;
@@ -102,12 +102,33 @@ enum ConnState {
     Sse { binding_id: String, next_seq: u64 },
 }
 
-/// A multiplexed connection slot.
-struct Conn {
-    /// The socket (nonblocking).
-    stream: TcpStream,
+/// What the transport already proved about a conn before any request
+/// parses — the accept step's verdict.
+enum PreAuth {
+    /// Nothing yet — per-request `Authorization: Bearer` mediation (the
+    /// plain HTTP arm).
+    Bearer,
+    /// A TLS handshake ran on this conn (the mTLS arm): `None` = the
+    /// handshake succeeded but presented no client certificate — a bare
+    /// `401` challenge answers; `Some` = the verified `PeerIdentity`
+    /// the declared subject map resolves.
+    TlsPeer(Option<hh_embed::service::PeerIdentity>),
+}
+
+/// A multiplexed connection slot — `S` is `TcpStream` on the plain arm,
+/// `hh_tls::ServerTlsStream` on the mTLS arm (one codec, TLS beneath;
+/// rustls surfaces `WouldBlock` as a typed io error the loop already
+/// tolerates).
+struct Conn<S> {
+    /// The stream (nonblocking after accept).
+    stream: S,
     /// The conn's state machine.
     state: ConnState,
+    /// The identity the transport bound at accept — `Some` on the mTLS
+    /// arm (the handshake's verified peer resolved through the subject
+    /// map; the conn's credential is the certificate, no bearer is
+    /// consulted), `None` on the plain arm (per-request bearer).
+    binding: Option<CallerBinding>,
 }
 
 /// The request's routing verdict — an HTTP reply to write then close,
@@ -222,6 +243,7 @@ fn handle_request(
     origins: &OriginPolicy,
     sessions: &mut BTreeMap<String, ()>,
     next_session: &mut u64,
+    prebound: Option<&CallerBinding>,
 ) -> Outcome {
     if req.method.is_empty() {
         return Outcome::Reply(reply(400, "Bad Request", &[], "{}"));
@@ -236,23 +258,31 @@ fn handle_request(
     {
         return Outcome::Reply(reply(403, "Forbidden", &[], "{}"));
     }
-    // Bearer → the WS-H3 mediation (DF-S4.11-2): the grant table plus
-    // the credential-kind check. A refusal carries its typed code.
-    let token = req
-        .headers
-        .get("authorization")
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .or_else(|| {
-            req.headers
+    let binding = match prebound {
+        // The mTLS arm — the handshake's verified peer resolved at
+        // accept (the certificate IS the credential; an `Authorization`
+        // header on the conn is never consulted).
+        Some(b) => b.clone(),
+        // Bearer → the WS-H3 mediation (DF-S4.11-2): the grant table plus
+        // the credential-kind check. A refusal carries its typed code.
+        None => {
+            let token = req
+                .headers
                 .get("authorization")
-                .and_then(|h| h.strip_prefix("bearer "))
-        });
-    let Some(token) = token else {
-        return Outcome::Reply(challenge(None));
-    };
-    let binding = match srv.resolve_credential(token) {
-        Ok(b) => b,
-        Err(refusal) => return Outcome::Reply(challenge(Some(refusal))),
+                .and_then(|h| h.strip_prefix("Bearer "))
+                .or_else(|| {
+                    req.headers
+                        .get("authorization")
+                        .and_then(|h| h.strip_prefix("bearer "))
+                });
+            let Some(token) = token else {
+                return Outcome::Reply(challenge(None));
+            };
+            match srv.resolve_credential(token) {
+                Ok(b) => b,
+                Err(refusal) => return Outcome::Reply(challenge(Some(refusal))),
+            }
+        }
     };
     match req.method.as_str() {
         "POST" => post(srv, req, &binding, sessions, next_session),
@@ -379,30 +409,104 @@ pub fn serve_http(
     listener: &TcpListener,
     origins: &OriginPolicy,
 ) -> Result<(), ServeHttpError> {
+    serve_loop(srv, listener, origins, |listener| match listener.accept() {
+        Ok((stream, _)) => {
+            stream.set_nonblocking(true).map_err(ServeHttpError::Io)?;
+            Ok(Some((stream, PreAuth::Bearer)))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+        Err(e) => Err(ServeHttpError::Io(e)),
+    })
+}
+
+/// The mTLS arm (R4.7a — DF-S4.11-2): the Lab surface behind the R4.5c
+/// TLS server requiring client certificates. The handshake runs on
+/// bounded deadlines at accept (a typed refusal yields no stream,
+/// never an unverified peer); the verified `PeerIdentity` resolves
+/// through [`LabServer::resolve_mtls_peer`] — an unmapped subject or a
+/// mismatched grant answers the `401` challenge *over the TLS stream*,
+/// and a certificate-less peer answers the bare challenge. A resolved
+/// conn carries its binding — the certificate is the credential, no
+/// bearer is consulted — and then multiplexes exactly like the plain
+/// arm (one codec, TLS beneath it).
+pub fn serve_http_mtls(
+    srv: &mut LabServer,
+    listener: &TcpListener,
+    origins: &OriginPolicy,
+    tls: &hh_embed::service::ServerTls,
+) -> Result<(), ServeHttpError> {
+    serve_loop(srv, listener, origins, |listener| {
+        match listener.accept() {
+            Ok((sock, _)) => {
+                // The handshake blocks on bounded deadlines — a stalled
+                // peer is a typed refusal, never a parked accept loop.
+                sock.set_nonblocking(false).map_err(ServeHttpError::Io)?;
+                sock.set_read_timeout(Some(Duration::from_secs(5)))
+                    .map_err(ServeHttpError::Io)?;
+                sock.set_write_timeout(Some(Duration::from_secs(5)))
+                    .map_err(ServeHttpError::Io)?;
+                match tls.accept(sock) {
+                    Ok(stream) => {
+                        let peer = stream.peer_identity();
+                        stream.set_nonblocking(true).map_err(ServeHttpError::Io)?;
+                        Ok(Some((stream, PreAuth::TlsPeer(peer))))
+                    }
+                    // The handshake refused typed — no stream exists to
+                    // answer over; drop the conn.
+                    Err(_) => Ok(None),
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+            Err(e) => Err(ServeHttpError::Io(e)),
+        }
+    })
+}
+
+/// The shared multiplex — `accept` yields `(stream, transport-verdict)`
+/// pairs; the per-arm accept closures own handshake policy.
+fn serve_loop<S: Read + Write>(
+    srv: &mut LabServer,
+    listener: &TcpListener,
+    origins: &OriginPolicy,
+    mut accept: impl FnMut(&TcpListener) -> Result<Option<(S, PreAuth)>, ServeHttpError>,
+) -> Result<(), ServeHttpError> {
     // session_id → issued — the contract record (a session exists iff
     // the table holds it; a missing id on a non-initialize request
     // refuses `404`).
     let mut sessions: BTreeMap<String, ()> = BTreeMap::new();
     let mut next_session = 0u64;
     listener.set_nonblocking(true).map_err(ServeHttpError::Io)?;
-    let mut conns: Vec<Conn> = Vec::new();
+    let mut conns: Vec<Conn<S>> = Vec::new();
     loop {
         // Accept every queued connection.
-        loop {
-            match listener.accept() {
-                Ok((stream, _)) => {
-                    stream.set_nonblocking(true).map_err(ServeHttpError::Io)?;
-                    conns.push(Conn {
-                        stream,
-                        state: ConnState::Read {
-                            buf: Vec::new(),
-                            dead: false,
-                        },
-                    });
+        while let Some((mut stream, pre)) = accept(listener)? {
+            let binding = match pre {
+                PreAuth::Bearer => None,
+                // TLS ran but no client cert was presented — the bare
+                // `401` challenge over the authenticated channel, then
+                // close (a missing credential, never a guessed one).
+                PreAuth::TlsPeer(None) => {
+                    let _ = stream.write_all(challenge(None).as_bytes());
+                    let _ = stream.flush();
+                    continue;
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
-                Err(e) => return Err(ServeHttpError::Io(e)),
-            }
+                PreAuth::TlsPeer(Some(peer)) => match srv.resolve_mtls_peer(&peer) {
+                    Ok(b) => Some(b),
+                    Err(refusal) => {
+                        let _ = stream.write_all(challenge(Some(refusal)).as_bytes());
+                        let _ = stream.flush();
+                        continue;
+                    }
+                },
+            };
+            conns.push(Conn {
+                stream,
+                state: ConnState::Read {
+                    buf: Vec::new(),
+                    dead: false,
+                },
+                binding,
+            });
         }
         // Read request-side conns; serve every complete request.
         for conn in conns.iter_mut() {
@@ -431,7 +535,14 @@ pub fn serve_http(
                     continue;
                 }
                 if let Some(req) = parse_request(buf) {
-                    match handle_request(srv, &req, origins, &mut sessions, &mut next_session) {
+                    match handle_request(
+                        srv,
+                        &req,
+                        origins,
+                        &mut sessions,
+                        &mut next_session,
+                        conn.binding.as_ref(),
+                    ) {
                         Outcome::Reply(resp) => {
                             // One request → one response → close (the
                             // keep-alive leg is the SSE arm, never a

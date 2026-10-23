@@ -1,0 +1,14 @@
+$ HH_OAUTH_PHASE=complete scripts/live-oauth-device.sh
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/r4_7a_live.rs (target/debug/deps/r4_7a_live-43b5201bce4ab26b)
+
+running 1 test
+test r47a_oauth_device_complete has been running for over 60 seconds
+OAUTH_SUBJECT_SHA256 f86bcf8a94b44669449f41d4dc9e9607d37ef8ce37b227bf8ea13e41c5d45b65
+OAUTH_SUBJECT_LEN 11
+OAUTH_RESULT pass
+test r47a_oauth_device_complete ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 217.29s
+

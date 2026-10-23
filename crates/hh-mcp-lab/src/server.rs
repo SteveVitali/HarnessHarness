@@ -98,6 +98,21 @@ pub struct LabServer {
     /// `taskId → TaskRecord` — the registered tasks (the alias table
     /// `tasks/get` resolves; ids are names, grants are the binding's).
     pub tasks: BTreeMap<String, crate::tasks::TaskRecord>,
+    /// `issuer_ref → issuer exchange` — the declared OAuth provider
+    /// table (R4.7a/DF-S4.11-2): an `oauth` binding whose `issuer_ref`
+    /// is declared here verifies its bearer through the issuer's real
+    /// subject endpoint (`OAuthIssuer::verify_bearer` — 2xx+subject
+    /// resolves, refusal answers `credential_invalid`, an unreachable
+    /// issuer `issuer_unreachable`). An `issuer_ref` NOT declared keeps
+    /// the kernel's own `minted_scoped` leg (the landed shape).
+    pub oauth_issuers: BTreeMap<String, crate::oauth::OAuthIssuer>,
+    /// `verified subject → binding` — the declared mTLS mapping table
+    /// (R4.7a/DF-S4.11-2): the TLS arm's handshake-verified
+    /// `PeerIdentity` resolves through this table — the handshake IS
+    /// the credential, no bearer is consulted. Keys are subject
+    /// coordinates in priority order: subject CN, then SAN URI, then
+    /// SAN DNS.
+    pub mtls_subjects: BTreeMap<String, CallerBinding>,
 }
 
 impl LabServer {
@@ -127,6 +142,8 @@ impl LabServer {
             subscriptions: BTreeMap::new(),
             client_tasks: std::collections::BTreeSet::new(),
             tasks: BTreeMap::new(),
+            oauth_issuers: BTreeMap::new(),
+            mtls_subjects: BTreeMap::new(),
         }
     }
 
@@ -178,9 +195,17 @@ impl LabServer {
     ///   entry alone never resolves an OAuth grant — a token the
     ///   kernel never minted, minted for a different audience, expired
     ///   or revoked answers its typed refusal;
-    /// - `mtls` — no TLS handshake exists at this slice, so the
-    ///   binding refuses `transport_absent` (BL-31 — environment-gated,
-    ///   never a fabricated subject).
+    /// - `oauth{audience}` — when the binding's `issuer_ref` is declared
+    ///   in [`LabServer::oauth_issuers`] (R4.7a), the bearer verifies
+    ///   through that issuer's real exchange (the provider's subject
+    ///   endpoint: 2xx+login resolves, refusal `credential_invalid`, an
+    ///   unreachable issuer `issuer_unreachable`); an undeclared
+    ///   `issuer_ref` keeps the landed leg above — kernel `minted_scoped`
+    ///   verify under the binding's declared `audience`;
+    /// - `mtls` — the handshake is the credential: on a transport with
+    ///   no TLS handshake (the plain HTTP arm) the binding refuses
+    ///   `transport_absent` — the TLS arm resolves through
+    ///   [`LabServer::resolve_mtls_peer`], never a bearer.
     pub fn resolve_credential(&self, token: &str) -> Result<CallerBinding, CredentialRefusal> {
         let binding = self
             .bindings
@@ -188,7 +213,22 @@ impl LabServer {
             .ok_or(CredentialRefusal::NoGrant)?;
         match &binding.credential {
             CallerCredential::StdioLaunch { .. } => Ok(binding),
-            CallerCredential::OAuth { audience, .. } => {
+            CallerCredential::OAuth {
+                issuer_ref,
+                audience,
+                ..
+            } => {
+                if let Some(issuer) = self.oauth_issuers.get(issuer_ref) {
+                    return match issuer.verify_bearer(token) {
+                        crate::oauth::BearerVerdict::Valid { .. } => Ok(binding),
+                        crate::oauth::BearerVerdict::Invalid => {
+                            Err(CredentialRefusal::CredentialInvalid)
+                        }
+                        crate::oauth::BearerVerdict::Unreachable => {
+                            Err(CredentialRefusal::IssuerUnreachable)
+                        }
+                    };
+                }
                 match self.svc.surface_verify_caller_token(token, audience) {
                     MintedVerdict::Valid => Ok(binding),
                     MintedVerdict::Invalid => Err(CredentialRefusal::CredentialInvalid),
@@ -197,6 +237,41 @@ impl LabServer {
                 }
             }
             CallerCredential::Mtls { .. } => Err(CredentialRefusal::TransportAbsent),
+        }
+    }
+
+    /// Declare one verified-subject→binding mTLS grant (the mapping
+    /// table [`LabServer::mtls_subjects`] — the deployment declares
+    /// which peer coordinates act as which sealed binding).
+    pub fn grant_mtls_subject(&mut self, subject: &str, binding: CallerBinding) {
+        self.mtls_subjects.insert(subject.to_string(), binding);
+    }
+
+    /// The mTLS mediator leg (R4.7a/DF-S4.11-2): resolve the TLS
+    /// handshake's *verified* peer identity through the declared
+    /// subject map — subject CN first, then SAN URIs, then SAN DNS
+    /// names. An unmapped peer answers `no_grant`; a grant naming a
+    /// non-`mtls` binding is a declared mismatch — `credential_invalid`
+    /// (the transport evidence can't vouch for a bearer-shaped grant);
+    /// the returned binding is the same `CallerBinding` the stdio path
+    /// produces, never a guessed subject.
+    pub fn resolve_mtls_peer(
+        &self,
+        peer: &hh_embed::service::PeerIdentity,
+    ) -> Result<CallerBinding, CredentialRefusal> {
+        let key = peer
+            .subject_common_name
+            .iter()
+            .chain(peer.sans_uri.iter())
+            .chain(peer.sans_dns.iter())
+            .find(|k| self.mtls_subjects.contains_key(*k));
+        let Some(k) = key else {
+            return Err(CredentialRefusal::NoGrant);
+        };
+        let binding = &self.mtls_subjects[k];
+        match &binding.credential {
+            CallerCredential::Mtls { .. } => Ok(binding.clone()),
+            _ => Err(CredentialRefusal::CredentialInvalid),
         }
     }
 

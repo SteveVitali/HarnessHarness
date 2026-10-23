@@ -2211,6 +2211,15 @@ impl EmbedService {
 /// (removability: surfaces reach the kernel only; R2.19/DF-S4.11-2).
 pub use hh_secrets::MintedVerdict;
 
+/// The one TLS home's surface set — re-exported through the kernel
+/// boundary so the surface consumes it without a `hh-mcp-lab → hh-tls`
+/// edge: ADR-0365 D3's admitted consumer set (`hh-gateway`, `hh-env`,
+/// `hh-embed`) stays closed while the R4.7a credential mediator gains
+/// the HTTPS client (the OAuth provider exchange) and the mTLS
+/// terminating half (`ServerTls`/`PeerIdentity`) it was chartered for
+/// (the `MintedVerdict` precedent, one level up — R4.7a/DF-S4.11-2).
+pub use hh_tls::{ClientTls, PeerIdentity, ServerTls, ServerTlsStream, TlsError, TlsStream};
+
 /// Map a `LedgerError` to the contract's typed surface — the ledger's
 /// words, never a stringy catch-all (I-H7: `Fenced` on a writer
 /// surfaces only as `SessionDetached`; `RunFinished` as `Draining`).

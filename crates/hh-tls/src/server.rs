@@ -126,6 +126,15 @@ impl ServerTlsStream {
         let chain = self.inner.conn.peer_certificates()?;
         identity::peer_identity(chain.first()?)
     }
+
+    /// Switch the underlying socket's blocking mode — the R4.7a
+    /// mediator's multiplex arm completes the handshake on bounded
+    /// deadlines, then round-robins the conn nonblocking (rustls
+    /// surfaces `WouldBlock` as a typed `io::Error`, never a partial
+    /// frame).
+    pub fn set_nonblocking(&self, nonblocking: bool) -> std::io::Result<()> {
+        self.inner.sock.set_nonblocking(nonblocking)
+    }
 }
 
 impl Read for ServerTlsStream {
