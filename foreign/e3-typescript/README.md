@@ -6,11 +6,13 @@ It consumes the committed `hh-xcheck-bundle/1` corpus at
 `crates/hh-xcheck/fixtures/cross-impl/` and emits `answers.json`, which
 `hh-xcheck verify` diffs against the bundle's E1 expectations.
 
-This is **part 1 (R4.4)**: the shared `lib/` core plus the
+**Part 1 (R4.4)** landed the shared `lib/` core plus the
 identity-trees, identity-records, ledger-transcript, registry-snapshot
-and canonical-parse arms. R4.4a completes the remaining arms
-(plugin-manifests, hir-documents, ledger-scenarios) against the same core
-— `lib/` is the one spelling; it is extended, never re-implemented.
+and canonical-parse arms. **Part 2 (R4.4a)** wired the plugin-manifests
+and ledger-scenarios arms against the same core — `lib/` is the one
+spelling; it is extended, never re-implemented. The hir-documents arm
+lands at **R4.4b**
+(`docs/tickets/153b_R4.4b__e3-typescript-foreign-impl-part3.md`).
 
 This tree is **outside the cargo workspace** (`foreign/` has no
 `Cargo.toml`; the workspace's `members` list is explicit `crates/*`
@@ -58,30 +60,38 @@ cargo run -p hh-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answe
 `answers.json` here is the run's committed output
 (`candidate: "E3-candidate"`).
 
-## Recorded verify output (part-1 scope, verbatim)
+## Recorded verify output (R4.4a scope, verbatim)
 
 ```
 candidate: E3-candidate
-ok    verify identity-trees binary-content        (×22 cases — all ok)
-ok    verify identity-records blob … text-leaf    (×4 cases — all ok)
+ok    verify identity-trees binary-content … whitespace-names  (×22 cases — all ok)
+ok    verify identity-records blob … text-leaf                 (×4 cases — all ok)
 ok    verify ledger-transcript event_hashes
 ok    verify ledger-transcript head_hash
 ok    verify registry-snapshot outputs_sha256
-ok    verify canonical-parse frame-16k-0 … frame-64k-1  (×6 cases — all ok)
-FAIL  verify plugin-manifests <14 cases> — missing answer
-FAIL  verify hir-documents <5 cases> — missing answer
-FAIL  verify ledger-scenarios <3 cases> — missing answer
-verify: 35 passed, 22 failed
+ok    verify plugin-manifests invalid/claim-not-publisher.json … valid/third-party-subprocess.json  (×14 cases — all ok)
+ok    verify canonical-parse frame-16k-0 … frame-64k-1           (×6 cases — all ok)
+FAIL  verify hir-documents gated-tool-no-contract — missing answer
+FAIL  verify hir-documents hosted-agent — missing answer
+FAIL  verify hir-documents minimal-native — missing answer
+FAIL  verify hir-documents missing-provenance — missing answer
+FAIL  verify hir-documents unresolved-ref — missing answer
+ok    verify ledger-scenarios blob-refs
+ok    verify ledger-scenarios causal-chain
+ok    verify ledger-scenarios writer-handover
+verify: 52 passed, 5 failed
 ```
 
 Per-arm: **identity-trees 22/22 · identity-records 4/4 ·
-ledger-transcript 2/2 · registry-snapshot 1/1 · canonical-parse 6/6 =
-35/35 covered cases green.** The 22 `missing answer` FAILs are exactly
-the arms R4.4a owns — the E3 tree answers nothing it did not replay
+ledger-transcript 2/2 · registry-snapshot 1/1 · plugin-manifests 14/14 ·
+canonical-parse 6/6 · ledger-scenarios 3/3 = 52/52 delivered cases
+green.** The 5 `missing answer` FAILs are exactly the `hir-documents`
+cells — R4.4b's arm; the E3 tree answers nothing it did not replay
 (honest pending, never a fabricated or vacuous pass). `hh-xcheck verify`
-exits 1 on this part-1 answers file by design; `scripts/xcheck-e3.sh`
+exits 1 on this answers file by design; `scripts/xcheck-e3.sh`
 reconciles: exit 0 iff every FAIL is a `missing answer` on an arm the
-tree did not answer.
+tree did not answer (`covered-arm failures: 0; pending (R4.4b) cells
+missing: 5`).
 
 ## What it implements
 
@@ -116,6 +126,23 @@ tree did not answer.
 7. **Canonical-parse** (`lib/canonical_parse.ts`) — decode + re-emit +
    digest per frame; `parse_ns`/`rehash_ns` recorded via
    `process.hrtime.bigint()`, never gated.
+8. **Plugin manifests** (`lib/plugin.ts`, R4.4a) — the strict
+   `PluginManifest/1` decode (closed member set, pinned `records[]`
+   `{version_id, kind, ext?}` shape checks, no inline bodies, no
+   package-escaping paths, `code-pointer` pins, `fetched_at` uint,
+   all-`v`-stripped versions, shorter-prefix-is-less `versionCmp`,
+   first-`-` range split, empty tier digits refused) then the admission
+   order decode → namespace → locality → tier → compatibility →
+   `requests ⊆ cap` under the bundle
+   posture (`first_party=true`, deny-everything requests cap). Verdicts
+   spell `admit:<id>` / `refuse:<Kind>`; the class catalog comes from
+   `RegistryReplay.classCatalog()` — the same `registry.json` fold the
+   snapshot arm ships (CC1, never a second registry read).
+9. **Ledger scenarios** (`lib/ledger.ts` `armLedgerScenarios`, R4.4a) —
+   the R4.3 WAL corpus (`causal-chain`, `blob-refs`, `writer-handover`)
+   replayed through the one `replayWal` fold per case dir; answers carry
+   `<case>` `{event_hashes, head_hash}` plus the informational
+   `<case>.wal_sha256` / `<case>.event_count` members `verify` skips.
 
 ## Spec ambiguities / discrepancies observed
 
@@ -141,16 +168,25 @@ tree did not answer.
 
 ## Result
 
-`verify` over the part-1 answers — **35 passed, 22 failed** (exit 1):
-every covered case green; the 22 failures are the R4.4a arms' cells
-failing honestly as `missing answer` (`plugin-manifests` 14,
-`hir-documents` 5, `ledger-scenarios` 3). `xcheck-e3` end-to-end:
-`covered-arm failures: 0; pending (R4.4a) cells missing: 22` → `ok`.
+`verify` over the seven-arm answers — **52 passed, 5 failed** (exit 1):
+every delivered case green; the 5 failures are exactly the
+`hir-documents` cells failing honestly as `missing answer` (R4.4b's
+arm). `xcheck-e3` end-to-end: `covered-arm failures: 0; pending (R4.4b)
+cells missing: 5` → `ok`.
 
-The five `*.foreign-replay`-class bundle cells this run discharges
-(identity-trees, identity-records, ledger-transcript, registry-snapshot
-answers + the canonical-parse replay) have `foreign-run-verified`
-evidence for the E3 leg; whether `bundle.json`'s `pending_cells[]` rows
-flip is a record-keeping call for the operator/GATE-G7 vocabulary ruling
-(CF-493) — the cells name the HUMAN-H3 toolchain leg this run is
-evidence for, and the cell vocabulary stays as recorded.
+Seven arms' E3-leg cells now carry `foreign-run-verified` evidence
+(R4.4's five `*.foreign-replay`/`foreign-timing` cells plus R4.4a's
+`plugin-manifests.foreign-checker` and `ledger-scenarios.e3-replay`);
+`hir-documents.e3-replay` stays pending for R4.4b. Whether
+`bundle.json`'s `pending_cells[]` rows flip is a record-keeping call for
+the operator/GATE-G7 vocabulary ruling (CF-493) — the cells name the
+HUMAN-H3 toolchain leg this run is evidence for, and the cell vocabulary
+stays as recorded.
+
+**e2-side record (R4.4a, verbatim):** the committed
+`foreign/e2-python/foreign.py` carries exactly the six original `arm_*`
+functions — `arm_ledger_transcript` is the only WAL consumer; there is
+no `arm_ledger_scenarios`/`arm_hir_documents`. The e2 tree cannot answer
+R4.3's extension arms today (`*.e2-replay` cells record
+`needs: "e2-tree arm extension"`); an e2-tree extension is its own
+operator-visible change — the tree is not edited here.

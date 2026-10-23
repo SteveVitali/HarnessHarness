@@ -4,13 +4,12 @@
 # <answers>` then `hh-xcheck verify <bundle> <answers>` and reports the
 # covered vs pending cells.
 #
-# The E3 part-1 tree answers five of the eight bundle arms
-# (identity-trees, identity-records, ledger-transcript, registry-snapshot,
-# canonical-parse); `verify` reports the R4.4a-owned cells
-# (plugin-manifests, hir-documents, ledger-scenarios) `missing answer` by
-# name — recorded pending, never a fabricated pass. A FAIL naming an arm
-# the E3 tree *did* answer, or anything but `missing answer` on a pending
-# arm, is a real failure (exit 1).
+# The E3 tree (R4.4 + R4.4a) answers seven of the eight bundle arms —
+# every arm but `hir-documents`; `verify` reports the R4.4b-owned cells
+# (hir-documents, five cases) `missing answer` by name — recorded
+# pending, never a fabricated pass. A FAIL naming an arm the E3 tree
+# *did* answer, or anything but `missing answer` on a pending arm, is a
+# real failure (exit 1).
 #
 # Usage: xcheck-e3.sh [--answers PATH]
 #   --answers PATH   write the replayed answers here instead of a tempdir
@@ -74,7 +73,7 @@ if [ "$VERIFY_STATUS" -gt 1 ]; then
 fi
 
 # Every FAIL must be a `missing answer` on an arm the tree did NOT answer
-# (the pending R4.4a cells). A covered-arm fail, or a non-"missing answer"
+# (the pending R4.4b cells). A covered-arm fail, or a non-"missing answer"
 # fail anywhere, is a real failure.
 FAILS=0
 PENDING=0
@@ -96,9 +95,9 @@ while IFS= read -r line; do
   esac
 done <"$VERIFY_OUT"
 
-echo "xcheck-e3: covered-arm failures: $FAILS; pending (R4.4a) cells missing: $PENDING"
+echo "xcheck-e3: covered-arm failures: $FAILS; pending (R4.4b) cells missing: $PENDING"
 if [ "$FAILS" -gt 0 ]; then
   echo "xcheck-e3: FAIL — $FAILS failure(s) outside the pending arms" >&2
   exit 1
 fi
-echo "xcheck-e3: ok — every answered case verified; $PENDING pending cells recorded (R4.4a)"
+echo "xcheck-e3: ok — every answered case verified; $PENDING pending cells recorded (R4.4b)"

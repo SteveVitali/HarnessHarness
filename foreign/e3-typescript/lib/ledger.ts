@@ -8,7 +8,7 @@
 // JSON (the committed corpus is the pinned form — a drifted frame is a
 // failure, never silently reserialized).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { canonical, decodeUtf8, idpId, parseJson, sha256Hex } from "./core.ts";
 import type { Json } from "./core.ts";
@@ -78,4 +78,24 @@ export function armLedgerTranscript(armDir: string): { [key: string]: Json } {
     event_count: r.eventCount,
     wal_sha256: r.walSha256,
   };
+}
+
+/** The `ledger-scenarios` arm (R4.3's extension arm, R4.4a-ported): every
+ *  `<case>/` directory's `events.wal` replays through the same `replayWal`
+ *  fold (CC1 — one ledger spelling). The per-case answer is
+ *  `{event_hashes, head_hash}`; `<case>.wal_sha256`/`<case>.event_count`
+ *  are the informational members the checker never gates. */
+export function armLedgerScenarios(armDir: string): { [key: string]: Json } {
+  const answers: { [key: string]: Json } = Object.create(null);
+  const cases = readdirSync(armDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  for (const c of cases) {
+    const r = replayWal(join(armDir, c, "events.wal"));
+    answers[c] = { event_hashes: r.eventHashes, head_hash: r.headHash };
+    answers[`${c}.event_count`] = r.eventCount;
+    answers[`${c}.wal_sha256`] = r.walSha256;
+  }
+  return answers;
 }

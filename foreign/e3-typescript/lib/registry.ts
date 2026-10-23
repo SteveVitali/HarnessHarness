@@ -184,6 +184,28 @@ export class RegistryReplay {
     return null;
   }
 
+  /** Every registered class record → the `{class_id, contract_version, tier}`
+   *  rows plugin admission reads (the `plugin-manifests` arm's catalog —
+   *  `tier` parses the `C0..C4` spelling, unparsable → 0, E2-faithful). */
+  classCatalog(): { class_id: Json; contract_version: Json; tier: number }[] {
+    const out: { class_id: Json; contract_version: Json; tier: number }[] = [];
+    for (const rec of this.records.values()) {
+      if (rec.env["kind"] !== "class" || !isObj(rec.body)) continue;
+      const t = rec.body["tier"];
+      let tier = 0;
+      if (typeof t === "string" && t.startsWith("C")) {
+        const n = Number(t.slice(1));
+        if (Number.isInteger(n) && n >= 0 && n <= 4) tier = n;
+      }
+      out.push({
+        class_id: rec.body["class_id"] ?? null,
+        contract_version: rec.body["contract_version"] ?? null,
+        tier,
+      });
+    }
+    return out;
+  }
+
   snapshot(snapId: string): Snapshot {
     const rec = this.records.get(snapId);
     if (rec === undefined || rec.env["kind"] !== "registry_snapshot") {

@@ -293,7 +293,8 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 151a | `151a_R4.2a__ci-fast-path-and-full-run-cadence.md` | Round 4 | ticket | CI cost/wait insert (phase 1): one `pull_request` run per head (branch `push` runs dropped), fail-closed docs-only fast path with repo-wide artifact anchors, S2 spike on `workflow_dispatch` full runs only, full run per gate + `full-run.sh` reader, step-mode lint; ADR (operator rows `CI insert` D1–D7) | — |
 | 152 | `152_R4.3__xcheck-bundle-extension-arms.md` | Round 4 | ticket | `hh-xcheck-bundle/1` HIR/ledger extension arms + checker + regenerated bundle (DF-S1.2-2/-S1.5-3 prerequisite legs; BL-01) | — |
 | 153 | `153_R4.4__e3-typescript-foreign-impl.md` | Round 4 | ticket | `foreign/e3-typescript` part 1 — core + identity/ledger/registry/canonical-parse arms + verify (DF-S1.5-3, DF-S1.8-1 E3 legs) | — |
-| 153a | `153a_R4.4a__e3-typescript-foreign-impl-part2.md` | Round 4 | ticket | `foreign/e3-typescript` part 2 — plugin-manifest + extension arms, full verify (DF-S1.2-2, DF-S1.27-1) | — |
+| 153a | `153a_R4.4a__e3-typescript-foreign-impl-part2.md` | Round 4 | ticket | `foreign/e3-typescript` part 2 — plugin-manifest + ledger-scenarios arms + verify-pending closeout (DF-S1.2-2, DF-S1.27-1 progress notes) — **run-time split 2026-10-21 (## Plan extensions): `hir-documents` + all-arms closeout → row 153b/R4.4b; this row rescoped by appended dated note** | — |
+| 153b | `153b_R4.4b__e3-typescript-foreign-impl-part3.md` | Round 4 | ticket | `foreign/e3-typescript` part 3 — `hir-documents` arm (`lib/hir.ts`) + full-bundle verify closeout (DF-S1.2-2, DF-S1.27-1 DONE flips) | — |
 | 154 | `154_R4.5__c12-polyglot-ci-measurement.md` | Round 4 | ticket | Two-toolchain CI leg + C12 measurement + ADR-0050 trigger-5 measured row (DF-S0.3-2; BL-01; GATE-ACCEPT 2/8/9) | — |
 | 154a | `154a_R4.5a__live-evidence-framework.md` | Round 4 | ticket | Live-evidence framework: `live-executed` class ADR, evidence records (+ provider request ids), $100 spend ledger + allocation, `live-verify.sh` (+ `--check-names`), gating convention, gitleaks staged-diff gate + full-history baseline (`.gitleaks.toml`, 7 fixture hits allowlisted); local proof leg (live, USD 0) | — |
 | 154b | `154b_R4.5b__gateway-model-port-local-live.md` | Round 4 | ticket | Gateway-backed `ModelPort` on the run path + one HTTP codec home + HTTP transport; first live run on local Ollama (DF-S1.18-1 member; live, USD 0) | — |
@@ -892,3 +893,19 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   full run on the chain tip at GATE-G7, at GATE-G6 and before HUMAN-H7's tag — never per ticket. Phase 2
   (test-time levers) is a later, separately ordered insert. No file renamed; no row superseded; round 4 is
   now 51 rows.
+- 2026-10-21 · **split** `R4.4a` (row 153a, `153a_R4.4a__e3-typescript-foreign-impl-part2.md`) → rescoped
+  `R4.4a` + `R4.4b` (new row 153b, `153b_R4.4b__e3-typescript-foreign-impl-part3.md`), run-time split under
+  the contract's own size-budget STOP (orchestrate-build §2.4, BM-MANIFEST-03; precedent R2.9 2026-10-07).
+  The R4.4a worker (crash-resume of the 09:00Z renderer crash) measured the remaining work at ≈2.2× the
+  900-line budget — `hir-documents`-driven (`lib/hir.ts` ≈650–900 + its battery ≈180 ≈ half the overage;
+  projection in `docs/build/runs/R4.4a.md`). **R4.4a (rescoped)** keeps the committed, verified partial —
+  plugin-manifests + ledger-scenarios arms, `RegistryReplay.classCatalog()`, `foreign.ts` wiring @ eadd178;
+  `hh-xcheck verify` 52 pass / 5 `missing answer` = exactly the hir-documents cells — plus `answers.json`
+  over delivered arms, README notes, its `r4_4a.rs` battery, the verify-pending closeout and DF progress
+  notes. **R4.4b** takes the `hir-documents` port (E1 spelling `crates/hh-xcheck/src/hir_replay.rs` over the
+  `hh-hir` decode/validate/seal spine + `corpus.rs`'s five cases), the eighth-arm wiring, regenerated
+  `answers.json`, all-arms `xcheck-e3.sh`, README closeout, and the DF-S1.2-2/DF-S1.27-1 DONE flips; it
+  forks from `svitali/harnessharness-r4.4a`; `nextTicket` advances to `R4.4b` on R4.4a's closeout. Contract
+  amendment appended to the R4.4a file (executed-contract rule); Phase-4 fresh-context review recorded in
+  `docs/build/planning/2026-10-21_R4.4b-split-review.md`. No file renamed; no row superseded; round 4 is
+  now 52 rows.
