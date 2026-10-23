@@ -79,19 +79,20 @@ pub const ARMS: &[ArmSpec] = &[
     // R4.3 extension arms — DF-S1.2-2's "extend to the HIR/ledger corpus"
     // leg: HIR/1 documents on the HIR side, additional transcript/WAL
     // scenarios on the ledger side (DF-S1.5-3). The committed
-    // `foreign/e2-python` tree cannot answer them (CF-493 records the
-    // honest gap — E3's `verified_by[]` only).
+    // `foreign/e2-python` tree answered only the six original arms until
+    // R4.16a ported the e3 reference semantics (CF-493's honest gap is
+    // discharged — all three candidates' `verified_by[]` now).
     ArmSpec {
         id: "hir-documents",
         df: "DF-S1.2-2",
         dir: "arms/hir-documents",
-        verified_by: &[E1_CHECK, E3_RUN],
+        verified_by: &[E1_CHECK, E2_RUN, E3_RUN],
     },
     ArmSpec {
         id: "ledger-scenarios",
         df: "DF-S1.5-3",
         dir: "arms/ledger-scenarios",
-        verified_by: &[E1_CHECK, E3_RUN],
+        verified_by: &[E1_CHECK, E2_RUN, E3_RUN],
     },
 ];
 
@@ -134,13 +135,15 @@ pub const E1_CHECK: CandidateEvidence = CandidateEvidence {
     evidence_class: "fixture-verified",
     evidence_ref: "hh-xcheck selfcheck",
 };
-/// The E2 foreign replay (python3) — PR #136, `hh-xcheck verify` 49/49
-/// (2026-10-14); the committed `foreign/e2-python` tree answers only the
-/// six original arms.
+/// The E2 foreign replay (python3) — R4.16a, `hh-xcheck verify` 57/57
+/// (2026-10-23): the committed `foreign/e2-python` tree answers all eight
+/// arms (PR #136's recorded 49/49 covered the six original arms; the
+/// R4.16a port of the e3 reference semantics added `hir-documents` +
+/// `ledger-scenarios`).
 pub const E2_RUN: CandidateEvidence = CandidateEvidence {
     candidate: "E2-candidate",
     evidence_class: "foreign-run-verified",
-    evidence_ref: "foreign/e2-python — PR #136 (49/49)",
+    evidence_ref: "foreign/e2-python — R4.16a (57/57)",
 };
 /// The E3 foreign replay (node ≥ 22; R4.4/R4.4a/R4.4b) — `hh-xcheck
 /// verify` 57/57 over all eight arms.
@@ -152,17 +155,14 @@ pub const E3_RUN: CandidateEvidence = CandidateEvidence {
 
 /// The cells the bundle does **not** close — `(cell, df, needs,
 /// verified_by)` quadruples (CF-493). The `needs` member names the gating
-/// prerequisite: `HUMAN-H3` is the foreign-toolchain environment;
-/// `e2-tree arm extension` is the honest record (CF-493 vocabulary —
-/// `status` stays `environment-pending`, never a new member) that the
-/// committed `foreign/e2-python` tree answers only the six original
-/// arms — the R4.3 arms' E2 replay awaits the e2-tree extension R4.4a
-/// may land, their E3 replay the E3 toolchain. `verified_by` records a
-/// cell's *partial* discharge honestly — the recorded foreign replay is
-/// evidence for the cell, never its closure: `status` stays
-/// `environment-pending` while the named prerequisite stands. Recorded
-/// in `bundle.json` as `pending_cells[]` so the packaging itself
-/// carries the honesty record.
+/// prerequisite: `HUMAN-H3` is the foreign-toolchain environment — the
+/// gate every foreign-replay cell carries (the `e2-tree arm extension`
+/// vocabulary the two `*.e2-replay` cells named until R4.16a is retired —
+/// the extension landed). `verified_by` records a cell's *partial*
+/// discharge honestly — the recorded foreign replay is evidence for the
+/// cell, never its closure: `status` stays `environment-pending` while
+/// the named prerequisite stands. Recorded in `bundle.json` as
+/// `pending_cells[]` so the packaging itself carries the honesty record.
 pub const PENDING_CELLS: &[(&str, &str, &str, &[CandidateEvidence])] = &[
     (
         "identity-trees.foreign-replay",
@@ -209,8 +209,8 @@ pub const PENDING_CELLS: &[(&str, &str, &str, &[CandidateEvidence])] = &[
     (
         "hir-documents.e2-replay",
         "DF-S1.2-2",
-        "e2-tree arm extension",
-        &[],
+        "HUMAN-H3",
+        &[E2_RUN],
     ),
     (
         "hir-documents.e3-replay",
@@ -221,8 +221,8 @@ pub const PENDING_CELLS: &[(&str, &str, &str, &[CandidateEvidence])] = &[
     (
         "ledger-scenarios.e2-replay",
         "DF-S1.5-3",
-        "e2-tree arm extension",
-        &[],
+        "HUMAN-H3",
+        &[E2_RUN],
     ),
     (
         "ledger-scenarios.e3-replay",

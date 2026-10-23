@@ -32,6 +32,18 @@ cannot pass until the operator dispositions them.
 
 Neither is decided here — the operator's recorded words choose.
 
+**Disposition recorded 2026-10-23 — the insert arm (R4.16a):** the operator ruled "ok insert and
+proceed" (chat, 2026-10-23; insert `165a_R4.16a__e2-python-extension-arms.md`). The e2 extension arms
+are implemented on `svitali/harnessharness-r4.16a` and replay the committed corpus byte-for-byte:
+`hh-xcheck verify` **57 passed / 0 failed** over all eight arms, `scripts/xcheck-foreign.sh` green
+(E1 97/0, E2 57/0, E3 57/0), both `*.e2-replay` cells carry the E2 `foreign-run-verified` record
+(`needs` now `HUMAN-H3` like every foreign cell; `status` stays `environment-pending`), DF-S1.2-2 +
+DF-S1.5-3 read `**DONE**` (`scripts/deferrals-open.sh` empty), R-2.12.1 re-verdicted `MET`. The work is
+STOP-committed pending the recorded size-deviation ruling (~3.1k changed lines vs the ticket's 900
+flag — the e3 reference arm alone was ~2.5k; the R4.4b/R4.9 precedent), so the finding's discharge is
+evidenced but unmerged. The gate's signature re-presents when the ruling lands.
+(Evidence: `foreign/e2-python/answers.json`, `docs/build/runs/R4.16a.md`.)
+
 ---
 
 ## Pre-registered thresholds — verified (fixed 2026-10-20, before the gated work)

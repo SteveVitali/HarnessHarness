@@ -6,10 +6,10 @@
 //! Invariants: a full local run with both toolchains exits 0; a stripped
 //! PATH reports `skipped(<tool>-absent)` (exit 3) per tool, never a
 //! fabricated pass; a missing hh-xcheck binary exits 2; the committed
-//! E2 answers carry exactly the six original arms — the extension arms
-//! (`hir-documents`, `ledger-scenarios`) fail `missing answer` as the
-//! recorded pending cells; the ci.yml step that runs the leg carries the
-//! ADR-0362 step-mode gate.
+//! E2 answers carry all eight arms — the extension arms
+//! (`hir-documents`, `ledger-scenarios`) verified at R4.16a's port, the
+//! earlier `missing answer` split recorded pending cells until then; the
+//! ci.yml step that runs the leg carries the ADR-0362 step-mode gate.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -158,48 +158,52 @@ fn xcheck_foreign_missing_binary_is_exit_2() {
     );
 }
 
-/// The committed E2 answers verify green on the six original arms and
-/// fail `missing answer` on exactly the two extension arms the e2 tree
-/// does not carry — the recorded pending cells, never a vacuous pass.
+/// The committed E2 answers verify green on all eight arms — R4.16a
+/// ported the extension arms (`hir-documents`, `ledger-scenarios`), so
+/// the `missing answer` split this battery asserted before is
+/// discharged; the six original arms stay green (no regression) and the
+/// two new arms' eight cases verify.
 #[test]
-fn e2_committed_answers_pending_cells_are_named() {
+fn e2_committed_answers_verify_all_arms() {
     let answers = load(&root().join("foreign/e2-python/answers.json"));
     assert_eq!(
         answers.get("candidate").and_then(Json::as_str),
         Some("E2-candidate"),
         "the committed answers must name the E2 candidate"
     );
-    let report = verify_answers(&bundle_dir(), &answers).unwrap();
-    let (mut ok, mut pending) = (0usize, 0usize);
-    for r in &report.results {
-        match r.arm.as_str() {
-            "hir-documents" | "ledger-scenarios" => {
-                pending += 1;
-                assert_eq!(
-                    r.outcome.as_ref().err().map(String::as_str),
-                    Some("missing answer"),
-                    "extension-arm case {} {} must fail `missing answer`, got {:?}",
-                    r.arm,
-                    r.case,
-                    r.outcome
-                );
-            }
-            _ => {
-                ok += 1;
-                assert!(
-                    r.outcome.is_ok(),
-                    "covered case {} {} failed: {:?}",
-                    r.arm,
-                    r.case,
-                    r.outcome
-                );
-            }
-        }
+    // The answers carry both extension arms — a regenerated file could
+    // only carry them if the tree replays the arms.
+    let Json::Obj(arms) = answers
+        .get("arms")
+        .expect("answers.json must carry an arms object")
+    else {
+        panic!("answers.json arms must be an object");
+    };
+    for arm in ["hir-documents", "ledger-scenarios"] {
+        assert!(
+            arms.contains_key(arm),
+            "committed E2 answers must carry {arm}"
+        );
     }
-    assert_eq!(ok, 49, "the six E2 arms cover 49 cases");
+    let report = verify_answers(&bundle_dir(), &answers).unwrap();
+    assert!(
+        report.is_green(),
+        "committed E2 answers must verify 57/0: {:?}",
+        report.failures()
+    );
     assert_eq!(
-        pending, 8,
-        "the extension arms carry 8 pending cells (5 hir-documents + 3 ledger-scenarios)"
+        report.results.len(),
+        57,
+        "the eight E2 arms cover 57 committed cases"
+    );
+    let new_arms = report
+        .results
+        .iter()
+        .filter(|r| r.arm == "hir-documents" || r.arm == "ledger-scenarios")
+        .count();
+    assert_eq!(
+        new_arms, 8,
+        "the extension arms contribute 8 cases (5 hir + 3 ledger)"
     );
 }
 
