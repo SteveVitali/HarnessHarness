@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The 52-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
+The 54-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
 service slices, the Lab (experiment/evaluation plane), the C3–C5 services, and
 the surfaces. Members are declared — with a one-line provenance comment each —
 in the root `Cargo.toml`. Dependency edges point downward through the layers
@@ -13,6 +13,7 @@ below; the root AGENTS.md has the layering narrative.
 | Crate | Purpose |
 |---|---|
 | `hharness-wire` | canonical JSON, JSON-RPC 2.0 framing, SHA-2 — transport primitives, no verbs |
+| `hharness-tls` | the workspace's ONE TLS home (ADR-0365): HTTPS client / TLS-server / mTLS over the admitted rustls/`ring` graph — the only member that may name it |
 | `hharness-ontology` | the formal model: seven-plane home-plane rule (CC10 anchors here), κ, config ids, compliance schema |
 | `hharness-identity` | idp/1 identity, `ContentAddress`, `VersionedRef`, the one canonicalizer (CC1 anchor), sameness ladder |
 | `hharness-provenance` | the one `ProvenanceRecord` + `Label` lattice, seven-class `AuthorityClass` order, seal/endorse basis |
@@ -64,6 +65,7 @@ below; the root AGENTS.md has the layering narrative.
 | `hharness-evolution` | the C5 evolution pipeline: S0–S10 candidate state machine over durable rows |
 | `hharness-debt` | the C4 assumption-debt manager service (sweep/settle/retire, `tier-c4` on `hharness-embed`) |
 | `hharness-xcheck` | the cross-implementation replay/checker packaging (spec §10.7, R2.21, ADR-0353): `hh-xcheck-bundle/1` export + E1 self-check + foreign-answers `verify`; `hh-xcheck` binary |
+| `hharness` | the umbrella facade crate (L4.4): re-exports the publishable public-API crates under short module names (`hharness::ledger`, `hharness::hir`, …) for library consumers |
 
 ## Build & Test
 

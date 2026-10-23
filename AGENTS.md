@@ -5,7 +5,7 @@
 The E1 reference build of the MetaHarness program: a kernel + Laboratory for
 *harness engineering* — durable, observable, model-conditioned runtimes for
 goal-directed agents, with provenance, budgets and governance carried as
-load-bearing contracts rather than conventions. The system is a 52-crate
+load-bearing contracts rather than conventions. The system is a 54-crate
 pure-std-modulo-ADR-0359/ADR-0365 Rust workspace (one named, pinned `ring`
 dep — the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361 — and the
 named, pinned rustls/`ring`-backend TLS graph admitted by ADR-0365 for
@@ -47,14 +47,14 @@ Human-facing overview: `README.md`. The behavioural contract:
   `hharness-acp`; packaged variants under `plugins/` run out of process through
   `hharness-varhost` + `hh-helper` over `plugin_abi/1`.
 - **Cross-implementation replay.** `hh-xcheck` packages the committed
-  `hh-xcheck-bundle/1` corpus (six arms — identity trees/records, ledger
+  `hh-xcheck-bundle/1` corpus (eight arms — identity trees/records, ledger
   transcript+WAL, registry snapshot, plugin manifests, canonical-parse
-  frames) plus the E1 `self_check` and the foreign-answers `verify`
-  comparator (R2.21, ADR-0353). The foreign replay legs stay
-  environment-pending on HUMAN-H3 — packaged, never claimed; the E2 legs
-  carry `foreign-run-verified` evidence (PR #136 — `hh-xcheck verify`
-  49/49 over the six arms), a distinct class that does not lift the
-  in-tree ceiling.
+  frames, HIR documents, ledger scenarios) plus the E1 `self_check` and
+  the foreign-answers `verify` comparator (R2.21, ADR-0353). The E2 + E3
+  legs carry `foreign-run-verified` evidence — `hh-xcheck verify` 57/57
+  on each toolchain over the eight arms (PR #136's six base arms plus the
+  R4.16a e2 extension) — a distinct class that does not lift the in-tree
+  ceiling.
 
 Full per-crate map and workspace rules: `crates/AGENTS.md`.
 
@@ -64,7 +64,7 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 |---|---|
 | `Cargo.toml` | workspace `members` — annotated one-line-per-crate; the hermetic-deps note |
 | `rust-toolchain.toml` | pins Rust 1.94 (+ `rustfmt`); CI honors it |
-| `crates/` | the 51-member workspace — see `crates/AGENTS.md` |
+| `crates/` | the 54-member workspace — see `crates/AGENTS.md` |
 | `plugins/` | packaged first-party variants: `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture` |
 | `schema/` | generated contract artifacts — regenerate via `scripts/check-drift.sh`, never hand-edit |
 | `scripts/` | `check-drift.sh` (CC7), `check-removability.sh` (CC6), spike runners |
@@ -136,7 +136,10 @@ Smoke: `cargo build -p hharness-cli -p hharness-kernel` then
    whole** (BM-ORIENT-01): `bash scripts/deferrals-open.sh` indexes every row
    whose dated marker is not DONE/WONTFIX, `bash scripts/bm-row.sh DF-…`
    prints one row (`--status` → `id | status | marker`, `--bl` → the BL
-   home), `bash scripts/spec-section.sh <anchor>` prints one spec section.
+   home), `bash scripts/spec-section.sh <anchor>` prints one spec section. The
+   same row-wise discipline holds for oversized sources (> ~40 KB — e.g.
+   `crates/hh-control/src/driver.rs`): locate with `grep -n`, read
+   `sed -n '<a>,<b>p'` ranges — never the whole file.
    (See Build memory below.)
 2. **Generated files are never hand-edited:** `schema/*.json`,
    `crates/hh-embed-client-generated/src/generated.rs`, `docs/adr/README.md`
@@ -151,18 +154,20 @@ Smoke: `cargo build -p hharness-cli -p hharness-kernel` then
    the build-memory files, the standing rule covers every file): write via
    shell/python and verify with `git diff` before committing —
    `git show --stat` must list every file a commit claims.
-5. **Offline/hermetic by design — with one gated exception.** The default
-   verified ceiling is fixture-verified; `staging-verified` and `public`
-   claims stay forbidden until L4.6/R4.18 earn them
-   (`docs/build/OPERATIONAL_READINESS.md` is the capability account).
-   `live-executed` is claimable **only** with a cited `hh-live-evidence/1`
-   record under `docs/build/reports/live/` produced by
-   `scripts/live-verify.sh` (ADR-0363) — never a bare claim, and a leg
-   that did not execute records `skipped(<reason>)`/`environment-pending`,
-   never a pass. `foreign-run-verified` — a foreign toolchain's recorded
-   replay of the committed `hh-xcheck` bundle (PR #136's E2 legs) — is a
-   distinct evidence class, below the in-tree ceiling and never conflated
-   with `fixture-verified` or `live-executed`.
+5. **Offline/hermetic by design — the evidence classes are
+   load-bearing.** `fixture-verified` is the floor; `live-executed` is
+   earned on the surfaces `docs/build/OPERATIONAL_READINESS.md`
+   inventories (34 committed records) and is claimable **only** with a
+   cited `hh-live-evidence/1` record under `docs/build/reports/live/`
+   produced by `scripts/live-verify.sh` (ADR-0363) — never a bare claim,
+   and a leg that did not execute records
+   `skipped(<reason>)`/`environment-pending`, never a pass.
+   `staging-verified` and `public` claims stay forbidden until R4.18
+   earns them. `foreign-run-verified` — a foreign toolchain's recorded
+   replay of the committed `hh-xcheck` bundle (the E2 + E3 legs, 57/57
+   each over the eight arms) — is a distinct evidence class, below the
+   in-tree ceiling and never conflated with `fixture-verified` or
+   `live-executed`.
 6. **The manifest chain is a stack, not a queue:** work forks from the
    previous ticket's branch; append-only history; a gate is a pause, not a
    block; secrets never enter a ledger (`provided: yes/no` only).
@@ -214,8 +219,9 @@ Smoke: `cargo build -p hharness-cli -p hharness-kernel` then
 | gate | a manifest STOP row — a pause for operator readout, not a block |
 | C0…C5, `tier-c*` | spec maturity tiers; mapped to cargo features |
 | `n/a{reason}` | the typed not-applicable lattice — claims carry their reason |
-| fixture-verified | the build's honesty ceiling: exercised end-to-end against fixtures, never a live service |
-| foreign-run-verified | a foreign toolchain's recorded replay of the committed `hh-xcheck` bundle (PR #136) — a distinct class below the ceiling, never conflated |
+| fixture-verified | the verified floor: exercised end-to-end against fixtures, never a live service |
+| live-executed | a real-environment leg with a cited `hh-live-evidence/1` record (ADR-0363) — the highest claimed layer |
+| foreign-run-verified | a foreign toolchain's recorded replay of the committed `hh-xcheck` bundle (E2 + E3, 57/57 each) — a distinct class below the ceiling, never conflated |
 
 ## Build memory
 
