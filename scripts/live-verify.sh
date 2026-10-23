@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -188,6 +188,11 @@ leg_field() { # $1 leg, $2 field
     l4-6b-replay:names)    printf '';;
     l4-6b-replay:test)     printf 'hharness-embed:l4_6b:l46b_replay_effect_run';;
     l4-6b-replay:host)     printf '127.0.0.1';;
+    quickstart-live:ticket)   printf 'L4.7';;
+    quickstart-live:provider) printf 'local-ollama';;
+    quickstart-live:kind)     printf 'script';;
+    quickstart-live:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    quickstart-live:host)     printf '127.0.0.1:11434';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -1248,6 +1253,69 @@ run_leg_capstone_mcp() {
   elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(no-ignored-tests-matched)"
   else RESULT="fail:mcp-leg rc=$rc"; fi
+}
+
+# `quickstart-live` — L4.7: the README's `<!-- quickstart-live:… -->`
+# block executed verbatim (the same extraction discipline
+# check-quickstart.sh applies to the hermetic block): `hh run start`
+# over the committed conformance fixture + the `/assembly/slots/
+# model_port` override binding `hh/gateway_http` to the provisioned
+# local lane — `env:HH_LOCAL_BASE_URL`/`env:HH_LOCAL_MODEL` coordinates
+# resolve inside the kernel (NAMEs only; the override arg is the only
+# place they appear). Asserts `exit_class:ok` + a real
+# `model.call.completed` + `lifecycle.run.finished` — the run's terminal
+# `stop_reason` is recorded verbatim in the assertions (a local model's
+# schema-violating answer honestly ends `format_failure`; the wire leg —
+# a real provider call with usage — is what the block proves).
+# USD 0 — the local lane.
+run_leg_quickstart_live() {
+  require cargo; require python3
+  local n; for n in $(leg_field "quickstart-live" names); do export "$n"; done
+  ENDPOINT_HOST=$(python3 - "$HH_LOCAL_BASE_URL" <<'PY'
+import sys, urllib.parse
+p = urllib.parse.urlparse(sys.argv[1])
+print(p.hostname or "", end="")
+if p.port:
+    print(":%d" % p.port, end="")
+PY
+)
+  ASSERTIONS="the README quickstart-live block executed verbatim: hh run start on clients/ts/fixture-definition.json + the model_port override binds gateway_http openai-compatible@1 to env:HH_LOCAL_BASE_URL/env:HH_LOCAL_MODEL (NAMEs only); a real model.call.requested/completed lands (usage recorded) and the run reaches lifecycle.run.finished with exit_class:ok — the terminal outcome is the model's honest tool-call fidelity; USD 0 local lane"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  awk '
+    /<!-- quickstart-live:begin -->/ { inmark = 1 }
+    /<!-- quickstart-live:end -->/   { inmark = 0 }
+    inmark && /^```sh[[:space:]]*$/ { insh = 1; next }
+    insh   && /^```[[:space:]]*$/   { insh = 0 }
+    insh                          { print }
+  ' "$REPO/README.md" > "$TMPD_L/block.sh"
+  if [ ! -s "$TMPD_L/block.sh" ]; then
+    RESULT="skipped(no-quickstart-live-block)"
+    return
+  fi
+  (cd "$REPO" && cargo build -q -p hharness-cli -p hharness-kernel) \
+    || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    printf '$ <verbatim <!-- quickstart-live --> block> (HH_STORE_ROOT/HH_WORKSPACE_ROOT → scratch)\n\n'
+    (cd "$REPO" && HH_STORE_ROOT="$TMPD_L/store" HH_WORKSPACE_ROOT="$TMPD_L/ws" \
+      bash -eu "$TMPD_L/block.sh") 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 0 ] \
+     && grep -qF '"exit_class":"ok"' "$TRANSCRIPT_RAW" \
+     && grep -qF '"class":"model.call.completed"' "$TRANSCRIPT_RAW" \
+     && grep -qF '"class":"lifecycle.run.finished"' "$TRANSCRIPT_RAW"; then
+    RESULT="pass"
+    MODEL_REPORTED="$HH_LOCAL_MODEL"
+    local run stop
+    run=$(grep -o '"run_id":"[^"]*"' "$TRANSCRIPT_RAW" | head -1 | cut -d'"' -f4)
+    stop=$(grep -o '"stop_reason":{[^}]*}' "$TRANSCRIPT_RAW" | tail -1)
+    [ -n "$run" ] && ASSERTIONS="$ASSERTIONS; run=$run"
+    [ -n "$stop" ] && ASSERTIONS="$ASSERTIONS; terminal:$stop"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="fail:assertion — block exited 0 but the documented outputs were absent (no real model call / no run-finished event)"
+  else
+    RESULT="fail:quickstart-live rc=$rc"
+  fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
