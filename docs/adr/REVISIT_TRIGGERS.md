@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_164 ADRs: 83 quiet-conditional · 49 fired-and-answered · 32 fired-unanswered · 0 superseded._
+_165 ADRs: 84 quiet-conditional · 49 fired-and-answered · 32 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -119,6 +119,7 @@ _164 ADRs: 83 quiet-conditional · 49 fired-and-answered · 32 fired-unanswered 
 | ADR-0378 | Reopen when: a RustSec advisory lands against the ADR-0365 set again (the pin bumps by sibling ADR, never a silent `cargo update`); a new dependency, registry, git source, or license family needs admission (always an ADR first); the `ubuntu-latest` → Ubuntu 26 or macOS image migration changes runner semantics; the `live-verify` Environment's protection shape changes; or cargo-deny/gitleaks releases move the pinned behaviour. |
 | ADR-0379 | Reopen when: the publish dry-run surfaces a namespace conflict on crates.io or in registries; a foreign implementation pins the old `hh-*` package spellings (interop naming note owed); the `hh` tracestate/registry namespace allocation changes; or a future directory rename is ever scheduled (requires its own ADR + a path-rewrite pass over build records). |
 | ADR-0380 | Reopen when: a Windows containment backend lands for `hh-helper` (the excluded `x86_64-pc-windows-*`/… targets join the set); a lower-MSRV claim is needed and a toolchain to prove it exists (the declaration drops below the pin and the CI step verifies it); GitHub retires or gates `ubuntu-24.04-arm` for public repos; the publish set's rule changes (a fixture/plugin becomes distributable or a surface crate becomes internal); or crates.io metadata requirements change (e.g. keyword/category vocabulary). |
+| ADR-0381 | Reopen when: the `EffectGate` contract grows a new emitted-row class the window rule misclassifies (a driver-minted non-`intended` row inside a dispatch window, or a gate-emitted row naming its effect some other way); the id allocator leaves `Driver` (the ceremony re-serve's binding to the shared `next_id` is the contract being kept — moving the allocator moves the contract); or deterministic replay is asked to re-execute effects (the recorded-terminal design is `executor calls = 0` by construction — re-execution is a different driver mode, not a change to this leg). |
 
 ## Fired-and-answered triggers (BL-48)
 
