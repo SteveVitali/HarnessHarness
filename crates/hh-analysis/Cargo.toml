@@ -4,18 +4,24 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-3 §6.4 estimator kernel (R-2.10.4⁰ᵇ; ticket S3.4c; ADR-0157/0158/0159/0160): the pure, versioned, class-aware analyze(spec, rows @ watermark_set) over results rows — A1 summarize, A2 compare (paired Δ, selection rule, permutation test, tail effects, outcome bounds, multiplicity), A3 contrast, A8 equivalence, A12 multiplicity (Holm + BH), transfer rows; the ResultsRow+RunManifest+LedgerFacts→EvalRun projection; AnalysisRecord/analysis_report_body/1 LabDocs persistence (recorded, never recomputed). Reuses hharness-eval's compare/stats/benefits machinery (CC1); owns no store, no scheduler, no oracle."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-eval = { path = "../hh-eval" }
-hharness-lab = { path = "../hh-lab" }
-hharness-results = { path = "../hh-results" }
-hharness-experiment = { path = "../hh-experiment" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-results = { path = "../hh-results", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }

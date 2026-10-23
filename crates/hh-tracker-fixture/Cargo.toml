@@ -1,9 +1,17 @@
 [package]
 name = "hharness-tracker-fixture"
+# ADR-0380 (a): fixture / packaged-plugin / test-support — never published
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The packaged `work_source_adapter` reference variant (§5i.1, R-2.12.6; ticket S5.6) — a `hharness_fleet_adapter::tracker::FixtureTracker` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. The fixture document arrives as the `bind` parameter `fixture_doc` (records-in/records-out — T-LCD-12); every op dispatches through the ONE canonical codec in `hharness_fleet_adapter::tracker::dispatch` (CC7). This is the L5 lane's honest fixture half — the real tracker variant (HUMAN-H2, deferred) implements the same `TrackerLogic` ops against its own client; nothing here simulates it. Packaged at `plugins/hh-tracker-fixture`."
 
 [[bin]]
@@ -11,8 +19,8 @@ name = "hh-tracker-fixture"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
 hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
-hharness-varhost = { path = "../hh-varhost" }
-hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
+hharness-varhost = { path = "../hh-varhost", version = "0.1.0" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter", version = "0.1.0" }

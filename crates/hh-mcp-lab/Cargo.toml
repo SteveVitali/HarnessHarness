@@ -4,23 +4,29 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C1 `hh-lab/1` MCP server slice (spec §7.3, R-2.11.3¹; ticket S4.11; ADR-0173/0174/0175, ADR-0184 D2, ADR-0303). The kernel-side Lab surface over stdio and Streamable HTTP: the read/launch/experiment/results groups as one-wraps-one-op MCP tools, `CallerBinding`s (stdio_launch + OAuth through the H3 `CallerAuth` seam), the `run_kind = surface` surface-session ledger with per-call `lifecycle.turn.*`/`action.effect.*` chains, charges against `binding.budget_node` (`instrument` for server work, `subject` on launched runs), `ExposurePolicy` sink reads with `measurement.export.delivered` per page, supply-surface Π evaluation for hosted participants, and the `surface_ids` handle carrier. hharness-mcp stays the protocol edge; the kernel boundary is `hh-embed/1` binding (a) plus the narrow `surface_*` write seam."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-embed = { path = "../hh-embed" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
-hharness-mcp = { path = "../hh-mcp" }
-hharness-env = { path = "../hh-env" }
-hharness-budget = { path = "../hh-budget" }
-hharness-telemetry = { path = "../hh-telemetry" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-provenance = { path = "../hh-provenance" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-embed = { path = "../hh-embed", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-mcp = { path = "../hh-mcp", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
 
 [dev-dependencies]
 # The open_session fixture's hir/1 document (the same shape the

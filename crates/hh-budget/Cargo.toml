@@ -4,15 +4,21 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 resource-economics & accounting model (spec §8.2, R-2.1.6): the canonical resource/accounting schema — ResourceQuantity/Vector, usage_mapping lowering to exclusive token roles, Attribution + charged_to, PricingTable + SpendRow provenance (confidence/coverage/derivation), the control.budget.* + measurement.cost.attributed payloads, the hierarchical BudgetTree projection (dynamic containment, slice/pool, reservations, exhaustion rules E1–E5), cost_totals, MatchSpec/search_budget/eval_budget, and the budget_delta governance gate. Sits above ontology/identity/provenance/ledger/hir/wire."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }

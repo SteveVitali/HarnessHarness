@@ -69,8 +69,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "hharness"
+version = "0.1.0"
+dependencies = [
+ "hharness-acp",
+ "hharness-analysis",
+ "hharness-assembly",
+ "hharness-bench",
+ "hharness-budget",
+ "hharness-bundle",
+ "hharness-cli",
+ "hharness-compiler",
+ "hharness-containment",
+ "hharness-context",
+ "hharness-control",
+ "hharness-debt",
+ "hharness-embed",
+ "hharness-embed-client-generated",
+ "hharness-embed-schema",
+ "hharness-env",
+ "hharness-eval",
+ "hharness-evolution",
+ "hharness-experiment",
+ "hharness-fleet",
+ "hharness-fleet-adapter",
+ "hharness-gateway",
+ "hharness-helper",
+ "hharness-hir",
+ "hharness-hosting",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-mcp",
+ "hharness-mcp-lab",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-orchestrator",
+ "hharness-plugin",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-results",
+ "hharness-secrets",
+ "hharness-subagent",
+ "hharness-telemetry",
+ "hharness-tls",
+ "hharness-varhost",
+ "hharness-verification",
+ "hharness-web",
+ "hharness-wire",
+ "hharness-xcheck",
+]
+
+[[package]]
 name = "hharness-acp"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-compiler",
  "hharness-identity",
@@ -82,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-analysis"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-eval",
@@ -97,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-assembly"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-hir",
@@ -112,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-bench"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -131,7 +183,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-budget"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-hir",
  "hharness-identity",
@@ -143,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-bundle"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-identity",
@@ -158,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-acp",
  "hharness-assembly",
@@ -178,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-codegen"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed-schema",
  "hharness-wire",
@@ -186,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-compact-evict-oldest"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-bench",
  "hharness-context",
@@ -200,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-compiler"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-assembly",
  "hharness-hir",
@@ -213,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-containment"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-compiler",
  "hharness-hir",
@@ -225,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-context"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-hir",
  "hharness-identity",
@@ -238,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-control"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -256,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-debt"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-hir",
@@ -270,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-embed"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-analysis",
  "hharness-assembly",
@@ -310,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-embed-client-generated"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed-schema",
  "hharness-wire",
@@ -318,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-embed-schema"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-identity",
  "hharness-wire",
@@ -326,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-env"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -348,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-eval"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -363,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-evolution"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-context",
@@ -381,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-experiment"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-eval",
@@ -395,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-fleet"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-embed-schema",
@@ -410,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-fleet-adapter"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-fleet",
  "hharness-wire",
@@ -418,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-gateway"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -435,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-github-issues"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed-schema",
  "hharness-fleet-adapter",
@@ -446,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-helper"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-containment",
  "hharness-identity",
@@ -455,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-hir"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-identity",
  "hharness-ontology",
@@ -465,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-hosting"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-hir",
@@ -479,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-identity"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-provenance",
  "hharness-wire",
@@ -487,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-kernel"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed",
  "hharness-embed-client-generated",
@@ -497,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-lab"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-assembly",
  "hharness-budget",
@@ -512,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-ledger"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-identity",
  "hharness-ontology",
@@ -522,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-mcp"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-bundle",
  "hharness-compiler",
@@ -542,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-mcp-lab"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-assembly",
  "hharness-budget",
@@ -561,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-memory-store"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-context",
  "hharness-embed-schema",
@@ -572,7 +624,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-monitor"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-assembly",
  "hharness-budget",
@@ -589,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-ontology"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-identity",
  "hharness-provenance",
@@ -598,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-orchestrator"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -619,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-plugin"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-identity",
  "hharness-ontology",
@@ -629,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-plugin-fixture"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-control",
  "hharness-embed-schema",
@@ -644,14 +696,14 @@ dependencies = [
 
 [[package]]
 name = "hharness-provenance"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-wire",
 ]
 
 [[package]]
 name = "hharness-registry"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-hir",
  "hharness-identity",
@@ -664,7 +716,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-results"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-bundle",
@@ -680,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-secrets"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-containment",
  "hharness-hir",
@@ -695,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-subagent"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-compiler",
@@ -713,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-telemetry"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-budget",
  "hharness-identity",
@@ -726,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-tls"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-wire",
  "rustls",
@@ -736,7 +788,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-tracker-fixture"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed-schema",
  "hharness-fleet-adapter",
@@ -747,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-varhost"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-containment",
  "hharness-context",
@@ -771,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-verification"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-compiler",
  "hharness-hir",
@@ -784,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "hharness-web"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-embed",
  "hharness-embed-client-generated",
@@ -798,11 +850,11 @@ dependencies = [
 
 [[package]]
 name = "hharness-wire"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "hharness-xcheck"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "hharness-hir",
  "hharness-identity",

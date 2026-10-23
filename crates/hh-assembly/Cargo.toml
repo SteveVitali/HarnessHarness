@@ -4,18 +4,24 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 configuration & composition model (spec §3.3, R-2.1.4): the assembly grammar in the HIR/1 schema, the class catalog for control_strategy and context_policy over the registry's ClassRecord/VariantRecord, load, validate_assembly (stages 1–5 and 7, complete reports, never fail-fast), resolve (one resolver feeding seal), identity, diff via HirDiff, in-process instantiate with lifecycle.component.bound, verify_resume with lifecycle.definition.changed, and the closed AssemblyDiagnostic taxonomy. Reuses the one HIR (hharness-hir), identity (hharness-identity), provenance (hharness-provenance), registry store (hharness-registry) and event store (hharness-ledger). compose (layers + monotone authority_cap), space/enumerate + the ADR-0025 override grammar and stage 6a are Stage 3; stage 6b is C1/Stage 5 — not yet."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-registry = { path = "../hh-registry" }
-hharness-plugin = { path = "../hh-plugin" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-plugin = { path = "../hh-plugin", version = "0.1.0" }

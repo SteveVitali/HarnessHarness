@@ -1,9 +1,17 @@
 [package]
 name = "hharness-github-issues"
+# ADR-0380 (a): fixture / packaged-plugin / test-support — never published
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The packaged `work_source_adapter` GitHub Issues variant (§5i.1, R-2.12.6/AC-9; R4.7; DF-S5.6-1; HUMAN-H2 GitHub Issues + tunnel) — a `hharness_fleet_adapter::github::GithubTracker` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. The `hh.fleet.github_source/1` document arrives as the `bind` parameter `github_doc` (records-in/records-out — T-LCD-12; the confined child has no network egress, so the host pins the live issue snapshot and verified deliveries into the document; credentials never reach the plugin). Every op dispatches through the ONE canonical codec in `hharness_fleet_adapter::tracker::dispatch` (CC7). Packaged at `plugins/hh-github-issues`."
 
 [[bin]]
@@ -11,8 +19,8 @@ name = "hh-github-issues"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
 hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
-hharness-varhost = { path = "../hh-varhost" }
-hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
+hharness-varhost = { path = "../hh-varhost", version = "0.1.0" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter", version = "0.1.0" }

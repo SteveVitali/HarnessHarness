@@ -11,3 +11,4 @@ scripts/spike-s2-boundary.sh	# stamped measurement sheet to docs/build/reports/.
 scripts/spike-s2-boundary.sh	SHEET="$ROOT/docs/build/reports/S0.1-boundary-spike.md"	# write-only job output
 crates/hh-gateway/src/dialects.rs	        "https://platform.openai.com/docs/api-reference",	# string literal — provider API reference URL; never opened as a checkout path
 crates/hh-gateway/src/dialects.rs	const OPENAI_REF: &str = "https://platform.openai.com/docs/api-reference/chat";	# string literal — provider API reference URL; never opened as a checkout path
+scripts/check-docsrs.sh	    d = (p.get("metadata") or {}).get("docs", {}) or {}	# the "docs" token is the [package.metadata.docs.rs] JSON key — a manifest table name, never a docs/ checkout path

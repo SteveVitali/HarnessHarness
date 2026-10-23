@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The E1 reference kernel binary (Stage-0 skeleton): schema export, the stdio JSON-RPC hello/ContractIdentity negotiation, and self-check subcommands. No runtime logic beyond the boundary skeleton (ADR-0050 (e))."
 
 [[bin]]
@@ -11,9 +17,9 @@ name = "hh-kernel"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
-hharness-embed = { path = "../hh-embed" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-embed = { path = "../hh-embed", version = "0.1.0" }
 
 [dev-dependencies]
 # The generated, drift-checked client — used to prove the end-to-end codegen round trip over

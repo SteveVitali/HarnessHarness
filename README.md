@@ -56,6 +56,29 @@ bash scripts/check-removability.sh   # the CC6 tier-removability gate
 | `hh-authorize` | `hharness-monitor` | the out-of-process `authorize` over `hh-monitor/authorize-input/1` |
 | `hh-bench-adapter` · `hh-eval-oracle` · `hh-gateway-stub` · `hh-plugin-check` · `hh-plugin-fixture` · `hh-compact-evict-oldest` · `hh-memory-store` · `hh-tracker-fixture` · `hh-xcheck` | respective crates | lab instruments, OOP oracle/stub binaries, plugin binaries, and the cross-implementation replay checker (`hh-xcheck-bundle/1` export + E1 self-check + foreign-answers `verify`, landed at R2.21) |
 
+## Install
+
+```sh
+cargo install hharness-cli     # the `hh` operator CLI
+cargo install hharness-kernel  # the `hh-kernel` service binary
+cargo install hharness-helper  # the `hh-helper` sandbox helper
+```
+
+Prebuilt archives of those three binaries for the ADR-0380 target set
+(macOS arm64 + x86_64, Linux x86_64 + aarch64) attach to each GitHub
+Release with a `SHA256SUMS` manifest.
+
+For library use, the umbrella crate re-exports every publishable
+public-API crate under short module names:
+
+```sh
+cargo add hharness   # hharness::ledger, hharness::hir, hharness::embed, …
+```
+
+The `tier-c1`/`tier-c4` features are on by default;
+`default-features = false` removes those tiers honestly (gated ops
+answer typed `unsupported` refusals).
+
 ## `hh` — quick orientation
 
 `hh` spawns `hh-kernel serve` over stdio (binding (b)); `HH_KERNEL_CMD`

@@ -4,19 +4,25 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C4 §5h.6 assumption-debt manager service (R-2.9.6; ticket S6.1b; ADR-0197/0198; ADR-0209 D2): the DebtManagerRecord service record (maturity + the home-16 reflexive AssumptionDebtRecord + DebtPolicy.schedule), the durable-prefix ManagerView fold over the registry run's lifecycle.debt.* rows (probation book, scheduled/settled removal tests, sweep watermarks — kernel producer hharness-debt, one authority path), schedule_removal_test under DebtPolicy (priority ordering, max_open_removal_tests, instrument-budget reservation, Deferred{reason}), retirement_batch designs (k single-rule removal arms sharing one base arm), the reflexive no_dead_weight_found test, propose_retirement + the retirement gate (RetirementNotEvidenced / proposal-vs-deployment separation), and the ledgered probation trigger surface (DF-S5.4-1: the append→consume seam through evaluate_debt). Records-in/records-out — the manager never opens a run and never applies a diff to a subject (D-2); it authors specs and proposals, folds the durable prefix, and mints lifecycle.debt.* rows on the registry run. Removable (CC6): only hharness-embed consumes it, under the tier-c4 feature."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-lab = { path = "../hh-lab" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-budget = { path = "../hh-budget" }

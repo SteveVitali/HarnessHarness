@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The workspace's one TLS home (R4.5c; ADR-0365): HTTPS client sessions over the admitted rustls/ring graph with webpki root verification (extra roots only via an explicitly named PEM file — the local-CA hook), client-certificate presentation for mTLS, TLS server configs for fixtures and the mediator, and verified peer-identity (subject/SAN) extraction."
 
 [lib]

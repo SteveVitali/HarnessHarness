@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The Stage-3 benchmark-adapter contract (R-2.9.4⁰ᵇ; ADR-0142/0143/0144): out-of-process adapters, materialize/expose/collect_submission/grade lifecycle, separate-verifier isolation, infrastructure-failure detection, typed reward parsing, parity reports. Integrates suites, never authors them."
 
 [lib]
@@ -14,15 +20,15 @@ name = "hh-bench-adapter"
 path = "src/bin/hh_bench_adapter.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-lab = { path = "../hh-lab" }
-hharness-hir = { path = "../hh-hir" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-budget = { path = "../hh-budget" }
-hharness-eval = { path = "../hh-eval" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
 
 [dev-dependencies]
 # S3.12b (GATE-G2 G2-1): the real-suite legs drive the recorded `model_io`

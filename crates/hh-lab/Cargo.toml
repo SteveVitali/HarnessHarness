@@ -1,16 +1,24 @@
 [package]
 name = "hharness-lab"
-version = "0.0.1"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "The C0/Stage-1 Lab schema plane (spec section 6, R-2.9.4/2.10.3-5): benchmark/environment records, the hh-experiment/1 experiment dialect, analysis records, and debt views. Records-in/records-out; engines and samplers land at Stage 3."
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-budget = { path = "../hh-budget" }
-hharness-registry = { path = "../hh-registry" }
-hharness-assembly = { path = "../hh-assembly" }
-hharness-compiler = { path = "../hh-compiler" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-assembly = { path = "../hh-assembly", version = "0.1.0" }
+hharness-compiler = { path = "../hh-compiler", version = "0.1.0" }
