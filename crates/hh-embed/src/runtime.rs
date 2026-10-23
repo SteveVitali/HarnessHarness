@@ -811,6 +811,14 @@ pub struct KernelContext {
     /// prefix on resume and advanced per applied run (the durable row is
     /// the record; the map is the projection).
     pub consolidation_watermarks: std::collections::BTreeMap<String, u64>,
+    /// R4.7b — the armed `model_port` lane (the session's own live lane)
+    /// the model-calling context ports arm over: `Similarity` retrieval
+    /// binds `LaneEmbedder`, `summarize`/`provider_compaction` ops bind
+    /// `LaneSummarizer`/`LaneProviderCompaction`. `None` (scripted lane,
+    /// or a lane without the capability → arm-time typed refusal) leaves
+    /// the port unbound and the op's `unresolved{…}`/`MissingBody` row
+    /// stands — never a fabricated vector or summary.
+    pub adapter_lane: Option<crate::context_adapters::AdapterLane>,
 }
 
 impl Default for KernelContext {
@@ -848,6 +856,7 @@ impl KernelContext {
             policy,
             content_refs: std::collections::BTreeMap::new(),
             consolidation_watermarks: std::collections::BTreeMap::new(),
+            adapter_lane: None,
         })
     }
 
@@ -1404,6 +1413,20 @@ impl KernelMemory {
             mode: hh_identity::names::ResolveMode::Execute,
         };
         let mut sink = CollectSink::default();
+        // R4.7b — the session's armed `model_port` lane backs a
+        // `Similarity` query with the lane-backed `LaneEmbedder`
+        // (BL-31's adapter member): the port pins the query's declared
+        // `embedder` ref. An arm-time typed refusal — a family without
+        // an embeddings API, an unbound credential — leaves the port
+        // unbound and the request's typed `unresolved{embedder}` row
+        // stands, never a fabricated vector.
+        let embedder_hold = if let RetrievalQuery::Similarity { embedder, .. } = &req.query {
+            ctx.adapter_lane
+                .as_ref()
+                .and_then(|l| crate::context_adapters::LaneEmbedder::new(l.clone(), embedder).ok())
+        } else {
+            None
+        };
         // §5c.3's materialized indexes (R3.4; DF-S1.19-1's "non-`lexical`
         // indexes"): the pipeline runs `retrieve_indexed` over the
         // fold-store's *owner-projected* `lexical` + `structural` views —
@@ -1425,7 +1448,9 @@ impl KernelMemory {
                     &RetrievalIndexes {
                         lexical: Some(&lex),
                         structural: Some(&structural),
-                        embedder: None,
+                        embedder: embedder_hold
+                            .as_ref()
+                            .map(|e| e as &dyn hh_context::retrieve::Embedder),
                     },
                     || 0,
                 )
@@ -1440,7 +1465,9 @@ impl KernelMemory {
                     &RetrievalIndexes {
                         lexical: Some(&lex),
                         structural: Some(&structural),
-                        embedder: None,
+                        embedder: embedder_hold
+                            .as_ref()
+                            .map(|e| e as &dyn hh_context::retrieve::Embedder),
                     },
                     || 0,
                 ) {
@@ -1803,6 +1830,36 @@ impl CompactionPort for KernelCompaction {
             },
             _ => CompactionTrigger::OccupancyHard,
         };
+        // R4.7b — the session's armed `model_port` lane backs the two
+        // model-calling compaction surfaces (BL-31's adapter member;
+        // ADR-0313 (c) — the port signatures stay, the stub wiring
+        // leaves): `summarize` ops ride `LaneSummarizer` (the lane's own
+        // streaming call through `GatewayModel`, usage folded); a
+        // `provider_compaction` op rides `LaneProviderCompaction` where
+        // the lane's family publishes the API (verified matrix in
+        // `context_adapters`). An arm-time typed refusal — a family
+        // without the API, an unbound credential — keeps the port
+        // unbound: the op's own typed `Unresolved*` row stands, never a
+        // fabricated summary.
+        let summarizer_hold;
+        let provider_hold;
+        if let Some(lane) = ctx.adapter_lane.as_ref() {
+            summarizer_hold = crate::context_adapters::LaneSummarizer::new(
+                lane.clone(),
+                BTreeMap::new(),
+                u64::MAX,
+                1024,
+            )
+            .ok();
+            provider_hold = crate::context_adapters::LaneProviderCompaction::new(
+                lane.clone(),
+                "cap/provider_compaction@1",
+            )
+            .ok();
+        } else {
+            summarizer_hold = None;
+            provider_hold = None;
+        }
         let input = CompactInput {
             plan,
             candidates: ctx.last_candidates.clone(),
@@ -1817,7 +1874,9 @@ impl CompactionPort for KernelCompaction {
             scope: hh_provenance::PersistenceScope::Run,
             at: ctx.store.applied_seq(),
             run_id: ctx.run_id.clone(),
-            summarizer: None,
+            summarizer: summarizer_hold
+                .as_ref()
+                .map(|s| s as &dyn hh_context::compact::Summarizer),
             slot_min_authority: default_layout()
                 .slots
                 .iter()
@@ -1826,7 +1885,9 @@ impl CompactionPort for KernelCompaction {
             item_texts: BTreeMap::new(),
             item_kinds: BTreeMap::new(),
             extractor: None,
-            provider: None,
+            provider: provider_hold
+                .as_ref()
+                .map(|p| p as &dyn hh_context::compact_family::ProviderCompaction),
             previous_summary_ref: None,
         };
         let fallback = EvictOldest;

@@ -116,7 +116,7 @@ impl TlsLane {
     /// `client_tls()` — arm the `hh_tls::ClientTls` the lane declares.
     /// Arm-time refusals are typed (`Refused` — the file is gone or
     /// unparseable at drive), never a silently smaller root set.
-    fn client_tls(&self) -> Result<hh_tls::ClientTls, EmbedError> {
+    pub(crate) fn client_tls(&self) -> Result<hh_tls::ClientTls, EmbedError> {
         let mut tls = hh_tls::ClientTls::webpki_roots();
         if let Some(p) = &self.extra_roots_file {
             tls =
@@ -257,7 +257,7 @@ const ADMITTED_DIALECTS: [&str; 3] = [
 /// `dialect_by_id(ref)` — bind a dialect coordinate to its document. An
 /// unknown coordinate answers `None` (the caller names it
 /// `InvalidDefinition` — never a silent fallback to another dialect).
-fn dialect_by_id(dialect_ref: &str) -> Option<WireDialect> {
+pub(crate) fn dialect_by_id(dialect_ref: &str) -> Option<WireDialect> {
     match dialect_ref {
         hh_gateway::dialects::OPENAI_COMPATIBLE_ID => {
             Some(hh_gateway::dialects::openai_compatible())
@@ -497,6 +497,10 @@ pub struct GatewayModel {
     terminal: BTreeMap<String, Vec<(&'static str, Json)>>,
     /// `hh.model_io/1` blobs `(media, bytes)` — the driver deposits them.
     model_io: Vec<(String, Vec<u8>)>,
+    /// The last completed message's text — `finish_call`'s Completed arm
+    /// records it (the driver reads the blob; `one_shot` callers get it
+    /// here). `None` on a failed/refused call.
+    last_text: Option<String>,
 }
 
 impl GatewayModel {
@@ -543,6 +547,7 @@ impl GatewayModel {
             plan_error: None,
             terminal: BTreeMap::new(),
             model_io: Vec::new(),
+            last_text: None,
         })
     }
 
@@ -950,6 +955,7 @@ impl GatewayModel {
                 }
                 let text_empty = message.text().is_empty();
                 let raw_usage = state.raw_usage.clone().unwrap_or(Json::Null);
+                self.last_text = Some(message.text());
                 let response_ref = self.record_io(mc, &pending, frames, message, &raw_usage);
                 let up = usage.clone();
                 (
@@ -967,6 +973,7 @@ impl GatewayModel {
                 )
             }
             Some(ModelEventKind::Failed { error, usage, .. }) => {
+                self.last_text = None;
                 let response_ref = self.record_io_err(mc, &pending, frames, error);
                 let up = usage.clone();
                 (
@@ -1176,6 +1183,7 @@ impl GatewayModel {
         frames: &[(u64, WireFrame)],
         error: &ModelError,
     ) -> ModelOutcome {
+        self.last_text = None;
         let response_ref = self.record_io_err(mc, pending, frames, error);
         let mut members: Vec<(&'static str, Json)> = Vec::new();
         let mut u = std::collections::BTreeMap::new();
@@ -1195,6 +1203,80 @@ impl GatewayModel {
             retry_after_ms: error.retry_after_ms,
         }
     }
+}
+
+/// `OneShot` — a caller-owned single call's answer (R4.7b): the decoded
+/// message text, the normalized usage record (the same shape the
+/// `model.call.completed` `usage` member carries), the provider's raw
+/// usage document, the served model, the terminal outcome, and the
+/// `hh.model_io/1` blobs the call produced (the caller deposits them
+/// through its own fenced seam — durable-before-visible stays the
+/// caller's job; the adapter itself appends nothing).
+pub struct OneShot {
+    /// The completed message's text ("" — `text_empty` — when the
+    /// provider answered no text).
+    pub text: String,
+    /// `usage{available, record{view, normalizer_ref}, arrival}` — the
+    /// terminal member the driver would have stamped.
+    pub usage: Json,
+    /// The provider's verbatim usage document (the `model_io` outcome's
+    /// `usage_raw`).
+    pub usage_raw: Json,
+    /// The provider-reported served model (drift fact; absent when the
+    /// provider doesn't report one).
+    pub served_model: Option<String>,
+    /// The terminal `ModelOutcome` (`stop_reason`, `error_class`).
+    pub outcome: ModelOutcome,
+    /// The drained `hh.model_io/1` blobs `(media, bytes)`.
+    pub model_io: Vec<(String, Vec<u8>)>,
+}
+
+impl GatewayModel {
+    /// `one_shot(mc)` — run this port's full requested→call→terminal
+    /// pipeline once, outside the driver fence (R4.7b: the lane-backed
+    /// `Summarizer` adapter rides it). The transcript is the staged
+    /// `instruction` alone (an empty prefix — one user message); the
+    /// caller collects the answer members instead of the driver's rows.
+    /// `Err` only when the plan can't even stage — a refused/failed wire
+    /// leg answers inside `outcome` typed, never a fabricated text.
+    pub fn one_shot(&mut self, mc: &str) -> OneShot {
+        let _ = self.requested_members(mc, &Json::Null, &[]);
+        let outcome = self.call(mc, &Json::Null);
+        let members = self.terminal_members(mc);
+        let model_io = self.take_model_io();
+        let mut usage = Json::Null;
+        for (k, v) in &members {
+            if *k == "usage" {
+                usage = v.clone();
+            }
+        }
+        // The provider's verbatim usage rides the produced blob's
+        // `outcome.usage_raw` member (the audit-bounded row carries the
+        // normalized vector only — finish_call's rule).
+        let usage_raw = blobs_usage_raw(&model_io);
+        OneShot {
+            text: self.last_text.take().unwrap_or_default(),
+            usage,
+            usage_raw,
+            served_model: members
+                .iter()
+                .find(|(k, _)| *k == "served_model")
+                .and_then(|(_, v)| v.as_str().map(str::to_string)),
+            outcome,
+            model_io,
+        }
+    }
+}
+
+/// The produced `model_io` docs' `outcome.usage_raw` (the last blob wins —
+/// a one-shot produces exactly one).
+fn blobs_usage_raw(model_io: &[(String, Vec<u8>)]) -> Json {
+    model_io
+        .iter()
+        .rev()
+        .filter_map(|(_, b)| hh_wire::json::parse(&String::from_utf8_lossy(b)).ok())
+        .find_map(|d| d.get("outcome").and_then(|o| o.get("usage_raw")).cloned())
+        .unwrap_or(Json::Null)
 }
 
 impl ModelPort for GatewayModel {

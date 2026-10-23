@@ -1,0 +1,21 @@
+$ HH_EMBED_CACHE_OUT=<fixture> HH_LOCAL_EMBED_MODEL=<optional> cargo test -p hh-embed --test r4_7b_live -- --ignored --nocapture --test-threads=1
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running tests/r4_7b_live.rs (target/debug/deps/r4_7b_live-78a459c9eb1f417c)
+
+running 4 tests
+test r47b_live_anthropic_compact ... LIVE_COMPACT_USAGE: {"input_total":127,"output_total":232}
+LIVE_COMPACT: anthropic chars=486 tokens=232 stop=compaction
+ok
+test r47b_live_local_embed_batch ... LIVE_EMBED: skipped(local-endpoint-refused: embeddings: ModelError{class: server_error, retry_class: transient}: This server does not support embeddings. Start it with `--embeddings`)
+ok
+test r47b_live_local_summarize ... LIVE_SUMM: local chars=216 tokens=37 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":90,"input_uncached":90,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":37}}}
+ok
+test r47b_live_openai_embed ... LIVE_EMBED: cache-recorded /Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed/tests/fixtures/r4_7b/embedding_cache.json
+LIVE_EMBED_USAGE: {"input_total":91,"output_total":0}
+LIVE_EMBED: hosted model=text-embedding-3-small dim=1536 usage={"prompt_tokens":91,"total_tokens":91}
+LIVE_MODEL: text-embedding-3-small
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.21s
+

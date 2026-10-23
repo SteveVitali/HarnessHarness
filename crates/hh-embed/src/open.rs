@@ -1045,6 +1045,12 @@ impl EmbedService {
             .map_err(|e| EmbedError::Refused {
             reason: format!("context_policy: {e}"),
         })?;
+        // R4.7b — the armed `model_port` lane rides the fold so
+        // `Similarity` retrieval and the model-calling compaction
+        // surfaces bind the lane-backed adapters (BL-31).
+        mem_ctx.adapter_lane = model_lane
+            .as_ref()
+            .map(crate::context_adapters::AdapterLane::from);
         if let Some(sup) = supplies {
             if !sup.procedures.is_empty() {
                 let supply_map: BTreeMap<String, Json> = sup
@@ -1708,6 +1714,12 @@ impl EmbedService {
                         reason: format!("context_policy: {e}"),
                     })?;
             }
+            // R4.7b — the resume re-binds the *recorded* lane the same
+            // way `model_lane` does, so the context adapters arm over
+            // the manifest's lane (never a re-derived one).
+            c.adapter_lane = crate::gateway_model::ModelLane::from_manifest(&manifest)
+                .as_ref()
+                .map(crate::context_adapters::AdapterLane::from);
             c
         };
         let head = self.store.head(run_id).map_err(ledger_err)?;
