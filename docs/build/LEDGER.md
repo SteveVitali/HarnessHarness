@@ -17,7 +17,7 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R4.16a # round 4: 56 rows 149a-167b (151a; 153a/153b; 164c/164f; 164x; 165a); GATE-G6 at 166 re-presents after this insert lands 149a-167b (151a CI insert; 153a/153b split; 164c/164f GATE-G7 inserts; 164x L4.6b insert 2026-10-23); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+nextTicket:      R4.16a # round 4: 56 rows 149a-167b (151a CI; 153a/153b split; 164c/164f G7; 164x L4.6b; 165a R4.16a); GATE-G6 at 166 re-presents after this insert lands; HUMAN-H6 before R4.5a
 lastCompleted:   R4.16
 blockedOn:       GATE-G6 pending — the e2 finding dispositioned by insert R4.16a (operator ruling 2026-10-23); was: (none — R4.16 landed: the closure record is complete; two OPEN deferral findings (DF-S1.2-2/-S1.5-3 e2 extension cells) are surfaced for GATE-G6, PR #196 open)
 pauseRequested:  false
