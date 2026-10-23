@@ -12,7 +12,7 @@ it is the contract for working in this repo.
 cargo build --workspace               # all crates + binaries
 cargo build --workspace --all-targets # what CI builds
 cargo test --workspace                # the full suite
-cargo test -p hh-<crate>              # one crate's tests
+cargo test -p hharness-<crate>              # one crate's tests
 cargo fmt --all --check               # CI gate
 bash scripts/check-drift.sh           # schema artifacts: regenerate; drift fails
 bash scripts/check-licenses.sh        # every workspace package MIT OR Apache-2.0
@@ -23,8 +23,8 @@ bash scripts/gen-third-party-notices.sh --check   # notices drift check
 ## Conventions that gate CI
 
 - **Hermetic modulo ADR** — no external dependency beyond the named,
-  pinned admissions (`ring` in `hh-secrets`, ADR-0359; the rustls graph
-  in `hh-tls`, ADR-0365; `tempfile` as a dev-dep). Any new dependency is
+  pinned admissions (`ring` in `hharness-secrets`, ADR-0359; the rustls graph
+  in `hharness-tls`, ADR-0365; `tempfile` as a dev-dep). Any new dependency is
   its own ADR *before* the code.
 - **Generated files are never hand-edited** — `schema/*.json`,
   `crates/hh-embed-client-generated/src/generated.rs`,

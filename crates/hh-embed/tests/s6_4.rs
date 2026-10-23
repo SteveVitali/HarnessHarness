@@ -1,5 +1,5 @@
 //! S6.4 boundary tests — the `lab.coevolution.*` + `lab.org_policy.*`
-//! surface over `hh-embed` (§5h.8 R-2.9.8; §5i.1 6d; ADR-0325;
+//! surface over `hharness-embed` (§5h.8 R-2.9.8; §5i.1 6d; ADR-0325;
 //! AC-R-2.9.8-{4,6,8,11,13}; AC-R-2.12.6-12): capability gating
 //! (`experimental` + `serves_measurement`), the claims-only
 //! `import_snapshot`, the bind guard, the cycle sidecar ops over
@@ -12,9 +12,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -399,9 +399,12 @@ mod c4 {
     fn consolidation_proposal_and_retirement_record() {
         let (_root, mut svc) = service();
         hello_coe(&mut svc);
-        let prov = hh_provenance::ProvenanceRecord::minted(
-            hh_provenance::Origin::human("test:proposer", hh_provenance::HumanRole::Principal),
-            hh_provenance::PersistenceScope::Run,
+        let prov = hharness_provenance::ProvenanceRecord::minted(
+            hharness_provenance::Origin::human(
+                "test:proposer",
+                hharness_provenance::HumanRole::Principal,
+            ),
+            hharness_provenance::PersistenceScope::Run,
             1,
         )
         .to_json();
@@ -427,21 +430,24 @@ mod c4 {
         );
 
         // A sealed report → the retirement record names it.
-        let mut report = hh_lab::coevolution::ConsolidationReport {
+        let mut report = hharness_lab::coevolution::ConsolidationReport {
             report_id: String::new(),
             proposal_ref: None,
             target_rule: "rule:ok".into(),
             snapshot_ref: "snap:trained-1".into(),
             lessons: vec!["lesson:1".into()],
-            verdict: hh_lab::coevolution::ConsolidationVerdict::Absorbed,
+            verdict: hharness_lab::coevolution::ConsolidationVerdict::Absorbed,
             experiment_ref: "exp:ret-1".into(),
             evidence_refs: vec!["report:t".into()],
             debt_refs: vec!["debt:rule:ok".into()],
         };
         report.seal();
-        let decided_by = hh_provenance::ProvenanceRecord::minted(
-            hh_provenance::Origin::human("test:sealer", hh_provenance::HumanRole::Principal),
-            hh_provenance::PersistenceScope::Run,
+        let decided_by = hharness_provenance::ProvenanceRecord::minted(
+            hharness_provenance::Origin::human(
+                "test:sealer",
+                hharness_provenance::HumanRole::Principal,
+            ),
+            hharness_provenance::PersistenceScope::Run,
             2,
         )
         .to_json();
@@ -659,23 +665,23 @@ mod c4 {
     /// A service record JSON (the canonical codec — same shape the
     /// s6_1b boundary test mints).
     fn manager_record_json(manager_id: &str) -> Json {
-        let reflexive = hh_debt::reflexive::reflexive_record(
+        let reflexive = hharness_debt::reflexive::reflexive_record(
             manager_id,
             "test:owner",
             vec!["sink:ops".into()],
-            hh_ontology::debt::DeadWeightWindow {
+            hharness_ontology::debt::DeadWeightWindow {
                 model_version_changes: 2,
             },
             60_000,
             1,
         )
         .unwrap();
-        hh_debt::records::DebtManagerRecord {
+        hharness_debt::records::DebtManagerRecord {
             manager_id: manager_id.to_string(),
             maturity: "instrument-grade".into(),
-            policy: hh_ontology::debt::DebtPolicy {
+            policy: hharness_ontology::debt::DebtPolicy {
                 notice_sinks: vec!["sink:ops".into()],
-                ..hh_ontology::debt::DebtPolicy::default()
+                ..hharness_ontology::debt::DebtPolicy::default()
             },
             reflexive_debt: reflexive,
         }
@@ -684,57 +690,60 @@ mod c4 {
 
     /// A `model_version_change`-conditioned debt record JSON.
     fn conditioned_debt_json(rule_id: &str, model_id: &str) -> Json {
-        let prov = hh_provenance::ProvenanceRecord::minted(
-            hh_provenance::Origin::human("test:owner", hh_provenance::HumanRole::Author),
-            hh_provenance::PersistenceScope::Definition,
+        let prov = hharness_provenance::ProvenanceRecord::minted(
+            hharness_provenance::Origin::human(
+                "test:owner",
+                hharness_provenance::HumanRole::Author,
+            ),
+            hharness_provenance::PersistenceScope::Definition,
             1,
         );
-        let record = hh_hir::records::AssumptionDebtRecord {
+        let record = hharness_hir::records::AssumptionDebtRecord {
             rule_id: rule_id.to_string(),
-            hypothesis: hh_hir::leaves::Text::new(
+            hypothesis: hharness_hir::leaves::Text::new(
                 format!("{rule_id} conditions a snapshot-scoped claim"),
                 "test:owner",
                 prov.clone(),
             ),
-            evidence_refs: vec![hh_ontology::debt::EvidenceRef::legacy(format!(
+            evidence_refs: vec![hharness_ontology::debt::EvidenceRef::legacy(format!(
                 "ev:{rule_id}"
             ))],
-            owner: hh_ontology::debt::OwnerRef {
+            owner: hharness_ontology::debt::OwnerRef {
                 team: false,
                 id: "test:owner".into(),
                 reach_via: vec!["sink:ops".into()],
             },
-            expiry_condition: hh_ontology::debt::ExpiryCondition {
-                kind: hh_ontology::debt::ExpiryKind::ModelVersionChange,
+            expiry_condition: hharness_ontology::debt::ExpiryCondition {
+                kind: hharness_ontology::debt::ExpiryKind::ModelVersionChange,
                 value: None,
             },
             removal_test_ref: format!("tmpl:{rule_id}"),
-            status: hh_ontology::debt::DebtStatus::Active,
-            debt_class: Some(hh_ontology::debt::DebtClass::ModelConditioned),
+            status: hharness_ontology::debt::DebtStatus::Active,
+            debt_class: Some(hharness_ontology::debt::DebtClass::ModelConditioned),
             hypothesis_typed: None,
-            scope: Some(hh_ontology::debt::DebtScope {
-                model_selectors: vec![hh_ontology::debt::ModelSelector::Exact {
+            scope: Some(hharness_ontology::debt::DebtScope {
+                model_selectors: vec![hharness_ontology::debt::ModelSelector::Exact {
                     model_id: model_id.into(),
                 }],
                 task_classes: vec![],
                 roles: vec![],
             }),
-            expiry: Some(hh_ontology::debt::DebtExpiry {
-                condition: hh_ontology::debt::ExpiryKind::ModelVersionChange,
-                params: hh_ontology::debt::ExpiryParams::default(),
+            expiry: Some(hharness_ontology::debt::DebtExpiry {
+                condition: hharness_ontology::debt::ExpiryKind::ModelVersionChange,
+                params: hharness_ontology::debt::ExpiryParams::default(),
             }),
             runway_ms: None,
             revalidation: None,
-            removal_test: Some(hh_ontology::debt::RemovalTest {
+            removal_test: Some(hharness_ontology::debt::RemovalTest {
                 template_ref: Some(format!("tmpl:{rule_id}")),
-                ..hh_ontology::debt::RemovalTest::new(
-                    hh_ontology::debt::RemovalTestKind::RetirementExperiment,
+                ..hharness_ontology::debt::RemovalTest::new(
+                    hharness_ontology::debt::RemovalTestKind::RetirementExperiment,
                 )
             }),
             created_by: Some(prov),
             created_at: Some(1),
             supersedes: None,
         };
-        hh_hir::debt_json(&record, false)
+        hharness_hir::debt_json(&record, false)
     }
 }

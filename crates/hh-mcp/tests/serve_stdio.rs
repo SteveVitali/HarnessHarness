@@ -12,7 +12,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// A scratch dir per test (no tempfile dep — `std::env::temp_dir()` +
 /// pid + counter).
@@ -27,7 +27,10 @@ fn tmpdir(tag: &str) -> PathBuf {
 /// `_meta` extension key and an explicit `semantic_id`.
 fn target_doc() -> Json {
     Json::obj([
-        ("schema", Json::str(hh_mcp::artifact::MCP_TARGET_SCHEMA)),
+        (
+            "schema",
+            Json::str(hharness_mcp::artifact::MCP_TARGET_SCHEMA),
+        ),
         ("target", Json::str("mcp")),
         (
             "tools",
@@ -49,7 +52,7 @@ fn target_doc() -> Json {
                         "_meta",
                         Json::obj([
                             (
-                                hh_mcp::artifact::HH_META_KEY,
+                                hharness_mcp::artifact::HH_META_KEY,
                                 Json::obj([("semantic_id", Json::str("tool.echo"))]),
                             ),
                             ("x.vendor/extra", Json::str("keep-me")),
@@ -69,7 +72,7 @@ fn target_doc() -> Json {
 /// Write the fixture bundle dir; return its `version_id`.
 fn write_bundle(dir: &Path) -> String {
     let member = target_doc().to_canonical_string().into_bytes();
-    let addr = hh_identity::idp_id("blob", &member);
+    let addr = hharness_identity::idp_id("blob", &member);
     let doc = Json::obj([
         ("schema", Json::str("hh-bundle/1")),
         ("idp", Json::str("idp/1")),
@@ -128,11 +131,11 @@ fn write_bundle(dir: &Path) -> String {
         ("ext", Json::obj([])),
         ("version_id", Json::str("pending")),
     ]);
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
     manifest.version_id = manifest.compute_id();
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     members.insert(addr, member);
-    hh_bundle::codec::encode_dir(dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(dir, &manifest, &members).unwrap();
     manifest.version_id
 }
 
@@ -169,7 +172,7 @@ fn drive(dir: &Path, lines: &[&str]) -> Vec<String> {
 /// AC-R-2.11.3-1 + AC-R-2.11.3-11 — two independent connections (two
 /// spawned processes) over one bundle answer byte-identical
 /// `initialize`/`server/discover`/`tools/list`, in canonical order,
-/// with `dev.cognition/hir` metadata and the `stdio_launch` binding.
+/// with `hharness/hir` metadata and the `stdio_launch` binding.
 #[test]
 fn discovery_is_byte_identical_across_processes() {
     let dir = tmpdir("ac1");
@@ -184,14 +187,14 @@ fn discovery_is_byte_identical_across_processes() {
     assert_eq!(a.len(), 3, "three answers: {a:?}");
     assert_eq!(a, b, "two connections must be byte-identical (AC-1)");
 
-    // The metadata contract — `dev.cognition/hir` present on every tool,
+    // The metadata contract — `hharness/hir` present on every tool,
     // `semantic_id` honored, canonical (semantic_id) order, the unknown
     // `_meta` key preserved (AC-6's retention half).
     let list = &a[2];
     let init = &a[0];
     assert!(init.contains("\"hh-mcp-serve\""), "server name in {init}");
     assert!(init.contains("\"protocolVersion\""), "{init}");
-    let tools = hh_wire::json::parse(list).unwrap();
+    let tools = hharness_wire::json::parse(list).unwrap();
     let tools = match tools.get("result").and_then(|r| r.get("tools")) {
         Some(Json::Arr(t)) => t.clone(),
         other => panic!("no tools array: {other:?}"),
@@ -210,7 +213,7 @@ fn discovery_is_byte_identical_across_processes() {
         "{tools:?}"
     );
     let meta = tools[1].get("_meta").unwrap();
-    let hir = meta.get("dev.cognition/hir").expect("hir meta");
+    let hir = meta.get("hharness/hir").expect("hir meta");
     assert_eq!(
         hir.get("semantic_id").and_then(Json::as_str),
         Some("tool.echo")
@@ -305,7 +308,7 @@ fn missing_target_member_exits_clean() {
     let dir = tmpdir("notarget");
     // A bundle with an unrelated member only.
     let member = b"{}".to_vec();
-    let addr = hh_identity::idp_id("member", &member);
+    let addr = hharness_identity::idp_id("member", &member);
     let doc = Json::obj([
         ("schema", Json::str("hh-bundle/1")),
         ("idp", Json::str("idp/1")),
@@ -328,11 +331,11 @@ fn missing_target_member_exits_clean() {
         ),
         ("version_id", Json::str("pending")),
     ]);
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
     manifest.version_id = manifest.compute_id();
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     members.insert(addr, member);
-    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
 
     let out = Command::new(env!("CARGO_BIN_EXE_hh-mcp-serve"))
         .arg("--bundle")
@@ -353,15 +356,15 @@ fn missing_target_member_exits_clean() {
 #[test]
 fn lowering_is_pure_and_typed() {
     let bytes = target_doc().to_canonical_string().into_bytes();
-    let a = hh_mcp::artifact::lower_mcp_target(&bytes, "b1", "v1").unwrap();
-    let b = hh_mcp::artifact::lower_mcp_target(&bytes, "b1", "v1").unwrap();
+    let a = hharness_mcp::artifact::lower_mcp_target(&bytes, "b1", "v1").unwrap();
+    let b = hharness_mcp::artifact::lower_mcp_target(&bytes, "b1", "v1").unwrap();
     assert_eq!(a, b);
     assert_eq!(a.catalogue_hash, b.catalogue_hash);
     assert_eq!(a.tools.len(), 2);
     assert_eq!(a.tools[0].semantic_id, "sum");
     assert_eq!(a.tools[1].semantic_id, "tool.echo");
 
-    let err =
-        hh_mcp::artifact::lower_mcp_target(b"{\"schema\":\"other/1\"}", "b", "v").unwrap_err();
+    let err = hharness_mcp::artifact::lower_mcp_target(b"{\"schema\":\"other/1\"}", "b", "v")
+        .unwrap_err();
     assert_eq!(err.refusal(), "malformed");
 }

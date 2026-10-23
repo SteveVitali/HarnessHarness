@@ -5,16 +5,16 @@
 //! `analysis.report` domain (KA-12: identical `(spec, row watermark,
 //! run-id set, metric_registry_version, price_table_version, seed,
 //! draws)` ⇒ identical `report_id`). The body is a canonical-JSON
-//! document; the envelopes are `hh_lab::analysis` records (CC7 — one
+//! document; the envelopes are `hharness_lab::analysis` records (CC7 — one
 //! schema home).
 
 use std::collections::BTreeMap;
 
-use hh_lab::analysis::{
+use hharness_lab::analysis::{
     AnalysisRecord, AnalysisReport, AnalysisSpec, AnalysisStatus, ComparisonReport,
     ConfigurationSummary, WatermarkSet as LabWatermarkSet,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::kernel::AnalysisInput;
 
@@ -37,7 +37,7 @@ pub struct AnalysisOutcome {
 
 /// `results` `{run_id → seq}` → the lab `watermark_set` (`{store →
 /// watermark}` — the run id is the store coordinate at C0).
-pub(crate) fn lab_watermarks(w: &hh_results::watermark::WatermarkSet) -> LabWatermarkSet {
+pub(crate) fn lab_watermarks(w: &hharness_results::watermark::WatermarkSet) -> LabWatermarkSet {
     LabWatermarkSet {
         watermarks: w
             .runs
@@ -49,7 +49,7 @@ pub(crate) fn lab_watermarks(w: &hh_results::watermark::WatermarkSet) -> LabWate
 
 /// The `generated_from` member — the input-set identity.
 fn generated_from(input: &AnalysisInput<'_>, run_ids: &[String]) -> Json {
-    let run_ids_hash = hh_identity::idp_id(
+    let run_ids_hash = hharness_identity::idp_id(
         "analysis.run_ids",
         Json::Arr(run_ids.iter().map(Json::str).collect())
             .to_canonical_string()
@@ -85,7 +85,7 @@ pub fn generated_from_for(input: &AnalysisInput<'_>) -> Json {
 /// never-recompute check reads exactly this).
 pub fn report_id_for(spec: &AnalysisSpec, generated_from: &Json) -> String {
     let spec_hash = spec.spec_id();
-    hh_identity::idp_id(
+    hharness_identity::idp_id(
         "analysis.report",
         format!("{}|{}", spec_hash, generated_from.to_canonical_string()).as_bytes(),
     )
@@ -166,7 +166,7 @@ pub fn record_for(
     };
     // `procedure` — the estimator selection's content address (what ran,
     // not a name: declared method + floors + fallback chain are hashed).
-    let procedure = hh_identity::idp::idp_id(
+    let procedure = hharness_identity::idp::idp_id(
         "analysis.procedure",
         spec.estimator_selection
             .to_json()

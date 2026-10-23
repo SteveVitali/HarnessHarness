@@ -17,14 +17,14 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_hir::{debt_from_json, debt_json};
-use hh_identity::idp::ContentAddress;
-use hh_identity::names::NameStatus;
-use hh_identity::repro::InstrumentRecord;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::{self, Json};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_hir::{debt_from_json, debt_json};
+use hharness_identity::idp::ContentAddress;
+use hharness_identity::names::NameStatus;
+use hharness_identity::repro::InstrumentRecord;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::{self, Json};
 
 use crate::errors::RegistryError;
 use crate::kinds::{
@@ -288,29 +288,28 @@ fn contract_from_json(j: &Json, path: &str) -> Result<Vec<ContractOperation>, Re
 
 /// `ContractRef` list member → JSON (empty lists encode absent — CC8: the
 /// pre-S1.27 canonical bytes are unchanged for a record with no `depends_on`).
-fn depends_on_json(deps: &[hh_plugin::ContractRef]) -> Json {
+fn depends_on_json(deps: &[hharness_plugin::ContractRef]) -> Json {
     Json::Arr(deps.iter().map(|d| d.to_json()).collect())
 }
 
 fn depends_on_from_json(
     j: &Json,
     path: &str,
-) -> Result<Vec<hh_plugin::ContractRef>, RegistryError> {
+) -> Result<Vec<hharness_plugin::ContractRef>, RegistryError> {
     match j.get("depends_on") {
         None | Some(Json::Null) => Ok(Vec::new()),
-        Some(Json::Arr(a)) => {
-            a.iter()
-                .enumerate()
-                .map(|(i, v)| {
-                    hh_plugin::ContractRef::from_json(v, &format!("{path}.depends_on[{i}]"))
-                        .map_err(|e| match e {
-                            hh_plugin::ContractRefError::SchemaViolation { path, detail } => {
-                                RegistryError::SchemaViolation { path, detail }
-                            }
-                        })
-                })
-                .collect()
-        }
+        Some(Json::Arr(a)) => a
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                hharness_plugin::ContractRef::from_json(v, &format!("{path}.depends_on[{i}]"))
+                    .map_err(|e| match e {
+                        hharness_plugin::ContractRefError::SchemaViolation { path, detail } => {
+                            RegistryError::SchemaViolation { path, detail }
+                        }
+                    })
+            })
+            .collect(),
         Some(_) => Err(RegistryError::SchemaViolation {
             path: format!("{path}.depends_on"),
             detail: "expected array of ContractRef".to_string(),
@@ -1067,8 +1066,8 @@ pub fn trust_root_policy_from_json(j: &Json, path: &str) -> Result<TrustRootPoli
         }
     }
     let hash_only_ceiling = match opt_str(j, "hash_only_ceiling") {
-        None => hh_provenance::AuthorityClass::External,
-        Some(s) => hh_provenance::AuthorityClass::parse(&s).ok_or_else(|| {
+        None => hharness_provenance::AuthorityClass::External,
+        Some(s) => hharness_provenance::AuthorityClass::parse(&s).ok_or_else(|| {
             RegistryError::SchemaViolation {
                 path: format!("{path}.hash_only_ceiling"),
                 detail: format!("`{s}` is outside the closed AuthorityClass sum"),
@@ -1282,12 +1281,12 @@ pub fn policy_from_json(j: &Json, path: &str) -> Result<RegistryPolicy, Registry
                 .iter()
                 .enumerate()
                 .map(|(i, v)| {
-                    hh_plugin::ContractVersionPolicy::from_json(
+                    hharness_plugin::ContractVersionPolicy::from_json(
                         v,
                         &format!("{path}.contract_version_policies[{i}]"),
                     )
                     .map_err(|e| match e {
-                        hh_plugin::ContractRefError::SchemaViolation { path, detail } => {
+                        hharness_plugin::ContractRefError::SchemaViolation { path, detail } => {
                             RegistryError::SchemaViolation { path, detail }
                         }
                     })
@@ -1477,7 +1476,7 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::TrustRootPolicy(t) => trust_root_policy_body_json(t),
         // The capability body IS the canonical HIR node (V-E1-9 — the `semantic`
         // flag is irrelevant: the node's own codec already splits identity).
-        RegistryRecord::Capability(c) => hh_hir::wire::node_to_json(&c.node),
+        RegistryRecord::Capability(c) => hharness_hir::wire::node_to_json(&c.node),
         // The eval declarations' canonical bodies are the ontology codecs (CC7 —
         // the registry re-encodes, never re-schemas).
         RegistryRecord::MetricDeclaration(m) => m.to_json(),
@@ -1485,24 +1484,24 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::Extension(e) => crate::extension::extension_body_json(e),
         RegistryRecord::EnvironmentFamily(f) => f.to_json(),
         // The opaque env-plane body: stored verbatim (the `canonical_full()`
-        // form `hh-env` minted — CC7 says the schema owner encodes, the
+        // form `hharness-env` minted — CC7 says the schema owner encodes, the
         // registry stores).
         RegistryRecord::EnvironmentRecord(b) => b.clone(),
-        // The opaque hosting/leaderboard bodies — `hh-hosting` owns the §6.6
-        // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema; the
+        // The opaque hosting/leaderboard bodies — `hharness-hosting` owns the §6.6
+        // schemas, `hharness-results` the §6.5 `LeaderboardDefinition` schema; the
         // registry stores the canonical Json verbatim (same layering).
         RegistryRecord::Participant(b)
         | RegistryRecord::Adapter(b)
         | RegistryRecord::LeaderboardDefinition(b)
         // The opaque compiler-owned bodies (`ModelProfile/1` view /
-        // `ProfileTestReport`) — `hh-compiler` owns the schemas (same
+        // `ProfileTestReport`) — `hharness-compiler` owns the schemas (same
         // layering); the registry stores the canonical Json verbatim.
         | RegistryRecord::ModelProfile(b)
         | RegistryRecord::ProfileTestReport(b) => b.clone(),
-        // The sealed-definition body — `hh-hir` owns the schema
+        // The sealed-definition body — `hharness-hir` owns the schema
         // (`sealed_definition_json`; like `Capability`, the `semantic` flag is
         // irrelevant: the document's own codec splits identity).
-        RegistryRecord::SealedDefinition(s) => hh_hir::wire::sealed_definition_json(s),
+        RegistryRecord::SealedDefinition(s) => hharness_hir::wire::sealed_definition_json(s),
     }
 }
 
@@ -1518,7 +1517,9 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
             }
             Some(j)
         }
-        RegistryRecord::Capability(c) => Some(hh_hir::wire::node_semantic_projection(&c.node)),
+        RegistryRecord::Capability(c) => {
+            Some(hharness_hir::wire::node_semantic_projection(&c.node))
+        }
         // The definition's semantic coordinate IS the root's — the registry
         // re-projects it (never re-mints) so a `sealed_definition` shares the
         // definition's lineage coordinate wherever it is pinned.
@@ -1530,7 +1531,7 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
             ),
         ])),
         // The env record's semantic coordinate is the `Record::canonical_semantic()`
-        // form `{kind, semantic}` — the same projection `hh-env`'s `identify` mints.
+        // form `{kind, semantic}` — the same projection `hharness-env`'s `identify` mints.
         RegistryRecord::EnvironmentRecord(b) => Some(obj(vec![
             ("kind", Json::str("environment")),
             ("semantic", b.get("semantic").cloned().unwrap_or(Json::Null)),
@@ -1557,12 +1558,13 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             trust_root_policy_from_json(j, path)?,
         )),
         RecordKind::Capability => {
-            let node =
-                hh_hir::wire::node_from_json(j).map_err(|e| RegistryError::SchemaViolation {
+            let node = hharness_hir::wire::node_from_json(j).map_err(|e| {
+                RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: format!("capability node: {e}"),
-                })?;
-            if node.kind != hh_hir::kinds::EntityKind::ToolCapability {
+                }
+            })?;
+            if node.kind != hharness_hir::kinds::EntityKind::ToolCapability {
                 return Err(RegistryError::SchemaViolation {
                     path: format!("{path}.kind"),
                     detail: format!(
@@ -1574,7 +1576,7 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             Ok(RegistryRecord::Capability(CapabilityRecord { node }))
         }
         RecordKind::MetricDeclaration => Ok(RegistryRecord::MetricDeclaration(
-            hh_ontology::compliance::MetricDeclaration::from_json(j).map_err(|d| {
+            hharness_ontology::compliance::MetricDeclaration::from_json(j).map_err(|d| {
                 RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: d,
@@ -1582,7 +1584,7 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             })?,
         )),
         RecordKind::Validator => Ok(RegistryRecord::Validator(
-            hh_ontology::eval::OracleDeclaration::from_json(j).map_err(|e| {
+            hharness_ontology::eval::OracleDeclaration::from_json(j).map_err(|e| {
                 RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: format!("{e:?}"),
@@ -1590,7 +1592,7 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             })?,
         )),
         RecordKind::EnvironmentFamily => Ok(RegistryRecord::EnvironmentFamily(
-            hh_ontology::lab::EnvironmentFamilyRecord::from_json(j).map_err(|e| {
+            hharness_ontology::lab::EnvironmentFamilyRecord::from_json(j).map_err(|e| {
                 RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: format!("{e:?}"),
@@ -1605,7 +1607,7 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             Ok(RegistryRecord::Extension(rec))
         }
         RecordKind::EnvironmentRecord => {
-            // Structural gate only — the §5a.5 schema owner is `hh-env` (above
+            // Structural gate only — the §5a.5 schema owner is `hharness-env` (above
             // this crate). The registry requires the `canonical_full()` shape
             // `{kind: "environment", semantic{…}, surface{…}, refs[]}` and the
             // pinned `containment_policy.version_id` it projects.
@@ -1646,9 +1648,9 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
         | RecordKind::LeaderboardDefinition
         | RecordKind::ModelProfile
         | RecordKind::ProfileTestReport => {
-            // Opaque body, structural gate only — `hh-hosting` owns the §6.6
-            // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema,
-            // `hh-compiler` the `ModelProfile/1` + `ProfileTestReport` schemas
+            // Opaque body, structural gate only — `hharness-hosting` owns the §6.6
+            // schemas, `hharness-results` the §6.5 `LeaderboardDefinition` schema,
+            // `hharness-compiler` the `ModelProfile/1` + `ProfileTestReport` schemas
             // (same layering as `EnvironmentRecord`). The registry requires
             // the body's `kind` tag to match the record kind so a mistagged
             // body can never register under the wrong kind.
@@ -1692,10 +1694,10 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             }
         }
         RecordKind::SealedDefinition => {
-            // Typed body — `hh-hir` owns the schema (`sealed_definition_from_json`
+            // Typed body — `hharness-hir` owns the schema (`sealed_definition_from_json`
             // re-derives `definition_ref`/`closed_world_tools` and refuses a body
             // whose declared members do not reproduce — CC3).
-            let s = hh_hir::wire::sealed_definition_from_json(j).map_err(|e| {
+            let s = hharness_hir::wire::sealed_definition_from_json(j).map_err(|e| {
                 RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: format!("sealed_definition body: {e}"),

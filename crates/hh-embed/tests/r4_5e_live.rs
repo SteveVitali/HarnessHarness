@@ -6,7 +6,7 @@
 //! results the durable prefix carries.
 //!
 //! The `router` slot's `probe_exec[]` declarations execute at `open`
-//! through `hh_gateway::probes::exec_probe_decl`: the authenticated
+//! through `hharness_gateway::probes::exec_probe_decl`: the authenticated
 //! model listing folds the `served_model.<id>` pin, the declared
 //! capability walk rides the one measured tiny probe call per family
 //! (cached across `cap.streaming`/`cap.snapshot_id_exposed`/
@@ -42,16 +42,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn prov(seq: u64) -> ProvenanceRecord {
     ProvenanceRecord::minted(
@@ -78,14 +78,14 @@ fn node(kind: EntityKind, rec: KindRecord, seq: u64) -> Node {
 /// (`prof.r45e@1`) — the scripted candidate's coordinate
 /// `hh-embed/kernel-scripted@1` matches the selector; `max_output`
 /// declared so the G-4 reservation sizes honestly.
-fn live_profile() -> hh_compiler::profile::ModelProfile {
-    use hh_compiler::profile::*;
+fn live_profile() -> hharness_compiler::profile::ModelProfile {
+    use hharness_compiler::profile::*;
     let mut p = ModelProfile {
         profile_id: "prof.r45e".into(),
         version: "1".into(),
         content_hash: String::new(),
         selector: ProfileSelector {
-            provider_api_family: "hh-embed".into(),
+            provider_api_family: "hharness-embed".into(),
             model_family: "kernel-scripted".into(),
             version_pattern: VersionPattern::Exact("1".into()),
             precedence: 0,
@@ -129,12 +129,12 @@ fn live_profile() -> hh_compiler::profile::ModelProfile {
         },
         tests: Json::Null,
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
 fn registrar() -> Json {
-    ProvenanceRecord::kernel("hh-embed", 0).to_json()
+    ProvenanceRecord::kernel("hharness-embed", 0).to_json()
 }
 
 /// The `health_aware` `RoutingPolicy` document the slot seals — the
@@ -143,7 +143,7 @@ fn registrar() -> Json {
 /// through `probe_targets`), and refuses `PolicyInvalid` when the
 /// admitted set carries no observation — never a default-healthy pick.
 fn health_aware_policy() -> Json {
-    use hh_gateway::router::*;
+    use hharness_gateway::router::*;
     let policy = RoutingPolicy {
         policy_id: "policy.r45e".into(),
         version: "1".into(),
@@ -482,7 +482,7 @@ fn r45e_live_routing_probe() {
                     ("kind", Json::str("model_profile")),
                     (
                         "profile",
-                        hh_compiler::schema::profile_to_json(&live_profile()),
+                        hharness_compiler::schema::profile_to_json(&live_profile()),
                     ),
                 ]),
             ),

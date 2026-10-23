@@ -6,18 +6,18 @@
 //! (Q-L1-09). `ext` is the only place unknown keys may live; any other unknown key is a
 //! `C-LOAD-3` error.
 //!
-//! The typed model sits in `hh-assembly`; the *document* carries the section as canonical
+//! The typed model sits in `hharness-assembly`; the *document* carries the section as canonical
 //! `Json` (`HirDocument.assembly`) and `seal` admits it only when no `version_selector` or
 //! `$param:`/`$entity:` binding form remains (§3.1.3 "only resolved documents are
 //! sealable"). The slot records themselves are the *same* `SlotBinding`/`SlotBindings`
-//! the `native.slots` member carries — one shape, one codec (`hh_hir::wire`, CC7).
+//! the `native.slots` member carries — one shape, one codec (`hharness_hir::wire`, CC7).
 
 use std::collections::BTreeMap;
 
-use hh_hir::records::SlotBindings;
-use hh_hir::refs::{ProfileRef, Ref};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::SlotBindings;
+use hharness_hir::refs::{ProfileRef, Ref};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
 
@@ -78,9 +78,9 @@ pub struct ConstraintSelector {
     pub model_family: Option<String>,
     /// The bound `selector.version_pattern` must admit only versions this
     /// pattern admits (subsumption over the closed `Pattern` grammar).
-    pub version_pattern: Option<hh_ontology::eval::VersionPattern>,
+    pub version_pattern: Option<hharness_ontology::eval::VersionPattern>,
     /// The bound `selector.roles_admitted` must cover these roles.
-    pub roles_admitted: Vec<hh_ontology::eval::ModelRole>,
+    pub roles_admitted: Vec<hharness_ontology::eval::ModelRole>,
 }
 
 impl ConstraintSelector {
@@ -370,10 +370,10 @@ pub struct ResolvedInfo {
 /// combine under one name. `exact_only` is the default — a ref binds exactly
 /// one pinned record and a second candidate for the same name is a collision;
 /// `disjoint` declares that the sources bind disjoint namespaces. The enum's
-/// home is `hh_registry::extension` (R2.20 — the declared-source scanners
+/// home is `hharness_registry::extension` (R2.20 — the declared-source scanners
 /// apply it when enumerating `ExtensionRef`s); re-exported here so
 /// `grammar::MergePolicy` stays the spelling (CC1 — one enum, one owner).
-pub use hh_registry::extension::MergePolicy;
+pub use hharness_registry::extension::MergePolicy;
 
 /// The `extensions` member (§5g.5 §3; S1.23): `{sources, refs, merge_policy}` —
 /// the **declared** extension surface. Sources are declared, never implicit
@@ -385,9 +385,9 @@ pub use hh_registry::extension::MergePolicy;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionBlock {
     /// The declared sources the refs' locators resolve under.
-    pub sources: Vec<hh_registry::extension::DeclaredSource>,
+    pub sources: Vec<hharness_registry::extension::DeclaredSource>,
     /// The extension references (selector-bearing before `resolve`, pinned after).
-    pub refs: Vec<hh_registry::extension::ExtensionRef>,
+    pub refs: Vec<hharness_registry::extension::ExtensionRef>,
     /// The declared merge policy (`exact_only` by default).
     pub merge_policy: MergePolicy,
 }
@@ -462,7 +462,10 @@ impl Assembly {
             "profile_binding".into(),
             profile_binding_json(&self.profile_binding),
         );
-        m.insert("slots".into(), hh_hir::wire::slots_json(&self.slots, false));
+        m.insert(
+            "slots".into(),
+            hharness_hir::wire::slots_json(&self.slots, false),
+        );
         m.insert(
             "parameters".into(),
             Json::Obj(
@@ -585,7 +588,7 @@ impl Assembly {
             }
         }
         if let Some(s) = m.get("slots") {
-            match hh_hir::wire::slots_from_json(s, &format!("{path}/slots")) {
+            match hharness_hir::wire::slots_from_json(s, &format!("{path}/slots")) {
                 Ok(slots) => a.slots = slots,
                 Err(e) => diags.push(diag(
                     Code::LoadParse,
@@ -819,7 +822,7 @@ fn constraint_selector_json(s: &ConstraintSelector) -> Json {
     if let Some(v) = &s.version_pattern {
         pairs.push((
             "version_pattern",
-            hh_ontology::eval::version_pattern_json(v),
+            hharness_ontology::eval::version_pattern_json(v),
         ));
     }
     Json::obj(pairs)
@@ -827,7 +830,7 @@ fn constraint_selector_json(s: &ConstraintSelector) -> Json {
 
 /// Parse a `profile_binding` member (`unbound | {profile_ref, pinned?} |
 /// {constraint: ProfileConstraint}`) — the codec's read direction, exported
-/// for `hh-lab`'s override grammar (CC7: the one decoder).
+/// for `hharness-lab`'s override grammar (CC7: the one decoder).
 pub fn profile_binding_from_json(j: &Json) -> Result<ProfileBinding, String> {
     match j {
         Json::Str(s) if s == "unbound" => Ok(ProfileBinding::Unbound),
@@ -939,7 +942,7 @@ fn constraint_selector_from_json(j: &Json, path: &str) -> Result<ConstraintSelec
                 i.as_str()
                     .ok_or_else(|| format!("{path}.roles_admitted members must be strings"))
                     .and_then(|s| {
-                        hh_ontology::eval::ModelRole::parse(s)
+                        hharness_ontology::eval::ModelRole::parse(s)
                             .ok_or_else(|| format!("{path}.roles_admitted: unknown role `{s}`"))
                     })
             })
@@ -948,7 +951,7 @@ fn constraint_selector_from_json(j: &Json, path: &str) -> Result<ConstraintSelec
     };
     let version_pattern = match m.get("version_pattern") {
         None => None,
-        Some(v) => Some(hh_ontology::eval::version_pattern_from_json(
+        Some(v) => Some(hharness_ontology::eval::version_pattern_from_json(
             v,
             &format!("{path}.version_pattern"),
         )?),
@@ -1120,7 +1123,7 @@ pub fn constraint_from_json(j: &Json, path: &str) -> Result<Constraint, String> 
 }
 
 /// The canonical JSON of one `LayerProvenance` (`{source_kind, id, version,
-/// precedence}` — §3.3.3; exported for `hh-lab`'s `AssemblySource` codec — CC7).
+/// precedence}` — §3.3.3; exported for `hharness-lab`'s `AssemblySource` codec — CC7).
 pub fn layer_json(l: &LayerProvenance) -> Json {
     Json::obj([
         ("source_kind", Json::str(l.source_kind.as_str())),
@@ -1195,7 +1198,7 @@ fn extension_block_json(e: &ExtensionBlock) -> Json {
             Json::Arr(
                 e.sources
                     .iter()
-                    .map(hh_registry::extension::declared_source_json)
+                    .map(hharness_registry::extension::declared_source_json)
                     .collect(),
             ),
         ),
@@ -1204,7 +1207,7 @@ fn extension_block_json(e: &ExtensionBlock) -> Json {
             Json::Arr(
                 e.refs
                     .iter()
-                    .map(hh_registry::extension::extension_ref_json)
+                    .map(hharness_registry::extension::extension_ref_json)
                     .collect(),
             ),
         ),
@@ -1229,7 +1232,7 @@ fn extension_block_from_json(j: &Json, path: &str) -> Result<ExtensionBlock, Str
             for (i, s) in items.iter().enumerate() {
                 let sp = format!("{path}/sources/{i}");
                 sources.push(
-                    hh_registry::extension::declared_source_from_json(s, &sp)
+                    hharness_registry::extension::declared_source_from_json(s, &sp)
                         .map_err(|e| format!("{sp}: {e:?}"))?,
                 );
             }
@@ -1243,7 +1246,7 @@ fn extension_block_from_json(j: &Json, path: &str) -> Result<ExtensionBlock, Str
             for (i, r) in items.iter().enumerate() {
                 let rp = format!("{path}/refs/{i}");
                 refs.push(
-                    hh_registry::extension::extension_ref_from_json(r, &rp)
+                    hharness_registry::extension::extension_ref_from_json(r, &rp)
                         .map_err(|e| format!("{rp}: {e:?}"))?,
                 );
             }

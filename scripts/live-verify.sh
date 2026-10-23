@@ -9,7 +9,7 @@
 # ~/.config/harnessharness/live.env — a symlink to a gitignored .env;
 # HH_LIVE_ENV overrides, tests only) under `set +x`, never echoed, never
 # blanket-exported to children; records say `provided: yes/no` per NAME.
-# Every artifact is swept by hh-secret-scan (the hh-secrets detectors —
+# Every artifact is swept by hh-secret-scan (the hharness-secrets detectors —
 # CC1) before it is written; the staged diff then faces
 # `gitleaks git --staged --redact -c .gitleaks.toml`. Exit codes:
 #   0 pass · 2 leg skipped/failed (record written honestly) · 3 SPEND CAP —
@@ -204,7 +204,7 @@ require() { command -v "$1" >/dev/null 2>&1 || { fail "required tool absent: $1"
 scan_binary() {
   if [ ! -x "$SCAN_BIN" ]; then
     require cargo
-    (cd "$REPO" && cargo build -q -p hh-secrets --bins) \
+    (cd "$REPO" && cargo build -q -p hharness-secrets --bins) \
       || { fail "cannot build hh-secret-scan"; exit 7; }
   fi
   [ -x "$SCAN_BIN" ] || { fail "hh-secret-scan unavailable"; exit 7; }
@@ -303,12 +303,12 @@ PY
 run_leg_https_reachability() { # R4.5c — the real rustls client, USD 0
   require cargo
   ENDPOINT_HOST="api.github.com:443"
-  ASSERTIONS="one unauthenticated HTTPS GET over the hh-tls rustls client (webpki roots only, full verification); HTTP 200 answer"
+  ASSERTIONS="one unauthenticated HTTPS GET over the hharness-tls rustls client (webpki roots only, full verification); HTTP 200 answer"
   TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
   local rc=0
   if {
-    printf '$ cargo test -p hh-tls --test r4_5c_live -- --ignored\n\n'
-    (cd "$REPO" && cargo test -p hh-tls --test r4_5c_live -- --ignored) 2>&1
+    printf '$ cargo test -p hharness-tls --test r4_5c_live -- --ignored\n\n'
+    (cd "$REPO" && cargo test -p hharness-tls --test r4_5c_live -- --ignored) 2>&1
   } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
   if grep -q "SKIPPED-UNREACHABLE" "$TRANSCRIPT_RAW"; then
     RESULT="skipped(unreachable: $ENDPOINT_HOST)"
@@ -325,14 +325,14 @@ run_leg_https_reachability() { # R4.5c — the real rustls client, USD 0
 # Harbor README member rides the adopted seam end to end — `first_party`
 # admission against the declared `admitted_origins`, the Π-mediated
 # `security.egress.{requested,decided}` trail on the kernel fetch run,
-# `hh_tls` webpki-roots verification, content-address re-verify on
+# `hharness_tls` webpki-roots verification, content-address re-verify on
 # arrival, `bundle.member.fetched` durable before the deposit, and the
 # blob-pool read-back byte-identical to the committed pin. USD 0,
 # read-only, no secrets, no extra roots (the public chain is the claim).
 run_leg_r4_15d_fetch() {
   require cargo
   ENDPOINT_HOST=$(leg_field "r4-15d-fetch" host)
-  ASSERTIONS="one kernel.fetch{trust:FetchTrustPolicy(first_party, admitted_origins=[raw.githubusercontent.com], require_ledgered_arrival)} materializing the pinned harbor-framework/harbor README.md member (commit dd88157): admit → security.egress.requested/decided durable on the kernel fetch run → hh_tls webpki-roots GET → content-address re-verify → bundle.member.fetched{verified} durable-before-deposit → blob-pool read-back byte-identical; USD 0 read-only, no secrets"
+  ASSERTIONS="one kernel.fetch{trust:FetchTrustPolicy(first_party, admitted_origins=[raw.githubusercontent.com], require_ledgered_arrival)} materializing the pinned harbor-framework/harbor README.md member (commit dd88157): admit → security.egress.requested/decided durable on the kernel fetch run → hharness_tls webpki-roots GET → content-address re-verify → bundle.member.fetched{verified} durable-before-deposit → blob-pool read-back byte-identical; USD 0 read-only, no secrets"
   TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
   local spec crate tbin filt rc=0
   spec=$(leg_field "r4-15d-fetch" test)
@@ -656,7 +656,7 @@ run_leg_github_live() {
 
 # R4.7a — `oauth-device` (DF-S4.11-2; the 2026-10-20 "GitHub OAuth App"
 # ruling; operator present to enter the code): the resumable GitHub
-# device flow over the admitted hh-tls/hh-wire stack — `initiate` writes
+# device flow over the admitted hharness-tls/hharness-wire stack — `initiate` writes
 # the operator-facing code file + resumable state under the gitignored
 # logs/ subtree (the user_code NEVER enters a transcript/record/ledger),
 # `complete` polls → access token → `GET /user` subject →
@@ -670,7 +670,7 @@ run_leg_oauth_device() {
   export HH_OAUTH_STATE="${HH_OAUTH_STATE:-$REPO/docs/build/logs/oauth-device.state.json}"
   export HH_OAUTH_CODE_FILE="${HH_OAUTH_CODE_FILE:-$REPO/docs/build/logs/oauth-device.code}"
   ENDPOINT_HOST="github.com:443"; MODEL_REPORTED=""
-  ASSERTIONS="GitHub device flow over hh-tls+hh-wire: initiate → operator-facing code file (gitignored, never a transcript/ledger); complete → poll (pending/slow_down/denied/expired handled) → access token held exchange-scope only → GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0"
+  ASSERTIONS="GitHub device flow over hharness-tls+hh-wire: initiate → operator-facing code file (gitignored, never a transcript/ledger); complete → poll (pending/slow_down/denied/expired handled) → access token held exchange-scope only → GET /user subject; record carries provided: yes + subject_login_sha256 + outcome; USD 0"
   TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
   local rc=0
   if {
@@ -897,8 +897,8 @@ run_leg_otel_live() {
   fi
   local rc=0
   {
-    printf '$ cargo test -p hh-embed --test r4_7c_live -- --ignored --nocapture\n\n'
-    (cd "$REPO" && cargo test -p hh-embed --test r4_7c_live -- --ignored --nocapture) 2>&1
+    printf '$ cargo test -p hharness-embed --test r4_7c_live -- --ignored --nocapture\n\n'
+    (cd "$REPO" && cargo test -p hharness-embed --test r4_7c_live -- --ignored --nocapture) 2>&1
   } >> "$TRANSCRIPT_RAW" || rc=$?
   local tid
   tid=$(grep -o 'LIVE_TRACE_ID: [0-9a-f]*' "$TRANSCRIPT_RAW" | head -1 | sed 's/.*LIVE_TRACE_ID: //')

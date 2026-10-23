@@ -15,8 +15,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 use crate::adapter_a::LiftedObservation;
 use crate::events::{EventChannel, HostedOrigin, Mediation};
@@ -297,7 +297,7 @@ impl AdapterB {
 pub fn adapter_b_record(
     adapter_version: &str,
     gen_param_policy: &GenParamPolicy,
-    debt: hh_hir::records::AssumptionDebtRecord,
+    debt: hharness_hir::records::AssumptionDebtRecord,
 ) -> AdapterRecord {
     let mut defaults = BTreeMap::new();
     for (dim, v) in [
@@ -317,7 +317,7 @@ pub fn adapter_b_record(
     AdapterRecord {
         adapter_id: ADAPTER_B_ID.to_string(),
         version_id: adapter_version.to_string(),
-        hosting_mechanism: hh_ontology::participant::HostingMechanism::ModelBoundaryIntercept,
+        hosting_mechanism: hharness_ontology::participant::HostingMechanism::ModelBoundaryIntercept,
         participant_selector: Json::obj([("mechanism", Json::str("model_boundary_intercept"))]),
         declaration_defaults: defaults,
         placement_supported: [ProcessPlacement::InEnvironment].into_iter().collect(),

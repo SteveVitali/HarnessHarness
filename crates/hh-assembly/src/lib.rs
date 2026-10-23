@@ -1,4 +1,4 @@
-//! `hh-assembly` — the **configuration & composition model** (spec §3.3; ticket S1.9;
+//! `hharness-assembly` — the **configuration & composition model** (spec §3.3; ticket S1.9;
 //! R-2.1.4 C0/Stage 1).
 //!
 //! The assembly grammar lives in the `hir/1` document's `assembly` member
@@ -7,7 +7,7 @@
 //! content (Q-L1-09). [`schema`] declares the per-field merge policy and the
 //! byte-level `encode`/`load` codec pair; [`mod@load`] is the §3.3.4 document-level `load`
 //! op. The op set: `validate_assembly` stages 1–5 + 7 with complete, never-fail-fast
-//! diagnostic reports ([`validate`]), `resolve` — the one resolver feeding `hh-hir`'s
+//! diagnostic reports ([`validate`]), `resolve` — the one resolver feeding `hharness-hir`'s
 //! `seal` (CF-056) — `identity` ([`mod@identity`]), `diff` via `HirDiff` ([`mod@diff`], not a
 //! separate object), in-process `instantiate` with `lifecycle.component.bound`
 //! ([`mod@instantiate`]), `verify_resume` with `lifecycle.definition.changed`
@@ -16,11 +16,11 @@
 //! (ADR-0148 + the ADR-0143 L2 code; `C-INT-1` is reserved — an uncoded rejection is a
 //! defect).
 //!
-//! Reuse (CC1/CC7): identity through `hh-identity`'s `idp/1`, records through
-//! `hh-registry`'s `ClassRecord`/`VariantRecord` and the one `RegistryStore`, the HIR
-//! document/records/`seal`/`HirDiff` through `hh-hir`, provenance and the opacity
-//! report through `hh-provenance`, the single fenced writer through `hh-ledger`, the
-//! `ResourceAccount` input through `hh-budget`.
+//! Reuse (CC1/CC7): identity through `hharness-identity`'s `idp/1`, records through
+//! `hharness-registry`'s `ClassRecord`/`VariantRecord` and the one `RegistryStore`, the HIR
+//! document/records/`seal`/`HirDiff` through `hharness-hir`, provenance and the opacity
+//! report through `hharness-provenance`, the single fenced writer through `hharness-ledger`, the
+//! `ResourceAccount` input through `hharness-budget`.
 //!
 //! `compose` with layers + monotone `authority_cap` ([`mod@compose`]),
 //! `space`/`enumerate` + the ADR-0025 override grammar ([`mod@space`]),

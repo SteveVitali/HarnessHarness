@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `SessionTransport` — send/recv whole JSON-RPC frames.
 pub trait SessionTransport {
@@ -154,7 +154,7 @@ impl<R: std::io::BufRead, W: std::io::Write> SessionTransport for StdioSessionTr
                     if t.is_empty() {
                         continue; // blank separators are not frames
                     }
-                    match hh_wire::json::parse(t) {
+                    match hharness_wire::json::parse(t) {
                         Ok(f) => return Ok(Some(f)),
                         Err(e) => return Err(format!("stdio/frame: {e:?}")),
                     }

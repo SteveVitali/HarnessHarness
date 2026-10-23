@@ -38,11 +38,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
-use hh_hir::leaves::Text;
-use hh_hir::records::{KindRecord, SurfaceRecord};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_assembly::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{KindRecord, SurfaceRecord};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
 use crate::errors::CompileError;
@@ -244,7 +244,7 @@ pub fn lower_profile(
         if binding
             .admitted_modes
             .iter()
-            .all(|m| *m == hh_hir::tools::ExposureMode::Deferred)
+            .all(|m| *m == hharness_hir::tools::ExposureMode::Deferred)
         {
             unexposed(&tb.capability.semantic_id, "deferred");
             continue;
@@ -418,7 +418,7 @@ pub fn lower_profile(
 fn apply_tool_shape(
     b: &mut SurfaceBinding,
     params: &Json,
-    node: &hh_hir::Node,
+    node: &hharness_hir::Node,
     cap_sid: &str,
 ) -> Result<(), CompileError> {
     let variant = params
@@ -553,7 +553,7 @@ fn apply_tool_shape(
         "code_mode" => {
             b.exposure_mode = crate::surface::CompileExposureMode::CodeMode;
             b.admitted_modes
-                .insert(hh_hir::tools::ExposureMode::CodeMode);
+                .insert(hharness_hir::tools::ExposureMode::CodeMode);
         }
         "shim" => {
             b.exposure_mode = crate::surface::CompileExposureMode::Shim;
@@ -574,7 +574,10 @@ fn apply_tool_shape(
 /// The surface-side input schema — `properties` keyed by surface field (projected
 /// sub-paths take their leaf schema), `required` = surface fields whose capability
 /// param root is required.
-fn surface_input_schema(node: &hh_hir::Node, b: &SurfaceBinding) -> Result<Json, CompileError> {
+fn surface_input_schema(
+    node: &hharness_hir::Node,
+    b: &SurfaceBinding,
+) -> Result<Json, CompileError> {
     let KindRecord::ToolCapability(t) = &node.semantic else {
         return Err(CompileError::UncheckableSurface {
             surface: node.semantic_id(),

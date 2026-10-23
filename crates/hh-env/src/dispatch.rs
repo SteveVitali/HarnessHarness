@@ -13,39 +13,39 @@
 //! re-run.
 //!
 //! Redaction is on the **capture path** — every captured payload is masked
-//! through `hh-secrets`' `DetectorSet` before it enters the manifest or the
+//! through `hharness-secrets`' `DetectorSet` before it enters the manifest or the
 //! raw-output blob (ADR-0101 D5), so a hostile executor's output is masked
 //! before any visibility.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_compiler::equiv::SurfaceBinding;
-use hh_compiler::plan::PinnedRef;
-use hh_containment::admit::{admit_input, floor_gate, workspace_scope};
-use hh_containment::egress::{ApprovalCache, EgressRequest};
-use hh_containment::policy::{EgressProtocol, NetMode};
-use hh_context::k4::{self, K4Cache, K4Entry, K4Key, K4Resolution};
-use hh_context::memory::WriteContext;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::records::{Grant, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::risk::project_risk;
-use hh_ledger::effect::idempotency_key;
-use hh_ledger::errors::LedgerError;
-use hh_ledger::fault::KillPoint;
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::args::CanonicalArgs;
-use hh_monitor::assess::{kernel_assessed, AssessmentInputs, ParseOutcome, Tri};
-use hh_monitor::decision::Decision;
-use hh_monitor::events::decided_payload;
-use hh_monitor::monitor::{FlowInputs, Monitor, Proposal};
-use hh_ontology::risk::{RiskClass, RiskReversibility};
-use hh_provenance::flow;
-use hh_provenance::origin::{HumanRole, Origin};
-use hh_provenance::{Label, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::{redact, DetectorSet};
-use hh_secrets::CredentialBroker;
-use hh_wire::json::Json;
+use hharness_compiler::equiv::SurfaceBinding;
+use hharness_compiler::plan::PinnedRef;
+use hharness_containment::admit::{admit_input, floor_gate, workspace_scope};
+use hharness_containment::egress::{ApprovalCache, EgressRequest};
+use hharness_containment::policy::{EgressProtocol, NetMode};
+use hharness_context::k4::{self, K4Cache, K4Entry, K4Key, K4Resolution};
+use hharness_context::memory::WriteContext;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::records::{Grant, ScopeBindings, ToolCapabilityRecord};
+use hharness_hir::risk::project_risk;
+use hharness_ledger::effect::idempotency_key;
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::fault::KillPoint;
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::args::CanonicalArgs;
+use hharness_monitor::assess::{kernel_assessed, AssessmentInputs, ParseOutcome, Tri};
+use hharness_monitor::decision::Decision;
+use hharness_monitor::events::decided_payload;
+use hharness_monitor::monitor::{FlowInputs, Monitor, Proposal};
+use hharness_ontology::risk::{RiskClass, RiskReversibility};
+use hharness_provenance::flow;
+use hharness_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::{Label, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::{redact, DetectorSet};
+use hharness_secrets::CredentialBroker;
+use hharness_wire::json::Json;
 
 use crate::capture::{
     CaptureItem, CaptureKind, CaptureSource, EffectCaptureManifest, OutputPolicy, Truncation,
@@ -65,14 +65,14 @@ use crate::snapshot::PathBaseline;
 use crate::tokens::{ResolveOutcome, TokenMinter, TokenResolver};
 
 /// `ReservationSource` — the `prepare` stage's reserve seam (ADR-0040 D3 —
-/// reserve-before-spend). The caller implements it on `hh-budget`'s `Account`
+/// reserve-before-spend). The caller implements it on `hharness-budget`'s `Account`
 /// (`Account::reserve`); the dispatcher only needs the reservation id.
 pub trait ReservationSource {
     /// `reserve(budget_id, quantity, holder, ttl_ms) → reservation_id`.
     fn reserve(
         &mut self,
         budget_id: &str,
-        quantity: &hh_budget::quantity::ResourceVector,
+        quantity: &hharness_budget::quantity::ResourceVector,
         holder: &str,
         ttl_ms: u64,
     ) -> Result<String, String>;
@@ -85,7 +85,7 @@ pub struct ReserveRequest {
     /// The budget node.
     pub budget_id: String,
     /// The quantity.
-    pub quantity: hh_budget::quantity::ResourceVector,
+    pub quantity: hharness_budget::quantity::ResourceVector,
     /// The holder (the effect/proposer).
     pub holder: String,
     /// The reservation TTL (ms).
@@ -274,7 +274,7 @@ pub struct Dispatcher<'a> {
     /// checks (ADR-0111 D1(d); S2.11). `Some` runs it under its conditioned
     /// thresholds with the assumption-debt record riding the verdict;
     /// `None` ablates it (T-LCD-02 — ablation is explicit, never silent).
-    diff_sanity: Option<hh_verification::validators::DiffSanityRule>,
+    diff_sanity: Option<hharness_verification::validators::DiffSanityRule>,
     /// The `TimeoutPolicy[permission]` deadline in ms (§5e.2; S2.11):
     /// `None` = `deadline none` — `attended` permission waits have no
     /// default deadline (bounded by `hard_max` at the caller's sweep).
@@ -298,7 +298,7 @@ pub struct Dispatcher<'a> {
     /// workspace tree at open; grant/transfer rows fold over the store).
     /// Empty ⇒ the ownership regime is unarmed and the check does not run
     /// (a run with no ownership records writes virgin territory).
-    ownership_roots: Vec<(String, hh_monitor::ownership::OwnedObject)>,
+    ownership_roots: Vec<(String, hharness_monitor::ownership::OwnedObject)>,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -319,13 +319,15 @@ impl<'a> Dispatcher<'a> {
             dedup: DedupStore::default(),
             detectors,
             cache: None,
-            diff_sanity: Some(hh_verification::validators::DiffSanityRule::kernel_default(
-                &ProvenanceRecord::kernel("hir/kernel/diff_sanity", 0),
-            )),
+            diff_sanity: Some(
+                hharness_verification::validators::DiffSanityRule::kernel_default(
+                    &ProvenanceRecord::kernel("hir/kernel/diff_sanity", 0),
+                ),
+            ),
             permission_timeout_ms: None,
             fault: None,
             egress_broker: CredentialBroker::new(
-                Box::new(hh_secrets::DenyAllResolver),
+                Box::new(hharness_secrets::DenyAllResolver),
                 format!("kernel-egress/{run_id}"),
             ),
             ownership_roots: Vec::new(),
@@ -337,13 +339,13 @@ impl<'a> Dispatcher<'a> {
     /// `(owner, object)` seeds — a run owns its own workspace tree at
     /// open — plus every `control.ownership.{granted,transferred,returned}`
     /// row the store folds. With roots armed, every `fs_write` dispatch
-    /// runs `hh_monitor::ownership::check_write` at `prepare`: a `path`
+    /// runs `hharness_monitor::ownership::check_write` at `prepare`: a `path`
     /// under another holder's record is `NotOwner`, a superseded writer
     /// generation `Fenced`, and the effect closes `refused` (never a
     /// silent write).
     pub fn set_ownership_roots(
         &mut self,
-        roots: Vec<(String, hh_monitor::ownership::OwnedObject)>,
+        roots: Vec<(String, hharness_monitor::ownership::OwnedObject)>,
     ) {
         self.ownership_roots = roots;
     }
@@ -420,7 +422,10 @@ impl<'a> Dispatcher<'a> {
 
     /// Set the conditioned `diff_sanity` rule (`None` ablates check (d) —
     /// the Lab's ablation seam; T-LCD-02).
-    pub fn set_diff_sanity(&mut self, rule: Option<hh_verification::validators::DiffSanityRule>) {
+    pub fn set_diff_sanity(
+        &mut self,
+        rule: Option<hharness_verification::validators::DiffSanityRule>,
+    ) {
         self.diff_sanity = rule;
     }
 
@@ -493,7 +498,9 @@ impl<'a> Dispatcher<'a> {
             .store
             .effect_folds(&self.run_id)?
             .iter()
-            .any(|(id, f)| id == &effect_id && f.phase == hh_ledger::effect::EffectPhase::Intended);
+            .any(|(id, f)| {
+                id == &effect_id && f.phase == hharness_ledger::effect::EffectPhase::Intended
+            });
 
         // `action.tool.proposed` opens the tool_call scope. It is minted
         // before the arg-map eval so a `resolve`-stage refusal can close the
@@ -509,7 +516,7 @@ impl<'a> Dispatcher<'a> {
                 input.binding.family_id.as_deref(),
             ),
         )?;
-        proposed.scope = hh_ledger::event::Scope {
+        proposed.scope = hharness_ledger::event::Scope {
             turn_id: Some(input.chain.turn_id.clone()),
             model_call_id: Some(input.chain.model_call_id.clone()),
             tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -525,7 +532,7 @@ impl<'a> Dispatcher<'a> {
         // `turn ⊃ model_call ⊃ tool_call` chain only; the call bytes are
         // content-addressed by `raw_call_hash`, never ledgered (ADR-0066
         // Rule C).
-        let canonical = match hh_monitor::args::eval(
+        let canonical = match hharness_monitor::args::eval(
             input.binding,
             input.scope_bindings,
             &input.surface_args,
@@ -535,10 +542,14 @@ impl<'a> Dispatcher<'a> {
                 // `UnscopedParameter` — a scope-bearing parameter outside the
                 // declared bindings — is `domain_violation` (ADR-0286 D3).
                 let failure_class = match &e {
-                    hh_monitor::args::ArgError::UnmappedArgument { .. } => "unmapped_argument",
-                    hh_monitor::args::ArgError::UnscopedParameter { .. } => "domain_violation",
+                    hharness_monitor::args::ArgError::UnmappedArgument { .. } => {
+                        "unmapped_argument"
+                    }
+                    hharness_monitor::args::ArgError::UnscopedParameter { .. } => {
+                        "domain_violation"
+                    }
                 };
-                let raw_call_hash = hh_identity::idp::idp_id(
+                let raw_call_hash = hharness_identity::idp::idp_id(
                     "raw_call",
                     input.surface_args.to_canonical_string().as_bytes(),
                 );
@@ -554,7 +565,7 @@ impl<'a> Dispatcher<'a> {
                         input.binding.family_id.as_deref(),
                     ),
                 )?;
-                rejected.scope = hh_ledger::event::Scope {
+                rejected.scope = hharness_ledger::event::Scope {
                     turn_id: Some(input.chain.turn_id.clone()),
                     model_call_id: Some(input.chain.model_call_id.clone()),
                     tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -571,7 +582,7 @@ impl<'a> Dispatcher<'a> {
                 });
             }
         };
-        let args_canonical_hash = hh_identity::idp::idp_id(
+        let args_canonical_hash = hharness_identity::idp::idp_id(
             "canonical_args",
             canonical_json(&canonical).to_canonical_string().as_bytes(),
         );
@@ -660,9 +671,10 @@ impl<'a> Dispatcher<'a> {
         if let Some(prior) = prior_hit {
             // The stored-observation serve (AC-R-2.2.2-1 — `dedup_support
             // ≠ none` returns the recorded observation, never a re-run).
-            let stored = hh_ledger::replay::stored_observation(self.store, &self.run_id, &prior)
-                .ok()
-                .flatten();
+            let stored =
+                hharness_ledger::replay::stored_observation(self.store, &self.run_id, &prior)
+                    .ok()
+                    .flatten();
             // The coordinate's `tool_call`/`effect_id` scopes are already
             // closed by the first dispatch's terminals — the dedup row is
             // anchored at the (still-open) turn/model_call chain only.
@@ -670,7 +682,7 @@ impl<'a> Dispatcher<'a> {
                 "action.tool.rejected",
                 events::tool_rejected_payload("dedup", &format!("dup of {prior}")),
             )?;
-            ev.scope = hh_ledger::event::Scope {
+            ev.scope = hharness_ledger::event::Scope {
                 turn_id: Some(input.chain.turn_id.clone()),
                 model_call_id: Some(input.chain.model_call_id.clone()),
                 ..Default::default()
@@ -743,7 +755,7 @@ impl<'a> Dispatcher<'a> {
                         "action.tool.rejected",
                         events::tool_rejected_payload("authorize", &reason),
                     )?;
-                    rejected.scope = hh_ledger::event::Scope {
+                    rejected.scope = hharness_ledger::event::Scope {
                         turn_id: Some(input.chain.turn_id.clone()),
                         model_call_id: Some(input.chain.model_call_id.clone()),
                         tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -790,7 +802,7 @@ impl<'a> Dispatcher<'a> {
                         "action.tool.rejected",
                         events::tool_rejected_payload("authorize", &reason),
                     )?;
-                    rejected.scope = hh_ledger::event::Scope {
+                    rejected.scope = hharness_ledger::event::Scope {
                         turn_id: Some(input.chain.turn_id.clone()),
                         model_call_id: Some(input.chain.model_call_id.clone()),
                         tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -829,9 +841,9 @@ impl<'a> Dispatcher<'a> {
         // deterministic — identical pending `(capability_ref,
         // args_canonical_hash)` asks mint the same id (the coalescing rule);
         // `irreversible`/`unknown` never coalesce (the effect salts the mint).
-        let never_auto = hh_monitor::approval::never_auto(decision.effective_risk_class);
+        let never_auto = hharness_monitor::approval::never_auto(decision.effective_risk_class);
         let permission_id = matches!(decision.decision, Decision::Ask { .. }).then(|| {
-            hh_monitor::approval::mint_permission_id(
+            hharness_monitor::approval::mint_permission_id(
                 &input.capability_ref,
                 &args_canonical_hash,
                 never_auto,
@@ -851,7 +863,7 @@ impl<'a> Dispatcher<'a> {
         // not re-minted: the recorded row already holds the `(effect_id,
         // attempt)` gate slot, and a second final decided would be
         // `DuplicateDecision` (§5g.1 I-H7 — exactly one per attempt cycle).
-        let recorded_served = decision.decider == hh_monitor::decision::Decider::Human
+        let recorded_served = decision.decider == hharness_monitor::decision::Decider::Human
             && decision.origin_permission_id.is_some();
         // R2.9a (DF-S2.4-1b) — the egress-ask resume re-enters at
         // `authorize` with the monitor's verdict *already durable*: the
@@ -890,20 +902,21 @@ impl<'a> Dispatcher<'a> {
         // with `action.tool.rejected` (its terminal), `effect_id` with
         // `refused`. `rejected` carries the tool-call chain only — `refused`
         // already closed the effect scope in the same batch.
-        let tool_rejected =
-            |minter: &EventMinter, reason: &str| -> Result<hh_ledger::event::Event, LedgerError> {
-                let mut ev = minter.mint(
-                    "action.tool.rejected",
-                    events::tool_rejected_payload("authorize", reason),
-                )?;
-                ev.scope = hh_ledger::event::Scope {
-                    turn_id: Some(input.chain.turn_id.clone()),
-                    model_call_id: Some(input.chain.model_call_id.clone()),
-                    tool_call_id: Some(input.chain.tool_call_id.clone()),
-                    ..Default::default()
-                };
-                Ok(ev)
+        let tool_rejected = |minter: &EventMinter,
+                             reason: &str|
+         -> Result<hharness_ledger::event::Event, LedgerError> {
+            let mut ev = minter.mint(
+                "action.tool.rejected",
+                events::tool_rejected_payload("authorize", reason),
+            )?;
+            ev.scope = hharness_ledger::event::Scope {
+                turn_id: Some(input.chain.turn_id.clone()),
+                model_call_id: Some(input.chain.model_call_id.clone()),
+                tool_call_id: Some(input.chain.tool_call_id.clone()),
+                ..Default::default()
             };
+            Ok(ev)
+        };
         match &decision.decision {
             Decision::Modified { .. } => {
                 // The C2 `modify` terminal (ADR-0070 D1; ADR-0343 D1): the
@@ -961,12 +974,12 @@ impl<'a> Dispatcher<'a> {
                     decision.effective_authority,
                     decision.effective_risk_class,
                 );
-                let chain = hh_monitor::approval::run_chain(
+                let chain = hharness_monitor::approval::run_chain(
                     &esc,
                     &self.monitor.approvals.leases,
                     &[],
                     &self.monitor.auto_review_rules,
-                    hh_monitor::approval::LeaseScope::Run,
+                    hharness_monitor::approval::LeaseScope::Run,
                 );
                 let pid = permission_id
                     .clone()
@@ -989,7 +1002,7 @@ impl<'a> Dispatcher<'a> {
                     self.store.append(&self.run_id, lease, vec![hop])?;
                 }
                 match &chain.decision {
-                    hh_monitor::approval::ChainDecision::Allow {
+                    hharness_monitor::approval::ChainDecision::Allow {
                         decider,
                         cache_key,
                         lease_id,
@@ -1045,7 +1058,7 @@ impl<'a> Dispatcher<'a> {
                         self.store.append(&self.run_id, lease, rows)?;
                         // Fall through to the `authorized` path.
                     }
-                    hh_monitor::approval::ChainDecision::Deny { reason, .. } => {
+                    hharness_monitor::approval::ChainDecision::Deny { reason, .. } => {
                         // The chain resolved deny inside the ask window —
                         // Π-12 unattended, a hook deny or the exhaustion
                         // conversion. `decided{ask}` was non-final; this deny
@@ -1078,11 +1091,11 @@ impl<'a> Dispatcher<'a> {
                             reason: reason.as_str().to_string(),
                         });
                     }
-                    hh_monitor::approval::ChainDecision::AskHuman { .. }
-                    | hh_monitor::approval::ChainDecision::Defer { .. } => {
+                    hharness_monitor::approval::ChainDecision::AskHuman { .. }
+                    | hharness_monitor::approval::ChainDecision::Defer { .. } => {
                         let deferred = matches!(
                             chain.decision,
-                            hh_monitor::approval::ChainDecision::Defer { .. }
+                            hharness_monitor::approval::ChainDecision::Defer { .. }
                         );
                         // Step 7's consumption half (ADR-0040 D6): a
                         // human-targeted ask reserves `approvals.requested =
@@ -1095,8 +1108,8 @@ impl<'a> Dispatcher<'a> {
                             if src
                                 .reserve(
                                     &req.budget_id,
-                                    &hh_budget::quantity::ResourceVector::one(
-                                        hh_ontology::dimensions::DimensionId::ApprovalsRequested,
+                                    &hharness_budget::quantity::ResourceVector::one(
+                                        hharness_ontology::dimensions::DimensionId::ApprovalsRequested,
                                         1,
                                     ),
                                     &input.proposer,
@@ -1151,7 +1164,7 @@ impl<'a> Dispatcher<'a> {
                         // `irreversible` and `permission_request` asks carry
                         // no batch (`EscalationInput.batchable` is the admit).
                         let batch_id = if esc.batchable {
-                            Some(hh_monitor::approval::mint_batch_id(
+                            Some(hharness_monitor::approval::mint_batch_id(
                                 &esc.risk,
                                 "principal",
                                 &esc.scope_ref,
@@ -1159,9 +1172,9 @@ impl<'a> Dispatcher<'a> {
                         } else {
                             None
                         };
-                        let request = hh_monitor::approval::ApprovalRequest {
+                        let request = hharness_monitor::approval::ApprovalRequest {
                             permission_id: pid.clone(),
-                            request: hh_monitor::approval::PermissionRequest {
+                            request: hharness_monitor::approval::PermissionRequest {
                                 subject_ref: input.proposer.clone(),
                                 capability_ref: input.capability_ref.clone(),
                                 args_canonical_hash: args_canonical_hash.clone(),
@@ -1175,24 +1188,24 @@ impl<'a> Dispatcher<'a> {
                             options: options
                                 .iter()
                                 .filter_map(|o| {
-                                    hh_monitor::approval::ApprovalOptionId::parse(o).map(|id| {
-                                        hh_monitor::approval::ApprovalOption {
+                                    hharness_monitor::approval::ApprovalOptionId::parse(o).map(
+                                        |id| hharness_monitor::approval::ApprovalOption {
                                             id,
                                             label: o.clone(),
-                                        }
-                                    })
+                                        },
+                                    )
                                 })
                                 .collect(),
                             mode: if deferred {
-                                hh_monitor::approval::ApprovalMode::Async
+                                hharness_monitor::approval::ApprovalMode::Async
                             } else {
-                                hh_monitor::approval::ApprovalMode::Sync
+                                hharness_monitor::approval::ApprovalMode::Sync
                             },
                             // `TimeoutPolicy[permission]` — `deadline none`
                             // attended (`None`); a declared default caps the
                             // wait (S2.11).
                             timeout: self.permission_timeout_ms,
-                            explanation: hh_monitor::approval::Explanation {
+                            explanation: hharness_monitor::approval::Explanation {
                                 display: format!("pi asked: {} option(s)", options.len()),
                                 rows: decision.checks.clone(),
                                 model_justification: None,
@@ -1244,16 +1257,20 @@ impl<'a> Dispatcher<'a> {
                             &input.chain,
                         )?;
                         anchor.provenance = Some(input.args_provenance.clone());
-                        anchor.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+                        anchor.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
                         let pending = self.minter_ev().mint_effect(
                             "security.permission.pending",
-                            hh_monitor::approval::pending_payload(&request, &effect_id, asked_at),
+                            hharness_monitor::approval::pending_payload(
+                                &request, &effect_id, asked_at,
+                            ),
                             &effect_id,
                             &input.chain,
                         )?;
                         let requested = self.minter_ev().mint_effect(
                             "security.permission.requested",
-                            hh_monitor::approval::requested_payload(&request, &effect_id, asked_at),
+                            hharness_monitor::approval::requested_payload(
+                                &request, &effect_id, asked_at,
+                            ),
                             &effect_id,
                             &input.chain,
                         )?;
@@ -1269,11 +1286,11 @@ impl<'a> Dispatcher<'a> {
                         let sub = self.store.wakeup_subscribe(
                             &self.run_id,
                             lease,
-                            hh_ledger::wakeup::Trigger::PermissionDecided {
+                            hharness_ledger::wakeup::Trigger::PermissionDecided {
                                 permission_id: pid.clone(),
                             },
-                            hh_ledger::wakeup::WakeupPolicy::default_policy(),
-                            &hh_ledger::manifest::EventRef {
+                            hharness_ledger::wakeup::WakeupPolicy::default_policy(),
+                            &hharness_ledger::manifest::EventRef {
                                 run_id: self.run_id.clone(),
                                 event_id: pending_event_id,
                             },
@@ -1281,7 +1298,7 @@ impl<'a> Dispatcher<'a> {
                         self.store.suspend(
                             &self.run_id,
                             lease,
-                            &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                            &[hharness_ledger::suspend::SuspendReason::AwaitingApproval {
                                 permission_id: pid.clone(),
                             }],
                             &[sub],
@@ -1385,11 +1402,11 @@ impl<'a> Dispatcher<'a> {
                 let sub = self.store.wakeup_subscribe(
                     &self.run_id,
                     lease,
-                    hh_ledger::wakeup::Trigger::PermissionDecided {
+                    hharness_ledger::wakeup::Trigger::PermissionDecided {
                         permission_id: permission_id.clone(),
                     },
-                    hh_ledger::wakeup::WakeupPolicy::default_policy(),
-                    &hh_ledger::manifest::EventRef {
+                    hharness_ledger::wakeup::WakeupPolicy::default_policy(),
+                    &hharness_ledger::manifest::EventRef {
                         run_id: self.run_id.clone(),
                         event_id: anchor_event_id,
                     },
@@ -1397,7 +1414,7 @@ impl<'a> Dispatcher<'a> {
                 self.store.suspend(
                     &self.run_id,
                     lease,
-                    &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                    &[hharness_ledger::suspend::SuspendReason::AwaitingApproval {
                         permission_id: permission_id.clone(),
                     }],
                     &[sub],
@@ -1448,7 +1465,7 @@ impl<'a> Dispatcher<'a> {
                             .apply_amended_containment(&input.env_handle_id, amended.clone())
                             .map_err(|e| EnvError::Blob(format!("apply_amended: {e:?}")))?;
                         handle.containment =
-                            hh_containment::attach::PolicySlot::Inline(Box::new(amended));
+                            hharness_containment::attach::PolicySlot::Inline(Box::new(amended));
                     }
                     gate_token = Some(token);
                     pending_egress = Some((request, g));
@@ -1468,11 +1485,11 @@ impl<'a> Dispatcher<'a> {
                         let sub = self.store.wakeup_subscribe(
                             &self.run_id,
                             lease,
-                            hh_ledger::wakeup::Trigger::PermissionDecided {
+                            hharness_ledger::wakeup::Trigger::PermissionDecided {
                                 permission_id: permission_id.clone(),
                             },
-                            hh_ledger::wakeup::WakeupPolicy::default_policy(),
-                            &hh_ledger::manifest::EventRef {
+                            hharness_ledger::wakeup::WakeupPolicy::default_policy(),
+                            &hharness_ledger::manifest::EventRef {
                                 run_id: self.run_id.clone(),
                                 event_id: decided_ref,
                             },
@@ -1480,7 +1497,7 @@ impl<'a> Dispatcher<'a> {
                         self.store.suspend(
                             &self.run_id,
                             lease,
-                            &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                            &[hharness_ledger::suspend::SuspendReason::AwaitingApproval {
                                 permission_id: permission_id.clone(),
                             }],
                             &[sub],
@@ -1611,7 +1628,7 @@ impl<'a> Dispatcher<'a> {
         // writer generation) refuses `NotOwner`/`Fenced` —
         // the `security.policy.evaluated{check: ownership, verdict: deny}`
         // audit row is the typed observation and the effect closes
-        // `refused` (the same shape `hh-subagent`'s merge path records).
+        // `refused` (the same shape `hharness-subagent`'s merge path records).
         // The projection folds the armed roots plus every
         // `control.ownership.*` row across the store (a child sees the
         // parent's grants to it); unarmed (no roots) ⇒ the ownership
@@ -1619,29 +1636,29 @@ impl<'a> Dispatcher<'a> {
         if !self.ownership_roots.is_empty() {
             // The objects this effect may write: the canonical `path` of
             // an `fs_write` plus every `Resources::Declared` key.
-            let mut write_objects: Vec<hh_monitor::ownership::OwnedObject> = Vec::new();
+            let mut write_objects: Vec<hharness_monitor::ownership::OwnedObject> = Vec::new();
             if input.declared.domain == EffectDomain::FsWrite {
                 if let Some(path) = canonical.params.get("path").and_then(Json::as_str) {
-                    write_objects.push(hh_monitor::ownership::OwnedObject::FsPathPrefix(
+                    write_objects.push(hharness_monitor::ownership::OwnedObject::FsPathPrefix(
                         path.to_string(),
                     ));
                 }
             }
-            if let hh_hir::records::Resources::Declared(keys) = &input.capability.resources {
+            if let hharness_hir::records::Resources::Declared(keys) = &input.capability.resources {
                 write_objects.extend(
                     keys.iter()
-                        .map(|k| hh_monitor::ownership::OwnedObject::ResourceKey(k.clone())),
+                        .map(|k| hharness_monitor::ownership::OwnedObject::ResourceKey(k.clone())),
                 );
             }
             if !write_objects.is_empty() {
-                let ownerships = hh_monitor::ownership::OwnershipTable::project(
+                let ownerships = hharness_monitor::ownership::OwnershipTable::project(
                     self.store,
                     &self.store.run_ids(),
                     self.ownership_roots.clone(),
                 )
                 .map_err(EnvError::Ledger)?;
                 for object in write_objects {
-                    let verdict = hh_monitor::ownership::check_write(
+                    let verdict = hharness_monitor::ownership::check_write(
                         self.store,
                         &self.run_id,
                         lease.generation,
@@ -1649,23 +1666,23 @@ impl<'a> Dispatcher<'a> {
                         &ownerships,
                     )
                     .map_err(EnvError::Ledger)?;
-                    if !matches!(verdict, hh_monitor::ownership::WriteVerdict::Ok) {
+                    if !matches!(verdict, hharness_monitor::ownership::WriteVerdict::Ok) {
                         let (detail, reason) = match &verdict {
-                            hh_monitor::ownership::WriteVerdict::NotOwner { owner } => (
+                            hharness_monitor::ownership::WriteVerdict::NotOwner { owner } => (
                                 Json::obj([
                                     ("reason", Json::str("not_owner")),
                                     ("owner", Json::str(owner)),
                                 ]),
                                 format!("NotOwner{{owner: {owner}}}"),
                             ),
-                            hh_monitor::ownership::WriteVerdict::Fenced { detail } => (
+                            hharness_monitor::ownership::WriteVerdict::Fenced { detail } => (
                                 Json::obj([
                                     ("reason", Json::str("fenced")),
                                     ("detail", Json::str(detail)),
                                 ]),
                                 format!("Fenced{{{detail}}}"),
                             ),
-                            hh_monitor::ownership::WriteVerdict::Ok => unreachable!(),
+                            hharness_monitor::ownership::WriteVerdict::Ok => unreachable!(),
                         };
                         let evaluated = self.minter_ev().mint_effect(
                             "security.policy.evaluated",
@@ -1702,7 +1719,7 @@ impl<'a> Dispatcher<'a> {
             Some(t) => t,
             None => self.minter.mint(&effect_id, 1, &input.env_handle_id),
         };
-        // `reserve` — reserve-before-spend (the reservation is `hh-budget`'s
+        // `reserve` — reserve-before-spend (the reservation is `hharness-budget`'s
         // `control.budget.reserved`; the caller's `ReservationSource` appends
         // it).
         if let (Some(req), Some(src)) = (&input.reserve, reserve_src) {
@@ -1852,8 +1869,8 @@ impl<'a> Dispatcher<'a> {
             .unwrap_or(Json::Null);
         let attempt_no = fold.attempt_no + 1;
         match fold.phase {
-            hh_ledger::effect::EffectPhase::Committed
-            | hh_ledger::effect::EffectPhase::Prepared => {}
+            hharness_ledger::effect::EffectPhase::Committed
+            | hharness_ledger::effect::EffectPhase::Prepared => {}
             other => {
                 return Err(EnvError::InvalidState {
                     op: "resume_paused",
@@ -1862,11 +1879,11 @@ impl<'a> Dispatcher<'a> {
             }
         }
         let canonical =
-            hh_monitor::args::eval(input.binding, input.scope_bindings, &input.surface_args)
+            hharness_monitor::args::eval(input.binding, input.scope_bindings, &input.surface_args)
                 .map_err(|e| EnvError::ResumeRefused {
                     reason: format!("arg_eval: {e:?}"),
                 })?;
-        let args_canonical_hash = hh_identity::idp::idp_id(
+        let args_canonical_hash = hharness_identity::idp::idp_id(
             "canonical_args",
             canonical_json(&canonical).to_canonical_string().as_bytes(),
         );
@@ -2133,7 +2150,7 @@ impl<'a> Dispatcher<'a> {
                         "action.tool.completed",
                         events::tool_completed_payload("error", None, None),
                     )?;
-                    completed.scope = hh_ledger::event::Scope {
+                    completed.scope = hharness_ledger::event::Scope {
                         turn_id: Some(input.chain.turn_id.clone()),
                         model_call_id: Some(input.chain.model_call_id.clone()),
                         tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -2212,12 +2229,12 @@ impl<'a> Dispatcher<'a> {
         // hit on an executor-reported payload is a `leak_detected` row
         // (the hostile-executor path — AC-R-2.5.5-8).
         let mut raw_output = String::new();
-        let mut leaks: Vec<hh_secrets::redact::DetectorKind> = Vec::new();
+        let mut leaks: Vec<hharness_secrets::redact::DetectorKind> = Vec::new();
         for it in &mut items {
             let hits = redact_item(it, &self.detectors);
             if it.source == CaptureSource::ExecutorReported {
                 for h in hits {
-                    if h != hh_secrets::redact::DetectorKind::PlaceholderPassthrough
+                    if h != hharness_secrets::redact::DetectorKind::PlaceholderPassthrough
                         && !leaks.contains(&h)
                     {
                         leaks.push(h);
@@ -2233,8 +2250,8 @@ impl<'a> Dispatcher<'a> {
             for d in &leaks {
                 evs.push(self.minter_ev().mint_effect(
                     "security.secret.leak_detected",
-                    hh_secrets::events::leak_detected_payload(
-                        &hh_secrets::redact::Leak::at_mediation(
+                    hharness_secrets::events::leak_detected_payload(
+                        &hharness_secrets::redact::Leak::at_mediation(
                             format!("capture:{effect_id}"),
                             *d,
                             None,
@@ -2351,7 +2368,7 @@ impl<'a> Dispatcher<'a> {
                 "action.tool.proposed",
                 events::tool_proposed_payload("hh:message_human", "elicitation", None),
             )?;
-            mh_proposed.scope = hh_ledger::event::Scope {
+            mh_proposed.scope = hharness_ledger::event::Scope {
                 turn_id: Some(mh_chain.turn_id.clone()),
                 model_call_id: Some(mh_chain.model_call_id.clone()),
                 tool_call_id: Some(tc_elic.clone()),
@@ -2365,7 +2382,7 @@ impl<'a> Dispatcher<'a> {
             )?;
             // `causes` names the *ask event* (the ledger coordinate —
             // `decision_id` is a payload member, never an event ref).
-            intended.causes = vec![hh_ledger::manifest::EventRef {
+            intended.causes = vec![hharness_ledger::manifest::EventRef {
                 run_id: self.run_id.clone(),
                 event_id: ask.event_id.clone(),
             }];
@@ -2570,7 +2587,7 @@ impl<'a> Dispatcher<'a> {
                 Some(&overhead),
             ),
         )?;
-        completed.scope = hh_ledger::event::Scope {
+        completed.scope = hharness_ledger::event::Scope {
             turn_id: Some(input.chain.turn_id.clone()),
             model_call_id: Some(input.chain.model_call_id.clone()),
             tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -2610,7 +2627,7 @@ impl<'a> Dispatcher<'a> {
             let mut recorded = self
                 .minter_ev()
                 .mint("context.observation.recorded", payload)?;
-            recorded.scope = hh_ledger::event::Scope {
+            recorded.scope = hharness_ledger::event::Scope {
                 turn_id: Some(input.chain.turn_id.clone()),
                 model_call_id: Some(input.chain.model_call_id.clone()),
                 tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -2763,7 +2780,7 @@ impl<'a> Dispatcher<'a> {
                     "action.tool.completed",
                     events::tool_completed_payload("ok", None, None),
                 )?;
-                completed.scope = hh_ledger::event::Scope {
+                completed.scope = hharness_ledger::event::Scope {
                     turn_id: Some(input.chain.turn_id.clone()),
                     model_call_id: Some(input.chain.model_call_id.clone()),
                     tool_call_id: Some(input.chain.tool_call_id.clone()),
@@ -2886,7 +2903,7 @@ impl<'a> Dispatcher<'a> {
         if let Ok(w) = written {
             let (class, payload) = w.memory_event;
             let mut ev = self.minter_ev().mint(&class, payload)?;
-            ev.scope = hh_ledger::event::Scope {
+            ev.scope = hharness_ledger::event::Scope {
                 turn_id: Some(input.chain.turn_id.clone()),
                 model_call_id: Some(input.chain.model_call_id.clone()),
                 ..Default::default()
@@ -2956,7 +2973,8 @@ impl<'a> Dispatcher<'a> {
         let bytes = crate::driver::blob_by_id(self.store, &value_ref)
             .ok_or(LeafWalkFailure::MalformedResult)?;
         let text = String::from_utf8(bytes).map_err(|_| LeafWalkFailure::MalformedResult)?;
-        let value = hh_wire::json::parse(&text).map_err(|_| LeafWalkFailure::MalformedResult)?;
+        let value =
+            hharness_wire::json::parse(&text).map_err(|_| LeafWalkFailure::MalformedResult)?;
         crate::leaf_admission::walk_result_leaves(schema, &value)
     }
 
@@ -2988,7 +3006,7 @@ impl<'a> Dispatcher<'a> {
         validator_ref: Option<&str>,
         param: &str,
         args_canonical_hash: &str,
-    ) -> Result<hh_provenance::Label, String> {
+    ) -> Result<hharness_provenance::Label, String> {
         let schema_node = input
             .capability
             .input_schema
@@ -3027,8 +3045,8 @@ impl<'a> Dispatcher<'a> {
             )
             .map_err(|e| format!("remedy_inapplicable:{e}"))?;
         anchor.provenance = Some(subject.clone());
-        anchor.content_kind = Some(hh_provenance::ContentKind::ClosedSchemaValue);
-        let end = match hh_provenance::endorse::shape_endorse(
+        anchor.content_kind = Some(hharness_provenance::ContentKind::ClosedSchemaValue);
+        let end = match hharness_provenance::endorse::shape_endorse(
             &subject,
             anchor.event_id.clone(),
             &schema_node,
@@ -3038,7 +3056,7 @@ impl<'a> Dispatcher<'a> {
             vec![param.to_string()],
         ) {
             Ok(end) => end,
-            Err(hh_provenance::endorse::EndorsementError::NoLabelIncrease) => {
+            Err(hharness_provenance::endorse::EndorsementError::NoLabelIncrease) => {
                 // The take attested a rise the param doesn't need — the
                 // remedy's fix didn't happen, so the consume is refused
                 // rather than recorded as a take-with-no-effect.
@@ -3060,7 +3078,7 @@ impl<'a> Dispatcher<'a> {
             .minter_ev()
             .mint_effect("security.label.endorsed", payload, effect_id, &input.chain)
             .map_err(|e| format!("remedy_inapplicable:{e}"))?;
-        endorsed.content_kind = Some(hh_provenance::ContentKind::ClosedSchemaValue);
+        endorsed.content_kind = Some(hharness_provenance::ContentKind::ClosedSchemaValue);
         self.store
             .append(&self.run_id, lease, vec![anchor])
             .map_err(|e| format!("remedy_inapplicable:{e}"))?;
@@ -3089,8 +3107,8 @@ impl<'a> Dispatcher<'a> {
         raw_output: &str,
         handle: &crate::handle::EnvHandle,
         effect_id: &str,
-    ) -> Vec<hh_verification::validators::Verdict> {
-        let cap = hh_verification::validators::TerminalCapture {
+    ) -> Vec<hharness_verification::validators::Verdict> {
+        let cap = hharness_verification::validators::TerminalCapture {
             effect_id: effect_id.to_string(),
             domain: Some(input.declared.domain),
             output: if raw_output.is_empty() {
@@ -3104,9 +3122,13 @@ impl<'a> Dispatcher<'a> {
             signalled: matches!(report_class, ErrorClass::Signalled { .. }),
             patch_status: match input.declared.domain {
                 EffectDomain::FsWrite => Some(match outcome {
-                    EffectOutcome::Applied => hh_verification::validators::PatchStatus::Applied,
-                    EffectOutcome::Partial => hh_verification::validators::PatchStatus::Partial,
-                    _ => hh_verification::validators::PatchStatus::Rejected(0),
+                    EffectOutcome::Applied => {
+                        hharness_verification::validators::PatchStatus::Applied
+                    }
+                    EffectOutcome::Partial => {
+                        hharness_verification::validators::PatchStatus::Partial
+                    }
+                    _ => hharness_verification::validators::PatchStatus::Rejected(0),
                 }),
                 _ => None,
             },
@@ -3115,7 +3137,7 @@ impl<'a> Dispatcher<'a> {
                 .map(|(e, _)| e.path_canonical.clone())
                 .collect(),
             resource_keys: match &input.capability.resources {
-                hh_hir::records::Resources::Declared(keys) => keys.iter().cloned().collect(),
+                hharness_hir::records::Resources::Declared(keys) => keys.iter().cloned().collect(),
                 _ => Vec::new(),
             },
             // (d) inputs — kernel-derived diff facts (`FsWrite` only; other
@@ -3140,7 +3162,7 @@ impl<'a> Dispatcher<'a> {
             .and_then(|evs| evs.last().map(|e| e.seq))
             .unwrap_or(0);
         let provenance = ProvenanceRecord::kernel(crate::events::COMPONENT, now);
-        let mut verdicts = hh_verification::validators::run_local_checks(
+        let mut verdicts = hharness_verification::validators::run_local_checks(
             &cap,
             &local_checks_ref(),
             self.diff_sanity.as_ref(),
@@ -3153,7 +3175,7 @@ impl<'a> Dispatcher<'a> {
         // resolves to a kernel built-in or yields an `inconclusive` verdict
         // naming it (declared-but-unbound is reported, never skipped).
         for pref in &input.capability.postconditions {
-            if let Some(v) = hh_verification::validators::run_declared_postcondition(
+            if let Some(v) = hharness_verification::validators::run_declared_postcondition(
                 pref,
                 &cap,
                 self.diff_sanity.as_ref(),
@@ -3174,7 +3196,7 @@ impl<'a> Dispatcher<'a> {
     /// applicable" is the AC).
     fn emit_verdicts(
         &mut self,
-        verdicts: &[hh_verification::validators::Verdict],
+        verdicts: &[hharness_verification::validators::Verdict],
         lease: &Lease,
         input: &DispatchInput,
     ) -> Result<(), EnvError> {
@@ -3187,19 +3209,19 @@ impl<'a> Dispatcher<'a> {
             for v in verdicts {
                 let mut invoked = m.mint(
                     "verification.validator.invoked",
-                    hh_verification::events::validator_invoked(
+                    hharness_verification::events::validator_invoked(
                         v,
-                        &hh_verification::vocab::Isolation::Kernel,
+                        &hharness_verification::vocab::Isolation::Kernel,
                     ),
                 )?;
                 let mut verdict = m.mint(
                     "verification.validator.verdict",
-                    hh_verification::events::validator_verdict(v),
+                    hharness_verification::events::validator_verdict(v),
                 )?;
                 // `effect`/`tool_call` closed — the rows scope to the
                 // still-open turn/model_call chain.
                 for e in [&mut invoked, &mut verdict] {
-                    e.scope = hh_ledger::event::Scope {
+                    e.scope = hharness_ledger::event::Scope {
                         turn_id: Some(input.chain.turn_id.clone()),
                         model_call_id: Some(input.chain.model_call_id.clone()),
                         ..Default::default()
@@ -3509,7 +3531,7 @@ fn classify_command(args: &Json) -> ParseOutcome {
 /// `capacity_bits ≤ CAP_MAX_DEFAULT` — the durable record is the
 /// authority, and a row claiming an over-capacity shape never stamps.
 pub fn shape_endorsed_params(
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
     args_canonical_hash: &str,
 ) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
@@ -3557,7 +3579,7 @@ pub fn shape_endorsed_params(
 /// `effect_id` re-claiming its own take is the idempotent retry, not a
 /// replay (its own `authorized` row names the same effect).
 fn remedy_taken_for(
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
     effect_id: &str,
     claimed: Option<&flow::Remedy>,
 ) -> Result<Option<flow::Remedy>, String> {
@@ -3584,8 +3606,8 @@ fn remedy_taken_for(
 
 fn dispatch_world_open(input: &DispatchInput) -> bool {
     let declared_attrs = match &input.capability.effects {
-        hh_hir::kinds::ToolEffects::Pure => None,
-        hh_hir::kinds::ToolEffects::Declared(set) => set
+        hharness_hir::kinds::ToolEffects::Pure => None,
+        hharness_hir::kinds::ToolEffects::Declared(set) => set
             .iter()
             .find(|e| e.domain == input.declared.domain)
             .and_then(|e| e.attributes.as_ref()),
@@ -3595,7 +3617,7 @@ fn dispatch_world_open(input: &DispatchInput) -> bool {
         .attributes
         .iter()
         .chain(declared_attrs)
-        .any(|a| a.world == hh_hir::kinds::World::Open)
+        .any(|a| a.world == hharness_hir::kinds::World::Open)
 }
 
 /// `canonical_json(canonical)` — the `params` map as a `Json` object (the
@@ -3625,7 +3647,7 @@ enum EgressAskState {
         /// The reconstructed response (decision + scope + endorser) —
         /// boxed: the variant is 400+ bytes against `Pending`'s 48
         /// (clippy `large_enum_variant`).
-        response: Box<hh_monitor::approval::ApprovalResponse>,
+        response: Box<hharness_monitor::approval::ApprovalResponse>,
         /// The endorser declaration (`responder_provenance.subject_ref`
         /// minted as a `human{principal}` record).
         endorser: Box<ProvenanceRecord>,
@@ -3639,7 +3661,7 @@ enum EgressAskState {
 /// `decided{ask}` and the respond surface's non-final `more_info` cycles
 /// never resolve a pending).
 fn egress_ask_state(
-    store: &hh_ledger::store::Store,
+    store: &hharness_ledger::store::Store,
     run_id: &str,
     effect_id: &str,
 ) -> EgressAskState {
@@ -3694,10 +3716,10 @@ fn egress_ask_state(
         .get("decision_scope")
         .and_then(Json::as_str)
         .unwrap_or("once");
-    let scope = hh_monitor::decision::DecisionScope::parse(scope_tag)
-        .unwrap_or(hh_monitor::decision::DecisionScope::Once);
+    let scope = hharness_monitor::decision::DecisionScope::parse(scope_tag)
+        .unwrap_or(hharness_monitor::decision::DecisionScope::Once);
     let choice = if decision == "deny" {
-        hh_monitor::approval::ResponseChoice::Deny {
+        hharness_monitor::approval::ResponseChoice::Deny {
             reason: decided
                 .payload
                 .get("reason")
@@ -3705,21 +3727,23 @@ fn egress_ask_state(
                 .unwrap_or("denied")
                 .to_string(),
         }
-    } else if scope == hh_monitor::decision::DecisionScope::Once {
-        hh_monitor::approval::ResponseChoice::AllowOnce
+    } else if scope == hharness_monitor::decision::DecisionScope::Once {
+        hharness_monitor::approval::ResponseChoice::AllowOnce
     } else {
         // `session`/`persisted` — a lease grant; `endorse_gate`'s
         // `amend(AddEgressAllow)` runs at the lease's scope bound.
-        let lease_scope = if scope == hh_monitor::decision::DecisionScope::Session {
-            hh_provenance::PersistenceScope::Run
+        let lease_scope = if scope == hharness_monitor::decision::DecisionScope::Session {
+            hharness_provenance::PersistenceScope::Run
         } else {
-            hh_provenance::PersistenceScope::Session
+            hharness_provenance::PersistenceScope::Session
         };
-        hh_monitor::approval::ResponseChoice::AllowLease(hh_monitor::approval::LeaseSpec {
-            pattern: None,
-            scope: lease_scope,
-            max_uses: None,
-        })
+        hharness_monitor::approval::ResponseChoice::AllowLease(
+            hharness_monitor::approval::LeaseSpec {
+                pattern: None,
+                scope: lease_scope,
+                max_uses: None,
+            },
+        )
     };
     let subject_ref = decided
         .payload
@@ -3735,15 +3759,15 @@ fn egress_ask_state(
         store.now_ms(),
     );
     EgressAskState::Decided {
-        response: Box::new(hh_monitor::approval::ApprovalResponse {
+        response: Box::new(hharness_monitor::approval::ApprovalResponse {
             permission_id,
             choice,
             scope,
             max_uses: None,
             justification: None,
-            decided_by: hh_monitor::approval::EndorserRef::Human {
+            decided_by: hharness_monitor::approval::EndorserRef::Human {
                 subject_ref,
-                authority: hh_provenance::AuthorityClass::Principal,
+                authority: hharness_provenance::AuthorityClass::Principal,
             },
             decided_at: store.now_ms(),
         }),
@@ -3865,7 +3889,7 @@ fn collect_secret_sentinels(j: &Json) -> Vec<String> {
                 for w in
                     s.split(|c: char| !(c.is_alphanumeric() || c == ':' || c == '_' || c == '-'))
                 {
-                    if hh_secrets::Placeholder::is_placeholder(w) {
+                    if hharness_secrets::Placeholder::is_placeholder(w) {
                         out.insert(w.to_string());
                     }
                 }
@@ -3884,9 +3908,9 @@ fn collect_secret_sentinels(j: &Json) -> Vec<String> {
 /// dialect (ADR-0111 D1: built-ins are `hir/kernel/<check>` nodes so they
 /// appear in `lcd_report.conditioned_rules` and are ablatable). The version is
 /// an `inputs_digest` input (AC-R-2.7.1-4's purity reads it).
-fn local_checks_ref() -> hh_identity::refs::VersionedRef {
-    hh_identity::refs::VersionedRef::pinned(
-        hh_identity::kinds::RecordKind::Validator,
+fn local_checks_ref() -> hharness_identity::refs::VersionedRef {
+    hharness_identity::refs::VersionedRef::pinned(
+        hharness_identity::kinds::RecordKind::Validator,
         "hir/kernel/local_checks@1",
         ProvenanceRecord::kernel("hir/kernel/local_checks", 0),
     )
@@ -3939,7 +3963,7 @@ fn terminal_item(
 fn redact_item(
     item: &mut CaptureItem,
     detectors: &DetectorSet,
-) -> Vec<hh_secrets::redact::DetectorKind> {
+) -> Vec<hharness_secrets::redact::DetectorKind> {
     let mut kinds = Vec::new();
     if let CaptureKind::OutputChunk { data, .. } = &mut item.kind {
         let (masked, hits) = redact(data, detectors);
@@ -3974,11 +3998,11 @@ fn check_state_preconditions(
             // `network` — the environment admits no egress at this tier
             // (R-NONET): a declared reachability precondition is
             // unverifiable ⇒ violated (fail-closed).
-            hh_hir::kinds::PreconditionDomain::Network => return Err("network"),
+            hharness_hir::kinds::PreconditionDomain::Network => return Err("network"),
             // `filesystem` — every declared workspace/writable root must
             // exist (the attach-time admission proved scope; `prepare`
             // re-checks presence — a root that vanished since is `stale`).
-            hh_hir::kinds::PreconditionDomain::Filesystem => {
+            hharness_hir::kinds::PreconditionDomain::Filesystem => {
                 let missing = handle
                     .roots
                     .workspace_roots
@@ -3991,19 +4015,19 @@ fn check_state_preconditions(
             }
             // `credentials` — no secret provision is in the dispatch input:
             // a declared credential precondition is unverifiable ⇒ violated.
-            hh_hir::kinds::PreconditionDomain::Credentials => return Err("credentials"),
+            hharness_hir::kinds::PreconditionDomain::Credentials => return Err("credentials"),
             // `environment` — `handle.verify_environment()` ran at dispatch
             // entry (the handle would not be `ready` otherwise).
-            hh_hir::kinds::PreconditionDomain::Environment => {}
+            hharness_hir::kinds::PreconditionDomain::Environment => {}
             // `temporal` — the effective deadline must not already be past.
-            hh_hir::kinds::PreconditionDomain::Temporal => {
+            hharness_hir::kinds::PreconditionDomain::Temporal => {
                 if input.ladder.expired(now) {
                     return Err("temporal");
                 }
             }
             // `capability` — the depends-on edge is the `link` check point
             // (compiler); re-checking is bind's `capability_requires`.
-            hh_hir::kinds::PreconditionDomain::Capability => {}
+            hharness_hir::kinds::PreconditionDomain::Capability => {}
         }
     }
     Ok(())

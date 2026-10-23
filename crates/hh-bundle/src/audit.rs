@@ -8,7 +8,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::codec::Decoded;
 use crate::manifest::MemberStatus;

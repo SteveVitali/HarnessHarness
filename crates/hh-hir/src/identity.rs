@@ -1,5 +1,5 @@
 //! `identity` (§3.1.2/§3.1.7) — the two-coordinate identity of every member, under the one
-//! `idp/1` scheme (CC1: `hh_identity` is the only identity construction):
+//! `idp/1` scheme (CC1: `hharness_identity` is the only identity construction):
 //!
 //! - `semantic_id = H({kind ∥ semantic ∥ refs-by-semantic_id})` — the semantic projection
 //!   (`node_semantic_projection`); surface, provenance, `ext` and the
@@ -13,15 +13,15 @@
 //! edges (§3.1.1); an edge's projection is `{kind, from, to, fields(refs-by-semantic_id)}`
 //! under `RecordKind::HirEdge`'s semantic domain.
 
-use hh_identity::idp::{identify_bytes, idp_id};
-use hh_identity::RecordKind;
-use hh_wire::json::Json;
+use hharness_identity::idp::{identify_bytes, idp_id};
+use hharness_identity::RecordKind;
+use hharness_wire::json::Json;
 
 use crate::document::{DefinitionVersionRef, Edge, HirDocument, Node};
 use crate::schema;
 
 /// The semantic-projection domain of a record kind — the same construction
-/// `hh_identity::record` uses (`<domain_tag>#semantic`; N3 keeps the two coordinates in
+/// `hharness_identity::record` uses (`<domain_tag>#semantic`; N3 keeps the two coordinates in
 /// separate domains even over equal bytes).
 fn semantic_domain(kind: RecordKind) -> String {
     format!("{}#semantic", kind.domain_tag())
@@ -121,7 +121,7 @@ mod tests {
     use crate::kinds::EntityKind;
     use crate::records::{BudgetRecord, KindRecord};
     use crate::refs::Ref;
-    use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+    use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
     use std::collections::BTreeMap;
 
     fn budget_node() -> Node {

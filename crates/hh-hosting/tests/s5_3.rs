@@ -16,17 +16,17 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
-use hh_hosting::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
+use hharness_hosting::{
     adapter_b_record, adapter_c_record, AdapterB, AdapterC, ContainerDriver, EndStateSnapshot,
     EventChannel, GenParamPolicy, HostedOrigin, InterceptTransport, LifterTable, LogLifter,
     Mediation, ADAPTER_B_ID, ADAPTER_C_ID,
 };
-use hh_ontology::debt::{DebtStatus, ExpiryKind};
-use hh_ontology::participant::HostingMechanism;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_wire::Json;
+use hharness_ontology::debt::{DebtStatus, ExpiryKind};
+use hharness_ontology::participant::HostingMechanism;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_wire::Json;
 
 fn debt(id: &str) -> AssumptionDebtRecord {
     let provenance = ProvenanceRecord::kernel("hh-hosting/test", 0);

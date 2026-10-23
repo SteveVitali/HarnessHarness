@@ -11,9 +11,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use hh_wire::json::{parse, Json};
-use hh_xcheck::check::{is_informational, self_check, verify_answers};
-use hh_xcheck::ARMS;
+use hharness_wire::json::{parse, Json};
+use hharness_xcheck::check::{is_informational, self_check, verify_answers};
+use hharness_xcheck::ARMS;
 
 fn bundle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/cross-impl")

@@ -1,5 +1,5 @@
 //! R3.2 acceptance — the remaining DF-S2.3-1 producer legs that live
-//! inside `hh-ledger` itself (BL-44):
+//! inside `hharness-ledger` itself (BL-44):
 //!
 //! - **R-2.4.3 `resume_set`** — the §5c.3 materialized view is a pure
 //!   fold over the durable `context.memory.written`/`invalidated`
@@ -18,15 +18,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::goal::ContinueCarried;
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::views::ViewKind;
-use hh_ledger::wakeup::{Coalesce, DeliveryMode, Trigger, WakeupPolicy};
-use hh_ledger::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::goal::ContinueCarried;
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::views::ViewKind;
+use hharness_ledger::wakeup::{Coalesce, DeliveryMode, Trigger, WakeupPolicy};
+use hharness_ledger::LedgerError;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -76,7 +76,10 @@ fn kernel_row(id: &str, class: &str, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -240,7 +243,7 @@ fn r3_2_resume_set_is_restart_stable() {
 /// `continue_goal` records the derived set verbatim — the producer leg's
 /// ledger-side record: `carried.resume_set_heads` is the new activation
 /// manifest's durable member (the derivation itself lives at the
-/// boundary — `hh-embed`'s `continue_goal`; the ledger records what it
+/// boundary — `hharness-embed`'s `continue_goal`; the ledger records what it
 /// is handed).
 #[test]
 fn r3_2_continue_goal_records_carried_resume_set() {

@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::idp_id;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_identity::idp::idp_id;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::vocab::{AdmissionMode, EvidenceClass, EvidenceKind, Freshness, Grounding, Integrity};
 

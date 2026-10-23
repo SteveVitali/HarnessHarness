@@ -9,24 +9,26 @@
 //!   `text_authority = external`, `allowed_capabilities = ∅` (claims, never
 //!   grants) and the `ProcedureProfile/1` ext block.
 //! - **AC-R-2.4.5-3** — render purity: a body carrying the declared exec
-//!   marker lifts faithfully but fails `hh_hir::validate` with
+//!   marker lifts faithfully but fails `hharness_hir::validate` with
 //!   `RenderTimeExecution` (the lift is honest; the gate refuses).
 
 use std::collections::BTreeMap;
 
-use hh_hir::errors::HirError;
-use hh_hir::kinds::EntityKind;
-use hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY;
-use hh_hir::records::{KindRecord, ProcedureStep};
-use hh_registry::extension::{ExtensionKind, ExtensionRecord, ExtensionTrustRecord, SourceLocator};
-use hh_registry::skill::{lift_skill, LiftError, SkillFile, SkillTree};
-use hh_wire::json::Json;
+use hharness_hir::errors::HirError;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY;
+use hharness_hir::records::{KindRecord, ProcedureStep};
+use hharness_registry::extension::{
+    ExtensionKind, ExtensionRecord, ExtensionTrustRecord, SourceLocator,
+};
+use hharness_registry::skill::{lift_skill, LiftError, SkillFile, SkillTree};
+use hharness_wire::json::Json;
 
 fn skill_ext(name: &str) -> ExtensionRecord {
     ExtensionRecord {
         kind: ExtensionKind::Skill,
         name: name.into(),
-        content: hh_identity::idp::address(b"skill-tree", "application/octet-stream"),
+        content: hharness_identity::idp::address(b"skill-tree", "application/octet-stream"),
         manifest: Json::Null,
         contributes: vec![],
         locator: SourceLocator {
@@ -36,8 +38,10 @@ fn skill_ext(name: &str) -> ExtensionRecord {
             resolved: Some("sha256:pin".into()),
             fetched_at: Some(1),
         },
-        trust: ExtensionTrustRecord::unresolved_default(hh_provenance::PersistenceScope::Project),
-        provenance: hh_provenance::ProvenanceRecord::kernel("test", 0),
+        trust: ExtensionTrustRecord::unresolved_default(
+            hharness_provenance::PersistenceScope::Project,
+        ),
+        provenance: hharness_provenance::ProvenanceRecord::kernel("test", 0),
         ext: BTreeMap::new(),
     }
 }
@@ -65,7 +69,7 @@ fn demo_tree() -> SkillTree {
             media_type: "text/markdown".into(),
         }],
         assets: vec![],
-        triggers: vec![hh_registry::skill::SkillTrigger::PathGlob {
+        triggers: vec![hharness_registry::skill::SkillTrigger::PathGlob {
             pattern: "src/**".into(),
         }],
         tree_path: Some("skills/demo".into()),
@@ -101,7 +105,7 @@ fn ac_r_2_4_5_1_lift_produces_a_valid_procedure_hir() {
     assert!(iface
         .effects
         .iter()
-        .any(|e| e.domain == hh_hir::kinds::EffectDomain::Exec));
+        .any(|e| e.domain == hharness_hir::kinds::EffectDomain::Exec));
     assert_eq!(iface.target, "subprocess_confined");
 
     // references/* land as content-addressed Artifacts produced_by the procedure.
@@ -110,16 +114,18 @@ fn ac_r_2_4_5_1_lift_produces_a_valid_procedure_hir() {
 
     // The profile parses: typed preconditions (env_requires + path_glob)
     // and the source back-reference are present.
-    let profile = hh_hir::procedure::ProcedureProfile::from_node(p)
+    let profile = hharness_hir::procedure::ProcedureProfile::from_node(p)
         .unwrap()
         .expect("the lift always writes a profile");
     assert_eq!(profile.source_extension_ref.as_deref(), Some("local/demo"));
-    let pre = hh_hir::procedure::parse_preconditions(&rec.preconditions, "pre").unwrap();
+    let pre = hharness_hir::procedure::parse_preconditions(&rec.preconditions, "pre").unwrap();
     assert_eq!(pre.len(), 2, "path_glob + env_requires");
 
-    // The lifted procedure validates under `hh_hir::validate` inside a doc.
-    let mut doc =
-        hh_hir::document::HirDocument::new(hh_hir::refs::Ref::selected(p.semantic_id(), "latest"));
+    // The lifted procedure validates under `hharness_hir::validate` inside a doc.
+    let mut doc = hharness_hir::document::HirDocument::new(hharness_hir::refs::Ref::selected(
+        p.semantic_id(),
+        "latest",
+    ));
     doc.nodes.push(p.clone());
     for a in &lift.artifacts {
         doc.nodes.push(a.clone());
@@ -128,7 +134,7 @@ fn ac_r_2_4_5_1_lift_produces_a_valid_procedure_hir() {
     // claims are never grants (the `exec` effect is `EffectUncovered` until
     // an `authorizes` edge lands at seal) and handler completeness is the
     // author's job. Anything else would be a lift bug.
-    match hh_hir::validate::validate(&doc) {
+    match hharness_hir::validate::validate(&doc) {
         Ok(_) => {}
         Err(es) => {
             for e in &es {
@@ -173,7 +179,7 @@ fn ac_r_2_4_5_3_render_exec_marker_survives_lift_and_fails_validate() {
     tree.body = "run !`evil` inline".into();
     tree.scripts.clear();
     let lift = lift_skill(&skill_ext("local/evil"), &tree, 7).unwrap();
-    let mut doc = hh_hir::document::HirDocument::new(hh_hir::refs::Ref::selected(
+    let mut doc = hharness_hir::document::HirDocument::new(hharness_hir::refs::Ref::selected(
         lift.procedure.semantic_id(),
         "latest",
     ));
@@ -189,7 +195,7 @@ fn ac_r_2_4_5_1_text_authority_caps_at_external() {
     // A trust record minted above external caps at lift — re-endorsement is
     // a `seal`-time act (R-TEXT), never the lift's.
     let mut ext = skill_ext("local/capped");
-    ext.trust.text_authority = hh_provenance::AuthorityClass::Principal;
+    ext.trust.text_authority = hharness_provenance::AuthorityClass::Principal;
     let lift = lift_skill(&ext, &demo_tree(), 7).unwrap();
     assert!(lift
         .loss
@@ -198,14 +204,14 @@ fn ac_r_2_4_5_1_text_authority_caps_at_external() {
         .any(|n| n.contains("capped at external")));
 }
 
-use hh_hir::validate;
+use hharness_hir::validate;
 
 // ── AC-R-2.4.5-7: export round trip ──────────────────────────────────────────
 // `lift(export(P, skill_tree)) ∪ loss_report = P` — the loss report lists at
 // least `preconditions`, `expected_evidence`, `tests`, `handlers`, `outputs`
 // as `no_slot` (§5c.5 row 7; ADR-0086).
 
-use hh_registry::skill::{export_skill, ExportError};
+use hharness_registry::skill::{export_skill, ExportError};
 
 #[test]
 fn ac_r_2_4_5_7_export_lift_round_trip() {
@@ -218,7 +224,7 @@ fn ac_r_2_4_5_7_export_lift_round_trip() {
     // The blob resolver — the caller's content store, keyed by bytes_hash.
     let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     for f in demo_tree().scripts.iter() {
-        let addr = hh_identity::idp::address(&f.bytes, f.media_type.clone());
+        let addr = hharness_identity::idp::address(&f.bytes, f.media_type.clone());
         blobs.insert(addr.id(), f.bytes.clone());
     }
     let resolve = |h: &str| blobs.get(h).cloned();
@@ -280,7 +286,7 @@ fn ac_r_2_4_5_7_export_declares_losses_never_drops() {
         unreachable!()
     };
     rec.steps.push(ProcedureStep::Invoke {
-        tool: hh_hir::refs::Ref::selected("test:tool", "latest"),
+        tool: hharness_hir::refs::Ref::selected("test:tool", "latest"),
         args: Json::Null,
     });
     rec.preconditions = Json::Arr(vec![Json::obj([("kind", Json::str("env_requires"))])]);
@@ -298,25 +304,25 @@ fn ac_r_2_4_5_7_export_declares_losses_never_drops() {
 
 #[test]
 fn ac_r_2_4_5_7_export_refuses_non_procedure() {
-    let not_proc = hh_hir::document::Node::new(
+    let not_proc = hharness_hir::document::Node::new(
         EntityKind::Goal,
-        KindRecord::Goal(hh_hir::records::GoalRecord {
-            statement: hh_hir::leaves::Text::new(
+        KindRecord::Goal(hharness_hir::records::GoalRecord {
+            statement: hharness_hir::leaves::Text::new(
                 "g",
                 "test",
-                hh_provenance::ProvenanceRecord::kernel("test", 0),
+                hharness_provenance::ProvenanceRecord::kernel("test", 0),
             ),
             success_criteria: vec![],
-            unverifiable_reason: Some(hh_hir::leaves::Text::new(
+            unverifiable_reason: Some(hharness_hir::leaves::Text::new(
                 "unverifiable",
                 "test",
-                hh_provenance::ProvenanceRecord::kernel("test", 0),
+                hharness_provenance::ProvenanceRecord::kernel("test", 0),
             )),
-            budget: hh_hir::refs::Ref::selected("test:budget", "latest"),
-            origin: hh_hir::records::GoalOrigin::Human,
+            budget: hharness_hir::refs::Ref::selected("test:budget", "latest"),
+            origin: hharness_hir::records::GoalOrigin::Human,
             parent: None,
         }),
-        hh_provenance::ProvenanceRecord::kernel("test", 0),
+        hharness_provenance::ProvenanceRecord::kernel("test", 0),
     );
     assert!(matches!(
         export_skill(&not_proc, &|_| None),

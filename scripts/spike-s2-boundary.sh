@@ -11,7 +11,7 @@ SHEET="$ROOT/docs/build/reports/S0.1-boundary-spike.md"
 mkdir -p "$(dirname "$SHEET")"
 
 echo "spike: building release kernel + codegen…"
-cargo build -q --release -p hh-kernel -p hh-codegen
+cargo build -q --release -p hharness-kernel -p hharness-codegen
 
 KERNEL="$ROOT/target/release/hh-kernel"
 CODEGEN="$ROOT/target/release/hh-codegen"

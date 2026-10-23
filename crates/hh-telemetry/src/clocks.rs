@@ -62,11 +62,11 @@ pub const DEFAULT_CLOCK_TOLERANCE_MS: i64 = 5;
 
 /// The manifest's `clock_tolerance_ms` — `extra["clock_tolerance_ms"]` when the
 /// manifest declares one, else [`DEFAULT_CLOCK_TOLERANCE_MS`].
-pub fn clock_tolerance(manifest: &hh_ledger::manifest::RunManifest) -> i64 {
+pub fn clock_tolerance(manifest: &hharness_ledger::manifest::RunManifest) -> i64 {
     manifest
         .extra
         .get("clock_tolerance_ms")
-        .and_then(hh_wire::json::Json::as_int)
+        .and_then(hharness_wire::json::Json::as_int)
         .unwrap_or(DEFAULT_CLOCK_TOLERANCE_MS)
 }
 

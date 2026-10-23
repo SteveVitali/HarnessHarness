@@ -12,7 +12,7 @@
 # dedup store + `preserve_until(ttl)` on kernel loss — removability(0)
 # builds it absent).
 [package]
-name = "hh-helper"
+name = "hharness-helper"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -34,6 +34,6 @@ default = ["tier-c1"]
 tier-c1 = []
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-containment = { path = "../hh-containment" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-containment = { path = "../hh-containment" }

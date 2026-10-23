@@ -7,7 +7,7 @@
 //! Kinds at C0/Stage-3 (`AnalysisSpec.kind`):
 //! - `summarize` — A1: one `ConfigurationSummary` per selected
 //!   configuration (per-stratum cells; strata are never silently pooled);
-//! - `compare` — A2: `hh_eval::compare::compare` between the `arm_a` /
+//! - `compare` — A2: `hharness_eval::compare::compare` between the `arm_a` /
 //!   `arm_b` named in `query.filters`;
 //! - `interaction` — A3 `contrast`: the default difference-of-differences
 //!   over the two arm pairs named `filters.contrast.{pair_a,pair_b}`;
@@ -40,21 +40,21 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::matchspec::ArmSpec;
-use hh_eval::benefits;
-use hh_eval::compare::{compare, contrast, CompareError, CompareInput, CompareOutcome};
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{EvalRun, SuiteContext, TaskContext};
-use hh_eval::scorecard::render_cell;
-use hh_eval::stats;
-use hh_ledger::manifest::RunManifest;
-use hh_ontology::compliance::{MetricDeclaration, NaReason};
-use hh_ontology::eval::{Design, MetricValueKind, PreRegistration};
-use hh_results::row::ResultsRow;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::Json;
+use hharness_budget::matchspec::ArmSpec;
+use hharness_eval::benefits;
+use hharness_eval::compare::{compare, contrast, CompareError, CompareInput, CompareOutcome};
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{EvalRun, SuiteContext, TaskContext};
+use hharness_eval::scorecard::render_cell;
+use hharness_eval::stats;
+use hharness_ledger::manifest::RunManifest;
+use hharness_ontology::compliance::{MetricDeclaration, NaReason};
+use hharness_ontology::eval::{Design, MetricValueKind, PreRegistration};
+use hharness_results::row::ResultsRow;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::Json;
 
-use hh_lab::analysis::{AnalysisSpec, ComparisonReport, ConfigurationSummary};
+use hharness_lab::analysis::{AnalysisSpec, ComparisonReport, ConfigurationSummary};
 
 use crate::error::AnalysisError;
 use crate::multiplicity::apply_multiplicity;
@@ -77,7 +77,7 @@ pub struct AnalysisInput<'a> {
     /// Required for `compare`/`interaction`/`transfer`/`equivalence`.
     pub design: Option<&'a Design>,
     /// `(arm_id, ArmSpec)` pairs — the resolved match inputs
-    /// (`hh_budget::matchspec::ArmSpec`: `eval_budget`/`search_budget`
+    /// (`hharness_budget::matchspec::ArmSpec`: `eval_budget`/`search_budget`
     /// bodies + `match_spec` + enforcement), keyed by the experiment's
     /// arm ids.
     pub arm_specs: &'a [(String, ArmSpec)],
@@ -207,7 +207,7 @@ pub fn project_runs(
 /// (§6.4 A1's output list; carried on the report body, never dropped).
 fn cell_detail(
     decl: &MetricDeclaration,
-    cell: &hh_lab::analysis::MetricCell,
+    cell: &hharness_lab::analysis::MetricCell,
     stratum: &str,
     sruns: &[&EvalRun],
 ) -> Json {
@@ -228,7 +228,7 @@ fn cell_detail(
         let mut vals = Vec::new();
         for r in truns {
             n += 1;
-            if let Some(v) = hh_eval::scorecard::run_numeric(decl, r) {
+            if let Some(v) = hharness_eval::scorecard::run_numeric(decl, r) {
                 vals.push(v);
                 if v > 0 {
                     c += 1;
@@ -236,17 +236,23 @@ fn cell_detail(
             }
         }
         let task_value = match decl.replicate_reducer {
-            hh_ontology::eval::ReplicateReducer::PassK(k) => hh_eval::stats::pass_k(c, n, k as u64),
-            hh_ontology::eval::ReplicateReducer::PassAt(k) => {
-                hh_eval::stats::pass_at_k(c, n, k as u64)
+            hharness_ontology::eval::ReplicateReducer::PassK(k) => {
+                hharness_eval::stats::pass_k(c, n, k as u64)
             }
-            hh_ontology::eval::ReplicateReducer::Mean => hh_eval::stats::mean(&vals),
-            hh_ontology::eval::ReplicateReducer::Median => hh_eval::stats::median(&vals),
-            hh_ontology::eval::ReplicateReducer::Max => vals.iter().copied().max(),
-            hh_ontology::eval::ReplicateReducer::AtLeast(k) => {
+            hharness_ontology::eval::ReplicateReducer::PassAt(k) => {
+                hharness_eval::stats::pass_at_k(c, n, k as u64)
+            }
+            hharness_ontology::eval::ReplicateReducer::Mean => hharness_eval::stats::mean(&vals),
+            hharness_ontology::eval::ReplicateReducer::Median => {
+                hharness_eval::stats::median(&vals)
+            }
+            hharness_ontology::eval::ReplicateReducer::Max => vals.iter().copied().max(),
+            hharness_ontology::eval::ReplicateReducer::AtLeast(k) => {
                 Some(if c >= k as u64 { stats::PPM } else { 0 })
             }
-            hh_ontology::eval::ReplicateReducer::Collect => hh_eval::stats::median(&vals),
+            hharness_ontology::eval::ReplicateReducer::Collect => {
+                hharness_eval::stats::median(&vals)
+            }
         };
         if let Some(v) = task_value {
             task_values.push((task_id.to_string(), v));
@@ -266,7 +272,7 @@ fn cell_detail(
                     ("k", Json::Int(k as i64)),
                     (
                         "pass_k",
-                        hh_eval::stats::pass_k(c, n, k).map_or(
+                        hharness_eval::stats::pass_k(c, n, k).map_or(
                             Json::obj([("n/a", Json::str("estimator_undefined"))]),
                             Json::Int,
                         ),
@@ -313,7 +319,7 @@ fn cell_detail(
 
 /// A1 `summarize` — one `ConfigurationSummary` per selected
 /// configuration; per-stratum cells (strata never silently pooled —
-/// ADR-0157 D3); the metric cells reuse `hh_eval::scorecard::render_cell`
+/// ADR-0157 D3); the metric cells reuse `hharness_eval::scorecard::render_cell`
 /// (the one estimator implementation, CC1).
 fn run_summarize(
     spec: &AnalysisSpec,
@@ -420,16 +426,16 @@ fn compare_input<'i>(
         arm_specs: arms,
         varied_factor: varied,
         confidence_ppm: input.confidence_ppm,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: false,
         family_size: None,
         // The pair's comparison granularity (R2.16): a search-unknown arm is
         // admissible only under a product-level comparison (the report flags
         // `search_unknown`); all-known pairs run the strict form.
         granularity: if arms.iter().any(|a| a.search_budget.is_none()) {
-            hh_ontology::participant::Granularity::ProductLevel
+            hharness_ontology::participant::Granularity::ProductLevel
         } else {
-            hh_ontology::participant::Granularity::ConfigurationLevel
+            hharness_ontology::participant::Granularity::ConfigurationLevel
         },
     }
 }
@@ -624,18 +630,18 @@ pub fn analyze(
                 .iter()
                 .map(|a| arm_spec(input, a).cloned())
                 .collect::<Result<_, _>>()?;
-            hh_budget::matchspec::validate_match(&arms)
+            hharness_budget::matchspec::validate_match(&arms)
                 .map_err(CompareError::Match)
                 .map_err(AnalysisError::Compare)?;
             if arms[0].match_spec.as_ref().map(|s| s.mode)
-                == Some(hh_budget::matchspec::MatchMode::None)
+                == Some(hharness_budget::matchspec::MatchMode::None)
             {
                 // Belt-and-braces — validate_match already refuses.
                 return Err(AnalysisError::Compare(CompareError::Match(
-                    hh_budget::MatchError {
+                    hharness_budget::MatchError {
                         arm: Some(0),
-                        refusal: hh_budget::MatchRefusal::IncommensurableMatch {
-                            reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+                        refusal: hharness_budget::MatchRefusal::IncommensurableMatch {
+                            reason: hharness_budget::RefusalReason::ExploratoryNoMatch,
                             dimension: None,
                             enforceability: None,
                         },
@@ -646,7 +652,7 @@ pub fn analyze(
             // declaration set the frontier ran under (the arms' declared
             // specs, in declaration order — `validate_match` has already
             // enforced the comparable members' equality).
-            let match_spec_ref = hh_identity::idp::idp_id(
+            let match_spec_ref = hharness_identity::idp::idp_id(
                 "budget.match_spec",
                 Json::Arr(
                     arms.iter()
@@ -689,12 +695,13 @@ pub fn analyze(
             let varied = opt_filter_str(&filters, "varied_factor");
             let mut inp = compare_input(spec, input, &runs, &arms, &a, &b, varied);
             if let Some(k) = opt_filter_str(&filters, "benefit_kind") {
-                inp.benefit_kind = hh_lab::analysis::BenefitKind::parse(k).ok_or_else(|| {
-                    AnalysisError::BadSpec {
-                        member: "query.filters.benefit_kind".into(),
-                        detail: format!("unknown benefit_kind {k}"),
-                    }
-                })?;
+                inp.benefit_kind =
+                    hharness_lab::analysis::BenefitKind::parse(k).ok_or_else(|| {
+                        AnalysisError::BadSpec {
+                            member: "query.filters.benefit_kind".into(),
+                            detail: format!("unknown benefit_kind {k}"),
+                        }
+                    })?;
             }
             let out = compare(&inp)?;
             for (i, r) in out.reports.iter().enumerate() {
@@ -940,7 +947,7 @@ pub fn analyze(
                 None
             };
             let budget_allocation_ref = allocation.as_ref().map(|a| {
-                hh_identity::idp_id(
+                hharness_identity::idp_id(
                     "attribution.budget_allocation",
                     a.to_canonical_string().as_bytes(),
                 )
@@ -1210,7 +1217,7 @@ pub fn analyze(
                     arms.first()
                         .and_then(|s| s.match_spec.as_ref())
                         .map(|m| {
-                            Json::str(hh_identity::idp_id(
+                            Json::str(hharness_identity::idp_id(
                                 "budget.match_spec",
                                 m.to_json().to_canonical_string().as_bytes(),
                             ))
@@ -1331,7 +1338,7 @@ pub fn analyze(
             // member (AC-R-2.9.7-11: deterministic reruns mint the same
             // report and the same id).
             if let Json::Obj(m) = &mut report {
-                let id = hh_identity::idp_id(
+                let id = hharness_identity::idp_id(
                     "attribution.report",
                     Json::Obj(m.clone()).to_canonical_string().as_bytes(),
                 );
@@ -1498,13 +1505,13 @@ pub fn analyze(
                 }
             }
             if distinct.len() > 1 {
-                hh_budget::matchspec::validate_match(&distinct)
+                hharness_budget::matchspec::validate_match(&distinct)
                     .map_err(CompareError::Match)
                     .map_err(AnalysisError::Compare)?;
             }
             let match_spec_ref = distinct.first().and_then(|a| {
                 a.match_spec.as_ref().map(|m| {
-                    hh_identity::idp_id(
+                    hharness_identity::idp_id(
                         "budget.match_spec",
                         m.to_json().to_canonical_string().as_bytes(),
                     )
@@ -1665,7 +1672,7 @@ fn run_transfer(
     let mut merged = CompareOutcome {
         reports: Vec::new(),
         per_task: Vec::new(),
-        deviation: hh_eval::compare::DeviationReport::default(),
+        deviation: hharness_eval::compare::DeviationReport::default(),
         outcome_counts: Default::default(),
     };
     let mut levels = Vec::new();

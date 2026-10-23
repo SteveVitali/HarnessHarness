@@ -1,4 +1,4 @@
-//! `hh-results` integration tests — the S3.4b results store over a real
+//! `hharness-results` integration tests — the S3.4b results store over a real
 //! `Store` + `LabDocs` + `ExperimentEngine` (spec §6.5; AC-R-2.10.5-
 //! {1,2,3,5,6,7,9,12} + the typed refusal set). The rig mirrors
 //! `hh-experiment/tests/engine.rs`: unique `HH_*` temp roots, a shared
@@ -8,40 +8,40 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey, MatchSpec};
-use hh_bundle::manifest::ReproLevel;
-use hh_experiment::docs::LabDocs;
-use hh_experiment::engine::{EngineContext, ExperimentEngine, NextVerdict};
-use hh_identity::idp::idp_id;
-use hh_lab::expand::{ArmConfiguration, ExpandTask};
-use hh_lab::experiment::{
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey, MatchSpec};
+use hharness_bundle::manifest::ReproLevel;
+use hharness_experiment::docs::LabDocs;
+use hharness_experiment::engine::{EngineContext, ExperimentEngine, NextVerdict};
+use hharness_identity::idp::idp_id;
+use hharness_lab::expand::{ArmConfiguration, ExpandTask};
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentKind, ExperimentSpec, FactorSpec,
     LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy, SuiteBinding, ValidationStrategy,
 };
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{Clock, ManualClock};
-use hh_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::compliance::Detector;
-use hh_ontology::config::Ref;
-use hh_ontology::control::StopReason;
-use hh_ontology::eval::{
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{Clock, ManualClock};
+use hharness_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::compliance::Detector;
+use hharness_ontology::config::Ref;
+use hharness_ontology::control::StopReason;
+use hharness_ontology::eval::{
     Design, DesignKind, FactorDeclaration, FactorLevel, MetricValue, MetricValueKind, Pairing,
     PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::ProvenanceRecord;
-use hh_results::audit::{verify_citation, AuditRef, CitationVerdict};
-use hh_results::catalogue::BundleStatus;
-use hh_results::error::ResultsError;
-use hh_results::leaderboard::LeaderboardDefinition;
-use hh_results::row::ResultsRow;
-use hh_results::scoring::{OverlayRef, ScoringContext};
-use hh_results::store::{ResultsStore, VerifyVerdict};
-use hh_results::version::DerivedReason;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::json::Json;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::ProvenanceRecord;
+use hharness_results::audit::{verify_citation, AuditRef, CitationVerdict};
+use hharness_results::catalogue::BundleStatus;
+use hharness_results::error::ResultsError;
+use hharness_results::leaderboard::LeaderboardDefinition;
+use hharness_results::row::ResultsRow;
+use hharness_results::scoring::{OverlayRef, ScoringContext};
+use hharness_results::store::{ResultsStore, VerifyVerdict};
+use hharness_results::version::DerivedReason;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::json::Json;
 
 // ── fixture plumbing ────────────────────────────────────────────────────────
 
@@ -67,8 +67,10 @@ fn pinned(tag: &str) -> String {
 /// A minimal `run_kind = experiment` manifest — `minimal` seeds the
 /// agent-only configuration cells; non-agent runs must not carry them
 /// (ADR-0183 §C), or `open_run` refuses with `ManifestInvalid`.
-fn experiment_manifest() -> hh_ledger::manifest::RunManifest {
-    let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Experiment);
+fn experiment_manifest() -> hharness_ledger::manifest::RunManifest {
+    let mut m = hharness_ledger::manifest::RunManifest::minimal(
+        hharness_ledger::manifest::RunKind::Experiment,
+    );
     m.configuration_id = None;
     m.configuration_version_id = None;
     m
@@ -150,7 +152,7 @@ fn design() -> Design {
         kind: DesignKind::Paired,
         factors: vec![FactorDeclaration {
             name: "compaction_strategy".to_string(),
-            kind: hh_ontology::FactorKind::Harness,
+            kind: hharness_ontology::FactorKind::Harness,
             granularity: None,
             levels: vec![
                 FactorLevel {
@@ -193,8 +195,8 @@ fn spec(kind: ExperimentKind) -> ExperimentSpec {
         pre_registration: (kind != ExperimentKind::Exploratory).then(pre_registration),
         factors: vec![FactorSpec {
             name: "compaction_strategy".to_string(),
-            kind: hh_ontology::FactorKind::Harness,
-            granularity: Some(hh_ontology::participant::Granularity::ComponentLevel),
+            kind: hharness_ontology::FactorKind::Harness,
+            granularity: Some(hharness_ontology::participant::Granularity::ComponentLevel),
             role: None,
             levels: vec![
                 LevelSpec {
@@ -251,7 +253,7 @@ fn spec(kind: ExperimentKind) -> ExperimentSpec {
             error_classes_included: None,
             on_cancel: CancelPolicy::Replan,
         },
-        budgets: hh_lab::experiment::ExperimentBudgets {
+        budgets: hharness_lab::experiment::ExperimentBudgets {
             experiment: "pool".to_string(),
             instrument: "instr".to_string(),
         },
@@ -384,8 +386,9 @@ fn finish_subject(
 /// The launched subject run ids so far (the experiment view's source of
 /// truth — `run_launched` rows name them).
 fn launched_runs(rig: &Rig, experiment_run_id: &str) -> Vec<String> {
-    let view =
-        hh_experiment::view::ExperimentView::fold(rig.store.envelopes(experiment_run_id).unwrap());
+    let view = hharness_experiment::view::ExperimentView::fold(
+        rig.store.envelopes(experiment_run_id).unwrap(),
+    );
     let mut out = Vec::new();
     for plan in view.plans.values() {
         for a in &plan.attempts {
@@ -429,7 +432,7 @@ fn experiment_run_id(rig: &Rig) -> String {
         .find(|r| {
             rig.store
                 .manifest(r)
-                .map(|m| m.run_kind == hh_ledger::manifest::RunKind::Experiment)
+                .map(|m| m.run_kind == hharness_ledger::manifest::RunKind::Experiment)
                 .unwrap_or(false)
         })
         .unwrap()
@@ -459,7 +462,7 @@ fn drive(
                 let ticket = eng.claim(&run_plan_id, "driver").unwrap();
                 let launched = eng.launch(&ticket, "subject").unwrap();
                 drop(eng);
-                let arm_id = hh_experiment::view::ExperimentView::fold(
+                let arm_id = hharness_experiment::view::ExperimentView::fold(
                     rig.store.envelopes(&exp_run).unwrap(),
                 )
                 .plans
@@ -543,7 +546,7 @@ fn deposit_bundle_broken(rig: &mut Rig, subject_run: &str) -> String {
 /// (AC-R-2.10.5-8).
 fn deposit_bundle_restricted(rig: &mut Rig, subject_run: &str, readers: &[&str]) -> String {
     let bid = deposit_bundle_inner(rig, subject_run, ReproLevel::R0, false, readers);
-    hh_results::status::set_status(
+    hharness_results::status::set_status(
         &mut rig.store,
         &rig.results,
         subject_run,
@@ -610,9 +613,10 @@ fn deposit_bundle_inner(
         )
     });
     // Real ledger members — pages + tree exported from the live store.
-    let mut member_bytes: hh_bundle::export::MemberBytes = BTreeMap::new();
+    let mut member_bytes: hharness_bundle::export::MemberBytes = BTreeMap::new();
     let (export, roles) =
-        hh_bundle::export::build_ledger_export(&rig.store, subject_run, &mut member_bytes).unwrap();
+        hharness_bundle::export::build_ledger_export(&rig.store, subject_run, &mut member_bytes)
+            .unwrap();
     // `withhold_member` skips the tree's bytes — a `present` claim with
     // nothing behind it, S1's "claims present, carries no bytes" fail.
     let withheld = withhold_member
@@ -687,7 +691,7 @@ fn deposit_bundle_inner(
             // so the fixture projects it from the live store's manifest.
             Json::obj([(
                 "run_refs",
-                hh_bundle::runrefs::run_refs_index(&[(
+                hharness_bundle::runrefs::run_refs_index(&[(
                     subject_run,
                     rig.store.manifest(subject_run).unwrap(),
                 )]),
@@ -718,7 +722,7 @@ fn deposit_bundle_inner(
     // Reader sets are declared through `set_status` (the status book),
     // not the manifest — the param stays so call sites read the intent.
     let _ = readers;
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&manifest_doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&manifest_doc).unwrap();
     manifest.version_id = manifest.compute_id();
     rig.store
         .put_blob(
@@ -793,7 +797,10 @@ fn project_row_is_deterministic_and_refuses_typed() {
         .unwrap();
     assert_eq!(wall.value, MetricValueKind::Decimal(120));
     // The total metric list — every catalogue metric has a cell (R-ROW-3).
-    assert_eq!(a.cells.len(), hh_eval::catalogue::scorecard_metrics().len());
+    assert_eq!(
+        a.cells.len(),
+        hharness_eval::catalogue::scorecard_metrics().len()
+    );
     // The fixed key is the identity coordinate pair — no names anywhere
     // (R-ROW-2: spot-check the canonical form carries no `label` member).
     let j = a.to_json();
@@ -807,7 +814,7 @@ fn project_row_is_deterministic_and_refuses_typed() {
         .find(|id| {
             r.store
                 .manifest(id)
-                .map(|m| m.run_kind == hh_ledger::manifest::RunKind::Experiment)
+                .map(|m| m.run_kind == hharness_ledger::manifest::RunKind::Experiment)
                 .unwrap_or(false)
         })
         .unwrap();
@@ -1117,7 +1124,7 @@ fn reads_repeat_at_watermark_and_refuse_ahead() {
 
     // A query `at` the early watermark sees the early head row; a query
     // without `at` sees the head.
-    let mut spec = hh_results::query::QuerySpec::all();
+    let mut spec = hharness_results::query::QuerySpec::all();
     spec.at = Some(wm.clone());
     let page_at = r.results.query_rows(&r.store, &spec).unwrap();
     // `row2`'s watermark carries the overlay pin — `at` (row1's set) does
@@ -1126,7 +1133,7 @@ fn reads_repeat_at_watermark_and_refuse_ahead() {
     assert_eq!(page_at.rows[0].version_id, row1.version_id);
     let page_head = r
         .results
-        .query_rows(&r.store, &hh_results::query::QuerySpec::all())
+        .query_rows(&r.store, &hharness_results::query::QuerySpec::all())
         .unwrap();
     assert_eq!(page_head.rows.len(), 1);
     assert_eq!(page_head.rows[0].version_id, row2.version_id);
@@ -1137,7 +1144,7 @@ fn reads_repeat_at_watermark_and_refuse_ahead() {
     // `WatermarkAhead` — a pin beyond the durable head refuses.
     let mut ahead = WatermarkSet::new();
     ahead.pin(&launched.run_id, early_seq + 100);
-    let mut spec2 = hh_results::query::QuerySpec::all();
+    let mut spec2 = hharness_results::query::QuerySpec::all();
     spec2.at = Some(ahead);
     assert!(matches!(
         r.results.query_rows(&r.store, &spec2),
@@ -1146,7 +1153,7 @@ fn reads_repeat_at_watermark_and_refuse_ahead() {
     // A pin naming a run the store does not hold refuses too.
     let mut ghost = WatermarkSet::new();
     ghost.pin("run:ghost", 0);
-    let mut spec3 = hh_results::query::QuerySpec::all();
+    let mut spec3 = hharness_results::query::QuerySpec::all();
     spec3.at = Some(ghost);
     assert!(matches!(
         r.results.query_rows(&r.store, &spec3),
@@ -1271,7 +1278,8 @@ fn verify_row_detects_stale_and_corrupt() {
         VerifyVerdict::Ok
     );
     let report =
-        hh_results::verify::verify_row(&r.results, &r.store, Some(&r.docs), &v.version_id).unwrap();
+        hharness_results::verify::verify_row(&r.results, &r.store, Some(&r.docs), &v.version_id)
+            .unwrap();
     assert!(report.ok, "{}", report.to_json().to_canonical_string());
 
     // Corrupt the stored bytes — re-projection still yields the true
@@ -1288,7 +1296,8 @@ fn verify_row_detects_stale_and_corrupt() {
     }
     std::fs::write(&row_path, tampered.to_canonical_string()).unwrap();
     let report2 =
-        hh_results::verify::verify_row(&r.results, &r.store, Some(&r.docs), &v.version_id).unwrap();
+        hharness_results::verify::verify_row(&r.results, &r.store, Some(&r.docs), &v.version_id)
+            .unwrap();
     assert!(!report2.ok);
     assert!(report2.checks.iter().any(|c| !c.ok));
 
@@ -1366,7 +1375,7 @@ fn redacted_evidence_reports_missing_not_silent() {
     assert_eq!(
         verify_citation(&r.store, cite),
         CitationVerdict::Missing {
-            reason: hh_ledger::errors::MissingReason::Redacted
+            reason: hharness_ledger::errors::MissingReason::Redacted
         }
     );
 }
@@ -1425,7 +1434,7 @@ fn build_cells_reports_every_attempt_with_reasons() {
         .find(|id| {
             r2.store
                 .manifest(id)
-                .map(|m| m.run_kind == hh_ledger::manifest::RunKind::Experiment)
+                .map(|m| m.run_kind == hharness_ledger::manifest::RunKind::Experiment)
                 .unwrap_or(false)
         })
         .unwrap();
@@ -1683,13 +1692,13 @@ fn query_rows_filters_factors_paginates_and_distributes() {
     }
     let all = r
         .results
-        .query_rows(&r.store, &hh_results::query::QuerySpec::all())
+        .query_rows(&r.store, &hharness_results::query::QuerySpec::all())
         .unwrap();
     assert_eq!(all.rows.len(), 4);
 
     // Factor filters — every declared coordinate groups.
     let count = |field: &str, value: &str| {
-        let spec = hh_results::query::QuerySpec::all()
+        let spec = hharness_results::query::QuerySpec::all()
             .filter(field, value)
             .unwrap();
         r.results.query_rows(&r.store, &spec).unwrap().rows.len()
@@ -1720,17 +1729,17 @@ fn query_rows_filters_factors_paginates_and_distributes() {
     assert_eq!(count("cell_na:task_success", "class"), 0);
     // No name-keyed query exists — an undeclared field refuses typed.
     assert!(matches!(
-        hh_results::query::QuerySpec::all().filter("label", "x"),
+        hharness_results::query::QuerySpec::all().filter("label", "x"),
         Err(ResultsError::UnknownField { .. })
     ));
 
     // Pagination — `limit` + `cursor` pages the key-ordered set stably.
-    let mut page1 = hh_results::query::QuerySpec::all();
+    let mut page1 = hharness_results::query::QuerySpec::all();
     page1.limit = Some(3);
     let p1 = r.results.query_rows(&r.store, &page1).unwrap();
     assert_eq!(p1.rows.len(), 3);
     let cursor = p1.next_cursor.clone().expect("a second page exists");
-    let mut page2 = hh_results::query::QuerySpec::all();
+    let mut page2 = hharness_results::query::QuerySpec::all();
     page2.cursor = Some(cursor.clone());
     let p2 = r.results.query_rows(&r.store, &page2).unwrap();
     assert_eq!(p2.rows.len(), 1);
@@ -1747,7 +1756,7 @@ fn query_rows_filters_factors_paginates_and_distributes() {
         k.sort();
         k
     });
-    let mut bad_cursor = hh_results::query::QuerySpec::all();
+    let mut bad_cursor = hharness_results::query::QuerySpec::all();
     bad_cursor.cursor = Some(pinned("no.such.key"));
     assert!(matches!(
         r.results.query_rows(&r.store, &bad_cursor),
@@ -1787,9 +1796,10 @@ fn class_scoped_na_cells_render_and_cite() {
     let mut r = rig("class-na", 9_800);
     // A hosted run at events-only observability — the class/observability
     // gates render typed `n/a` cells, never fabricated values.
-    let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
-    m.participant_class = hh_ledger::manifest::ParticipantClass::Hosted;
-    m.observability_level = [hh_ledger::manifest::ObservabilityLevel::Events]
+    let mut m =
+        hharness_ledger::manifest::RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent);
+    m.participant_class = hharness_ledger::manifest::ParticipantClass::Hosted;
+    m.observability_level = [hharness_ledger::manifest::ObservabilityLevel::Events]
         .into_iter()
         .collect();
     let (rid, lease) = r.store.open_run(m, "hosted-fixture").unwrap();
@@ -1949,13 +1959,13 @@ fn analysis_record(
     pre_reg: bool,
     registered_ref: Option<&str>,
     post_amendment: bool,
-) -> hh_lab::analysis::AnalysisRecord {
-    let mut rec = hh_lab::analysis::AnalysisRecord::from_json(&Json::obj([
+) -> hharness_lab::analysis::AnalysisRecord {
+    let mut rec = hharness_lab::analysis::AnalysisRecord::from_json(&Json::obj([
         ("analysis_id", Json::str("pending")),
         ("spec_ref", Json::str("spec:analysis.test")),
         (
             "generated_from",
-            hh_lab::analysis::WatermarkSet::default().to_json(),
+            hharness_lab::analysis::WatermarkSet::default().to_json(),
         ),
         ("outputs", Json::Arr(vec![])),
         ("status", Json::str("final")),
@@ -1976,7 +1986,8 @@ fn analysis_record(
 /// A standalone agent run with a `wall_time_ms` metric + `finished` — the
 /// records-in producer path (bound to nothing on its own stream).
 fn foreign_finished_run(rig: &mut Rig, value: i64) -> String {
-    let m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+    let m =
+        hharness_ledger::manifest::RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent);
     let (rid, lease) = rig.store.open_run(m, "foreign-run").unwrap();
     finish_subject(
         &mut rig.store,
@@ -2004,12 +2015,12 @@ fn mint_foreign_launched(rig: &mut Rig, exp_run: &str, run_plan_id: &str, run_id
         &rig.store,
         exp_run,
         "measurement.experiment.run_launched",
-        hh_experiment::events::run_launched(
+        hharness_experiment::events::run_launched(
             run_plan_id,
             run_id,
             9,
             "budget:records-in",
-            &hh_experiment::events::LaunchStamp {
+            &hharness_experiment::events::LaunchStamp {
                 pool_consumed: &[],
                 participant_class: "native",
                 limits_enforced: "full",
@@ -2098,7 +2109,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
         .snapshot_leaderboard(&r.store, &r.docs, &def, None)
         .unwrap();
     assert_eq!(snap_a.entries.len(), 3);
-    let cfg_of = |snap: &hh_results::leaderboard::LeaderboardSnapshot, bid: &str| {
+    let cfg_of = |snap: &hharness_results::leaderboard::LeaderboardSnapshot, bid: &str| {
         snap.entries
             .iter()
             .find(|e| e.bundle_refs.iter().any(|b| b == bid))
@@ -2145,7 +2156,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
     // 2) Member revocation — the covering bundle retracts; the entry
     // stays listed under `member_revoked`, `bundle_refs` names the revoked
     // bundle (the record, never a removal).
-    hh_results::status::set_status(
+    hharness_results::status::set_status(
         &mut r.store,
         &r.results,
         &s_rev,
@@ -2357,7 +2368,8 @@ fn disclosure_summary_counts_and_marks_undisclosed() {
 
     // Two exclusions + three analyses (1 pre-registered) — the producer
     // contract's recorded surface, ahead of close.
-    let view_pre = hh_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
+    let view_pre =
+        hharness_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
     let plans: Vec<(String, String)> = view_pre
         .plans
         .iter()
@@ -2407,7 +2419,8 @@ fn disclosure_summary_counts_and_marks_undisclosed() {
     let foreign = foreign_finished_run(&mut r, 4_242);
     mint_foreign_launched(&mut r, &exp_run, &plans[2].0, &foreign);
 
-    let view = hh_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
+    let view =
+        hharness_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
     // One covering bundle per arm — arm:b's is restricted.
     let arm_run = |arm: &str| {
         view.plans
@@ -2429,7 +2442,7 @@ fn disclosure_summary_counts_and_marks_undisclosed() {
     let cat_entry = cat.entries.iter().find(|e| e.bundle_id == bids[1]).unwrap();
     assert_eq!(cat_entry.readers, vec!["ops-team".to_string()]);
 
-    let summary = hh_results::disclosure::disclosure_summary(&view, &s, &cat);
+    let summary = hharness_results::disclosure::disclosure_summary(&view, &s, &cat);
     assert_eq!(summary.arms_registered, 4);
     assert_eq!(summary.arms_published, 3);
     assert_eq!(summary.arms_restricted, 1);
@@ -2508,7 +2521,7 @@ fn export_rows_loss_report_and_native_round_trip() {
         .export_rows(
             &mut r.store,
             &rows,
-            hh_results::export::ExportTarget::ForeignLeaderboardSubmission,
+            hharness_results::export::ExportTarget::ForeignLeaderboardSubmission,
             &Json::obj([]),
         )
         .unwrap();
@@ -2542,7 +2555,9 @@ fn export_rows_loss_report_and_native_round_trip() {
     let bare_row = {
         // `foreign_finished_run` emits the metric; for the n/a arm mint a
         // second run with no metrics at all.
-        let m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        let m = hharness_ledger::manifest::RunManifest::minimal(
+            hharness_ledger::manifest::RunKind::Agent,
+        );
         let (rid, lease) = r.store.open_run(m, "bare-run").unwrap();
         finish_subject(
             &mut r.store,
@@ -2570,7 +2585,7 @@ fn export_rows_loss_report_and_native_round_trip() {
         .export_rows(
             &mut r.store,
             &[bare_row],
-            hh_results::export::ExportTarget::ForeignLeaderboardSubmission,
+            hharness_results::export::ExportTarget::ForeignLeaderboardSubmission,
             &Json::obj([]),
         )
         .unwrap();
@@ -2589,13 +2604,13 @@ fn export_rows_loss_report_and_native_round_trip() {
         .export_rows(
             &mut r.store,
             &rows,
-            hh_results::export::ExportTarget::LedgerNativeRows,
+            hharness_results::export::ExportTarget::LedgerNativeRows,
             &Json::obj([]),
         )
         .unwrap();
     assert!(native.loss_report.lossless);
     assert!(native.loss_report.entries.is_empty());
-    let mut round_tripped = hh_results::export::round_trip_native(&native.body).unwrap();
+    let mut round_tripped = hharness_results::export::round_trip_native(&native.body).unwrap();
     round_tripped.sort();
     let mut want: Vec<String> = rows.iter().map(|r| r.version_id.clone()).collect();
     want.sort();
@@ -2606,7 +2621,7 @@ fn export_rows_loss_report_and_native_round_trip() {
 
 #[test]
 fn subscribe_reports_committed_events_in_order() {
-    use hh_results::journal::{JournalFilter, JournalKind};
+    use hharness_results::journal::{JournalFilter, JournalKind};
     let mut r = rig("journal", 13_500);
     let sub_all = r.results.subscribe(JournalFilter { kinds: None });
     let sub_snap = r.results.subscribe(JournalFilter {
@@ -2768,7 +2783,7 @@ fn leaderboard_define_snapshot_verify_publish_and_pins() {
             )
             .unwrap_err();
         assert!(
-            matches!(err, hh_ledger::errors::LedgerError::Pinned { .. }),
+            matches!(err, hharness_ledger::errors::LedgerError::Pinned { .. }),
             "a published snapshot pin must refuse gc: {err:?}"
         );
     }
@@ -3098,8 +3113,8 @@ fn publish_reports_verifiable_by_per_reader_and_public_tier() {
     );
 }
 
-fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
-    hh_ledger::retention::RetentionPolicy {
+fn gc_policy(policy_ref: &str) -> hharness_ledger::retention::RetentionPolicy {
+    hharness_ledger::retention::RetentionPolicy {
         policy_ref: policy_ref.to_string(),
         blob_residency_ms: 0,
         bundle_retention_ms: 0,

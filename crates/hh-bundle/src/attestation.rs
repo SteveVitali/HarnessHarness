@@ -3,13 +3,13 @@
 //! instrument, issued_ms}`; when it carries `sig` the signature is the
 //! C0 `hmac-sha256` construction over the canonical unsigned statement
 //! — the same seam `security.audit.checkpoint` uses (`key_id` resolved
-//! through [`hh_ledger::audit::AuditKeyResolver`]; an unresolvable or
+//! through [`hharness_ledger::audit::AuditKeyResolver`]; an unresolvable or
 //! mismatched signature refuses `ProvenanceInvalid`, never passes —
 //! CC2/CC4).
 
-use hh_ledger::audit::{parse_sig, render_sig, AuditKeyResolver, CHECKPOINT_ALG};
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256;
+use hharness_ledger::audit::{parse_sig, render_sig, AuditKeyResolver, CHECKPOINT_ALG};
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256;
 
 use crate::codec::Decoded;
 use crate::error::BundleError;

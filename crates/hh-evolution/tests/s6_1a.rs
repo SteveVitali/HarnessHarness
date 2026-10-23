@@ -7,46 +7,46 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::matchspec::{MatchMode, MatchSpec};
-use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
-use hh_evolution::errors::{EvolutionError, Refusal};
-use hh_evolution::records::{
+use hharness_budget::matchspec::{MatchMode, MatchSpec};
+use hharness_evolution::campaign::{doc_kind, EvolutionCampaign};
+use hharness_evolution::errors::{EvolutionError, Refusal};
+use hharness_evolution::records::{
     AcceptanceItem, CandidateProposal, CorpusSpec, EvolutionAcceptanceReport,
     EvolutionCampaignSpec, FailureHypothesis, ItemStatus, PortabilityLabel, PredictedDelta,
     PredictedEffect, ScreenReport, SecurityInvarianceReport, SlotAllocation, StopRule, TransferRow,
 };
-use hh_evolution::state::{self, CandidateState};
-use hh_evolution::view::CampaignView;
-use hh_experiment::docs::LabDocs;
-use hh_hir::diff::{self, DiffDerivation, HirDiff};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::idp_id;
-use hh_lab::analysis::{
+use hharness_evolution::state::{self, CandidateState};
+use hharness_evolution::view::CampaignView;
+use hharness_experiment::docs::LabDocs;
+use hharness_hir::diff::{self, DiffDerivation, HirDiff};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::idp_id;
+use hharness_lab::analysis::{
     BenefitKind, BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity, OutcomeBounds,
     OutcomeBoundsVerdict, PairedEffect, ReportLabelKind, SignProfile, TailEffects, TestKind,
     TestRecord,
 };
-use hh_lab::bench::SplitAssignmentRecord;
-use hh_lab::experiment::{
+use hharness_lab::bench::SplitAssignmentRecord;
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_lab::model::{CompatibilityRecord, CompatibilityStatus};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::debt::ExpiryCondition;
-use hh_ontology::eval::{
+use hharness_lab::model::{CompatibilityRecord, CompatibilityStatus};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::debt::ExpiryCondition;
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorKind, IntervalMethod, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixture plumbing ────────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ fn agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
     )
 }
 
-/// The minimal valid base document (the hh-hir fixture's 4-node shape).
+/// The minimal valid base document (the hharness-hir fixture's 4-node shape).
 fn base_doc() -> HirDocument {
     let mut doc = HirDocument::new(sel("test:agent"));
     doc.nodes.push(rule_node(
@@ -382,7 +382,7 @@ fn human_seal() -> ProvenanceRecord {
     );
     // `authority = definition` is minted only at the seal/pin boundary —
     // the fixture pins it directly (the same fixture convention the
-    // hh-env tests use).
+    // hharness-env tests use).
     r.authority = AuthorityClass::Definition;
     r
 }
@@ -1034,7 +1034,7 @@ fn view_fold_is_deterministic() {
 
 #[test]
 fn retirement_batch_kind_parses_and_is_retirement() {
-    use hh_lab::experiment::ExperimentKind;
+    use hharness_lab::experiment::ExperimentKind;
     assert_eq!(
         ExperimentKind::parse("retirement_batch"),
         Some(ExperimentKind::RetirementBatch)
@@ -1050,15 +1050,15 @@ fn retirement_batch_kind_parses_and_is_retirement() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 13. Context — AC-R-2.4.5-9's `PromotionRefused` (the induced-procedure
-//     promotion gate; the hh-context half of this ticket).
+//     promotion gate; the hharness-context half of this ticket).
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn evolution_origin_promotion_refused_without_human_and_validity() {
-    use hh_context::lifecycle::{promote, LifecycleError};
-    use hh_context::memory::{MemoryDraft, MemoryStore, WriteContext};
-    use hh_context::vocab::{MemoryContent, MemoryKind};
-    use hh_provenance::label::Label;
+    use hharness_context::lifecycle::{promote, LifecycleError};
+    use hharness_context::memory::{MemoryDraft, MemoryStore, WriteContext};
+    use hharness_context::vocab::{MemoryContent, MemoryKind};
+    use hharness_provenance::label::Label;
 
     let mut store = MemoryStore::new("ms");
     let ctx = WriteContext {
@@ -1078,7 +1078,7 @@ fn evolution_origin_promotion_refused_without_human_and_validity() {
             MemoryDraft {
                 kind: MemoryKind::Fact,
                 subject_key: None,
-                content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
                     "induced",
                     "owner",
                     ProvenanceRecord::kernel("kernel:mem", 0),
@@ -1148,10 +1148,10 @@ fn candidate_diff_inverts_byte_identical() {
     let base = base_doc();
     let target = target_doc();
     let d = candidate_diff(&base, &target);
-    let t = hh_hir::diff::apply(&base, &d).unwrap();
-    let b = hh_hir::diff::apply(&t, &hh_hir::diff::invert(&d)).unwrap();
+    let t = hharness_hir::diff::apply(&base, &d).unwrap();
+    let b = hharness_hir::diff::apply(&t, &hharness_hir::diff::invert(&d)).unwrap();
     assert_eq!(b.canonical_bytes(), base.canonical_bytes());
-    hh_hir::validate::validate(&t).unwrap();
+    hharness_hir::validate::validate(&t).unwrap();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1175,7 +1175,7 @@ fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> ArmSpec {
             mode,
             ..MatchSpec::matched_cap(&[])
         }),
-        artifact_ref: hh_ontology::config::Ref::new("def:x", "sha256:ee55"),
+        artifact_ref: hharness_ontology::config::Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,
@@ -1405,7 +1405,7 @@ fn advance_to_sealed(
     docs.put_named(
         doc_kind::SEARCH_BUDGET,
         "budget:search",
-        &hh_ontology::eval::SearchBudgetRecord {
+        &hharness_ontology::eval::SearchBudgetRecord {
             rollouts: 4,
             model_calls: 4,
             tokens: 8_000,

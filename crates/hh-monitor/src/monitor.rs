@@ -16,15 +16,15 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_compiler::equiv::SurfaceBinding;
-use hh_compiler::plan::PinnedRef;
-use hh_hir::kinds::EffectClass;
-use hh_hir::kinds::EffectDomain;
-use hh_hir::records::ToolCapabilityRecord;
-use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::flow::{self, FlowContract, FlowInput, FlowVerdict};
-use hh_provenance::{AuthorityClass, Label, ProvenanceRecord, TaintTag};
-use hh_wire::json::Json;
+use hharness_compiler::equiv::SurfaceBinding;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::kinds::EffectClass;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::records::ToolCapabilityRecord;
+use hharness_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::flow::{self, FlowContract, FlowInput, FlowVerdict};
+use hharness_provenance::{AuthorityClass, Label, ProvenanceRecord, TaintTag};
+use hharness_wire::json::Json;
 
 use crate::approval::{self, ApprovalLease, ApprovalMode, ApprovalState, EscalationInput};
 use crate::args::{self, ArgError, CanonicalArgs};
@@ -33,7 +33,7 @@ use crate::decision::{CheckRecord, Decider, Decision, DecisionScope, DenyReason,
 use crate::handle::{HandleId, OriginBasis};
 use crate::policy::{Mode, PiContext, PiVerdict, PolicyTable};
 use crate::table::HandleTable;
-use hh_provenance::PersistenceScope;
+use hharness_provenance::PersistenceScope;
 
 /// `Proposal` — the `action.effect.intended` payload plus `args_provenance`
 /// and `self_report?` (§3). Every member is a canonical record — no `Text`,
@@ -66,10 +66,10 @@ pub struct Proposal {
     pub inputs: AssessmentInputs,
     /// For `spawn_process`/`Delegate` proposals: the requested child grants
     /// (step 6's operands — checked against the covering handle).
-    pub requested_grants: Vec<hh_hir::records::Grant>,
+    pub requested_grants: Vec<hharness_hir::records::Grant>,
     /// The recorded containment-floor verdict (§5g.4; ADR-0062 D3 — the
     /// `authorize` precondition). The kernel computes it through
-    /// `hh_containment` (`admit::floor_gate`) at resolve and stamps it on
+    /// `hharness_containment` (`admit::floor_gate`) at resolve and stamps it on
     /// the proposal like `inputs` — the monitor never evaluates
     /// containment itself; the operation edge is R-2.8.4 → R-2.8.1.
     pub containment: ContainmentGate,
@@ -85,7 +85,7 @@ pub struct Proposal {
     /// beyond the one proposal; the dispatcher stamps it on the re-issued
     /// `Proposal` and `authorize` carries it to the decided record,
     /// §5g.2 §3 `decided{remedy_taken?}`).
-    pub remedy_taken: Option<hh_provenance::flow::Remedy>,
+    pub remedy_taken: Option<hharness_provenance::flow::Remedy>,
     /// The decision's logical time (`at` — the seq the `time` constraint's
     /// bound compares against).
     pub at: u64,
@@ -104,7 +104,7 @@ pub struct FlowInputs {
     pub shape_endorsed: BTreeSet<String>,
     /// `project(run, effects, until_seq)` — the committed-effect projection
     /// the `committed`/`every_committed`/`count` atoms read.
-    pub committed: Vec<hh_provenance::flow::CommittedEffect>,
+    pub committed: Vec<hharness_provenance::flow::CommittedEffect>,
     /// Recorded deterministic detector verdicts — `"<validator_ref>:<param>"`.
     /// A `detector` atom on an unrecorded key is an `EvaluationError`, never
     /// `false`.
@@ -113,7 +113,7 @@ pub struct FlowInputs {
 
 /// `ContainmentGate` — the recorded containment-floor verdict `authorize`
 /// consumes (ADR-0062 D3; R-2.8.4). A recorded input like
-/// `AssessmentInputs` — produced by `hh_containment` from the effective
+/// `AssessmentInputs` — produced by `hharness_containment` from the effective
 /// policy + the attach `ContainmentReport` + the proposal's canonical
 /// arguments, never computed inside the monitor.
 #[derive(Debug, Clone, PartialEq)]
@@ -201,12 +201,12 @@ pub struct Monitor {
     /// The definition's `FlowPolicy` set (§5g.2 §2.3 `check_flow`'s
     /// `policies` input — the `HarnessRule{action: flow_policy}` rules
     /// issued at `authority ≥ definition`, validated by
-    /// [`hh_provenance::validate_flow_policy`] at monitor setup). Their
+    /// [`hharness_provenance::validate_flow_policy`] at monitor setup). Their
     /// rules evaluate in the flow stage **after** the capability's
     /// `FlowContract.rules` in the same tier order (all `deny` →
     /// `allow`/`declassify`/`sanitize` → fallthrough to Π). Empty = the
     /// contract's rules alone decide.
-    pub flow_policies: Vec<hh_provenance::flow_policy::FlowPolicy>,
+    pub flow_policies: Vec<hharness_provenance::flow_policy::FlowPolicy>,
     /// The sealed repeated-denial policy (`None` = no ceiling — a denial
     /// never auto-fires a fallback).
     pub denial_policy: Option<crate::approval::DenialPolicy>,
@@ -516,7 +516,7 @@ impl Monitor {
         holder: &str,
         domain: EffectDomain,
         canonical: &CanonicalArgs,
-    ) -> Vec<(HandleId, hh_hir::records::Grant)> {
+    ) -> Vec<(HandleId, hharness_hir::records::Grant)> {
         self.table
             .covering_domain(
                 holder,
@@ -562,7 +562,7 @@ impl Monitor {
             checks: {
                 let mut c = checks;
                 c.push(CheckRecord {
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     step,
                     outcome: "fail",
                     detail: reason.as_str().to_string(),
@@ -587,7 +587,7 @@ impl Monitor {
                 step,
                 outcome: "fail",
                 detail: reason.as_str().to_string(),
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             });
             KernelDecision {
                 effect_id: p.effect_id.clone(),
@@ -615,7 +615,7 @@ impl Monitor {
         match &p.containment {
             ContainmentGate::Unverified { group } => {
                 checks.push(CheckRecord {
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     step: 0,
                     outcome: "fail",
                     detail: format!("containment:unverified:{group}"),
@@ -631,7 +631,7 @@ impl Monitor {
             }
             ContainmentGate::Denied { detail } => {
                 checks.push(CheckRecord {
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     step: 0,
                     outcome: "fail",
                     detail: detail.clone(),
@@ -701,7 +701,7 @@ impl Monitor {
             }
         };
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 0,
             outcome: "pass",
             detail: "well_formed".to_string(),
@@ -709,7 +709,7 @@ impl Monitor {
 
         // Step 1 — authority of proposal: eff = min(authority(proposer),
         // context_label.authority); taint = taint(ctx) ∪ taint(args).
-        let ea = hh_provenance::effective_authority(
+        let ea = hharness_provenance::effective_authority(
             proposer_label,
             &p.context_label,
             &args_prov.label(),
@@ -717,7 +717,7 @@ impl Monitor {
         let eff = ea.authority;
         let taint = ea.taint;
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 1,
             outcome: "pass",
             detail: format!("eff={}", eff.as_str()),
@@ -788,7 +788,7 @@ impl Monitor {
             ));
         }
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 2,
             outcome: "pass",
             detail: format!("covers={}", covered.len()),
@@ -805,7 +805,7 @@ impl Monitor {
         );
         let risk = assess::apply_self_report(kernel, p.self_report);
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 3,
             outcome: "pass",
             detail: risk.to_string(),
@@ -837,7 +837,7 @@ impl Monitor {
                         step: 4,
                         outcome: "fail",
                         detail: format!("flow_contract_malformed:{}", e.detail),
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     });
                     return Ok(deny_rem(
                         checks,
@@ -912,7 +912,7 @@ impl Monitor {
                     step: 4,
                     outcome: "fail",
                     detail: format!("d_robust:{}", robust_fail.join(",")),
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 });
                 let remedies = flow::enumerate_remedies(
                     &p.effect_id,
@@ -941,7 +941,7 @@ impl Monitor {
                         step: 4,
                         outcome: "fail",
                         detail: "recipients_unresolvable".to_string(),
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     });
                     return Ok(deny_rem(
                         checks,
@@ -959,7 +959,7 @@ impl Monitor {
                 .attributes
                 .iter()
                 .chain(declared_attrs.iter().copied())
-                .any(|a| a.world == hh_hir::kinds::World::Open);
+                .any(|a| a.world == hharness_hir::kinds::World::Open);
             let memory_ge_project = matches!(
                 p.inputs.memory_scope,
                 Some(MemoryScope::Project) | Some(MemoryScope::User)
@@ -975,7 +975,7 @@ impl Monitor {
                 detectors: &p.flow.detectors,
                 capability: &p.capability_ref.semantic_id,
             };
-            let mut declassified_readers: Option<hh_provenance::ReaderSet> = None;
+            let mut declassified_readers: Option<hharness_provenance::ReaderSet> = None;
             match flow::check_flow(&combined_rules, &finput) {
                 Err(e) => {
                     checks.push(CheckRecord {
@@ -1060,14 +1060,14 @@ impl Monitor {
                         step: 4,
                         outcome: "pass",
                         detail: "reader_coverage".to_string(),
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     });
                 } else {
                     checks.push(CheckRecord {
                         step: 4,
                         outcome: "fail",
                         detail: format!("reader_coverage:{}", failures.join(",")),
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     });
                     let remedies = flow::enumerate_remedies(
                         &p.effect_id,
@@ -1129,7 +1129,7 @@ impl Monitor {
             verdict
         };
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 4,
             outcome: match verdict {
                 PiVerdict::Allow => "pass",
@@ -1162,7 +1162,7 @@ impl Monitor {
             };
             let mut c = checks;
             c.push(CheckRecord {
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 step: 4,
                 outcome: "fail",
                 detail: reason.as_str().to_string(),
@@ -1195,7 +1195,7 @@ impl Monitor {
         if let Some(detail) = self.persistence_ceiling_violation(p, &canonical, eff) {
             let mut c = checks;
             c.push(CheckRecord {
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 step: 5,
                 outcome: "fail",
                 detail: format!("scope_ceiling:{detail}"),
@@ -1221,7 +1221,7 @@ impl Monitor {
             });
         }
         checks.push(CheckRecord {
-            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
             step: 5,
             outcome: "pass",
             detail: "persistence_ceiling".to_string(),
@@ -1244,7 +1244,7 @@ impl Monitor {
                 {
                     let mut c = checks;
                     c.push(CheckRecord {
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                         step: 6,
                         outcome: "fail",
                         detail: DenyReason::AuthorityWidening.as_str().to_string(),
@@ -1271,7 +1271,7 @@ impl Monitor {
                 }
             }
             checks.push(CheckRecord {
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 step: 6,
                 outcome: "pass",
                 detail: "attenuated".to_string(),
@@ -1297,13 +1297,13 @@ impl Monitor {
                 match &rec.decision {
                     Decision::Allow => {
                         checks.push(CheckRecord {
-                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                             step: 7,
                             outcome: "pass",
                             detail: format!("decided:{pid}"),
                         });
                         checks.push(CheckRecord {
-                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                             step: 8,
                             outcome: "pass",
                             detail: format!("recorded:{pid}"),
@@ -1328,7 +1328,7 @@ impl Monitor {
                     Decision::Deny { reason, .. } => {
                         let mut c = checks;
                         c.push(CheckRecord {
-                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                             step: 7,
                             outcome: "fail",
                             detail: format!("recorded_deny:{pid}"),
@@ -1360,7 +1360,7 @@ impl Monitor {
                     Decision::Modified { amended_args } => {
                         let mut c = checks;
                         c.push(CheckRecord {
-                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                            enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                             step: 7,
                             outcome: "fail",
                             detail: format!("recorded_modified:{pid}"),
@@ -1410,7 +1410,7 @@ impl Monitor {
                 {
                     let mut c = checks;
                     c.push(CheckRecord {
-                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                        enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                         step: 7,
                         outcome: "fail",
                         detail: format!("denial_fallback:{}", pol.fallback.as_str()),
@@ -1444,7 +1444,7 @@ impl Monitor {
             if exhausted && hit.is_none() {
                 let mut c = checks;
                 c.push(CheckRecord {
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     step: 7,
                     outcome: "fail",
                     detail: DenyReason::ApprovalsExhausted.as_str().to_string(),
@@ -1470,7 +1470,7 @@ impl Monitor {
                 });
             }
             checks.push(CheckRecord {
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 step: 7,
                 outcome: "pass",
                 detail: if hit.is_some() {
@@ -1485,7 +1485,7 @@ impl Monitor {
                 // the decision scope the lease's (I-P6/ADR-0071 D1).
                 let mut c = checks;
                 c.push(CheckRecord {
-                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                     step: 8,
                     outcome: "pass",
                     detail: format!("lease:{key}"),
@@ -1512,7 +1512,7 @@ impl Monitor {
                 });
             }
             checks.push(CheckRecord {
-                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                enforcement: hharness_provenance::flow::EnforcementClass::Deterministic,
                 step: 8,
                 outcome: "n/a",
                 detail: "miss".to_string(),
@@ -1581,10 +1581,10 @@ pub fn floor_verdict(domain: EffectDomain, risk: RiskClass) -> PiVerdict {
 fn declared_attributes<'a>(
     t: &'a ToolCapabilityRecord,
     effect: &EffectClass,
-) -> Option<&'a hh_hir::kinds::EffectAttributes> {
+) -> Option<&'a hharness_hir::kinds::EffectAttributes> {
     match &t.effects {
-        hh_hir::kinds::ToolEffects::Pure => None,
-        hh_hir::kinds::ToolEffects::Declared(set) => set
+        hharness_hir::kinds::ToolEffects::Pure => None,
+        hharness_hir::kinds::ToolEffects::Declared(set) => set
             .iter()
             .find(|e| e.domain == effect.domain)
             .and_then(|e| e.attributes.as_ref()),
@@ -1606,7 +1606,7 @@ pub struct ReplayOutcome {
 /// canonical(inputs_json))`. The recorded inputs' identity; the reason is
 /// reconstructible from the row it names (ADR-0066 D5).
 pub fn assessment_inputs_ref(inputs: &AssessmentInputs) -> String {
-    hh_identity::idp::idp_id(
+    hharness_identity::idp::idp_id(
         "assessment_inputs",
         assess::inputs_json(inputs).to_canonical_string().as_bytes(),
     )

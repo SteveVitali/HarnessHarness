@@ -1,4 +1,4 @@
-//! `hh-subagent` — the C1/Stage-4 kernel slice (spec §5e.3, R-2.6.3¹ +
+//! `hharness-subagent` — the C1/Stage-4 kernel slice (spec §5e.3, R-2.6.3¹ +
 //! R-2.1.6¹; ticket S4.6).
 //!
 //! The one kernel operation `spawn` composes `delegate` + `allocate` +
@@ -15,8 +15,8 @@
 //! `SubagentSpec.goal.statement` travels as its content-addressed leaf and
 //! child output re-enters as `Ref`s (SP-3).
 //!
-//! The C3 `orchestrator` class lives in `hh-orchestrator` — its only
-//! consumer; nothing in `hh-subagent` names it (removability(1) keeps C1
+//! The C3 `orchestrator` class lives in `hharness-orchestrator` — its only
+//! consumer; nothing in `hharness-subagent` names it (removability(1) keeps C1
 //! while C3 may be absent).
 
 pub mod types;

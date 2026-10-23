@@ -24,10 +24,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_eval::runs::EvalRun;
-use hh_eval::stats;
-use hh_ontology::eval::{Design, FactorKind, MetricValueKind};
-use hh_wire::json::Json;
+use hharness_eval::runs::EvalRun;
+use hharness_eval::stats;
+use hharness_ontology::eval::{Design, FactorKind, MetricValueKind};
+use hharness_wire::json::Json;
 
 use crate::error::AnalysisError;
 
@@ -59,7 +59,7 @@ fn hosted_inadmissible(r: &EvalRun, factor: &str, design: Option<&Design>) -> bo
     }
     if matches!(
         r.capability_vector.get(factor),
-        Some(hh_ontology::participant::CapabilityVerdict::Supported)
+        Some(hharness_ontology::participant::CapabilityVerdict::Supported)
     ) {
         return false; // a SUPPORTED verdict overrides the class default.
     }
@@ -382,9 +382,9 @@ pub fn reliability_profile(
             .filter(|r| {
                 matches!(
                     r.outcome_class,
-                    hh_ontology::control::OutcomeClass::InfrastructureFailure
-                        | hh_ontology::control::OutcomeClass::OracleFailure
-                        | hh_ontology::control::OutcomeClass::Refused
+                    hharness_ontology::control::OutcomeClass::InfrastructureFailure
+                        | hharness_ontology::control::OutcomeClass::OracleFailure
+                        | hharness_ontology::control::OutcomeClass::Refused
                 )
             })
             .count() as i64;
@@ -617,7 +617,7 @@ pub fn diagnostics(runs: &[EvalRun], metric: &str) -> Json {
         }
         if matches!(
             r.outcome_class,
-            hh_ontology::control::OutcomeClass::InfrastructureFailure
+            hharness_ontology::control::OutcomeClass::InfrastructureFailure
         ) {
             infra += 1;
         }
@@ -884,7 +884,7 @@ pub fn fit_surface(
                 matches!(fd.kind, FactorKind::Harness)
                     || matches!(
                         fd.granularity,
-                        Some(hh_ontology::participant::Granularity::ComponentLevel)
+                        Some(hharness_ontology::participant::Granularity::ComponentLevel)
                     )
             })
             == Some(true)
@@ -932,7 +932,7 @@ pub fn fit_surface(
                 verdict
             };
             if let Some(v) = v {
-                use hh_ontology::participant::CapabilityVerdict as Cv;
+                use hharness_ontology::participant::CapabilityVerdict as Cv;
                 if matches!(v, Cv::Unknown | Cv::Unsupported | Cv::Drift) {
                     na_rows.push(Json::obj([
                         ("run_id", Json::str(&r.run_id)),
@@ -1739,7 +1739,7 @@ pub fn fit_surface(
             ]),
         ),
     ]);
-    let debt_record_ref = hh_identity::idp_id(
+    let debt_record_ref = hharness_identity::idp_id(
         "debt.assumption",
         debt_body.to_canonical_string().as_bytes(),
     );
@@ -2073,7 +2073,11 @@ impl StrataAxis {
 /// The stratum key a run lands in for `axis` (hosted strata by
 /// `capability_vector`/`mediation`/cost `confidence` per §2.5 — a hosted
 /// run's vector is canonicalised, never pooled into a neighbour).
-fn stratum_key(r: &EvalRun, axis: StrataAxis, suites: &[hh_eval::runs::SuiteContext]) -> String {
+fn stratum_key(
+    r: &EvalRun,
+    axis: StrataAxis,
+    suites: &[hharness_eval::runs::SuiteContext],
+) -> String {
     match axis {
         StrataAxis::ContaminationStratum => r.stratum.name().to_string(),
         StrataAxis::CapabilityVector => {
@@ -2101,9 +2105,9 @@ fn stratum_key(r: &EvalRun, axis: StrataAxis, suites: &[hh_eval::runs::SuiteCont
             let mut seen = false;
             for s in &r.facts.spend_rows {
                 let (rank, label) = match &s.confidence {
-                    Some(hh_budget::pricing::Confidence::Exact) => (3, "exact"),
-                    Some(hh_budget::pricing::Confidence::Bounded { .. }) => (2, "bounded"),
-                    Some(hh_budget::pricing::Confidence::Estimate) => (1, "estimate"),
+                    Some(hharness_budget::pricing::Confidence::Exact) => (3, "exact"),
+                    Some(hharness_budget::pricing::Confidence::Bounded { .. }) => (2, "bounded"),
+                    Some(hharness_budget::pricing::Confidence::Estimate) => (1, "estimate"),
                     _ => (0, "unknown"),
                 };
                 if !seen || rank < best_rank {
@@ -2158,7 +2162,7 @@ pub fn strata_view(
     runs: &[EvalRun],
     metric: &str,
     by: StrataAxis,
-    suites: &[hh_eval::runs::SuiteContext],
+    suites: &[hharness_eval::runs::SuiteContext],
 ) -> Json {
     let mut strata: BTreeMap<String, Vec<i64>> = BTreeMap::new();
     let mut stratum_runs: BTreeMap<String, u64> = BTreeMap::new();
@@ -2235,7 +2239,7 @@ pub fn realized_stages(
     metric: &str,
     confidence_ppm: i64,
 ) -> Json {
-    use hh_ontology::participant::Observability as Obs;
+    use hharness_ontology::participant::Observability as Obs;
     let native: Vec<&&EvalRun> = arm_runs.iter().filter(|r| !is_hosted(r)).collect();
     let hosted: Vec<&&EvalRun> = arm_runs.iter().filter(|r| is_hosted(r)).collect();
     let mut rows = Vec::new();

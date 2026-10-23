@@ -7,20 +7,22 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
-use hh_ontology::debt::{DebtStatus, ExpiryKind};
-use hh_ontology::participant::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
+use hharness_ontology::debt::{DebtStatus, ExpiryKind};
+use hharness_ontology::participant::{
     CapabilityVerdict, HostingMechanism, Observability, ParticipantClass, ParticipantDescriptor,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_hosting::abi::{HostedRunSpec, HostingError};
-use hh_hosting::adapter_a::{adapter_a_record, allow_all_decider, AdapterA};
-use hh_hosting::fixture::FixtureParticipant;
-use hh_hosting::records::{HostingExt, ModelIoIntercept, ParticipantRecord, ProcessPlacement};
-use hh_hosting::service::HostingService;
+use hharness_hosting::abi::{HostedRunSpec, HostingError};
+use hharness_hosting::adapter_a::{adapter_a_record, allow_all_decider, AdapterA};
+use hharness_hosting::fixture::FixtureParticipant;
+use hharness_hosting::records::{
+    HostingExt, ModelIoIntercept, ParticipantRecord, ProcessPlacement,
+};
+use hharness_hosting::service::HostingService;
 
 fn complete_debt() -> AssumptionDebtRecord {
     let provenance = ProvenanceRecord::kernel("hh-hosting/test", 0);

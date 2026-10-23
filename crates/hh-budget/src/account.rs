@@ -26,12 +26,12 @@
 //! - **E5** — [`Account::gauge_reserve`] refuses the next increment with
 //!   `GaugeCapExceeded` (`SpawnRefused`/`CompactionRequired`), never a stop.
 
-use hh_ledger::event::{Event, Producer, Scope, SeqRange};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::dimensions::{DimensionClass, DimensionId, DimensionKey};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope, SeqRange};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::dimensions::{DimensionClass, DimensionId, DimensionKey};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::attribution::Attribution;

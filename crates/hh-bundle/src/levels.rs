@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::manifest::{BasisSatisfaction, BundleManifest, LevelBasis, MemberStatus, ReproLevel};
 

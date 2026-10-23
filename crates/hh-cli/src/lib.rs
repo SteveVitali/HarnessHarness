@@ -1,4 +1,4 @@
-//! `hh-cli` — the attended terminal surface for `hh-kernel`.
+//! `hharness-cli` — the attended terminal surface for `hh-kernel`.
 //!
 //! The CLI is a generated client + renderer over `hh-embed/1` and nothing
 //! else (K-2): every command maps its arguments onto typed boundary

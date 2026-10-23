@@ -10,7 +10,7 @@
 //! dialect mismatch, `C-LOAD-3 UnknownKey` on a non-`ext` member outside the closed
 //! grammar) — `Err` when any `error`-severity diagnostic was produced.
 
-use hh_provenance::ProvenanceRecord;
+use hharness_provenance::ProvenanceRecord;
 
 use crate::diagnostics::{AssemblyDiagnostic, Severity};
 use crate::grammar::{Assembly, ASSEMBLY_DIALECT};
@@ -78,7 +78,7 @@ pub fn load(
     expected_dialect: Option<&str>,
 ) -> Result<Assembly, Vec<AssemblyDiagnostic>> {
     let kernel = ProvenanceRecord::kernel("kernel:assembly:load", 0);
-    let json = hh_wire::canonical::parse_canonical(bytes).map_err(|e| {
+    let json = hharness_wire::canonical::parse_canonical(bytes).map_err(|e| {
         vec![{
             let mut d = AssemblyDiagnostic {
                 code: crate::diagnostics::Code::LoadParse,

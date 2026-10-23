@@ -23,7 +23,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::{self, Json};
+use hharness_wire::json::{self, Json};
 
 use crate::error::BundleError;
 use crate::export::MemberBytes;
@@ -221,7 +221,7 @@ fn lift_swebench(files: &BTreeMap<String, Vec<u8>>, prov: &Json) -> ForeignClaim
                     ("patch_bytes", Json::Int(patch.len() as i64)),
                     (
                         "patch_digest",
-                        Json::str(hh_identity::idp_id("blob", patch.as_bytes())),
+                        Json::str(hharness_identity::idp_id("blob", patch.as_bytes())),
                     ),
                     ("source", Json::str(loc.clone())),
                 ]),
@@ -528,7 +528,7 @@ fn lift_otlp(files: &BTreeMap<String, Vec<u8>>, prov: &Json) -> ForeignClaims {
 fn events_of(
     manifest: &BundleManifest,
     members: &MemberBytes,
-) -> Result<BTreeMap<String, Vec<hh_ledger::event::EventEnvelope>>, BundleError> {
+) -> Result<BTreeMap<String, Vec<hharness_ledger::event::EventEnvelope>>, BundleError> {
     let mut out = BTreeMap::new();
     for (run, export) in &manifest.traces {
         let mut evs = Vec::new();
@@ -610,7 +610,7 @@ fn model_name(manifest: &BundleManifest) -> String {
 
 /// The run's declared `task_ref.task_id` off its `lifecycle.run.created`
 /// payload (`None` when the run declares none).
-fn task_id_of(evs: &[hh_ledger::event::EventEnvelope]) -> Option<String> {
+fn task_id_of(evs: &[hharness_ledger::event::EventEnvelope]) -> Option<String> {
     evs.iter()
         .find(|e| e.class == "lifecycle.run.created")
         .and_then(|e| e.payload.get("task_ref"))
@@ -976,14 +976,16 @@ fn export_telemetry(
     let mut resource_spans = Vec::new();
     let mut time_loss = false;
     for (run, evs) in &events {
-        let trace_id = hh_identity::idp_digest("otel.trace", run.as_bytes());
+        let trace_id = hharness_identity::idp_digest("otel.trace", run.as_bytes());
         let mut spans = Vec::new();
         for e in evs {
             let mut span = BTreeMap::from([
                 ("traceId".to_string(), Json::str(&trace_id[..32])),
                 (
                     "spanId".to_string(),
-                    Json::str(&hh_identity::idp_digest("otel.span", e.event_id.as_bytes())[..16]),
+                    Json::str(
+                        &hharness_identity::idp_digest("otel.span", e.event_id.as_bytes())[..16],
+                    ),
                 ),
                 ("name".to_string(), Json::str(e.class.clone())),
                 ("kind".to_string(), Json::Int(1)), // SPAN_KIND_INTERNAL
@@ -1021,7 +1023,7 @@ fn export_telemetry(
             (
                 "scopeSpans",
                 Json::Arr(vec![Json::obj([
-                    ("scope", Json::obj([("name", Json::str("hh-ledger"))])),
+                    ("scope", Json::obj([("name", Json::str("hharness-ledger"))])),
                     ("spans", Json::Arr(spans)),
                 ])]),
             ),
@@ -1151,7 +1153,7 @@ pub(crate) fn rfc3339_unix_nanos(ts: &str) -> Option<String> {
 }
 
 /// Days since 1970-01-01 for a civil date (Hinnant's algorithm — the
-/// inverse of `hh_ledger::store::rfc3339_ms`'s civil-from-days).
+/// inverse of `hharness_ledger::store::rfc3339_ms`'s civil-from-days).
 fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;

@@ -13,10 +13,10 @@
 //! once per run — the ladder position is the count of prior
 //! `control.loop.detected` rows.
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{LoopDetectorKind, LoopPattern};
-use hh_wire::json::Json;
-use hh_wire::sha256::sha256_hex;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{LoopDetectorKind, LoopPattern};
+use hharness_wire::json::Json;
+use hharness_wire::sha256::sha256_hex;
 
 use crate::policy::{LadderAction, LoopPolicy};
 
@@ -424,9 +424,9 @@ fn monologue(
 #[allow(clippy::items_after_test_module)] // test module precedes the S4.16b judged port
 mod tests {
     use super::*;
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
 
     fn ev(seq: u64, class: &str, payload: Json) -> EventEnvelope {
         EventEnvelope {
@@ -800,7 +800,7 @@ pub trait JudgePort: std::fmt::Debug {
     /// binding abstains rather than guess.
     fn assess(
         &self,
-        _claim: &hh_verification::claims::Claim,
+        _claim: &hharness_verification::claims::Claim,
         _evidence: &[Json],
     ) -> Vec<JudgedConsult> {
         Vec::new()
@@ -813,7 +813,7 @@ pub trait JudgePort: std::fmt::Debug {
     /// fence — the `RoutingPort::take_rows`/`MemoryPort` convention).
     /// `RecordedJudge` produces none: its answers replay rows already on
     /// the prefix, so replay stays byte-identical.
-    fn take_records(&self) -> Vec<(String, Json, hh_provenance::record::ProvenanceRecord)> {
+    fn take_records(&self) -> Vec<(String, Json, hharness_provenance::record::ProvenanceRecord)> {
         Vec::new()
     }
 
@@ -845,7 +845,7 @@ pub struct JudgedConsult {
     /// The critic's re-based independence summary (ADR-0116 D1).
     pub independence_summary: String,
     /// The claim assessment.
-    pub assessment: hh_verification::reconciler::JudgedAssessment,
+    pub assessment: hharness_verification::reconciler::JudgedAssessment,
 }
 
 /// `RecordedJudge` — the offline `Validator{kind = judge}` binding (R2.15;

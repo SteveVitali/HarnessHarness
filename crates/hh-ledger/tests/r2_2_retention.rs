@@ -12,16 +12,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::branch::{BranchKind, ForkOpts, NavigateTarget};
-use hh_ledger::errors::{LedgerError, MissingReason};
-use hh_ledger::event::{Cursor, Event, EventFrame, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::replay::{self, ValidityInput};
-use hh_ledger::retention::{self, RetentionPolicy, RetentionTier};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::branch::{BranchKind, ForkOpts, NavigateTarget};
+use hharness_ledger::errors::{LedgerError, MissingReason};
+use hharness_ledger::event::{Cursor, Event, EventFrame, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::replay::{self, ValidityInput};
+use hharness_ledger::retention::{self, RetentionPolicy, RetentionTier};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -92,7 +92,7 @@ fn ev(id: &str, class: &str, payload: Json) -> Event {
     }
 }
 
-fn tier_rows(s: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn tier_rows(s: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     s.envelopes(run)
         .unwrap()
         .iter()
@@ -102,7 +102,7 @@ fn tier_rows(s: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
 }
 
 fn blob_file(s: &Store, id: &str) -> PathBuf {
-    let parsed = hh_identity::idp::parse_id(id).unwrap();
+    let parsed = hharness_identity::idp::parse_id(id).unwrap();
     s.root().join("blobs").join(&parsed.digest_hex)
 }
 
@@ -117,7 +117,7 @@ fn blob_with_ref(
     lease: &Lease,
     body: &[u8],
     id: &str,
-) -> hh_identity::idp::ContentAddress {
+) -> hharness_identity::idp::ContentAddress {
     let blob = s.put_blob(body, "text/plain").unwrap();
     let mut e = ev(
         id,
@@ -547,7 +547,7 @@ fn oq173_legal_hold_refuses_every_gc_path() {
 
     // A held policy — set at `principal` authority (the gate's floor).
     let mut held = policy(0, 0);
-    held.set_legal_hold(true, hh_provenance::AuthorityClass::Principal)
+    held.set_legal_hold(true, hharness_provenance::AuthorityClass::Principal)
         .unwrap();
     assert!(held.legal_hold);
 
@@ -579,9 +579,9 @@ fn oq173_legal_hold_refuses_every_gc_path() {
     let page = s
         .read(
             &run,
-            hh_ledger::event::Cursor::Seq(0),
+            hharness_ledger::event::Cursor::Seq(0),
             None,
-            hh_ledger::event::Direction::Fwd,
+            hharness_ledger::event::Direction::Fwd,
             usize::MAX,
         )
         .unwrap();
@@ -592,7 +592,7 @@ fn oq173_legal_hold_refuses_every_gc_path() {
     assert_eq!(s.get_blob(&blob).unwrap(), b"held evidence");
 
     // Cleared at principal authority — gc proceeds normally.
-    held.set_legal_hold(false, hh_provenance::AuthorityClass::Principal)
+    held.set_legal_hold(false, hharness_provenance::AuthorityClass::Principal)
         .unwrap();
     s.gc(&run, &lease, vec![id.clone()], &held, "cold", None)
         .unwrap();
@@ -610,7 +610,7 @@ fn oq173_legal_hold_refuses_every_gc_path() {
 /// answer the typed refusal `Refused{legal_hold = authority_below_principal}`.
 #[test]
 fn oq173_legal_hold_set_clear_needs_principal_authority() {
-    use hh_provenance::AuthorityClass as A;
+    use hharness_provenance::AuthorityClass as A;
     let mut p = policy(0, 0);
     for a in [A::Unverified, A::External, A::Environment, A::Delegate] {
         match p.set_legal_hold(true, a) {

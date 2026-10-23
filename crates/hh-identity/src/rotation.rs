@@ -19,7 +19,7 @@
 //!   by recomputation, not replacement (spec §5g.6 §2 "old ids retained;
 //!   verification across profiles"; N1).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::idp::{idp_id_in, parse_id_in, profile_for, IdError, IdentityProfile};
 

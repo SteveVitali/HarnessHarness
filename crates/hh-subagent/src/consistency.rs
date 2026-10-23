@@ -9,7 +9,7 @@
 //! [`CoordinationPolicy::delta`] classifies a policy diff as
 //! `tightening | loosening | none`; evolution admits tightening only.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `ConsistencyLevel` — the closed six-member set (§5e.5; ADR-0193 D5).
 /// The names are the classic hierarchy's; `linearizable_single_writer` is
@@ -170,8 +170,11 @@ impl ConsistencyDeclaration {
 /// `snapshot_at_fork`-only declarations that assume full isolation of the
 /// parent (a scoped share is still shared — `snapshot_at_fork` means the
 /// whole-tree fork invariant the scoped view cannot honour).
-pub fn k1_check(mode: hh_env::handle::DeriveMode, decls: &[ConsistencyDeclaration]) -> Vec<String> {
-    use hh_env::handle::DeriveMode;
+pub fn k1_check(
+    mode: hharness_env::handle::DeriveMode,
+    decls: &[ConsistencyDeclaration],
+) -> Vec<String> {
+    use hharness_env::handle::DeriveMode;
     let mut out = Vec::new();
     for (i, d) in decls.iter().enumerate() {
         let bad = match (mode, d.level) {
@@ -209,7 +212,7 @@ pub struct CoordinationPolicy {
     /// The declared consistency levels.
     pub declarations: Vec<ConsistencyDeclaration>,
     /// `fork_snapshot (default) | scoped_subtree | share`.
-    pub default_isolation: hh_env::handle::DeriveMode,
+    pub default_isolation: hharness_env::handle::DeriveMode,
     /// The delegation-depth cap (`depth_cap`; `delegation_depth + 1 ≤`).
     pub depth_cap: u64,
     /// The live-children cap (`fan_out + 1 ≤`).
@@ -256,7 +259,7 @@ impl OnAbsentChild {
 }
 
 /// The K-4 delta classification (the `coordination_delta` direction — kept
-/// as a string so `hh-hir` can compare policy payloads without a dep cycle).
+/// as a string so `hharness-hir` can compare policy payloads without a dep cycle).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PolicyDelta {
     /// No semantic direction change.
@@ -381,11 +384,11 @@ impl CoordinationPolicy {
         }
         // `default_isolation` ranks shared > scoped > fork (widening toward
         // the shared end loosens).
-        let iso_rank = |d: hh_env::handle::DeriveMode| match d {
-            hh_env::handle::DeriveMode::Share => 3,
-            hh_env::handle::DeriveMode::ScopedSubtree => 2,
-            hh_env::handle::DeriveMode::ForkSnapshot => 1,
-            hh_env::handle::DeriveMode::FreshFromImage => 0,
+        let iso_rank = |d: hharness_env::handle::DeriveMode| match d {
+            hharness_env::handle::DeriveMode::Share => 3,
+            hharness_env::handle::DeriveMode::ScopedSubtree => 2,
+            hharness_env::handle::DeriveMode::ForkSnapshot => 1,
+            hharness_env::handle::DeriveMode::FreshFromImage => 0,
         };
         if iso_rank(other.default_isolation) > iso_rank(self.default_isolation) {
             return PolicyDelta::Loosening;

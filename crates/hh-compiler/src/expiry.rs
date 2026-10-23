@@ -37,8 +37,8 @@
 //! `retired`, and re-evaluation with unchanged observables is idempotent (the
 //! `to` state equals `from` produces no row).
 
-use hh_ontology::debt::{DebtStatus, ExpiryKind};
-use hh_wire::json::Json;
+use hharness_ontology::debt::{DebtStatus, ExpiryKind};
+use hharness_wire::json::Json;
 
 use crate::profile::ProfileRule;
 use crate::profile_test::ConformanceVerdict;
@@ -559,9 +559,9 @@ mod tests {
     #[test]
     fn evidence_refresh_due_warns() {
         let mut r = rule_with_expiry(ExpiryKind::EvidenceRefreshDue, Some("500"));
-        r.debt.expiry = Some(hh_ontology::debt::DebtExpiry {
+        r.debt.expiry = Some(hharness_ontology::debt::DebtExpiry {
             condition: ExpiryKind::EvidenceRefreshDue,
-            params: hh_ontology::debt::ExpiryParams {
+            params: hharness_ontology::debt::ExpiryParams {
                 until: None,
                 evidence_max_age_ms: Some(500),
                 dependency_capabilities: vec![],

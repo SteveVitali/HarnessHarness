@@ -7,18 +7,18 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use hh_gateway::probes::{
+use hharness_gateway::probes::{
     discovery_conformance, fingerprint_basis, fingerprint_probe_verdict, run_fingerprint_probe,
     run_transport_probes, FingerprintProbeSpec,
 };
-use hh_gateway::snapshot::{
+use hharness_gateway::snapshot::{
     fingerprint_response, FingerprintVerdict, ModelSnapshotRecord, SnapshotClaimKind,
 };
-use hh_gateway::*;
-use hh_provenance::origin::Origin;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
-use hh_registry::kinds::ConformanceVerdict;
-use hh_wire::json::Json;
+use hharness_gateway::*;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_registry::kinds::ConformanceVerdict;
+use hharness_wire::json::Json;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures (self-contained — each integration test file is its own crate)
@@ -1333,7 +1333,7 @@ fn transport_probes_pinned_vs_observed() {
     let d = dialect_b(); // `cache_state_visible=false`, `model_listing=models`
     let mut t = ScriptedTransport::new();
     // The transport reports exactly the declared surface.
-    for (cap, _) in hh_gateway::probes::describe(&d).entries {
+    for (cap, _) in hharness_gateway::probes::describe(&d).entries {
         t.probe_values.insert(
             cap.clone(),
             match cap.as_str() {

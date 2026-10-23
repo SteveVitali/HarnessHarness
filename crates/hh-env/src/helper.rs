@@ -26,9 +26,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use hh_containment::policy::IsolationClass;
-use hh_hir::kinds::EffectDomain;
-use hh_wire::json::{self, Json};
+use hharness_containment::policy::IsolationClass;
+use hharness_hir::kinds::EffectDomain;
+use hharness_wire::json::{self, Json};
 
 use crate::capture::CaptureKind;
 use crate::errors::EnvError;
@@ -38,7 +38,7 @@ use crate::executor::{
 };
 use crate::observe::ErrorClass;
 
-use hh_helper::protocol::{CommitProof, HelperRequest, HelperResponse, OnKernelLoss};
+use hharness_helper::protocol::{CommitProof, HelperRequest, HelperResponse, OnKernelLoss};
 
 /// `helper_binary()` — resolve the `hh-helper` binary: `HH_HELPER_BIN`
 /// first (the operator/test pin), then the cargo target dir beside the
@@ -480,7 +480,7 @@ impl ToolExecutor for HelperExecutor {
                 seq,
                 fencing_token,
             } => CommitProof::Token {
-                proof: hh_helper::protocol::mint_commit_proof(
+                proof: hharness_helper::protocol::mint_commit_proof(
                     &self.client.session_nonce,
                     &request.effect_id,
                     request.attempt_no,
@@ -565,9 +565,9 @@ impl ToolExecutor for HelperExecutor {
             })?;
             if let Json::Arr(chunks) = r.get("chunks").cloned().unwrap_or(Json::Arr(vec![])) {
                 for c in &chunks {
-                    if let Ok(f) = hh_helper::protocol::HelperFrame::from_json(c) {
+                    if let Ok(f) = hharness_helper::protocol::HelperFrame::from_json(c) {
                         match f {
-                            hh_helper::protocol::HelperFrame::Chunk {
+                            hharness_helper::protocol::HelperFrame::Chunk {
                                 seq,
                                 stream,
                                 data,
@@ -579,7 +579,7 @@ impl ToolExecutor for HelperExecutor {
                                     kind: CaptureKind::OutputChunk { stream, data },
                                 });
                             }
-                            hh_helper::protocol::HelperFrame::Process {
+                            hharness_helper::protocol::HelperFrame::Process {
                                 seq,
                                 transition,
                                 process_ref,

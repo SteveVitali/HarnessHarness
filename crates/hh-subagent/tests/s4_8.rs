@@ -3,38 +3,40 @@
 //! checks, ownership check 8 + verbs, `three_way_text{line}` /
 //! `validator_selected` merge arms, `merge_hash` determinism, absent-child
 //! accounting, and terminal-time lock release — all over the real
-//! `hh-ledger` store (no mocks at the ledger seam).
+//! `hharness-ledger` store (no mocks at the ledger seam).
 
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::plan::PinnedRef;
-use hh_env::handle::{DeriveMode, OnParentEnd};
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::consistency::{ConsistencyDeclaration, ConsistencyLevel, OnAbsentChild};
-use hh_subagent::merge::{
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::plan::PinnedRef;
+use hharness_env::handle::{DeriveMode, OnParentEnd};
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_subagent::consistency::{ConsistencyDeclaration, ConsistencyLevel, OnAbsentChild};
+use hharness_subagent::merge::{
     merge, BoundValidator, MergeCtx, MergeInput, MergeOpts, MergeValidator, MergeVeto,
     ValidatorMergeVerdict,
 };
-use hh_subagent::ownership::{
+use hharness_subagent::ownership::{
     check_write, record_write_refusal, return_ownership, transfer_ownership, OwnershipTable,
     WriteVerdict,
 };
-use hh_subagent::result::{record_child_result, ChildTerminalView};
-use hh_subagent::spawn::{spawn, EnvDeriver, SpawnCtx};
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_subagent::result::{record_child_result, ChildTerminalView};
+use hharness_subagent::spawn::{spawn, EnvDeriver, SpawnCtx};
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -355,7 +357,9 @@ fn run_env(p: &mut Parent, s: &SubagentSpec) -> Result<Spawned, SpawnError> {
 
 fn resource_lease_holders(p: &Parent, key: &str) -> Vec<String> {
     p.store
-        .scoped_lease_holders(&hh_ledger::leases::LeaseScope::Resource(key.to_string()))
+        .scoped_lease_holders(&hharness_ledger::leases::LeaseScope::Resource(
+            key.to_string(),
+        ))
         .into_iter()
         .map(|(_, l)| l.holder)
         .collect()
@@ -419,7 +423,7 @@ fn ac3_sorted_order_and_failed_spawn_releases_prefix() {
     let (rival_run, rival_lease) = rival_run(&mut p);
     // The rival takes `k2` on its own run in the same ledger (cross-run
     // holder).
-    let scope = hh_ledger::leases::LeaseScope::Resource("k2".to_string());
+    let scope = hharness_ledger::leases::LeaseScope::Resource("k2".to_string());
     p.store
         .lease_acquire(&rival_run, &rival_lease, &scope, "subagent:rival", 30_000)
         .unwrap();
@@ -442,7 +446,7 @@ fn ac3_sorted_order_and_failed_spawn_releases_prefix() {
 fn ac3_cross_run_holder_contends() {
     let mut p = open_parent("ac3c");
     let (rival_run, rival_lease) = rival_run(&mut p);
-    let scope = hh_ledger::leases::LeaseScope::Resource("shared-key".to_string());
+    let scope = hharness_ledger::leases::LeaseScope::Resource("shared-key".to_string());
     p.store
         .lease_acquire(
             &rival_run,
@@ -665,7 +669,7 @@ fn ac2_resource_write_requires_held_key() {
     let v = check_write(&p.store, &p.run_id, p.lease.generation, &obj, &p.ownerships).unwrap();
     assert!(matches!(&v, WriteVerdict::NotOwner { owner } if owner == "unheld"));
     // Another holder → `NotOwner{holder}`.
-    let scope = hh_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
+    let scope = hharness_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
     p.store
         .lease_acquire(&p.run_id, &p.lease, &scope, "subagent:someone-else", 30_000)
         .unwrap();
@@ -816,10 +820,10 @@ fn g1_three_way_text_disjoint_edits_merge() {
         .get("after_ref")
         .and_then(Json::as_str)
         .unwrap();
-    let parsed = hh_identity::idp::parse_id(merged_ref).unwrap();
+    let parsed = hharness_identity::idp::parse_id(merged_ref).unwrap();
     let bytes = p
         .store
-        .get_blob(&hh_identity::idp::ContentAddress {
+        .get_blob(&hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex,
@@ -1118,7 +1122,7 @@ fn g4_conflict_record_carries_touched_handles() {
     );
     // The report surfaces the union + the codec round-trips it.
     assert_eq!(report.touched_handles, g4_touched());
-    let parsed = hh_subagent::merge::report_from_json(&report.to_json()).expect("round-trip");
+    let parsed = hharness_subagent::merge::report_from_json(&report.to_json()).expect("round-trip");
     assert_eq!(parsed.touched_handles, g4_touched());
     assert_eq!(
         parsed.conflicts[0].touched_handles,

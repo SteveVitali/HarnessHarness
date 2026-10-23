@@ -1,5 +1,5 @@
 [package]
-name = "hh-subagent"
+name = "hharness-subagent"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,17 +10,17 @@ description = "The C1/Stage-4 subagent kernel slice (spec §5e.3, R-2.6.3¹ + R-
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger" }
-hh-budget = { path = "../hh-budget" }
-hh-monitor = { path = "../hh-monitor" }
-hh-env = { path = "../hh-env" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-budget = { path = "../hh-budget" }
+hharness-monitor = { path = "../hh-monitor" }
+hharness-env = { path = "../hh-env" }
 
 [dev-dependencies]
-hh-compiler = { path = "../hh-compiler" }
-hh-control = { path = "../hh-control" }
-hh-lab = { path = "../hh-lab" }
+hharness-compiler = { path = "../hh-compiler" }
+hharness-control = { path = "../hh-control" }
+hharness-lab = { path = "../hh-lab" }

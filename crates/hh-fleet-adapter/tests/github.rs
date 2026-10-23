@@ -2,16 +2,16 @@
 //! the `hh.fleet.github_source/1` document drives the six
 //! `work_source_adapter` ops — the capability declaration (tri-state,
 //! never coerced), `list`/`get` over the bound `issues[]` snapshot
-//! normalized through the one `hh_fleet::github` mapping, `suspended`
+//! normalized through the one `hharness_fleet::github` mapping, `suspended`
 //! (declared set + `repo_archived`), `activate_run` (open issues only),
 //! verbatim `occurrences`, strict-decode refusals, and the `dispatch`
 //! wire codec round-trip.
 
-use hh_fleet::capabilities::CapState;
-use hh_fleet_adapter::abi;
-use hh_fleet_adapter::github::GithubTracker;
-use hh_fleet_adapter::tracker::{self, TrackerLogic};
-use hh_wire::json::Json;
+use hharness_fleet::capabilities::CapState;
+use hharness_fleet_adapter::abi;
+use hharness_fleet_adapter::github::GithubTracker;
+use hharness_fleet_adapter::tracker::{self, TrackerLogic};
+use hharness_wire::json::Json;
 
 /// The recorded GitHub Issues shape (fixture — `tests/fixtures/`).
 fn issues() -> Vec<Json> {
@@ -20,7 +20,7 @@ fn issues() -> Vec<Json> {
         "/tests/fixtures/github-issues.json"
     ))
     .unwrap();
-    match hh_wire::json::parse(&text).unwrap() {
+    match hharness_wire::json::parse(&text).unwrap() {
         Json::Obj(o) => match o.get("issues") {
             Some(Json::Arr(a)) => a.clone(),
             _ => panic!("fixture issues[] required"),

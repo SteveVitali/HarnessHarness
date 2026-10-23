@@ -16,7 +16,7 @@
 //! table, never a counterfactual decomposition claim.
 
 use crate::view::CampaignView;
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// One lineage node — a candidate plus the parent edge it was proposed

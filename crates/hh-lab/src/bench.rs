@@ -19,16 +19,16 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_hir::Text;
-use hh_identity::idp::{identify_bytes, idp_id};
-use hh_identity::kinds::RecordKind;
-pub use hh_ontology::lab::EnvironmentFamilyRecord;
-use hh_ontology::lab::{
+use hharness_hir::Text;
+use hharness_identity::idp::{identify_bytes, idp_id};
+use hharness_identity::kinds::RecordKind;
+pub use hharness_ontology::lab::EnvironmentFamilyRecord;
+use hharness_ontology::lab::{
     BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, EpisodeModel, SplitLabel,
     TaskValidityState, VerifierIsolation,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 use crate::model::ForeignRef;

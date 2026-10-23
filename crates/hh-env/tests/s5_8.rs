@@ -13,21 +13,21 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_containment::attach::PolicySlot;
-use hh_containment::policy::ResourceLimits;
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::handle::{EnvCapabilityDeclaration, HandleState, OnLoss, Roots, Tri};
-use hh_env::provider::{ProviderAdapter, ProviderHandle, ProvisionRequest};
-use hh_env::record::{
+use hharness_containment::attach::PolicySlot;
+use hharness_containment::policy::ResourceLimits;
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::handle::{EnvCapabilityDeclaration, HandleState, OnLoss, Roots, Tri};
+use hharness_env::provider::{ProviderAdapter, ProviderHandle, ProvisionRequest};
+use hharness_env::record::{
     CanaryChannel, EnvironmentClass, EnvironmentRecord, ImageAttestation, ImageRef,
     ProvisioningRecipe,
 };
-use hh_env::snapshot::{SnapshotKind, TakenBy};
-use hh_identity::idp::address;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_env::snapshot::{SnapshotKind, TakenBy};
+use hharness_identity::idp::address;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -75,9 +75,9 @@ fn test_record(class: EnvironmentClass) -> EnvironmentRecord {
 fn test_canary(channel_id: &str) -> CanaryChannel {
     CanaryChannel {
         channel_id: channel_id.to_string(),
-        spec: hh_secrets::SecretChannelSpec {
-            kind: hh_secrets::CredentialKind::ApiKey,
-            source: hh_secrets::SecretSource::OperatorVault {
+        spec: hharness_secrets::SecretChannelSpec {
+            kind: hharness_secrets::CredentialKind::ApiKey,
+            source: hharness_secrets::SecretSource::OperatorVault {
                 vault_ref: format!("canary:{channel_id}"),
             },
             destinations: vec![],
@@ -85,10 +85,10 @@ fn test_canary(channel_id: &str) -> CanaryChannel {
             delivery_modes: std::collections::BTreeSet::new(),
             max_lifetime_ms: None,
             rotation_policy: None,
-            sender_constraint: hh_secrets::SenderConstraint::None,
+            sender_constraint: hharness_secrets::SenderConstraint::None,
             constraints: Default::default(),
             bindable: false,
-            access_class: hh_secrets::AccessClass::KernelOnly,
+            access_class: hharness_secrets::AccessClass::KernelOnly,
             canary: true,
             description: "image-manifest tripwire".into(),
         },
@@ -103,9 +103,9 @@ fn canary_channels_for(class: EnvironmentClass) -> Vec<CanaryChannel> {
     }
 }
 
-fn test_broker() -> hh_secrets::CredentialBroker {
-    hh_secrets::CredentialBroker::new(
-        Box::new(hh_secrets::StaticVault::default()),
+fn test_broker() -> hharness_secrets::CredentialBroker {
+    hharness_secrets::CredentialBroker::new(
+        Box::new(hharness_secrets::StaticVault::default()),
         "canary-test-key",
     )
 }
@@ -214,7 +214,9 @@ fn provision_remote(s: &mut Store, lease: &Lease, d: &mut EnvDriver, tag: &str) 
             lease,
             &test_record(EnvironmentClass::RemoteEphemeral),
             roots_for(tag),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -482,7 +484,9 @@ fn heal_replace_prefers_memory_snapshot() {
             &lease,
             &rec,
             roots_for("hr-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::ReplaceFromSnapshot,
             Some(&mut broker),
         )
@@ -541,7 +545,7 @@ fn heal_replace_prefers_memory_snapshot() {
 /// fail-closed.
 #[test]
 fn attested_microvm_image_verified_at_resolve() {
-    use hh_containment::policy::IsolationClass;
+    use hharness_containment::policy::IsolationClass;
     let mut rec = test_record(EnvironmentClass::RemoteEphemeral);
     // Non-attesting classes pass unconditionally — a declared
     // attestation on a weaker class is a recorded claim, not a gate.

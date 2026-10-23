@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, Sender};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The journal event kinds (the §6.5 §2.2 stream member vocabulary).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

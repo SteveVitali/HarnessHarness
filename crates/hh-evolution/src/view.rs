@@ -4,8 +4,8 @@
 //! re-derives the identical view (RC-8's equality; the V3/V6 renders read
 //! this fold).
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::errors::EvolutionError;

@@ -32,12 +32,12 @@
 
 use std::collections::BTreeMap;
 
-use hh_context::compact::{SummarizeInput, SummarizeItem, Summarizer};
-use hh_context::compact_family::{ProviderCompactInput, ProviderCompaction};
-use hh_embed::context_adapters::{
+use hharness_context::compact::{SummarizeInput, SummarizeItem, Summarizer};
+use hharness_context::compact_family::{ProviderCompactInput, ProviderCompaction};
+use hharness_embed::context_adapters::{
     AdapterLane, LaneEmbedder, LaneProviderCompaction, LaneSummarizer, EMBED_SCALE_PPM,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 fn lane(dialect: &str, endpoint: &str, model: &str, cred: Option<&str>) -> AdapterLane {
     AdapterLane {
@@ -78,7 +78,7 @@ fn benchset_texts() -> Vec<String> {
     files
         .iter()
         .map(|f| {
-            let d = hh_wire::json::parse(
+            let d = hharness_wire::json::parse(
                 &std::fs::read_to_string(root.join(f)).expect("benchset task"),
             )
             .unwrap();
@@ -165,7 +165,7 @@ fn r47b_live_local_embed_batch() {
 fn record_cache(
     provider: &str,
     model: &str,
-    obs: &hh_embed::context_adapters::EmbedObservation,
+    obs: &hharness_embed::context_adapters::EmbedObservation,
     texts: &[String],
     vectors: &[Vec<i64>],
 ) {

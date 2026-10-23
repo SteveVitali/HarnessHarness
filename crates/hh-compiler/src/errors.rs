@@ -3,7 +3,7 @@
 //! fallback. `AssemblyDiagnostic`s from `validate_assembly`/`link_precheck` ride inside
 //! the variants that carry them so the `C-*` codes reach the caller intact.
 
-use hh_assembly::AssemblyDiagnostic;
+use hharness_assembly::AssemblyDiagnostic;
 
 /// `LinkError{unbound_slot | version_conflict | missing_debt_record | unknown_target}`
 /// (§3.2.2 stage 1 — the closed kind set).

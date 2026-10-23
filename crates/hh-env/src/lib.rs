@@ -1,11 +1,11 @@
-//! `hh-env` — the Stage-1 execution-environment abstraction and sandboxed
+//! `hharness-env` — the Stage-1 execution-environment abstraction and sandboxed
 //! tool-execution / effect-capture pipeline (S1.16; R-2.2.5, R-2.5.5).
 //!
 //! The environment half (`record`/`handle`/`snapshot`/`driver`) owns the
 //! `local_host`/`local_sandboxed` classes, the `EnvironmentRecord` identity
 //! (image-digest content address), the `declared → ready → torn_down`
 //! lifecycle, and the kernel-mediated `EnvHandle` ops (no side door — every
-//! op requires the handle to be `ready` and the `hh-containment` report to
+//! op requires the handle to be `ready` and the `hharness-containment` report to
 //! verify).
 //!
 //! The execution half (`tokens`/`capture`/`observe`/`deadline`/`executor`/

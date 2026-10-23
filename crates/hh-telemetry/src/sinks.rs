@@ -1,6 +1,6 @@
 //! `SinkPolicy` and the L0–L3 instrumentation/content classes (§5h.1 §3;
 //! ADR-0044 D1/D2/D3). The policy is MUST-data — a content-free record whose
-//! `version_id` comes from `hh-identity`'s `idp/1` (CC1); the closed codec
+//! `version_id` comes from `hharness-identity`'s `idp/1` (CC1); the closed codec
 //! refuses unknown members with `BadMember`.
 //!
 //! The content classes are *what a sink may receive*:
@@ -16,9 +16,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::identify_bytes;
-use hh_identity::RecordKind;
-use hh_wire::json::Json;
+use hharness_identity::idp::identify_bytes;
+use hharness_identity::RecordKind;
+use hharness_wire::json::Json;
 
 use crate::codec::{arr_at, bool_at, expect_obj, int_at, reject_unknown, str_at};
 use crate::errors::{CodecError, TelemetryError};
@@ -187,11 +187,11 @@ impl Sampling {
                 }
             }
             SamplingMode::Ratio | SamplingMode::ParentBased => match self.ratio_ppm {
-                Some(r) if r > 0 && r <= hh_budget::quantity::PPM_SCALE => {}
+                Some(r) if r > 0 && r <= hharness_budget::quantity::PPM_SCALE => {}
                 _ => {
                     return Err(bad(format!(
                         "sampling.ratio must be in (0, {}] ppm for mode={}",
-                        hh_budget::quantity::PPM_SCALE,
+                        hharness_budget::quantity::PPM_SCALE,
                         self.mode.as_str()
                     )))
                 }
@@ -273,7 +273,7 @@ impl SinkPolicy {
     }
 
     /// The `idp/1` version id over the canonical bytes (identity through
-    /// `hh-identity` — CC1; `RecordKind::SinkPolicy`).
+    /// `hharness-identity` — CC1; `RecordKind::SinkPolicy`).
     pub fn version_id(&self) -> String {
         identify_bytes(
             RecordKind::SinkPolicy,

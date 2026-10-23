@@ -14,26 +14,26 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::catalogue;
-use hh_eval::compare::{compare, CompareInput};
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
-use hh_eval::scorecard::{render_scorecard, ScorecardInput};
-use hh_eval::vetoes::AuditVerdict;
-use hh_eval::{tripped_veto_ids, veto_id, VetoContext};
-use hh_lab::analysis::BenefitKind;
-use hh_ontology::compliance::{Detector, MetricDeclaration};
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::catalogue;
+use hharness_eval::compare::{compare, CompareInput};
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
+use hharness_eval::scorecard::{render_scorecard, ScorecardInput};
+use hharness_eval::vetoes::AuditVerdict;
+use hharness_eval::{tripped_veto_ids, veto_id, VetoContext};
+use hharness_lab::analysis::BenefitKind;
+use hharness_ontology::compliance::{Detector, MetricDeclaration};
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, MediationChannel, MetricValue, MetricValueKind, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Observability, ParticipantClass};
-use hh_wire::Json;
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{Observability, ParticipantClass};
+use hharness_wire::Json;
 
 /// `(seq, class, payload)` — the `LedgerFacts::from_events` input shape.
 fn ev(seq: u64, class: &str, p: Json) -> (u64, String, Json) {
@@ -180,7 +180,7 @@ fn scorecard<'a>(
     tasks: &'a [TaskContext],
     suites: &'a [SuiteContext],
     decls: &'a [MetricDeclaration],
-) -> hh_lab::analysis::ScorecardReport {
+) -> hharness_lab::analysis::ScorecardReport {
     render_scorecard(&ScorecardInput {
         runs,
         tasks,
@@ -498,7 +498,7 @@ fn lt14_brokered_vs_wrapped_compare_under_matchspec() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     })
     .expect("matched-budget brokered-vs-wrapped compare");
     let r = &out.reports[0];
@@ -506,7 +506,7 @@ fn lt14_brokered_vs_wrapped_compare_under_matchspec() {
     assert_eq!(r.benefit_kind, BenefitKind::ArtifactBenefit);
     assert_eq!(
         r.budget_match.status,
-        hh_lab::analysis::BudgetMatchStatus::Matched
+        hharness_lab::analysis::BudgetMatchStatus::Matched
     );
     assert!(r.held_out);
     // Parity across the delivery modes — a 0-point delta, reported not
@@ -566,7 +566,7 @@ fn ac_h4_11_four_arm_matched_budget_comparison() {
             benefit_kind: BenefitKind::ArtifactBenefit,
             held_out: true,
             family_size: Some(4),
-            granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+            granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
         })
         .unwrap_or_else(|e| panic!("mediated vs {other} compare: {e}"));
         let r = &out.reports[0];
@@ -574,7 +574,7 @@ fn ac_h4_11_four_arm_matched_budget_comparison() {
         assert_eq!(r.arm_b, other);
         assert_eq!(
             r.budget_match.status,
-            hh_lab::analysis::BudgetMatchStatus::Matched,
+            hharness_lab::analysis::BudgetMatchStatus::Matched,
             "mediated vs {other} budget match"
         );
         assert!(r.held_out);
@@ -609,7 +609,7 @@ fn audit_verdict_reports_failing_components_by_name() {
         audit: Some(verdict),
         ..VetoContext::default()
     };
-    let trips = hh_eval::evaluate_vetoes(&f, &ctx);
+    let trips = hharness_eval::evaluate_vetoes(&f, &ctx);
     let trip = trips
         .iter()
         .find(|t| t.veto_id == veto_id::AUDIT_COMPLETENESS)

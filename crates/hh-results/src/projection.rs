@@ -5,16 +5,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_eval::catalogue::scorecard_metrics;
-use hh_experiment::docs::LabDocs;
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::manifest::RunKind;
-use hh_ledger::store::Store;
-use hh_ontology::control::StopReason;
-use hh_ontology::eval::MetricValue;
-use hh_ontology::eval::MetricValueKind;
-use hh_ontology::participant::{Observability, ParticipantClass as OntClass};
-use hh_wire::json::Json;
+use hharness_eval::catalogue::scorecard_metrics;
+use hharness_experiment::docs::LabDocs;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::manifest::RunKind;
+use hharness_ledger::store::Store;
+use hharness_ontology::control::StopReason;
+use hharness_ontology::eval::MetricValue;
+use hharness_ontology::eval::MetricValueKind;
+use hharness_ontology::participant::{Observability, ParticipantClass as OntClass};
+use hharness_wire::json::Json;
 
 use crate::audit::AuditRef;
 use crate::error::ResultsError;
@@ -99,7 +99,7 @@ pub fn project_row(
                 };
                 outcome.stop_reason = Some(stop.kind().as_str().to_string());
                 outcome.outcome_class = Some(
-                    hh_ontology::eval::derive_outcome_class(&stop, oracle_failed)
+                    hharness_ontology::eval::derive_outcome_class(&stop, oracle_failed)
                         .as_str()
                         .to_string(),
                 );
@@ -178,7 +178,7 @@ pub fn project_row(
                 ]));
             }
             "security.audit.checkpoint" => {
-                checkpoint_ref = Some(hh_ledger::tree::checkpoint_idp(&e.payload));
+                checkpoint_ref = Some(hharness_ledger::tree::checkpoint_idp(&e.payload));
             }
             c if c.starts_with("security.invariant") || c.starts_with("control.veto") => {
                 for k in ["veto_id", "metric", "invariant"] {
@@ -322,14 +322,14 @@ pub fn project_row(
             .iter()
             .any(|c| Some(*c) == ont_class)
         {
-            Some(hh_ontology::compliance::NaReason::Class)
+            Some(hharness_ontology::compliance::NaReason::Class)
         } else if !decl.requires_observability.is_subset(&obs) {
-            Some(hh_ontology::compliance::NaReason::Observability)
+            Some(hharness_ontology::compliance::NaReason::Observability)
         } else if !decl.requires_capabilities.is_empty() {
             // Stage 3 has no capability-vector resolution — a required
             // capability is honestly `n/a{capability}` (never silently
             // scored; OQ-377's capability plane lands at C2).
-            Some(hh_ontology::compliance::NaReason::Capability)
+            Some(hharness_ontology::compliance::NaReason::Capability)
         } else {
             None
         };
@@ -358,7 +358,7 @@ pub fn project_row(
                 },
                 None => Cell {
                     metric_ref: decl.name.clone(),
-                    value: MetricValueKind::Na(hh_ontology::compliance::NaReason::NotRun),
+                    value: MetricValueKind::Na(hharness_ontology::compliance::NaReason::NotRun),
                     detector: None,
                     oracle_ref: None,
                     confidence: None,
@@ -410,7 +410,7 @@ pub fn project_row(
                     if let Some(ms) = &arm.match_spec {
                         budget.insert("match_spec".into(), ms.to_json());
                         let msr = b.match_spec_ref.clone().unwrap_or_else(|| {
-                            hh_identity::idp::idp_id(
+                            hharness_identity::idp::idp_id(
                                 "match_spec",
                                 ms.to_json().to_canonical_string().as_bytes(),
                             )
@@ -614,10 +614,10 @@ fn verdict_value_to_kind(v: Option<&Json>) -> MetricValueKind {
     match v {
         Some(Json::Bool(b)) => MetricValueKind::Bool(*b),
         Some(Json::Int(i)) => MetricValueKind::Decimal(*i),
-        Some(Json::Str(s)) => hh_ontology::eval::LatticeValue::parse(s)
+        Some(Json::Str(s)) => hharness_ontology::eval::LatticeValue::parse(s)
             .map(MetricValueKind::Verdict)
             .unwrap_or_else(|| MetricValueKind::Vector(v.cloned().unwrap_or(Json::Null))),
         Some(other) => MetricValueKind::Vector((*other).clone()),
-        None => MetricValueKind::Na(hh_ontology::compliance::NaReason::EstimatorUndefined),
+        None => MetricValueKind::Na(hharness_ontology::compliance::NaReason::EstimatorUndefined),
     }
 }

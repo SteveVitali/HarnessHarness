@@ -7,8 +7,8 @@
 //! `AuthorityInsufficient`; `attribute_spend` → `NoPrice`, `MixedCurrency`;
 //! `validate_match` → the closed refusal sum [`MatchRefusal`].
 
-use hh_ledger::LedgerError;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ledger::LedgerError;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
 use std::fmt;
 
 /// The budget/accounting error sum (§8.2 §2 error columns).

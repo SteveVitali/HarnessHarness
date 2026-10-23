@@ -8,7 +8,7 @@
 //! Payloads carry references and `provided: yes/no`, never secret material —
 //! a credential appears as `credential_binding_id`/`provided` only.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::cache::{CacheKind, CacheOutcome};
 use crate::plan::CachePlan;
@@ -151,7 +151,7 @@ pub fn expected_basis_json(b: &crate::cache::ExpectedBasis) -> Json {
 /// An `AssumptionDebtRecord`/`ProfileDebtRecord`'s canonical JSON
 /// (`{rule_id, hypothesis, evidence_refs[], owner, expiry_condition{kind,
 /// value?}, removal_test_ref, status}` — CF-049 / ADR-0124).
-pub fn debt_json(d: &hh_compiler::profile::ProfileDebtRecord) -> Json {
+pub fn debt_json(d: &hharness_compiler::profile::ProfileDebtRecord) -> Json {
     let mut e = std::collections::BTreeMap::new();
     e.insert("kind".into(), Json::str(d.expiry_condition.kind.name()));
     if let Some(v) = &d.expiry_condition.value {
@@ -166,7 +166,7 @@ pub fn debt_json(d: &hh_compiler::profile::ProfileDebtRecord) -> Json {
                 d.evidence_refs
                     .iter()
                     .map(|r| {
-                        if r.kind == hh_compiler::profile::EvidenceKind::Source
+                        if r.kind == hharness_compiler::profile::EvidenceKind::Source
                             && r.observed_at.is_none()
                             && r.tier.is_none()
                             && !r.provisional
@@ -197,7 +197,7 @@ pub fn debt_json(d: &hh_compiler::profile::ProfileDebtRecord) -> Json {
 pub fn call_completed(
     model_call_id: &str,
     message: &crate::message::ModelMessage,
-    usage: Option<&hh_telemetry::TokenVector>,
+    usage: Option<&hharness_telemetry::TokenVector>,
     usage_raw: Option<&Json>,
     arrival: Option<&str>,
     _estimate: Option<&crate::codec::Estimate>,
@@ -393,7 +393,7 @@ pub fn call_completed(
 pub fn call_failed(
     model_call_id: &str,
     error: &ModelError,
-    usage: Option<&hh_telemetry::TokenVector>,
+    usage: Option<&hharness_telemetry::TokenVector>,
     timing: &crate::grammar::Timing,
     credential_binding_id: Option<&str>,
 ) -> Json {

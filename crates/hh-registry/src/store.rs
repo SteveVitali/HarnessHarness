@@ -5,7 +5,7 @@
 //! lines (`record` / `name_history` / `supersedes` / `revocation` / `policy` /
 //! `diagnostic`), rewritten atomically on each mutation. Records-in/records-out,
 //! deterministic given `registry_snapshot_id` (R8). The store **reuses** the one
-//! identity scheme: `NameIndex`/`Lineage`/`VersionedRef` from `hh-identity` (CC1 —
+//! identity scheme: `NameIndex`/`Lineage`/`VersionedRef` from `hharness-identity` (CC1 —
 //! name histories and the version DAG are replayed into those structures on open,
 //! never re-implemented), and never touches `implementation.content` (R3 — AC-3).
 //!
@@ -17,20 +17,20 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hh_identity::kinds::RecordKind as IdentityKind;
-use hh_identity::names::{
+use hharness_identity::kinds::RecordKind as IdentityKind;
+use hharness_identity::names::{
     NameHistoryEntry, NameIndex, NameStatus, Namespace, PublishError, ResolveMode, ResolveOutcome,
 };
-use hh_identity::refs::{NameSelector, VersionedRef};
-use hh_identity::sameness::{self, Delta, DiffClassification, Sameness};
-use hh_identity::supersede::{
+use hharness_identity::refs::{NameSelector, VersionedRef};
+use hharness_identity::sameness::{self, Delta, DiffClassification, Sameness};
+use hharness_identity::supersede::{
     Lineage, RevocationRecord, StaleEntry, SupersedeError, SupersedeReason,
 };
-use hh_provenance::{
+use hharness_provenance::{
     verify_attestation, Attestation, AttestationAnchor, AttestationKind, AuthorityClass,
     ContentKind, EndorsementBasis, Label, Origin, ProvenanceRecord, TrustedAnchors,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::events::RegistryEvent;
@@ -412,7 +412,7 @@ impl RegistryStore {
             path: "log".to_string(),
             detail: format!("{e}"),
         })?;
-        let j = hh_wire::json::parse(text).map_err(|e| RegistryError::SchemaViolation {
+        let j = hharness_wire::json::parse(text).map_err(|e| RegistryError::SchemaViolation {
             path: "log".to_string(),
             detail: format!("{e:?}"),
         })?;
@@ -736,8 +736,8 @@ impl RegistryStore {
     /// against the registered record, never a bare name).
     pub fn resolve_environment_family(
         &self,
-        family: hh_ontology::lab::EnvironmentFamily,
-    ) -> Option<&hh_ontology::lab::EnvironmentFamilyRecord> {
+        family: hharness_ontology::lab::EnvironmentFamily,
+    ) -> Option<&hharness_ontology::lab::EnvironmentFamilyRecord> {
         self.records.values().find_map(|(_, r)| match r {
             RegistryRecord::EnvironmentFamily(f) if f.family_id == family => Some(f),
             _ => None,
@@ -949,9 +949,9 @@ impl RegistryStore {
             | RegistryRecord::LeaderboardDefinition(body)
             | RegistryRecord::ModelProfile(body)
             | RegistryRecord::ProfileTestReport(body) => {
-                // Same opaque-body gate as `EnvironmentRecord` — `hh-hosting`
-                // owns the §6.6 schemas, `hh-results` the §6.5
-                // `LeaderboardDefinition` schema, `hh-compiler` the
+                // Same opaque-body gate as `EnvironmentRecord` — `hharness-hosting`
+                // owns the §6.6 schemas, `hharness-results` the §6.5
+                // `LeaderboardDefinition` schema, `hharness-compiler` the
                 // `ModelProfile/1` view + `ProfileTestReport` schemas; the
                 // registry re-runs the structural decode (the `kind` tag must
                 // match the record kind and the payload member must decode).
@@ -973,8 +973,8 @@ impl RegistryStore {
                 // declared `definition_ref` must reproduce from the document
                 // (the codec's read-direction check, run on the typed arm so
                 // a program-built record faces the same gate as the wire).
-                let body = hh_hir::wire::sealed_definition_json(s);
-                if let Err(e) = hh_hir::wire::sealed_definition_from_json(&body) {
+                let body = hharness_hir::wire::sealed_definition_json(s);
+                if let Err(e) = hharness_hir::wire::sealed_definition_from_json(&body) {
                     bail!(RegistryError::SchemaViolation {
                         path: "record".to_string(),
                         detail: format!("sealed_definition body: {e}"),
@@ -1043,7 +1043,7 @@ impl RegistryStore {
                             registrar.authority,
                             AuthorityClass::Kernel | AuthorityClass::Definition
                         ),
-                        now: hh_plugin::EvalPoint::kernel(),
+                        now: hharness_plugin::EvalPoint::kernel(),
                         requests_cap: None, // claims recorded; the cap binds at seal
                     };
                     if let Err(e2) = crate::extension::plugin::admit_plugin(self, &manifest, &ctx) {
@@ -1156,8 +1156,8 @@ impl RegistryStore {
             // ADR-0088 D8 / CF-327: capability registration emits the
             // kind-specific `lifecycle.capability.registered` class.
             let source_kind = match &c.node.semantic {
-                hh_hir::records::KindRecord::ToolCapability(t) => {
-                    hh_hir::tools::source_kind(&t.source).unwrap_or_default()
+                hharness_hir::records::KindRecord::ToolCapability(t) => {
+                    hharness_hir::tools::source_kind(&t.source).unwrap_or_default()
                 }
                 _ => String::new(),
             };
@@ -1236,7 +1236,7 @@ impl RegistryStore {
         // `validate_for_home` enforces the per-home required fields and runs the
         // member-level `validate_removal_test` checks (no resolvers at register —
         // the resolution-dependent refusals land with the experiment registry).
-        let debt_policy = hh_ontology::debt::DebtPolicy::default();
+        let debt_policy = hharness_ontology::debt::DebtPolicy::default();
         for (rule_id, debt) in &v.conditioned_rules {
             if rule_id.is_empty()
                 || debt.rule_id.is_empty()
@@ -1252,8 +1252,8 @@ impl RegistryStore {
                     rule_id: rule_id.clone(),
                 });
             }
-            let ctx = hh_hir::debt::RemovalTestContext::member_level();
-            match hh_hir::debt::validate_for_home(
+            let ctx = hharness_hir::debt::RemovalTestContext::member_level();
+            match hharness_hir::debt::validate_for_home(
                 debt,
                 "routing_policy_conditioned_rule",
                 "debt",
@@ -1261,8 +1261,8 @@ impl RegistryStore {
                 &ctx,
             ) {
                 Ok(()) => {}
-                Err(hh_hir::debt::DebtError::MissingField { .. })
-                | Err(hh_hir::debt::DebtError::UnknownDebtHome { .. }) => {
+                Err(hharness_hir::debt::DebtError::MissingField { .. })
+                | Err(hharness_hir::debt::DebtError::UnknownDebtHome { .. }) => {
                     return Err(RegistryError::ConditionedRuleIncomplete {
                         rule_id: rule_id.clone(),
                     });
@@ -1487,7 +1487,7 @@ impl RegistryStore {
                 subject: Some(vid),
                 registrar: ProvenanceRecord::minted(
                     Origin::kernel("registry.trust_roots"),
-                    hh_provenance::PersistenceScope::Run,
+                    hharness_provenance::PersistenceScope::Run,
                     seq,
                 ),
                 seq,
@@ -1495,7 +1495,7 @@ impl RegistryStore {
         }
     }
 
-    /// The `TrustedAnchors` view handed to `hh_provenance::verify_attestation`
+    /// The `TrustedAnchors` view handed to `hharness_provenance::verify_attestation`
     /// (accepted signers only — no chain heads are registered at this slice).
     fn trusted_anchors(&self) -> TrustedAnchors {
         TrustedAnchors {
@@ -1721,7 +1721,7 @@ impl RegistryStore {
                 source_system: "registry".to_string(),
                 mapping_version: "registry/1".to_string(),
             },
-            hh_provenance::PersistenceScope::Run,
+            hharness_provenance::PersistenceScope::Run,
             env.registered_at,
             att.clone(),
         );
@@ -1737,7 +1737,7 @@ impl RegistryStore {
             AttestationAnchor::Signer(s) => Some(s.clone()),
             AttestationAnchor::Chain(c) => Some(c.clone()),
         };
-        let ev = match hh_provenance::endorse(
+        let ev = match hharness_provenance::endorse(
             &subject_anchor,
             version_id.to_string(),
             &to,
@@ -2029,7 +2029,7 @@ impl RegistryStore {
                             ])]);
                         }
                     }
-                    let dref = hh_identity::idp::idp_id(
+                    let dref = hharness_identity::idp::idp_id(
                         "registry.diff",
                         ops.to_canonical_string().as_bytes(),
                     );
@@ -2147,7 +2147,7 @@ impl RegistryStore {
             kind: e.kind,
             version_id: e.version_id.clone(),
             semantic_id: e.semantic_id.clone(),
-            name: Some(hh_identity::refs::Name {
+            name: Some(hharness_identity::refs::Name {
                 namespace: e.namespace.as_str().to_string(),
                 name: e.name.clone(),
                 label: e.label.clone(),
@@ -2757,7 +2757,7 @@ impl RegistryStore {
                 name_bindings.insert((ns.to_string(), name.to_string()), vref.version_id);
             }
         }
-        let policy_digest = hh_identity::idp::idp_id(
+        let policy_digest = hharness_identity::idp::idp_id(
             "registry.policy",
             schema::policy_json(&self.policy)
                 .to_canonical_string()
@@ -3484,23 +3484,24 @@ impl RegistryStore {
                 // The real §3.1.7 classification over the two sealed documents —
                 // `classify_pair` is the gate-free reading of `diff`; the
                 // registry forwards it rather than approximating over the body.
-                let ca = hh_hir::diff::classify_pair(&sa.document, &sb.document);
-                let cb = hh_hir::diff::classify_pair(&sb.document, &sa.document);
+                let ca = hharness_hir::diff::classify_pair(&sa.document, &sb.document);
+                let cb = hharness_hir::diff::classify_pair(&sb.document, &sa.document);
                 Some(DiffClassification {
                     semantic_ops_nonempty: ca.semantic_ops > 0 || cb.semantic_ops > 0,
-                    authority_delta: if ca.authority_delta == hh_hir::diff::AuthorityDelta::Widening
-                        || cb.authority_delta == hh_hir::diff::AuthorityDelta::Widening
+                    authority_delta: if ca.authority_delta
+                        == hharness_hir::diff::AuthorityDelta::Widening
+                        || cb.authority_delta == hharness_hir::diff::AuthorityDelta::Widening
                     {
                         Delta::Widening
                     } else {
                         Delta::None
                     },
-                    budget_delta: if ca.budget_delta == hh_hir::diff::Delta::Loosening
-                        || cb.budget_delta == hh_hir::diff::Delta::Loosening
+                    budget_delta: if ca.budget_delta == hharness_hir::diff::Delta::Loosening
+                        || cb.budget_delta == hharness_hir::diff::Delta::Loosening
                     {
                         Delta::Loosening
-                    } else if ca.budget_delta == hh_hir::diff::Delta::Tightening
-                        || cb.budget_delta == hh_hir::diff::Delta::Tightening
+                    } else if ca.budget_delta == hharness_hir::diff::Delta::Tightening
+                        || cb.budget_delta == hharness_hir::diff::Delta::Tightening
                     {
                         Delta::Tightening
                     } else {
@@ -3664,8 +3665,10 @@ impl RegistryStore {
             }
         }
         for (vid, regen) in repairs {
-            let dref =
-                hh_identity::idp::idp_id("registry.diff", regen.to_canonical_string().as_bytes());
+            let dref = hharness_identity::idp::idp_id(
+                "registry.diff",
+                regen.to_canonical_string().as_bytes(),
+            );
             self.diffs.insert(vid.clone(), regen.clone());
             self.diagnostics.push(RegistryDiagnostic {
                 operation: "heal_diffs".to_string(),
@@ -3761,7 +3764,7 @@ fn registrar_origin_tagged(p: &ProvenanceRecord) -> String {
 /// `ContractRef`s, `ContractVersionPolicy`s and `check_compatibility` (CC1;
 /// §8.4 §2). This function is a delegate; semantics unchanged.
 pub(crate) fn range_covers(range: &str, version: &str) -> bool {
-    hh_plugin::contract::range_covers(range, version)
+    hharness_plugin::contract::range_covers(range, version)
 }
 
 /// Whether a `dialect_range` admits `registry/1`.
@@ -3813,10 +3816,10 @@ fn check_declaration(
 /// more privileged (`in_process` is the top of the lattice).
 /// The capability admission checks (§5d.1 §3 — V-E1 at `register`, ADR-0088
 /// D1's `ValidationErrors`): the node must be a `tool_capability` whose own
-/// provenance validates, and `hh_hir::tools::validate_capability` must be
+/// provenance validates, and `hharness_hir::tools::validate_capability` must be
 /// clean. Failures are collected, never fail-fast.
 fn check_capability(c: &CapabilityRecord) -> Result<(), RegistryError> {
-    if c.node.kind != hh_hir::kinds::EntityKind::ToolCapability {
+    if c.node.kind != hharness_hir::kinds::EntityKind::ToolCapability {
         return Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),
             detail: format!(
@@ -3831,13 +3834,13 @@ fn check_capability(c: &CapabilityRecord) -> Result<(), RegistryError> {
             detail: format!("{pe:?}"),
         });
     }
-    let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
+    let hharness_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
         return Err(RegistryError::SchemaViolation {
             path: "semantic".to_string(),
             detail: "node kind/semantic mismatch".to_string(),
         });
     };
-    let violations = hh_hir::tools::validate_capability(t, c.node.provenance.authority);
+    let violations = hharness_hir::tools::validate_capability(t, c.node.provenance.authority);
     if !violations.is_empty() {
         return Err(RegistryError::CapabilityValidation { violations });
     }
@@ -3849,13 +3852,13 @@ fn check_capability(c: &CapabilityRecord) -> Result<(), RegistryError> {
 /// or a `declared` effect set carrying members with no attribute vector (the
 /// `unknown_domain` honesty form — `effects = unknown` at the record level).
 fn capability_needs_quarantine(c: &CapabilityRecord) -> bool {
-    let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
+    let hharness_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
         return false;
     };
-    if hh_hir::tools::lifted_source_kind(&t.source).is_some() {
+    if hharness_hir::tools::lifted_source_kind(&t.source).is_some() {
         return true;
     }
-    if let hh_hir::kinds::ToolEffects::Declared(set) = &t.effects {
+    if let hharness_hir::kinds::ToolEffects::Declared(set) = &t.effects {
         if set.iter().any(|e| e.attributes.is_none()) {
             return true;
         }
@@ -4023,9 +4026,9 @@ fn successor_widening(old: &RegistryRecord, new: &RegistryRecord) -> bool {
             // (§3.1.7/§6.1 S-6): authority widening or budget loosening on the
             // superseded pair — the registry forwards `classify_pair`, never
             // re-derives its own widening rule.
-            let c = hh_hir::diff::classify_pair(&o.document, &n.document);
-            c.authority_delta == hh_hir::diff::AuthorityDelta::Widening
-                || c.budget_delta == hh_hir::diff::Delta::Loosening
+            let c = hharness_hir::diff::classify_pair(&o.document, &n.document);
+            c.authority_delta == hharness_hir::diff::AuthorityDelta::Widening
+                || c.budget_delta == hharness_hir::diff::Delta::Loosening
         }
         (RegistryRecord::Variant(o), RegistryRecord::Variant(n)) => {
             placement_rank(n.implementation.placement) > placement_rank(o.implementation.placement)

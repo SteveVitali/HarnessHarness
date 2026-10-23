@@ -1,6 +1,6 @@
 //! `hh-wire::http` — the one minimal HTTP/1.1 codec: the `local_network`
-//! binding (§7.2 binding (c); ADR-0301 D1), the `hh-env` mediated-egress
-//! proxy leg, the `hh-mcp` boundary helpers, and R4.5b's model-lane
+//! binding (§7.2 binding (c); ADR-0301 D1), the `hharness-env` mediated-egress
+//! proxy leg, the `hharness-mcp` boundary helpers, and R4.5b's model-lane
 //! `HttpModelTransport` (ADR-0364 D1 — CC1: the wire shape has exactly one
 //! implementation).
 //!
@@ -9,7 +9,7 @@
 //! semantics, no pipelining, no 1xx, no TLS *in the codec*. Every
 //! admission refusal (bad head, bad framing, too large, a scheme outside
 //! `http`/`https`) is a typed [`HttpError`], never a partial read or a
-//! silent upgrade. `https` parses — the TLS session lives in `hh-tls`
+//! silent upgrade. `https` parses — the TLS session lives in `hharness-tls`
 //! beneath this codec (R4.5c; ADR-0365); a caller that cannot terminate
 //! TLS answers its own typed refusal, never a downgrade.
 
@@ -74,7 +74,7 @@ pub enum HttpError {
     /// body-parse (reserved — callers may map to 400).
     Unsupported,
     /// The URL's scheme is neither `http` nor `https` (TLS terminates in
-    /// `hh-tls` beneath this codec — R4.5c/ADR-0365).
+    /// `hharness-tls` beneath this codec — R4.5c/ADR-0365).
     UnsupportedScheme(String),
     /// The URL did not parse (`http://host[:port]/target` required).
     BadUrl,
@@ -359,7 +359,7 @@ fn body_for(
     present_ok: bool,
 ) -> Result<Vec<u8>, HttpError> {
     // `Transfer-Encoding: chunked` request bodies decode through the same
-    // framed path as responses (the `hh-mcp` boundary's SSE-post client
+    // framed path as responses (the `hharness-mcp` boundary's SSE-post client
     // uses it — R4.5b's codec fold).
     if headers
         .get("transfer-encoding")
@@ -557,7 +557,7 @@ pub fn read_body(
 
 /// Read one HTTP response under any declared body mode —
 /// `Content-Length`, `Transfer-Encoding: chunked`, or close-delimited.
-/// This is the client-facing reader (`hh-env` egress, `hh-mcp` posts,
+/// This is the client-facing reader (`hharness-env` egress, `hharness-mcp` posts,
 /// the R4.5b model transport); [`read_response`] stays the strict
 /// `Content-Length`-only reader binding (c) documented.
 pub fn read_response_full(

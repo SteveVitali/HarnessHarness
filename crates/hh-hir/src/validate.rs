@@ -5,7 +5,7 @@
 //! The battery:
 //! - shape: `kind == semantic.kind()`, surface only on surface-carrying kinds, ext key
 //!   discipline, member dialects, T-LCD-01 statics (no model-identity field outside
-//!   `ProfileRef`/`surface`), `UnclassifiedKind` wiring through `hh-ontology`;
+//!   `ProfileRef`/`surface`), `UnclassifiedKind` wiring through `hharness-ontology`;
 //! - provenance: `ProvenanceRecord::validate` on every node, edge and `Text`/`CompiledPayload`
 //!   leaf; the scope write ceiling; R-TEXT per leaf;
 //! - references: every `Ref` resolves to a node of an allowed kind; edge endpoints resolve
@@ -23,8 +23,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_provenance::{AuthorityClass, ProvenanceError, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, ProvenanceError, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::document::{Edge, HirDocument, Node};
 use crate::errors::{HirError, ValidationReport};
@@ -140,7 +140,7 @@ fn check_node_shape(node: &Node, errs: &mut Vec<HirError>) {
     }
     // CC10 wiring: the kind must classify in the ontology's home table (DF-S1.1-1 — total
     // by construction; this exercises the boundary so a future unregistered kind fails).
-    if hh_ontology::planes::classify_home_identifier(node.kind.name()).is_err() {
+    if hharness_ontology::planes::classify_home_identifier(node.kind.name()).is_err() {
         errs.push(HirError::UnclassifiedKind {
             kind: node.kind.name().to_string(),
         });
@@ -170,7 +170,7 @@ fn check_member_provenance(
     // carry the seal-conferred `definition` authority. (Unsealed members at definition scope
     // are pre-seal content — `seal` raises them.)
     if sealed
-        && p.scope == hh_provenance::PersistenceScope::Definition
+        && p.scope == hharness_provenance::PersistenceScope::Definition
         && p.authority < AuthorityClass::Definition
     {
         errs.push(HirError::ScopeCeilingExceeded {
@@ -682,7 +682,7 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
             for (d, bound) in &b.dimensions {
                 // DF-S1.4-1 (closed at S1.6): keys are the closed kernel registry plus
                 // the derived bound names — unknown spellings are refused, never carried.
-                if hh_ontology::dimensions::DimensionKey::parse(d).is_none() {
+                if hharness_ontology::dimensions::DimensionKey::parse(d).is_none() {
                     errs.push(HirError::SchemaViolation {
                         detail: format!(
                             "budget dimension {d:?}: not in the kernel dimension registry (§8.2)"
@@ -715,7 +715,7 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
                 // engine-side; the member-level checks run here —
                 // AC-R-2.9.6-2 static half).
                 let ctx = crate::debt::RemovalTestContext::member_level();
-                let policy = hh_ontology::debt::DebtPolicy::default();
+                let policy = hharness_ontology::debt::DebtPolicy::default();
                 match crate::debt::validate_for_home(
                     d,
                     "harness_rule",
@@ -814,7 +814,7 @@ fn check_validator(
 
 fn check_hosted(h: &OpaqueProcess, errs: &mut Vec<HirError>) {
     // CF-351: `hosting_mechanism` never `none` on an OpaqueProcess.
-    if h.hosting_mechanism == hh_ontology::participant::HostingMechanism::None {
+    if h.hosting_mechanism == hharness_ontology::participant::HostingMechanism::None {
         errs.push(HirError::SchemaViolation {
             detail: "hosted body carries hosting_mechanism = none (CF-351)".into(),
         });
@@ -836,7 +836,7 @@ fn check_hosted(h: &OpaqueProcess, errs: &mut Vec<HirError>) {
 
 fn debt_complete(d: &AssumptionDebtRecord) -> bool {
     // The ratified `/1` base members (§5h.6 §3; REQUIRED_FIELDS_BASE) — the
-    // per-home richer check is `hh_hir::debt::validate_for_home` at
+    // per-home richer check is `hharness_hir::debt::validate_for_home` at
     // seal/register; this is the in-document completeness half.
     !d.rule_id.is_empty()
         && !d.hypothesis.content_hash.is_empty()
@@ -1287,7 +1287,7 @@ fn check_capability_procedure_sources(
 /// I-DISCOVERY (§5d.3 §2; ADR-0093 D8): a definition that admits `deferred`
 /// on any capability surface must carry a `discover_surfaces` capability
 /// (`exposure_hint.discovery = true`) — deferred/indexed reachability has no
-/// other path. The run-time half lives in `hh-compiler`'s `select_surfaces`.
+/// other path. The run-time half lives in `hharness-compiler`'s `select_surfaces`.
 fn check_discovery_capability(doc: &HirDocument, errs: &mut Vec<HirError>) {
     let admits_deferred = doc.nodes.iter().any(|n| {
         if !matches!(&n.semantic, KindRecord::ToolCapability(_)) {

@@ -20,7 +20,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::bind::{fold_verdicts, RowView};
 use crate::vocab::DivergenceClass;
@@ -416,7 +416,7 @@ pub fn divergence_classes() -> &'static [DivergenceClass] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::authority::AuthorityClass;
+    use hharness_provenance::authority::AuthorityClass;
 
     #[test]
     fn folds_gate_and_completion() {

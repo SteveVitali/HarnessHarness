@@ -56,14 +56,14 @@ if [ -n "$missing" ]; then
 fi
 
 # The variant + helper binaries the out-of-process cell spawns.
-(cd "$REPO_ROOT" && cargo build -q -p hh-github-issues -p hh-helper) \
+(cd "$REPO_ROOT" && cargo build -q -p hharness-github-issues -p hharness-helper) \
   || { say "GH_SKIP build-failed"; exit 2; }
 
 # The trap: re-run the rollback legs for anything state.json still marks
 # pending — fires on success, failure, and SIGINT alike. Never fatal.
 cleanup() {
   (cd "$REPO_ROOT" && HH_GH_DIR="$GH_DIR" \
-    cargo test -q -p hh-embed --test r4_7_live r47_github_cleanup \
+    cargo test -q -p hharness-embed --test r4_7_live r47_github_cleanup \
       -- --ignored --nocapture) 2>&1 | sed 's/^/  [cleanup] /' || true
 }
 trap cleanup EXIT INT TERM
@@ -72,7 +72,7 @@ rc_total=0
 for cell in r47_github_live r47_github_plugin; do
   rc=0
   (cd "$REPO_ROOT" && HH_GH_DIR="$GH_DIR" \
-    cargo test -p hh-embed --test r4_7_live "$cell" -- --ignored --nocapture) 2>&1 \
+    cargo test -p hharness-embed --test r4_7_live "$cell" -- --ignored --nocapture) 2>&1 \
     || rc=$?
   [ "$rc" -ne 0 ] && rc_total=$rc
 done

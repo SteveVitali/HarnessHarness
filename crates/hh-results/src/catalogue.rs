@@ -7,12 +7,12 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use hh_bundle::export::MemberBytes;
-use hh_bundle::manifest::{BundleManifest, MemberStatus, ReproLevel};
-use hh_bundle::validate;
-use hh_identity::idp::{idp_id, parse_id, ContentAddress};
-use hh_ledger::store::Store;
-use hh_wire::json::{parse as json_parse, Json};
+use hharness_bundle::export::MemberBytes;
+use hharness_bundle::manifest::{BundleManifest, MemberStatus, ReproLevel};
+use hharness_bundle::validate;
+use hharness_identity::idp::{idp_id, parse_id, ContentAddress};
+use hharness_ledger::store::Store;
+use hharness_wire::json::{parse as json_parse, Json};
 
 use crate::error::ResultsError;
 use crate::store::ResultsStore;
@@ -33,7 +33,7 @@ pub const CATALOGUE_SCHEMA: &str = "hh-bundle-catalogue/1";
 pub enum BundleStatus {
     /// Assembled, not (or not yet / no longer) validated.
     Assembled,
-    /// `hh_bundle::validate` passes over materialized members.
+    /// `hharness_bundle::validate` passes over materialized members.
     Validated,
     /// Attested — a verified attestation on the manifest exists (S4.2).
     Attested,
@@ -152,7 +152,7 @@ pub struct BundleCatalogueEntry {
     pub claimed_level: Option<ReproLevel>,
     /// The derived maximum.
     pub max_supported_level: Option<ReproLevel>,
-    /// The catalogue status (validated ⟺ `hh_bundle::validate` passes over
+    /// The catalogue status (validated ⟺ `hharness_bundle::validate` passes over
     /// the materialized members at refresh).
     pub status: BundleStatus,
     /// The declared readers (S8 reader checks are Stage-4; recorded).
@@ -623,7 +623,7 @@ fn entry_for(
 /// ("satisfies nothing above R0" — manifest.rs); `NotApplicable` never
 /// blocks; `Missing` fails.
 fn level_now(store: &Store, manifest: &BundleManifest) -> Option<ReproLevel> {
-    let (max, basis) = hh_bundle::levels::derive(manifest, false);
+    let (max, basis) = hharness_bundle::levels::derive(manifest, false);
     let resolves = |addr: &str| -> bool {
         manifest
             .members
@@ -645,10 +645,12 @@ fn level_now(store: &Store, manifest: &BundleManifest) -> Option<ReproLevel> {
             .iter()
             .filter(|b| b.level == level)
             .all(|b| match &b.satisfied_by {
-                hh_bundle::manifest::BasisSatisfaction::Member(a) => resolves(a),
-                hh_bundle::manifest::BasisSatisfaction::Unpinned(_) => level == ReproLevel::R0,
-                hh_bundle::manifest::BasisSatisfaction::NotApplicable(_) => true,
-                hh_bundle::manifest::BasisSatisfaction::Missing => false,
+                hharness_bundle::manifest::BasisSatisfaction::Member(a) => resolves(a),
+                hharness_bundle::manifest::BasisSatisfaction::Unpinned(_) => {
+                    level == ReproLevel::R0
+                }
+                hharness_bundle::manifest::BasisSatisfaction::NotApplicable(_) => true,
+                hharness_bundle::manifest::BasisSatisfaction::Missing => false,
             });
         if ok {
             best = Some(level);

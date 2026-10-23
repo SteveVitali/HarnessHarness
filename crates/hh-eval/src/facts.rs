@@ -7,7 +7,7 @@
 //! *what the ledger says*; nothing is inferred (a missing decision row is a
 //! fact, never a default).
 //!
-//! Event classes read (all registered in `hh_ledger::classes::CLASS_TABLE`):
+//! Event classes read (all registered in `hharness_ledger::classes::CLASS_TABLE`):
 //!
 //! - `security.egress.requested` / `security.egress.decided` — the L4
 //!   `benchmark_egress` veto's input.
@@ -32,7 +32,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 
@@ -454,7 +454,7 @@ pub struct SpendRowFact {
     pub provenance_class: Option<String>,
     /// `confidence` — decoded (`exact | bounded{lo,hi} | estimate |
     /// unknown`); estimate/unknown render bands, never points.
-    pub confidence: Option<hh_budget::pricing::Confidence>,
+    pub confidence: Option<hharness_budget::pricing::Confidence>,
     /// `coverage` — the ppm share of the run's calls the row prices; a
     /// row with `coverage < 1` is never summed as complete (OQ-033).
     pub coverage_ppm: Option<i64>,
@@ -1000,7 +1000,7 @@ impl LedgerFacts {
                         provenance_class: s(p, "provenance_class"),
                         confidence: p
                             .get("confidence")
-                            .and_then(hh_budget::pricing::Confidence::from_json),
+                            .and_then(hharness_budget::pricing::Confidence::from_json),
                         coverage_ppm: p.get("coverage").and_then(Json::as_int),
                         currency: s(&p.get("money").cloned().unwrap_or(Json::Null), "currency"),
                         micro_units: si(p, "money", "micro_units"),
@@ -1052,7 +1052,7 @@ impl LedgerFacts {
                         for c in calls {
                             let raw = c.get("args_raw").and_then(Json::as_str);
                             if let Some(raw) = raw {
-                                if let Ok(a) = hh_wire::json::parse(raw) {
+                                if let Ok(a) = hharness_wire::json::parse(raw) {
                                     for m in
                                         ["path", "resource", "uri", "target", "file", "file_path"]
                                     {
@@ -2242,7 +2242,7 @@ impl LedgerFacts {
                     provenance_class: s(r, "provenance_class"),
                     confidence: r
                         .get("confidence")
-                        .and_then(hh_budget::pricing::Confidence::from_json),
+                        .and_then(hharness_budget::pricing::Confidence::from_json),
                     coverage_ppm: r.get("coverage").and_then(Json::as_int),
                     currency: s(r, "currency"),
                     micro_units: r.get("micro_units").and_then(Json::as_int),

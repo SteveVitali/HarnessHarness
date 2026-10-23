@@ -1,4 +1,4 @@
-//! `hh-secret-scan` — the thin CLI over `hh_secrets`' one canonical detector
+//! `hh-secret-scan` — the thin CLI over `hharness_secrets`' one canonical detector
 //! set (`DetectorSet::standard` + `redact`/`leak_scan`), built for the
 //! live-evidence gate (ADR-0363 D6; ticket R4.5a). CC1: no second spelling of
 //! the patterns or mask machinery exists anywhere else.
@@ -19,7 +19,7 @@
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
-use hh_secrets::{
+use hharness_secrets::{
     is_inheritable, redact, CredentialBroker, DenyAllResolver, DetectorSet, MaskEntry, MaskSet,
     ScanTarget,
 };
@@ -194,7 +194,7 @@ fn main() -> ExitCode {
                         }
                     }
                 };
-                for leak in hh_secrets::leak_scan(
+                for leak in hharness_secrets::leak_scan(
                     &[(ScanTarget::Artifact(name.clone()), text.as_str())],
                     &detectors,
                 ) {

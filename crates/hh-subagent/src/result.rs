@@ -10,12 +10,12 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::account::Account;
-use hh_budget::BudgetMode;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_budget::account::Account;
+use hharness_budget::BudgetMode;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::spawn::{fold_children, kernel_ev_pub};
 use crate::types::SpawnError;
@@ -112,13 +112,13 @@ pub fn child_terminal_view(
 fn child_head_anchor(
     store: &Store,
     child_run_id: &str,
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
 ) -> Result<Option<Json>, SpawnError> {
     if let Some(final_cp) = events.iter().rev().find(|e| {
         e.class == "security.audit.checkpoint"
             && e.payload.get("kind").and_then(Json::as_str) == Some("final")
     }) {
-        if let Some(claim) = hh_ledger::tree::parse_checkpoint(&final_cp.payload) {
+        if let Some(claim) = hharness_ledger::tree::parse_checkpoint(&final_cp.payload) {
             if let (Some(tree_size), Some(chain_hash)) = (claim.tree_size, claim.chain_hash) {
                 return Ok(Some(Json::obj([
                     (
@@ -131,7 +131,9 @@ fn child_head_anchor(
                         Json::str(
                             claim
                                 .idp
-                                .unwrap_or_else(|| hh_ledger::tree::checkpoint_idp(&claim.payload))
+                                .unwrap_or_else(|| {
+                                    hharness_ledger::tree::checkpoint_idp(&claim.payload)
+                                })
                                 .as_str(),
                         ),
                     ),
@@ -303,7 +305,7 @@ pub fn record_child_result(
 /// The `control.subagent.result` commit plus the built record.
 pub struct SeqRangePair {
     /// The committed seq range.
-    pub range: hh_ledger::event::SeqRange,
+    pub range: hharness_ledger::event::SeqRange,
     /// The `SubagentResult` the row carries.
     pub result: SubagentResult,
 }
@@ -318,7 +320,7 @@ pub fn record_child_cancelled(
     spec: &SubagentSpec,
     reason: CancelReason,
     budget_id: &str,
-) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+) -> Result<hharness_ledger::event::SeqRange, SpawnError> {
     if spec.budget_mode == BudgetMode::Slice {
         let mut account =
             Account::open(store, parent_run_id).map_err(|e| SpawnError::Kernel(e.to_string()))?;
@@ -369,7 +371,7 @@ pub fn detach_to_child(
     parent_lease: &Lease,
     child_run_id: &str,
     decision: &EventRef,
-) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+) -> Result<hharness_ledger::event::SeqRange, SpawnError> {
     let mut ev = kernel_ev_pub(
         store,
         parent_run_id,
@@ -597,11 +599,11 @@ pub fn drain_on_parent_stop(
     Ok(done)
 }
 
-pub(crate) fn default_goal() -> hh_hir::records::GoalRecord {
-    use hh_hir::leaves::Text;
-    use hh_hir::records::GoalOrigin;
-    use hh_hir::refs::{Ref, RefVersion};
-    hh_hir::records::GoalRecord {
+pub(crate) fn default_goal() -> hharness_hir::records::GoalRecord {
+    use hharness_hir::leaves::Text;
+    use hharness_hir::records::GoalOrigin;
+    use hharness_hir::refs::{Ref, RefVersion};
+    hharness_hir::records::GoalRecord {
         statement: Text::new(
             "(unavailable)",
             "kernel",
@@ -623,7 +625,7 @@ pub(crate) fn default_goal() -> hh_hir::records::GoalRecord {
 pub(crate) fn default_spec() -> SubagentSpec {
     SubagentSpec {
         process: ChildProcess::Native {
-            harness_def: hh_hir::refs::Ref::pinned(
+            harness_def: hharness_hir::refs::Ref::pinned(
                 "harness".to_string(),
                 "sha256:zero".to_string(),
             ),
@@ -635,7 +637,7 @@ pub(crate) fn default_spec() -> SubagentSpec {
         role: ChildRole::Subagent,
         requested_grants: Vec::new(),
         ceiling: None,
-        budget_spec: hh_budget::spec::BudgetSpec::default(),
+        budget_spec: hharness_budget::spec::BudgetSpec::default(),
         budget_mode: BudgetMode::Pool,
         context: ContextIsolation::Fresh,
         environment: EnvIsolation::None,
@@ -643,7 +645,7 @@ pub(crate) fn default_spec() -> SubagentSpec {
         return_contract: ReturnContract::default(),
         wait_mode: WaitMode::Background,
         wait_timeout_ms: 0,
-        on_parent_end: hh_env::handle::OnParentEnd::Teardown,
+        on_parent_end: hharness_env::handle::OnParentEnd::Teardown,
         delegation_reason: DelegationReason::CleanContext,
         topology_ref: None,
         stage_index: None,

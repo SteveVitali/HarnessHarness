@@ -10,18 +10,20 @@
 //! - the `attested` evidence kind lands only under a substrate
 //!   attestation; `for_policy`/`for_class` drive backend selection.
 
-use hh_containment::attach::{
+use hharness_containment::attach::{
     attach, evidence_preview, AttachInput, AttachMode, AttachOutcome, PolicySlot,
 };
-use hh_containment::backend::{
+use hharness_containment::backend::{
     for_class, for_policy, Attestation, BackendClass, ContainmentBackend, ModelBackend, NetPlane,
 };
-use hh_containment::policy::{kernel_default, EgressRule, HostPattern, NetMode, RuleDecision};
-use hh_containment::report::{EnforcementEvidence, FieldGroup, ProbeKind};
-use hh_hir::leaves::Text;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_containment::policy::{
+    kernel_default, EgressRule, HostPattern, NetMode, RuleDecision,
+};
+use hharness_containment::report::{EnforcementEvidence, FieldGroup, ProbeKind};
+use hharness_hir::leaves::Text;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
 
-use hh_containment::backend::{GateVerdict, Syscall};
+use hharness_containment::backend::{GateVerdict, Syscall};
 
 fn att() -> Attestation {
     Attestation {
@@ -32,23 +34,25 @@ fn att() -> Attestation {
 
 /// A principal-authority policy at the given isolation class.
 fn policy_at(
-    class: hh_containment::policy::IsolationClass,
-) -> hh_containment::policy::ContainmentPolicy {
+    class: hharness_containment::policy::IsolationClass,
+) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     p.provenance.authority = AuthorityClass::Principal;
     p.proc.isolation_class = class;
-    p.fs.write.allow.push(hh_containment::policy::WritableRoot {
-        root: "workspace".to_string(),
-        read_only_subpaths: vec![],
-        protected_metadata_names: vec![],
-    });
+    p.fs.write
+        .allow
+        .push(hharness_containment::policy::WritableRoot {
+            root: "workspace".to_string(),
+            read_only_subpaths: vec![],
+            protected_metadata_names: vec![],
+        });
     p.compute_ids();
     p
 }
 
 fn input<'a>(
-    policy: &'a hh_containment::policy::ContainmentPolicy,
-    backend: &'a dyn hh_containment::backend::ContainmentBackend,
+    policy: &'a hharness_containment::policy::ContainmentPolicy,
+    backend: &'a dyn hharness_containment::backend::ContainmentBackend,
 ) -> AttachInput<'a> {
     AttachInput {
         env_handle: "env:test",
@@ -67,27 +71,27 @@ fn input<'a>(
 fn for_policy_maps_isolation_class_to_backend() {
     for (class, expect_backend) in [
         (
-            hh_containment::policy::IsolationClass::ProcessSandbox,
+            hharness_containment::policy::IsolationClass::ProcessSandbox,
             "ep2_model",
         ),
         (
-            hh_containment::policy::IsolationClass::Namespaces,
+            hharness_containment::policy::IsolationClass::Namespaces,
             "namespaces_model",
         ),
         (
-            hh_containment::policy::IsolationClass::UserSpaceKernel,
+            hharness_containment::policy::IsolationClass::UserSpaceKernel,
             "user_space_kernel_model",
         ),
         (
-            hh_containment::policy::IsolationClass::Microvm,
+            hharness_containment::policy::IsolationClass::Microvm,
             "microvm_model",
         ),
     ] {
         let p = policy_at(class);
         let need = matches!(
             class,
-            hh_containment::policy::IsolationClass::UserSpaceKernel
-                | hh_containment::policy::IsolationClass::Microvm
+            hharness_containment::policy::IsolationClass::UserSpaceKernel
+                | hharness_containment::policy::IsolationClass::Microvm
         );
         let b = for_policy(&p, need.then(att)).unwrap();
         assert_eq!(b.name(), expect_backend, "class {class:?}");
@@ -98,8 +102,8 @@ fn for_policy_maps_isolation_class_to_backend() {
 #[test]
 fn attested_classes_refuse_without_attestation() {
     for class in [
-        hh_containment::policy::IsolationClass::UserSpaceKernel,
-        hh_containment::policy::IsolationClass::Microvm,
+        hharness_containment::policy::IsolationClass::UserSpaceKernel,
+        hharness_containment::policy::IsolationClass::Microvm,
     ] {
         let p = policy_at(class);
         match for_policy(&p, None) {
@@ -113,7 +117,7 @@ fn attested_classes_refuse_without_attestation() {
 
 #[test]
 fn ac_h4_12_battery_runs_against_each_shipped_class() {
-    let backends: Vec<Box<dyn hh_containment::backend::ContainmentBackend>> = vec![
+    let backends: Vec<Box<dyn hharness_containment::backend::ContainmentBackend>> = vec![
         for_class(BackendClass::ProcessSandbox, None).unwrap(),
         for_class(BackendClass::Namespaces, None).unwrap(),
         for_class(BackendClass::UserSpaceKernel, Some(att())).unwrap(),
@@ -154,7 +158,7 @@ fn ac_h4_12_battery_runs_against_each_shipped_class() {
 
 #[test]
 fn attested_evidence_lands_only_under_a_substrate_attestation() {
-    let p = policy_at(hh_containment::policy::IsolationClass::UserSpaceKernel);
+    let p = policy_at(hharness_containment::policy::IsolationClass::UserSpaceKernel);
     let b = ModelBackend::user_space_kernel(att());
     let map = evidence_preview(&b, &p).unwrap();
     assert_eq!(map[&FieldGroup::Fs], EnforcementEvidence::Attested);
@@ -165,7 +169,7 @@ fn attested_evidence_lands_only_under_a_substrate_attestation() {
     assert_eq!(map[&FieldGroup::Resources], EnforcementEvidence::Reported);
 
     // A namespaces model carries no attestation — `probed`, not `attested`.
-    let p2 = policy_at(hh_containment::policy::IsolationClass::Namespaces);
+    let p2 = policy_at(hharness_containment::policy::IsolationClass::Namespaces);
     let map = evidence_preview(&ModelBackend::namespaces(), &p2).unwrap();
     assert_eq!(map[&FieldGroup::Fs], EnforcementEvidence::Probed);
 }
@@ -174,7 +178,7 @@ fn attested_evidence_lands_only_under_a_substrate_attestation() {
 
 #[test]
 fn transparent_redirect_mediated_allows_rule_covered_hosts_only() {
-    let mut p = policy_at(hh_containment::policy::IsolationClass::Namespaces);
+    let mut p = policy_at(hharness_containment::policy::IsolationClass::Namespaces);
     p.net.mode = NetMode::Mediated;
     p.net.rules.push(EgressRule {
         host: HostPattern::Exact("allowed.example".to_string()),
@@ -229,7 +233,7 @@ fn transparent_redirect_mediated_allows_rule_covered_hosts_only() {
 
 #[test]
 fn ac_h4_13_external_boundary_reports_reported_never_probed() {
-    let p = policy_at(hh_containment::policy::IsolationClass::External);
+    let p = policy_at(hharness_containment::policy::IsolationClass::External);
     let b = ModelBackend::external();
     let out = attach(&input(&p, &b)).unwrap();
     let AttachOutcome::Applied { report, .. } = out else {
@@ -237,7 +241,7 @@ fn ac_h4_13_external_boundary_reports_reported_never_probed() {
     };
     assert_eq!(
         report.isolation_class,
-        hh_containment::policy::IsolationClass::External
+        hharness_containment::policy::IsolationClass::External
     );
     // Every enforced group is `reported` — the participant's own
     // declaration; no probes run inside the opaque boundary.
@@ -256,6 +260,6 @@ fn ac_h4_13_external_boundary_reports_reported_never_probed() {
     );
     // And a hosted boundary refuses a non-external class claim.
     let mut p2 = p.clone();
-    p2.proc.isolation_class = hh_containment::policy::IsolationClass::Namespaces;
+    p2.proc.isolation_class = hharness_containment::policy::IsolationClass::Namespaces;
     assert!(b.apply(&p2).is_err());
 }

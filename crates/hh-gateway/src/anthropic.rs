@@ -34,7 +34,7 @@
 
 use crate::codec::WireFrame;
 use crate::vocab::{ModelError, ModelErrorClass};
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 // ── request render ───────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ pub fn assistant_tool_use_msg(calls: &[(String, String, String)]) -> Json {
     let blocks: Vec<Json> = calls
         .iter()
         .map(|(id, name, args)| {
-            let input = hh_wire::json::parse(args).unwrap_or_else(|_| Json::obj([]));
+            let input = hharness_wire::json::parse(args).unwrap_or_else(|_| Json::obj([]));
             Json::obj([
                 ("type", Json::str("tool_use")),
                 ("id", Json::str(id.clone())),

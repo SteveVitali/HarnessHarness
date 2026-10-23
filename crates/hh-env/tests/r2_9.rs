@@ -26,70 +26,74 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_budget::account::Account;
-use hh_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_compiler::surface::{BindingMapping, CompileExposureMode};
-use hh_containment::admit::ContainmentDiff;
-use hh_containment::amend::amend;
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::egress::{ApprovalCache, EgressRequest};
-use hh_containment::events::DecidedBy;
-use hh_containment::policy::{
+use hharness_budget::account::Account;
+use hharness_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_compiler::surface::{BindingMapping, CompileExposureMode};
+use hharness_containment::admit::ContainmentDiff;
+use hharness_containment::amend::amend;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::egress::{ApprovalCache, EgressRequest};
+use hharness_containment::events::DecidedBy;
+use hharness_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressProtocol,
     ExecPolicy, HostPattern, IsolationClass, NetMode, NonPublic, ResourceLimits, RuleDecision,
     WritableRoot,
 };
-use hh_env::capture::OutputPolicy;
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::{resource_budget_spec, EnvDriver};
-use hh_env::egress::{
+use hharness_env::capture::OutputPolicy;
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::{resource_budget_spec, EnvDriver};
+use hharness_env::egress::{
     EgressMediator, EgressTransport, GateOutcome, MediatedOutcome, StaticResolver, WireResponse,
 };
-use hh_env::errors::EnvError;
-use hh_env::events::{intended_payload, EventMinter, ScopeChain};
-use hh_env::executor::{
+use hharness_env::errors::EnvError;
+use hharness_env::events::{intended_payload, EventMinter, ScopeChain};
+use hharness_env::executor::{
     DedupSupport, ExecutionRequest, ExecutorDeclaration, ExecutorSignal, InterruptSupport,
     ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_env::tokens::TokenMinter;
-use hh_hir::kinds::{
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_env::tokens::TokenMinter;
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_hir::tools::ExposureMode;
-use hh_identity::idp::address;
-use hh_ledger::event::{Cursor, Direction, Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::approval::{ApprovalResponse, EndorserRef, LeaseSpec, ResponseChoice};
-use hh_monitor::assess::SecretTransport;
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::risk::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_hir::tools::ExposureMode;
+use hharness_identity::idp::address;
+use hharness_ledger::event::{Cursor, Direction, Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::approval::{ApprovalResponse, EndorserRef, LeaseSpec, ResponseChoice};
+use hharness_monitor::assess::SecretTransport;
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::risk::{
     RepeatSafety as RiskRepeatSafety, RiskClass, RiskReversibility, RiskScope,
 };
-use hh_provenance::origin::HumanRole;
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::DetectorSet;
-use hh_secrets::{
+use hharness_provenance::origin::HumanRole;
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::DetectorSet;
+use hharness_secrets::{
     AccessClass, AuthCarrier, BindRequest, CredentialBroker, CredentialKind, DestinationBinding,
     SecretChannel, SecretChannelSpec, SecretSource, SenderConstraint, StaticVault,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── scaffold (the acceptance battery's shape) ────────────────────────────────
 
@@ -307,7 +311,7 @@ fn ready_env(
     h.env_handle_id
 }
 
-fn read_all(store: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     store
         .read(run, Cursor::Seq(0), None, Direction::Fwd, usize::MAX)
         .unwrap()
@@ -384,7 +388,7 @@ fn mediated<'a>(
     run: &str,
     lease: &'a Lease,
     broker: &'a mut CredentialBroker,
-    tokens: hh_env::tokens::TokenResolver,
+    tokens: hharness_env::tokens::TokenResolver,
     policy: ContainmentPolicy,
     transport: CaptureTransport,
 ) -> EgressMediator<'a> {

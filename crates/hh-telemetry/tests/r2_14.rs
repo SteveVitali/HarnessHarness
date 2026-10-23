@@ -12,22 +12,24 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::views::ViewKind;
-use hh_ontology::participant::{Observability, ParticipantClass};
-use hh_telemetry::genai;
-use hh_telemetry::lift::lift_span;
-use hh_telemetry::openinfer as oi;
-use hh_telemetry::phase::turn_phase_profile;
-use hh_telemetry::propagation::{
-    acp_hh_members, carrier_loss, inbound_carrier, meta_carrier, outbound_context,
+use hharness_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::views::ViewKind;
+use hharness_ontology::participant::{Observability, ParticipantClass};
+use hharness_telemetry::genai;
+use hharness_telemetry::lift::lift_span;
+use hharness_telemetry::openinfer as oi;
+use hharness_telemetry::phase::turn_phase_profile;
+use hharness_telemetry::propagation::{
+    acp_hharness_members, carrier_loss, inbound_carrier, meta_carrier, outbound_context,
     MCP_PROPAGATION_KEY,
 };
-use hh_telemetry::views::{catalogue_distributions, metric_view, metric_view_scoped, trace_view};
-use hh_wire::json::Json;
+use hharness_telemetry::views::{
+    catalogue_distributions, metric_view, metric_view_scoped, trace_view,
+};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -69,7 +71,10 @@ fn ev(id: &str, class: &str, scope: Scope, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -99,14 +104,14 @@ fn mcp_meta_carrier_round_trips_through_inbound_carrier() {
     assert_eq!(link.run_id.as_deref(), Some("run-1"));
     assert_eq!(link.event_id.as_deref(), Some("event-1"));
     assert_eq!(link.configuration_id.as_deref(), Some("cfg-9"));
-    // The MCP slot key is the `dev.cognition/*` namespace's.
-    assert_eq!(MCP_PROPAGATION_KEY, "dev.cognition/propagation");
+    // The MCP slot key is the `hharness/*` namespace's.
+    assert_eq!(MCP_PROPAGATION_KEY, "hharness/propagation");
 }
 
 #[test]
-fn acp_hh_members_carry_the_flat_spelling() {
+fn acp_hharness_members_carry_the_flat_spelling() {
     let ctx = outbound_context("root-1", "run-1", "event-1", Some("cfg-9"));
-    let members: BTreeMap<String, Json> = acp_hh_members(&ctx).into_iter().collect();
+    let members: BTreeMap<String, Json> = acp_hharness_members(&ctx).into_iter().collect();
     assert_eq!(
         members.get("traceparent").and_then(Json::as_str),
         Some(ctx.traceparent.as_str())

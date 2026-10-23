@@ -6,11 +6,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_experiment::docs::LabDocs;
-use hh_experiment::view::ExperimentView;
-use hh_ledger::manifest::RunKind;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_experiment::docs::LabDocs;
+use hharness_experiment::view::ExperimentView;
+use hharness_ledger::manifest::RunKind;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::error::ResultsError;
 use crate::row::ResultsRow;
@@ -229,7 +229,7 @@ pub(crate) fn build_cells_inner(
         Some(s) => s,
         None => exp_head.seq,
     };
-    let events: Vec<hh_ledger::event::EventEnvelope> = store
+    let events: Vec<hharness_ledger::event::EventEnvelope> = store
         .envelopes(&experiment_run_id)
         .map_err(ResultsError::from)?
         .iter()
@@ -367,14 +367,14 @@ pub(crate) fn build_cells_inner(
         m.remove("view_hash");
     }
     table.view_hash =
-        hh_identity::idp::idp_id("results_view", pre.to_canonical_string().as_bytes());
+        hharness_identity::idp::idp_id("results_view", pre.to_canonical_string().as_bytes());
     Ok((table, projected))
 }
 
 /// The affirmative-value rule for `c` (bool `true` / verdict `P`; decimal
 /// and vector values have no affirmative reading — they live in `values[]`).
-fn affirmative(v: &hh_ontology::eval::MetricValueKind) -> bool {
-    use hh_ontology::eval::MetricValueKind as K;
+fn affirmative(v: &hharness_ontology::eval::MetricValueKind) -> bool {
+    use hharness_ontology::eval::MetricValueKind as K;
     match v {
         K::Bool(b) => *b,
         K::Verdict(l) => l.as_str() == "P",
@@ -443,7 +443,7 @@ pub fn distribution(
             if cell.is_concrete() {
                 e.0 += 1;
                 values.push(cell.value.to_json());
-                if let hh_ontology::eval::MetricValueKind::Decimal(d) = cell.value {
+                if let hharness_ontology::eval::MetricValueKind::Decimal(d) = cell.value {
                     decimals.push(d);
                 }
             }
@@ -494,6 +494,7 @@ pub fn distribution(
         ),
         ("watermark_set", d.watermark_set.to_json()),
     ]);
-    d.view_hash = hh_identity::idp::idp_id("results_view", j.to_canonical_string().as_bytes());
+    d.view_hash =
+        hharness_identity::idp::idp_id("results_view", j.to_canonical_string().as_bytes());
     Ok(d)
 }

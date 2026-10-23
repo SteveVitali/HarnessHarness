@@ -10,7 +10,7 @@
 
 use crate::errors::EmbedError;
 use crate::strict::{closed_str, StrictObj};
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 // ── Negotiation (Group H) ───────────────────────────────────────────────
@@ -675,7 +675,7 @@ impl NarrowingLeaf {
     /// The surface's table and this record derive the same id from the
     /// same canonical bytes (CC1).
     pub fn leaf_id(&self) -> String {
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "narrowing_leaf",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -1005,7 +1005,7 @@ pub struct ClientDecl {
     /// future surfaces declare before the enum hardens).
     pub kind: String,
     /// The surface's declared `SinkPolicy`, verbatim (`content_classes`,
-    /// redaction, field caps, consent — the `hh-telemetry` shape). Optional;
+    /// redaction, field caps, consent — the `hharness-telemetry` shape). Optional;
     /// the boundary carries it without decoding its semantics.
     pub sink: Option<Json>,
     /// The surface's own authority/identifier, verbatim — recorded on
@@ -2158,7 +2158,7 @@ impl View {
         ]);
         format!(
             "sha256:{}",
-            hh_wire::sha256::sha256_hex(material.to_canonical_string().as_bytes())
+            hharness_wire::sha256::sha256_hex(material.to_canonical_string().as_bytes())
         )
     }
 
@@ -3222,7 +3222,7 @@ impl InterventionRecord {
 /// `counterfactual`'s `design` — `{n_seeds, k?, budget, factual_arm,
 /// noise_coupling?, target?}` (§5a.4 + §5h.7's CF-432; the `budget`
 /// member is the MatchSpec's canonical JSON — the kernel parses it
-/// through `hh_budget::MatchSpec`, the schema crate stays
+/// through `hharness_budget::MatchSpec`, the schema crate stays
 /// dependency-free). `noise_coupling = crn` shares
 /// `H(configuration_version_id.seed ∥ replicate_index ∥ fork_point)`
 /// across the two arms of a replicate (S6.3b); absent/`none` keeps the

@@ -13,11 +13,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::diff::{self, DiffDerivation};
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-use hh_hir::leaves::Text;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::diff::{self, DiffDerivation};
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+use hharness_hir::leaves::Text;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::records::{
     CandidateProposal, ConditionedRuleDecl, FailureHypothesis, ParentSelectionPolicy,
@@ -436,7 +436,7 @@ impl AheProposer {
             if !self.admissible_node(n, constraints) {
                 continue;
             }
-            let rec = hh_hir::wire::semantic_record_json(&n.semantic, true);
+            let rec = hharness_hir::wire::semantic_record_json(&n.semantic, true);
             if let Some(path) = Self::find_member(&rec, "", 0) {
                 return Some((n.semantic_id(), path));
             }
@@ -566,18 +566,19 @@ impl AheProposer {
             .iter_mut()
             .find(|n| n.semantic_id() == node_id)
             .expect("node came from base");
-        let mut rec = hh_hir::wire::semantic_record_json(&tnode.semantic, true);
+        let mut rec = hharness_hir::wire::semantic_record_json(&tnode.semantic, true);
         Self::set_member(&mut rec, &member.split('.').collect::<Vec<_>>(), task);
         // Rewrite the node's record through the kinds' own codec — a
         // member that doesn't decode is a proposer defect surfaced as a
         // typed failure, never a silent drop.
-        tnode.semantic = hh_hir::wire::semantic_record_from_json(tnode.kind, &rec, "ahe-proposer")
-            .map_err(|e| ProposerFailure::ConstraintUnsatisfiable {
-                detail: format!("edited record fails its own codec: {e:?}"),
-            })?;
+        tnode.semantic =
+            hharness_hir::wire::semantic_record_from_json(tnode.kind, &rec, "ahe-proposer")
+                .map_err(|e| ProposerFailure::ConstraintUnsatisfiable {
+                    detail: format!("edited record fails its own codec: {e:?}"),
+                })?;
         let provenance = ProvenanceRecord::minted(
-            hh_provenance::Origin::evolution(&node_id, &node_id),
-            hh_provenance::PersistenceScope::Run,
+            hharness_provenance::Origin::evolution(&node_id, &node_id),
+            hharness_provenance::PersistenceScope::Run,
             0,
         );
         let d = diff::diff(
@@ -713,9 +714,9 @@ impl CodeSearchProposer {
             if !admissible_node(n, constraints) {
                 continue;
             }
-            if let hh_hir::records::KindRecord::Procedure(rec) = &n.semantic {
+            if let hharness_hir::records::KindRecord::Procedure(rec) = &n.semantic {
                 for (i, step) in rec.steps.iter().enumerate() {
-                    if let hh_hir::records::ProcedureStep::Opaque(p) = step {
+                    if let hharness_hir::records::ProcedureStep::Opaque(p) = step {
                         if p.declared_interface.is_some() {
                             return Some((n.semantic_id(), i));
                         }
@@ -825,19 +826,19 @@ impl EvolutionProposer for CodeSearchProposer {
             .iter_mut()
             .find(|n| n.semantic_id() == node_id)
             .expect("node came from base");
-        let hh_hir::records::KindRecord::Procedure(rec) = &mut tnode.semantic else {
+        let hharness_hir::records::KindRecord::Procedure(rec) = &mut tnode.semantic else {
             unreachable!("pick_payload only returns Procedure nodes")
         };
-        let hh_hir::records::ProcedureStep::Opaque(old) = &rec.steps[step_idx] else {
+        let hharness_hir::records::ProcedureStep::Opaque(old) = &rec.steps[step_idx] else {
             unreachable!("pick_payload returned this step index")
         };
         let provenance = ProvenanceRecord::minted(
-            hh_provenance::Origin::evolution(&node_id, &node_id),
-            hh_provenance::PersistenceScope::Run,
+            hharness_provenance::Origin::evolution(&node_id, &node_id),
+            hharness_provenance::PersistenceScope::Run,
             0,
         );
         rec.steps[step_idx] =
-            hh_hir::records::ProcedureStep::Opaque(hh_hir::leaves::CompiledPayload {
+            hharness_hir::records::ProcedureStep::Opaque(hharness_hir::leaves::CompiledPayload {
                 format_tag: old.format_tag.clone(),
                 bytes_hash: format!("{}#cs{}", old.bytes_hash, self.emitted),
                 declared_interface: old.declared_interface.clone(),
@@ -1117,8 +1118,10 @@ pub fn outcome_to_json(o: &ProposerOutcome) -> Json {
 /// Strict decode of `outcome_to_json`'s documents — the contract kind
 /// parses every emitted output through this (a doc that fails to parse
 /// is the conformance failure).
-pub fn outcome_from_json(j: &Json) -> Result<ProposerOutcome, hh_lab::json_util::SchemaError> {
-    use hh_lab::json_util::{expect_obj, str_at, SchemaError};
+pub fn outcome_from_json(
+    j: &Json,
+) -> Result<ProposerOutcome, hharness_lab::json_util::SchemaError> {
+    use hharness_lab::json_util::{expect_obj, str_at, SchemaError};
     let m = expect_obj(j, "ProposerOutcome")?;
     match m.get("kind").and_then(Json::as_str) {
         Some("candidate") => {

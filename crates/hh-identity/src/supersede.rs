@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use crate::kinds::RecordKind;
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
 
 /// The closed set of supersession reasons (§8.3 #3; ADR-0037 D2 as amended — `fork` per ADR-0082,
 /// `consolidation` per ADR-0080). A new reason is a dialect bump, never an ad-hoc string (CC8).
@@ -305,7 +305,7 @@ mod tests {
             "sha256:v1",
             RecordKind::Validator,
             SupersedeReason::Revocation,
-            Origin::human("revoker", hh_provenance::HumanRole::Principal),
+            Origin::human("revoker", hharness_provenance::HumanRole::Principal),
             Some("sha256:v2".into()),
         );
         assert_eq!(rec.revokes, "sha256:v1");
@@ -323,7 +323,7 @@ mod tests {
             "sha256:member",
             RecordKind::VariantRecord,
             SupersedeReason::Revocation,
-            Origin::human("revoker", hh_provenance::HumanRole::Principal),
+            Origin::human("revoker", hharness_provenance::HumanRole::Principal),
             None,
         );
         assert!(lin.depends_on_revoked("sha256:run1"));

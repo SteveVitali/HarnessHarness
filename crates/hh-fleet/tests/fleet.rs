@@ -8,18 +8,18 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_budget::spec::BudgetMode;
-use hh_budget::{BudgetSpec, DimensionId, DimensionKey};
-use hh_fleet::engine::{FleetEngine, ReconcileReport};
-use hh_fleet::errors::FleetError;
-use hh_fleet::source::FixtureAdapter;
-use hh_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
-use hh_fleet::work_item::{derive_state, WorkItemInit};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::RunKind;
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_wire::json::Json;
+use hharness_budget::spec::BudgetMode;
+use hharness_budget::{BudgetSpec, DimensionId, DimensionKey};
+use hharness_fleet::engine::{FleetEngine, ReconcileReport};
+use hharness_fleet::errors::FleetError;
+use hharness_fleet::source::FixtureAdapter;
+use hharness_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
+use hharness_fleet::work_item::{derive_state, WorkItemInit};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::RunKind;
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_wire::json::Json;
 
 const HOLDER: &str = "fleet-test";
 const TTL: u64 = 60_000;
@@ -179,8 +179,9 @@ fn empty_adapter() -> FixtureAdapter {
 
 /// A real child activation run for `dispatch_note`'s `run_ref` — the
 /// note resolves the ref against the store (the `fleet_anchor` join).
-fn child_run(s: &mut Store, spawn: Option<hh_ledger::manifest::EventRef>) -> String {
-    let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+fn child_run(s: &mut Store, spawn: Option<hharness_ledger::manifest::EventRef>) -> String {
+    let mut m =
+        hharness_ledger::manifest::RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent);
     m.spawn_event = spawn;
     s.open_run(m, "child-writer").unwrap().0
 }
@@ -191,7 +192,7 @@ fn child_run(s: &mut Store, spawn: Option<hh_ledger::manifest::EventRef>) -> Str
 fn stamp_note(eng: &mut FleetEngine, s: &mut Store, item: &str) {
     let it = eng.work_item(item).unwrap();
     let dref = it.dispatch.spec_ref.clone().unwrap();
-    let spawn = hh_ledger::manifest::EventRef {
+    let spawn = hharness_ledger::manifest::EventRef {
         run_id: eng.run_id.clone(),
         event_id: it.dispatch_event_id.clone().unwrap(),
     };
@@ -313,7 +314,7 @@ fn ac3_blocked_escalate_resolve() {
     let (mut s, _c) = store("ac3", 1_000);
     let (run, mut eng) = open_engine(&mut s, spec());
     let mut init = item_init("i1", Some("alice"));
-    init.on.blocked_escalate = Some(hh_fleet::work_item::BlockedEscalate {
+    init.on.blocked_escalate = Some(hharness_fleet::work_item::BlockedEscalate {
         to: "ops".into(),
         deadline_ms: None,
     });

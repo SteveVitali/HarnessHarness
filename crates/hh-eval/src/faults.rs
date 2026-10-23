@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 

@@ -7,7 +7,7 @@
 //!     fs, net, proc, resources, amendment, residual_channels[], ext }
 //! ```
 //!
-//! Identity (CC1 — `hh_identity` is the one scheme):
+//! Identity (CC1 — `hharness_identity` is the one scheme):
 //!
 //! - `policy_id` = `semantic_id` over the *semantic projection*: normalised
 //!   host patterns and closed-sum values; `policy_id`/`version_id`/
@@ -31,11 +31,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::{identify_bytes, idp_id};
-use hh_identity::RecordKind;
-use hh_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::{identify_bytes, idp_id};
+use hharness_identity::RecordKind;
+use hharness_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 /// `KERNEL_PROTECTED` (I-C2) — the harness's own definition/config/hook/
 /// skill/scheduled-task locations and VCS hook directories, plus R-2.8.5's
@@ -533,7 +533,7 @@ impl IsolationClass {
         }
     }
 
-    /// Parse the canonical spelling (public for `hh-env`'s `ExecutionRequirement`
+    /// Parse the canonical spelling (public for `hharness-env`'s `ExecutionRequirement`
     /// reader — CC7: this is the one spelling source).
     pub fn parse(s: &str) -> Result<IsolationClass, PolicyError> {
         match s {
@@ -2075,7 +2075,7 @@ mod decode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::{HumanRole, Origin};
+    use hharness_provenance::{HumanRole, Origin};
 
     #[test]
     fn kernel_default_is_deny_by_default_and_valid() {

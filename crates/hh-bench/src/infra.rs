@@ -11,7 +11,7 @@
 //! The detector is deterministic over the grader/environment signature —
 //! the same bytes always classify the same way.
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// The closed infrastructure-signature taxonomy (§5h.4 §8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -71,8 +71,8 @@ impl InfraClass {
 
     /// The outcome class this signature maps to — `Ambiguous`/`ArtifactMissing`
     /// `Clean` score normally (`None` here; the run's `outcome_class` stands).
-    pub fn outcome_class(self) -> Option<hh_ontology::control::OutcomeClass> {
-        use hh_ontology::control::OutcomeClass as O;
+    pub fn outcome_class(self) -> Option<hharness_ontology::control::OutcomeClass> {
+        use hharness_ontology::control::OutcomeClass as O;
         match self {
             InfraClass::EnvironmentSetupFailed | InfraClass::EnvironmentDied => {
                 Some(O::InfrastructureFailure)

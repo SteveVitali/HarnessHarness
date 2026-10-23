@@ -1,5 +1,5 @@
 [package]
-name = "hh-compact-evict-oldest"
+name = "hharness-compact-evict-oldest"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,17 +11,17 @@ name = "hh-compact-evict-oldest"
 path = "src/main.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-plugin-fixture = { path = "../hh-plugin-fixture" }
-hh-varhost = { path = "../hh-varhost" }
+hharness-wire = { path = "../hh-wire" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
+hharness-varhost = { path = "../hh-varhost" }
 
 [dev-dependencies]
 # R2.5 / DF-S2.8-1(f): the byte-differential conformance corpus runs the
 # packaged variant's contract functions against the kernel `evict_oldest`
 # rung over `benchset.stage3.v1` projections (dev-only — the variant
 # itself never depends upward; CC10/CC6).
-hh-bench = { path = "../hh-bench" }
-hh-context = { path = "../hh-context" }
-hh-hir = { path = "../hh-hir" }
-hh-provenance = { path = "../hh-provenance" }
+hharness-bench = { path = "../hh-bench" }
+hharness-context = { path = "../hh-context" }
+hharness-hir = { path = "../hh-hir" }
+hharness-provenance = { path = "../hh-provenance" }

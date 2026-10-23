@@ -18,21 +18,21 @@
 //! Every decision is a surface-session turn — the hosted run sees the
 //! same `lifecycle.turn.*` + `action.effect.*` spine a lab caller gets.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 use crate::dispatch::{call_result_refusal, effect_ctx_for, op_call, SurfaceError, ToolOutcome};
 use crate::exposure::{ExposureTool, SupplySurface};
 use crate::server::LabServer;
 use crate::session::mint_event;
-use hh_ledger::event::Scope;
+use hharness_ledger::event::Scope;
 
 /// The `ExposureTool` a supply artifact member lowers to — the
 /// artifact's own record is the declaration (name/semantic_id/
 /// schemas); `op` comes out of `hir_meta` (empty ⇒ the declared stub).
 /// The effect shape is the read-only chain (`authorized → prepared →
 /// dispatch → observed` — the allow arm's own spelling).
-pub fn tool_for_artifact(at: &hh_mcp::artifact::ArtifactTool) -> ExposureTool {
+pub fn tool_for_artifact(at: &hharness_mcp::artifact::ArtifactTool) -> ExposureTool {
     ExposureTool {
         name: at.name.clone(),
         semantic_id: at.semantic_id.clone(),
@@ -358,7 +358,7 @@ pub fn dispatch(
         let _ = srv.sessions.get_mut(&bid).expect("session").charge_turn(
             &mut srv.svc,
             &source,
-            hh_ontology::dimensions::DimensionId::ToolCalls,
+            hharness_ontology::dimensions::DimensionId::ToolCalls,
             1,
         );
     }
@@ -395,7 +395,7 @@ pub fn dispatch(
 
 /// The `security.permission.pending` row a later `respond_approval`
 /// resolves — `list_pending_approvals` on the surface run reports it.
-pub fn pending_ids(events: &[hh_ledger::event::EventEnvelope]) -> Vec<String> {
+pub fn pending_ids(events: &[hharness_ledger::event::EventEnvelope]) -> Vec<String> {
     let mut pending = Vec::new();
     let mut decided = std::collections::BTreeSet::new();
     for e in events {
@@ -474,9 +474,9 @@ pub fn respond_approval(
         }
     };
     let outcome = if option == "__cancelled" {
-        hh_embed_schema::types::PermissionOutcome::Cancelled
+        hharness_embed_schema::types::PermissionOutcome::Cancelled
     } else {
-        hh_embed_schema::types::PermissionOutcome::Selected {
+        hharness_embed_schema::types::PermissionOutcome::Selected {
             option_id: option.to_string(),
         }
     };
@@ -514,7 +514,7 @@ pub fn respond_approval(
 /// satisfies the re-ask; `decided{deny}` refuses it. `None` = the ask
 /// is unanswered (a fresh pending mints).
 fn answered_ask(
-    svc: &hh_embed::service::EmbedService,
+    svc: &hharness_embed::service::EmbedService,
     run_id: &str,
     capability: &str,
     args_hash: &str,

@@ -5,8 +5,8 @@
 //! `FetchTrustPolicy` (`first_party` class, `raw.githubusercontent.com`
 //! allowlisted, `require_ledgered_arrival`). The fetch rides the real
 //! seam end to end: `admit` → `security.egress.{requested,decided}` on
-//! the kernel fetch run → `hh_tls` webpki-roots verification → the one
-//! `hh_wire::http` codec → content-address re-verify →
+//! the kernel fetch run → `hharness_tls` webpki-roots verification → the one
+//! `hharness_wire::http` codec → content-address re-verify →
 //! `bundle.member.fetched` durable before the bytes deposit. USD 0,
 //! read-only, no secrets, no `tls_extra_roots_file` (the public chain
 //! verifies against the Mozilla roots).
@@ -18,15 +18,15 @@
 
 use std::path::{Path, PathBuf};
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
-use hh_bundle::trust::FetchTrustPolicy;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
+use hharness_bundle::trust::FetchTrustPolicy;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 /// The pinned live member — `harbor-framework/harbor` `README.md` at
 /// commit `dd8815755a61e849ad0f146ae85eb4aaff4fe61f` (2990 bytes; the
@@ -57,7 +57,7 @@ fn fixture_bytes() -> Vec<u8> {
 }
 
 fn member_addr() -> String {
-    hh_identity::idp_id("blob", &fixture_bytes())
+    hharness_identity::idp_id("blob", &fixture_bytes())
 }
 
 /// The bundle dir — `members[0]` is `status = fetch` at the member's
@@ -67,7 +67,7 @@ fn fetch_bundle_dir(root: &Path) -> PathBuf {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     let (run, _l) = store.open_run(m, "r415d.live").unwrap();
@@ -109,7 +109,7 @@ fn fetch_bundle_dir(root: &Path) -> PathBuf {
     let mut members = a.members.clone();
     members.remove(&a.manifest.members[0].address);
     let dir = dir("bundle");
-    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
     dir
 }
 
@@ -206,8 +206,8 @@ fn r415d_live_member_fetch() {
     assert_eq!(materialized, vec![member_addr()]);
     // The materialized member reads back from the blob pool under its
     // verified address — and equals the pinned fixture object.
-    let parsed = hh_identity::idp::parse_id(&member_addr()).unwrap();
-    let ca = hh_identity::idp::ContentAddress {
+    let parsed = hharness_identity::idp::parse_id(&member_addr()).unwrap();
+    let ca = hharness_identity::idp::ContentAddress {
         idp: "idp/1",
         algorithm: "sha256",
         digest: parsed.digest_hex,

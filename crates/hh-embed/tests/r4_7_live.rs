@@ -35,22 +35,22 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_secrets::broker::{
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_secrets::broker::{
     BindRequest, CredentialBroker, LaunchEnvResolver, MediationOutcome, RequestDescriptor,
 };
-use hh_secrets::channel::{
+use hharness_secrets::channel::{
     AuthCarrier, CredentialKind, DestinationBinding, SecretChannel, SecretChannelSpec,
     SecretSource, SenderConstraint,
 };
-use hh_secrets::types::AccessClass;
-use hh_tls::ClientTls;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_secrets::types::AccessClass;
+use hharness_tls::ClientTls;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 const TOKEN_NAME: &str = "HH_GITHUB_SANDBOX_TOKEN";
 const SECRET_NAME: &str = "HH_GITHUB_WEBHOOK_SECRET";
@@ -87,7 +87,7 @@ fn read_state() -> (Option<i64>, Option<i64>) {
     let Ok(text) = std::fs::read_to_string(state_path()) else {
         return (None, None);
     };
-    let Ok(j) = hh_wire::json::parse(&text) else {
+    let Ok(j) = hharness_wire::json::parse(&text) else {
         return (None, None);
     };
     (
@@ -226,8 +226,8 @@ fn chan_spec(channel: &str, var: &str) -> SecretChannelSpec {
         }],
         allowed_env_names: Some([var.to_string()].into_iter().collect()),
         delivery_modes: [
-            hh_monitor::assess::SecretTransport::ProxyInjected,
-            hh_monitor::assess::SecretTransport::WrappedLongLived,
+            hharness_monitor::assess::SecretTransport::ProxyInjected,
+            hharness_monitor::assess::SecretTransport::WrappedLongLived,
         ]
         .into_iter()
         .collect(),
@@ -294,8 +294,8 @@ fn resolve_secret(
                 channel_id: channel.into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: dref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -323,7 +323,7 @@ fn resolve_secret(
     broker.drain_claim(&delivery.claim_id).map(|(_, v)| v)
 }
 
-// ── the GitHub REST read/write half (hh-tls + hh-wire::http — the ──────
+// ── the GitHub REST read/write half (hharness-tls + hh-wire::http — the ──────
 // admitted TLS home; the token rides the Authorization header inside the
 // process, never argv/disk/log) ─────────────────────────────────────────
 
@@ -334,15 +334,15 @@ fn gh_api(
     path: &str,
     body: Option<&Json>,
 ) -> Result<(u16, Json), String> {
-    let url = hh_wire::http::parse_http_url(&format!("https://api.github.com{path}"))
+    let url = hharness_wire::http::parse_http_url(&format!("https://api.github.com{path}"))
         .map_err(|e| format!("url {e:?}"))?;
-    let sock = hh_wire::http::connect(&url, 15_000, 30_000).map_err(|e| format!("{e:?}"))?;
+    let sock = hharness_wire::http::connect(&url, 15_000, 30_000).map_err(|e| format!("{e:?}"))?;
     let mut st = tls
         .connect(sock, "api.github.com")
         .map_err(|e| format!("tls {e:?}"))?;
     let bytes = body.map(|b| b.to_canonical_string()).unwrap_or_default();
     let auth = format!("Bearer {token}");
-    hh_wire::http::write_request(
+    hharness_wire::http::write_request(
         &mut st,
         method,
         path,
@@ -359,8 +359,8 @@ fn gh_api(
     .map_err(|e| format!("write {e:?}"))?;
     let mut br = BufReader::new(st);
     let (head, raw) =
-        hh_wire::http::read_response_full(&mut br, 4 << 20).map_err(|e| format!("{e:?}"))?;
-    let j = hh_wire::json::parse(&String::from_utf8_lossy(&raw)).unwrap_or(Json::Null);
+        hharness_wire::http::read_response_full(&mut br, 4 << 20).map_err(|e| format!("{e:?}"))?;
+    let j = hharness_wire::json::parse(&String::from_utf8_lossy(&raw)).unwrap_or(Json::Null);
     Ok((head.status, j))
 }
 
@@ -808,7 +808,9 @@ fn r47_github_live() {
                     .and_then(|_| stream.set_read_timeout(Some(Duration::from_secs(15))))
                     .unwrap();
                 let mut br = BufReader::new(stream.try_clone().unwrap());
-                let req = hh_wire::http::read_request(&mut br, 1 << 20).ok().flatten();
+                let req = hharness_wire::http::read_request(&mut br, 1 << 20)
+                    .ok()
+                    .flatten();
                 if let Some((head, body)) = req {
                     let hdr = |k: &str| head.headers.get(k).cloned().unwrap_or_default();
                     let event = hdr("x-github-event");
@@ -816,7 +818,8 @@ fn r47_github_live() {
                     let did = hdr("x-github-delivery");
                     let raw = String::from_utf8_lossy(&body).to_string();
                     if event == "ping" {
-                        let ok = hh_fleet::github::verify_sig256(&raw, &sig, secret.as_bytes());
+                        let ok =
+                            hharness_fleet::github::verify_sig256(&raw, &sig, secret.as_bytes());
                         println!("GH_PING verified={}", ok.is_ok() as u8);
                     } else if event == "issues" || event == "issue_comment" {
                         let r = ingress(&mut svc, &run, &source, &raw, &sig, &did, &event, &secret);
@@ -867,7 +870,7 @@ fn r47_github_live() {
                         }
                     }
                     let mut w = stream;
-                    let _ = hh_wire::http::write_response(
+                    let _ = hharness_wire::http::write_response(
                         &mut w,
                         200,
                         &[("Content-Type", "text/plain")],
@@ -890,7 +893,7 @@ fn r47_github_live() {
     // ── dedupe + stale-window cells (in-process re-calls — the same ──
     // capture, the durable fold audits) ───────────────────────────────
     let dj = std::fs::read_to_string(dir.join("delivery.json")).unwrap();
-    let dj = hh_wire::json::parse(&dj).unwrap();
+    let dj = hharness_wire::json::parse(&dj).unwrap();
     let draw = dj.get("raw").and_then(Json::as_str).unwrap();
     let dsig = dj.get("signature").and_then(Json::as_str).unwrap();
     let ddid = dj.get("delivery_id").and_then(Json::as_str).unwrap();
@@ -1027,24 +1030,24 @@ fn r47_github_cleanup() {
 
 // ── AC-R-2.12.6-9's live clause: the packaged variant out of process ────
 // over the live-captured issue snapshot (`$HH_GH_DIR/issues.json`) — the
-// same spawn/bind/probe path `hh-varhost`'s fixture leg exercises, fed
+// same spawn/bind/probe path `hharness-varhost`'s fixture leg exercises, fed
 // the real repository read.
 
 #[test]
 #[ignore = "live — ADR-0363: scripts/live-verify.sh github-live"]
 fn r47_github_plugin() {
-    use hh_fleet::capabilities::CapState;
-    use hh_fleet::source::WorkSourceAdapter;
-    use hh_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
-    use hh_fleet_adapter::{WORK_SOURCE_CLASS, WORK_SOURCE_CONTRACT};
-    use hh_varhost::{
+    use hharness_fleet::capabilities::CapState;
+    use hharness_fleet::source::WorkSourceAdapter;
+    use hharness_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
+    use hharness_fleet_adapter::{WORK_SOURCE_CLASS, WORK_SOURCE_CONTRACT};
+    use hharness_varhost::{
         load_package, seal_package, spawn, unstamp_json, InvokeOutcome, RecordingPorts, SpawnSpec,
         VariantHost, VecEvents,
     };
 
     struct Chan<'a> {
         host: &'a mut VariantHost<RecordingPorts, VecEvents>,
-        session: &'a mut hh_varhost::VariantSession,
+        session: &'a mut hharness_varhost::VariantSession,
         binding: String,
         seq: u64,
     }
@@ -1076,7 +1079,7 @@ fn r47_github_plugin() {
         eprintln!("issues.json absent — run r47_github_live first; skipped");
         return;
     };
-    let issues = hh_wire::json::parse(&snapshot).expect("issues.json parses");
+    let issues = hharness_wire::json::parse(&snapshot).expect("issues.json parses");
     let repo = env(REPO_NAME).unwrap_or_else(|| "SteveVitali/hh-live-sandbox".into());
     let exe = std::env::current_exe().unwrap();
     let bin = exe
@@ -1088,7 +1091,7 @@ fn r47_github_plugin() {
         eprintln!("hh-github-issues binary not built — skipped");
         return;
     };
-    if hh_env::helper::helper_binary().is_none() {
+    if hharness_env::helper::helper_binary().is_none() {
         eprintln!("hh-helper binary not found — skipped");
         return;
     }
@@ -1103,13 +1106,14 @@ fn r47_github_plugin() {
     let mtext =
         std::fs::read_to_string(repo_root.join("plugins/hh-github-issues/plugin.manifest.json"))
             .unwrap();
-    let manifest = hh_registry::extension::plugin::manifest_from_json(
-        &hh_wire::json::parse(&mtext).unwrap(),
+    let manifest = hharness_registry::extension::plugin::manifest_from_json(
+        &hharness_wire::json::parse(&mtext).unwrap(),
         "plugin.manifest.json",
     )
     .unwrap();
     let sealed = seal_package(&pkg_dir, &manifest).expect("seal");
-    let stext = hh_registry::extension::plugin::manifest_to_json(&sealed).to_canonical_string();
+    let stext =
+        hharness_registry::extension::plugin::manifest_to_json(&sealed).to_canonical_string();
     std::fs::write(pkg_dir.join("plugin.manifest.json"), &stext).unwrap();
     let pkg = load_package(&pkg_dir).expect("load verifies pins");
 
@@ -1133,7 +1137,7 @@ fn r47_github_plugin() {
         package: pkg.clone(),
         session_id: "gh-live-1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: sock_dir,
         exec_args: vec![
@@ -1147,7 +1151,7 @@ fn r47_github_plugin() {
         cap: pkg.manifest.requests.clone(),
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:hh/hh-github-issues", "pin:sealed"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:hh/hh-github-issues", "pin:sealed"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -1163,7 +1167,7 @@ fn r47_github_plugin() {
     let b = h
         .bind(
             &mut s,
-            hh_embed_schema::plugin_abi::BindParams {
+            hharness_embed_schema::plugin_abi::BindParams {
                 slot: "work_source".into(),
                 class_id: WORK_SOURCE_CLASS.into(),
                 contract_version: WORK_SOURCE_CONTRACT.into(),

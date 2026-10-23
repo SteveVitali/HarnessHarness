@@ -1,4 +1,4 @@
-//! S4.9 boundary tests — the `fleet.*` surface over `hh-embed` (records
+//! S4.9 boundary tests — the `fleet.*` surface over `hharness-embed` (records
 //! in, records out; one Store). Under the `tier-c4` feature: open →
 //! reconcile → dispatch-note → settle → accountability over the fixture
 //! adapter, plus the experimental gate + typed refusals. Without it:
@@ -8,9 +8,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -448,7 +448,7 @@ fn fleet_adapter_surface_through_the_boundary() {
     ]);
     let sig = format!(
         "hmac-sha256:{}",
-        hh_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
+        hharness_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
     );
     let r = call(
         &mut svc,
@@ -635,7 +635,7 @@ fn fleet_github_webhook_lane_through_the_boundary() {
     .to_canonical_string();
     let sig = format!(
         "sha256={}",
-        hh_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
+        hharness_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
     );
     let ingress = |svc: &mut EmbedService, raw: &str, sig: &str, did: &str| {
         call(
@@ -787,7 +787,7 @@ fn fleet_github_webhook_lane_through_the_boundary() {
     // A bad `sha256=` refuses typed; a `sha1=` header refuses the scheme.
     let bad = format!(
         "sha256={}",
-        hh_wire::sha256::hmac_sha256_hex(b"wrong", raw.as_bytes())
+        hharness_wire::sha256::hmac_sha256_hex(b"wrong", raw.as_bytes())
     );
     assert_eq!(
         err_kind(&ingress(&mut svc, &raw, &bad, "gh-d-11")),
@@ -795,7 +795,7 @@ fn fleet_github_webhook_lane_through_the_boundary() {
     );
     let sha1 = format!(
         "sha1={}",
-        hh_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
+        hharness_wire::sha256::hmac_sha256_hex(key, raw.as_bytes())
     );
     assert_eq!(
         err_kind(&ingress(&mut svc, &raw, &sha1, "gh-d-12")),
@@ -824,7 +824,7 @@ fn fleet_github_webhook_lane_through_the_boundary() {
     ]);
     let csig = format!(
         "hmac-sha256:{}",
-        hh_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
+        hharness_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
     );
     let r = call(
         &mut svc,

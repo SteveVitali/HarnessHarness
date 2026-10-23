@@ -6,14 +6,14 @@
 //! `control.decision` row `ContextWindowExceeded` emits).
 //!
 //! The builders produce the *payload* — the caller appends through
-//! `hh-ledger`'s append path (the store/assembler never mint `Event`s
+//! `hharness-ledger`'s append path (the store/assembler never mint `Event`s
 //! themselves; `EventSink` is the injection seam). Large `items[]` lists are
 //! offloaded by the caller via `itemize`/`itemize_offloaded` (the payload
 //! carries content addresses, never raw bulk — spec §5c.1's
 //! "offload lists under a size threshold" rule).
 
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::codec::label_json;
 use crate::memory::{MemoryVersion, WriteContext};
@@ -26,7 +26,7 @@ use crate::vocab::RevocationReason;
 pub const INLINE_ITEMS_LIMIT: usize = 256;
 
 /// `EventSink` — the sink `assemble`/`retrieve` emit payload rows into
-/// (same shape as `hh-gateway`'s: `class + payload`; the *caller* owns
+/// (same shape as `hharness-gateway`'s: `class + payload`; the *caller* owns
 /// `append` — I-PROV).
 pub trait EventSink {
     /// Record `class` + `payload`.
@@ -271,7 +271,7 @@ pub fn memory_read_payload(
 /// (§5c.3; `contract_hash` is the contract's `idp` digest).
 pub fn memory_written_payload(v: &MemoryVersion, ctx: &WriteContext) -> Json {
     let contract_hash =
-        hh_identity::idp::idp_id("memory_contract.1", serde_json_contract(v).as_bytes());
+        hharness_identity::idp::idp_id("memory_contract.1", serde_json_contract(v).as_bytes());
     let mut m = vec![
         ("memory_id", Json::str(v.semantic_id.clone())),
         ("version_id", Json::str(v.version_id.clone())),

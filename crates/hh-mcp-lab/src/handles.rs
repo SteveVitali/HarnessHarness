@@ -20,10 +20,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::errors::LedgerError;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 /// The producer tag on every surface-minted kernel row.
 pub const SURFACE_PRODUCER: &str = "kernel:mcp-surface";
@@ -75,7 +75,7 @@ impl HandleKind {
 /// The *name* is public (a handle travels in `surface_ids`); the
 /// *grant* is the table's — knowing the name never confers access.
 pub fn handle_alias(kind: HandleKind, target_id: &str) -> String {
-    let digest = hh_identity::idp_id(
+    let digest = hharness_identity::idp_id(
         "mcp.surface_handle",
         Json::obj([
             ("kind", Json::str(kind.as_str())),
@@ -329,7 +329,7 @@ impl HandleTable {
     #[allow(clippy::too_many_arguments)]
     pub fn mint_on_run(
         &mut self,
-        svc: &mut hh_embed::service::EmbedService,
+        svc: &mut hharness_embed::service::EmbedService,
         surface_run_id: &str,
         kind: HandleKind,
         handle_id: &str,

@@ -8,9 +8,9 @@
 //! doc returns the stored body verbatim; the estimators never run twice
 //! for the same `(spec, rows @ watermark, seed, draws)`.
 
-use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_lab::analysis::{AnalysisReport, AnalysisSpec, AnalysisStatus};
-use hh_wire::Json;
+use hharness_experiment::docs::{kind as doc_kind, LabDocs};
+use hharness_lab::analysis::{AnalysisReport, AnalysisSpec, AnalysisStatus};
+use hharness_wire::Json;
 
 use crate::error::AnalysisError;
 use crate::kernel::{analyze, AnalysisInput};

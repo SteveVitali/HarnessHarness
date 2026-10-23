@@ -3,7 +3,7 @@
 //! declarations are *registered* here at C0/Stage 1; their computation is
 //! C0/Stage 3 (deterministic folds over the verification event classes).
 //! `claim_state_agreement` and `evidence_traceability` are already declared
-//! in the process-metric catalogue (hh-telemetry, §5h.1 §8's population) —
+//! in the process-metric catalogue (hharness-telemetry, §5h.1 §8's population) —
 //! they are *not* re-declared here (CC7); `ADR0114_COMPLETENESS` pins the
 //! union so the register cannot silently lose a member.
 
@@ -175,7 +175,7 @@ mod tests {
                     "{name} missing from the verification register"
                 ),
                 "catalogue" => assert!(
-                    hh_telemetry::catalogue::metric(name).is_some(),
+                    hharness_telemetry::catalogue::metric(name).is_some(),
                     "{name} missing from the process catalogue"
                 ),
                 other => panic!("unknown home {other}"),
@@ -184,7 +184,7 @@ mod tests {
         // And no verification-register name duplicates a catalogue row.
         for m in GROUNDING_METRICS {
             assert!(
-                hh_telemetry::catalogue::metric(m.name).is_none(),
+                hharness_telemetry::catalogue::metric(m.name).is_none(),
                 "{} double-sourced",
                 m.name
             );

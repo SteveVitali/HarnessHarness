@@ -5,7 +5,7 @@
 //! and the closed, total, bounded flow-policy language.
 //!
 //! One schema source (CC7): [`FlowContract::to_json`]/[`FlowContract::from_json`]
-//! own the `flow_contract` member's shape — `hh-hir` stores the canonical
+//! own the `flow_contract` member's shape — `hharness-hir` stores the canonical
 //! `Json` and validates through this module; the monitor evaluates through it.
 //! Every refusal is a typed [`FlowError`] — never a warning (ADR-0033 D7).
 //!
@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, ReaderSet, TaintTag};
 use crate::decode::DecodeError;
@@ -2457,7 +2457,7 @@ pub fn label_bytes(l: &Label) -> usize {
 }
 
 /// The canonical `Label` spelling `{authority, taint[], readers[]}` — shared
-/// with `hh_monitor::wire`'s proposal codec (one spelling; emitters keep the
+/// with `hharness_monitor::wire`'s proposal codec (one spelling; emitters keep the
 /// non-default-members-only convention by omitting empty `taint`/`readers`
 /// where the receiving schema allows).
 pub fn label_json_full(l: &Label) -> Json {

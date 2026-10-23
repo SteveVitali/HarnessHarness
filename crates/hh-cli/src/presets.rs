@@ -23,7 +23,7 @@
 //! enter the lease key's `policy_fingerprint` leg kernel-side, so a
 //! preset change revokes every minted lease by construction (ADR-0071).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// A leaf's Π disposition — the closed sum the table admits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,7 +77,7 @@ impl NarrowingLeaf {
     /// `leaf_id` — `H("narrowing_leaf" ∥ canonical(leaf))`; the member the
     /// kernel folds into `policy_fingerprint`'s narrowing-leaf leg.
     pub fn leaf_id(&self) -> String {
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "narrowing_leaf",
             self.to_json().to_canonical_string().as_bytes(),
         )

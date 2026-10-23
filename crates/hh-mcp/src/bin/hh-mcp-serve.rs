@@ -25,8 +25,8 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use hh_mcp::artifact::ServedArtifact;
-use hh_mcp::server::ServeMode;
+use hharness_mcp::artifact::ServedArtifact;
+use hharness_mcp::server::ServeMode;
 
 fn usage() -> ExitCode {
     eprintln!("usage: hh-mcp-serve [--legacy] [--watch] --bundle <dir> | --container <file>");
@@ -38,9 +38,9 @@ fn load_artifact(path: &Path, container: bool) -> Result<ServedArtifact, String>
     let decoded = if container {
         std::fs::read(path)
             .map_err(|e| format!("read: {e}"))
-            .and_then(|b| hh_bundle::codec::decode_container(&b).map_err(|e| format!("{e}")))
+            .and_then(|b| hharness_bundle::codec::decode_container(&b).map_err(|e| format!("{e}")))
     } else {
-        hh_bundle::codec::decode_dir(path).map_err(|e| format!("{e}"))
+        hharness_bundle::codec::decode_dir(path).map_err(|e| format!("{e}"))
     }
     .map_err(|e| format!("bundle decode: {e}"))?;
     let member = decoded
@@ -54,7 +54,7 @@ fn load_artifact(path: &Path, container: bool) -> Result<ServedArtifact, String>
         .get(&member.address)
         .cloned()
         .ok_or_else(|| "target:mcp member bytes absent".to_string())?;
-    hh_mcp::artifact::lower_mcp_target(
+    hharness_mcp::artifact::lower_mcp_target(
         &bytes,
         &decoded.manifest.version_id,
         &decoded.manifest.version_id,
@@ -121,7 +121,7 @@ fn main() -> ExitCode {
             }
         }
     };
-    match hh_mcp::server::serve_dynamic(&mut load, mode, &mut reader, &mut writer) {
+    match hharness_mcp::server::serve_dynamic(&mut load, mode, &mut reader, &mut writer) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("hh-mcp-serve: {e}");

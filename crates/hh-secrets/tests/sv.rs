@@ -6,15 +6,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_hir::records::GrantConstraints;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::GrantConstraints;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_secrets::*;
+use hharness_secrets::*;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -168,8 +168,8 @@ fn github_spec() -> SecretChannelSpec {
         }],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
         delivery_modes: [
-            hh_monitor::assess::SecretTransport::ProxyInjected,
-            hh_monitor::assess::SecretTransport::WrappedLongLived,
+            hharness_monitor::assess::SecretTransport::ProxyInjected,
+            hharness_monitor::assess::SecretTransport::WrappedLongLived,
         ]
         .into_iter()
         .collect(),
@@ -216,8 +216,8 @@ fn bound_binding(
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: dref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -463,7 +463,7 @@ fn sv7_scope_attenuates_never_widens() {
         "github",
         &["evil.example.com".into()].into_iter().collect(),
         GrantConstraints::default(),
-        &hh_hir::records::Issuer {
+        &hharness_hir::records::Issuer {
             authority: AuthorityClass::Principal,
             reference: "principal:test".into(),
         },
@@ -483,7 +483,7 @@ fn sv7_scope_attenuates_never_widens() {
         "github",
         &["api.github.com".into()].into_iter().collect(),
         GrantConstraints::default(),
-        &hh_hir::records::Issuer {
+        &hharness_hir::records::Issuer {
             authority: AuthorityClass::Delegate,
             reference: "agent.main".into(),
         },
@@ -621,8 +621,8 @@ fn sv8_canary_never_injected() {
             channel_id: "tripwire".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt-x".into(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -663,8 +663,8 @@ fn sv8_kernel_use_audited_and_bind_refused() {
             channel_id: "gw".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt-x".into(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -725,8 +725,8 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::MintedScoped,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::MintedScoped,
             monitor_decision_ref: dref.clone(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -746,8 +746,8 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::None,
-            mode: hh_monitor::assess::SecretTransport::WrappedLongLived,
+            env_isolation: hharness_containment::policy::IsolationClass::None,
+            mode: hharness_monitor::assess::SecretTransport::WrappedLongLived,
             monitor_decision_ref: dref,
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -774,7 +774,7 @@ fn sv9_sender_constraint_fails_closed() {
     let mut spec = github_spec();
     spec.sender_constraint = SenderConstraint::Dpop;
     spec.delivery_modes
-        .insert(hh_monitor::assess::SecretTransport::MintedScoped);
+        .insert(hharness_monitor::assess::SecretTransport::MintedScoped);
     let mut broker = broker_with(gh_source(), "ghp_sv9s_0123456789abcdefghij012345");
     broker
         .register_channel(
@@ -794,8 +794,8 @@ fn sv9_sender_constraint_fails_closed() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::MintedScoped,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::MintedScoped,
             monitor_decision_ref: dref,
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -955,7 +955,7 @@ fn sv4_env_deny_by_default_and_masking() {
             env_name: "GH_API_TOKEN".into(),
             channel_id: "github".into(),
             binding_id: binding.binding_id.clone(),
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
         }],
     };
     let mut bound = BTreeMap::new();

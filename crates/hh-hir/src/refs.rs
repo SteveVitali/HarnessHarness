@@ -6,7 +6,7 @@
 //! the assembly section are §3.3's resolution domain (S1.9).
 
 use crate::errors::HirError;
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `Ref = {semantic_id, version_id | version_selector}` (§3.1.3). The `semantic_id` is the
 /// comparison coordinate and the in-document link: an edge or ref field resolves a target

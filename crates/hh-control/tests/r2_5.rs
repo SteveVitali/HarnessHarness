@@ -7,7 +7,7 @@
 //!   `context.memory.invalidated{scope_ended}` in durable order, all
 //!   appended under the driver's writer lease (AC-1: the rows come from
 //!   the loop, not test scaffolding — the ports run the real
-//!   `hh_context::retrieve`/`compact` pipelines over a real
+//!   `hharness_context::retrieve`/`compact` pipelines over a real
 //!   `MemoryStore`).
 //! - **`resume_set` consumption** (AC-2) — an armed
 //!   `DriverConfig.resume_set_heads` drains `by_name` through the
@@ -29,30 +29,30 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
-use hh_context::compact::{CompactInput, CompactionTrigger, EvictOldest};
-use hh_context::{
+use hharness_context::compact::{CompactInput, CompactionTrigger, EvictOldest};
+use hharness_context::{
     CacheHint, CollectSink, InvalidationCondition, InvalidationContract, MemoryContent,
     MemoryDraft, MemoryKind, MemoryStore, RetrievalBudget, RetrievalQuery, RetrievalRequest,
     Revalidation, RevocationReason, SlotConstraints, TriggerKind, ValidityPolicy,
     DETERMINISTIC_DEFAULT,
 };
-use hh_control::driver::{
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, CompactionDone, CompactionImpossible,
     CompactionPort, Driver, DriverConfig, EffectGate, GateOutcome, LedgerSink, MemoryPort,
     ModelOutcome, ModelPort, VerifyPort,
 };
-use hh_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
-use hh_control::policy::EnvelopePolicy;
-use hh_control::react::ReactMinimal;
-use hh_control::strategy::{ControlContext, ControlStrategy, StrategyParams};
-use hh_control::vocab::{
+use hharness_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::react::ReactMinimal;
+use hharness_control::strategy::{ControlContext, ControlStrategy, StrategyParams};
+use hharness_control::vocab::{
     ControlDecision, Cue, DecisionKind, DecisionStamp, HumanInput, SettledOutcome,
 };
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{Event, EventEnvelope, EventPlane};
-use hh_ledger::manifest::ParticipantClass;
-use hh_ontology::control::{DecisionPoint, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{Event, EventEnvelope, EventPlane};
+use hharness_ledger::manifest::ParticipantClass;
+use hharness_ontology::control::{DecisionPoint, Owner, StopReason};
+use hharness_wire::json::Json;
 
 // ── test doubles ────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ impl LedgerSink for MemSink {
             // kernel's provenance on rows the driver emits bare (the
             // provenance-bearing producers ride `append_prov`).
             if e.provenance.is_none() {
-                e.provenance = Some(hh_provenance::ProvenanceRecord::kernel(
+                e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
                     "hh-test/sink",
                     self.seq + 1,
                 ));
@@ -138,7 +138,7 @@ struct ScriptedModel {
 impl ModelPort for ScriptedModel {
     fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
         self.script.pop_front().unwrap_or(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-empty".into(),
             text_empty: true,
             calls: vec![],
@@ -223,7 +223,7 @@ impl AssemblerPort for FakeAssembler {
     }
 }
 
-/// `FakeMemory` — a `MemoryPort` over a *real* `hh_context::MemoryStore`:
+/// `FakeMemory` — a `MemoryPort` over a *real* `hharness_context::MemoryStore`:
 /// the legs run the landed `retrieve`/`lifecycle` machinery; only the
 /// event capture is a sink buffer (the driver owns the appends).
 struct FakeMemory {
@@ -244,21 +244,26 @@ impl FakeMemory {
     /// Seed a named version — the write a prior activation's supply or
     /// memory write would have recorded (`scope` is the persistence floor
     /// the `scope_ended` test exercises).
-    fn seed(&mut self, name: &str, scope: hh_provenance::PersistenceScope, at_seq: u64) -> String {
-        let prov = hh_provenance::ProvenanceRecord::kernel("hh-test/memory", 0);
+    fn seed(
+        &mut self,
+        name: &str,
+        scope: hharness_provenance::PersistenceScope,
+        at_seq: u64,
+    ) -> String {
+        let prov = hharness_provenance::ProvenanceRecord::kernel("hh-test/memory", 0);
         let draft = MemoryDraft {
             kind: MemoryKind::Fact,
             subject_key: None,
-            content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+            content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
                 format!("the seeded note body for {name}"),
                 "hh-test/memory",
                 prov.clone(),
             ))),
             contract: if matches!(
                 scope,
-                hh_provenance::PersistenceScope::Session
-                    | hh_provenance::PersistenceScope::Project
-                    | hh_provenance::PersistenceScope::User
+                hharness_provenance::PersistenceScope::Session
+                    | hharness_provenance::PersistenceScope::Project
+                    | hharness_provenance::PersistenceScope::User
             ) {
                 // C-CONTRACT-1 — a `session|project|user` write needs ≥1
                 // checkable member; `scope_ended` on its own scope is the
@@ -284,9 +289,9 @@ impl FakeMemory {
             semantic_id: Some(name.to_string()),
             validator_endorsed: false,
         };
-        let wctx = hh_context::WriteContext {
-            context_label: hh_provenance::label::Label::at(
-                hh_provenance::AuthorityClass::Principal,
+        let wctx = hharness_context::WriteContext {
+            context_label: hharness_provenance::label::Label::at(
+                hharness_provenance::AuthorityClass::Principal,
             ),
             lease_generation: self.store.lease(scope),
             at_seq,
@@ -308,25 +313,25 @@ impl FakeMemory {
             model_call_id: model_call_id.to_string(),
             at: ("run".to_string(), self.store.applied_seq()),
             layers: [
-                hh_context::Layer::Artifact,
-                hh_context::Layer::Episodic,
-                hh_context::Layer::Procedural,
-                hh_context::Layer::Session,
+                hharness_context::Layer::Artifact,
+                hharness_context::Layer::Episodic,
+                hharness_context::Layer::Procedural,
+                hharness_context::Layer::Session,
             ]
             .into_iter()
             .collect(),
             query,
             constraints: SlotConstraints {
-                slot_min_authority: hh_provenance::AuthorityClass::Unverified,
+                slot_min_authority: hharness_provenance::AuthorityClass::Unverified,
                 validity_policy: ValidityPolicy {
                     admitted_states: [
-                        hh_context::LifecycleStateKind::Valid,
-                        hh_context::LifecycleStateKind::StaleByDependency,
-                        hh_context::LifecycleStateKind::Unknown,
+                        hharness_context::LifecycleStateKind::Valid,
+                        hharness_context::LifecycleStateKind::StaleByDependency,
+                        hharness_context::LifecycleStateKind::Unknown,
                     ]
                     .into_iter()
                     .collect(),
-                    conflict_policy: hh_context::vocab::ConflictPolicy::DeliverAllAnnotated,
+                    conflict_policy: hharness_context::vocab::ConflictPolicy::DeliverAllAnnotated,
                     max_stale: None,
                 },
                 readers_required: None,
@@ -337,10 +342,10 @@ impl FakeMemory {
                 k: 16,
             },
             ranker: DETERMINISTIC_DEFAULT.to_string(),
-            mode: hh_identity::names::ResolveMode::Execute,
+            mode: hharness_identity::names::ResolveMode::Execute,
         };
         let mut sink = CollectSink::default();
-        hh_context::retrieve::retrieve(&mut self.store, &req, &mut sink, None, || 0)
+        hharness_context::retrieve::retrieve(&mut self.store, &req, &mut sink, None, || 0)
             .map_err(|e| format!("retrieve: {e:?}"))?;
         Ok(sink.events)
     }
@@ -377,10 +382,10 @@ impl MemoryPort for FakeMemory {
         let mut events = Vec::new();
         for head in heads {
             let scope = [
-                hh_provenance::PersistenceScope::Session,
-                hh_provenance::PersistenceScope::Run,
-                hh_provenance::PersistenceScope::Project,
-                hh_provenance::PersistenceScope::User,
+                hharness_provenance::PersistenceScope::Session,
+                hharness_provenance::PersistenceScope::Run,
+                hharness_provenance::PersistenceScope::Project,
+                hharness_provenance::PersistenceScope::User,
             ]
             .into_iter()
             .find(|scope| {
@@ -389,11 +394,11 @@ impl MemoryPort for FakeMemory {
                         *scope,
                         Some(head),
                         None,
-                        hh_identity::names::ResolveMode::Audit,
+                        hharness_identity::names::ResolveMode::Audit,
                     )
                     .is_ok()
             })
-            .unwrap_or(hh_provenance::PersistenceScope::Session);
+            .unwrap_or(hharness_provenance::PersistenceScope::Session);
             events.extend(self.run_retrieve(
                 RetrievalQuery::ByName {
                     scope,
@@ -406,7 +411,7 @@ impl MemoryPort for FakeMemory {
     }
     fn mark_scope_ended(
         &mut self,
-        scope: hh_provenance::PersistenceScope,
+        scope: hharness_provenance::PersistenceScope,
         at_seq: u64,
     ) -> Vec<(String, Json)> {
         let expired: Vec<String> = self
@@ -425,20 +430,20 @@ impl MemoryPort for FakeMemory {
                 // still ends with its scope); only already-terminal
                 // states mint nothing.
                 !matches!(
-                    hh_context::lifecycle_state(&self.store, vid, at_seq).kind(),
-                    hh_context::LifecycleStateKind::Revoked
-                        | hh_context::LifecycleStateKind::Superseded
-                        | hh_context::LifecycleStateKind::Expired
+                    hharness_context::lifecycle_state(&self.store, vid, at_seq).kind(),
+                    hharness_context::LifecycleStateKind::Revoked
+                        | hharness_context::LifecycleStateKind::Superseded
+                        | hharness_context::LifecycleStateKind::Expired
                 )
             })
             .cloned()
             .collect();
         self.store.mark_scope_ended(scope);
-        let prov = hh_provenance::ProvenanceRecord::kernel("hh-test/memory", at_seq);
+        let prov = hharness_provenance::ProvenanceRecord::kernel("hh-test/memory", at_seq);
         expired
             .into_iter()
             .map(|vid| {
-                let mut m = match hh_context::events::memory_invalidated_payload(
+                let mut m = match hharness_context::events::memory_invalidated_payload(
                     &vid,
                     RevocationReason::Expired,
                     &prov,
@@ -478,9 +483,9 @@ impl MemoryPort for FakeMemory {
     }
     fn consolidate(
         &mut self,
-        rules: &[hh_context::consolidate::ConsolidationRule],
+        rules: &[hharness_context::consolidate::ConsolidationRule],
         boundary: &str,
-        _seam: Option<hh_control::driver::StoreSeam<'_>>,
+        _seam: Option<hharness_control::driver::StoreSeam<'_>>,
     ) -> Result<Vec<(String, Json)>, String> {
         // The fixture runs the real consolidation driver over its seeded
         // store — the same `context.memory.consolidated` watermark row
@@ -491,21 +496,21 @@ impl MemoryPort for FakeMemory {
             let last = self.watermarks.get(&rule.rule_id).copied();
             if matches!(
                 rule.cadence,
-                hh_context::consolidate::ConsolidationCadence::SessionStart
+                hharness_context::consolidate::ConsolidationCadence::SessionStart
             ) && last.is_some()
             {
                 continue;
             }
-            let wctx = hh_context::WriteContext {
-                context_label: hh_provenance::label::Label::at(
-                    hh_provenance::AuthorityClass::Kernel,
+            let wctx = hharness_context::WriteContext {
+                context_label: hharness_provenance::label::Label::at(
+                    hharness_provenance::AuthorityClass::Kernel,
                 ),
                 lease_generation: self.store.lease(rule.scope),
                 at_seq: self.store.applied_seq(),
                 run_id: "run".to_string(),
             };
             let Some(rec) =
-                hh_context::consolidate::consolidate(&mut self.store, rule, &wctx, last)
+                hharness_context::consolidate::consolidate(&mut self.store, rule, &wctx, last)
                     .map_err(|e| format!("consolidate:{}: {e}", rule.rule_id))?
             else {
                 continue;
@@ -513,7 +518,7 @@ impl MemoryPort for FakeMemory {
             events.extend(self.store.drain_events());
             events.push((
                 "context.memory.consolidated".to_string(),
-                hh_context::events::memory_consolidated_payload(
+                hharness_context::events::memory_consolidated_payload(
                     &rec,
                     rule,
                     &self.store.store_id,
@@ -529,13 +534,13 @@ impl MemoryPort for FakeMemory {
     }
 }
 
-/// `FakeCompaction` — a `CompactionPort` running the real `hh_context::
+/// `FakeCompaction` — a `CompactionPort` running the real `hharness_context::
 /// compact` ladder (`evict_oldest` rung) over a caller-seeded plan +
 /// candidate map; the emitted rows ride `CompactionDone.emitted` — the
 /// driver lands them.
 struct FakeCompaction {
-    plan: Option<hh_context::ContextPlan>,
-    candidates: BTreeMap<String, hh_context::Candidate>,
+    plan: Option<hharness_context::ContextPlan>,
+    candidates: BTreeMap<String, hharness_context::Candidate>,
     /// The compaction `window_cap` — below `occupancy_estimate` ⇒ a real
     /// reclaim target.
     window_cap: u64,
@@ -561,12 +566,12 @@ impl CompactionPort for FakeCompaction {
             window_cap: self.window_cap,
             trigger,
             needed: 1,
-            target_fraction_ppm: hh_context::compact::DEFAULT_TARGET_FRACTION_PPM,
-            scope: hh_provenance::PersistenceScope::Run,
+            target_fraction_ppm: hharness_context::compact::DEFAULT_TARGET_FRACTION_PPM,
+            scope: hharness_provenance::PersistenceScope::Run,
             at: 0,
             run_id: "run".to_string(),
             summarizer: None,
-            slot_min_authority: hh_context::default_layout()
+            slot_min_authority: hharness_context::default_layout()
                 .slots
                 .iter()
                 .map(|s| (s.slot_id.clone(), s.min_authority))
@@ -579,12 +584,10 @@ impl CompactionPort for FakeCompaction {
         };
         let fallback = EvictOldest;
         let mut sink = CollectSink::default();
-        let _outcome =
-            hh_context::compact::compact(&input, &[&fallback], &mut sink).map_err(|_| {
-                CompactionImpossible {
-                    required_tokens: plan.occupancy_estimate,
-                    cap: self.window_cap,
-                }
+        let _outcome = hharness_context::compact::compact(&input, &[&fallback], &mut sink)
+            .map_err(|_| CompactionImpossible {
+                required_tokens: plan.occupancy_estimate,
+                cap: self.window_cap,
             })?;
         Ok(CompactionDone {
             view_hash: "cv-test".into(),
@@ -597,27 +600,27 @@ impl CompactionPort for FakeCompaction {
 /// `acceptance_s28` `cand_at`/`planned_item` shapes — minimal but real).
 fn compact_cand(
     id: &str,
-    kind: hh_context::CandidateKind,
-    authority: hh_provenance::AuthorityClass,
+    kind: hharness_context::CandidateKind,
+    authority: hharness_provenance::AuthorityClass,
     tokens: u64,
-    priority: hh_context::PriorityClass,
+    priority: hharness_context::PriorityClass,
     seq: u64,
-) -> (hh_context::Candidate, hh_context::PlannedItem) {
-    let c = hh_context::Candidate {
+) -> (hharness_context::Candidate, hharness_context::PlannedItem) {
+    let c = hharness_context::Candidate {
         candidate_id: id.to_string(),
         context_item_id: Some(format!("sha256:item-{id}")),
         kind,
-        state: hh_context::CandidateState::Expanded,
-        retention: hh_context::Retention::Optional(priority),
-        estimate: hh_context::Estimate {
+        state: hharness_context::CandidateState::Expanded,
+        retention: hharness_context::Retention::Optional(priority),
+        estimate: hharness_context::Estimate {
             tokens,
             estimator_ref: "est/pinned".to_string(),
         },
         source_event: None,
         source_seq: seq,
-        label: hh_provenance::label::Label::at(authority),
-        provenance: hh_provenance::ProvenanceRecord::kernel("hh-test/context", 0),
-        validity: hh_hir::records::Validity::open_from(0),
+        label: hharness_provenance::label::Label::at(authority),
+        provenance: hharness_provenance::ProvenanceRecord::kernel("hh-test/context", 0),
+        validity: hharness_hir::records::Validity::open_from(0),
         readers: None,
         slot_hint: None,
         volatile: false,
@@ -626,7 +629,7 @@ fn compact_cand(
         artefact_id: None,
         handle: None,
     };
-    let p = hh_context::PlannedItem {
+    let p = hharness_context::PlannedItem {
         candidate_id: c.candidate_id.clone(),
         context_item_id: c.context_item_id.clone().unwrap(),
         artefact_id: c.artefact_id.clone(),
@@ -645,11 +648,11 @@ fn compact_cand(
 /// `transcript` slot holds the items in order (the same fixture shape
 /// `acceptance_s28`'s `plan_of` uses).
 fn compaction_fixture(
-    pairs: Vec<(hh_context::Candidate, hh_context::PlannedItem)>,
+    pairs: Vec<(hharness_context::Candidate, hharness_context::PlannedItem)>,
     occupancy: u64,
 ) -> (
-    hh_context::ContextPlan,
-    BTreeMap<String, hh_context::Candidate>,
+    hharness_context::ContextPlan,
+    BTreeMap<String, hharness_context::Candidate>,
 ) {
     let mut candidates = BTreeMap::new();
     let mut planned = Vec::new();
@@ -657,23 +660,25 @@ fn compaction_fixture(
         candidates.insert(c.candidate_id.clone(), c);
         planned.push(p);
     }
-    let plan = hh_context::ContextPlan {
+    let plan = hharness_context::ContextPlan {
         plan_id: "plan:test".into(),
         model_call_id: "mc-1".into(),
-        derived_from: hh_context::DerivedFrom {
+        derived_from: hharness_context::DerivedFrom {
             run_id: "run".into(),
             seq: 0,
             view_hash: "sha256:view".into(),
         },
-        slots: vec![hh_context::SlotFill {
+        slots: vec![hharness_context::SlotFill {
             slot_id: "transcript".into(),
             items: planned,
         }],
         omitted: vec![],
-        context_label: hh_provenance::label::Label::at(hh_provenance::AuthorityClass::Delegate),
+        context_label: hharness_provenance::label::Label::at(
+            hharness_provenance::AuthorityClass::Delegate,
+        ),
         occupancy_estimate: occupancy,
         legal_cut_points: (0..=64)
-            .map(|i| hh_context::CutPoint { before_index: i })
+            .map(|i| hharness_context::CutPoint { before_index: i })
             .collect(),
         reserved: 0,
         estimator_ref: "est/pinned".into(),
@@ -704,19 +709,24 @@ impl ScriptedStrategy {
 }
 
 impl ControlStrategy for ScriptedStrategy {
-    fn capabilities(&self) -> &hh_control::strategy::ControlCapabilities {
+    fn capabilities(&self) -> &hharness_control::strategy::ControlCapabilities {
         self.inner.capabilities()
     }
     fn open(
         &mut self,
         ctx: &ControlContext,
-    ) -> Result<hh_control::state::ControlState, hh_control::strategy::ControlError> {
+    ) -> Result<hharness_control::state::ControlState, hharness_control::strategy::ControlError>
+    {
         self.inner.open(ctx)
     }
-    fn observe(&self, state: &mut hh_control::state::ControlState, events: &[EventEnvelope]) {
+    fn observe(&self, state: &mut hharness_control::state::ControlState, events: &[EventEnvelope]) {
         self.inner.observe(state, events);
     }
-    fn decide(&self, state: &mut hh_control::state::ControlState, cue: &Cue) -> ControlDecision {
+    fn decide(
+        &self,
+        state: &mut hharness_control::state::ControlState,
+        cue: &Cue,
+    ) -> ControlDecision {
         let tag = match cue {
             Cue::ModelCompleted { .. } => "model_completed",
             Cue::RetrievalCompleted => "retrieval_completed",
@@ -751,21 +761,22 @@ impl ControlStrategy for ScriptedStrategy {
         &mut self,
         checkpoint: &[u8],
         ctx: &ControlContext,
-    ) -> Result<hh_control::state::ControlState, hh_control::strategy::RestoreError> {
+    ) -> Result<hharness_control::state::ControlState, hharness_control::strategy::RestoreError>
+    {
         self.inner.restore(checkpoint, ctx)
     }
     fn terminate(
         &self,
-        state: &hh_control::state::ControlState,
+        state: &hharness_control::state::ControlState,
         reason: &StopReason,
-    ) -> hh_control::strategy::FinalReport {
+    ) -> hharness_control::strategy::FinalReport {
         self.inner.terminate(state, reason)
     }
 }
 
 /// A scripted `VerifyPort`.
 struct ScriptedVerify {
-    verdicts: Vec<hh_verification::validators::Verdict>,
+    verdicts: Vec<hharness_verification::validators::Verdict>,
 }
 
 impl VerifyPort for ScriptedVerify {
@@ -773,7 +784,7 @@ impl VerifyPort for ScriptedVerify {
         &mut self,
         _refs: &[String],
         _subject: &Json,
-    ) -> Vec<hh_verification::validators::Verdict> {
+    ) -> Vec<hharness_verification::validators::Verdict> {
         self.verdicts.clone()
     }
 }
@@ -784,7 +795,7 @@ fn ctx() -> ControlContext {
     ControlContext {
         process_ref: "proc-1".into(),
         plan: vec![],
-        boundary: hh_control::react::react_preset(),
+        boundary: hharness_control::react::react_preset(),
         profile: Json::Null,
         account_ref: "acct".into(),
         budget_ref: "b-1".into(),
@@ -792,8 +803,8 @@ fn ctx() -> ControlContext {
         parameters: StrategyParams::default(),
         capabilities_available: vec!["hh.submit".into()],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     }
 }
@@ -820,7 +831,7 @@ fn submit_surface() -> SurfaceSpec {
 
 fn submit_call() -> ModelOutcome {
     ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         response_ref: "r-1".into(),
         text_empty: false,
         calls: vec![ParsedCall {
@@ -835,7 +846,7 @@ fn submit_call() -> ModelOutcome {
 
 fn write_call() -> ModelOutcome {
     ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         response_ref: "r-1".into(),
         text_empty: false,
         calls: vec![ParsedCall {
@@ -848,17 +859,17 @@ fn write_call() -> ModelOutcome {
     }
 }
 
-fn affirmative_verdict() -> hh_verification::validators::Verdict {
-    use hh_verification::vocab::*;
-    let judge_prov = hh_provenance::ProvenanceRecord::minted(
-        hh_provenance::origin::Origin::model("model:judge-1", "run", "resp-j1"),
-        hh_provenance::PersistenceScope::Run,
+fn affirmative_verdict() -> hharness_verification::validators::Verdict {
+    use hharness_verification::vocab::*;
+    let judge_prov = hharness_provenance::ProvenanceRecord::minted(
+        hharness_provenance::origin::Origin::model("model:judge-1", "run", "resp-j1"),
+        hharness_provenance::PersistenceScope::Run,
         0,
     );
-    hh_verification::validators::Verdict {
+    hharness_verification::validators::Verdict {
         verdict_id: "verdict:artefact-1".into(),
-        validator_ref: hh_identity::refs::VersionedRef::pinned(
-            hh_identity::kinds::RecordKind::Validator,
+        validator_ref: hharness_identity::refs::VersionedRef::pinned(
+            hharness_identity::kinds::RecordKind::Validator,
             "validator:judge-1",
             judge_prov.clone(),
         ),
@@ -912,9 +923,9 @@ fn scripted_driver(
 fn producer_sequence_lands_durable_and_ordered() {
     let mut sink = MemSink::new();
     let mut memory = FakeMemory::new();
-    let seeded = memory.seed("note-1", hh_provenance::PersistenceScope::Session, 1);
+    let seeded = memory.seed("note-1", hharness_provenance::PersistenceScope::Session, 1);
     // A run-scoped version — the `scope_ended` floor at finish expires it.
-    let run_scoped = memory.seed("scratch-1", hh_provenance::PersistenceScope::Run, 1);
+    let run_scoped = memory.seed("scratch-1", hharness_provenance::PersistenceScope::Run, 1);
     let mut driver = scripted_driver(
         &mut sink,
         vec![
@@ -941,33 +952,33 @@ fn producer_sequence_lands_durable_and_ordered() {
         },
     );
     driver.set_memory_port(Box::new(memory));
-    // The compaction port runs the real `hh_context::compact` ladder —
+    // The compaction port runs the real `hharness_context::compact` ladder —
     // the seeded plan's occupancy (400) exceeds the window cap (300), so
     // `request_principal` is a hard reclaim and `evict_oldest` applies.
     let (plan, cands) = compaction_fixture(
         vec![
             compact_cand(
                 "c1",
-                hh_context::CandidateKind::Observation,
-                hh_provenance::AuthorityClass::Delegate,
+                hharness_context::CandidateKind::Observation,
+                hharness_provenance::AuthorityClass::Delegate,
                 150,
-                hh_context::PriorityClass::Commentary,
+                hharness_context::PriorityClass::Commentary,
                 1,
             ),
             compact_cand(
                 "c2",
-                hh_context::CandidateKind::Memory,
-                hh_provenance::AuthorityClass::Delegate,
+                hharness_context::CandidateKind::Memory,
+                hharness_provenance::AuthorityClass::Delegate,
                 150,
-                hh_context::PriorityClass::Memory,
+                hharness_context::PriorityClass::Memory,
                 2,
             ),
             compact_cand(
                 "c3",
-                hh_context::CandidateKind::TranscriptItem,
-                hh_provenance::AuthorityClass::Delegate,
+                hharness_context::CandidateKind::TranscriptItem,
+                hharness_provenance::AuthorityClass::Delegate,
                 100,
-                hh_context::PriorityClass::TranscriptTail,
+                hharness_context::PriorityClass::TranscriptTail,
                 3,
             ),
         ],
@@ -1079,7 +1090,11 @@ fn producer_sequence_lands_durable_and_ordered() {
 fn resume_set_drains_before_first_decide() {
     let mut sink = MemSink::new();
     let mut memory = FakeMemory::new();
-    let head = memory.seed("carried-note", hh_provenance::PersistenceScope::Session, 1);
+    let head = memory.seed(
+        "carried-note",
+        hharness_provenance::PersistenceScope::Session,
+        1,
+    );
     let mut driver = scripted_driver(
         &mut sink,
         vec![],
@@ -1151,7 +1166,7 @@ fn resume_set_without_port_refuses() {
     };
     let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
     match r {
-        Err(hh_control::driver::DriverError::UnbackedPort { kind }) => {
+        Err(hharness_control::driver::DriverError::UnbackedPort { kind }) => {
             assert_eq!(kind, "resume_set");
         }
         other => panic!("expected UnbackedPort{{resume_set}}, got {other:?}"),
@@ -1169,7 +1184,7 @@ fn trigger_path_touched_runs_retrieval() {
     let mut sink = MemSink::new();
     let mut memory = FakeMemory::new();
     // A `procedure_pointer` watching `src/**` — the trigger arm's hit.
-    let prov = hh_provenance::ProvenanceRecord::kernel("hh-test/memory", 0);
+    let prov = hharness_provenance::ProvenanceRecord::kernel("hh-test/memory", 0);
     let draft = MemoryDraft {
         kind: MemoryKind::ProcedurePointer,
         subject_key: None,
@@ -1189,11 +1204,11 @@ fn trigger_path_touched_runs_retrieval() {
             validator_ref: None,
             freshness: None,
             invalidation_condition: Some(InvalidationCondition::ScopeEnded(
-                hh_provenance::PersistenceScope::Session,
+                hharness_provenance::PersistenceScope::Session,
             )),
             revalidation: Revalidation::Never,
         }),
-        scope: hh_provenance::PersistenceScope::Session,
+        scope: hharness_provenance::PersistenceScope::Session,
         declared_inputs: vec![],
         justifications: vec![],
         supersedes: None,
@@ -1202,9 +1217,13 @@ fn trigger_path_touched_runs_retrieval() {
         semantic_id: Some("proc-watch-src".to_string()),
         validator_endorsed: false,
     };
-    let wctx = hh_context::WriteContext {
-        context_label: hh_provenance::label::Label::at(hh_provenance::AuthorityClass::Principal),
-        lease_generation: memory.store.lease(hh_provenance::PersistenceScope::Session),
+    let wctx = hharness_context::WriteContext {
+        context_label: hharness_provenance::label::Label::at(
+            hharness_provenance::AuthorityClass::Principal,
+        ),
+        lease_generation: memory
+            .store
+            .lease(hharness_provenance::PersistenceScope::Session),
         at_seq: 1,
         run_id: "run".to_string(),
     };
@@ -1386,7 +1405,7 @@ fn judged_verify_mints_judged_activation_not_deterministic() {
                 DecisionKind::Propose {
                     decision_point: DecisionPoint::Act,
                     context_request: Json::Null,
-                    expected_output: hh_control::vocab::ExpectedOutput::Free,
+                    expected_output: hharness_control::vocab::ExpectedOutput::Free,
                 },
             ),
         ],
@@ -1419,7 +1438,7 @@ fn judged_verify_mints_judged_activation_not_deterministic() {
         verdicts: vec![affirmative_verdict()],
     }));
     let mut memory = FakeMemory::new();
-    memory.seed("proc-1", hh_provenance::PersistenceScope::Session, 1);
+    memory.seed("proc-1", hharness_provenance::PersistenceScope::Session, 1);
     driver.set_memory_port(Box::new(memory));
     let mut model = ScriptedModel {
         script: [write_call(), submit_call()].into_iter().collect(),
@@ -1492,7 +1511,7 @@ fn judged_verify_mints_judged_followed() {
         },
     );
     let mut verdict = affirmative_verdict();
-    verdict.value = hh_verification::vocab::VerdictValue::Graded(800_000);
+    verdict.value = hharness_verification::vocab::VerdictValue::Graded(800_000);
     driver.set_verify_port(Box::new(ScriptedVerify {
         verdicts: vec![verdict],
     }));
@@ -1538,8 +1557,8 @@ fn judged_verify_mints_judged_followed() {
 fn judged_inconclusive_mints_nothing() {
     let mut sink = MemSink::new();
     let mut verdict = affirmative_verdict();
-    verdict.status = hh_verification::vocab::VerdictStatus::Inconclusive(
-        hh_verification::vocab::InconclusiveReason::MissingEvidence,
+    verdict.status = hharness_verification::vocab::VerdictStatus::Inconclusive(
+        hharness_verification::vocab::InconclusiveReason::MissingEvidence,
     );
     let mut driver = scripted_driver(
         &mut sink,

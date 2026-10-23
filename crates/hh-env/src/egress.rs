@@ -1,12 +1,12 @@
 //! The **egress mediator** — the Stage-2 runtime half of §5g.4's
 //! `decide_egress` + credential mediation (R-2.8.3/R-2.8.4; S2.4;
-//! ADR-0266 D1). The *decision* is `hh_containment::egress::decide_egress`
+//! ADR-0266 D1). The *decision* is `hharness_containment::egress::decide_egress`
 //! (pure); this module owns the runtime: attribution-token resolution
 //! (`TokenResolver`), the durable `security.egress.{requested,decided}` rows,
 //! the decide-once-consume-once re-resolution ([`EgressResolver`] +
 //! `recheck_resolved` — the SSRF pivot check), the credential-binding slot
 //! (`CredentialBroker::mediate_sentinel` → `drain_claim`), the
-//! `network.calls` charge ([`hh_budget::Account`]), and the ask/endorse
+//! `network.calls` charge ([`hharness_budget::Account`]), and the ask/endorse
 //! path (`resolve_ask` + `amend` + `ApprovalCache`).
 //!
 //! Ordering contract (SV-5 + §5g.4 §6):
@@ -31,28 +31,30 @@ use std::collections::BTreeSet;
 use std::net::{IpAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use hh_budget::account::{Account, AskOutcome, ChargeRequest};
-use hh_budget::attribution::{default_charged_to, Attribution};
-use hh_budget::quantity::ResourceQuantity;
-use hh_containment::amend::{amend, AmendError};
-use hh_containment::egress::{
+use hharness_budget::account::{Account, AskOutcome, ChargeRequest};
+use hharness_budget::attribution::{default_charged_to, Attribution};
+use hharness_budget::quantity::ResourceQuantity;
+use hharness_containment::amend::{amend, AmendError};
+use hharness_containment::egress::{
     decide_egress, recheck_resolved, ApprovalCache, CacheScope, EgressDecision, EgressReason,
     EgressRequest, EgressSource, EgressVerdict,
 };
-use hh_containment::events::{
+use hharness_containment::events::{
     amended_payload, egress_decided_payload, egress_requested_payload, request_ref, DecidedBy,
 };
-use hh_containment::policy::{AmendmentBasis, ContainmentPolicy};
-use hh_ledger::event::Event;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::approval::{self, ApprovalRequest, ApprovalResponse, ResponseChoice};
-use hh_ontology::dimensions::DimensionId;
-use hh_provenance::flow::Remedy;
-use hh_provenance::origin::Origin;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
-use hh_secrets::{CredentialBroker, MediationOutcome, Placeholder, RefusedCode, RequestDescriptor};
-use hh_wire::json::Json;
+use hharness_containment::policy::{AmendmentBasis, ContainmentPolicy};
+use hharness_ledger::event::Event;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::approval::{self, ApprovalRequest, ApprovalResponse, ResponseChoice};
+use hharness_ontology::dimensions::DimensionId;
+use hharness_provenance::flow::Remedy;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_secrets::{
+    CredentialBroker, MediationOutcome, Placeholder, RefusedCode, RequestDescriptor,
+};
+use hharness_wire::json::Json;
 
 use crate::events::{EventMinter, ScopeChain};
 use crate::tokens::{ResolveOutcome, TokenResolver};
@@ -180,7 +182,7 @@ impl EgressTransport for LocalHttpTransport {
         headers: &[(String, String)],
         body: Option<&[u8]>,
     ) -> Result<WireResponse, String> {
-        // R4.5b (ADR-0364 D1) — the wire shape is `hh_wire::http`'s one
+        // R4.5b (ADR-0364 D1) — the wire shape is `hharness_wire::http`'s one
         // codec: request write + head parse + body per the declared mode
         // (`Content-Length`/`chunked`/close-delimited — the fixtures'
         // `Connection: close` answer reads the same). The dial stays here:
@@ -196,10 +198,10 @@ impl EgressTransport for LocalHttpTransport {
         for (k, v) in headers {
             hdrs.push((k.as_str(), v.as_str()));
         }
-        hh_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
+        hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+        let (head, body) = hharness_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
             .map_err(|e| format!("read {addr}:{port}: {e}"))?;
         Ok(WireResponse {
             status: head.status,
@@ -214,8 +216,8 @@ impl EgressTransport for LocalHttpTransport {
 }
 
 /// The local TLS-terminated transport (R4.5c; ADR-0365; DF-S2.4-2):
-/// `hh_tls::ClientTls` wraps the resolved-address `TcpStream`, then the
-/// **same** `hh_wire::http` codec carries the request. `terminates_tls()`
+/// `hharness_tls::ClientTls` wraps the resolved-address `TcpStream`, then the
+/// **same** `hharness_wire::http` codec carries the request. `terminates_tls()`
 /// answers `true` — the policy's `tls.terminate` declaration is honoured
 /// with a real session (webPKI verification always on; a private issuer
 /// needs the operator-declared extra-roots file), and `tls_terminated`
@@ -224,7 +226,7 @@ impl EgressTransport for LocalHttpTransport {
 pub struct LocalTlsTransport {
     /// The client TLS configuration (`ClientTls::webpki_roots()` plus
     /// any declared extra roots / mTLS client identity).
-    pub tls: hh_tls::ClientTls,
+    pub tls: hharness_tls::ClientTls,
     /// The dial/handshake/read timeout.
     pub timeout: Duration,
 }
@@ -232,7 +234,7 @@ pub struct LocalTlsTransport {
 impl Default for LocalTlsTransport {
     fn default() -> Self {
         LocalTlsTransport {
-            tls: hh_tls::ClientTls::webpki_roots(),
+            tls: hharness_tls::ClientTls::webpki_roots(),
             timeout: Duration::from_secs(5),
         }
     }
@@ -266,10 +268,10 @@ impl EgressTransport for LocalTlsTransport {
         for (k, v) in headers {
             hdrs.push((k.as_str(), v.as_str()));
         }
-        hh_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
+        hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+        let (head, body) = hharness_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
             .map_err(|e| format!("read {addr}:{port}: {e}"))?;
         Ok(WireResponse {
             status: head.status,
@@ -407,7 +409,7 @@ pub enum GateOutcome {
 #[derive(Debug)]
 pub struct GateAllow {
     /// The pure decision (`decision = allow`).
-    pub decision: hh_containment::egress::EgressDecision,
+    pub decision: hharness_containment::egress::EgressDecision,
     /// The decided row's effect scope (the token's resolved binding, else
     /// the claim).
     pub effect_id: String,
@@ -735,11 +737,11 @@ impl<'a> EgressMediator<'a> {
         }
 
         // Mint the pending coordinate + emit the owed-decision trail.
-        let cap = hh_compiler::plan::PinnedRef {
+        let cap = hharness_compiler::plan::PinnedRef {
             semantic_id: "net_egress".to_string(),
             version_id: format!("net_egress@{}", self.policy.version_id),
         };
-        let args_hash = hh_identity::idp::idp_id(
+        let args_hash = hharness_identity::idp::idp_id(
             "egress.ask",
             format!(
                 "{}\u{1f}{}\u{1f}{}\u{1f}{}",
@@ -821,7 +823,7 @@ impl<'a> EgressMediator<'a> {
                 PersistenceScope::Run,
                 asked_at,
             ));
-            anchor.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+            anchor.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
             self.store
                 .append(&self.run_id, self.lease, vec![anchor])
                 .map_err(|e| EgressError::Ledger {
@@ -1010,8 +1012,9 @@ impl<'a> EgressMediator<'a> {
                     }
                 };
                 let host = req.host_norm();
-                let diff =
-                    hh_containment::admit::ContainmentDiff::AddEgressAllow { host: host.clone() };
+                let diff = hharness_containment::admit::ContainmentDiff::AddEgressAllow {
+                    host: host.clone(),
+                };
                 match amend(
                     &self.policy,
                     &diff,
@@ -1167,7 +1170,7 @@ impl<'a> EgressMediator<'a> {
         //      the declared hook set. A guard deny is durable before the
         //      refusal is visible, and no credential is staged for a
         //      refused leg.
-        if let Some(deny) = hh_containment::approved_host_body_check(&self.policy, req) {
+        if let Some(deny) = hharness_containment::approved_host_body_check(&self.policy, req) {
             let ev = self.decide_row(
                 req,
                 &deny,
@@ -1185,7 +1188,7 @@ impl<'a> EgressMediator<'a> {
                 reason: deny.reason.unwrap_or(EgressReason::ReaderCoverage),
             });
         }
-        let tls_leg = req.protocol == hh_containment::policy::EgressProtocol::HttpsConnect;
+        let tls_leg = req.protocol == hharness_containment::policy::EgressProtocol::HttpsConnect;
         if tls_leg
             && (self.policy.net.tls.terminate || !self.policy.net.tls.inspect_hooks.is_empty())
             && !self.transport.terminates_tls()
@@ -1500,7 +1503,7 @@ impl<'a> EgressMediator<'a> {
     /// so the dispatch is durably ledgered as `requested`/`decided`).
     pub fn dispatch_revocations(
         &mut self,
-        intents: &[hh_secrets::RevokeIntent],
+        intents: &[hharness_secrets::RevokeIntent],
         token: &str,
         chain: &ScopeChain,
     ) -> Vec<Result<MediatedOutcome, EgressError>> {
@@ -1512,7 +1515,7 @@ impl<'a> EgressMediator<'a> {
                 // intended reader is the destination it revokes at; the
                 // `approved_host_body` closer reads `Restricted{host_norm}`
                 // as exactly that statement (R2.9b; ADR-0341 D6).
-                let host_norm = hh_containment::policy::normalize_host(&i.host_pattern);
+                let host_norm = hharness_containment::policy::normalize_host(&i.host_pattern);
                 let req = EgressRequest {
                     token: token.to_string(),
                     effect_id: None,
@@ -1524,9 +1527,9 @@ impl<'a> EgressMediator<'a> {
                     // honours it, a non-terminating one refuses typed
                     // (R4.5c; the intent's scheme is R4.5c's addition).
                     protocol: if i.scheme == "https" {
-                        hh_containment::policy::EgressProtocol::HttpsConnect
+                        hharness_containment::policy::EgressProtocol::HttpsConnect
                     } else {
-                        hh_containment::policy::EgressProtocol::Http
+                        hharness_containment::policy::EgressProtocol::Http
                     },
                     host_raw: i.host_pattern.clone(),
                     resolved_addrs: vec![],
@@ -1538,7 +1541,7 @@ impl<'a> EgressMediator<'a> {
                         "{{\"binding_id\":\"{}\",\"channel_id\":\"{}\"}}",
                         i.binding_id, i.channel_id
                     )),
-                    body_readers: Some(hh_provenance::authority::ReaderSet::Restricted(
+                    body_readers: Some(hharness_provenance::authority::ReaderSet::Restricted(
                         [host_norm].into_iter().collect(),
                     )),
                     credential_sentinels: vec![],

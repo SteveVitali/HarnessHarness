@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::MatchSpec;
-use hh_hir::document::Node;
-use hh_hir::procedure::{CompilationTarget, ProcedureProfile, SelectCtx};
-use hh_wire::json::Json;
+use hharness_budget::MatchSpec;
+use hharness_hir::document::Node;
+use hharness_hir::procedure::{CompilationTarget, ProcedureProfile, SelectCtx};
+use hharness_wire::json::Json;
 
 use crate::experiment::ExperimentRefusal;
 
@@ -60,7 +60,7 @@ pub struct ProcedureTestSpec<'a> {
     /// The procedure under test.
     pub procedure: &'a Node,
     /// The procedure's profile (`ext["hh/procedure"]` parsed by the caller
-    /// or [`hh_hir::procedure::ProcedureProfile::from_node`]).
+    /// or [`hharness_hir::procedure::ProcedureProfile::from_node`]).
     pub profile: Option<&'a ProcedureProfile>,
     /// The requested target (`None` = `select_target` decides under `ctx`).
     pub target: Option<CompilationTarget>,
@@ -162,11 +162,16 @@ pub fn test_procedure(
     let target = match spec.target {
         Some(t) => t,
         None => {
-            hh_hir::procedure::select_target(spec.procedure, spec.profile, &spec.select_ctx, index)
-                .map_err(|e| ExperimentRefusal::UnmatchedBudget {
-                    detail: format!("select_target: {e}"),
-                })?
-                .target
+            hharness_hir::procedure::select_target(
+                spec.procedure,
+                spec.profile,
+                &spec.select_ctx,
+                index,
+            )
+            .map_err(|e| ExperimentRefusal::UnmatchedBudget {
+                detail: format!("select_target: {e}"),
+            })?
+            .target
         }
     };
     // `cost` — the instrument-charged sum over validator runs.

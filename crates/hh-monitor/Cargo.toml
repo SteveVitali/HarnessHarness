@@ -1,5 +1,5 @@
 [package]
-name = "hh-monitor"
+name = "hharness-monitor"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,16 +14,16 @@ name = "hh-authorize"
 path = "src/bin/hh-authorize.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-assembly = { path = "../hh-assembly" }
-hh-compiler = { path = "../hh-compiler" }
-hh-ledger = { path = "../hh-ledger" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-assembly = { path = "../hh-assembly" }
+hharness-compiler = { path = "../hh-compiler" }
+hharness-ledger = { path = "../hh-ledger" }
 
 [dev-dependencies]
-hh-eval = { path = "../hh-eval" }
-hh-budget = { path = "../hh-budget" }
-hh-lab = { path = "../hh-lab" }
+hharness-eval = { path = "../hh-eval" }
+hharness-budget = { path = "../hh-budget" }
+hharness-lab = { path = "../hh-lab" }

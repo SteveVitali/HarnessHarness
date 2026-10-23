@@ -21,7 +21,7 @@
 //! `schedule`/`external` on an interactive activation refuses without a
 //! reachable principal — [`crate::wakeup`] owns that refusal.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::LedgerError;
 use crate::manifest::{LineageLink, RunKind, RunManifest};

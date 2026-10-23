@@ -9,37 +9,37 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_assembly::compose::compose;
-use hh_assembly::diagnostics::{Code, NaReason, Severity, Stage};
-use hh_assembly::grammar::{Assembly, LayerProvenance, LayerSourceKind};
-use hh_assembly::resolve::{resolve, ResolveEnv};
-use hh_assembly::Stage1Catalog;
-use hh_hir::document::Node;
-use hh_hir::kinds::EntityKind;
-use hh_hir::leaves::Text;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::address;
-use hh_identity::names::ResolveMode;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::kinds::{Cardinality, Placement};
-use hh_registry::records::{
+use hharness_assembly::compose::compose;
+use hharness_assembly::diagnostics::{Code, NaReason, Severity, Stage};
+use hharness_assembly::grammar::{Assembly, LayerProvenance, LayerSourceKind};
+use hharness_assembly::resolve::{resolve, ResolveEnv};
+use hharness_assembly::Stage1Catalog;
+use hharness_hir::document::Node;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::address;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::kinds::{Cardinality, Placement};
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ContractOperation, Implementation, RegistryRecord, VariantRecord,
 };
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
-use hh_lab::assembly::desugar::{desugar, overrides_layer_id, LAB_EXT_KEY};
-use hh_lab::assembly::diff_view::{flatten, project};
-use hh_lab::assembly::drift::{adopt_admissible, pin_ops_only};
-use hh_lab::assembly::plan::PlanExit;
-use hh_lab::assembly::service::{AssembleMode, AssemblyService, BatchPoint, PublishSpec};
-use hh_lab::assembly::source::{
+use hharness_lab::assembly::desugar::{desugar, overrides_layer_id, LAB_EXT_KEY};
+use hharness_lab::assembly::diff_view::{flatten, project};
+use hharness_lab::assembly::drift::{adopt_admissible, pin_ops_only};
+use hharness_lab::assembly::plan::PlanExit;
+use hharness_lab::assembly::service::{AssembleMode, AssemblyService, BatchPoint, PublishSpec};
+use hharness_lab::assembly::source::{
     AssemblySource, HostedSpec, HostedSupply, Import, ImportKind, RootKind, SourceDocument,
     SourceLayer,
 };
 
-// ── fixtures (the hh-assembly common fixtures, duplicated — the suites share
+// ── fixtures (the hharness-assembly common fixtures, duplicated — the suites share
 // no test crate so the removability argument stays literal) ──────────────────
 
 fn kernel() -> ProvenanceRecord {
@@ -173,7 +173,7 @@ fn scaffold() -> SourceDocument {
     ];
     SourceDocument {
         root: "test:agent".into(),
-        nodes: nodes.iter().map(hh_hir::wire::node_to_json).collect(),
+        nodes: nodes.iter().map(hharness_hir::wire::node_to_json).collect(),
         edges: Vec::new(),
     }
 }
@@ -337,7 +337,7 @@ fn svc<'a>(s: &'a mut RegistryStore, c: &'a Stage1Catalog) -> AssemblyService<'a
     }
 }
 
-fn codes(r: &hh_assembly::diagnostics::ValidationReport) -> Vec<String> {
+fn codes(r: &hharness_assembly::diagnostics::ValidationReport) -> Vec<String> {
     r.diagnostics.iter().map(|d| d.code.code()).collect()
 }
 
@@ -355,11 +355,11 @@ fn corpus() -> Vec<AssemblySource> {
                 let mut frag = Assembly::empty();
                 frag.parameters.insert(
                     format!("p{i}_{v}"),
-                    hh_assembly::grammar::ParameterSpec {
-                        param_type: hh_assembly::grammar::ParamType::Int,
+                    hharness_assembly::grammar::ParameterSpec {
+                        param_type: hharness_assembly::grammar::ParamType::Int,
                         domain: Some(Json::Arr(vec![Json::Int(0), Json::Int(8)])),
                         default: Some(Json::Int(v as i64)),
-                        required: hh_assembly::grammar::ParamRequirement::Optional,
+                        required: hharness_assembly::grammar::ParamRequirement::Optional,
                         unit: None,
                         sweepable: true,
                         affects: vec![],
@@ -373,7 +373,7 @@ fn corpus() -> Vec<AssemblySource> {
                 if v == 4 {
                     frag.entities.insert(
                         format!("ent-{i}"),
-                        hh_assembly::grammar::EntityBinding::Inline {
+                        hharness_assembly::grammar::EntityBinding::Inline {
                             kind: "context_item".into(),
                             record: Json::obj([("body", Json::str(format!("e{i}")))]),
                         },
@@ -561,11 +561,11 @@ fn ac3_invalid_fixtures_per_owned_code() {
     }
     a.parameters.insert(
         "window".into(),
-        hh_assembly::grammar::ParameterSpec {
-            param_type: hh_assembly::grammar::ParamType::Int,
+        hharness_assembly::grammar::ParameterSpec {
+            param_type: hharness_assembly::grammar::ParamType::Int,
             domain: None,
             default: Some(Json::Int(8)),
-            required: hh_assembly::grammar::ParamRequirement::Optional,
+            required: hharness_assembly::grammar::ParamRequirement::Optional,
             unit: None,
             sweepable: true,
             affects: vec![],
@@ -613,7 +613,7 @@ fn ac5_plan_seal_parity() {
     admit_profile(&mut store, &prof);
     let mut s = valid_source();
     s.document = Some(scaffold_with_profile(
-        &hh_compiler::profile::profile_coordinate(&prof),
+        &hharness_compiler::profile::profile_coordinate(&prof),
     ));
     let snap = store.snapshot(&kernel()).unwrap().snapshot_id;
     let p = svc(&mut store, &catalog).assemble(&s, Some(&snap), AssembleMode::Plan);
@@ -623,8 +623,8 @@ fn ac5_plan_seal_parity() {
     assert_eq!(p.snapshot, e.snapshot);
     assert_eq!(p.derivation_key, e.derivation_key);
     assert_eq!(
-        hh_assembly::diagnostics::report_json(&p.report).to_canonical_string(),
-        hh_assembly::diagnostics::report_json(&e.report).to_canonical_string(),
+        hharness_assembly::diagnostics::report_json(&p.report).to_canonical_string(),
+        hharness_assembly::diagnostics::report_json(&e.report).to_canonical_string(),
         "S-1: plan and seal yield identical reports"
     );
     assert!(p.sealed.is_none());
@@ -648,11 +648,20 @@ fn s3_byte_identity_with_kernel() {
     let d = desugar(&s, &store, Some(&snap), &catalog, &kernel(), &kernel());
     let mut composed = compose(&d.layers, &kernel()).expect("compose");
     if let Some(exp) = &d.experiment {
-        hh_lab::assembly::desugar::apply_experiment(&mut composed, exp, &kernel(), &mut Vec::new());
+        hharness_lab::assembly::desugar::apply_experiment(
+            &mut composed,
+            exp,
+            &kernel(),
+            &mut Vec::new(),
+        );
     }
     composed.ext.insert(
-        hh_lab::assembly::desugar::LAB_EXT_KEY.into(),
-        hh_lab::assembly::desugar::lab_ext(&d.layers, d.experiment.as_ref(), &r.derivation_key),
+        hharness_lab::assembly::desugar::LAB_EXT_KEY.into(),
+        hharness_lab::assembly::desugar::lab_ext(
+            &d.layers,
+            d.experiment.as_ref(),
+            &r.derivation_key,
+        ),
     );
     let mut doc = d.doc;
     doc.assembly = Some(composed.to_json());
@@ -686,28 +695,28 @@ fn ac7_snapshot_drift_and_freeze() {
     // Publish a successor variant — the name's head moves.
     let class_vid = store
         .resolve(
-            &hh_registry::store::ResolveInput::Selector {
+            &hharness_registry::store::ResolveInput::Selector {
                 namespace: "hh".into(),
                 name: "round_robin".into(),
                 label: None,
                 snapshot_id: None,
             },
             ResolveMode::Audit,
-            &hh_registry::store::ResolveRequest::default(),
+            &hharness_registry::store::ResolveRequest::default(),
         )
         .map(|r| r.versioned_ref.version_id)
         .unwrap();
     let _ = class_vid;
     let c = store
         .resolve(
-            &hh_registry::store::ResolveInput::Selector {
+            &hharness_registry::store::ResolveInput::Selector {
                 namespace: "hh".into(),
                 name: "round_robin".into(),
                 label: None,
                 snapshot_id: None,
             },
             ResolveMode::Audit,
-            &hh_registry::store::ResolveRequest::default(),
+            &hharness_registry::store::ResolveRequest::default(),
         )
         .unwrap();
     let old_variant = match &c.record {
@@ -740,7 +749,7 @@ fn ac7_snapshot_drift_and_freeze() {
         .iter()
         .any(|d| d.code == Code::RefSnapshotDrift);
     assert!(
-        c_ref_6 || dr.sameness == Some(hh_identity::sameness::SamenessLevel::L0),
+        c_ref_6 || dr.sameness == Some(hharness_identity::sameness::SamenessLevel::L0),
         "a moved head reports C-REF-6 (or L0 when the pin already won): {:?}",
         dr.diagnostics
             .iter()
@@ -757,9 +766,9 @@ fn ac7_snapshot_drift_and_freeze() {
     );
 
     // adopt admissibility: evolution may never adopt L3.
-    assert!(adopt_admissible(hh_identity::sameness::SamenessLevel::L3, true).is_err());
-    assert!(adopt_admissible(hh_identity::sameness::SamenessLevel::L2, true).is_ok());
-    assert!(adopt_admissible(hh_identity::sameness::SamenessLevel::L3, false).is_ok());
+    assert!(adopt_admissible(hharness_identity::sameness::SamenessLevel::L3, true).is_err());
+    assert!(adopt_admissible(hharness_identity::sameness::SamenessLevel::L2, true).is_ok());
+    assert!(adopt_admissible(hharness_identity::sameness::SamenessLevel::L3, false).is_ok());
 }
 
 // ── T-1: flatten(project(d)) = d.ops ─────────────────────────────────────────
@@ -776,11 +785,11 @@ fn t1_assembly_diff_flatten_round_trip() {
     let mut f2 = Assembly::empty();
     f2.parameters.insert(
         "x".into(),
-        hh_assembly::grammar::ParameterSpec {
-            param_type: hh_assembly::grammar::ParamType::Int,
+        hharness_assembly::grammar::ParameterSpec {
+            param_type: hharness_assembly::grammar::ParamType::Int,
             domain: Some(Json::Arr(vec![Json::Int(0), Json::Int(4)])),
             default: None,
-            required: hh_assembly::grammar::ParamRequirement::Optional,
+            required: hharness_assembly::grammar::ParamRequirement::Optional,
             unit: None,
             sweepable: true,
             affects: vec![],
@@ -805,31 +814,31 @@ fn t1_assembly_diff_flatten_round_trip() {
     let b = svc(&mut store, &catalog).assemble(&s2, None, AssembleMode::Seal);
     let sealed_b = b.sealed.unwrap();
 
-    let (ops, class) = hh_hir::diff::ops_between(&sealed_a.document, &sealed_b.document);
+    let (ops, class) = hharness_hir::diff::ops_between(&sealed_a.document, &sealed_b.document);
     let d = project(ops.clone(), class, None);
     let flat = flatten(&d);
     // Same multiset: canonical-compare sorted op encodings.
     let mut lhs: Vec<String> = flat
         .iter()
-        .map(|o| hh_hir::diff::op_json(o).to_canonical_string())
+        .map(|o| hharness_hir::diff::op_json(o).to_canonical_string())
         .collect();
     let mut rhs: Vec<String> = ops
         .iter()
-        .map(|o| hh_hir::diff::op_json(o).to_canonical_string())
+        .map(|o| hharness_hir::diff::op_json(o).to_canonical_string())
         .collect();
     lhs.sort();
     rhs.sort();
     assert_eq!(lhs, rhs, "flatten(project(d)) = d.ops as a multiset");
     // The render is deterministic.
     assert_eq!(
-        hh_lab::assembly::diff_view::render(&d),
-        hh_lab::assembly::diff_view::render(&d)
+        hharness_lab::assembly::diff_view::render(&d),
+        hharness_lab::assembly::diff_view::render(&d)
     );
     // The toggle lands as exactly one slot_toggle (T-5).
     let toggles = d
         .ops
         .iter()
-        .filter(|o| o.bucket == hh_lab::assembly::diff_view::AssemblyBucket::SlotToggle)
+        .filter(|o| o.bucket == hharness_lab::assembly::diff_view::AssemblyBucket::SlotToggle)
         .count();
     assert_eq!(toggles, 1, "one enabled flip = exactly one slot_toggle");
 }
@@ -850,7 +859,7 @@ fn hosted_root_na_rows_and_class6() {
         imports: Vec::new(),
         hosted: Some(HostedSpec {
             harness: "participant:test".into(),
-            model: Some(hh_lab::assembly::source::ModelBinding::Bound(vec![
+            model: Some(hharness_lab::assembly::source::ModelBinding::Bound(vec![
                 "model:a".into(),
             ])),
             auth: vec!["$secret:api_key".into()],
@@ -1024,7 +1033,7 @@ fn validate_batch_dedupes_identical_points() {
     admit_profile(&mut store, &prof);
     let mut s = valid_source();
     s.document = Some(scaffold_with_profile(
-        &hh_compiler::profile::profile_coordinate(&prof),
+        &hharness_compiler::profile::profile_coordinate(&prof),
     ));
     let mut bad = valid_source();
     bad.layers[0].fragment = Json::str("broken");
@@ -1037,11 +1046,11 @@ fn validate_batch_dedupes_identical_points() {
     assert_eq!(reports.len(), 2, "identical points validate once");
     assert_eq!(
         reports[0].1.status,
-        hh_assembly::diagnostics::ReportStatus::Pass
+        hharness_assembly::diagnostics::ReportStatus::Pass
     );
     assert_eq!(
         reports[1].1.status,
-        hh_assembly::diagnostics::ReportStatus::Fail
+        hharness_assembly::diagnostics::ReportStatus::Fail
     );
 }
 
@@ -1203,7 +1212,7 @@ fn d4_selectors_live_only_in_layers() {
             );
         }
     }
-    nodes_doc.nodes[3] = hh_hir::wire::node_to_json(&agent);
+    nodes_doc.nodes[3] = hharness_hir::wire::node_to_json(&agent);
     let mut s = valid_source();
     s.document = Some(nodes_doc);
     let d = desugar(&s, &store, None, &catalog, &kernel(), &kernel());
@@ -1243,7 +1252,7 @@ fn drift_projection_keeps_pin_ops_only() {
     let s = valid_source();
     let a = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Seal);
     let sealed = a.sealed.unwrap();
-    let (ops, class) = hh_hir::diff::ops_between(&sealed.document, &sealed.document);
+    let (ops, class) = hharness_hir::diff::ops_between(&sealed.document, &sealed.document);
     let d = project(ops, class, None);
     let pinned = pin_ops_only(&d);
     assert!(pinned.ops.is_empty(), "no movement on identical inputs");
@@ -1252,9 +1261,9 @@ fn drift_projection_keeps_pin_ops_only() {
 // ── AC-11 (compile): the anchor's sealed output compiles under minimal
 // profiles — the service's `compile` delegates to the compiler unchanged ───
 
-use hh_compiler::compiler::CompileInputs;
-use hh_compiler::link::TargetSpec;
-use hh_compiler::profile::{
+use hharness_compiler::compiler::CompileInputs;
+use hharness_compiler::link::TargetSpec;
+use hharness_compiler::profile::{
     DebtStatus, ExpiryCondition, ExpiryKind, ModelProfile, ModelRole, ProfileCompatibility,
     ProfileDebtRecord, ProfileSelector, ProfileView, VersionPattern,
 };
@@ -1263,7 +1272,7 @@ fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
     ProfileDebtRecord {
         rule_id: rule_id.to_string(),
         hypothesis: "the model honours the declared contract".to_string(),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
         owner: "test:owner".to_string(),
         reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
@@ -1271,10 +1280,10 @@ fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
             value: Some("2099-01-01".to_string()),
         },
         removal_test_ref: "sha256:test".to_string(),
-        removal_test: Some(hh_hir::RemovalTest {
-            kind: hh_hir::RemovalTestKind::Inspection,
+        removal_test: Some(hharness_hir::RemovalTest {
+            kind: hharness_hir::RemovalTestKind::Inspection,
             criteria: Some("human inspection".into()),
-            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+            ..hharness_hir::RemovalTest::new(hharness_hir::RemovalTestKind::Inspection)
         }),
         status,
         debt_class: None,
@@ -1313,13 +1322,13 @@ fn minimal_profile(id: &str, version: &str) -> ModelProfile {
         },
         tests: Json::obj([]),
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
 struct MapProfileView {
     profiles: BTreeMap<String, ModelProfile>,
-    reports: BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+    reports: BTreeMap<String, hharness_compiler::profile_test::ProfileTestReport>,
 }
 
 impl ProfileView for MapProfileView {
@@ -1330,7 +1339,7 @@ impl ProfileView for MapProfileView {
     fn test_report(
         &self,
         coordinate: &str,
-    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+    ) -> Option<hharness_compiler::profile_test::ProfileTestReport> {
         self.reports.get(coordinate).cloned()
     }
 }
@@ -1339,11 +1348,13 @@ fn profiles_of(ps: &[ModelProfile]) -> MapProfileView {
     let mut m = BTreeMap::new();
     let mut reports = BTreeMap::new();
     for p in ps {
-        let coord = hh_compiler::profile::profile_coordinate(p);
+        let coord = hharness_compiler::profile::profile_coordinate(p);
         // Fixture plumbing: a fabricated *passing* ProfileTestReport per bound
         // profile so the AC-R-2.3.3-13 link gate admits the (tested) chain.
-        let report =
-            hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+        let report = hharness_compiler::profile_test::ProfileTestReport::passing_for(
+            &coord,
+            &p.content_hash,
+        );
         reports.insert(coord.clone(), report.clone());
         reports.insert(p.content_hash.clone(), report);
         m.insert(coord, p.clone());
@@ -1397,7 +1408,7 @@ fn ac11_anchor_compiles_under_minimal_profiles() {
     for p in [&p1, &p2] {
         let inputs = CompileInputs {
             sealed: sealed.clone(),
-            profile_refs: vec![hh_compiler::profile::profile_coordinate(p)],
+            profile_refs: vec![hharness_compiler::profile::profile_coordinate(p)],
             fallback_profile: None,
             targets: vec![TargetSpec {
                 target_id: "mcp".to_string(),
@@ -1441,7 +1452,7 @@ fn scaffold_with_profile(coordinate: &str) -> SourceDocument {
     ];
     SourceDocument {
         root: "test:agent".into(),
-        nodes: nodes.iter().map(hh_hir::wire::node_to_json).collect(),
+        nodes: nodes.iter().map(hharness_hir::wire::node_to_json).collect(),
         edges: Vec::new(),
     }
 }
@@ -1454,21 +1465,22 @@ fn admit_profile(store: &mut RegistryStore, p: &ModelProfile) {
         .register(
             RegistryRecord::ModelProfile(Json::obj([
                 ("kind", Json::str("model_profile")),
-                ("profile", hh_compiler::schema::profile_to_json(p)),
+                ("profile", hharness_compiler::schema::profile_to_json(p)),
             ])),
             &kernel(),
             None,
         )
         .expect("model_profile registers");
-    let coord = hh_compiler::profile::profile_coordinate(p);
-    let report = hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+    let coord = hharness_compiler::profile::profile_coordinate(p);
+    let report =
+        hharness_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
     store
         .register(
             RegistryRecord::ProfileTestReport(Json::obj([
                 ("kind", Json::str("profile_test_report")),
                 (
                     "report",
-                    hh_compiler::profile_test::test_report_json(&report),
+                    hharness_compiler::profile_test::test_report_json(&report),
                 ),
             ])),
             &kernel(),
@@ -1483,22 +1495,22 @@ fn s5_1_stage6b_unexpressible_surface_is_c_prof_2_at_plan_time() {
     // `interaction_mode.freeform` is outside the C0 surface family — link's
     // expressibility gate raises `UnexpressibleSurface` (AC-CP-05's shape).
     let mut p = minimal_profile("test:prof6b", "1.0");
-    p.rules.push(hh_compiler::profile::ProfileRule {
+    p.rules.push(hharness_compiler::profile::ProfileRule {
         rule_id: "r-mode".into(),
-        kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+        kind: hharness_compiler::profile::ProfileRuleKind::InteractionMode,
         owned_fields: vec![],
         params: Json::obj([("mode", Json::str("freeform"))]),
         debt: profile_debt("r-mode", DebtStatus::Active),
         scope: None,
         supersedes: None,
-        compliance: hh_compiler::profile::Compliance {
-            detector_class: hh_compiler::profile::ComplianceDetector::None,
+        compliance: hharness_compiler::profile::Compliance {
+            detector_class: hharness_compiler::profile::ComplianceDetector::None,
             followed_predicate_ref: None,
         },
     });
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     admit_profile(&mut store, &p);
-    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let coord = hharness_compiler::profile::profile_coordinate(&p);
 
     let mut s = valid_source();
     s.document = Some(scaffold_with_profile(&coord));
@@ -1547,8 +1559,8 @@ fn r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8() {
     let pb = minimal_profile("test:tie-b", "1.0");
     admit_profile(&mut store, &pa);
     admit_profile(&mut store, &pb);
-    let coord_a = hh_compiler::profile::profile_coordinate(&pa);
-    let coord_b = hh_compiler::profile::profile_coordinate(&pb);
+    let coord_a = hharness_compiler::profile::profile_coordinate(&pa);
+    let coord_b = hharness_compiler::profile::profile_coordinate(&pb);
 
     let mut s = valid_source();
     // The native pin is B; `assembly.profile_binding` pins A — the stage-6
@@ -1571,7 +1583,7 @@ fn r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8() {
             "latest",
         ))),
     );
-    a.profile_binding = hh_assembly::grammar::ProfileBinding::Pinned(ProfileRef {
+    a.profile_binding = hharness_assembly::grammar::ProfileBinding::Pinned(ProfileRef {
         profile: coord_a.clone(),
         pinned: true,
     });
@@ -1607,22 +1619,22 @@ fn s5_1_stage6b_expressible_profile_leaves_plan_clean() {
     // The C0-admissible mode compiles — `plan` stays `ok` and no C-PROF-*
     // diagnostic appears.
     let mut p = minimal_profile("test:prof6b", "1.0");
-    p.rules.push(hh_compiler::profile::ProfileRule {
+    p.rules.push(hharness_compiler::profile::ProfileRule {
         rule_id: "r-mode".into(),
-        kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+        kind: hharness_compiler::profile::ProfileRuleKind::InteractionMode,
         owned_fields: vec![],
         params: Json::obj([("mode", Json::str("native_fc"))]),
         debt: profile_debt("r-mode", DebtStatus::Active),
         scope: None,
         supersedes: None,
-        compliance: hh_compiler::profile::Compliance {
-            detector_class: hh_compiler::profile::ComplianceDetector::None,
+        compliance: hharness_compiler::profile::Compliance {
+            detector_class: hharness_compiler::profile::ComplianceDetector::None,
             followed_predicate_ref: None,
         },
     });
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     admit_profile(&mut store, &p);
-    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let coord = hharness_compiler::profile::profile_coordinate(&p);
 
     let mut s = valid_source();
     s.document = Some(scaffold_with_profile(&coord));
@@ -1664,24 +1676,24 @@ fn s5_1_stage6b_skips_unbound_and_seal_mode() {
     // boundary (`lab.assembly.compile`) owns the sealed pipeline's verdict.
     let p = {
         let mut p = minimal_profile("test:prof6b", "1.0");
-        p.rules.push(hh_compiler::profile::ProfileRule {
+        p.rules.push(hharness_compiler::profile::ProfileRule {
             rule_id: "r-mode".into(),
-            kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+            kind: hharness_compiler::profile::ProfileRuleKind::InteractionMode,
             owned_fields: vec![],
             params: Json::obj([("mode", Json::str("freeform"))]),
             debt: profile_debt("r-mode", DebtStatus::Active),
             scope: None,
             supersedes: None,
-            compliance: hh_compiler::profile::Compliance {
-                detector_class: hh_compiler::profile::ComplianceDetector::None,
+            compliance: hharness_compiler::profile::Compliance {
+                detector_class: hharness_compiler::profile::ComplianceDetector::None,
                 followed_predicate_ref: None,
             },
         });
-        p.content_hash = hh_compiler::profile::profile_identity(&p);
+        p.content_hash = hharness_compiler::profile::profile_identity(&p);
         p
     };
     admit_profile(&mut store, &p);
-    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let coord = hharness_compiler::profile::profile_coordinate(&p);
     let mut s = valid_source();
     s.document = Some(scaffold_with_profile(&coord));
     let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Seal);
@@ -1755,11 +1767,11 @@ fn ac6_diff_apply_invert_and_surface_rename() {
     let mut f2 = Assembly::empty();
     f2.parameters.insert(
         "x".into(),
-        hh_assembly::grammar::ParameterSpec {
-            param_type: hh_assembly::grammar::ParamType::Int,
+        hharness_assembly::grammar::ParameterSpec {
+            param_type: hharness_assembly::grammar::ParamType::Int,
             domain: Some(Json::Arr(vec![Json::Int(0), Json::Int(4)])),
             default: None,
-            required: hh_assembly::grammar::ParamRequirement::Optional,
+            required: hharness_assembly::grammar::ParamRequirement::Optional,
             unit: None,
             sweepable: true,
             affects: vec![],
@@ -1801,27 +1813,27 @@ fn ac6_diff_apply_invert_and_surface_rename() {
         PersistenceScope::Run,
         1,
     );
-    let hd = hh_hir::diff::diff(&a.document, &b.document, prov.clone(), Default::default())
+    let hd = hharness_hir::diff::diff(&a.document, &b.document, prov.clone(), Default::default())
         .expect("diff");
     // The projection's ops ARE the diff's ops — feed `flatten` back.
     let pd = project(hd.ops.clone(), hd.classification.clone(), None);
     let mut flat = flatten(&pd);
-    flat.sort_by_key(|o| hh_hir::diff::op_json(o).to_canonical_string());
+    flat.sort_by_key(|o| hharness_hir::diff::op_json(o).to_canonical_string());
     assert_eq!(
         flat.iter()
-            .map(hh_hir::diff::op_json)
+            .map(hharness_hir::diff::op_json)
             .map(|j| j.to_canonical_string())
             .collect::<Vec<_>>(),
         hd.ops
             .iter()
-            .map(hh_hir::diff::op_json)
+            .map(hharness_hir::diff::op_json)
             .map(|j| j.to_canonical_string())
             .collect::<Vec<_>>(),
         "flatten(project(d)) reproduces d.ops"
     );
 
     // apply(a, diff(a, b)) = b; the inverse lands back on a (AC-6).
-    let applied = hh_hir::diff::apply(&a.document, &hd).expect("apply");
+    let applied = hharness_hir::diff::apply(&a.document, &hd).expect("apply");
     assert_eq!(
         applied.to_json().to_canonical_string(),
         b.document.to_json().to_canonical_string(),
@@ -1831,17 +1843,17 @@ fn ac6_diff_apply_invert_and_surface_rename() {
     // (Inverse `apply` restores the semantic content but not explicit-null
     // ext leaves — the kernel's apply granularity; AC-6 requires only the
     // forward direction byte-exact.)
-    let inv = hh_hir::diff::invert(&hd);
-    let rt = hh_hir::diff::invert(&inv);
+    let inv = hharness_hir::diff::invert(&hd);
+    let rt = hharness_hir::diff::invert(&inv);
     assert_eq!(
         rt.ops
             .iter()
-            .map(hh_hir::diff::op_json)
+            .map(hharness_hir::diff::op_json)
             .map(|j| j.to_canonical_string())
             .collect::<Vec<_>>(),
         hd.ops
             .iter()
-            .map(hh_hir::diff::op_json)
+            .map(hharness_hir::diff::op_json)
             .map(|j| j.to_canonical_string())
             .collect::<Vec<_>>(),
         "invert(invert(d)) = d"
@@ -1874,7 +1886,7 @@ fn ac6_diff_apply_invert_and_surface_rename() {
         position: Json::Null,
     }));
     assert_eq!(renamed.nodes[idx].semantic_id(), before_sid);
-    let rd = hh_hir::diff::diff(&si_doc.document, &renamed, prov, Default::default())
+    let rd = hharness_hir::diff::diff(&si_doc.document, &renamed, prov, Default::default())
         .expect("rename diff");
     assert_eq!(
         rd.classification.semantic_ops, 0,
@@ -1885,7 +1897,7 @@ fn ac6_diff_apply_invert_and_surface_rename() {
     assert!(
         pd2.ops
             .iter()
-            .all(|o| o.bucket == hh_lab::assembly::diff_view::AssemblyBucket::SurfaceOnly),
+            .all(|o| o.bucket == hharness_lab::assembly::diff_view::AssemblyBucket::SurfaceOnly),
         "every op is surface_only: {:?}",
         pd2.ops.iter().map(|o| o.bucket.name()).collect::<Vec<_>>()
     );
@@ -1916,21 +1928,21 @@ fn ac2_identical_content_one_identity_layers_recorded() {
         "identical resolved content → one semantic_id"
     );
     // One configuration_id under equal composition inputs.
-    let inputs = hh_assembly::identity::CompositionInputs {
+    let inputs = hharness_assembly::identity::CompositionInputs {
         model_ref: "model:x".into(),
         profile: "sha256:profile".into(),
         environment_ref: "env:test".into(),
         budget: "test:budget".into(),
         seed: "0".into(),
     };
-    let ca = hh_assembly::identity::configuration(&a, &inputs);
-    let cb = hh_assembly::identity::configuration(&b, &inputs);
+    let ca = hharness_assembly::identity::configuration(&a, &inputs);
+    let cb = hharness_assembly::identity::configuration(&b, &inputs);
     assert_eq!(
         ca.configuration_id, cb.configuration_id,
         "one configuration_id"
     );
     // `layers[]` differ and are recorded on the sealed documents.
-    let layers_of = |s: &hh_hir::document::SealedDefinition| {
+    let layers_of = |s: &hharness_hir::document::SealedDefinition| {
         s.document
             .assembly
             .as_ref()
@@ -1942,7 +1954,7 @@ fn ac2_identical_content_one_identity_layers_recorded() {
     assert_ne!(la, Json::Null, "layers[] recorded on a");
     assert_ne!(la, lb, "the two paths' layers[] differ");
     // and the lab ext carries the per-path provenance too.
-    let lab_layers = |s: &hh_hir::document::SealedDefinition| {
+    let lab_layers = |s: &hharness_hir::document::SealedDefinition| {
         s.document
             .assembly
             .as_ref()
@@ -1997,11 +2009,11 @@ fn ac4_unbound_slot_fails_and_no_slot_defaults() {
     let mut f = Assembly::empty();
     f.parameters.insert(
         "temp".into(),
-        hh_assembly::grammar::ParameterSpec {
-            param_type: hh_assembly::grammar::ParamType::Int,
+        hharness_assembly::grammar::ParameterSpec {
+            param_type: hharness_assembly::grammar::ParamType::Int,
             domain: Some(Json::Arr(vec![Json::Int(0), Json::Int(4)])),
             default: Some(Json::Int(1)),
-            required: hh_assembly::grammar::ParamRequirement::Optional,
+            required: hharness_assembly::grammar::ParamRequirement::Optional,
             unit: None,
             sweepable: true,
             affects: vec![],
@@ -2089,7 +2101,7 @@ fn ac9_equal_overrides_one_layer_id_and_explain_names_it() {
     let rb = svc(&mut store, &catalog).assemble(&s2, None, AssembleMode::Seal);
     assert_eq!(rb.status, "ok", "s2 assembles");
     let b = rb.sealed.expect("s2 seals");
-    let inputs = hh_assembly::identity::CompositionInputs {
+    let inputs = hharness_assembly::identity::CompositionInputs {
         model_ref: "model:x".into(),
         profile: "sha256:profile".into(),
         environment_ref: "env:test".into(),
@@ -2097,8 +2109,8 @@ fn ac9_equal_overrides_one_layer_id_and_explain_names_it() {
         seed: "0".into(),
     };
     assert_eq!(
-        hh_assembly::identity::configuration(&a, &inputs).configuration_id,
-        hh_assembly::identity::configuration(&b, &inputs).configuration_id,
+        hharness_assembly::identity::configuration(&a, &inputs).configuration_id,
+        hharness_assembly::identity::configuration(&b, &inputs).configuration_id,
         "configuration_id is unchanged"
     );
 }

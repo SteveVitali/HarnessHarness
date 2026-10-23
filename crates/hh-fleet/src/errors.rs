@@ -2,8 +2,8 @@
 //! #4–#6's refusal spellings; `xerr` maps them onto the boundary's
 //! `WouldBlock`/`Refused`/`SchemaViolation`/`InsufficientBudget`).
 
-use hh_budget::errors::BudgetError;
-use hh_ledger::errors::LedgerError;
+use hharness_budget::errors::BudgetError;
+use hharness_ledger::errors::LedgerError;
 use std::fmt;
 
 /// One canonical spelling per variant (the `code` member the boundary

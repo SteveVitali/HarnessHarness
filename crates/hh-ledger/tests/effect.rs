@@ -15,13 +15,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::effect::{idempotency_key, CommitOutcome, EffectPhase};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::{LedgerError, ViewKind};
-use hh_wire::json::Json;
+use hharness_ledger::effect::{idempotency_key, CommitOutcome, EffectPhase};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::{LedgerError, ViewKind};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -40,13 +40,13 @@ fn open(tag: &str) -> (Store, String, Lease) {
 
 /// `open` with a caller-held [`ManualClock`] — lease expiry (crash ⇒ takeover)
 /// tests advance it past the writer TTL.
-fn open_at(tag: &str, ms: u64) -> (Store, String, Lease, hh_ledger::ids::ManualClock) {
-    let clock = hh_ledger::ids::ManualClock::at(ms);
+fn open_at(tag: &str, ms: u64) -> (Store, String, Lease, hharness_ledger::ids::ManualClock) {
+    let clock = hharness_ledger::ids::ManualClock::at(ms);
     let mut s = Store::open_with(
         dir(tag),
         Box::new(clock.clone()),
-        Some(Box::new(hh_ledger::ids::SeqIds::new())),
-        hh_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+        Some(Box::new(hharness_ledger::ids::SeqIds::new())),
+        hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
     )
     .unwrap();
     let (run, lease) = s
@@ -100,7 +100,10 @@ fn eff(id: &str, class: &str, effect_id: &str, payload: Json, fencing: u64) -> E
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -774,13 +777,13 @@ fn model_call_open(s: &mut Store, run: &str, lease: &Lease, turn: &str, mc: &str
 #[test]
 fn ac_2_2_3_2_restore_fences_marks_unknown_and_audits() {
     let d = dir("restore");
-    let clock = hh_ledger::ids::ManualClock::at(1_000);
+    let clock = hharness_ledger::ids::ManualClock::at(1_000);
     let (mut s, run, lease) = {
         let mut s = Store::open_with(
             &d,
             Box::new(clock.clone()),
-            Some(Box::new(hh_ledger::ids::SeqIds::new())),
-            hh_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+            Some(Box::new(hharness_ledger::ids::SeqIds::new())),
+            hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
         )
         .unwrap();
         let (run, lease) = s
@@ -908,7 +911,7 @@ fn ac_2_2_3_2_retry_due_is_a_pure_fold() {
         refs: vec![],
         ir_refs: vec![],
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel(
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
             "kernel:test",
             s.now_ms(),
         )),
@@ -1015,12 +1018,12 @@ fn mediation_allow_decision_survives_rebuild() {
     // Rebuild: the decision fold lands — a `committed` for attempt 1 after
     // restart is refused `DuplicateDecision`-adjacent (the fold knows the
     // attempt closed) — and the effect is committed.
-    let clock2 = hh_ledger::ids::ManualClock::at(1_000);
+    let clock2 = hharness_ledger::ids::ManualClock::at(1_000);
     let mut s2 = Store::open_with(
         &d,
         Box::new(clock2.clone()),
-        Some(Box::new(hh_ledger::ids::SeqIds::new())),
-        hh_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+        Some(Box::new(hharness_ledger::ids::SeqIds::new())),
+        hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
     )
     .unwrap();
     let f = s2.effect_fold(&run, "e1").unwrap().unwrap();
@@ -1048,7 +1051,7 @@ fn ac_2_8_7_1_check_mediation_replays_the_ordering() {
     let gen = lease.generation;
     // Π-allow prefix: `authorized` mediates `prepared` (no permission row yet).
     to_prepared(&mut s, &run, &lease, "e1", irreversible());
-    hh_ledger::effect::check_mediation(s.events(&run).unwrap())
+    hharness_ledger::effect::check_mediation(s.events(&run).unwrap())
         .expect("the Π allow mediates preparation");
     // The committed gate: `decided{allow}` lands, then `committed` — the whole
     // committed prefix replays clean.
@@ -1058,7 +1061,7 @@ fn ac_2_8_7_1_check_mediation_replays_the_ordering() {
         vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
     )
     .unwrap();
-    hh_ledger::effect::check_mediation(s.events(&run).unwrap())
+    hharness_ledger::effect::check_mediation(s.events(&run).unwrap())
         .expect("a legal committed prefix mediates");
 }
 
@@ -1083,7 +1086,7 @@ fn ac_2_8_7_1_committed_requires_the_decided_allow() {
         .cloned()
         .collect();
     assert!(matches!(
-        hh_ledger::effect::check_mediation(&stripped),
+        hharness_ledger::effect::check_mediation(&stripped),
         Err(LedgerError::Undecided { .. })
     ));
 }
@@ -1107,7 +1110,7 @@ fn ac_2_8_7_1_a_final_deny_vetoes_later_effect_motion() {
     )
     .unwrap();
     assert!(matches!(
-        hh_ledger::effect::check_mediation(s.events(&run).unwrap()),
+        hharness_ledger::effect::check_mediation(s.events(&run).unwrap()),
         Err(LedgerError::Undecided { .. })
     ));
 }
@@ -1148,7 +1151,7 @@ fn ac_2_8_7_1_no_decision_at_all_is_undecided() {
     env.seq = shell.seq + 1;
     evs.push(env);
     assert!(matches!(
-        hh_ledger::effect::check_mediation(&evs),
+        hharness_ledger::effect::check_mediation(&evs),
         Err(LedgerError::Undecided { .. })
     ));
 }

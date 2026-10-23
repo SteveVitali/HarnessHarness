@@ -14,15 +14,15 @@
 //! output_reasoning?, tiers[{threshold_tokens, rates}]?, valid_from, source}]}` — a
 //! versioned, content-addressed bundle artifact pinned by `pricing_ref`.
 
-use hh_ledger::manifest::EventRef;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::attribution::{Attribution, ModelRef};
 use crate::errors::SpendError;
 use crate::quantity::{Money, ResourceVector, PPM_SCALE};
 use crate::usage::TokenDecomposition;
-use hh_ontology::dimensions::DimensionId;
+use hharness_ontology::dimensions::DimensionId;
 
 /// `Money`-carrying provenance — the closed six-valued enum (ADR-0039 P1 amendment;
 /// ADR-0043 D4). Where the spend number actually came from.

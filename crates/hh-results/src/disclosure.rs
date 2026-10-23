@@ -18,9 +18,9 @@
 //! leaderboard form of search-vs-artifact separation): an arm with a
 //! declared `search_budget` never ranks as a plain artifact.
 
-use hh_experiment::view::ExperimentView;
-use hh_lab::experiment::ExperimentSpec;
-use hh_wire::json::Json;
+use hharness_experiment::view::ExperimentView;
+use hharness_lab::experiment::ExperimentSpec;
+use hharness_wire::json::Json;
 
 use crate::catalogue::BundleCatalogue;
 

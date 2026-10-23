@@ -7,17 +7,17 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use hh_identity::names::ResolveMode;
-use hh_plugin::{ContractRef, ContractVersionPolicy, EvalPoint, SunsetBound};
-use hh_registry::corpus;
-use hh_registry::extension::plugin::{
+use hharness_identity::names::ResolveMode;
+use hharness_plugin::{ContractRef, ContractVersionPolicy, EvalPoint, SunsetBound};
+use hharness_registry::corpus;
+use hharness_registry::extension::plugin::{
     admit_plugin, manifest_from_json, manifest_to_json, resolve_plugin_candidate, AdmissionContext,
     ManifestError, PluginManifest, Requests,
 };
-use hh_registry::extension::{ExtensionKind, ExtensionRecord, SourceLocator};
-use hh_registry::records::{RegistryPolicy, RegistryRecord};
-use hh_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
-use hh_wire::json::Json;
+use hharness_registry::extension::{ExtensionKind, ExtensionRecord, SourceLocator};
+use hharness_registry::records::{RegistryPolicy, RegistryRecord};
+use hharness_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!(
@@ -361,7 +361,7 @@ fn plugin_record(m: &PluginManifest) -> RegistryRecord {
     RegistryRecord::Extension(ExtensionRecord {
         kind: ExtensionKind::Plugin,
         name: m.identity.id(),
-        content: hh_identity::idp::address(b"pkg", "application/octet-stream"),
+        content: hharness_identity::idp::address(b"pkg", "application/octet-stream"),
         manifest: manifest_to_json(m),
         contributes: vec![],
         locator: SourceLocator {
@@ -371,10 +371,10 @@ fn plugin_record(m: &PluginManifest) -> RegistryRecord {
             resolved: Some("sha256:pin".to_string()),
             fetched_at: Some(1),
         },
-        trust: hh_registry::extension::ExtensionTrustRecord::unresolved_default(
-            hh_provenance::PersistenceScope::Run,
+        trust: hharness_registry::extension::ExtensionTrustRecord::unresolved_default(
+            hharness_provenance::PersistenceScope::Run,
         ),
-        provenance: hh_provenance::ProvenanceRecord::kernel("test", 0),
+        provenance: hharness_provenance::ProvenanceRecord::kernel("test", 0),
         ext: BTreeMap::new(),
     })
 }
@@ -470,7 +470,7 @@ fn resolve_plugin_candidate_decode_admit_one_step() {
 /// admit via `resolve_plugin_candidate` under a deny-everything requests cap
 /// (every fixture with a non-empty `requests` must then fail
 /// `RequestsExceedCap`; all `valid/` fixtures carry empty requests).
-/// `hh_plugin::corpus::run_corpus` enumerates `valid/`+`invalid/` and pins the
+/// `hharness_plugin::corpus::run_corpus` enumerates `valid/`+`invalid/` and pins the
 /// failure kind per `*.expect` file (AC-1's corpus requirement; the
 /// byte-identical cross-implementation check).
 #[test]
@@ -480,7 +480,7 @@ fn golden_manifest_corpus() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-manifests");
     let mut c = ctx(true);
     c.requests_cap = Some(Requests::default());
-    let admitted = hh_plugin::run_corpus(&dir, |bytes| {
+    let admitted = hharness_plugin::run_corpus(&dir, |bytes| {
         resolve_plugin_candidate(&s, bytes, &c)
             .map(|r| r.plugin_id)
             .map_err(|e| e.kind_str().to_string())
@@ -499,7 +499,7 @@ fn spec_dag_reports_clean() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/CANONICAL_SPEC.md"),
     )
     .unwrap();
-    let report = hh_plugin::spec_dag_check(&spec, &[], &[]);
+    let report = hharness_plugin::spec_dag_check(&spec, &[], &[]);
     assert!(
         report.is_clean(),
         "tier_violations={:?} cycles={:?} unknown={:?} errors={:?}",
@@ -533,19 +533,19 @@ fn manifest_dag_input_feeds_the_check() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/CANONICAL_SPEC.md"),
     )
     .unwrap();
-    let classes = hh_registry::extension::plugin::class_catalog(&s)
+    let classes = hharness_registry::extension::plugin::class_catalog(&s)
         .iter()
-        .map(|c| hh_plugin::ClassDagInput {
+        .map(|c| hharness_plugin::ClassDagInput {
             class_id: c.class_id.clone(),
             tier: c.tier,
             depends_on: vec![],
         })
         .collect::<Vec<_>>();
-    let report = hh_plugin::spec_dag_check(&spec, &classes, &[m.dag_input()]);
+    let report = hharness_plugin::spec_dag_check(&spec, &classes, &[m.dag_input()]);
     assert!(!report.inner.tier_violations.is_empty());
     // And the same manifest lints clean through the module-graph lint only
     // when its code is out of process — the lint applies to in-process
     // variant *source*; manifests are data, nothing to lint.
-    assert!(hh_plugin::lint_module_source("use hh_hir::leaves::Text;").is_empty());
-    assert!(!hh_plugin::lint_module_source("use unsafe_code::X;").is_empty());
+    assert!(hharness_plugin::lint_module_source("use hharness_hir::leaves::Text;").is_empty());
+    assert!(!hharness_plugin::lint_module_source("use unsafe_code::X;").is_empty());
 }

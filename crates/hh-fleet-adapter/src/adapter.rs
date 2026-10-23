@@ -11,9 +11,9 @@
 //! failed call: a faulting `occurrences` answers `[]` (nothing ledgered)
 //! and the *next* pass reports the latched fault.
 
-use hh_fleet::capabilities::AdapterCapabilities;
-use hh_fleet::source::{SourceOccurrence, WorkSourceAdapter};
-use hh_wire::json::Json;
+use hharness_fleet::capabilities::AdapterCapabilities;
+use hharness_fleet::source::{SourceOccurrence, WorkSourceAdapter};
+use hharness_wire::json::Json;
 
 use crate::abi;
 use crate::abi::AbiCodecError;

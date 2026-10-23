@@ -15,14 +15,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::kinds::RecordKind;
-use hh_identity::supersede::RevocationRecord as LineageRevocation;
-use hh_ledger::views::View;
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::supersede::RevocationRecord as LineageRevocation;
+use hharness_ledger::views::View;
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::PersistenceScope;
+use hharness_wire::json::Json;
 
 use crate::memory::{
     ConflictSet, DependencyStamp, InvalidationContract, MemoryError, MemoryRevocation, MemoryStore,
@@ -352,7 +352,7 @@ fn state_inner(
 /// `item_lifecycle_state` — the context-item half of E1/E2 (§5c.1 I-ORDER):
 /// a `Candidate`'s `Validity` evaluated at `at`. A conditioned item is
 /// `unknown` at C0 (nothing checkable evaluates the condition — honest).
-pub fn item_lifecycle_state(v: &hh_hir::records::Validity, at: u64) -> LifecycleState {
+pub fn item_lifecycle_state(v: &hharness_hir::records::Validity, at: u64) -> LifecycleState {
     if at < v.from {
         return LifecycleState::Unknown; // not yet valid — honest unknown
     }
@@ -381,7 +381,7 @@ pub struct FilterItem {
     /// The version id.
     pub version_id: String,
     /// The item's authority.
-    pub authority: hh_provenance::AuthorityClass,
+    pub authority: hharness_provenance::AuthorityClass,
     /// The item's readers.
     pub readers: ReaderSet,
     /// The item's persistence scope — the C2 readers rule needs it: for
@@ -434,14 +434,14 @@ pub struct FilterOutcome {
 pub fn filter_for_slot(
     items: &[FilterItem],
     policy: &crate::plan::ValidityPolicy,
-    slot_min_authority: hh_provenance::AuthorityClass,
+    slot_min_authority: hharness_provenance::AuthorityClass,
     reader: &str,
-    mode: hh_identity::names::ResolveMode,
+    mode: hharness_identity::names::ResolveMode,
     at: u64,
     conflicts: &BTreeMap<String, ConflictSet>,
     readers_required: Option<&ReaderSet>,
 ) -> FilterOutcome {
-    use hh_identity::names::ResolveMode;
+    use hharness_identity::names::ResolveMode;
     let mut out = FilterOutcome::default();
     let execute = mode == ResolveMode::Execute;
     for it in items {
@@ -610,8 +610,8 @@ impl From<MemoryError> for LifecycleError {
 /// `check_supersede_authority(new_auth, old_auth)` — `authority(new) ≥
 /// authority(old)` (the supersession authority rule).
 pub fn check_supersede_authority(
-    new_authority: hh_provenance::AuthorityClass,
-    old_authority: hh_provenance::AuthorityClass,
+    new_authority: hharness_provenance::AuthorityClass,
+    old_authority: hharness_provenance::AuthorityClass,
 ) -> Result<(), LifecycleError> {
     if new_authority < old_authority {
         return Err(LifecycleError::SupersessionAuthorityInsufficient {
@@ -736,7 +736,7 @@ pub fn resolve_conflict(
         let a = store
             .version(m)
             .map(|v| v.label.authority)
-            .unwrap_or(hh_provenance::AuthorityClass::Unverified);
+            .unwrap_or(hharness_provenance::AuthorityClass::Unverified);
         check_supersede_authority(head_auth, a)?;
     }
     set.resolution = ConflictResolution::Superseded {
@@ -759,7 +759,7 @@ pub fn promote(
     version_id: &str,
     reviewer: &ProvenanceRecord,
     to_scope: PersistenceScope,
-    to_authority: hh_provenance::AuthorityClass,
+    to_authority: hharness_provenance::AuthorityClass,
     ctx: &crate::memory::WriteContext,
 ) -> Result<crate::memory::PutOutcome, LifecycleError> {
     if !matches!(
@@ -923,7 +923,7 @@ pub fn dependants(store: &MemoryStore, version_id: &str) -> Vec<String> {
 /// `MemoryStaleIndex` — the derived `MemoryStaleIndex[version_id] →
 /// [stale_member_ids]` fold (§5c.4; ADR-0081 d3). Folded at `until_seq`
 /// (versions with `created_at ≤ until_seq`), transitive (J1), and stamped as
-/// an `hh-ledger` `View` (`lexical_index`/`memory_stale_index`/`memory_usage`
+/// an `hharness-ledger` `View` (`lexical_index`/`memory_stale_index`/`memory_usage`
 /// all ride the one `View` shape — CC7).
 #[derive(Debug, Clone)]
 pub struct MemoryStaleIndex {
@@ -997,7 +997,7 @@ pub fn stale_index(store: &MemoryStore, until_seq: u64) -> MemoryStaleIndex {
     )]);
     let view = View::stamped(
         &store.store_id,
-        hh_ledger::views::ViewKind::MemoryStaleIndex,
+        hharness_ledger::views::ViewKind::MemoryStaleIndex,
         Some(until_seq),
         payload,
     );

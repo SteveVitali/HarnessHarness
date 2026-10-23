@@ -1,4 +1,4 @@
-//! `hh-ontology` — the C0/Stage-1 ontology and formal model (spec §2, scope item **R-2.1.1**).
+//! `hharness-ontology` — the C0/Stage-1 ontology and formal model (spec §2, scope item **R-2.1.1**).
 //!
 //! This crate is the E1 *build binding* (CC4: the spec/contracts name no language; this crate,
 //! alongside the build ADRs, is the one place that realizes them concretely) of the ontology

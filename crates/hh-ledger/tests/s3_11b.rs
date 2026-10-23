@@ -21,26 +21,28 @@
 //! - AC-H6-11 — killed-then-resumed is `chain_ok`; the resume absent with a
 //!   later head is `Tampered{truncate}`; otherwise `scopes_closed = false`.
 //! - AC-H6-13 — the `completeness` vector's `headline`/`n/a{reason}`
-//!   projection half (the veto registration half lives in hh-eval).
+//!   projection half (the veto registration half lives in hharness-eval).
 //! - AC-R-2.8.5-10 — `audit_view.extensions{declared, effects[]}`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::audit::{
+use hharness_ledger::audit::{
     eval_obligations, AuditFault, Auditor, CheckpointKind, FixedSigner, KeyTable,
 };
-use hh_ledger::errors::{LedgerError, TamperedKind};
-use hh_ledger::event::{Cursor, Event, EventEnvelope, EventFrame, EventPlane, Producer, Scope};
-use hh_ledger::export::{export_audit_view, lift_external, ExportConvention};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::tree;
-use hh_ledger::views::ViewKind;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::errors::{LedgerError, TamperedKind};
+use hharness_ledger::event::{
+    Cursor, Event, EventEnvelope, EventFrame, EventPlane, Producer, Scope,
+};
+use hharness_ledger::export::{export_audit_view, lift_external, ExportConvention};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::tree;
+use hharness_ledger::views::ViewKind;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -447,7 +449,7 @@ fn evolution_link_obligation() {
             producer: Producer::kernel("kernel:test"),
             participant_class: ParticipantClass::Native,
             observability_level: BTreeSet::from([ObservabilityLevel::Events]),
-            durability: hh_ledger::classes::Durability::Ledger,
+            durability: hharness_ledger::classes::Durability::Ledger,
             scope: Scope::default(),
             lease_generation: 1,
             parent_event_id: ROOT_EVENT.into(),
@@ -552,7 +554,7 @@ fn evolution_campaign_classes_registered() {
         "measurement.evolution.campaign.stopped",
         "measurement.evolution.campaign.closed",
     ] {
-        let spec = hh_ledger::classes::lookup(class)
+        let spec = hharness_ledger::classes::lookup(class)
             .unwrap_or_else(|| panic!("{class} missing from the class table"));
         assert!(spec.audit_grade, "{class} must be audit-grade");
     }
@@ -576,7 +578,7 @@ fn ac_h6_4_persisted_widening_met_by_human_change_row() {
         producer: Producer::kernel("kernel:test"),
         participant_class: ParticipantClass::Native,
         observability_level: BTreeSet::from([ObservabilityLevel::Events]),
-        durability: hh_ledger::classes::Durability::Ledger,
+        durability: hharness_ledger::classes::Durability::Ledger,
         scope: Scope::default(),
         lease_generation: 1,
         parent_event_id: ROOT_EVENT.into(),

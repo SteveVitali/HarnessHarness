@@ -17,8 +17,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::participant::Granularity;
-use hh_wire::Json;
+use hharness_ontology::participant::Granularity;
+use hharness_wire::Json;
 
 use crate::adapter::{AdapterError, BenchmarkAdapter, ExportFormat};
 use crate::records::{BenchTask, Submission};
@@ -142,7 +142,7 @@ pub fn export(
     match format {
         ExportFormat::AdapterExport => {
             let body = adapter.export(submission, verdict);
-            let content_ref = hh_identity::idp_id(
+            let content_ref = hharness_identity::idp_id(
                 "bench.foreign_artifact",
                 body.to_canonical_string().as_bytes(),
             );
@@ -234,7 +234,7 @@ pub fn export(
                     ]),
                 ),
             ]);
-            let content_ref = hh_identity::idp_id(
+            let content_ref = hharness_identity::idp_id(
                 "bench.foreign_artifact",
                 body.to_canonical_string().as_bytes(),
             );

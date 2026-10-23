@@ -268,7 +268,7 @@ fn chat_completions_rules() -> Vec<DialectRule> {
 
 /// The descriptor's canonical document body (`dialect.to_json()` — the
 /// committed-record form of the bound dialect).
-pub fn openai_compatible_doc() -> hh_wire::json::Json {
+pub fn openai_compatible_doc() -> hharness_wire::json::Json {
     openai_compatible().to_json()
 }
 
@@ -402,7 +402,7 @@ pub fn openai() -> WireDialect {
 }
 
 /// `openai_doc()` — the `openai@1` document body.
-pub fn openai_doc() -> hh_wire::json::Json {
+pub fn openai_doc() -> hharness_wire::json::Json {
     openai().to_json()
 }
 
@@ -667,6 +667,6 @@ pub fn anthropic_messages() -> WireDialect {
 }
 
 /// `anthropic_messages_doc()` — the `anthropic-messages@1` document body.
-pub fn anthropic_messages_doc() -> hh_wire::json::Json {
+pub fn anthropic_messages_doc() -> hharness_wire::json::Json {
     anthropic_messages().to_json()
 }

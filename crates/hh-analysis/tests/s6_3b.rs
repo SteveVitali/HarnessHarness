@@ -12,13 +12,13 @@
 //! cap, `unattributed_share`, report determinism and the hosted
 //! admissibility ladder.
 
-use hh_analysis::attribution::{
+use hharness_analysis::attribution::{
     self, AttributionDesign, AttributionError, AttributionHypothesis, ComponentTarget,
     CoupledSource, DESIGN_SCHEMA, TARGET_CAP,
 };
-use hh_eval::stats::PPM;
-use hh_wire::json::Json;
-use hh_wire::sha256::sha256_hex;
+use hharness_eval::stats::PPM;
+use hharness_wire::json::Json;
+use hharness_wire::sha256::sha256_hex;
 
 // ── synthetic driver ────────────────────────────────────────────────────────
 

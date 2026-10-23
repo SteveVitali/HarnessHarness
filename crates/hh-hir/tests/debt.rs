@@ -11,17 +11,17 @@ use std::collections::BTreeSet;
 
 use common::*;
 
-use hh_hir::debt::{
+use hharness_hir::debt::{
     validate_for_home, validate_removal_test, DebtError, RemovalTestContext, RetirementRecord,
     TemplateView,
 };
-use hh_hir::{AssumptionDebtRecord, RemovalTest, RemovalTestKind};
-use hh_ontology::debt::{
+use hharness_hir::{AssumptionDebtRecord, RemovalTest, RemovalTestKind};
+use hharness_ontology::debt::{
     debt_home, evidence_grade, DebtClass, DebtPolicy, DebtScope, DebtStatus, EvidenceGrade,
     EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, RemovalVerdict, UnexecutableReason,
     Verdict,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 fn policy() -> DebtPolicy {
     DebtPolicy::default()
@@ -31,7 +31,7 @@ fn ctx() -> RemovalTestContext<'static> {
     RemovalTestContext::member_level()
 }
 
-fn harness_home() -> &'static hh_ontology::debt::DebtHome {
+fn harness_home() -> &'static hharness_ontology::debt::DebtHome {
     debt_home("harness_rule", "assumption_debt").expect("the harness_rule home exists")
 }
 
@@ -285,9 +285,9 @@ fn insufficient_runway_and_owner_unreachable() {
     let mut d = debt_record("rule:1", 0);
     let mut p = policy();
     p.min_runway_ms = 1_000;
-    d.expiry = Some(hh_ontology::debt::DebtExpiry {
+    d.expiry = Some(hharness_ontology::debt::DebtExpiry {
         condition: ExpiryKind::Date,
-        params: hh_ontology::debt::ExpiryParams {
+        params: hharness_ontology::debt::ExpiryParams {
             until: Some(500),
             ..Default::default()
         },
@@ -303,9 +303,9 @@ fn insufficient_runway_and_owner_unreachable() {
     ));
     // Enough runway passes.
     let mut d2 = d.clone();
-    d2.expiry = Some(hh_ontology::debt::DebtExpiry {
+    d2.expiry = Some(hharness_ontology::debt::DebtExpiry {
         condition: ExpiryKind::Date,
-        params: hh_ontology::debt::ExpiryParams {
+        params: hharness_ontology::debt::ExpiryParams {
             until: Some(5_000),
             ..Default::default()
         },
@@ -411,9 +411,9 @@ fn verdict_and_retirement_round_trip() {
     let ret = RetirementRecord {
         removal_test_report_ref: "report:1".into(),
         verdict_ref: "verdict:1".into(),
-        decided_by: hh_provenance::ProvenanceRecord::minted(
-            hh_provenance::Origin::human("a", hh_provenance::HumanRole::Principal),
-            hh_provenance::PersistenceScope::Run,
+        decided_by: hharness_provenance::ProvenanceRecord::minted(
+            hharness_provenance::Origin::human("a", hharness_provenance::HumanRole::Principal),
+            hharness_provenance::PersistenceScope::Run,
             0,
         ),
         rationale: text("the removal test passed twice", 3),
@@ -431,7 +431,7 @@ fn verdict_and_retirement_round_trip() {
     }
 }
 
-// ── the seal-time battery (AC-R-2.9.6-2 static half at `hh_hir::validate`) ───
+// ── the seal-time battery (AC-R-2.9.6-2 static half at `hharness_hir::validate`) ───
 
 #[test]
 fn seal_refuses_an_uninstantiable_removal_test() {
@@ -443,10 +443,10 @@ fn seal_refuses_an_uninstantiable_removal_test() {
     d.removal_test = Some(RemovalTest::new(RemovalTestKind::RetirementExperiment));
     doc.nodes
         .push(conditioned_rule_node("test:crule", 7, Some(d)));
-    let es = hh_hir::validate(&doc).expect_err("uninstantiable removal test");
+    let es = hharness_hir::validate(&doc).expect_err("uninstantiable removal test");
     assert!(es
         .iter()
-        .any(|e| matches!(e, hh_hir::errors::HirError::RemovalTestRefusal { .. })));
+        .any(|e| matches!(e, hharness_hir::errors::HirError::RemovalTestRefusal { .. })));
 
     // A record missing a per-home required field stays
     // `ConditionedRuleIncomplete` (the completeness half).
@@ -455,10 +455,10 @@ fn seal_refuses_an_uninstantiable_removal_test() {
     d.scope = None;
     doc.nodes
         .push(conditioned_rule_node("test:crule", 7, Some(d)));
-    let es = hh_hir::validate(&doc).expect_err("incomplete debt record");
+    let es = hharness_hir::validate(&doc).expect_err("incomplete debt record");
     assert!(es.iter().any(|e| matches!(
         e,
-        hh_hir::errors::HirError::ConditionedRuleIncomplete { .. }
+        hharness_hir::errors::HirError::ConditionedRuleIncomplete { .. }
     )));
 
     // The complete record validates.
@@ -468,7 +468,7 @@ fn seal_refuses_an_uninstantiable_removal_test() {
         7,
         Some(debt_record("test:crule.rule", 7)),
     ));
-    hh_hir::validate(&doc).unwrap();
+    hharness_hir::validate(&doc).unwrap();
 }
 
 // ── the `debt_json`/`debt_from_json` codec (CC7 — one schema source) ─────────
@@ -478,15 +478,15 @@ fn debt_codec_round_trips_and_decodes_legacy_bodies() {
     let d = debt_record("rule:1", 0);
     // The canonical encoding emits the `/1` additive members only when
     // present (CC8) and re-decodes to the same record.
-    let j = hh_hir::debt_json(&d, false);
-    let back = hh_hir::debt_from_json(&j, "debt").unwrap();
+    let j = hharness_hir::debt_json(&d, false);
+    let back = hharness_hir::debt_from_json(&j, "debt").unwrap();
     // The `Text` leaf serializes hash-only — round-trip equality holds at
     // the JSON level (the decoded record re-encodes byte-identically).
-    assert_eq!(hh_hir::debt_json(&back, false), j);
+    assert_eq!(hharness_hir::debt_json(&back, false), j);
     // The semantic projection (identity hashing) is deterministic and
     // differs from the versioned encoding (content elided).
-    let js = hh_hir::debt_json(&d, true);
-    assert_eq!(js, hh_hir::debt_json(&d, true));
+    let js = hharness_hir::debt_json(&d, true);
+    assert_eq!(js, hharness_hir::debt_json(&d, true));
 
     // A legacy body — bare `owner`/`expiry_condition`/`evidence_refs`
     // spellings and a legacy `status` — decodes per the `/1` field notes.
@@ -499,7 +499,7 @@ fn debt_codec_round_trips_and_decodes_legacy_bodies() {
         ("removal_test_ref", Json::str("sha256:test")),
         ("status", Json::str("open")),
     ]);
-    let decoded = hh_hir::debt_from_json(&legacy, "debt").unwrap();
+    let decoded = hharness_hir::debt_from_json(&legacy, "debt").unwrap();
     assert_eq!(decoded.status, DebtStatus::Active);
     assert!(!decoded.owner.team);
     assert_eq!(decoded.expiry_condition.kind, ExpiryKind::Date);
@@ -509,5 +509,5 @@ fn debt_codec_round_trips_and_decodes_legacy_bodies() {
     if let Json::Obj(ref mut m) = bad {
         m.insert("status".into(), Json::str("bogus"));
     }
-    assert!(hh_hir::debt_from_json(&bad, "debt").is_err());
+    assert!(hharness_hir::debt_from_json(&bad, "debt").is_err());
 }

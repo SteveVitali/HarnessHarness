@@ -15,29 +15,29 @@
 //! `plan_schema` admits the slot's `provider_params`, and the plan's
 //! `body` is the openai-compatible render — `validate_plan`, endpoint
 //! admission (H4), credential bind, and the wire send all run through
-//! `hh_gateway`'s own machinery (`validate_plan`/`EndpointAllowlist::
+//! `hharness_gateway`'s own machinery (`validate_plan`/`EndpointAllowlist::
 //! admit`/`CredentialPort::bind`/`Transport::send` →
 //! `grammar::decode_frame` → `collect`); nothing in this module
 //! re-implements classification, grammar, or framing.
 
 use std::collections::BTreeMap;
 
-use hh_control::driver::{ModelOutcome, ModelPort};
-use hh_control::output::ParsedCall;
-use hh_control::output::SurfaceSpec;
-use hh_gateway::codec::{self, WireFrame};
-use hh_gateway::credentials::BrokerCredentialPort;
-use hh_gateway::dialect::WireDialect;
-use hh_gateway::gateway::{CredentialHandle, CredentialPort, EndpointAllowlist, Transport};
-use hh_gateway::grammar::{self, DecodeState, ModelEventKind};
-use hh_gateway::http_transport::Family;
-use hh_gateway::message::{ModelBlock, ToolArgs};
-use hh_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
-use hh_gateway::vocab::{ModelError, ModelErrorClass, StopReason};
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_control::driver::{ModelOutcome, ModelPort};
+use hharness_control::output::ParsedCall;
+use hharness_control::output::SurfaceSpec;
+use hharness_gateway::codec::{self, WireFrame};
+use hharness_gateway::credentials::BrokerCredentialPort;
+use hharness_gateway::dialect::WireDialect;
+use hharness_gateway::gateway::{CredentialHandle, CredentialPort, EndpointAllowlist, Transport};
+use hharness_gateway::grammar::{self, DecodeState, ModelEventKind};
+use hharness_gateway::http_transport::Family;
+use hharness_gateway::message::{ModelBlock, ToolArgs};
+use hharness_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
+use hharness_gateway::vocab::{ModelError, ModelErrorClass, StopReason};
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 /// `ModelLane` — the realized live binding a `model_port` slot declares:
 /// the dialect coordinate, the resolved endpoint, the provider model id,
@@ -113,11 +113,11 @@ impl TlsLane {
             && self.client_key_file.is_none()
     }
 
-    /// `client_tls()` — arm the `hh_tls::ClientTls` the lane declares.
+    /// `client_tls()` — arm the `hharness_tls::ClientTls` the lane declares.
     /// Arm-time refusals are typed (`Refused` — the file is gone or
     /// unparseable at drive), never a silently smaller root set.
-    pub(crate) fn client_tls(&self) -> Result<hh_tls::ClientTls, EmbedError> {
-        let mut tls = hh_tls::ClientTls::webpki_roots();
+    pub(crate) fn client_tls(&self) -> Result<hharness_tls::ClientTls, EmbedError> {
+        let mut tls = hharness_tls::ClientTls::webpki_roots();
         if let Some(p) = &self.extra_roots_file {
             tls =
                 tls.extra_roots_file(std::path::Path::new(p))
@@ -127,12 +127,12 @@ impl TlsLane {
         }
         match (&self.client_cert_file, &self.client_key_file) {
             (Some(c), Some(k)) => {
-                let chain = hh_tls::pem::read_pem(std::path::Path::new(c)).map_err(|e| {
+                let chain = hharness_tls::pem::read_pem(std::path::Path::new(c)).map_err(|e| {
                     EmbedError::Refused {
                         reason: format!("model_port.tls.client_cert_file `{c}`: {e}"),
                     }
                 })?;
-                let key = hh_tls::pem::read_pem(std::path::Path::new(k)).map_err(|e| {
+                let key = hharness_tls::pem::read_pem(std::path::Path::new(k)).map_err(|e| {
                     EmbedError::Refused {
                         reason: format!("model_port.tls.client_key_file `{k}`: {e}"),
                     }
@@ -186,7 +186,7 @@ impl ModelLane {
     }
 
     /// The manifest member's decode — absent ⇒ `None` (the scripted lane).
-    pub fn from_manifest(manifest: &hh_ledger::manifest::RunManifest) -> Option<ModelLane> {
+    pub fn from_manifest(manifest: &hharness_ledger::manifest::RunManifest) -> Option<ModelLane> {
         let j = manifest.extra.get("model_lane")?;
         Some(ModelLane {
             dialect_ref: j.get("dialect")?.as_str()?.to_string(),
@@ -249,9 +249,9 @@ fn resolve_value(member: &str, v: Option<&Json>) -> Result<String, EmbedError> {
 /// The admitted `model_port.dialect` coordinates at R4.5d — the local
 /// family plus the two hosted dialects (ADR-0366).
 const ADMITTED_DIALECTS: [&str; 3] = [
-    hh_gateway::dialects::OPENAI_COMPATIBLE_ID,
-    hh_gateway::dialects::OPENAI_ID,
-    hh_gateway::dialects::ANTHROPIC_MESSAGES_ID,
+    hharness_gateway::dialects::OPENAI_COMPATIBLE_ID,
+    hharness_gateway::dialects::OPENAI_ID,
+    hharness_gateway::dialects::ANTHROPIC_MESSAGES_ID,
 ];
 
 /// `dialect_by_id(ref)` — bind a dialect coordinate to its document. An
@@ -259,12 +259,12 @@ const ADMITTED_DIALECTS: [&str; 3] = [
 /// `InvalidDefinition` — never a silent fallback to another dialect).
 pub(crate) fn dialect_by_id(dialect_ref: &str) -> Option<WireDialect> {
     match dialect_ref {
-        hh_gateway::dialects::OPENAI_COMPATIBLE_ID => {
-            Some(hh_gateway::dialects::openai_compatible())
+        hharness_gateway::dialects::OPENAI_COMPATIBLE_ID => {
+            Some(hharness_gateway::dialects::openai_compatible())
         }
-        hh_gateway::dialects::OPENAI_ID => Some(hh_gateway::dialects::openai()),
-        hh_gateway::dialects::ANTHROPIC_MESSAGES_ID => {
-            Some(hh_gateway::dialects::anthropic_messages())
+        hharness_gateway::dialects::OPENAI_ID => Some(hharness_gateway::dialects::openai()),
+        hharness_gateway::dialects::ANTHROPIC_MESSAGES_ID => {
+            Some(hharness_gateway::dialects::anthropic_messages())
         }
         _ => None,
     }
@@ -281,7 +281,7 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
     let dialect_ref = params
         .get("dialect")
         .and_then(Json::as_str)
-        .unwrap_or(hh_gateway::dialects::OPENAI_COMPATIBLE_ID)
+        .unwrap_or(hharness_gateway::dialects::OPENAI_COMPATIBLE_ID)
         .to_string();
     let dialect = dialect_by_id(&dialect_ref).ok_or_else(|| EmbedError::InvalidDefinition {
         diagnostics: vec![format!(
@@ -423,8 +423,8 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
 
 /// `model_port_slot_params(doc)` — the `native.slots["model_port"]`
 /// declaration (same read discipline as `router_slot_params`).
-pub fn model_port_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
-    use hh_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
+pub fn model_port_slot_params(doc: &hharness_hir::document::HirDocument) -> Option<Json> {
+    use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -467,7 +467,7 @@ pub struct GatewayModel {
     /// The HTTP transport (plain or TLS-terminated — the lane's `tls{}`
     /// declaration armed at construction; R4.5c). Auth material is
     /// injected here and only here (R4.5d — ADR-0366 D4).
-    transport: hh_gateway::http_transport::HttpModelTransport,
+    transport: hharness_gateway::http_transport::HttpModelTransport,
     /// The credential port — the broker-backed bind for every family.
     /// `credential_ref: None` answers `provided: no` (the local lane's
     /// `AuthKind::None` contract); `env:NAME` resolves through the
@@ -519,10 +519,12 @@ impl GatewayModel {
         let dialect = dialect_by_id(&lane.dialect_ref).ok_or_else(|| EmbedError::Refused {
             reason: format!("model_port: dialect `{}` unbindable", lane.dialect_ref),
         })?;
-        let family = hh_gateway::family_of(&dialect);
+        let family = hharness_gateway::family_of(&dialect);
         let client_tls = lane.tls.client_tls()?;
-        let transport =
-            hh_gateway::http_transport::HttpModelTransport::with_tls(dialect.clone(), client_tls);
+        let transport = hharness_gateway::http_transport::HttpModelTransport::with_tls(
+            dialect.clone(),
+            client_tls,
+        );
         let mut endpoints = EndpointAllowlist {
             policy_ref: dialect.endpoint_allowlist_ref.clone(),
             ..Default::default()
@@ -556,8 +558,8 @@ impl GatewayModel {
     /// Messages spelling wraps it in a `text` content block.
     fn text_msg(&self, role: &str, text: &str) -> Json {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::text_msg(role, text),
-            Family::ChatCompletions => hh_gateway::openai::text_msg(role, text),
+            Family::Messages => hharness_gateway::anthropic::text_msg(role, text),
+            Family::ChatCompletions => hharness_gateway::openai::text_msg(role, text),
         }
     }
 
@@ -570,8 +572,10 @@ impl GatewayModel {
     /// pairing contract (the wire id is consistent within the body).
     fn assistant_tool_msg(&self, calls: &[(String, String, String)]) -> Json {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::assistant_tool_use_msg(calls),
-            Family::ChatCompletions => hh_gateway::openai::assistant_tool_call_msg(None, calls),
+            Family::Messages => hharness_gateway::anthropic::assistant_tool_use_msg(calls),
+            Family::ChatCompletions => {
+                hharness_gateway::openai::assistant_tool_call_msg(None, calls)
+            }
         }
     }
 
@@ -583,7 +587,7 @@ impl GatewayModel {
     /// pair inside the body.
     fn wire_call_id(&self, id: &str) -> String {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::wire_call_id(id),
+            Family::Messages => hharness_gateway::anthropic::wire_call_id(id),
             Family::ChatCompletions => id.to_string(),
         }
     }
@@ -593,8 +597,8 @@ impl GatewayModel {
     /// a `user` turn carrying a `tool_result` block under Messages.
     fn tool_result_msg(&self, id: &str, content: Json) -> Json {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::tool_result_msg(id, content),
-            Family::ChatCompletions => hh_gateway::openai::tool_result_msg(id, content),
+            Family::Messages => hharness_gateway::anthropic::tool_result_msg(id, content),
+            Family::ChatCompletions => hharness_gateway::openai::tool_result_msg(id, content),
         }
     }
 
@@ -603,8 +607,8 @@ impl GatewayModel {
     /// `{name, description, input_schema}` under Messages.
     fn tool_entry(&self, name: &str, desc: &str, schema: Json) -> Json {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::tool_entry(name, desc, schema),
-            Family::ChatCompletions => hh_gateway::openai::tool_entry(name, desc, schema),
+            Family::Messages => hharness_gateway::anthropic::tool_entry(name, desc, schema),
+            Family::ChatCompletions => hharness_gateway::openai::tool_entry(name, desc, schema),
         }
     }
 
@@ -621,14 +625,14 @@ impl GatewayModel {
         params: &BTreeMap<String, Json>,
     ) -> Json {
         match self.family {
-            Family::Messages => hh_gateway::anthropic::messages_request_body(
+            Family::Messages => hharness_gateway::anthropic::messages_request_body(
                 &self.lane.provider_model_id,
                 messages,
                 tools,
                 true,
                 params,
             ),
-            Family::ChatCompletions => hh_gateway::openai::chat_request_body(
+            Family::ChatCompletions => hharness_gateway::openai::chat_request_body(
                 &self.lane.provider_model_id,
                 messages,
                 tools,
@@ -702,7 +706,7 @@ impl GatewayModel {
                         .map(|(id, surface, args)| {
                             (
                                 self.wire_call_id(id),
-                                hh_gateway::openai::wire_name(surface),
+                                hharness_gateway::openai::wire_name(surface),
                                 args.clone(),
                             )
                         })
@@ -765,7 +769,7 @@ impl GatewayModel {
         let mut tools = Vec::new();
         let mut map = BTreeMap::new();
         for s in &self.surfaces {
-            let wire = hh_gateway::openai::wire_name(&s.surface_id);
+            let wire = hharness_gateway::openai::wire_name(&s.surface_id);
             if map.contains_key(&wire) {
                 return Err(ModelError::new(
                     ModelErrorClass::InvalidRequest,
@@ -779,12 +783,12 @@ impl GatewayModel {
             let mut required = Vec::new();
             for (name, p) in &s.params {
                 let ty = match p.kind {
-                    hh_control::output::ParamKind::Str => Some("string"),
-                    hh_control::output::ParamKind::Int => Some("integer"),
-                    hh_control::output::ParamKind::Bool => Some("boolean"),
-                    hh_control::output::ParamKind::Arr => Some("array"),
-                    hh_control::output::ParamKind::Obj => Some("object"),
-                    hh_control::output::ParamKind::Any => None,
+                    hharness_control::output::ParamKind::Str => Some("string"),
+                    hharness_control::output::ParamKind::Int => Some("integer"),
+                    hharness_control::output::ParamKind::Bool => Some("boolean"),
+                    hharness_control::output::ParamKind::Arr => Some("array"),
+                    hharness_control::output::ParamKind::Obj => Some("object"),
+                    hharness_control::output::ParamKind::Any => None,
                 };
                 let mut spec = std::collections::BTreeMap::new();
                 if let Some(t) = ty {
@@ -1092,7 +1096,7 @@ impl GatewayModel {
         mc: &str,
         pending: &PendingPlan,
         frames: &[(u64, WireFrame)],
-        message: &hh_gateway::message::ModelMessage,
+        message: &hharness_gateway::message::ModelMessage,
         raw_usage: &Json,
     ) -> String {
         let doc = Json::obj([
@@ -1169,7 +1173,7 @@ impl GatewayModel {
 
     fn push_blob(&mut self, doc: Json) -> String {
         let bytes = doc.to_canonical_string().into_bytes();
-        let addr = hh_identity::idp::address(&bytes, "application/json");
+        let addr = hharness_identity::idp::address(&bytes, "application/json");
         self.model_io.push(("application/json".to_string(), bytes));
         addr.id()
     }
@@ -1274,7 +1278,7 @@ fn blobs_usage_raw(model_io: &[(String, Vec<u8>)]) -> Json {
     model_io
         .iter()
         .rev()
-        .filter_map(|(_, b)| hh_wire::json::parse(&String::from_utf8_lossy(b)).ok())
+        .filter_map(|(_, b)| hharness_wire::json::parse(&String::from_utf8_lossy(b)).ok())
         .find_map(|d| d.get("outcome").and_then(|o| o.get("usage_raw")).cloned())
         .unwrap_or(Json::Null)
 }

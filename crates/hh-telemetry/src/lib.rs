@@ -1,4 +1,4 @@
-//! `hh-telemetry` — the Stage-1 telemetry, tracing and cost/latency
+//! `hharness-telemetry` — the Stage-1 telemetry, tracing and cost/latency
 //! instrumentation (spec §5h.1; R-2.9.1; ticket S1.14; ADR-0042/0043/0044).
 //!
 //! The architectural invariant: **a trace is a deterministic projection over
@@ -56,9 +56,9 @@ pub use events::{export_delivered_payload, metric_emitted_payload, ExportDeliver
 pub use export::{deliver, export_events, export_view, ExportBatch, LossEntry};
 pub use phase::turn_phase_profile;
 pub use propagation::{
-    acp_hh_members, carrier_loss, inbound_carrier, inbound_context, meta_carrier, outbound_context,
-    propagation_unsupported_loss, subprocess_env, InboundLink, PropagationContext, BAGGAGE_ENV,
-    MCP_PROPAGATION_KEY, TRACEPARENT_ENV, TRACESTATE_ENV,
+    acp_hharness_members, carrier_loss, inbound_carrier, inbound_context, meta_carrier,
+    outbound_context, propagation_unsupported_loss, subprocess_env, InboundLink,
+    PropagationContext, BAGGAGE_ENV, MCP_PROPAGATION_KEY, TRACEPARENT_ENV, TRACESTATE_ENV,
 };
 pub use scope::{MeasurementPoint, ScopeKind, MEASUREMENT_POINTS};
 pub use sinks::{ContentClass, RateLimit, Redaction, Sampling, SamplingMode, SinkPolicy};

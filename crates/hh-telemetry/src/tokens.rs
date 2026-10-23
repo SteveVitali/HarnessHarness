@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::{DimensionId, ResourceVector};
-use hh_wire::json::Json;
+use hharness_budget::{DimensionId, ResourceVector};
+use hharness_wire::json::Json;
 
 use crate::codec::{expect_obj, int_at, opt_int_at, opt_str_at, reject_unknown, str_at};
 use crate::errors::{CodecError, TelemetryError};
@@ -103,7 +103,7 @@ impl TokenVector {
         if self.input_total == 0 {
             return None;
         }
-        Some(self.cache_read * hh_budget::quantity::PPM_SCALE / self.input_total)
+        Some(self.cache_read * hharness_budget::quantity::PPM_SCALE / self.input_total)
     }
 
     /// The projection onto the primary §08 dimensions (CF-105 — the vector is

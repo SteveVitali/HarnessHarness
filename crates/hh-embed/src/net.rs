@@ -37,9 +37,9 @@ use std::io::{BufReader, BufWriter, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::{Duration, Instant};
 
-use hh_wire::http::{read_request, split_target, write_response, HttpError};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::{err_response, parse_request};
+use hharness_wire::http::{read_request, split_target, write_response, HttpError};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::{err_response, parse_request};
 
 use crate::service::EmbedService;
 
@@ -124,7 +124,7 @@ fn respond(
 /// The P2/P3/P4/P9 request gate. `authority` is the bound `Host` value
 /// (`127.0.0.1:port` / `[::1]:port`). Returns the status to emit when
 /// the request is refused (the caller writes a bare error body).
-fn gate(head: &hh_wire::http::RequestHead, authority: &str, token: &str) -> Result<(), u16> {
+fn gate(head: &hharness_wire::http::RequestHead, authority: &str, token: &str) -> Result<(), u16> {
     // P9 — a token on the target is refused before anything reads it.
     if let Some(q) = split_target(&head.target).1 {
         let ql = q.to_ascii_lowercase();
@@ -185,7 +185,7 @@ fn connection(stream: TcpStream, svc: &mut EmbedService, authority: &str, token:
             let resp = match parse_request(&text) {
                 Ok(req) => svc.handle(&req).to_canonical_string(),
                 Err(e) => {
-                    let err = hh_embed_schema::errors::EmbedError::SchemaViolation {
+                    let err = hharness_embed_schema::errors::EmbedError::SchemaViolation {
                         path: "/".to_string(),
                         code: format!("framing:{e}"),
                     };
@@ -303,7 +303,7 @@ pub fn rpc_on(
             .try_clone()
             .map_err(|e| HttpError::Io(e.to_string()))?,
     );
-    let (head, resp) = hh_wire::http::read_response(&mut r, NET_MAX_BODY)?;
+    let (head, resp) = hharness_wire::http::read_response(&mut r, NET_MAX_BODY)?;
     String::from_utf8(resp)
         .map(|s| (head.status, s))
         .map_err(|_| HttpError::Unsupported)
@@ -329,7 +329,7 @@ pub fn drain_events(
             .try_clone()
             .map_err(|e| HttpError::Io(e.to_string()))?,
     );
-    let (head, resp) = hh_wire::http::read_response(&mut r, NET_MAX_BODY)?;
+    let (head, resp) = hharness_wire::http::read_response(&mut r, NET_MAX_BODY)?;
     String::from_utf8(resp)
         .map(|s| (head.status, s))
         .map_err(|_| HttpError::Unsupported)

@@ -40,9 +40,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::participant::Observability;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_ontology::participant::Observability;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::claims::{
     reconcile_ledger_only, severity_for, AuthoritativeHandle, Claim, ReconciliationNotice,
@@ -808,7 +808,9 @@ pub fn cap_outside_gate(
 /// `conditioned_on` maps to `profile_conditioned` (such a row must carry
 /// `assumption_debt` — [`crate::gate::validate_gamma`] refuses it
 /// otherwise). Non-γ rules pass through untouched.
-pub fn gamma_from_rules(rules: &[hh_hir::records::HarnessRuleRecord]) -> Result<Gamma, GammaError> {
+pub fn gamma_from_rules(
+    rules: &[hharness_hir::records::HarnessRuleRecord],
+) -> Result<Gamma, GammaError> {
     let mut gamma = Gamma::default();
     for rule in rules {
         let is_gamma = matches!(
@@ -1031,9 +1033,9 @@ mod tests {
     use super::*;
     use crate::claims::{Claim, CriterionState, HandleValue};
     use crate::vocab::{ExtractedBy, HandleKind, ReconcileMode};
-    use hh_provenance::authority::AuthorityClass;
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
+    use hharness_provenance::authority::AuthorityClass;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
 
     fn delegate_prov() -> ProvenanceRecord {
         ProvenanceRecord::minted(
@@ -1500,14 +1502,14 @@ mod tests {
     // without debt is refused.
     #[test]
     fn gamma_from_harness_rules() {
-        let rule = hh_hir::records::HarnessRuleRecord {
+        let rule = hharness_hir::records::HarnessRuleRecord {
             rule_id: "rule/gamma.d10".into(),
             trigger: Json::obj([
                 ("kind", Json::str("intervention")),
                 ("divergence_class", Json::str("d10")),
                 ("decision_point", Json::str("verify")),
             ]),
-            action: hh_hir::records::RuleAction::RestrictToolSet(vec![]),
+            action: hharness_hir::records::RuleAction::RestrictToolSet(vec![]),
             scope: Json::obj([("intervention", Json::str("feed_back"))]),
             conditioned_on: None,
             assumption_debt: None,
@@ -1520,10 +1522,10 @@ mod tests {
         );
         assert_eq!(g.rows[0].intervention, Intervention::FeedBack);
         // Non-γ rules pass through.
-        let other = hh_hir::records::HarnessRuleRecord {
+        let other = hharness_hir::records::HarnessRuleRecord {
             rule_id: "rule/other".into(),
             trigger: Json::obj([("kind", Json::str("budget"))]),
-            action: hh_hir::records::RuleAction::RestrictToolSet(vec![]),
+            action: hharness_hir::records::RuleAction::RestrictToolSet(vec![]),
             scope: Json::obj([]),
             conditioned_on: None,
             assumption_debt: None,

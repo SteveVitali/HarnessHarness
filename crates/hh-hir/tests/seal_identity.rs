@@ -5,13 +5,13 @@ mod common;
 
 use common::*;
 
-use hh_hir::document::parse_document;
-use hh_hir::errors::HirError;
-use hh_hir::kinds::EntityKind;
-use hh_hir::ops::{canonicalize, migrate, project, seal, ProjectSelector};
-use hh_hir::records::*;
-use hh_hir::refs::RefVersion;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope};
+use hharness_hir::document::parse_document;
+use hharness_hir::errors::HirError;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::ops::{canonicalize, migrate, project, seal, ProjectSelector};
+use hharness_hir::records::*;
+use hharness_hir::refs::RefVersion;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope};
 
 #[test]
 fn seal_pins_every_ref_and_marks_members() {
@@ -24,7 +24,7 @@ fn seal_pins_every_ref_and_marks_members() {
         assert!(n.version.semantic_id.is_some());
         assert_eq!(
             n.provenance.authority,
-            hh_provenance::AuthorityClass::Definition,
+            hharness_provenance::AuthorityClass::Definition,
             "seal-conferred definition authority"
         );
     }
@@ -43,7 +43,7 @@ fn seal_pins_every_ref_and_marks_members() {
 }
 
 /// Scan a node's canonical JSON for `version_selector` members.
-fn semantic_json_has_no_selectors(n: &hh_hir::document::Node) -> bool {
+fn semantic_json_has_no_selectors(n: &hharness_hir::document::Node) -> bool {
     fn has_selector(j: &Json) -> bool {
         match j {
             Json::Obj(m) => m.contains_key("version_selector") || m.values().any(has_selector),
@@ -54,8 +54,8 @@ fn semantic_json_has_no_selectors(n: &hh_hir::document::Node) -> bool {
     !has_selector(&n.to_json())
 }
 
-use hh_hir::refs::ProfileRef;
-use hh_wire::json::Json;
+use hharness_hir::refs::ProfileRef;
+use hharness_wire::json::Json;
 
 #[test]
 fn seal_is_deterministic() {
@@ -163,9 +163,9 @@ fn seal_refuses_unresolvable_refs() {
 #[test]
 fn sealed_document_revalidates_and_round_trips() {
     let def = seal(&valid_doc(), 7).unwrap();
-    hh_hir::validate(&def.document).expect("sealed doc validates");
+    hharness_hir::validate(&def.document).expect("sealed doc validates");
     let reparsed = parse_document(&def.canonical_bytes()).expect("canonical round trip");
-    hh_hir::validate(&reparsed).expect("reparsed sealed doc validates");
+    hharness_hir::validate(&reparsed).expect("reparsed sealed doc validates");
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn semantic_id_is_stable_under_surface_edits() {
     // AC-IR-05: rename + argument reorder + reworded template ⇒ unchanged semantic_id.
     let mut doc = valid_doc();
     doc.nodes.push(tool_node("test:tool", 9));
-    hh_hir::compute_ids(&mut doc);
+    hharness_hir::compute_ids(&mut doc);
     let t_idx = doc.nodes.len() - 1;
     let before = doc.nodes[t_idx].semantic_id();
 
@@ -212,13 +212,13 @@ fn semantic_id_changes_with_semantic_content() {
         t.purpose = text("a different purpose", 10);
     }
     assert_ne!(
-        hh_hir::identity::semantic_id(&a),
-        hh_hir::identity::semantic_id(&b)
+        hharness_hir::identity::semantic_id(&a),
+        hharness_hir::identity::semantic_id(&b)
     );
     a.ext.insert("org.example/k".into(), Json::Int(1));
     assert_eq!(
-        hh_hir::identity::semantic_id(&a),
-        hh_hir::identity::semantic_id(&tool_node("test:tool", 9))
+        hharness_hir::identity::semantic_id(&a),
+        hharness_hir::identity::semantic_id(&tool_node("test:tool", 9))
     );
 }
 
@@ -259,12 +259,12 @@ fn project_by_plane_and_kind() {
     assert_eq!(sub.nodes.len(), 1);
     let sub = project(
         &doc,
-        ProjectSelector::Plane(hh_ontology::planes::Plane::Action),
+        ProjectSelector::Plane(hharness_ontology::planes::Plane::Action),
     );
     assert_eq!(sub.nodes.len(), 1, "only the tool homes to Action");
     let sub = project(
         &doc,
-        ProjectSelector::Plane(hh_ontology::planes::Plane::Measurement),
+        ProjectSelector::Plane(hharness_ontology::planes::Plane::Measurement),
     );
     assert_eq!(sub.nodes.len(), 2, "budget + rule home to Measurement");
 }
@@ -278,15 +278,17 @@ fn closed_world_tools_mint_environment() {
     let t_idx = doc.nodes.len() - 1;
     if let KindRecord::ToolCapability(t) = &mut doc.nodes[t_idx].semantic {
         let mut set = std::collections::BTreeSet::new();
-        let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::FsRead);
-        e.attributes = Some(hh_hir::kinds::EffectAttributes {
-            mutability: hh_hir::kinds::Mutability::ReadOnly,
-            repeat_safety: hh_hir::kinds::RepeatSafety::Idempotent,
-            world: hh_hir::kinds::World::Closed,
-            reversibility: hh_hir::kinds::Reversibility::Reversible(sel("test:proc")),
+        let mut e = hharness_hir::kinds::EffectClass::domain_only(
+            hharness_hir::kinds::EffectDomain::FsRead,
+        );
+        e.attributes = Some(hharness_hir::kinds::EffectAttributes {
+            mutability: hharness_hir::kinds::Mutability::ReadOnly,
+            repeat_safety: hharness_hir::kinds::RepeatSafety::Idempotent,
+            world: hharness_hir::kinds::World::Closed,
+            reversibility: hharness_hir::kinds::Reversibility::Reversible(sel("test:proc")),
         });
         set.insert(e);
-        t.effects = hh_hir::kinds::ToolEffects::Declared(set);
+        t.effects = hharness_hir::kinds::ToolEffects::Declared(set);
         // R-2.8.2: `fs_read` is a gated domain — the capability carries a
         // minimal declared contribution to seal.
         t.flow_contract = Some(Json::obj([(
@@ -315,18 +317,23 @@ fn closed_world_tools_mint_environment() {
     let ctx = def.minting_context();
     let origin = Origin::tool("test:cw_tool", "inv:1");
     assert_eq!(
-        hh_provenance::default_authority_in(&origin, PersistenceScope::Definition, None, &ctx),
+        hharness_provenance::default_authority_in(
+            &origin,
+            PersistenceScope::Definition,
+            None,
+            &ctx
+        ),
         AuthorityClass::Environment,
         "closed-world tool mints environment inside the sealed definition"
     );
     // Without the context (no sealed declaration) the same origin mints `external`.
     assert_eq!(
-        hh_provenance::default_authority(&origin, PersistenceScope::Definition, None),
+        hharness_provenance::default_authority(&origin, PersistenceScope::Definition, None),
         AuthorityClass::External
     );
     // Free text never rises (R-TEXT) even for a closed-world capability.
     assert_eq!(
-        hh_provenance::default_text_authority(&origin, None),
+        hharness_provenance::default_text_authority(&origin, None),
         AuthorityClass::External
     );
 }
@@ -348,7 +355,7 @@ fn opaque_process_fields_round_trip() {
                 assert_eq!(h.participant_ref, "participant:test");
                 assert_eq!(
                     h.hosting_mechanism,
-                    hh_ontology::participant::HostingMechanism::SessionAbi
+                    hharness_ontology::participant::HostingMechanism::SessionAbi
                 );
                 assert_eq!(
                     h.declared_capabilities.streaming,
@@ -373,27 +380,27 @@ fn gated_capability_without_a_flow_contract_refuses_to_seal() {
     for (domain, world) in [
         // A gated domain — even a closed-world `net_egress` is gated.
         (
-            hh_hir::kinds::EffectDomain::NetEgress,
-            hh_hir::kinds::World::Closed,
+            hharness_hir::kinds::EffectDomain::NetEgress,
+            hharness_hir::kinds::World::Closed,
         ),
         // Any open-world effect — even outside the gated domains.
         (
-            hh_hir::kinds::EffectDomain::FsWrite,
-            hh_hir::kinds::World::Open,
+            hharness_hir::kinds::EffectDomain::FsWrite,
+            hharness_hir::kinds::World::Open,
         ),
     ] {
         let mut doc = valid_doc();
         doc.nodes.push(tool_node("test:gated", 9));
         let idx = doc.nodes.len() - 1;
         if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
-            let mut e = hh_hir::kinds::EffectClass::domain_only(domain);
-            e.attributes = Some(hh_hir::kinds::EffectAttributes {
-                mutability: hh_hir::kinds::Mutability::Additive,
-                repeat_safety: hh_hir::kinds::RepeatSafety::Idempotent,
+            let mut e = hharness_hir::kinds::EffectClass::domain_only(domain);
+            e.attributes = Some(hharness_hir::kinds::EffectAttributes {
+                mutability: hharness_hir::kinds::Mutability::Additive,
+                repeat_safety: hharness_hir::kinds::RepeatSafety::Idempotent,
                 world,
-                reversibility: hh_hir::kinds::Reversibility::Reversible(sel("test:proc")),
+                reversibility: hharness_hir::kinds::Reversibility::Reversible(sel("test:proc")),
             });
-            t.effects = hh_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
+            t.effects = hharness_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
         }
         // The reversibility ref must resolve.
         doc.nodes.push(sid(
@@ -488,14 +495,16 @@ fn malformed_flow_contracts_refuse() {
     doc.nodes.push(tool_node("test:ok", 9));
     let idx = doc.nodes.len() - 1;
     if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
-        let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::NetEgress);
-        e.attributes = Some(hh_hir::kinds::EffectAttributes {
-            mutability: hh_hir::kinds::Mutability::Additive,
-            repeat_safety: hh_hir::kinds::RepeatSafety::Idempotent,
-            world: hh_hir::kinds::World::Open,
-            reversibility: hh_hir::kinds::Reversibility::Reversible(sel("test:proc")),
+        let mut e = hharness_hir::kinds::EffectClass::domain_only(
+            hharness_hir::kinds::EffectDomain::NetEgress,
+        );
+        e.attributes = Some(hharness_hir::kinds::EffectAttributes {
+            mutability: hharness_hir::kinds::Mutability::Additive,
+            repeat_safety: hharness_hir::kinds::RepeatSafety::Idempotent,
+            world: hharness_hir::kinds::World::Open,
+            reversibility: hharness_hir::kinds::Reversibility::Reversible(sel("test:proc")),
         });
-        t.effects = hh_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
+        t.effects = hharness_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
         t.flow_contract = Some(Json::obj([
             (
                 "contribution",

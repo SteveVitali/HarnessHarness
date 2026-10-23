@@ -13,8 +13,8 @@
 //! so a `{accounting}`-only policy withholds it even though the row
 //! listing (ids, sizes, hashes — accounting) still serves.
 
-use hh_telemetry::sinks::{ContentClass, SinkPolicy};
-use hh_wire::json::Json;
+use hharness_telemetry::sinks::{ContentClass, SinkPolicy};
+use hharness_wire::json::Json;
 
 /// Which view-member classes each returned shape declares — checked
 /// against `policy.content_classes`; a disallowed member is replaced by

@@ -16,11 +16,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use hh_wire::json::{parse, Json};
-use hh_xcheck::check::{is_informational, self_check, verify_answers};
-use hh_xcheck::export::export_bundle;
-use hh_xcheck::trees::{manifest_to_tree, tree_manifest};
-use hh_xcheck::ARMS;
+use hharness_wire::json::{parse, Json};
+use hharness_xcheck::check::{is_informational, self_check, verify_answers};
+use hharness_xcheck::export::export_bundle;
+use hharness_xcheck::trees::{manifest_to_tree, tree_manifest};
+use hharness_xcheck::ARMS;
 
 fn bundle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/cross-impl")
@@ -127,7 +127,7 @@ fn export_is_byte_deterministic_against_committed_bundle() {
 /// a foreign implementation reads must decode to the same tree.
 #[test]
 fn tree_manifest_codec_round_trips() {
-    for (name, tree) in hh_identity::corpus::golden_tree_fixtures() {
+    for (name, tree) in hharness_identity::corpus::golden_tree_fixtures() {
         let manifest = tree_manifest(&tree);
         let back = manifest_to_tree(&manifest).unwrap();
         assert_eq!(back, tree, "manifest round-trip changed {name}");
@@ -192,14 +192,14 @@ fn bundle_manifest_carries_the_honesty_record() {
     };
     assert_eq!(
         m.get("format").and_then(Json::as_str),
-        Some(hh_xcheck::BUNDLE_FORMAT)
+        Some(hharness_xcheck::BUNDLE_FORMAT)
     );
     let Json::Arr(arms) = m.get("arms").unwrap() else {
         panic!("arms must be an array");
     };
     assert_eq!(
         arms.len(),
-        hh_xcheck::ARMS.len(),
+        hharness_xcheck::ARMS.len(),
         "an arm went missing from bundle.json"
     );
     // CF-493 — `verified_by[]` on every arm: `{candidate,

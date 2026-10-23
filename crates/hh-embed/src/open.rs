@@ -9,27 +9,27 @@ use crate::service::{
     ledger_err, EmbedService, HostAsk, HostCap, PendingAsk, SessionState, DEFAULT_MAX_SESSIONS,
     LEASE_TTL_MS,
 };
-use hh_assembly::resolve::{resolve, ResolveEnv};
-use hh_assembly::validate::{validate_assembly, Subject};
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::policy::ResourceLimits;
-use hh_control::driver::{Driver, DriverConfig};
-use hh_control::output::{ParamKind, ParamSpec, SurfaceSpec};
-use hh_control::policy::EnvelopePolicy;
-use hh_control::react::ReactMinimal;
-use hh_control::strategy::{
+use hharness_assembly::resolve::{resolve, ResolveEnv};
+use hharness_assembly::validate::{validate_assembly, Subject};
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::policy::ResourceLimits;
+use hharness_control::driver::{Driver, DriverConfig};
+use hharness_control::output::{ParamKind, ParamSpec, SurfaceSpec};
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::react::ReactMinimal;
+use hharness_control::strategy::{
     ConcurrentInput, ControlContext, ControlStrategy, SteerMode, StrategyParams,
 };
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::*;
-use hh_env::driver::EnvDriver;
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
-use hh_identity::names::ResolveMode;
-use hh_ledger::manifest::{AttendanceSource, AttendanceValue, RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::*;
+use hharness_env::driver::EnvDriver;
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
+use hharness_identity::names::ResolveMode;
+use hharness_ledger::manifest::{AttendanceSource, AttendanceValue, RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -400,7 +400,7 @@ impl EmbedService {
     /// open). See [`RealizedRoles`] for the returned members.
     fn realized_role_table(
         &self,
-        sealed: &hh_hir::document::SealedDefinition,
+        sealed: &hharness_hir::document::SealedDefinition,
         supplied: Option<&Json>,
     ) -> Result<RealizedRoles, EmbedError> {
         // Role → `(declared coordinate, intent_ref)` — the caller's rows
@@ -408,7 +408,7 @@ impl EmbedService {
         let mut declared: BTreeMap<String, (String, Option<String>)> = BTreeMap::new();
         if let Some(Json::Obj(m)) = supplied {
             for (role, value) in m {
-                if hh_compiler::profile::ModelRole::parse(role).is_none() {
+                if hharness_compiler::profile::ModelRole::parse(role).is_none() {
                     return Err(EmbedError::SchemaViolation {
                         path: format!("spec.profile_binding.{role}"),
                         code: "unknown_role".to_string(),
@@ -427,7 +427,7 @@ impl EmbedService {
                 declared.insert("primary".to_string(), (pin, None));
             }
         }
-        let mut table = hh_gateway::router::ModelRoleTable::default();
+        let mut table = hharness_gateway::router::ModelRoleTable::default();
         let mut expired_rows: Vec<(String, String)> = Vec::new();
         let mut primary_semantic: Option<String> = None;
         let mut primary_record_ref: Option<String> = None;
@@ -441,11 +441,11 @@ impl EmbedService {
             let resolved = crate::bundle_ops::resolve_profile_coordinate(&self.registry, &coord);
             let (profile_ref, semantic, record_ref, expired) = match &resolved {
                 Some((vid, p)) => (
-                    hh_compiler::profile::profile_coordinate(p),
+                    hharness_compiler::profile::profile_coordinate(p),
                     Some(p.content_hash.clone()),
                     Some(vid.clone()),
-                    hh_compiler::profile::profile_status(p)
-                        == hh_compiler::profile::DebtStatus::Expired,
+                    hharness_compiler::profile::profile_status(p)
+                        == hharness_compiler::profile::DebtStatus::Expired,
                 ),
                 None => (coord.clone(), Some(coord.clone()), None, false),
             };
@@ -471,7 +471,7 @@ impl EmbedService {
             }
             table.roles.insert(
                 role,
-                hh_gateway::router::RoleBinding {
+                hharness_gateway::router::RoleBinding {
                     primary: scripted_route_candidate(&profile_ref),
                     alternates: Vec::new(),
                     policy_ref: "hh-embed/scripted".to_string(),
@@ -505,9 +505,9 @@ impl EmbedService {
         approval_mode: Option<&str>,
         workspace_trust: Option<&str>,
         narrowing_leaves: &[NarrowingLeaf],
-        spawn_event: Option<&hh_embed_schema::types::SpawnEventRef>,
+        spawn_event: Option<&hharness_embed_schema::types::SpawnEventRef>,
         notification_sink: Option<&str>,
-        client: Option<&hh_embed_schema::ClientDecl>,
+        client: Option<&hharness_embed_schema::ClientDecl>,
         contract_json: Option<&Json>,
         invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
@@ -602,7 +602,7 @@ impl EmbedService {
             expired_rows,
         } = self.realized_role_table(&sealed, profile_binding)?;
         // The realized configuration pair — content-addressed through
-        // `hh_assembly::configuration` (CC9): the manifest pins the
+        // `hharness_assembly::configuration` (CC9): the manifest pins the
         // honest Stage-1 composition inputs (the realized role table's
         // semantic id, the primary profile's identity, the realized
         // environment, the declared budget, seed `0` — `open_session`
@@ -611,13 +611,14 @@ impl EmbedService {
         let budget_input = match budget {
             Some(BudgetInput::Ref(r)) => r.clone(),
             Some(BudgetInput::Node(n)) => {
-                hh_identity::address(n.to_canonical_string().as_bytes(), "application/json").id()
+                hharness_identity::address(n.to_canonical_string().as_bytes(), "application/json")
+                    .id()
             }
             None => "unbudgeted".to_string(),
         };
-        let cfg = hh_assembly::configuration(
+        let cfg = hharness_assembly::configuration(
             &sealed,
-            &hh_assembly::CompositionInputs {
+            &hharness_assembly::CompositionInputs {
                 model_ref: role_table.semantic_id(),
                 profile: primary_semantic
                     .clone()
@@ -647,15 +648,14 @@ impl EmbedService {
         // `proc.isolation_class` (`for_policy`), never hard-coded to the
         // EP2 model; attesting classes need the binding's declared
         // `substrate_attestation` (`attestation_missing` refuses).
-        let backend = hh_containment::backend::for_policy(env_policy, env_attestation.clone())
+        let backend =
+            hharness_containment::backend::for_policy(env_policy, env_attestation.clone())
+                .map_err(|e| EmbedError::EnvironmentUnavailable {
+                    reason: format!("containment_backend:{e:?}"),
+                })?;
+        let evidence = hharness_containment::attach::evidence_preview(&*backend, env_policy)
             .map_err(|e| EmbedError::EnvironmentUnavailable {
-                reason: format!("containment_backend:{e:?}"),
-            })?;
-        let evidence =
-            hh_containment::attach::evidence_preview(&*backend, env_policy).map_err(|e| {
-                EmbedError::EnvironmentUnavailable {
-                    reason: format!("containment_preview:{e:?}"),
-                }
+                reason: format!("containment_preview:{e:?}"),
             })?;
         if approval_mode == Some("bypass") {
             bypass_gate(env_policy, env_attestation.clone())?;
@@ -666,16 +666,16 @@ impl EmbedService {
         // `workspace_trust` — the H5 trust-store claim recorded verbatim
         // (ADR-0168 D7); absent ⇒ `unknown`, never inferred (OQ-387).
         manifest.workspace_trust = workspace_trust
-            .and_then(hh_ledger::manifest::WorkspaceTrust::parse)
-            .unwrap_or(hh_ledger::manifest::WorkspaceTrust::Unknown);
+            .and_then(hharness_ledger::manifest::WorkspaceTrust::parse)
+            .unwrap_or(hharness_ledger::manifest::WorkspaceTrust::Unknown);
         // `containment.enforcement_evidence` — the environment handle's
         // evidence the gate computed (kernel-minted, never CLI-asserted).
-        let bypass_admissible = hh_containment::attach::relied_groups(env_policy)
+        let bypass_admissible = hharness_containment::attach::relied_groups(env_policy)
             .iter()
             .all(|g| {
-                evidence
-                    .get(g)
-                    .is_some_and(|e| *e != hh_containment::report::EnforcementEvidence::Unknown)
+                evidence.get(g).is_some_and(|e| {
+                    *e != hharness_containment::report::EnforcementEvidence::Unknown
+                })
             });
         manifest.extra.insert(
             "containment".to_string(),
@@ -871,7 +871,7 @@ impl EmbedService {
         // `causes[]` record §7.3 requires — the `spawn_event` member is
         // the ledger's own launch-causality carrier (one scheme, CC1).
         if let Some(se) = spawn_event {
-            manifest.spawn_event = Some(hh_ledger::manifest::EventRef {
+            manifest.spawn_event = Some(hharness_ledger::manifest::EventRef {
                 run_id: se.run_id.clone(),
                 event_id: se.event_id.clone(),
             });
@@ -897,15 +897,15 @@ impl EmbedService {
         // don't decode skips (the sealed definition validated them — mint
         // never guesses).
         {
-            let issuer = hh_provenance::ProvenanceRecord::kernel(
+            let issuer = hharness_provenance::ProvenanceRecord::kernel(
                 "hh-embed/open_session",
                 self.store.now_ms(),
             );
-            let holder_ref = hh_hir::refs::Ref::selected(holder.clone(), "latest");
+            let holder_ref = hharness_hir::refs::Ref::selected(holder.clone(), "latest");
             let minted = {
                 let store = &self.store;
                 let mut alloc = |kind: &str| store.alloc_id(kind);
-                hh_monitor::mint::mint_preauthorization_handles(
+                hharness_monitor::mint::mint_preauthorization_handles(
                     &sealed,
                     &holder_ref,
                     &issuer,
@@ -914,10 +914,10 @@ impl EmbedService {
                 )
             };
             for (handle, granted_event_id) in minted {
-                let ev = hh_env::events::EventMinter::new(&self.store, &run_id)
+                let ev = hharness_env::events::EventMinter::new(&self.store, &run_id)
                     .mint_with_id(
                         "security.permission.granted",
-                        hh_monitor::events::granted_payload(&handle),
+                        hharness_monitor::events::granted_payload(&handle),
                         granted_event_id,
                     )
                     .map_err(ledger_err)?;
@@ -950,7 +950,7 @@ impl EmbedService {
                 &run_id,
                 &lease,
                 "model.profile.expired_used",
-                hh_gateway::events::profile_expired_used(profile_ref, intent_ref),
+                hharness_gateway::events::profile_expired_used(profile_ref, intent_ref),
             )?;
         }
 
@@ -1042,10 +1042,10 @@ impl EmbedService {
         // `default` substitution.
         let context_policy_ref = context_policy_slot(&sealed.document)
             .map(|v| match v.as_str() {
-                "hh/full_window" => hh_context::policy_family::DEFAULT_POLICY_REF.to_string(),
+                "hh/full_window" => hharness_context::policy_family::DEFAULT_POLICY_REF.to_string(),
                 other => other.to_string(),
             })
-            .unwrap_or_else(|| hh_context::policy_family::DEFAULT_POLICY_REF.to_string());
+            .unwrap_or_else(|| hharness_context::policy_family::DEFAULT_POLICY_REF.to_string());
         let mut mem_ctx = crate::runtime::KernelContext::for_policy(&run_id, &context_policy_ref)
             .map_err(|e| EmbedError::Refused {
             reason: format!("context_policy: {e}"),
@@ -1077,7 +1077,7 @@ impl EmbedService {
                     &lease,
                     &mut mem_ctx,
                     &supply_map,
-                    hh_context::MemoryKind::ProcedurePointer,
+                    hharness_context::MemoryKind::ProcedurePointer,
                 )
                 .map_err(|e| EmbedError::Refused {
                     reason: format!("supplies_ingest: {e}"),
@@ -1101,7 +1101,7 @@ impl EmbedService {
             active_turn: "turn-1".to_string(),
             finished: false,
             detached: None,
-            authority_caps: hh_monitor::mint::cap_rows(&sealed.document),
+            authority_caps: hharness_monitor::mint::cap_rows(&sealed.document),
             narrowing_leaf_ids: narrowing_leaves.iter().map(|l| l.leaf_id()).collect(),
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
@@ -1151,9 +1151,9 @@ impl EmbedService {
         let bypass = approval_mode == Some("bypass");
         for cap in cap_decl.iter().filter(|c| c.requires_approval) {
             let proposal = format!("host capability {} requests approval", cap.capability_id);
-            let never_auto = hh_monitor::approval::never_auto(
+            let never_auto = hharness_monitor::approval::never_auto(
                 cap.risk_class
-                    .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+                    .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN),
             );
             if bypass && !never_auto {
                 let permission_id = self.alloc("perm");
@@ -1317,7 +1317,7 @@ impl EmbedService {
         // recorded as `lifecycle.definition.changed` once the lease lands;
         // incompatible ⇒ `DefinitionChanged` with the full reason set.
         let mut definition_changed: Option<(String, String, String)> = None;
-        let mut resume_prov: Option<hh_provenance::ProvenanceRecord> = None;
+        let mut resume_prov: Option<hharness_provenance::ProvenanceRecord> = None;
         if let Some(d) = definition {
             let current = self.resolve_definition(d)?;
             let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
@@ -1328,36 +1328,36 @@ impl EmbedService {
             };
             if current.definition_ref.version_id != persisted_ref {
                 let persisted = self.persisted_definition(&persisted_ref)?;
-                let view = hh_assembly::LedgerView {
+                let view = hharness_assembly::LedgerView {
                     events: self.store.events(run_id).map_err(ledger_err)?,
                     // Mid-run budget decreases need the accounting gate —
                     // no admission path exists at this seam, so the gate
                     // is `DenyAll` (a decrease is `Incompatible`).
-                    budget_gate: &hh_assembly::DenyAll,
+                    budget_gate: &hharness_assembly::DenyAll,
                 };
                 // The re-presented edit is the operator's — human-origin
                 // (`verify_resume`'s diff gates read the origin; the
                 // recorded `definition.changed` row carries it too).
-                let prov = hh_provenance::ProvenanceRecord::minted(
-                    hh_provenance::Origin::human(
+                let prov = hharness_provenance::ProvenanceRecord::minted(
+                    hharness_provenance::Origin::human(
                         "operator:resume",
-                        hh_provenance::HumanRole::Author,
+                        hharness_provenance::HumanRole::Author,
                     ),
-                    hh_provenance::PersistenceScope::Definition,
+                    hharness_provenance::PersistenceScope::Definition,
                     self.store.now_ms(),
                 );
-                match hh_assembly::verify_resume(
+                match hharness_assembly::verify_resume(
                     &persisted,
                     &current,
                     &view,
                     prov.clone(),
-                    hh_hir::diff::DiffDerivation::default(),
+                    hharness_hir::diff::DiffDerivation::default(),
                 ) {
-                    Ok(hh_assembly::ResumeVerdict::Compatible { diff, diff_ref }) => {
+                    Ok(hharness_assembly::ResumeVerdict::Compatible { diff, diff_ref }) => {
                         // The `diff_ref` the row names must resolve —
                         // deposit the canonical diff into the blob pool
                         // (CC3; `diff_ref` is a blob-domain address).
-                        let dj = hh_hir::wire::diff_to_json(&diff);
+                        let dj = hharness_hir::wire::diff_to_json(&diff);
                         self.store
                             .put_blob(
                                 dj.to_canonical_string().as_bytes(),
@@ -1371,7 +1371,7 @@ impl EmbedService {
                         ));
                         resume_prov = Some(prov);
                     }
-                    Ok(hh_assembly::ResumeVerdict::Incompatible { reasons }) => {
+                    Ok(hharness_assembly::ResumeVerdict::Incompatible { reasons }) => {
                         return Err(EmbedError::DefinitionChanged {
                             reasons: reasons
                                 .iter()
@@ -1503,12 +1503,12 @@ impl EmbedService {
             // (`diff.provenance`) the `diff_ref` resolves to.
             let prov = self.kernel_prov.clone();
             let _ = resume_prov;
-            hh_assembly::emit(
+            hharness_assembly::emit(
                 &mut self.store,
                 run_id,
                 &lease,
                 &prov,
-                vec![hh_assembly::events::definition_changed(
+                vec![hharness_assembly::events::definition_changed(
                     &semantic_id,
                     &version_id,
                     &diff_ref,
@@ -1712,8 +1712,9 @@ impl EmbedService {
                 .as_deref()
                 .and_then(|r| self.persisted_definition(r).ok())
             {
-                let policy_ref = context_policy_slot(&sealed.document)
-                    .unwrap_or_else(|| hh_context::policy_family::DEFAULT_POLICY_REF.to_string());
+                let policy_ref = context_policy_slot(&sealed.document).unwrap_or_else(|| {
+                    hharness_context::policy_family::DEFAULT_POLICY_REF.to_string()
+                });
                 c.rebind_policy(&policy_ref)
                     .map_err(|e| EmbedError::Refused {
                         reason: format!("context_policy: {e}"),
@@ -1755,7 +1756,7 @@ impl EmbedService {
                 .harness_def_ref
                 .as_deref()
                 .and_then(|r| self.persisted_definition(r).ok())
-                .map(|d| hh_monitor::mint::cap_rows(&d.document))
+                .map(|d| hharness_monitor::mint::cap_rows(&d.document))
                 .unwrap_or_default(),
             // The leaf ids re-derive from the manifest's durable
             // `narrowing_leaves` member — the fingerprint leg survives
@@ -1806,7 +1807,7 @@ impl EmbedService {
     fn open_attach(
         &mut self,
         run_id: &str,
-        client: Option<&hh_embed_schema::ClientDecl>,
+        client: Option<&hharness_embed_schema::ClientDecl>,
         contract_json: Option<&Json>,
     ) -> Result<Json, EmbedError> {
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
@@ -2054,8 +2055,8 @@ impl EmbedService {
                     s.next_completion = String::new();
                 }
                 if let Some(d) = self.session_mut(&p.session_id)?.driver.as_mut() {
-                    d.submit(hh_control::vocab::Cue::HumanInput(
-                        hh_control::vocab::HumanInput::Interrupt,
+                    d.submit(hharness_control::vocab::Cue::HumanInput(
+                        hharness_control::vocab::HumanInput::Interrupt,
                     ));
                 }
                 let _ = self.drive(&p.session_id);
@@ -2115,7 +2116,7 @@ impl EmbedService {
     // ── open helpers ────────────────────────────────────────────────────
 
     /// Resolve → validate → seal a `DefinitionInput` — the full
-    /// `hh-assembly` pipeline (a `document` parses + resolves inside the
+    /// `hharness-assembly` pipeline (a `document` parses + resolves inside the
     /// embedded registry's snapshot; a `ref` resolves through the
     /// registry-backed fetch — DF-S1.25-1 closed at R2.19, see
     /// [`EmbedService::resolve_ref_definition`]).
@@ -2128,9 +2129,9 @@ impl EmbedService {
     pub(crate) fn persisted_definition(
         &self,
         version_id: &str,
-    ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+    ) -> Result<hharness_hir::document::SealedDefinition, EmbedError> {
         let bytes = self.artifact_bytes(version_id)?;
-        let document = hh_hir::document::parse_document(&bytes).map_err(|e| {
+        let document = hharness_hir::document::parse_document(&bytes).map_err(|e| {
             EmbedError::InvalidDefinition {
                 diagnostics: vec![format!("persisted definition unreadable: {e}")],
             }
@@ -2146,12 +2147,12 @@ impl EmbedService {
                 reason: "persisted_definition_corrupt".to_string(),
             });
         }
-        Ok(hh_hir::document::SealedDefinition {
-            definition_ref: hh_hir::document::DefinitionVersionRef {
+        Ok(hharness_hir::document::SealedDefinition {
+            definition_ref: hharness_hir::document::DefinitionVersionRef {
                 semantic_id: root.semantic_id(),
                 version_id: root.version_id(),
             },
-            closed_world_tools: hh_hir::closed_world_tools(&document),
+            closed_world_tools: hharness_hir::closed_world_tools(&document),
             document,
         })
     }
@@ -2166,10 +2167,10 @@ impl EmbedService {
             reason: "artifact_unavailable".to_string(),
         })?;
         let parsed =
-            hh_identity::idp::parse_id(blob_id.trim()).map_err(|_| EmbedError::Refused {
+            hharness_identity::idp::parse_id(blob_id.trim()).map_err(|_| EmbedError::Refused {
                 reason: "artifact_corrupt".to_string(),
             })?;
-        let addr = hh_identity::idp::ContentAddress {
+        let addr = hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex,
@@ -2177,7 +2178,7 @@ impl EmbedService {
             size: 0,
         };
         self.store.get_blob(&addr).map_err(|e| match e {
-            hh_ledger::errors::LedgerError::Missing { .. } => EmbedError::Refused {
+            hharness_ledger::errors::LedgerError::Missing { .. } => EmbedError::Refused {
                 reason: "artifact_unavailable".to_string(),
             },
             other => ledger_err(other),
@@ -2187,7 +2188,7 @@ impl EmbedService {
     pub(crate) fn resolve_definition(
         &mut self,
         definition: &DefinitionInput,
-    ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+    ) -> Result<hharness_hir::document::SealedDefinition, EmbedError> {
         let doc_json = match definition {
             DefinitionInput::Document(j) => j.clone(),
             DefinitionInput::Ref(r) => {
@@ -2199,15 +2200,16 @@ impl EmbedService {
             }
         };
         let bytes = doc_json.to_canonical_string().into_bytes();
-        let loaded = hh_assembly::load::load(&bytes, None, &self.kernel_prov).map_err(|ds| {
-            EmbedError::InvalidDefinition {
-                diagnostics: ds.iter().map(diag_line).collect(),
-            }
-        })?;
+        let loaded =
+            hharness_assembly::load::load(&bytes, None, &self.kernel_prov).map_err(|ds| {
+                EmbedError::InvalidDefinition {
+                    diagnostics: ds.iter().map(diag_line).collect(),
+                }
+            })?;
         let load_errors: Vec<String> = loaded
             .diagnostics
             .iter()
-            .filter(|d| matches!(d.severity, hh_assembly::diagnostics::Severity::Error))
+            .filter(|d| matches!(d.severity, hharness_assembly::diagnostics::Severity::Error))
             .map(diag_line)
             .collect();
         if !load_errors.is_empty() {
@@ -2235,7 +2237,7 @@ impl EmbedService {
         let errors: Vec<String> = report
             .diagnostics
             .iter()
-            .filter(|d| matches!(d.severity, hh_assembly::diagnostics::Severity::Error))
+            .filter(|d| matches!(d.severity, hharness_assembly::diagnostics::Severity::Error))
             .map(diag_line)
             .collect();
         if !errors.is_empty() {
@@ -2282,7 +2284,7 @@ impl EmbedService {
         let kernel_prov = self.kernel_prov.clone();
         self.registry
             .register(
-                hh_registry::records::RegistryRecord::SealedDefinition(sealed.clone()),
+                hharness_registry::records::RegistryRecord::SealedDefinition(sealed.clone()),
                 &kernel_prov,
                 None,
             )
@@ -2314,7 +2316,7 @@ impl EmbedService {
     fn resolve_ref_definition(
         &mut self,
         reference: &str,
-    ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+    ) -> Result<hharness_hir::document::SealedDefinition, EmbedError> {
         // (1) — the durable local fetch (version-id spellings only).
         let version_key = reference.strip_prefix("version:").unwrap_or(reference);
         if !version_key.contains('/') {
@@ -2329,7 +2331,7 @@ impl EmbedService {
         // (2) — the registry resolve under `Execute` (the resolved
         // definition is the one the session runs — the stricter gates
         // apply: revoked admission, the conformance floor).
-        let sealed = hh_lab::assembly::desugar::base_definition(
+        let sealed = hharness_lab::assembly::desugar::base_definition(
             reference,
             &self.registry,
             None,
@@ -2369,7 +2371,7 @@ impl EmbedService {
     pub(crate) fn provision_environment(
         &mut self,
         run_id: &str,
-        lease: &hh_ledger::store::Lease,
+        lease: &hharness_ledger::store::Lease,
         environment: &EnvironmentInput,
     ) -> Result<(Option<String>, Json), EmbedError> {
         let ws = self.workspace_root().display().to_string();
@@ -2379,11 +2381,12 @@ impl EmbedService {
         // refuse without the binding's declared `substrate_attestation`.
         // Fail-closed: the report is stored and the applied row lands
         // durable.
-        let backend = hh_containment::backend::for_policy(&policy, attestation).map_err(|e| {
-            EmbedError::EnvironmentUnavailable {
-                reason: format!("containment_backend:{e:?}"),
-            }
-        })?;
+        let backend =
+            hharness_containment::backend::for_policy(&policy, attestation).map_err(|e| {
+                EmbedError::EnvironmentUnavailable {
+                    reason: format!("containment_backend:{e:?}"),
+                }
+            })?;
         // R2.3 (DF-S2.3-1) — `connection_info{on_loss}` is the binding's
         // declared loss posture (§5a.5 `on_loss`; ADR-0136 §6). The
         // Stage-1 default `fail_run` is preserved verbatim — the heal
@@ -2407,15 +2410,16 @@ impl EmbedService {
         // `snapshot.<kind> = supported` in its capability declaration)
         // refuses `snapshot_cadence_unsatisfiable` — a declaration that
         // could never fire is a lie.
-        let snapshot_cadence = match info.get("snapshot_cadence").and_then(Json::as_str) {
-            None | Some("never") => None,
-            Some(s) => Some(hh_env::handle::SnapshotCadence::parse(s).ok_or_else(|| {
-                EmbedError::SchemaViolation {
-                    path: "environment.connection_info.snapshot_cadence".into(),
-                    code: format!("unknown_snapshot_cadence:{s}"),
-                }
-            })?),
-        };
+        let snapshot_cadence =
+            match info.get("snapshot_cadence").and_then(Json::as_str) {
+                None | Some("never") => None,
+                Some(s) => Some(hharness_env::handle::SnapshotCadence::parse(s).ok_or_else(
+                    || EmbedError::SchemaViolation {
+                        path: "environment.connection_info.snapshot_cadence".into(),
+                        code: format!("unknown_snapshot_cadence:{s}"),
+                    },
+                )?),
+            };
         let driver = self
             .env_drivers
             .entry(run_id.to_string())
@@ -2445,7 +2449,7 @@ impl EmbedService {
                     h.capabilities
                         .snapshot
                         .values()
-                        .any(|t| matches!(t, hh_env::handle::Tri::Supported))
+                        .any(|t| matches!(t, hharness_env::handle::Tri::Supported))
                 })
                 .unwrap_or(false);
             if !any_kind {
@@ -2485,9 +2489,9 @@ impl EmbedService {
     /// reason, never a zero-step `plan`.
     fn project_compiled_plan(
         &self,
-        sealed: &hh_hir::document::SealedDefinition,
-    ) -> Result<Vec<hh_compiler::plan::PlanNode>, EmbedError> {
-        let linked = hh_compiler::link::link(
+        sealed: &hharness_hir::document::SealedDefinition,
+    ) -> Result<Vec<hharness_compiler::plan::PlanNode>, EmbedError> {
+        let linked = hharness_compiler::link::link(
             sealed,
             &crate::bundle_ops::pinned_profile_refs(&sealed.document),
             None,
@@ -2500,9 +2504,10 @@ impl EmbedService {
         .map_err(|e| EmbedError::Refused {
             reason: format!("plan_link: {e:?}"),
         })?;
-        let plan = hh_compiler::plan::lower_native(&linked).map_err(|e| EmbedError::Refused {
-            reason: format!("plan_lower: {e:?}"),
-        })?;
+        let plan =
+            hharness_compiler::plan::lower_native(&linked).map_err(|e| EmbedError::Refused {
+                reason: format!("plan_lower: {e:?}"),
+            })?;
         Ok(plan.control)
     }
 
@@ -2513,21 +2518,23 @@ impl EmbedService {
     fn arm_driver(
         &mut self,
         run_id: &str,
-        lease: &hh_ledger::store::Lease,
+        lease: &hharness_ledger::store::Lease,
         surfaces: &[SurfaceSpec],
         manifest: &RunManifest,
         budget: Option<&BudgetInput>,
         control_variant: &str,
         compute_variant: &str,
-        sealed: Option<&hh_hir::document::SealedDefinition>,
+        sealed: Option<&hharness_hir::document::SealedDefinition>,
     ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
         let doc = sealed.map(|s| &s.document);
         // §5e.4 — the bound `compute_policy` variant must resolve at arm
         // time (`policy_for` is the admission check; a `bandit`/
         // `surface_prior`/`predictor` ref or an unknown spelling refuses
         // the open, never fails mid-run).
-        hh_control::compute::policy_for(compute_variant).map_err(|e| EmbedError::Refused {
-            reason: format!("compute_policy: {e:?}"),
+        hharness_control::compute::policy_for(compute_variant).map_err(|e| {
+            EmbedError::Refused {
+                reason: format!("compute_policy: {e:?}"),
+            }
         })?;
         // S3.10 — the `TaskContract` projection (§5f.2; ADR-0109 D1): the
         // sealed doc's `Goal` projects to the gate's pass table; the
@@ -2539,13 +2546,14 @@ impl EmbedService {
         // it but never overrides the contract the value was sealed on).
         let mut compute_facts = doc.map(compute_facts_for).unwrap_or_default();
         if let Some(tv) = task_contract.as_ref().and_then(|c| c.task_value.as_ref()) {
-            compute_facts.task_value = Some(hh_control::compute::TaskValueFact::from_task_value(
-                &task_contract
-                    .as_ref()
-                    .map(|c| c.contract_id.clone())
-                    .unwrap_or_default(),
-                tv,
-            ));
+            compute_facts.task_value =
+                Some(hharness_control::compute::TaskValueFact::from_task_value(
+                    &task_contract
+                        .as_ref()
+                        .map(|c| c.contract_id.clone())
+                        .unwrap_or_default(),
+                    tv,
+                ));
         }
         // `plan_execute` arms the `hh.plan` surface + the model-emitted
         // switch (S3.10); other variants keep the react preset params.
@@ -2554,10 +2562,10 @@ impl EmbedService {
         if is_plan_execute
             && !surfaces
                 .iter()
-                .any(|s| s.surface_id == hh_control::plan_exec::PLAN_SURFACE_ID)
+                .any(|s| s.surface_id == hharness_control::plan_exec::PLAN_SURFACE_ID)
         {
             surfaces.push(SurfaceSpec {
-                surface_id: hh_control::plan_exec::PLAN_SURFACE_ID.to_string(),
+                surface_id: hharness_control::plan_exec::PLAN_SURFACE_ID.to_string(),
                 semantic_id: "hh/plan-execute/plan-surface".to_string(),
                 params: BTreeMap::new(),
 
@@ -2567,7 +2575,7 @@ impl EmbedService {
         }
         let mut parameters = StrategyParams::default();
         if is_plan_execute {
-            parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
+            parameters.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
             parameters.max_continue_nudges = 1;
         }
         // The boundary is the *armed variant's* own preset (S3.10 —
@@ -2614,11 +2622,11 @@ impl EmbedService {
         let (mut budget_ceiling, mut remaining) = budget_dimensions(budget);
         if interactive {
             for dim in budget_ceiling.keys().chain(remaining.keys()) {
-                if hh_ontology::dimensions::DimensionId::parse(dim).is_some() {
+                if hharness_ontology::dimensions::DimensionId::parse(dim).is_some() {
                     policy.exhaustion.rules.insert(
                         dim.clone(),
-                        hh_control::policy::ExhaustionRule {
-                            on_exhaustion: hh_control::policy::ExhaustionAction::Escalate,
+                        hharness_control::policy::ExhaustionRule {
+                            on_exhaustion: hharness_control::policy::ExhaustionAction::Escalate,
                             grace_calls: 0,
                         },
                     );
@@ -2650,7 +2658,7 @@ impl EmbedService {
                 interactive_attendance: interactive,
                 task_contract,
                 plan_surface_id: is_plan_execute
-                    .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
+                    .then(|| hharness_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 compute_policy_ref: compute_variant.to_string(),
                 compute_facts,
                 compute_rules: doc.and_then(compute_rules_for),
@@ -2690,14 +2698,14 @@ impl EmbedService {
     fn arm_resume_driver(
         &mut self,
         run_id: &str,
-        lease: &hh_ledger::store::Lease,
+        lease: &hharness_ledger::store::Lease,
         checkpoint: &[u8],
         manifest: &RunManifest,
     ) -> Result<ResumeArm, EmbedError> {
         let arm_path = self.store.root().join("runs").join(run_id).join("leaf.arm");
         let arm = std::fs::read_to_string(&arm_path)
             .ok()
-            .and_then(|s| hh_wire::json::parse(&s).ok())
+            .and_then(|s| hharness_wire::json::parse(&s).ok())
             .and_then(|j| LeafArm::from_json(&j))
             .ok_or_else(|| EmbedError::Refused {
                 reason: "resume_arm_record_unavailable".to_string(),
@@ -2716,7 +2724,7 @@ impl EmbedService {
         let boundary = strategy.capabilities().boundary_preset.clone();
         let mut parameters = StrategyParams::default();
         if is_plan_execute {
-            parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
+            parameters.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
             parameters.max_continue_nudges = 1;
         }
         let sealed = manifest
@@ -2758,11 +2766,11 @@ impl EmbedService {
         );
         if interactive {
             for dim in arm.budget_ceiling.keys().chain(arm.remaining.keys()) {
-                if hh_ontology::dimensions::DimensionId::parse(dim).is_some() {
+                if hharness_ontology::dimensions::DimensionId::parse(dim).is_some() {
                     policy.exhaustion.rules.insert(
                         dim.clone(),
-                        hh_control::policy::ExhaustionRule {
-                            on_exhaustion: hh_control::policy::ExhaustionAction::Escalate,
+                        hharness_control::policy::ExhaustionRule {
+                            on_exhaustion: hharness_control::policy::ExhaustionAction::Escalate,
                             grace_calls: 0,
                         },
                     );
@@ -2787,13 +2795,14 @@ impl EmbedService {
             .as_ref()
             .and_then(|sealed| compute_rules_for(&sealed.document));
         if let Some(tv) = task_contract.as_ref().and_then(|c| c.task_value.as_ref()) {
-            compute_facts.task_value = Some(hh_control::compute::TaskValueFact::from_task_value(
-                &task_contract
-                    .as_ref()
-                    .map(|c| c.contract_id.clone())
-                    .unwrap_or_default(),
-                tv,
-            ));
+            compute_facts.task_value =
+                Some(hharness_control::compute::TaskValueFact::from_task_value(
+                    &task_contract
+                        .as_ref()
+                        .map(|c| c.contract_id.clone())
+                        .unwrap_or_default(),
+                    tv,
+                ));
         }
         let mut sink = crate::runtime::KernelSink {
             store: &mut self.store,
@@ -2820,7 +2829,7 @@ impl EmbedService {
                 interactive_attendance: interactive,
                 task_contract,
                 plan_surface_id: is_plan_execute
-                    .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
+                    .then(|| hharness_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 compute_policy_ref: arm.compute_variant.clone(),
                 compute_facts,
                 compute_rules,
@@ -2909,7 +2918,7 @@ impl EmbedService {
     /// `registered()` snapshot (CF-046's snapshot-confined read — the
     /// arm reads the records, never a live registry) and the arm-time
     /// `now_ms`. `execute_probe_execs` — the open path only — runs the
-    /// declared `probe_exec[]` lanes live (`hh_gateway::probes::
+    /// declared `probe_exec[]` lanes live (`hharness_gateway::probes::
     /// exec_probe_decl` — R4.5e) and appends their
     /// `model.profile.probed`/`model.profile.status.changed` rows to the
     /// arm's mint set; resume passes `false` (a resume re-folds the
@@ -2917,12 +2926,12 @@ impl EmbedService {
     pub(crate) fn arm_routing_lane(
         &self,
         params: &Json,
-        table: &hh_gateway::router::ModelRoleTable,
+        table: &hharness_gateway::router::ModelRoleTable,
         budget_id: &str,
         configuration_version_id: &str,
         execute_probe_execs: bool,
     ) -> Result<crate::runtime::RouterArm, String> {
-        use hh_compiler::profile::SelectorView;
+        use hharness_compiler::profile::SelectorView;
         let profiles = crate::bundle_ops::RegistryProfiles(&self.registry).registered();
         let mut arm = crate::runtime::router_arm_from_params(
             params,
@@ -2935,16 +2944,16 @@ impl EmbedService {
         if execute_probe_execs {
             let now_ms = self.store.now_ms();
             for decl in &arm.probe_execs {
-                let out = hh_gateway::probes::exec_probe_decl(decl, now_ms)
+                let out = hharness_gateway::probes::exec_probe_decl(decl, now_ms)
                     .map_err(|e| format!("probe_exec: {e}"))?;
                 let records: Vec<Json> = out
                     .records
                     .iter()
-                    .map(hh_registry::schema::hosted_entry_json)
+                    .map(hharness_registry::schema::hosted_entry_json)
                     .collect();
                 arm.probe_rows.push((
                     "model.profile.probed".to_string(),
-                    hh_gateway::events::profile_probed(
+                    hharness_gateway::events::profile_probed(
                         &decl.profile_ref,
                         &out.probe_run_id,
                         &records,
@@ -2956,7 +2965,7 @@ impl EmbedService {
                     // profile's status (`probe_failure`), never silently.
                     arm.probe_rows.push((
                         "model.profile.status.changed".to_string(),
-                        hh_gateway::events::profile_status_changed(
+                        hharness_gateway::events::profile_status_changed(
                             &decl.profile_ref,
                             None,
                             &decl.status_declared,
@@ -3106,7 +3115,7 @@ pub(crate) fn parse_host_caps(supplies: Option<&Supplies>) -> Vec<HostCap> {
         // `UNKNOWN` (never-auto, ADR-0031 §2 — fail closed under `bypass`).
         let risk_class = c
             .get("risk_class")
-            .and_then(hh_ontology::risk::RiskClass::from_json);
+            .and_then(hharness_ontology::risk::RiskClass::from_json);
         out.push(HostCap {
             capability_id,
             surface_id,
@@ -3138,7 +3147,7 @@ pub(crate) const REACT_MINIMAL_VARIANT: &str = "hh/react-minimal";
 /// The sealed `control_strategy` slot's bound variant id — read off the
 /// root `NativeProcess.slots` the resolver materialised (`resolve` pins
 /// `assembly.slots` onto the process; `None` ⇒ the Stage-1 default).
-fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
+fn control_slot_variant(doc: &hharness_hir::document::HirDocument) -> Option<String> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3159,7 +3168,7 @@ fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
 /// DF-S1.19-1's non-`default` `ContextPolicy` runtime wiring): read off
 /// the root `NativeProcess.slots` like the sibling slot helpers; `None`
 /// ⇒ the slot is unbound and the fold binds `context_policy/default`.
-fn context_policy_slot(doc: &hh_hir::document::HirDocument) -> Option<String> {
+fn context_policy_slot(doc: &hharness_hir::document::HirDocument) -> Option<String> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3184,13 +3193,13 @@ fn context_policy_slot(doc: &hh_hir::document::HirDocument) -> Option<String> {
 /// decode error the arm surfaces as `Refused` — a declared rule is never
 /// silently dropped.
 fn consolidation_rules_for(
-    doc: &hh_hir::document::HirDocument,
-) -> Result<Vec<hh_context::consolidate::ConsolidationRule>, String> {
+    doc: &hharness_hir::document::HirDocument,
+) -> Result<Vec<hharness_context::consolidate::ConsolidationRule>, String> {
     let mut rules = Vec::new();
     for n in &doc.nodes {
         if let KindRecord::HarnessRule(rule) = &n.semantic {
-            if let hh_hir::records::RuleAction::ConsolidateMemories(action) = &rule.action {
-                rules.push(hh_context::consolidate::rule_from_action(
+            if let hharness_hir::records::RuleAction::ConsolidateMemories(action) = &rule.action {
+                rules.push(hharness_context::consolidate::rule_from_action(
                     &rule.rule_id,
                     action,
                 )?);
@@ -3203,7 +3212,7 @@ fn consolidation_rules_for(
 /// The sealed `compute_policy` slot's bound variant spelling (§5e.4) —
 /// `None` when the slot is unbound (`static` semantics: the scheduler
 /// binds nothing and no `control.compute.*` rows land).
-fn compute_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
+fn compute_slot_variant(doc: &hharness_hir::document::HirDocument) -> Option<String> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3227,8 +3236,10 @@ fn compute_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
 /// (§5e.4's ctx members are typed declarations, never prose; anything
 /// the params don't carry stays at the fact's zero value and the
 /// scheduler reads it as absent).
-fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute::ComputeFacts {
-    let mut facts = hh_control::compute::ComputeFacts::default();
+fn compute_facts_for(
+    doc: &hharness_hir::document::HirDocument,
+) -> hharness_control::compute::ComputeFacts {
+    let mut facts = hharness_control::compute::ComputeFacts::default();
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3251,7 +3262,7 @@ fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute
                         .collect();
                 }
                 if let Some(e) = p.get("ensemble") {
-                    facts.ensemble = Some(hh_control::compute::EnsembleFact {
+                    facts.ensemble = Some(hharness_control::compute::EnsembleFact {
                         k_max: e.get("k_max").and_then(Json::as_int).unwrap_or(0).max(0) as u32,
                         oracle: e.get("oracle").and_then(Json::as_str).map(str::to_string),
                     });
@@ -3274,7 +3285,7 @@ fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute
                     .map(str::to_string);
                 facts.task_value = p
                     .get("task_value")
-                    .and_then(hh_control::compute::TaskValueFact::from_json);
+                    .and_then(hharness_control::compute::TaskValueFact::from_json);
                 // S5.5 prior-cell coordinates + declared prior seeds —
                 // `bandit`/`surface_prior` refuse without `profile_ref`
                 // (AC-F4-12's unmatched-cell rule).
@@ -3293,7 +3304,7 @@ fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute
                 if let Some(Json::Arr(seeds)) = p.get("priors") {
                     facts.priors = seeds
                         .iter()
-                        .filter_map(hh_control::compute::PriorFact::from_json)
+                        .filter_map(hharness_control::compute::PriorFact::from_json)
                         .collect();
                 }
             }
@@ -3308,8 +3319,8 @@ fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute
 /// delegation rules with `debt_ref` per rule). Absent ⇒ `None` (the
 /// driver binds the default config).
 pub(crate) fn compute_rules_for(
-    doc: &hh_hir::document::HirDocument,
-) -> Option<hh_control::compute::RulesConfig> {
+    doc: &hharness_hir::document::HirDocument,
+) -> Option<hharness_control::compute::RulesConfig> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3319,7 +3330,7 @@ pub(crate) fn compute_rules_for(
                     _ => None,
                 };
                 if let Some(rc) = params.and_then(|p| p.get("rules")) {
-                    return hh_control::compute::RulesConfig::from_json(rc);
+                    return hharness_control::compute::RulesConfig::from_json(rc);
                 }
             }
         }
@@ -3331,7 +3342,7 @@ pub(crate) fn compute_rules_for(
 /// unbound (the legacy scripted lane runs byte-identical). The params
 /// record decodes under `router_arm_from_params` — a malformed member
 /// fails the open loudly, never a default policy.
-pub(crate) fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
+pub(crate) fn router_slot_params(doc: &hharness_hir::document::HirDocument) -> Option<Json> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3356,8 +3367,8 @@ pub(crate) fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<
 /// `model.profile.expired_used` rows are the record).
 pub(crate) fn role_table_from_manifest(
     manifest: &RunManifest,
-) -> hh_gateway::router::ModelRoleTable {
-    let mut table = hh_gateway::router::ModelRoleTable::default();
+) -> hharness_gateway::router::ModelRoleTable {
+    let mut table = hharness_gateway::router::ModelRoleTable::default();
     if let Some(Json::Obj(roles)) = manifest
         .extra
         .get("profile_binding")
@@ -3369,7 +3380,7 @@ pub(crate) fn role_table_from_manifest(
             };
             table.roles.insert(
                 role.clone(),
-                hh_gateway::router::RoleBinding {
+                hharness_gateway::router::RoleBinding {
                     primary: scripted_route_candidate(profile_ref),
                     alternates: Vec::new(),
                     policy_ref: "hh-embed/scripted".to_string(),
@@ -3390,10 +3401,10 @@ pub(crate) fn role_table_from_manifest(
 /// `Goal` or the projection refuses (the run then gates on the claim's
 /// own divergences only — the T-LCD-03 anchor shape).
 pub(crate) fn project_task_contract(
-    doc: &hh_hir::document::HirDocument,
-) -> Option<hh_verification::gate::TaskContract> {
+    doc: &hharness_hir::document::HirDocument,
+) -> Option<hharness_verification::gate::TaskContract> {
     doc.nodes.iter().find_map(|n| {
-        if let hh_hir::records::KindRecord::Goal(_) = &n.semantic {
+        if let hharness_hir::records::KindRecord::Goal(_) = &n.semantic {
             let goal_id = n.version.semantic_id.clone().unwrap_or_default();
             let mut visibility = std::collections::BTreeMap::new();
             for c in &doc.nodes {
@@ -3404,14 +3415,14 @@ pub(crate) fn project_task_contract(
                     visibility.insert(
                         sid.clone(),
                         if v == "held_out" {
-                            hh_verification::vocab::Visibility::HeldOut
+                            hharness_verification::vocab::Visibility::HeldOut
                         } else {
-                            hh_verification::vocab::Visibility::Visible
+                            hharness_verification::vocab::Visibility::Visible
                         },
                     );
                 }
             }
-            hh_verification::gate::project_contract(doc, &goal_id, &visibility).ok()
+            hharness_verification::gate::project_contract(doc, &goal_id, &visibility).ok()
         } else {
             None
         }
@@ -3421,7 +3432,7 @@ pub(crate) fn project_task_contract(
 /// `hh/round_robin` is the Stage-1 seeded name for the canonical
 /// `react/minimal` interpreter (the family is one loop under presets —
 /// ADR-0103 D6). Every other registered ref resolves through
-/// `hh_control::react::variant_for` — the one binding table (CC1, shared
+/// `hharness_control::react::variant_for` — the one binding table (CC1, shared
 /// with the OOP conformance lane). An unknown variant is `None` — the
 /// caller turns it into a typed refusal, never a silent `react/minimal`
 /// arm (a bound strategy is a ledgered fact; the armed interpreter must
@@ -3429,7 +3440,7 @@ pub(crate) fn project_task_contract(
 pub(crate) fn strategy_for(variant_id: &str) -> Option<Box<dyn ControlStrategy>> {
     match variant_id.trim_end_matches("@1") {
         "hh/round_robin" => Some(Box::new(ReactMinimal::new())),
-        _ => hh_control::react::variant_for(variant_id),
+        _ => hharness_control::react::variant_for(variant_id),
     }
 }
 
@@ -3440,7 +3451,7 @@ pub(crate) fn leaf_arm_for(store: &Store, run_id: &str) -> Option<LeafArm> {
     let arm_path = store.root().join("runs").join(run_id).join("leaf.arm");
     std::fs::read_to_string(&arm_path)
         .ok()
-        .and_then(|s| hh_wire::json::parse(&s).ok())
+        .and_then(|s| hharness_wire::json::parse(&s).ok())
         .and_then(|j| LeafArm::from_json(&j))
 }
 
@@ -3454,14 +3465,14 @@ pub(crate) fn leaf_arm_for(store: &Store, run_id: &str) -> Option<LeafArm> {
 /// default — the mode the S2.11 seeds carried); a non-steering impl is
 /// `Unsupported{by: control_strategy}` (AC-R-2.6.1-10).
 pub(crate) fn steering_for(
-    registry: &hh_registry::store::RegistryStore,
+    registry: &hharness_registry::store::RegistryStore,
     variant_id: &str,
 ) -> (SteerMode, ConcurrentInput) {
     let decl = registry
-        .query(&hh_registry::store::QueryPredicate {
-            clauses: vec![hh_registry::store::QueryClause {
+        .query(&hharness_registry::store::QueryPredicate {
+            clauses: vec![hharness_registry::store::QueryClause {
                 field: "variant_id".into(),
-                op: hh_registry::store::QueryOp::Eq,
+                op: hharness_registry::store::QueryOp::Eq,
                 value: variant_id.trim_end_matches("@1").to_string(),
             }],
             snapshot_id: None,
@@ -3469,7 +3480,9 @@ pub(crate) fn steering_for(
         .ok()
         .and_then(|rs| rs.into_iter().next())
         .and_then(|r| match r.record {
-            hh_registry::records::RegistryRecord::Variant(v) => Some(v.capability_declaration),
+            hharness_registry::records::RegistryRecord::Variant(v) => {
+                Some(v.capability_declaration)
+            }
             _ => None,
         });
     let mode = decl
@@ -3591,9 +3604,9 @@ fn environment_spec(
     (
         EnvironmentRecord,
         Roots,
-        hh_containment::policy::ContainmentPolicy,
+        hharness_containment::policy::ContainmentPolicy,
         Json,
-        Option<hh_containment::backend::Attestation>,
+        Option<hharness_containment::backend::Attestation>,
     ),
     EmbedError,
 > {
@@ -3619,18 +3632,18 @@ fn environment_spec(
     // roots must name resolved paths too (the macOS `/var` →
     // `/private/var` leg; R-NOSIDE's root check is a string prefix on
     // canonical forms).
-    let ws = hh_env::handle::canonicalize_path(workspace_root);
+    let ws = hharness_env::handle::canonicalize_path(workspace_root);
     let roots_json = match info.get("workspace_roots") {
         Some(Json::Arr(a)) => a
             .iter()
             .filter_map(|v| v.as_str())
-            .map(hh_env::handle::canonicalize_path)
+            .map(hharness_env::handle::canonicalize_path)
             .collect::<Vec<_>>(),
         _ => vec![ws.clone()],
     };
     let mut record = EnvironmentRecord {
         class: EnvironmentClass::LocalHost,
-        image: ImageRef::ContentAddress(hh_identity::address(
+        image: ImageRef::ContentAddress(hharness_identity::address(
             format!("hh-embed/local_host:{ws}").as_bytes(),
             "application/vnd.hh.env",
         )),
@@ -3650,19 +3663,19 @@ fn environment_spec(
         writable_roots: roots_json,
         cwd: ws.clone(),
     };
-    let mut policy = hh_containment::policy::kernel_default(0);
+    let mut policy = hharness_containment::policy::kernel_default(0);
     for r in &roots.writable_roots {
         policy
             .fs
             .write
             .allow
-            .push(hh_containment::policy::WritableRoot {
+            .push(hharness_containment::policy::WritableRoot {
                 root: r.clone(),
                 read_only_subpaths: vec![],
                 protected_metadata_names: vec![],
             });
     }
-    policy.net.mode = hh_containment::policy::NetMode::None;
+    policy.net.mode = hharness_containment::policy::NetMode::None;
     // S4.14b (R-2.8.4¹) — the binding may *raise* the boundary:
     // `isolation_class` is honoured only above the `process_sandbox`
     // floor (a binding declaring `none` is refused — an external input
@@ -3671,12 +3684,12 @@ fn environment_spec(
     // classes (`user_space_kernel`/`microvm`) require at selection;
     // `for_policy` fails closed (`attestation_missing`) without it.
     if let Some(c) = info.get("isolation_class").and_then(Json::as_str) {
-        let class = hh_containment::policy::IsolationClass::parse(c).map_err(|e| {
+        let class = hharness_containment::policy::IsolationClass::parse(c).map_err(|e| {
             EmbedError::EnvironmentUnavailable {
                 reason: format!("isolation_class:{e}"),
             }
         })?;
-        if class == hh_containment::policy::IsolationClass::None {
+        if class == hharness_containment::policy::IsolationClass::None {
             return Err(EmbedError::EnvironmentUnavailable {
                 reason: "isolation_class_weakening".to_string(),
             });
@@ -3685,7 +3698,7 @@ fn environment_spec(
     }
     let attestation = match info.get("substrate_attestation") {
         None => None,
-        Some(j) => Some(hh_containment::backend::Attestation {
+        Some(j) => Some(hharness_containment::backend::Attestation {
             method: j
                 .get("method")
                 .and_then(Json::as_str)
@@ -3708,12 +3721,13 @@ fn environment_spec(
     // — the binding declares it once); record-resolution verifies it
     // against the policy's isolation class before the backend select's
     // `attestation_missing` leg runs.
-    record.image_attestation = attestation
-        .as_ref()
-        .map(|a| hh_env::record::ImageAttestation {
-            method: a.method.clone(),
-            attestation_ref: a.attestation_ref.clone(),
-        });
+    record.image_attestation =
+        attestation
+            .as_ref()
+            .map(|a| hharness_env::record::ImageAttestation {
+                method: a.method.clone(),
+                attestation_ref: a.attestation_ref.clone(),
+            });
     record
         .verify_attested(policy.proc.isolation_class)
         .map_err(env_err)?;
@@ -3725,7 +3739,10 @@ fn environment_spec(
 /// verbatim (ADR-0168 D3: "the manifest records
 /// `containment.enforcement_evidence` … from the environment handle").
 fn evidence_json(
-    ev: &BTreeMap<hh_containment::report::FieldGroup, hh_containment::report::EnforcementEvidence>,
+    ev: &BTreeMap<
+        hharness_containment::report::FieldGroup,
+        hharness_containment::report::EnforcementEvidence,
+    >,
 ) -> Json {
     let mut m = BTreeMap::new();
     for (g, e) in ev {
@@ -3742,23 +3759,24 @@ fn evidence_json(
 /// (`attach::evidence_preview`), evaluated before `open_run` so the
 /// refusal precedes any run's existence.
 fn bypass_gate(
-    policy: &hh_containment::policy::ContainmentPolicy,
-    attestation: Option<hh_containment::backend::Attestation>,
+    policy: &hharness_containment::policy::ContainmentPolicy,
+    attestation: Option<hharness_containment::backend::Attestation>,
 ) -> Result<(), EmbedError> {
-    let backend = hh_containment::backend::for_policy(policy, attestation).map_err(|e| {
+    let backend = hharness_containment::backend::for_policy(policy, attestation).map_err(|e| {
         EmbedError::EnvironmentUnavailable {
             reason: format!("containment_backend:{e:?}"),
         }
     })?;
-    let evidence = hh_containment::attach::evidence_preview(&*backend, policy).map_err(|e| {
-        EmbedError::EnvironmentUnavailable {
-            reason: format!("containment_preview:{e:?}"),
-        }
-    })?;
-    let enforced = hh_containment::attach::relied_groups(policy)
+    let evidence =
+        hharness_containment::attach::evidence_preview(&*backend, policy).map_err(|e| {
+            EmbedError::EnvironmentUnavailable {
+                reason: format!("containment_preview:{e:?}"),
+            }
+        })?;
+    let enforced = hharness_containment::attach::relied_groups(policy)
         .iter()
         .all(|g| {
-            evidence.get(g) != Some(&hh_containment::report::EnforcementEvidence::Unknown)
+            evidence.get(g) != Some(&hharness_containment::report::EnforcementEvidence::Unknown)
                 && evidence.contains_key(g)
         });
     if enforced {
@@ -3778,7 +3796,7 @@ pub(crate) fn realized_settings(
     workspace_root: &std::path::Path,
     attendance: &AttendanceDeclaration,
     approval_mode: Option<&str>,
-    role_table: Option<&hh_gateway::router::ModelRoleTable>,
+    role_table: Option<&hharness_gateway::router::ModelRoleTable>,
 ) -> RealizedSettings {
     RealizedSettings {
         // The realized `ModelRoleTable` itself when the caller opened it
@@ -3804,12 +3822,12 @@ pub(crate) fn realized_settings(
 /// Fold an `EnvError` into the contract's surface — provisioning and
 /// attach failures are `EnvironmentUnavailable` (the environment's
 /// words, carried in `reason`; never a stringy `Internal`).
-pub(crate) fn env_err(e: hh_env::errors::EnvError) -> EmbedError {
+pub(crate) fn env_err(e: hharness_env::errors::EnvError) -> EmbedError {
     match e {
         // S5.8 (R-2.2.5²) — the attesting-class refusal keeps the
         // containment spelling (`attestation_missing`) so a surface sees
         // the same code at record resolution and backend selection.
-        hh_env::errors::EnvError::AttestationMissing { isolation_class } => {
+        hharness_env::errors::EnvError::AttestationMissing { isolation_class } => {
             EmbedError::EnvironmentUnavailable {
                 reason: format!("attestation_missing:{isolation_class}"),
             }
@@ -3818,10 +3836,12 @@ pub(crate) fn env_err(e: hh_env::errors::EnvError) -> EmbedError {
         // (DF-S2.10-1): `unsupported` (declared, not backed) and
         // `unknown` (never declared) are different answers — the surface
         // must see which, never a flattened `environment_unavailable`.
-        hh_env::errors::EnvError::Unsupported { capability, detail } => EmbedError::Unsupported {
-            by: format!("{capability}: {detail}"),
-        },
-        hh_env::errors::EnvError::UnknownCapability { capability } => {
+        hharness_env::errors::EnvError::Unsupported { capability, detail } => {
+            EmbedError::Unsupported {
+                by: format!("{capability}: {detail}"),
+            }
+        }
+        hharness_env::errors::EnvError::UnknownCapability { capability } => {
             EmbedError::UnknownCapability { capability }
         }
         other => EmbedError::EnvironmentUnavailable {
@@ -3833,7 +3853,7 @@ pub(crate) fn env_err(e: hh_env::errors::EnvError) -> EmbedError {
 /// One diagnostic line for `InvalidDefinition.diagnostics` — the
 /// canonical `C-…` code, the JSON-pointer path, and the detail text
 /// (never the whole record: clients render strings).
-pub(crate) fn diag_line(d: &hh_assembly::diagnostics::AssemblyDiagnostic) -> String {
+pub(crate) fn diag_line(d: &hharness_assembly::diagnostics::AssemblyDiagnostic) -> String {
     format!(
         "{:?} {} {} — {}",
         d.code,
@@ -3854,7 +3874,7 @@ pub(crate) fn diag_line(d: &hh_assembly::diagnostics::AssemblyDiagnostic) -> Str
 /// run opens under (the `model.profile.expired_used` rows `open_new`
 /// mints and the manifest's `expired_used` member records).
 struct RealizedRoles {
-    table: hh_gateway::router::ModelRoleTable,
+    table: hharness_gateway::router::ModelRoleTable,
     primary_identity: Option<String>,
     primary_record_ref: Option<String>,
     /// §5c.1 — the `primary` profile's declared `context_window` (the
@@ -3869,17 +3889,17 @@ struct RealizedRoles {
 /// every `RoleBinding` points at (S5.1; AC-R-2.3.3-11): a real `ModelRef`
 /// (`profile_ref` is the role's bound coordinate; `provider_model_id` the
 /// scripted port's honest identity) over the scripted `ModelCoordinate`.
-fn scripted_route_candidate(profile_ref: &str) -> hh_gateway::router::RouteCandidate {
-    hh_gateway::router::RouteCandidate {
-        model_ref: hh_gateway::plan::ModelRef {
+fn scripted_route_candidate(profile_ref: &str) -> hharness_gateway::router::RouteCandidate {
+    hharness_gateway::router::RouteCandidate {
+        model_ref: hharness_gateway::plan::ModelRef {
             profile_ref: profile_ref.to_string(),
             provider_model_id: "hh-embed/kernel-scripted".to_string(),
             snapshot_id: None,
             serving_route: None,
             effort: None,
         },
-        coordinate: hh_compiler::profile::ModelCoordinate {
-            provider_api_family: "hh-embed".to_string(),
+        coordinate: hharness_compiler::profile::ModelCoordinate {
+            provider_api_family: "hharness-embed".to_string(),
             model_family: "kernel-scripted".to_string(),
             model_version: "1".to_string(),
         },
@@ -3923,7 +3943,7 @@ fn profile_binding_entry(j: &Json) -> Option<(String, Option<String>)> {
 /// `AgentProcess`'s pinned `native.profile` (CF-313; a selector pin or
 /// `unbound` names no coordinate — `profile` is already the bound
 /// coordinate from stage-2b's `native_profile`).
-fn native_profile_pin(doc: &hh_hir::document::HirDocument) -> Option<String> {
+fn native_profile_pin(doc: &hharness_hir::document::HirDocument) -> Option<String> {
     let root = doc.node(&doc.root.semantic_id)?;
     if let KindRecord::AgentProcess(ap) = &root.semantic {
         if let AgentProcessBody::Native(n) = &ap.body {

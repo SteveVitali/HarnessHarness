@@ -184,7 +184,7 @@ const REPEAT_SAFETIES = new Set(["idempotent", "non_idempotent"]);
 const WORLDS = new Set(["closed", "open"]);
 const REVERSIBILITIES = new Set(["compensable", "irreversible"]);
 /** `DimensionKey::parse` — `DimensionId` ∪ registered `ext` names ∪
- *  derived dimensions (hh-ontology `dimensions.rs`). */
+ *  derived dimensions (hharness-ontology `dimensions.rs`). */
 const DIMENSION_KEYS = new Set([
   "tokens.input.uncached", "tokens.input.cache_read",
   "tokens.input.cache_write", "tokens.output.visible",
@@ -211,7 +211,7 @@ const EXPOSURE_MODES = new Set([
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Provenance (hh-provenance `record.rs`/`origin.rs`/`authority.rs` — the
+// Provenance (hharness-provenance `record.rs`/`origin.rs`/`authority.rs` — the
 // corpus-reached codec, byte-faithful both directions)
 // ─────────────────────────────────────────────────────────────────────────────
 

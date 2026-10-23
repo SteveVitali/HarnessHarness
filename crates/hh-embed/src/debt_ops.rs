@@ -1,23 +1,25 @@
 //! Group L — the S5.4 debt + model-compat + attribution-design ops
 //! (R-2.9.6¹/R-2.9.7¹/R-2.9.8¹). Records-in/records-out like the rest of
 //! Group L: the caller supplies the `AssumptionDebtRecord`/`DebtIndexRow`/
-//! observables documents; the ops fold them through `hh_lab::debt` /
-//! `hh_lab::model` / `hh_analysis::ops` — the manager is out-of-process by
+//! observables documents; the ops fold them through `hharness_lab::debt` /
+//! `hharness_lab::model` / `hharness_analysis::ops` — the manager is out-of-process by
 //! construction (AC-R-2.9.6-10: `DebtIndexRow`, `RemovalVerdict`,
 //! `DebtReport` documents move through `hh-embed/1`, no private verb).
 
-use hh_ontology::debt::DebtPolicy;
-use hh_wire::json::Json;
+use hharness_ontology::debt::DebtPolicy;
+use hharness_wire::json::Json;
 
 use crate::eval_ops::{bad, opt_str, req};
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 /// Decode a `DebtObservables` doc (`{expiry{…}, profile_change?,
 /// evidence_superseded[]?, revalidation_grade?}` — every member optional;
 /// `{}` is the empty observable set).
-pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservables, EmbedError> {
-    let mut obs = hh_lab::debt::DebtObservables::default();
+pub(crate) fn observables(
+    j: Option<&Json>,
+) -> Result<hharness_lab::debt::DebtObservables, EmbedError> {
+    let mut obs = hharness_lab::debt::DebtObservables::default();
     let Some(j) = j else { return Ok(obs) };
     let m = match j {
         Json::Obj(m) => m,
@@ -46,15 +48,17 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
                     return Err(bad("/observables/expiry/probe_records", "type_mismatch"));
                 };
                 let verdict = match v {
-                    "SUPPORTED" => hh_compiler::profile_test::ConformanceVerdict::Supported,
-                    "UNSUPPORTED" => hh_compiler::profile_test::ConformanceVerdict::Unsupported,
-                    "PARTIAL" => hh_compiler::profile_test::ConformanceVerdict::Partial,
-                    "NOT_APPLICABLE" => {
-                        hh_compiler::profile_test::ConformanceVerdict::NotApplicable
+                    "SUPPORTED" => hharness_compiler::profile_test::ConformanceVerdict::Supported,
+                    "UNSUPPORTED" => {
+                        hharness_compiler::profile_test::ConformanceVerdict::Unsupported
                     }
-                    "UNKNOWN" => hh_compiler::profile_test::ConformanceVerdict::Unknown,
-                    "SKIPPED" => hh_compiler::profile_test::ConformanceVerdict::Skipped,
-                    "DRIFT" => hh_compiler::profile_test::ConformanceVerdict::Drift,
+                    "PARTIAL" => hharness_compiler::profile_test::ConformanceVerdict::Partial,
+                    "NOT_APPLICABLE" => {
+                        hharness_compiler::profile_test::ConformanceVerdict::NotApplicable
+                    }
+                    "UNKNOWN" => hharness_compiler::profile_test::ConformanceVerdict::Unknown,
+                    "SKIPPED" => hharness_compiler::profile_test::ConformanceVerdict::Skipped,
+                    "DRIFT" => hharness_compiler::profile_test::ConformanceVerdict::Drift,
                     _ => {
                         return Err(bad(
                             "/observables/expiry/probe_records/verdict",
@@ -80,7 +84,7 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
                 .and_then(Json::as_str)
                 .ok_or_else(|| bad("/observables/expiry/revalidation", "missing evidence_ref"))?;
             let probe_passed = matches!(rv.get("probe_passed"), Some(Json::Bool(true)));
-            obs.expiry.revalidation = Some(hh_compiler::expiry::RevalidationObs {
+            obs.expiry.revalidation = Some(hharness_compiler::expiry::RevalidationObs {
                 evidence_ref: eref.to_string(),
                 probe_passed,
             });
@@ -97,9 +101,9 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
         let kind = pc
             .get("kind")
             .and_then(Json::as_str)
-            .and_then(hh_lab::debt::ProfileChangeKind::parse)
+            .and_then(hharness_lab::debt::ProfileChangeKind::parse)
             .ok_or_else(|| bad("/observables/profile_change/kind", "unknown_profile_change"))?;
-        obs.profile_change = Some(hh_lab::debt::ProfileChange {
+        obs.profile_change = Some(hharness_lab::debt::ProfileChange {
             kind,
             grace_elapsed: matches!(pc.get("grace_elapsed"), Some(Json::Bool(true))),
             changed_at_ms: pc
@@ -122,9 +126,9 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
     }
     if let Some(g) = m.get("revalidation_grade").and_then(Json::as_str) {
         obs.revalidation_grade = match g {
-            "hypothesized" => Some(hh_ontology::debt::EvidenceGrade::Hypothesized),
-            "evidenced" => Some(hh_ontology::debt::EvidenceGrade::Evidenced),
-            "confirmed" => Some(hh_ontology::debt::EvidenceGrade::Confirmed),
+            "hypothesized" => Some(hharness_ontology::debt::EvidenceGrade::Hypothesized),
+            "evidenced" => Some(hharness_ontology::debt::EvidenceGrade::Evidenced),
+            "confirmed" => Some(hharness_ontology::debt::EvidenceGrade::Confirmed),
             _ => return Err(bad("/observables/revalidation_grade", "unknown_grade")),
         };
     }
@@ -139,7 +143,7 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
                 .map(|v| v.max(0) as u64)
                 .unwrap_or(0)
         };
-        obs.probation = Some(hh_lab::debt::LedgeredProbation {
+        obs.probation = Some(hharness_lab::debt::LedgeredProbation {
             debt_ref: pm
                 .get("debt_ref")
                 .and_then(Json::as_str)
@@ -165,33 +169,35 @@ fn policy_of(j: Option<&Json>) -> Result<DebtPolicy, EmbedError> {
     }
 }
 
-/// Decode an `AssumptionDebtRecord` member (`hh_hir::debt_from_json` —
+/// Decode an `AssumptionDebtRecord` member (`hharness_hir::debt_from_json` —
 /// the one codec, CC1).
-pub(crate) fn debt_record(j: &Json) -> Result<hh_hir::records::AssumptionDebtRecord, EmbedError> {
-    hh_hir::debt_from_json(j, "/record").map_err(|e| bad("/record", &format!("{e:?}")))
+pub(crate) fn debt_record(
+    j: &Json,
+) -> Result<hharness_hir::records::AssumptionDebtRecord, EmbedError> {
+    hharness_hir::debt_from_json(j, "/record").map_err(|e| bad("/record", &format!("{e:?}")))
 }
 
 /// Decode a `DebtIndexRow` member.
-fn index_row(j: &Json) -> Result<hh_lab::debt::DebtIndexRow, EmbedError> {
-    hh_lab::debt::DebtIndexRow::from_json(j).map_err(|e| bad("/rows", &format!("{e:?}")))
+fn index_row(j: &Json) -> Result<hharness_lab::debt::DebtIndexRow, EmbedError> {
+    hharness_lab::debt::DebtIndexRow::from_json(j).map_err(|e| bad("/rows", &format!("{e:?}")))
 }
 
 /// Decode a `DebtTransition` doc (`{debt_ref, from, to, trigger,
 /// evidence_ref?, causes[]?}`).
-fn transition(j: &Json) -> Result<hh_lab::debt::DebtTransition, EmbedError> {
+fn transition(j: &Json) -> Result<hharness_lab::debt::DebtTransition, EmbedError> {
     let m = match j {
         Json::Obj(m) => m,
         _ => return Err(bad("/transitions", "type_mismatch")),
     };
-    let status = |k: &str| -> Result<hh_ontology::debt::DebtStatus, EmbedError> {
+    let status = |k: &str| -> Result<hharness_ontology::debt::DebtStatus, EmbedError> {
         let s = m
             .get(k)
             .and_then(Json::as_str)
             .ok_or_else(|| bad("/transitions", "missing from/to"))?;
-        hh_ontology::debt::DebtStatus::parse(s)
+        hharness_ontology::debt::DebtStatus::parse(s)
             .ok_or_else(|| bad("/transitions", "unknown debt status"))
     };
-    Ok(hh_lab::debt::DebtTransition {
+    Ok(hharness_lab::debt::DebtTransition {
         debt_ref: m
             .get("debt_ref")
             .and_then(Json::as_str)
@@ -237,7 +243,7 @@ impl EmbedService {
         let debt_ref =
             opt_str(params, "debt_ref").unwrap_or_else(|| format!("debt:{}", record.rule_id));
         let transitions =
-            hh_lab::debt::evaluate_debt(&debt_ref, &record, home_id, &obs, now_ms, &policy);
+            hharness_lab::debt::evaluate_debt(&debt_ref, &record, home_id, &obs, now_ms, &policy);
         Ok(Json::obj([(
             "transitions",
             Json::Arr(transitions.iter().map(|t| t.to_json()).collect()),
@@ -269,12 +275,12 @@ impl EmbedService {
             };
             let removal_test_state = match em.get("removal_test") {
                 Some(v) => Some(
-                    hh_lab::debt::RemovalTestState::from_json(v)
+                    hharness_lab::debt::RemovalTestState::from_json(v)
                         .map_err(|e| bad("/entries/removal_test", &format!("{e:?}")))?,
                 ),
                 None => None,
             };
-            input.push(hh_lab::debt::DebtIndexEntry {
+            input.push(hharness_lab::debt::DebtIndexEntry {
                 home: em.get("home").and_then(Json::as_int).map(|v| v as u8),
                 version_id: em
                     .get("version_id")
@@ -297,7 +303,7 @@ impl EmbedService {
                     .unwrap_or(0) as u64,
             });
         }
-        let rows = hh_lab::debt::debt_index(&input);
+        let rows = hharness_lab::debt::debt_index(&input);
         Ok(Json::obj([(
             "rows",
             Json::Arr(rows.iter().map(|r| r.to_json()).collect()),
@@ -310,7 +316,7 @@ impl EmbedService {
     /// intersected with the policy's `notice_sinks`; an unreachable owner
     /// lands under `unrouted`, never silently dropped.
     pub(crate) fn lab_debt_report(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let rows: Vec<hh_lab::debt::DebtIndexRow> = match req(params, "rows")? {
+        let rows: Vec<hharness_lab::debt::DebtIndexRow> = match req(params, "rows")? {
             Json::Arr(a) => a.iter().map(index_row).collect::<Result<Vec<_>, _>>()?,
             _ => return Err(bad("/rows", "type_mismatch")),
         };
@@ -320,7 +326,7 @@ impl EmbedService {
             .and_then(Json::as_int)
             .map(|v| v as u64)
             .unwrap_or_else(|| self.store.now_ms());
-        let health = hh_lab::debt::AssumptionDebtHealth {
+        let health = hharness_lab::debt::AssumptionDebtHealth {
             warn_within_ms: policy.warn_within_ms,
         };
         let mut report = health.report(&rows, now_ms);
@@ -332,7 +338,7 @@ impl EmbedService {
         ];
         report.scope = params.get("scope").cloned();
         let notices = health.notices(&rows, &report);
-        let routed = hh_lab::debt::route_notices(&notices, &policy);
+        let routed = hharness_lab::debt::route_notices(&notices, &policy);
         Ok(Json::obj([
             ("report", report.to_json()),
             (
@@ -356,7 +362,7 @@ impl EmbedService {
         let drift_ref = req(params, "drift_ref")?
             .as_str()
             .ok_or_else(|| bad("/drift_ref", "type_mismatch"))?;
-        let claim = hh_lab::model::synthetic_snapshot_claim(provider, model_id, drift_ref);
+        let claim = hharness_lab::model::synthetic_snapshot_claim(provider, model_id, drift_ref);
         Ok(Json::obj([("claim", claim.to_json())]))
     }
 
@@ -370,7 +376,7 @@ impl EmbedService {
             .get("suite_id")
             .and_then(Json::as_str)
             .ok_or_else(|| bad("/suite/suite_id", "missing"))?;
-        let checks: Vec<hh_lab::model::RegressionCheck> = match suite_j.get("checks") {
+        let checks: Vec<hharness_lab::model::RegressionCheck> = match suite_j.get("checks") {
             Some(Json::Arr(cs)) => cs
                 .iter()
                 .map(|c| {
@@ -378,7 +384,7 @@ impl EmbedService {
                         .get("rule_id")
                         .and_then(Json::as_str)
                         .ok_or_else(|| bad("/suite/checks", "missing rule_id"))?;
-                    Ok(hh_lab::model::RegressionCheck {
+                    Ok(hharness_lab::model::RegressionCheck {
                         rule_id: rule_id.to_string(),
                         capability: c
                             .get("capability")
@@ -392,42 +398,44 @@ impl EmbedService {
         // The suite's provenance rides the record the caller deposits —
         // the op mints the check-list view only (the claim boundary is
         // the `CompatibilityRecord`).
-        let prov =
-            hh_provenance::ProvenanceRecord::kernel("hh-embed.lab.model", self.store.now_ms());
-        let suite = hh_lab::model::HarnessRegressionSuite {
+        let prov = hharness_provenance::ProvenanceRecord::kernel(
+            "hh-embed.lab.model",
+            self.store.now_ms(),
+        );
+        let suite = hharness_lab::model::HarnessRegressionSuite {
             suite_id: suite_id.to_string(),
             checks,
             provenance: prov,
         };
-        let results: Vec<(String, hh_lab::model::RegressionVerdict)> = match req(params, "results")?
-        {
-            Json::Arr(rs) => rs
-                .iter()
-                .map(|r| {
-                    let rule_id = r
-                        .get("rule_id")
-                        .and_then(Json::as_str)
-                        .ok_or_else(|| bad("/results", "missing rule_id"))?;
-                    let v = r
-                        .get("verdict")
-                        .and_then(Json::as_str)
-                        .and_then(hh_lab::model::RegressionVerdict::parse)
-                        .ok_or_else(|| bad("/results/verdict", "unknown_verdict"))?;
-                    Ok((rule_id.to_string(), v))
-                })
-                .collect::<Result<_, EmbedError>>()?,
-            _ => return Err(bad("/results", "type_mismatch")),
-        };
+        let results: Vec<(String, hharness_lab::model::RegressionVerdict)> =
+            match req(params, "results")? {
+                Json::Arr(rs) => rs
+                    .iter()
+                    .map(|r| {
+                        let rule_id = r
+                            .get("rule_id")
+                            .and_then(Json::as_str)
+                            .ok_or_else(|| bad("/results", "missing rule_id"))?;
+                        let v = r
+                            .get("verdict")
+                            .and_then(Json::as_str)
+                            .and_then(hharness_lab::model::RegressionVerdict::parse)
+                            .ok_or_else(|| bad("/results/verdict", "unknown_verdict"))?;
+                        Ok((rule_id.to_string(), v))
+                    })
+                    .collect::<Result<_, EmbedError>>()?,
+                _ => return Err(bad("/results", "type_mismatch")),
+            };
         let evidence_ref = req(params, "evidence_ref")?
             .as_str()
             .ok_or_else(|| bad("/evidence_ref", "type_mismatch"))?;
-        let status = hh_lab::model::run_regression_suite(&suite, &results, evidence_ref);
+        let status = hharness_lab::model::run_regression_suite(&suite, &results, evidence_ref);
         Ok(Json::obj([
             ("status", status.to_json()),
             (
                 "regression_drifted_rules",
                 Json::Arr(
-                    hh_lab::model::regression_drifted_rules(&status)
+                    hharness_lab::model::regression_drifted_rules(&status)
                         .iter()
                         .map(Json::str)
                         .collect(),
@@ -444,7 +452,7 @@ impl EmbedService {
         params: &Json,
     ) -> Result<Json, EmbedError> {
         let definition = req(params, "definition")?;
-        let targets = hh_analysis::ops::component_targets(definition, params.get("filter"));
+        let targets = hharness_analysis::ops::component_targets(definition, params.get("filter"));
         Ok(Json::obj([("targets", Json::Arr(targets))]))
     }
 
@@ -473,7 +481,7 @@ impl EmbedService {
                 .collect::<Result<_, _>>()?,
             _ => return Err(bad("/arms", "type_mismatch")),
         };
-        let design = hh_analysis::ops::attribution_design(
+        let design = hharness_analysis::ops::attribution_design(
             design_ref,
             targets,
             &arms,
@@ -495,7 +503,7 @@ impl EmbedService {
 // registry audit run (the registered class — the ledger carries the
 // transition, the manager carries no authority handle).
 
-use hh_registry::events::RegistryEvent;
+use hharness_registry::events::RegistryEvent;
 
 impl EmbedService {
     /// Evaluate the debt member of a registered record under a
@@ -505,27 +513,27 @@ impl EmbedService {
     pub(crate) fn evaluate_debt_on_lifecycle(
         &mut self,
         version_id: &str,
-        change: hh_lab::debt::ProfileChangeKind,
-    ) -> Result<Vec<hh_lab::debt::DebtTransition>, EmbedError> {
+        change: hharness_lab::debt::ProfileChangeKind,
+    ) -> Result<Vec<hharness_lab::debt::DebtTransition>, EmbedError> {
         let Some((envelope, record)) = self.registry.get(version_id) else {
             return Ok(Vec::new());
         };
         let kind = envelope.kind.as_str();
-        let Some(home) = hh_ontology::debt::DEBT_HOMES
+        let Some(home) = hharness_ontology::debt::DEBT_HOMES
             .iter()
             .find(|h| h.record_kind == kind)
         else {
             return Ok(Vec::new());
         };
-        let body = hh_registry::schema::body_json(record, true);
+        let body = hharness_registry::schema::body_json(record, true);
         let Some(member) = body.get(home.field) else {
             return Ok(Vec::new());
         };
-        let debt = hh_hir::debt_from_json(member, &format!("/{kind}.{}", home.field))
+        let debt = hharness_hir::debt_from_json(member, &format!("/{kind}.{}", home.field))
             .map_err(|e| bad("/debt", &format!("{e:?}")))?;
         let now_ms = self.store.now_ms();
-        let obs = hh_lab::debt::DebtObservables {
-            profile_change: Some(hh_lab::debt::ProfileChange {
+        let obs = hharness_lab::debt::DebtObservables {
+            profile_change: Some(hharness_lab::debt::ProfileChange {
                 kind: change,
                 grace_elapsed: false,
                 // Stamp the change time — a later evaluation under the
@@ -540,8 +548,14 @@ impl EmbedService {
         };
         let policy = DebtPolicy::default();
         let debt_ref = format!("debt:{}:{version_id}:{}", home.id, debt.rule_id);
-        let transitions =
-            hh_lab::debt::evaluate_debt(&debt_ref, &debt, Some(home.id), &obs, now_ms, &policy);
+        let transitions = hharness_lab::debt::evaluate_debt(
+            &debt_ref,
+            &debt,
+            Some(home.id),
+            &obs,
+            now_ms,
+            &policy,
+        );
         if !transitions.is_empty() {
             let (run_id, lease) = self.ensure_registry_run()?;
             let kernel = self.kernel_prov.clone();
@@ -554,7 +568,7 @@ impl EmbedService {
                     anchor_tag: None,
                 })
                 .collect();
-            hh_registry::events::emit(&mut self.store, &run_id, &lease, &kernel, events)
+            hharness_registry::events::emit(&mut self.store, &run_id, &lease, &kernel, events)
                 .map_err(crate::service::ledger_err)?;
         }
         Ok(transitions)

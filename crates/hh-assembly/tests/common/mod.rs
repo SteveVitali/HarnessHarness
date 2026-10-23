@@ -1,22 +1,22 @@
-//! Shared fixtures for the `hh-assembly` acceptance suite (spec §3.3; ticket S1.9).
+//! Shared fixtures for the `hharness-assembly` acceptance suite (spec §3.3; ticket S1.9).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_assembly::grammar::Assembly;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::{EntityKind, ToolEffects};
-use hh_hir::leaves::Text;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::address;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::kinds::{Cardinality, Placement};
-use hh_registry::records::{
+use hharness_assembly::grammar::Assembly;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::{EntityKind, ToolEffects};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::address;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::kinds::{Cardinality, Placement};
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ContractOperation, Implementation, RegistryRecord, VariantRecord,
 };
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 pub fn kernel() -> ProvenanceRecord {
     ProvenanceRecord::kernel("assembly.test", 0)
@@ -163,7 +163,7 @@ pub fn hosted_agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
                     observability_levels: BTreeSet::new(),
                     participant_version: "sha256:pv".into(),
                     version_identity: None,
-                    hosting_mechanism: hh_ontology::participant::HostingMechanism::SessionAbi,
+                    hosting_mechanism: hharness_ontology::participant::HostingMechanism::SessionAbi,
                     supplies: Supplies::default(),
                     budget: sel(budget),
                     permissions: sel(perm),
@@ -404,9 +404,9 @@ pub fn seeded_store(tag: &str) -> (RegistryStore, BTreeMap<String, String>) {
 #[allow(dead_code)]
 pub fn extension_record(
     name: &str,
-    kind: hh_registry::extension::ExtensionKind,
-) -> hh_registry::extension::ExtensionRecord {
-    use hh_registry::extension::*;
+    kind: hharness_registry::extension::ExtensionKind,
+) -> hharness_registry::extension::ExtensionRecord {
+    use hharness_registry::extension::*;
     let origin = Origin::human("test:author", HumanRole::Author);
     let status = AttestationStatus::Missing;
     ExtensionRecord {
@@ -436,14 +436,14 @@ pub fn extension_record(
 #[allow(dead_code)]
 pub fn extension_ref(
     name: &str,
-    kind: hh_registry::extension::ExtensionKind,
+    kind: hharness_registry::extension::ExtensionKind,
     scheme: &str,
     selector: Option<&str>,
-) -> hh_registry::extension::ExtensionRef {
-    hh_registry::extension::ExtensionRef {
+) -> hharness_registry::extension::ExtensionRef {
+    hharness_registry::extension::ExtensionRef {
         name: name.to_string(),
         kind,
-        locator: hh_registry::extension::SourceLocator {
+        locator: hharness_registry::extension::SourceLocator {
             scheme: scheme.to_string(),
             credential_free_uri: format!("https://example.com/{name}.git"),
             selector: selector.map(str::to_string),

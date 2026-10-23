@@ -1,5 +1,5 @@
 //! The golden corpus driver — the R-2.12.2 corpus/naive-checker requirement
-//! (the one already used by `hh-embed-schema`/`hh-hir`: "the golden corpus +
+//! (the one already used by `hharness-embed-schema`/`hharness-hir`: "the golden corpus +
 //! naive checker is part of the contracts evidence"). The driver enumerates
 //! `tests/fixtures/plugin-manifests/valid/*.json` (each must admit) and
 //! `tests/fixtures/plugin-manifests/invalid/*.json` (each must fail, with the
@@ -10,7 +10,7 @@
 //! `PluginManifest::decode`'s own unit tests (shared-authority mitigation —
 //! ADR-0176's corpus pattern).
 //!
-//! `hh-plugin` is corpus-engine-only: the registry's `extension::plugin`
+//! `hharness-plugin` is corpus-engine-only: the registry's `extension::plugin`
 //! supplies the `check` closure (it owns the codec); the acceptance test in
 //! `crates/hh-registry/tests/` wires them (no circular dep).
 

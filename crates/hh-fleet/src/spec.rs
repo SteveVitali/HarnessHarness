@@ -8,10 +8,10 @@
 //! defaults are all durable before any `WorkItem` can dispatch (CC3:
 //! nothing unpinned).
 
-use hh_budget::spec::BudgetSpec;
-use hh_embed_schema::types::NarrowingLeaf;
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_wire::json::Json;
+use hharness_budget::spec::BudgetSpec;
+use hharness_embed_schema::types::NarrowingLeaf;
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::FleetError;
@@ -58,7 +58,7 @@ impl Default for Defaults {
 }
 
 /// `TriggerRule` — one member of `spec.triggers` (`occurs_on` names these).
-/// The `Trigger` sum is `hh-ledger`'s; the fleet admits `external`/`manual`/
+/// The `Trigger` sum is `hharness-ledger`'s; the fleet admits `external`/`manual`/
 /// `timer` only at this boundary and every other member refuses typed
 /// (`FleetError::UnsupportedTrigger` → `TriggerUnsupported` at subscribe).
 #[derive(Debug, Clone, PartialEq)]
@@ -110,7 +110,7 @@ pub struct FleetSpec {
     /// (`policy_ref` lands in every `FleetAnchor` + `policy_fingerprint`).
     pub policy_ref: String,
     /// The declared Π narrowing leaves — persisted to
-    /// `manifest.extra["narrowing_leaves"]` (the same member `hh-embed`
+    /// `manifest.extra["narrowing_leaves"]` (the same member `hharness-embed`
     /// fingerprints; CC1 one leg) and narrowed per-item at `state_map`.
     pub narrowing: Vec<NarrowingLeaf>,
     /// The activation's budget spec — the matched-budget conditional's

@@ -14,8 +14,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::idp_id;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_wire::json::Json;
 
 use crate::event::{EventEnvelope, EventPlane};
 use crate::schema::VIEW_HASH_DOMAIN;
@@ -37,21 +37,21 @@ pub enum ViewKind {
     /// `effect_ledger` — the per-effect fold in full (§5a.2's effect ledger).
     EffectLedger,
     /// `trace_view` — the measurement plane's span projection (§5h.1 §2.1;
-    /// ADR-0042 D1/D2). Folded by `hh-telemetry` (the owner).
+    /// ADR-0042 D1/D2). Folded by `hharness-telemetry` (the owner).
     TraceView,
     /// `cost_view` — the per-scope/per-attribution spend projection (§5h.1 §2.1;
-    /// ADR-0043 D4/D6). Folded by `hh-telemetry`.
+    /// ADR-0043 D4/D6). Folded by `hharness-telemetry`.
     CostView,
     /// `metric_view` — declared metrics folded to `MetricValue`s (§5h.1 §2.1;
-    /// ADR-0044 D5). Folded by `hh-telemetry`.
+    /// ADR-0044 D5). Folded by `hharness-telemetry`.
     MetricView,
     /// `audit_view` — the §5g.6 audit projection (Rule-O obligations,
     /// producer/partition rechecks, content-ref accounting, the completeness
-    /// vector). Folded by `hh-ledger` itself — the audit trail *is* the ledger
+    /// vector). Folded by `hharness-ledger` itself — the audit trail *is* the ledger
     /// (ADR-0066 D1: no second store).
     AuditView,
     /// `lexical_index` — the `R-2.4.3⁰` lexical index over the `MemoryStore`
-    /// (§5c.3; S1.19). Folded by `hh-context`; `lexical` queries serve from it
+    /// (§5c.3; S1.19). Folded by `hharness-context`; `lexical` queries serve from it
     /// (`IndexUnavailable` until materialized).
     LexicalIndex,
     /// `structural_index` — the `R-2.4.3` Stage-3 structural index over the
@@ -59,13 +59,13 @@ pub enum ViewKind {
     /// `mentioned_idents` extracted from each item's `index_text` surface —
     /// path-like tokens become anchors, identifier-like tokens become
     /// idents; an AST-derived code index remains OQ-203). Folded by
-    /// `hh-context`; `structural` queries serve from it.
+    /// `hharness-context`; `structural` queries serve from it.
     StructuralIndex,
     /// `memory_stale_index` — `MemoryStaleIndex[version_id] →
-    /// [stale_member_ids]` (§5c.4; S1.19). Folded by `hh-context`.
+    /// [stale_member_ids]` (§5c.4; S1.19). Folded by `hharness-context`.
     MemoryStaleIndex,
     /// `memory_usage` — `{version_id → {created_at, last_read_at,
-    /// read_count}}` (§5c.3; S1.19). Folded by `hh-context`.
+    /// read_count}}` (§5c.3; S1.19). Folded by `hharness-context`.
     MemoryUsage,
     /// `branch_tree` — the derived branch index (§5a.1 §5; R-2.2.4; ADR-0271):
     /// this run's fork record (when it is a child), its `rolled_back` rewind
@@ -86,7 +86,7 @@ pub enum ViewKind {
     /// `turn_phase_profile` — the M2 per-turn phase partition (§5h.1 §2.2;
     /// ADR-0043 D3; R2.14): sampling/compaction/tool-blocking/permission-wait
     /// intervals carved out of the turn's measured wall plus the surrounding
-    /// overhead buckets. Folded by `hh-telemetry`.
+    /// overhead buckets. Folded by `hharness-telemetry`.
     TurnPhaseProfile,
     /// `resume_set` — the layer-S heads by name (§5c.3's materialized-view
     /// table; §05a.3 `carried.resume_set_heads`; R3.2's R-2.4.3 producer
@@ -188,7 +188,7 @@ impl View {
         }
     }
 
-    /// Stamp a view folded by an owning crate (`hh-telemetry`'s
+    /// Stamp a view folded by an owning crate (`hharness-telemetry`'s
     /// `trace_view`/`cost_view`/`metric_view`) — the identical `derived_from`
     /// watermark + `view_policy_version` + `idp/1` `view_hash` discipline, so a
     /// projection is a `View` no matter which crate folds it (CC7 — one view
@@ -218,8 +218,8 @@ pub fn context_view(run_id: &str, events: &[EventEnvelope], until: Option<u64>) 
             Some(p) => (
                 p.authority.as_str().to_string(),
                 match &p.readers {
-                    hh_provenance::ReaderSet::Public => Json::str("public"),
-                    hh_provenance::ReaderSet::Restricted(rs) => {
+                    hharness_provenance::ReaderSet::Public => Json::str("public"),
+                    hharness_provenance::ReaderSet::Restricted(rs) => {
                         Json::Arr(rs.iter().map(|r| Json::str(r.clone())).collect())
                     }
                 },

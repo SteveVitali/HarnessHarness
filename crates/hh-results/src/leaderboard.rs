@@ -25,11 +25,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_experiment::docs::LabDocs;
-use hh_identity::idp::idp_id;
-use hh_ledger::store::Store;
-use hh_ontology::eval::{Direction, LatticeValue, MetricValueKind};
-use hh_wire::json::Json;
+use hharness_experiment::docs::LabDocs;
+use hharness_identity::idp::idp_id;
+use hharness_ledger::store::Store;
+use hharness_ontology::eval::{Direction, LatticeValue, MetricValueKind};
+use hharness_wire::json::Json;
 
 use crate::audit::AuditRef;
 use crate::catalogue::BundleStatus;
@@ -128,7 +128,7 @@ pub struct LeaderboardDefinition {
     /// The L1 reproducibility rung — a covering bundle must claim at
     /// least this level (`None` = no claimed-level gate; AC-R-2.10.5-3's
     /// `min_claimed_level = R1` arm).
-    pub min_claimed_level: Option<hh_bundle::manifest::ReproLevel>,
+    pub min_claimed_level: Option<hharness_bundle::manifest::ReproLevel>,
     /// The public `name` — the registry name-history binding target.
     pub name: Option<String>,
     /// A human-facing title.
@@ -281,7 +281,7 @@ impl LeaderboardDefinition {
             def.min_status = BundleStatus::parse(s).unwrap_or(BundleStatus::Validated);
         }
         if let Some(s) = m.get("min_claimed_level").and_then(Json::as_str) {
-            def.min_claimed_level = hh_bundle::manifest::ReproLevel::parse(s);
+            def.min_claimed_level = hharness_bundle::manifest::ReproLevel::parse(s);
         }
         def.name = m.get("name").and_then(Json::as_str).map(String::from);
         def.title = m.get("title").and_then(Json::as_str).map(String::from);
@@ -615,7 +615,7 @@ pub fn leaderboard(
     definition: &LeaderboardDefinition,
     at: Option<&WatermarkSet>,
 ) -> Result<LeaderboardSnapshot, ResultsError> {
-    let decl = hh_eval::catalogue::metric(&definition.metric_ref).ok_or_else(|| {
+    let decl = hharness_eval::catalogue::metric(&definition.metric_ref).ok_or_else(|| {
         ResultsError::LeaderboardRefused {
             detail: format!("no metric declaration for {}", definition.metric_ref),
         }
@@ -625,7 +625,7 @@ pub fn leaderboard(
     let catalogue = results.catalogue()?;
     // The arm → MatchSpec stratum map (through the declared spec — the
     // plan cells name arms; the spec carries the match declarations).
-    let view = hh_experiment::view::ExperimentView::fold(
+    let view = hharness_experiment::view::ExperimentView::fold(
         store
             .envelopes(&table.experiment_run_id)
             .map_err(ResultsError::from)?,
@@ -650,7 +650,7 @@ pub fn leaderboard(
             arm.arm_id.clone(),
             arm.match_spec
                 .as_ref()
-                .filter(|ms| ms.mode != hh_budget::MatchMode::None)
+                .filter(|ms| ms.mode != hharness_budget::MatchMode::None)
                 .map(|ms| {
                     idp_id(
                         "results_stratum",
@@ -1053,7 +1053,8 @@ pub fn leaderboard(
                 .any(|r| {
                     !matches!(
                         store.blob_status(r),
-                        hh_ledger::BlobStatus::Present | hh_ledger::BlobStatus::Sealed { .. }
+                        hharness_ledger::BlobStatus::Present
+                            | hharness_ledger::BlobStatus::Sealed { .. }
                     )
                 });
             if evidence_missing {
@@ -1138,8 +1139,8 @@ pub fn leaderboard(
 /// The arm ids whose covering bundles are all restricted (the
 /// `restricted` disclosure class — shared by entries and the summary).
 fn restricted_arms(
-    view: &hh_experiment::view::ExperimentView,
-    spec: &hh_lab::experiment::ExperimentSpec,
+    view: &hharness_experiment::view::ExperimentView,
+    spec: &hharness_lab::experiment::ExperimentSpec,
     catalogue: &crate::catalogue::BundleCatalogue,
 ) -> std::collections::BTreeSet<String> {
     let summary = crate::disclosure::disclosure_summary(view, spec, catalogue);
@@ -1221,7 +1222,7 @@ fn selection_marks(store: &Store, experiment_run_id: &str) -> BTreeMap<String, J
 /// `requires_observability` must cover the row. Returns the reason string
 /// on failure.
 fn applicability_failure(
-    decl: &hh_ontology::compliance::MetricDeclaration,
+    decl: &hharness_ontology::compliance::MetricDeclaration,
     row: &ResultsRow,
 ) -> Option<String> {
     if !decl.applies_to_classes.is_empty()
@@ -1308,7 +1309,7 @@ fn lb_read(path: &std::path::Path) -> Result<Json, ResultsError> {
     let text = std::fs::read_to_string(path).map_err(|e| ResultsError::Store {
         detail: format!("read {}: {e}", path.display()),
     })?;
-    hh_wire::json::parse(&text).map_err(|e| ResultsError::Store {
+    hharness_wire::json::parse(&text).map_err(|e| ResultsError::Store {
         detail: format!("parse {}: {e:?}", path.display()),
     })
 }
@@ -1809,14 +1810,14 @@ impl ResultsStore {
         // The pin set — every evidence address the publication cites.
         let mut pinned: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for e in &snap.entries {
-            if hh_ledger::ids::is_pinned_id(&e.audit_ref.hash) {
+            if hharness_ledger::ids::is_pinned_id(&e.audit_ref.hash) {
                 pinned.insert(e.audit_ref.hash.clone());
             }
-            if hh_ledger::ids::is_pinned_id(&e.version_id) {
+            if hharness_ledger::ids::is_pinned_id(&e.version_id) {
                 pinned.insert(e.version_id.clone());
             }
             for r in &e.audit_ref.content_refs {
-                if hh_ledger::ids::is_pinned_id(r) {
+                if hharness_ledger::ids::is_pinned_id(r) {
                     pinned.insert(r.clone());
                 }
             }
@@ -1825,7 +1826,7 @@ impl ResultsStore {
                 for c in &row.cells {
                     for a in &c.evidence {
                         for r in &a.content_refs {
-                            if hh_ledger::ids::is_pinned_id(r) {
+                            if hharness_ledger::ids::is_pinned_id(r) {
                                 pinned.insert(r.clone());
                             }
                         }
@@ -1857,9 +1858,9 @@ impl ResultsStore {
         // resolves each `bundle_refs` id's `claimed_level`; an entry
         // with no resolved level contributes `R0` (never fabricated).
         let catalogue = self.catalogue()?;
-        let mut min_level = hh_bundle::manifest::ReproLevel::R3;
+        let mut min_level = hharness_bundle::manifest::ReproLevel::R3;
         for e in &snap.entries {
-            let mut best = hh_bundle::manifest::ReproLevel::R0;
+            let mut best = hharness_bundle::manifest::ReproLevel::R0;
             for b in &e.bundle_refs {
                 if let Some(c) = catalogue
                     .entries
@@ -1877,7 +1878,7 @@ impl ResultsStore {
             }
         }
         let reader_level = if digest_only || snap.entries.is_empty() {
-            hh_bundle::manifest::ReproLevel::R0.name().to_string()
+            hharness_bundle::manifest::ReproLevel::R0.name().to_string()
         } else {
             min_level.name().to_string()
         };
@@ -1910,18 +1911,18 @@ impl ResultsStore {
         // The pins are real, not just recorded: the publication event's
         // `refs[]` name every pinned address so the ledger's `gc`
         // `pin_reason` scan refuses them (`referenced_by_run`, §5g.6).
-        let pin_refs: Vec<hh_identity::idp::ContentAddress> = pinned
+        let pin_refs: Vec<hharness_identity::idp::ContentAddress> = pinned
             .iter()
             .filter_map(|a| {
-                hh_identity::idp::parse_id(a)
-                    .ok()
-                    .map(|p| hh_identity::idp::ContentAddress {
+                hharness_identity::idp::parse_id(a).ok().map(|p| {
+                    hharness_identity::idp::ContentAddress {
                         idp: "idp/1",
                         algorithm: "sha256",
                         digest: p.digest_hex,
                         media_type: String::new(),
                         size: 0,
-                    })
+                    }
+                })
             })
             .collect();
         let env = store

@@ -4,7 +4,7 @@
 //! The context is data on the row — two projections under different contexts
 //! are different versions, never a mutation.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::error::ResultsError;
 
@@ -57,7 +57,7 @@ pub struct ScoringContext {
     pub validator_set: Vec<String>,
     /// The overlay (regrade) runs folded into this projection.
     pub overlay_runs: Vec<OverlayRef>,
-    /// The pinned metric registry version (`hh_eval::catalogue`'s
+    /// The pinned metric registry version (`hharness_eval::catalogue`'s
     /// `metric_registry_version` at Stage 3 — the only registry this build
     /// carries; anything else is `RegistryVersionUnknown`).
     pub metric_registry_version: String,
@@ -76,7 +76,8 @@ impl ScoringContext {
         ScoringContext {
             validator_set: Vec::new(),
             overlay_runs: Vec::new(),
-            metric_registry_version: hh_eval::catalogue::check_catalogue().metric_registry_version,
+            metric_registry_version: hharness_eval::catalogue::check_catalogue()
+                .metric_registry_version,
             pricing_ref: None,
             view_policy_version: VIEW_POLICY_VERSION.to_string(),
         }
@@ -85,7 +86,7 @@ impl ScoringContext {
     /// Validate the pin — `RegistryVersionUnknown` when the named registry
     /// is not this build's catalogue.
     pub fn validate(&self) -> Result<(), ResultsError> {
-        let known = hh_eval::catalogue::check_catalogue().metric_registry_version;
+        let known = hharness_eval::catalogue::check_catalogue().metric_registry_version;
         if self.metric_registry_version != known {
             return Err(ResultsError::RegistryVersionUnknown {
                 found: self.metric_registry_version.clone(),

@@ -1,4 +1,4 @@
-//! S6.1a boundary tests — the `lab.evolution.*` surface over `hh-embed`
+//! S6.1a boundary tests — the `lab.evolution.*` surface over `hharness-embed`
 //! (records in, records out; one Store; §05h R-2.9.5). The gating legs
 //! (experimental opt-in → `serves_measurement` capability → strict codec
 //! → `evidence_stale` refusal) run on every build; the campaign legs
@@ -8,9 +8,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -199,8 +199,10 @@ fn campaign_open_rejects_malformed_spec() {
 #[cfg(feature = "tier-c4")]
 #[test]
 fn campaign_open_requires_the_split_pin() {
-    use hh_evolution::records::{CorpusSpec, EvolutionCampaignSpec, SlotAllocation, StopRule};
-    use hh_ontology::lab::EnvironmentFamily;
+    use hharness_evolution::records::{
+        CorpusSpec, EvolutionCampaignSpec, SlotAllocation, StopRule,
+    };
+    use hharness_ontology::lab::EnvironmentFamily;
 
     let (_root, mut svc) = service();
     hello_evo(&mut svc);
@@ -267,11 +269,13 @@ fn campaign_open_requires_the_split_pin() {
 #[cfg(feature = "tier-c4")]
 #[test]
 fn campaign_open_view_ensure_close() {
-    use hh_evolution::campaign::doc_kind;
-    use hh_evolution::records::{CorpusSpec, EvolutionCampaignSpec, SlotAllocation, StopRule};
-    use hh_experiment::docs::LabDocs;
-    use hh_lab::bench::SplitAssignmentRecord;
-    use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
+    use hharness_evolution::campaign::doc_kind;
+    use hharness_evolution::records::{
+        CorpusSpec, EvolutionCampaignSpec, SlotAllocation, StopRule,
+    };
+    use hharness_experiment::docs::LabDocs;
+    use hharness_lab::bench::SplitAssignmentRecord;
+    use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
 
     let (root, mut svc) = service();
     hello_evo(&mut svc);

@@ -12,7 +12,7 @@
 //! in-process wiring and the recording/fake out-of-process gateway both
 //! satisfy them (AC-R-2.3.1-11).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::attempts::{run_attempts, CollectSink, EventSink, NoSleep, SharedSink};
 use crate::codec::{self, WireFrame};
@@ -217,7 +217,7 @@ impl<'a> ModelGateway<'a> {
     /// `SnapshotClaim{kind: compatibility_token_changed}` *and* marks the
     /// profile `pending_relower` — the next `open_call` under it refuses
     /// `ReLowerRequired` until [`Self::mark_relowered`] clears the gate (the
-    /// caller runs `hh_compiler::relower` and mints
+    /// caller runs `hharness_compiler::relower` and mints
     /// `model.surface.relowered{reason: compatibility_token_changed}` —
     /// `runtime_plan` unchanged, asserted inside `relower`).
     pub fn check_compatibility_token(

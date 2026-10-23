@@ -57,7 +57,7 @@ fn e3_smoke_generated_ts_client_over_binding_c() {
         }
     }
     if !root().join("target/debug/hh-kernel").exists() {
-        eprintln!("r4_2: skipped(kernel-absent) — run 'cargo build -p hh-kernel' first");
+        eprintln!("r4_2: skipped(kernel-absent) — run 'cargo build -p hharness-kernel' first");
         return;
     }
     let out = Command::new("bash")

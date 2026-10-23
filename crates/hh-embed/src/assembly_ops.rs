@@ -1,20 +1,20 @@
 //! `lab.assembly.*` — the Group L assembly-service boundary (§6.1; S3.5;
 //! records-in/records-out, CC5). Every verb delegates to
-//! `hh_lab::assembly::service::AssemblyService` over the embed service's one
+//! `hharness_lab::assembly::service::AssemblyService` over the embed service's one
 //! `RegistryStore`/`Stage1Catalog`; the boundary never re-implements a kernel
 //! rule (V-1: failures are typed diagnostics inside the result records, not
 //! boundary errors — `EmbedError` is reserved for malformed *params*).
 
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::DefinitionInput;
-use hh_lab::assembly::drift::drift_json;
-use hh_lab::assembly::service::{
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::DefinitionInput;
+use hharness_lab::assembly::drift::drift_json;
+use hharness_lab::assembly::service::{
     diagnostics_json, AssembleMode, AssemblyService, BatchPoint, PublishSpec,
 };
-use hh_lab::assembly::source::AssemblySource;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_lab::assembly::source::AssemblySource;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
 
@@ -76,7 +76,7 @@ fn svc<'a>(s: &'a mut EmbedService, registrar: &ProvenanceRecord) -> AssemblySer
 fn sealed_of(
     s: &EmbedService,
     version_id: &str,
-) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+) -> Result<hharness_hir::document::SealedDefinition, EmbedError> {
     let (_, rec) = s
         .registry
         .get(version_id)
@@ -170,7 +170,7 @@ impl EmbedService {
                 .map(|(k, r)| {
                     Json::obj([
                         ("key", Json::str(k.clone())),
-                        ("report", hh_assembly::diagnostics::report_json(r)),
+                        ("report", hharness_assembly::diagnostics::report_json(r)),
                     ])
                 })
                 .collect(),
@@ -196,7 +196,7 @@ impl EmbedService {
         let b = sealed_of(self, req_str(params, "b")?)?;
         let registrar = self.kernel_prov.clone();
         let d = svc(self, &registrar).diff_sealed(&a, &b);
-        Ok(hh_lab::assembly::diff_view::diff_json(&d))
+        Ok(hharness_lab::assembly::diff_view::diff_json(&d))
     }
 
     /// `lab.assembly.identity` — `{sealed: vid}` → `{semantic_id, version_id}`
@@ -280,15 +280,16 @@ impl EmbedService {
                 reason: "assemble produced no sealed definition".to_string(),
             })?
         };
-        let mut targets: Vec<hh_compiler::link::TargetSpec> = Vec::new();
+        let mut targets: Vec<hharness_compiler::link::TargetSpec> = Vec::new();
         if let Some(Json::Arr(ts)) = params.get("targets") {
             for (i, t) in ts.iter().enumerate() {
                 let spec = match t {
                     Json::Str(id) => crate::bundle_ops::target_spec(id)?,
-                    other => {
-                        hh_compiler::schema::target_spec_from_json(other, &format!("/targets/{i}"))
-                            .map_err(|e| bad(&format!("/targets/{i}"), &format!("{e:?}")))?
-                    }
+                    other => hharness_compiler::schema::target_spec_from_json(
+                        other,
+                        &format!("/targets/{i}"),
+                    )
+                    .map_err(|e| bad(&format!("/targets/{i}"), &format!("{e:?}")))?,
                 };
                 targets.push(spec);
             }
@@ -307,8 +308,8 @@ impl EmbedService {
         // (§5b.3: `expired` requires it, else `LinkError{expired_without_intent}`).
         let intent_ref = opt_str(params, "intent_ref");
         let kernel = self.kernel_prov.clone();
-        let out = hh_compiler::compile(
-            &hh_compiler::CompileInputs {
+        let out = hharness_compiler::compile(
+            &hharness_compiler::CompileInputs {
                 sealed,
                 profile_refs,
                 fallback_profile,
@@ -323,7 +324,7 @@ impl EmbedService {
         );
         match out {
             Ok(b) => {
-                let doc = hh_compiler::schema::bundle_to_json(&b);
+                let doc = hharness_compiler::schema::bundle_to_json(&b);
                 // The canonical bundle member is pool-addressable —
                 // `get_artifact{bundle_id}` and a later `lab.serve`
                 // read it back from the one content-addressed store.
@@ -337,13 +338,14 @@ impl EmbedService {
                 // V-1 — the result record carries `diagnostics` (the
                 // `LinkError{diagnostics}`-convention members verbatim;
                 // `{compile_error}` keeps the Debug spelling).
-                let diags: Vec<hh_assembly::AssemblyDiagnostic> = match &e {
-                    hh_compiler::errors::CompileError::LinkError { diagnostics, .. }
-                    | hh_compiler::errors::CompileError::InvalidDefinition { diagnostics }
-                    | hh_compiler::errors::CompileError::AmbiguousSelector {
-                        diagnostics, ..
+                let diags: Vec<hharness_assembly::AssemblyDiagnostic> = match &e {
+                    hharness_compiler::errors::CompileError::LinkError { diagnostics, .. }
+                    | hharness_compiler::errors::CompileError::InvalidDefinition { diagnostics }
+                    | hharness_compiler::errors::CompileError::AmbiguousSelector {
+                        diagnostics,
+                        ..
                     }
-                    | hh_compiler::errors::CompileError::DialectNarrowingUndeclared {
+                    | hharness_compiler::errors::CompileError::DialectNarrowingUndeclared {
                         diagnostics,
                         ..
                     } => diagnostics.clone(),

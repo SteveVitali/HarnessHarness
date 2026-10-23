@@ -21,13 +21,13 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::branch::{BranchKind, ForkOpts};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{LineageLink, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::LedgerError;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::branch::{BranchKind, ForkOpts};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{LineageLink, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::LedgerError;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 /// `k = 5` — the companion's continuation length per arm (ADR-0077 d7;
 /// `eval_budget` on `turns = 5`).

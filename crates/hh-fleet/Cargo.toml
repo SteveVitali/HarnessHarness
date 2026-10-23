@@ -1,5 +1,5 @@
 [package]
-name = "hh-fleet"
+name = "hharness-fleet"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,12 +10,12 @@ description = "The C4/Stage-4 human-agent organizational layer — the fleet rec
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-ledger = { path = "../hh-ledger" }
-hh-budget = { path = "../hh-budget" }
-hh-monitor = { path = "../hh-monitor" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-budget = { path = "../hh-budget" }
+hharness-monitor = { path = "../hh-monitor" }

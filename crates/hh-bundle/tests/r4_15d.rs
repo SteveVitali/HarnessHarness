@@ -15,19 +15,19 @@
 
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::error::BundleError;
-use hh_bundle::fetch;
-use hh_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
-use hh_bundle::trust::{
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::error::BundleError;
+use hharness_bundle::fetch;
+use hharness_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
+use hharness_bundle::trust::{
     admit, member_fetched_payload, AdmissionClass, FetchRefusal, FetchTrustPolicy, LocationLeg,
     FETCH_TRUST_SCHEMA,
 };
-use hh_bundle::Decoded;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::Decoded;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -45,7 +45,7 @@ fn dir(tag: &str) -> PathBuf {
 /// A `BundleManifest` over one tiny member — the assembled run bundle
 /// minus the members map (the fetch fold resolves through the seams).
 struct Rig {
-    manifest: hh_bundle::manifest::BundleManifest,
+    manifest: hharness_bundle::manifest::BundleManifest,
     member_addr: String,
     member_bytes: Vec<u8>,
 }
@@ -55,7 +55,7 @@ fn rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     let (run, _l) = store.open_run(m, "r415d.test").unwrap();
@@ -639,7 +639,7 @@ fn member_fetched_payload_carries_the_contract_members() {
 
 #[test]
 fn location_scheme_classification() {
-    use hh_bundle::trust::location_scheme;
+    use hharness_bundle::trust::location_scheme;
     assert_eq!(location_scheme("https://a/b"), Some("https".to_string()));
     assert_eq!(location_scheme("ipfs:cid"), Some("ipfs".to_string()));
     assert_eq!(location_scheme("pool:x"), Some("pool".to_string()));

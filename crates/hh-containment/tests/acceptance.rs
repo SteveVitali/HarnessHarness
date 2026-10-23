@@ -1,4 +1,4 @@
-//! Acceptance + unit tests for `hh-containment` (ticket S1.12; R-2.8.4 /
+//! Acceptance + unit tests for `hharness-containment` (ticket S1.12; R-2.8.4 /
 //! §5g.4, the C0/Stage-1 slice).
 //!
 //! Coverage:
@@ -21,41 +21,41 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_containment::admit::{
+use hharness_containment::admit::{
     admit_input, admits, floor_gate, unreachable_permissions, workspace_scope, AdmitInput,
     AdmitVerdict, ContainmentDiff, RefusedReason,
 };
-use hh_containment::attach::{
+use hharness_containment::attach::{
     attach, relied_groups, AttachError, AttachInput, AttachMode, AttachOutcome, PolicySlot,
     SealWarning,
 };
-use hh_containment::backend::{
+use hharness_containment::backend::{
     BackendCaps, ContainmentBackend, Ep2Model, GateVerdict, Syscall, ViolationKind,
 };
-use hh_containment::events;
-use hh_containment::meet::{effective, MeetError};
-use hh_containment::paths;
-use hh_containment::policy::{
+use hharness_containment::events;
+use hharness_containment::meet::{effective, MeetError};
+use hharness_containment::paths;
+use hharness_containment::policy::{
     kernel_default, ContainmentPolicy, EgressRule, HostPattern, NetMode, ReadMode, ResidualChannel,
     ResidualKind, RuleDecision, WritableRoot, KERNEL_PROTECTED,
 };
-use hh_containment::probes;
-use hh_containment::report::{
+use hharness_containment::probes;
+use hharness_containment::report::{
     verify_report, ContainmentReport, EnforcementEvidence, FieldGroup, ProbeKind, ProbeOutcome,
 };
-use hh_hir::kinds::EffectDomain;
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, ScopeBindings};
-use hh_hir::refs::Ref;
-use hh_hir::EffectClass;
-use hh_monitor::args::CanonicalArgs;
-use hh_monitor::assess::AssessmentInputs;
-use hh_monitor::decision::{Decision, DenyReason};
-use hh_monitor::monitor::{ContainmentGate, Monitor, Proposal};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_provenance::{AuthorityClass, Label, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{Grant, GrantConstraints, ScopeBindings};
+use hharness_hir::refs::Ref;
+use hharness_hir::EffectClass;
+use hharness_monitor::args::CanonicalArgs;
+use hharness_monitor::assess::AssessmentInputs;
+use hharness_monitor::decision::{Decision, DenyReason};
+use hharness_monitor::monitor::{ContainmentGate, Monitor, Proposal};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_provenance::{AuthorityClass, Label, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ fn kernel_default_is_the_deny_by_default_floor() {
     assert_eq!(p.net.mode, NetMode::None);
     assert!(p.fs.write.allow.is_empty());
     assert_eq!(p.fs.read.mode, ReadMode::AllowAllExcept);
-    for d in hh_containment::KERNEL_DENY {
+    for d in hharness_containment::KERNEL_DENY {
         assert!(p.fs.read.deny.iter().any(|x| x == d));
     }
     for name in KERNEL_PROTECTED {
@@ -261,7 +261,7 @@ fn meet_sub_principal_loosening_is_containment_widening() {
         assert!(matches!(effective(&[l], 1), Err(MeetError::Widening(_))));
         // And a kernel-only field (`exec` → an allow list).
         let mut l = layer_at(a);
-        l.fs.exec = hh_containment::policy::ExecPolicy::Any;
+        l.fs.exec = hharness_containment::policy::ExecPolicy::Any;
         assert!(matches!(effective(&[l], 1), Err(MeetError::Widening(_))));
     }
 }
@@ -540,7 +540,7 @@ fn ac1_write_containment_protected_and_symlink_escape_deny() {
         b.name(),
         ViolationKind::FsWrite,
         "workspace/.hh/hooks/pre",
-        hh_containment::report::EvidenceKind::KernelLog,
+        hharness_containment::report::EvidenceKind::KernelLog,
         Some("e1"),
     );
     assert_eq!(ev.get("kind").and_then(Json::as_str), Some("fs_write"));
@@ -759,7 +759,7 @@ fn ac8_fail_closed_fault_matrix() {
 
     // backend unsupported — an isolation class above the EP2 model's.
     let mut strong = layer_at(AuthorityClass::Kernel);
-    strong.proc.isolation_class = hh_containment::policy::IsolationClass::Microvm;
+    strong.proc.isolation_class = hharness_containment::policy::IsolationClass::Microvm;
     strong.compute_ids();
     let mut i = base_input(&p, Some(&b));
     i.policy = PolicySlot::Inline(Box::new(strong));
@@ -991,8 +991,10 @@ fn mutate(rng: &mut Rng, p: &mut ContainmentPolicy) {
             protected_metadata_names: vec![],
         }),
         5 => {
-            p.fs.exec =
-                hh_containment::policy::ExecPolicy::Allow(vec![format!("bin{}", rng.below(3))])
+            p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec![format!(
+                "bin{}",
+                rng.below(3)
+            )])
         }
         6 => {
             p.net.mode = if rng.coin() {
@@ -1103,11 +1105,11 @@ fn check_meet_invariants(layers: &[ContainmentPolicy], e: &ContainmentPolicy) {
             w.root
         );
     }
-    if let hh_containment::policy::ExecPolicy::Allow(set) = &e.fs.exec {
+    if let hharness_containment::policy::ExecPolicy::Allow(set) = &e.fs.exec {
         for x in set {
             assert!(
                 declared_by(
-                    &|l: &ContainmentPolicy| matches!(&l.fs.exec, hh_containment::policy::ExecPolicy::Allow(s) if s.contains(x)),
+                    &|l: &ContainmentPolicy| matches!(&l.fs.exec, hharness_containment::policy::ExecPolicy::Allow(s) if s.contains(x)),
                     AuthorityClass::Kernel
                 ),
                 "exec allow {x} never declared by a kernel layer"
@@ -1286,7 +1288,7 @@ fn bare_proposal(domain: EffectDomain, gate: ContainmentGate) -> Proposal {
         effect_id: "e1".into(),
         attempt_no: 1,
         proposer: "test:agent".into(),
-        capability_ref: hh_compiler::plan::PinnedRef {
+        capability_ref: hharness_compiler::plan::PinnedRef {
             semantic_id: "nonexistent".into(),
             version_id: "v".into(),
         },

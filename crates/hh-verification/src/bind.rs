@@ -8,13 +8,13 @@
 //! authoritative evidence).
 //!
 //! The fold is pure over a [`RowView`] projection so the crate stays free of
-//! `hh-ledger`: the driver projects `EventEnvelope`s, the eval plane
+//! `hharness-ledger`: the driver projects `EventEnvelope`s, the eval plane
 //! projects run records — one binding rule, two callers (CC1).
 
 use std::collections::BTreeMap;
 
-use hh_provenance::authority::AuthorityClass;
-use hh_wire::Json;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_wire::Json;
 
 use crate::claims::{binding_kinds, AuthoritativeHandle, Claim, CriterionState, HandleValue};
 use crate::gate::TaskContract;
@@ -756,9 +756,9 @@ mod tests {
         Agreement, ClaimKind, CompletionPolicy, DivergenceClass, ExtractedBy, SubjectRef,
     };
     use crate::vocab::{CriterionRole, VerdictPhase, Visibility};
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
-    use hh_provenance::record::ProvenanceRecord;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
+    use hharness_provenance::record::ProvenanceRecord;
 
     fn prov() -> ProvenanceRecord {
         ProvenanceRecord::minted(Origin::model("m", "r", "call:1"), PersistenceScope::Run, 1)

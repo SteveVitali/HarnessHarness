@@ -17,8 +17,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hh_lab::bench::EnvironmentSpec;
-use hh_ontology::lab::{BenchmarkNetworkMode, HandleCapability, Support};
+use hharness_lab::bench::EnvironmentSpec;
+use hharness_ontology::lab::{BenchmarkNetworkMode, HandleCapability, Support};
 
 /// The filesystem environment's typed failures.
 #[derive(Debug, Clone, PartialEq)]

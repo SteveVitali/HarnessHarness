@@ -19,8 +19,8 @@ use std::os::unix::net::UnixListener;
 use std::process::exit;
 use std::sync::Arc;
 
-use hh_helper::podman::PodmanBackend;
-use hh_helper::server::{serve, HelperServer};
+use hharness_helper::podman::PodmanBackend;
+use hharness_helper::server::{serve, HelperServer};
 
 fn usage() -> ! {
     eprintln!(
@@ -67,7 +67,7 @@ fn main() {
     let srv = Arc::new(HelperServer::new());
     match backend.as_str() {
         "seatbelt" => {
-            if !hh_helper::seatbelt::is_available() {
+            if !hharness_helper::seatbelt::is_available() {
                 eprintln!("hh-helper: backend seatbelt unavailable (no /usr/bin/sandbox-exec)");
                 exit(3);
             }
@@ -81,7 +81,7 @@ fn main() {
                     exit(2);
                 }
             };
-            if !hh_helper::podman::is_available() {
+            if !hharness_helper::podman::is_available() {
                 eprintln!("hh-helper: backend podman unavailable (no reachable podman)");
                 exit(3);
             }

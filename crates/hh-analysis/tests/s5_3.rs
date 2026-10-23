@@ -18,29 +18,29 @@
 
 use std::collections::BTreeMap;
 
-use hh_analysis::{analyze, AnalysisError, AnalysisInput};
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::catalogue;
-use hh_eval::facts::{ArtefactRow, LedgerFacts, VerdictRow};
-use hh_eval::runs::{SuiteContext, TaskContext};
-use hh_lab::analysis::{AnalysisSpec, QuerySpec};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_analysis::{analyze, AnalysisError, AnalysisInput};
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::catalogue;
+use hharness_eval::facts::{ArtefactRow, LedgerFacts, VerdictRow};
+use hharness_eval::runs::{SuiteContext, TaskContext};
+use hharness_lab::analysis::{AnalysisSpec, QuerySpec};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorDeclaration, FactorKind, FactorLevel,
     IntervalMethod, MetricValueKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_results::audit::AuditRef;
-use hh_results::row::{
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_results::audit::AuditRef;
+use hharness_results::row::{
     AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection, ResultsRow,
     RowKey,
 };
-use hh_results::scoring::ScoringContext;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::Json;
+use hharness_results::scoring::ScoringContext;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::Json;
 
 // ── fixture plumbing (mirrors tests/kernel.rs) ───────────────────────────────
 

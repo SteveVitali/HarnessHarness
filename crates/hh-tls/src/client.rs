@@ -3,7 +3,7 @@
 //! `ClientTls` carries the root set and the optional client identity;
 //! `connect` performs the real handshake over the caller's dialed
 //! `TcpStream` (read/write deadlines already set) and returns the
-//! `Read + Write` [`TlsStream`] the `hh_wire::http` codec rides (the
+//! `Read + Write` [`TlsStream`] the `hharness_wire::http` codec rides (the
 //! ADR-0364 D1 "one codec, streams beneath it" rule).
 //!
 //! Posture: verification is **always on** — webpki path validation

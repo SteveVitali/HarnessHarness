@@ -44,12 +44,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::derive::{derive, DerivationInput};
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::{DerivationKind, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::derive::{derive, DerivationInput};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::{DerivationKind, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::compact_family::{CheckpointExtractor, ProviderCompactInput, ProviderCompaction};
 use crate::events::EventSink;
@@ -462,7 +462,7 @@ impl CompactionProposal {
         }
         let preimage = Json::obj(members).to_canonical_string();
         CompactionProposal {
-            proposal_id: hh_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
+            proposal_id: hharness_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
             ops,
             fallback,
             reclaim_estimate,
@@ -731,7 +731,7 @@ pub struct CompactInput<'a> {
     /// checked against: a summary is admitted only into slots with
     /// `min_authority ≤ delegate` (`transcript`, `external`) — a slot absent
     /// here refuses with `PolicyViolation`, never defaults (I-REQ).
-    pub slot_min_authority: BTreeMap<String, hh_provenance::AuthorityClass>,
+    pub slot_min_authority: BTreeMap<String, hharness_provenance::AuthorityClass>,
     /// `context_item_id → body text` — the bodies a `summarize` op's inputs
     /// carry into the port call (the kernel never reads them; a missing
     /// body is `MissingBody`, never a silent empty string — CC3).
@@ -1691,10 +1691,10 @@ pub fn execute(
             .iter()
             .map(|f| f.item.authority)
             .max()
-            .unwrap_or(hh_provenance::AuthorityClass::Unverified);
-        let authority = join_auth.min(hh_provenance::AuthorityClass::Delegate);
+            .unwrap_or(hharness_provenance::AuthorityClass::Unverified);
+        let authority = join_auth.min(hharness_provenance::AuthorityClass::Delegate);
         let mut label = inputs.iter().fold(
-            Label::at(hh_provenance::AuthorityClass::Unverified),
+            Label::at(hharness_provenance::AuthorityClass::Unverified),
             |acc, f| acc.join(&f.item.label),
         );
         label.authority = authority;
@@ -1709,7 +1709,7 @@ pub fn execute(
                 detail: format!("summarize insert_at {insert_at} names no view index"),
             })?;
         match input.slot_min_authority.get(&slot_of_insert) {
-            Some(floor) if *floor <= hh_provenance::AuthorityClass::Delegate => {}
+            Some(floor) if *floor <= hharness_provenance::AuthorityClass::Delegate => {}
             _ => {
                 return Err(CompactError::PolicyViolation {
                     detail: format!(
@@ -1718,7 +1718,7 @@ pub fn execute(
                 })
             }
         }
-        let derived_from_id = hh_identity::idp::idp_id(
+        let derived_from_id = hharness_identity::idp::idp_id(
             COMPACTION_IDP,
             Json::obj([
                 ("kind", Json::str("compaction_summary")),
@@ -1735,7 +1735,7 @@ pub fn execute(
             candidate_id: format!("compaction-summary-{insert_at}"),
             context_item_id: derived_from_id.clone(),
             artefact_id: Some(derived_from_id.clone()),
-            delivery_id: hh_identity::idp::idp_id(
+            delivery_id: hharness_identity::idp::idp_id(
                 crate::plan::DELIVERY_IDP,
                 format!("compact-summary:{}:{}", input.run_id, insert_at).as_bytes(),
             ),
@@ -1792,7 +1792,7 @@ pub fn execute(
         // `valid` when the projection is total — the port's contract).
         let inputs: Vec<&FlatItem> = input_ids.iter().map(|id| by_item[id.as_str()]).collect();
         let label = inputs.iter().fold(
-            Label::at(hh_provenance::AuthorityClass::Unverified),
+            Label::at(hharness_provenance::AuthorityClass::Unverified),
             |acc, f| acc.join(&f.item.label),
         );
         let authority = label.authority;
@@ -1816,7 +1816,7 @@ pub fn execute(
                 })
             }
         }
-        let derived_from_id = hh_identity::idp::idp_id(
+        let derived_from_id = hharness_identity::idp::idp_id(
             COMPACTION_IDP,
             Json::obj([
                 ("kind", Json::str("compaction_checkpoint")),
@@ -1835,7 +1835,7 @@ pub fn execute(
             candidate_id: format!("compaction-checkpoint-{insert_at}"),
             context_item_id: derived_from_id.clone(),
             artefact_id: Some(derived_from_id.clone()),
-            delivery_id: hh_identity::idp::idp_id(
+            delivery_id: hharness_identity::idp::idp_id(
                 crate::plan::DELIVERY_IDP,
                 format!("compact-checkpoint:{}:{}", input.run_id, insert_at).as_bytes(),
             ),
@@ -1897,10 +1897,10 @@ pub fn execute(
             .iter()
             .map(|f| f.item.authority)
             .max()
-            .unwrap_or(hh_provenance::AuthorityClass::Unverified);
-        let authority = join_auth.min(hh_provenance::AuthorityClass::Delegate);
+            .unwrap_or(hharness_provenance::AuthorityClass::Unverified);
+        let authority = join_auth.min(hharness_provenance::AuthorityClass::Delegate);
         let mut label = inputs.iter().fold(
-            Label::at(hh_provenance::AuthorityClass::Unverified),
+            Label::at(hharness_provenance::AuthorityClass::Unverified),
             |acc, f| acc.join(&f.item.label),
         );
         label.authority = authority;
@@ -1913,7 +1913,7 @@ pub fn execute(
                 detail: format!("provider_compact insert_at {insert_at} names no view index"),
             })?;
         match input.slot_min_authority.get(&slot_of_insert) {
-            Some(floor) if *floor <= hh_provenance::AuthorityClass::Delegate => {}
+            Some(floor) if *floor <= hharness_provenance::AuthorityClass::Delegate => {}
             _ => {
                 return Err(CompactError::PolicyViolation {
                     detail: format!(
@@ -1966,7 +1966,7 @@ pub fn execute(
                 }
             }
         }
-        let derived_from_id = hh_identity::idp::idp_id(
+        let derived_from_id = hharness_identity::idp::idp_id(
             COMPACTION_IDP,
             Json::obj([
                 ("kind", Json::str("compaction_summary")),
@@ -1989,7 +1989,7 @@ pub fn execute(
             candidate_id: format!("provider-compaction-{insert_at}"),
             context_item_id: derived_from_id.clone(),
             artefact_id: Some(derived_from_id.clone()),
-            delivery_id: hh_identity::idp::idp_id(
+            delivery_id: hharness_identity::idp::idp_id(
                 crate::plan::DELIVERY_IDP,
                 format!("compact-provider:{}:{}", input.run_id, insert_at).as_bytes(),
             ),
@@ -2047,17 +2047,17 @@ pub fn execute(
                     placeholder_count += 1;
                     let omission = PlannedItem {
                         candidate_id: format!("kernel-omission-{}", f.flat_index),
-                        context_item_id: hh_identity::idp::idp_id(
+                        context_item_id: hharness_identity::idp::idp_id(
                             crate::plan::OMISSION_ITEM_IDP,
                             format!("compact:{}:{}", input.run_id, f.flat_index).as_bytes(),
                         ),
                         artefact_id: None,
-                        delivery_id: hh_identity::idp::idp_id(
+                        delivery_id: hharness_identity::idp::idp_id(
                             crate::plan::DELIVERY_IDP,
                             format!("compact-del:{}:{}", input.run_id, f.flat_index).as_bytes(),
                         ),
-                        authority: hh_provenance::authority::AuthorityClass::Kernel,
-                        label: Label::at(hh_provenance::authority::AuthorityClass::Kernel),
+                        authority: hharness_provenance::authority::AuthorityClass::Kernel,
+                        label: Label::at(hharness_provenance::authority::AuthorityClass::Kernel),
                         tokens: OMISSION_ITEM_TOKENS,
                         state: CandidateState::Expanded,
                         delivered_by_reference: false,
@@ -2135,7 +2135,7 @@ pub fn op_output_record(
     inputs: &[DerivationInput],
     scope: PersistenceScope,
     at: u64,
-) -> Result<ProvenanceRecord, hh_provenance::record::ProvenanceError> {
+) -> Result<ProvenanceRecord, hharness_provenance::record::ProvenanceError> {
     match op_kind {
         "offload" | "restructure" => derive(
             DerivationKind::Projection,
@@ -2540,7 +2540,7 @@ pub fn mint_record(
     ])
     .to_canonical_string();
     CompactionRecord {
-        compaction_id: hh_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
+        compaction_id: hharness_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
         variant_ref: variant_ref.to_string(),
         trigger: input.trigger.clone(),
         requirement: assessment.requirement,

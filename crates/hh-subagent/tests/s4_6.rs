@@ -1,38 +1,42 @@
 //! S4.6 acceptance matrix — AC-R-2.6.3-1…12 + AC-R-2.1.6-4 + KP-14/16–21
-//! fault-injection over the real `hh-ledger` store (no mocks at the ledger
+//! fault-injection over the real `hharness-ledger` store (no mocks at the ledger
 //! seam — the spawn path is exercised end-to-end).
 
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::plan::PinnedRef;
-use hh_env::handle::{DeriveMode, OnParentEnd};
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::audit::{CheckpointKind, FixedSigner};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::merge::{merge, project_merge_report, MergeCtx, MergeInput, MergeOpts, MergeVeto};
-use hh_subagent::messaging::{inbox_scan, relay_set, send_message, SendCtx};
-use hh_subagent::ownership::OwnershipTable;
-use hh_subagent::recovery::{cancel_on_revocation, recover_parent};
-use hh_subagent::result::{
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::plan::PinnedRef;
+use hharness_env::handle::{DeriveMode, OnParentEnd};
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::audit::{CheckpointKind, FixedSigner};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_subagent::merge::{
+    merge, project_merge_report, MergeCtx, MergeInput, MergeOpts, MergeVeto,
+};
+use hharness_subagent::messaging::{inbox_scan, relay_set, send_message, SendCtx};
+use hharness_subagent::ownership::OwnershipTable;
+use hharness_subagent::recovery::{cancel_on_revocation, recover_parent};
+use hharness_subagent::result::{
     cancel_unresponsive, child_terminal_view, detach_to_child, drain_child_terminal,
     drain_on_parent_stop, record_child_result, ChildTerminalView,
 };
-use hh_subagent::spawn::{
+use hharness_subagent::spawn::{
     child_run_id_for, live_children, spawn, EnvDeriver, SpawnCtx, SpawnHook, SpawnPhase,
 };
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -326,7 +330,7 @@ fn has_child_terminal_sub(p: &Parent, child_run_id: &str) -> bool {
         .any(|w| {
             matches!(
                 &w.trigger,
-                hh_ledger::wakeup::Trigger::ChildTerminal { child_run_id: c } if c == child_run_id
+                hharness_ledger::wakeup::Trigger::ChildTerminal { child_run_id: c } if c == child_run_id
             )
         })
 }
@@ -573,7 +577,7 @@ fn ac6_result_row_is_refs_never_transcript() {
             &mut FixedSigner::new("test-key", b"s4.6-test-signing-key".to_vec()),
         )
         .unwrap();
-    let claim = hh_ledger::tree::parse_checkpoint(&checkpoint.payload).unwrap();
+    let claim = hharness_ledger::tree::parse_checkpoint(&checkpoint.payload).unwrap();
     let mut view = child_terminal_view(&p.store, &spawned.child_run_id).unwrap();
     assert!(view.finished);
     let child_head = view.child_head.as_ref().unwrap();
@@ -587,7 +591,7 @@ fn ac6_result_row_is_refs_never_transcript() {
     );
     assert_eq!(
         child_head.get("checkpoint_ref").and_then(Json::as_str),
-        Some(hh_ledger::tree::checkpoint_idp(&claim.payload).as_str())
+        Some(hharness_ledger::tree::checkpoint_idp(&claim.payload).as_str())
     );
     view.artifacts = vec![Json::str("art:child-out")];
     view.summary = Some(Json::str("art:child-summary"));
@@ -651,7 +655,7 @@ fn ac6_result_row_is_refs_never_transcript() {
             &mut FixedSigner::new("test-key", b"s4.6-test-signing-key".to_vec()),
         )
         .unwrap();
-    let parent_claim = hh_ledger::tree::parse_checkpoint(&parent_checkpoint.payload).unwrap();
+    let parent_claim = hharness_ledger::tree::parse_checkpoint(&parent_checkpoint.payload).unwrap();
     let anchor = parent_claim
         .cross_run_anchors
         .iter()
@@ -675,7 +679,7 @@ fn ac6_result_row_is_refs_never_transcript() {
     );
     assert_eq!(
         other_head.get("tree_head").and_then(Json::as_str),
-        Some(hh_ledger::tree::mth(&child_leaves).as_str())
+        Some(hharness_ledger::tree::mth(&child_leaves).as_str())
     );
     // The live-children fold sees a terminal row — the child no longer counts.
     assert_eq!(live_children(&p.store, &p.run_id).unwrap(), 0);
@@ -816,7 +820,7 @@ fn ac10_peer_message_sent_and_refused_rows() {
             sender_lease: &p.lease,
             to: &child_run,
             body: b"hello",
-            delivery_mode: hh_ledger::wakeup::DeliveryMode::FollowUp,
+            delivery_mode: hharness_ledger::wakeup::DeliveryMode::FollowUp,
             idempotency_key: "ac10-msg-1",
             policy: &policy,
             caps: MessageCaps::KERNEL,
@@ -839,10 +843,10 @@ fn ac10_peer_message_sent_and_refused_rows() {
         .and_then(Json::as_str)
         .expect("body ref")
         .to_string();
-    let parsed = hh_identity::idp::parse_id(&body_ref).unwrap();
+    let parsed = hharness_identity::idp::parse_id(&body_ref).unwrap();
     let body = p
         .store
-        .get_blob(&hh_identity::idp::ContentAddress {
+        .get_blob(&hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex,
@@ -867,7 +871,7 @@ fn ac10_peer_message_sent_and_refused_rows() {
             sender_lease: &p.lease,
             to: &child_run,
             body: b"hello",
-            delivery_mode: hh_ledger::wakeup::DeliveryMode::FollowUp,
+            delivery_mode: hharness_ledger::wakeup::DeliveryMode::FollowUp,
             idempotency_key: "ac10-msg-1",
             policy: &policy,
             caps: MessageCaps::KERNEL,
@@ -892,7 +896,7 @@ fn ac10_peer_message_sent_and_refused_rows() {
             sender_lease: &p.lease,
             to: &child_run,
             body: b"different",
-            delivery_mode: hh_ledger::wakeup::DeliveryMode::FollowUp,
+            delivery_mode: hharness_ledger::wakeup::DeliveryMode::FollowUp,
             idempotency_key: "ac10-msg-1",
             policy: &policy,
             caps: MessageCaps::KERNEL,
@@ -916,7 +920,7 @@ fn ac10_peer_message_sent_and_refused_rows() {
             sender_lease: &child_lease,
             to: "sub-other",
             body: b"nope",
-            delivery_mode: hh_ledger::wakeup::DeliveryMode::FollowUp,
+            delivery_mode: hharness_ledger::wakeup::DeliveryMode::FollowUp,
             idempotency_key: "ac10-msg-2",
             policy: &policy,
             caps: MessageCaps::KERNEL,

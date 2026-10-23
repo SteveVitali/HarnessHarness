@@ -5,14 +5,14 @@ mod common;
 
 use common::*;
 
-use hh_hir::document::{parse_document, HirDocument};
-use hh_hir::errors::HirError;
-use hh_hir::kinds::{EdgeKind, EntityKind, JudgeProfile, ValidatorKind};
-use hh_hir::records::*;
-use hh_hir::refs::Ref;
-use hh_hir::validate;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord, TaintTag};
-use hh_wire::json::Json;
+use hharness_hir::document::{parse_document, HirDocument};
+use hharness_hir::errors::HirError;
+use hharness_hir::kinds::{EdgeKind, EntityKind, JudgeProfile, ValidatorKind};
+use hharness_hir::records::*;
+use hharness_hir::refs::Ref;
+use hharness_hir::validate;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord, TaintTag};
+use hharness_wire::json::Json;
 
 fn errs(doc: &HirDocument) -> Vec<HirError> {
     validate(doc).expect_err("document must not validate")
@@ -34,7 +34,7 @@ fn missing_provenance_fails_parse_and_validate() {
     // DF-S1.3-1: `provenance` absent on a node → `MissingProvenance` at parse.
     let doc = valid_doc();
     let bytes = doc.canonical_bytes();
-    let mut j = hh_wire::canonical::parse_canonical(&bytes).unwrap();
+    let mut j = hharness_wire::canonical::parse_canonical(&bytes).unwrap();
     if let Json::Obj(m) = &mut j {
         let nodes = m.get_mut("nodes").unwrap();
         if let Json::Arr(ns) = nodes {
@@ -196,7 +196,7 @@ fn delegation_attenuation_is_enforced() {
     ));
     doc.nodes
         .push(agent_node("test:agent2", "test:budget", "test:perm2", 10));
-    doc.edges.push(hh_hir::document::Edge::new(
+    doc.edges.push(hharness_hir::document::Edge::new(
         EdgeKind::DelegatedTo,
         "test:agent",
         "test:agent2",
@@ -230,10 +230,10 @@ fn uncovered_procedure_effect_is_effect_uncovered() {
     // Give the tool a declared fs_write effect.
     if let KindRecord::ToolCapability(t) = &mut doc.nodes.last_mut().unwrap().semantic {
         let mut set = std::collections::BTreeSet::new();
-        set.insert(hh_hir::kinds::EffectClass::domain_only(
-            hh_hir::kinds::EffectDomain::FsWrite,
+        set.insert(hharness_hir::kinds::EffectClass::domain_only(
+            hharness_hir::kinds::EffectDomain::FsWrite,
         ));
-        t.effects = hh_hir::kinds::ToolEffects::Declared(set);
+        t.effects = hharness_hir::kinds::ToolEffects::Declared(set);
     }
     let mut steps_proc = node(
         EntityKind::Procedure,
@@ -328,12 +328,12 @@ fn judge_validator_needs_debt_and_nondeterminism() {
         KindRecord::Validator(ValidatorRecord {
             kind: ValidatorKind::Judge(Box::new(JudgeProfile {
                 rubric: text("rubric", 30),
-                profile: hh_hir::refs::ProfileRef {
+                profile: hharness_hir::refs::ProfileRef {
                     profile: "sha256:profile".into(),
                     pinned: true,
                 },
                 calibration_ref: None,
-                charged_to: hh_hir::kinds::ChargedTo::Subject,
+                charged_to: hharness_hir::kinds::ChargedTo::Subject,
             })),
             inputs: vec![],
             verdict_type: "verdict".into(),
@@ -364,7 +364,7 @@ fn hosted_body_refuses_none_mechanism_and_bad_version_identity() {
     let mut doc = hosted_doc();
     if let KindRecord::AgentProcess(a) = &mut doc.nodes[3].semantic {
         if let AgentProcessBody::Hosted(h) = &mut a.body {
-            h.hosting_mechanism = hh_ontology::participant::HostingMechanism::None;
+            h.hosting_mechanism = hharness_ontology::participant::HostingMechanism::None;
         }
     }
     let es = errs(&doc);
@@ -393,7 +393,7 @@ fn hosted_body_refuses_none_mechanism_and_bad_version_identity() {
 fn opaque_step_without_interface_is_refused() {
     // O1: a `CompiledPayload` step needs a declared interface.
     let mut doc = valid_doc();
-    let payload = hh_hir::leaves::CompiledPayload {
+    let payload = hharness_hir::leaves::CompiledPayload {
         format_tag: "wasm".into(),
         bytes_hash: "sha256:aa".into(),
         declared_interface: None,
@@ -443,8 +443,8 @@ fn ext_key_discipline() {
 #[test]
 fn unclassified_kind_wiring() {
     // The boundary check: ontology refuses an unregistered identifier.
-    assert!(hh_ontology::planes::classify_home_identifier("NotAKind").is_err());
-    assert!(hh_ontology::planes::classify_home_identifier("Goal").is_ok());
+    assert!(hharness_ontology::planes::classify_home_identifier("NotAKind").is_err());
+    assert!(hharness_ontology::planes::classify_home_identifier("Goal").is_ok());
 }
 
 #[test]

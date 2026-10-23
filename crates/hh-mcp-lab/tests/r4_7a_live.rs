@@ -18,7 +18,9 @@
 
 use std::time::{Duration, Instant};
 
-use hh_mcp_lab::oauth::{self, BearerVerdict, DeviceFlow, OAuthIssuer, PollOutcome, Transport};
+use hharness_mcp_lab::oauth::{
+    self, BearerVerdict, DeviceFlow, OAuthIssuer, PollOutcome, Transport,
+};
 
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
@@ -114,7 +116,7 @@ fn r47a_oauth_device_complete() {
         result("skipped(no-state — run initiate first)");
         return;
     };
-    let j = hh_wire::json::parse(&state).unwrap_or(hh_wire::json::Json::Null);
+    let j = hharness_wire::json::parse(&state).unwrap_or(hharness_wire::json::Json::Null);
     let device_code = j.get("device_code").and_then(|v| v.as_str()).unwrap_or("");
     let interval = j.get("interval_s").and_then(|v| v.as_int()).unwrap_or(5) as u64;
     let deadline_ms = j.get("deadline_ms").and_then(|v| v.as_int()).unwrap_or(0) as u64;
@@ -170,7 +172,7 @@ fn r47a_oauth_device_complete() {
         BearerVerdict::Valid { subject } => {
             println!(
                 "OAUTH_SUBJECT_SHA256 {}",
-                hh_wire::sha256::sha256_hex(subject.as_bytes())
+                hharness_wire::sha256::sha256_hex(subject.as_bytes())
             );
             println!("OAUTH_SUBJECT_LEN {}", subject.len());
             result("pass");

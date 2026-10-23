@@ -1,6 +1,6 @@
 //! Stage 1 — `link(sealed, profile_refs[], target_refs[], variant_view?)` (§3.2.2).
 //!
-//! Runs `hh_assembly::link_precheck` **first** — any surviving `version_selector` is a
+//! Runs `hharness_assembly::link_precheck` **first** — any surviving `version_selector` is a
 //! `C-LINK-1` `LinkError{unbound_slot}` (this is the DF-S1.9-3 consumer half: the
 //! compiler never re-resolves, it *refuses*). Then: binds the profile chain, binds the
 //! declared targets, checks `capability_requires` preconditions (ADR-0087), conditioned-
@@ -10,12 +10,12 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
-use hh_hir::{records::KindRecord, refs::RefVersion, SealedDefinition};
-use hh_provenance::ProvenanceRecord;
-use hh_registry::records::{RegistryRecord, VariantRecord};
-use hh_registry::RegistryStore;
-use hh_wire::json::Json;
+use hharness_assembly::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
+use hharness_hir::{records::KindRecord, refs::RefVersion, SealedDefinition};
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::records::{RegistryRecord, VariantRecord};
+use hharness_registry::RegistryStore;
+use hharness_wire::json::Json;
 
 use crate::errors::{CompileError, LinkErrorKind};
 use crate::profile::{
@@ -213,7 +213,7 @@ pub fn link(
     let mut diagnostics: Vec<AssemblyDiagnostic> = Vec::new();
 
     // ── link_precheck FIRST — a surviving selector is C-LINK-1 (DF-S1.9-3). ───────
-    if let Err(diags) = hh_assembly::link_precheck(sealed) {
+    if let Err(diags) = hharness_assembly::link_precheck(sealed) {
         return Err(CompileError::LinkError {
             kind: LinkErrorKind::UnboundSlot,
             detail: "an unpinned selector reaches link — the compiler never re-resolves"
@@ -478,7 +478,7 @@ pub fn link(
             if r.conditioned_on.is_some() {
                 match &r.assumption_debt {
                     Some(d) if debt_complete(d) => {
-                        if d.status == hh_hir::DebtStatus::Expired {
+                        if d.status == hharness_hir::DebtStatus::Expired {
                             expired.push(diag(
                                 Code::LinkExpiredRule,
                                 Severity::Warning,
@@ -575,7 +575,7 @@ pub fn link(
         );
         for (rule_id, debt) in &record.conditioned_rules {
             if debt_complete(debt) {
-                if debt.status == hh_hir::DebtStatus::Expired {
+                if debt.status == hharness_hir::DebtStatus::Expired {
                     expired.push(diag(
                         Code::LinkExpiredRule,
                         Severity::Warning,
@@ -617,10 +617,10 @@ pub fn link(
         if let KindRecord::ToolCapability(t) = &node.semantic {
             let needs = t
                 .preconditions
-                .contains(&hh_hir::PreconditionDomain::Capability);
+                .contains(&hharness_hir::PreconditionDomain::Capability);
             if needs {
                 let satisfied = doc.edges_from(&node.semantic_id()).any(|e| {
-                    e.kind == hh_hir::EdgeKind::DependsOn
+                    e.kind == hharness_hir::EdgeKind::DependsOn
                         && doc
                             .node(&e.to)
                             .map(|n| matches!(n.semantic, KindRecord::ToolCapability(_)))
@@ -662,7 +662,7 @@ pub fn link(
         s
     };
     for node in &doc.nodes {
-        if let Some(hh_hir::SurfaceRecord::Tool(ts)) = &node.surface {
+        if let Some(hharness_hir::SurfaceRecord::Tool(ts)) = &node.surface {
             if let Some(d) = ts
                 .as_ref()
                 .schema_dialect_narrowing
@@ -842,10 +842,10 @@ pub fn link(
 /// A decode failure propagates the codec's typed `C-LOAD-*` diagnostics —
 /// a malformed constraint reaching link is refused, never skipped.
 fn definition_profile_constraint(
-    doc: &hh_hir::HirDocument,
+    doc: &hharness_hir::HirDocument,
     kernel: &ProvenanceRecord,
-) -> Result<Option<hh_assembly::grammar::ProfileConstraint>, CompileError> {
-    use hh_assembly::grammar::{Assembly, ProfileBinding};
+) -> Result<Option<hharness_assembly::grammar::ProfileConstraint>, CompileError> {
+    use hharness_assembly::grammar::{Assembly, ProfileBinding};
     let Some(j) = &doc.assembly else {
         return Ok(None);
     };
@@ -871,7 +871,7 @@ fn definition_profile_constraint(
 /// axis must read `declared | probed` (`unknown`/unrecognised never coerces —
 /// the same rule the router's G-2 applies).
 fn check_profile_constraint(
-    c: &hh_assembly::grammar::ProfileConstraint,
+    c: &hharness_assembly::grammar::ProfileConstraint,
     head: &ModelProfile,
     kernel: &ProvenanceRecord,
 ) -> Result<(), CompileError> {
@@ -911,7 +911,7 @@ fn check_profile_constraint(
         }
     }
     if let Some(p) = &s.version_pattern {
-        if !hh_ontology::eval::pattern_subsumes(
+        if !hharness_ontology::eval::pattern_subsumes(
             p,
             &head.selector.version_pattern,
             s.model_family.as_deref().unwrap_or(""),
@@ -946,10 +946,10 @@ fn check_profile_constraint(
 
 /// The definition's pinned profile coordinate, when `native.profile` or
 /// `assembly.profile_binding` pins one.
-fn definition_pinned_profile(doc: &hh_hir::HirDocument) -> Option<String> {
+fn definition_pinned_profile(doc: &hharness_hir::HirDocument) -> Option<String> {
     for node in &doc.nodes {
         if let KindRecord::AgentProcess(ap) = &node.semantic {
-            if let hh_hir::AgentProcessBody::Native(n) = &ap.body {
+            if let hharness_hir::AgentProcessBody::Native(n) = &ap.body {
                 if n.profile.pinned && !n.profile.is_unbound() {
                     return Some(n.profile.profile.clone());
                 }
@@ -963,15 +963,17 @@ fn definition_pinned_profile(doc: &hh_hir::HirDocument) -> Option<String> {
 /// the sealed `assembly.slots` (both pinned post-`link_precheck`). Keyed `slot` (a
 /// duplicate slot name across scopes collides by design — the root's slots are the
 /// bound set).
-fn all_slot_bindings(doc: &hh_hir::HirDocument) -> BTreeMap<String, hh_hir::records::SlotBinding> {
+fn all_slot_bindings(
+    doc: &hharness_hir::HirDocument,
+) -> BTreeMap<String, hharness_hir::records::SlotBinding> {
     let mut out = BTreeMap::new();
     for node in &doc.nodes {
         if let KindRecord::AgentProcess(ap) = &node.semantic {
-            if let hh_hir::AgentProcessBody::Native(n) = &ap.body {
+            if let hharness_hir::AgentProcessBody::Native(n) = &ap.body {
                 for (slot, bindings) in &n.slots {
-                    let all: Vec<&hh_hir::records::SlotBinding> = match bindings {
-                        hh_hir::records::SlotBindings::One(b) => vec![b],
-                        hh_hir::records::SlotBindings::Many(bs) => bs.iter().collect(),
+                    let all: Vec<&hharness_hir::records::SlotBinding> = match bindings {
+                        hharness_hir::records::SlotBindings::One(b) => vec![b],
+                        hharness_hir::records::SlotBindings::Many(bs) => bs.iter().collect(),
                     };
                     for b in all {
                         out.insert(slot.clone(), b.clone());
@@ -986,9 +988,10 @@ fn all_slot_bindings(doc: &hh_hir::HirDocument) -> BTreeMap<String, hh_hir::reco
     if let Some(j) = &doc.assembly {
         if let Some(Json::Obj(slots)) = j.get("slots") {
             for (slot, v) in slots {
-                if let Ok(b) =
-                    hh_hir::wire::slot_binding_from_json(v, &format!("/assembly/slots/{slot}"))
-                {
+                if let Ok(b) = hharness_hir::wire::slot_binding_from_json(
+                    v,
+                    &format!("/assembly/slots/{slot}"),
+                ) {
                     out.entry(slot.clone()).or_insert(b);
                 } else if let Ok(bs) = parse_slot_list(v, slot) {
                     for b in bs {
@@ -1004,13 +1007,16 @@ fn all_slot_bindings(doc: &hh_hir::HirDocument) -> BTreeMap<String, hh_hir::reco
 fn parse_slot_list(
     v: &Json,
     slot: &str,
-) -> Result<Vec<hh_hir::records::SlotBinding>, hh_hir::HirError> {
+) -> Result<Vec<hharness_hir::records::SlotBinding>, hharness_hir::HirError> {
     match v {
         Json::Arr(items) => items
             .iter()
             .enumerate()
             .map(|(i, item)| {
-                hh_hir::wire::slot_binding_from_json(item, &format!("/assembly/slots/{slot}[{i}]"))
+                hharness_hir::wire::slot_binding_from_json(
+                    item,
+                    &format!("/assembly/slots/{slot}[{i}]"),
+                )
             })
             .collect(),
         _ => Ok(Vec::new()),
@@ -1019,7 +1025,7 @@ fn parse_slot_list(
 
 /// The §3.1 `AssumptionDebtRecord` completeness check (definition/variant home):
 /// every field populated.
-fn debt_complete(d: &hh_hir::records::AssumptionDebtRecord) -> bool {
+fn debt_complete(d: &hharness_hir::records::AssumptionDebtRecord) -> bool {
     // The `/1` required set (§5h.6 §3; REQUIRED_FIELDS_BASE ∪ {removal_test}).
     !d.rule_id.is_empty()
         && !d.hypothesis.content_hash.is_empty()

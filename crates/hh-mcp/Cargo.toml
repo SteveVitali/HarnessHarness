@@ -1,5 +1,5 @@
 [package]
-name = "hh-mcp"
+name = "hharness-mcp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,27 +14,27 @@ name = "hh-mcp-serve"
 path = "src/bin/hh-mcp-serve.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
 # The binary decodes `hh-bundle/1` directories/containers (the lib's
 # lowering is over member bytes only — the dep serves `hh-mcp-serve`).
-hh-bundle = { path = "../hh-bundle" }
-# S4.5b — the `McpExecutor` is a `ToolExecutor`; `hh-hir`/`hh-containment`
+hharness-bundle = { path = "../hh-bundle" }
+# S4.5b — the `McpExecutor` is a `ToolExecutor`; `hharness-hir`/`hharness-containment`
 # name its declaration's domains/isolation.
-hh-env = { path = "../hh-env" }
-hh-hir = { path = "../hh-hir" }
-hh-containment = { path = "../hh-containment" }
+hharness-env = { path = "../hh-env" }
+hharness-hir = { path = "../hh-hir" }
+hharness-containment = { path = "../hh-containment" }
 # R2.14 — the propagation carrier's `_meta` shape (`dev.cognition/
-# propagation`) is hh-telemetry's single definition (CC1).
-hh-telemetry = { path = "../hh-telemetry" }
+# propagation`) is hharness-telemetry's single definition (CC1).
+hharness-telemetry = { path = "../hh-telemetry" }
 
 [dev-dependencies]
 # The paused-arm integration fixture (DF-S3.9-1): a real Dispatcher over a
-# scripted transport needs the same crates hh-env's own acceptance tests use.
-hh-compiler = { path = "../hh-compiler" }
-hh-context = { path = "../hh-context" }
-hh-ledger = { path = "../hh-ledger" }
-hh-monitor = { path = "../hh-monitor" }
-hh-ontology = { path = "../hh-ontology" }
-hh-provenance = { path = "../hh-provenance" }
-hh-secrets = { path = "../hh-secrets" }
+# scripted transport needs the same crates hharness-env's own acceptance tests use.
+hharness-compiler = { path = "../hh-compiler" }
+hharness-context = { path = "../hh-context" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-monitor = { path = "../hh-monitor" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-secrets = { path = "../hh-secrets" }

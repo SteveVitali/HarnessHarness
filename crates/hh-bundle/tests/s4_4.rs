@@ -1,4 +1,4 @@
-//! `hh-bundle` S4.4 tests — `ReproReport{independent}` (§5h.3 §2's
+//! `hharness-bundle` S4.4 tests — `ReproReport{independent}` (§5h.3 §2's
 //! record; R-2.9.3 C1/Stage-4 "`ReproReport` sidecar with
 //! `independent`"): the spec's four-valued `verdict`, the declared
 //! `reproducer`/`reproducer_instrument` members, and
@@ -6,9 +6,9 @@
 //! interim rule, ADR-0295). Every assertion fails if the members or the
 //! computation are removed.
 
-use hh_bundle::manifest::ReproLevel;
-use hh_bundle::repro::{compute_independence, ReproOutcome, ReproReport};
-use hh_wire::json::Json;
+use hharness_bundle::manifest::ReproLevel;
+use hharness_bundle::repro::{compute_independence, ReproOutcome, ReproReport};
+use hharness_wire::json::Json;
 
 /// A declared `ProvenanceRecord` JSON — `signer` lands as an attestation
 /// anchor (the one scheme a signing claim takes; CC1).

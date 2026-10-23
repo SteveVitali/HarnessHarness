@@ -34,14 +34,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::pricing::Confidence;
-use hh_budget::quantity::PPM_SCALE;
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::EvalRun;
-use hh_eval::scorecard::run_numeric;
-use hh_eval::stats::{self, Interval};
-use hh_ontology::compliance::MetricDeclaration;
-use hh_wire::Json;
+use hharness_budget::pricing::Confidence;
+use hharness_budget::quantity::PPM_SCALE;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::EvalRun;
+use hharness_eval::scorecard::run_numeric;
+use hharness_eval::stats::{self, Interval};
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_wire::Json;
 
 /// One aggregated frontier candidate — an arm's realized
 /// `(cost, capability)` over one `(provenance_class, currency)` slice.
@@ -287,7 +287,7 @@ pub fn aggregate(
     let mut no_spend: Vec<String> = Vec::new();
     for r in runs {
         let f = facts.get(&r.run_id);
-        let spend_rows: &[hh_eval::facts::SpendRowFact] =
+        let spend_rows: &[hharness_eval::facts::SpendRowFact] =
             f.map(|f| f.spend_rows.as_slice()).unwrap_or(&[]);
         if spend_rows.is_empty() {
             no_spend.push(r.run_id.clone());

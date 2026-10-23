@@ -1,4 +1,4 @@
-//! `hh-bundle` — the reproducible-bundle plane (spec §5h.3; R-2.9.3⁰;
+//! `hharness-bundle` — the reproducible-bundle plane (spec §5h.3; R-2.9.3⁰;
 //! ticket S3.1; ADR-0139/0140/0141).
 //!
 //! Layering (ADR-0038's three-layer split):

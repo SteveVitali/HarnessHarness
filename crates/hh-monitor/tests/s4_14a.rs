@@ -21,18 +21,18 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::plan::PinnedRef;
-use hh_monitor::approval::{
+use hharness_compiler::plan::PinnedRef;
+use hharness_monitor::approval::{
     auto_review_failure_denies, check_auto_review_binding, grant_approver, revoke_approver,
     ApprovalError, ApprovalMode, ApprovalOption, ApprovalOptionId, ApprovalRequest,
     ApprovalResponse, ApprovalState, ApproverGrant, AutoReviewBindingError, EndorserRef,
     Explanation, PermissionRequest, RespondCtx, ResponseChoice, ReviewerBinding,
 };
-use hh_monitor::decision::{Decision, DecisionScope};
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::origin::{HumanRole, Origin};
-use hh_provenance::record::ProvenanceRecord;
+use hharness_monitor::decision::{Decision, DecisionScope};
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::record::ProvenanceRecord;
 
 /// A human-principal provenance record — the grant-bootstrap grantor.
 fn principal(author: &str) -> ProvenanceRecord {
@@ -457,10 +457,10 @@ fn a_reviewer_failure_denies_above_reversible() {
 
 #[test]
 fn grant_rows_fold_into_live_grants() {
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-    use hh_wire::json::Json;
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_wire::json::Json;
     use std::collections::BTreeSet;
 
     let env = |seq: u64, class: &str, payload: Json| EventEnvelope {
@@ -510,8 +510,11 @@ fn grant_rows_fold_into_live_grants() {
 
     let mut revoked_payload = grant.to_json();
     if let Json::Obj(m) = &mut revoked_payload {
-        m.insert("revoked_at".into(), hh_wire::json::Json::Int(20));
-        m.insert("revoker".into(), hh_wire::json::Json::str("human:alice"));
+        m.insert("revoked_at".into(), hharness_wire::json::Json::Int(20));
+        m.insert(
+            "revoker".into(),
+            hharness_wire::json::Json::str("human:alice"),
+        );
     }
     let events = vec![
         env(1, "security.permission.grant_issued", grant.to_json()),

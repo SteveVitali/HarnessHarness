@@ -15,15 +15,15 @@
 //! the GitHub REST lane (the token is broker-held; `subprocess_confined`
 //! placement admits no network egress) and pins the issue snapshot into
 //! `issues[]` at bind; the plugin normalizes through the one shared
-//! `hh_fleet::github` mapping (CC1 — never a second dialect codec).
+//! `hharness_fleet::github` mapping (CC1 — never a second dialect codec).
 
 use std::collections::BTreeSet;
 
-use hh_fleet::capabilities::{AdapterCapabilities, CapState};
-use hh_fleet::errors::FleetError;
-use hh_fleet::github::{self, GithubConfig, GITHUB_SOURCE_SCHEMA};
-use hh_fleet::source::SourceOccurrence;
-use hh_wire::json::Json;
+use hharness_fleet::capabilities::{AdapterCapabilities, CapState};
+use hharness_fleet::errors::FleetError;
+use hharness_fleet::github::{self, GithubConfig, GITHUB_SOURCE_SCHEMA};
+use hharness_fleet::source::SourceOccurrence;
+use hharness_wire::json::Json;
 
 use crate::tracker::TrackerLogic;
 

@@ -25,8 +25,8 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use hh_ledger::store::Store;
-use hh_wire::json::{parse as json_parse, Json};
+use hharness_ledger::store::Store;
+use hharness_wire::json::{parse as json_parse, Json};
 
 use crate::catalogue::BundleStatus;
 use crate::error::ResultsError;
@@ -375,7 +375,7 @@ pub fn set_status(
             .map(String::from),
         evidence,
         provenance: authority.clone(),
-        created_at: hh_ledger::store::rfc3339_ms(store.now_ms()),
+        created_at: hharness_ledger::store::rfc3339_ms(store.now_ms()),
     };
     // The ledger-visible event on the subject run (§5h.3 §3) — the book
     // fold reads it back; the persisted book stays a cache.

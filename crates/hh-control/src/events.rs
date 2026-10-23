@@ -1,6 +1,6 @@
 //! The `control.*` ledger-row payload builders (§5e.1/§5e.2 ledger rows;
 //! ADR-0106/0107/0108). Every builder returns the canonical payload `Json` —
-//! the driver wraps it in an [`hh_ledger::event::Event`] with a kernel
+//! the driver wraps it in an [`hharness_ledger::event::Event`] with a kernel
 //! [`Producer`]; the class shapes are the registered `classes.rs` rows
 //! (`control.decision`, `control.retry.scheduled`, `control.timeout.fired`,
 //! `control.loop.detected`, `control.output.rejected`,
@@ -8,10 +8,10 @@
 //! `lifecycle.run.finished`). No free text — ids, enums, ints and refs only
 //! (the refusal `detail_ref` is a content address, never rejected bytes).
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_ontology::control::{InvariantId, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::control::{InvariantId, StopReason};
+use hharness_wire::json::Json;
 
 use crate::policy::LadderAction;
 use crate::state::PlanCursor;
@@ -19,7 +19,7 @@ use crate::state::{decision_point_str, owner_str};
 use crate::vocab::{ControlDecision, Decider, GuardPoint, ScopeKind, SettledOutcome};
 
 /// `HH-CONTROL` — the producer component id for every envelope/driver row.
-pub const COMPONENT: &str = "hh-control";
+pub const COMPONENT: &str = "hharness-control";
 
 /// The kernel producer stamp for this crate's rows.
 pub fn producer() -> Producer {
@@ -158,8 +158,8 @@ pub fn timeout_fired_payload(
 /// `control.loop.detected{detector, pattern{cycle_len, repeats, loop_keys[]},
 /// evidence_refs[], action, ladder_position, validator_ref?}` (§5e.2).
 pub fn loop_detected_payload(
-    detector: hh_ontology::control::LoopDetectorKind,
-    pattern: &hh_ontology::control::LoopPattern,
+    detector: hharness_ontology::control::LoopDetectorKind,
+    pattern: &hharness_ontology::control::LoopPattern,
     evidence_refs: &[String],
     action: LadderAction,
     ladder_position: u32,
@@ -278,7 +278,7 @@ pub fn turn_finished_payload(reason: &StopReason) -> Json {
 /// `control.guard.fired{decision_point, guard_id}` — the ledgered spelling of
 /// the `guard_fired` cue (CF-229).
 pub fn guard_fired_payload(
-    decision_point: hh_ontology::control::DecisionPoint,
+    decision_point: hharness_ontology::control::DecisionPoint,
     guard_id: &str,
 ) -> Json {
     Json::obj([
@@ -357,8 +357,8 @@ pub fn settled_outcome_json(o: &SettledOutcome) -> Json {
 mod tests {
     use super::*;
     use crate::vocab::{DecisionKind, DecisionStamp};
-    use hh_ontology::control::DecisionPoint;
-    use hh_ontology::control::Owner;
+    use hharness_ontology::control::DecisionPoint;
+    use hharness_ontology::control::Owner;
 
     #[test]
     fn decision_payload_carries_the_full_stamp() {

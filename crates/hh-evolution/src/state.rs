@@ -17,7 +17,7 @@
 //! held-out gates before S6 resumes; it never bypasses S5.
 //! ```
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// The state spellings — the `to`/`from` member vocabulary of
@@ -219,7 +219,7 @@ pub struct Transition {
 impl Transition {
     /// Decode the payload members the fold consumes (tolerant — the fold
     /// is over durable rows, all members optional).
-    pub fn from_event(e: &hh_ledger::event::EventEnvelope) -> Transition {
+    pub fn from_event(e: &hharness_ledger::event::EventEnvelope) -> Transition {
         let p = &e.payload;
         let s = |k: &str| p.get(k).and_then(Json::as_str).map(str::to_string);
         Transition {

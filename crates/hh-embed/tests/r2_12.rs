@@ -13,20 +13,20 @@
 //! The surface seam is the honest driver (the r2_11 battery's shape):
 //! a surface run, dispatch-shape `pending` rows appended through the
 //! append gate, answers through `surface_respond_permission` — the
-//! same op `hh-mcp-lab`'s `respond_approval` tool calls. The dispatch-
+//! same op `hharness-mcp-lab`'s `respond_approval` tool calls. The dispatch-
 //! side consume (attestation verify + replay + the endorsement mint)
 //! is `hh-env/tests/r2_12.rs`.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::PermissionOutcome;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_monitor::approval::{
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::PermissionOutcome;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_monitor::approval::{
     ApprovalMode, ApprovalOption, ApprovalOptionId, ApprovalRequest, Explanation, PermissionRequest,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -72,7 +72,7 @@ fn request(pid: &str, options: Vec<ApprovalOptionId>, remedies: Vec<Json>) -> Ap
         permission_id: pid.to_string(),
         request: PermissionRequest {
             subject_ref: "test:agent".to_string(),
-            capability_ref: hh_compiler::plan::PinnedRef {
+            capability_ref: hharness_compiler::plan::PinnedRef {
                 semantic_id: "test:fetch".to_string(),
                 version_id: "v-cap".to_string(),
             },
@@ -93,7 +93,7 @@ fn request(pid: &str, options: Vec<ApprovalOptionId>, remedies: Vec<Json>) -> Ap
             .iter()
             .enumerate()
             .map(|(i, r)| {
-                hh_provenance::flow::Remedy::from_json(r, &format!("remedies[{i}]")).unwrap()
+                hharness_provenance::flow::Remedy::from_json(r, &format!("remedies[{i}]")).unwrap()
             })
             .collect(),
     }
@@ -108,11 +108,11 @@ fn pending_event(
     effect_id: &str,
     options: Vec<ApprovalOptionId>,
     remedies: Vec<Json>,
-) -> hh_ledger::event::Event {
-    let m = hh_env::events::EventMinter::new(svc.store(), run_id);
+) -> hharness_ledger::event::Event {
+    let m = hharness_env::events::EventMinter::new(svc.store(), run_id);
     m.mint(
         "security.permission.pending",
-        hh_monitor::approval::pending_payload(
+        hharness_monitor::approval::pending_payload(
             &request(pid, options, remedies),
             effect_id,
             svc.store().now_ms(),
@@ -121,7 +121,7 @@ fn pending_event(
     .unwrap()
 }
 
-fn events(svc: &EmbedService, run_id: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn events(svc: &EmbedService, run_id: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     svc.surface_events(run_id).unwrap().to_vec()
 }
 
@@ -324,7 +324,7 @@ fn r212_remedy_not_offered_refuses() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::OptionNotOffered { .. }
+            hharness_embed_schema::errors::EmbedError::OptionNotOffered { .. }
         ),
         "an unoffered remedy refuses OptionNotOffered: {err:?}"
     );
@@ -356,7 +356,7 @@ fn r212_remedy_not_offered_refuses() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::OptionNotOffered { .. }
+            hharness_embed_schema::errors::EmbedError::OptionNotOffered { .. }
         ),
         "a remedy answer on a no-offer pending refuses: {err:?}"
     );
@@ -404,7 +404,7 @@ fn r212_remedy_malformed_refuses() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::SchemaViolation { .. }
+            hharness_embed_schema::errors::EmbedError::SchemaViolation { .. }
         ),
         "a non-decode is SchemaViolation, never a guessed kind: {err:?}"
     );

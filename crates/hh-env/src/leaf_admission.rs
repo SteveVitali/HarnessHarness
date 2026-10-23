@@ -21,7 +21,7 @@
 //! makes the leaf grammar unreadable and the walk refuses rather than guess
 //! (T-LCD-15).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The leaf-walk budget — per-leaf records cost one payload member each
 /// (OQ-146's capacity question); a result past the bound is non-admissible
@@ -102,7 +102,7 @@ fn collect(
         return Err(LeafWalkFailure::UncoveredLeaf(path.to_string()));
     };
     for k in m.keys() {
-        if !hh_verification::validators::CONFORMANCE_ADMITTED_KEYWORDS.contains(&k.as_str()) {
+        if !hharness_verification::validators::CONFORMANCE_ADMITTED_KEYWORDS.contains(&k.as_str()) {
             return Err(LeafWalkFailure::UncheckedKeyword(k.clone()));
         }
     }

@@ -7,11 +7,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::diff::{DiffClassification, DiffOp};
-use hh_identity::sameness::SamenessLevel;
-use hh_wire::json::Json;
+use hharness_hir::diff::{DiffClassification, DiffOp};
+use hharness_identity::sameness::SamenessLevel;
+use hharness_wire::json::Json;
 
-/// `L0..L4` spellings (hh-identity keeps the enum bare — the label is a view).
+/// `L0..L4` spellings (hharness-identity keeps the enum bare — the label is a view).
 pub fn sameness_name(s: SamenessLevel) -> &'static str {
     match s {
         SamenessLevel::L0 => "L0",

@@ -33,8 +33,8 @@
 
 use std::collections::BTreeSet;
 
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_wire::Json;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_wire::Json;
 
 use crate::critics::{
     CalibrationRecord, CriticDeclaration, CriticError, CriticVerdict, PanelRecord,
@@ -604,11 +604,11 @@ mod tests {
     use crate::vocab::{
         AdmissionMode, CalibrationStatus, CriticUse, EvidenceMode, Site, VerdictType,
     };
-    use hh_identity::kinds::RecordKind;
-    use hh_identity::refs::VersionedRef;
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
-    use hh_provenance::record::ProvenanceRecord;
+    use hharness_identity::kinds::RecordKind;
+    use hharness_identity::refs::VersionedRef;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
+    use hharness_provenance::record::ProvenanceRecord;
 
     fn prov(scope: PersistenceScope) -> ProvenanceRecord {
         ProvenanceRecord::minted(Origin::kernel("hir/kernel/critic"), scope, 1)

@@ -1,5 +1,5 @@
 [package]
-name = "hh-results"
+name = "hharness-results"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,15 +10,15 @@ description = "The C0/Stage-3 results store slice (spec §6.5, R-2.10.5⁰; tick
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-ontology = { path = "../hh-ontology" }
-hh-ledger = { path = "../hh-ledger" }
-hh-budget = { path = "../hh-budget" }
-hh-eval = { path = "../hh-eval" }
-hh-bundle = { path = "../hh-bundle" }
-hh-lab = { path = "../hh-lab" }
-hh-experiment = { path = "../hh-experiment" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-budget = { path = "../hh-budget" }
+hharness-eval = { path = "../hh-eval" }
+hharness-bundle = { path = "../hh-bundle" }
+hharness-lab = { path = "../hh-lab" }
+hharness-experiment = { path = "../hh-experiment" }
 
 [dev-dependencies]
-hh-provenance = { path = "../hh-provenance" }
+hharness-provenance = { path = "../hh-provenance" }

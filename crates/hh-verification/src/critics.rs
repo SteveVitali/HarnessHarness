@@ -7,10 +7,10 @@
 
 use std::collections::BTreeSet;
 
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::evidence::{grounding_of, EvidenceBundle};
 use crate::validators::Finding;
@@ -843,9 +843,9 @@ impl ProgrammaticCritic for ReconciliationAgreementCritic {
 mod tests {
     use super::*;
     use crate::vocab::SeverityLevel;
-    use hh_identity::kinds::RecordKind;
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
+    use hharness_identity::kinds::RecordKind;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
 
     fn prov(authority_scope: PersistenceScope) -> ProvenanceRecord {
         ProvenanceRecord::minted(Origin::kernel("hir/kernel/critic"), authority_scope, 1)

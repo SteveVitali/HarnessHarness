@@ -26,19 +26,19 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_mcp_lab::binding::{
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_mcp_lab::binding::{
     stdio_launch_binding, CallerBinding, CallerCredential, CallerKind, CredentialRefusal,
     SubjectKind,
 };
-use hh_mcp_lab::server::LabServer;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_mcp_lab::server::LabServer;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── store/service fixtures (same shape as the s5_8 battery) ────────
 
@@ -420,15 +420,15 @@ fn read_until(stream: &mut TcpStream, buf: &mut String, needle: &str, within: Du
 /// owner of `srv` for the test's remainder; the main thread only does
 /// client-side socket IO.
 fn spawn_http(srv: LabServer, listener: std::net::TcpListener) {
-    let origins = hh_mcp::http::OriginPolicy::new(&[], false);
+    let origins = hharness_mcp::http::OriginPolicy::new(&[], false);
     let srv_ptr = Box::into_raw(Box::new(srv)) as usize;
     let listener_ptr = Box::into_raw(Box::new(listener)) as usize;
     let origins_ptr = Box::into_raw(Box::new(origins)) as usize;
     std::thread::spawn(move || {
         let srv = unsafe { &mut *(srv_ptr as *mut LabServer) };
         let listener = unsafe { &*(listener_ptr as *const std::net::TcpListener) };
-        let origins = unsafe { &*(origins_ptr as *const hh_mcp::http::OriginPolicy) };
-        let _ = hh_mcp_lab::http::serve_http(srv, listener, origins);
+        let origins = unsafe { &*(origins_ptr as *const hharness_mcp::http::OriginPolicy) };
+        let _ = hharness_mcp_lab::http::serve_http(srv, listener, origins);
     });
 }
 
@@ -534,7 +534,7 @@ fn sse_get_streams_pushed_notifications_and_resumes() {
     );
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
     let body = r.split("\r\n\r\n").nth(1).unwrap_or("");
-    let frame = hh_wire::json::parse(body).unwrap();
+    let frame = hharness_wire::json::parse(body).unwrap();
     let run_id = frame
         .get("result")
         .and_then(|x| x.get("structuredContent"))

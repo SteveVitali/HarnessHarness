@@ -1,16 +1,18 @@
-//! hh-bench acceptance tests — the adapter contract out of process
+//! hharness-bench acceptance tests — the adapter contract out of process
 //! (AC-R-2.9.4-{3,5,6,11}; S3.3).
 
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use hh_bench::adapter::BenchmarkAdapter;
-use hh_bench::adapters::FixtureAdapter;
-use hh_bench::grade::{grade, parse_typed_reward, GradeError, GradeRequest, RewardParseError};
-use hh_bench::infra::{detect_infrastructure_failure, InfraClass, InfraSignal};
-use hh_bench::records::EnvironmentHandle;
-use hh_ontology::lab::VerifierIsolation;
-use hh_wire::Json;
+use hharness_bench::adapter::BenchmarkAdapter;
+use hharness_bench::adapters::FixtureAdapter;
+use hharness_bench::grade::{
+    grade, parse_typed_reward, GradeError, GradeRequest, RewardParseError,
+};
+use hharness_bench::infra::{detect_infrastructure_failure, InfraClass, InfraSignal};
+use hharness_bench::records::EnvironmentHandle;
+use hharness_ontology::lab::VerifierIsolation;
+use hharness_wire::Json;
 
 const BIN: &str = env!("CARGO_BIN_EXE_hh-bench-adapter");
 
@@ -30,7 +32,7 @@ fn adapter_rpc(req: Json) -> (i32, Json) {
     let text = String::from_utf8_lossy(&out.stdout).to_string();
     (
         out.status.code().unwrap_or(-1),
-        hh_wire::parse(&text).expect("response not canonical JSON"),
+        hharness_wire::parse(&text).expect("response not canonical JSON"),
     )
 }
 
@@ -40,7 +42,7 @@ fn task_id_of(adapter: &str, held_out: bool) -> String {
         .into_iter()
         .find(|id| {
             let t = a.task(id).unwrap();
-            (t.split_label == hh_ontology::lab::SplitLabel::HeldOut) == held_out
+            (t.split_label == hharness_ontology::lab::SplitLabel::HeldOut) == held_out
         })
         .unwrap()
 }
@@ -101,7 +103,7 @@ fn infra_classification() {
     );
     assert_eq!(
         InfraClass::VerifierTimeout.outcome_class(),
-        Some(hh_ontology::control::OutcomeClass::OracleFailure)
+        Some(hharness_ontology::control::OutcomeClass::OracleFailure)
     );
 
     let env_died = InfraSignal {
@@ -114,7 +116,7 @@ fn infra_classification() {
     );
     assert_eq!(
         InfraClass::EnvironmentDied.outcome_class(),
-        Some(hh_ontology::control::OutcomeClass::InfrastructureFailure)
+        Some(hharness_ontology::control::OutcomeClass::InfrastructureFailure)
     );
 
     let ambiguous = InfraSignal {
@@ -154,7 +156,7 @@ fn in_process_lifecycle() {
         !std::path::Path::new(&env.root)
             .join("verifier/expected.bin")
             .exists()
-            || env.surface == hh_bench::records::Surface::Search
+            || env.surface == hharness_bench::records::Surface::Search
     );
     // The participant writes a correct submission.
     std::fs::write(
@@ -173,7 +175,7 @@ fn in_process_lifecycle() {
         })
         .unwrap();
     assert_eq!(result.reward_ppm, 1_000_000);
-    assert_eq!(result.verdict, hh_ontology::eval::LatticeValue::N);
+    assert_eq!(result.verdict, hharness_ontology::eval::LatticeValue::N);
     assert!(result.separate_verifier);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -214,7 +216,7 @@ fn verifier_failure_is_oracle_failure() {
     let task_id = task_id_of("adapter_a", false);
     let task = a.task(&task_id).unwrap();
     let req = GradeRequest {
-        submission: hh_bench::records::Submission {
+        submission: hharness_bench::records::Submission {
             submission_id: "s1".into(),
             task_id: task_id.clone(),
             artifact_refs: vec![],
@@ -324,7 +326,7 @@ fn expose_on_verifier_handle_refuses() {
     let venv = a
         .materialize(&task_id, dir.to_str().unwrap(), true)
         .unwrap();
-    assert_eq!(venv.surface, hh_bench::records::Surface::Instrument);
+    assert_eq!(venv.surface, hharness_bench::records::Surface::Instrument);
     // The verifier root carries the staged held-out bytes.
     assert!(std::path::Path::new(&venv.root)
         .join("expected.bin")
@@ -333,7 +335,7 @@ fn expose_on_verifier_handle_refuses() {
     let err = a.expose(&venv, "profile/test").unwrap_err();
     assert!(matches!(
         err,
-        hh_bench::adapter::AdapterError::HeldOutBoundaryViolation(_)
+        hharness_bench::adapter::AdapterError::HeldOutBoundaryViolation(_)
     ));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -345,15 +347,15 @@ fn unenforceable_network_refuses() {
     let a = FixtureAdapter::adapter_a();
     let task_id = task_id_of("adapter_a", false);
     let mut t = a.task(&task_id).unwrap();
-    t.environment.network_mode = hh_ontology::lab::BenchmarkNetworkMode::Open;
-    let err = hh_bench::env::FsEnv::materialize(
+    t.environment.network_mode = hharness_ontology::lab::BenchmarkNetworkMode::Open;
+    let err = hharness_bench::env::FsEnv::materialize(
         std::path::Path::new("/tmp/hh-bench-l4-refuse"),
         &t.environment,
     )
     .unwrap_err();
     assert!(matches!(
         err,
-        hh_bench::env::FsEnvError::UnenforceableNetwork(_)
+        hharness_bench::env::FsEnvError::UnenforceableNetwork(_)
     ));
 }
 
@@ -367,14 +369,14 @@ fn _handle_marker(_: &EnvironmentHandle) {}
 /// fixture runs containerless through the kernel-internal file handle.
 #[test]
 fn family_unsupported_and_structured_tool_containerless() {
-    use hh_bench::adapter::{check_handle_requirements, AdapterError};
-    use hh_ontology::lab::{HandleCapability, Support};
+    use hharness_bench::adapter::{check_handle_requirements, AdapterError};
+    use hharness_ontology::lab::{HandleCapability, Support};
     // `handle.network` is declared `unsupported` by the fixture env; a
     // family requiring it refuses, naming the missing capability.
     let requires = [(HandleCapability::Network, Support::Required)]
         .into_iter()
         .collect();
-    match check_handle_requirements(&requires, &hh_bench::env::FsEnv::declared_support()) {
+    match check_handle_requirements(&requires, &hharness_bench::env::FsEnv::declared_support()) {
         Err(AdapterError::FamilyUnsupported { missing }) => {
             assert_eq!(missing, vec!["handle.network".to_string()]);
         }
@@ -384,7 +386,7 @@ fn family_unsupported_and_structured_tool_containerless() {
     let requires = [(HandleCapability::Computer, Support::Required)]
         .into_iter()
         .collect();
-    match check_handle_requirements(&requires, &hh_bench::env::FsEnv::declared_support()) {
+    match check_handle_requirements(&requires, &hharness_bench::env::FsEnv::declared_support()) {
         Err(AdapterError::FamilyUnsupported { missing }) => {
             assert_eq!(missing, vec!["handle.computer".to_string()]);
         }
@@ -401,7 +403,7 @@ fn family_unsupported_and_structured_tool_containerless() {
         .unwrap();
     assert_eq!(
         h.family,
-        hh_ontology::lab::EnvironmentFamily::StructuredTool
+        hharness_ontology::lab::EnvironmentFamily::StructuredTool
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -411,9 +413,9 @@ fn family_unsupported_and_structured_tool_containerless() {
 /// `resolved_image_digest = None`; the stock adapters are all pinned.
 #[test]
 fn unpinned_tag_only_caps_claimed_level() {
-    use hh_bench::adapter::{is_pinned_image_digest, AdapterError};
-    use hh_bench::adapters::fixture_task;
-    use hh_ontology::lab::{
+    use hharness_bench::adapter::{is_pinned_image_digest, AdapterError};
+    use hharness_bench::adapters::fixture_task;
+    use hharness_ontology::lab::{
         ContaminationStratum, EnvironmentFamily, HandleCapability, SplitLabel, Support,
         VerifierIsolation,
     };
@@ -492,13 +494,13 @@ fn unpinned_tag_only_caps_claimed_level() {
 /// any other benefit kind refuses (the parity record's invariant).
 #[test]
 fn parity_report_requires_artifact_benefit() {
-    use hh_lab::analysis::{
+    use hharness_lab::analysis::{
         BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity, OutcomeBounds,
         OutcomeBoundsVerdict, PairedEffect, ReportLabelKind, SignProfile, TailEffects, TestKind,
         TestRecord,
     };
-    use hh_ontology::eval::{BootstrapPairedMethod, EstimatorSelection, IntervalMethod};
-    let rep = |kind: hh_lab::analysis::BenefitKind| ComparisonReport {
+    use hharness_ontology::eval::{BootstrapPairedMethod, EstimatorSelection, IntervalMethod};
+    let rep = |kind: hharness_lab::analysis::BenefitKind| ComparisonReport {
         arm_a: "orig".into(),
         arm_b: "replay".into(),
         metric: "task_success".into(),
@@ -553,20 +555,20 @@ fn parity_report_requires_artifact_benefit() {
             substituted: None,
         },
     };
-    let p = hh_bench::parity::parity_report(
+    let p = hharness_bench::parity::parity_report(
         "runner/original",
         vec!["r1".into(), "r2".into(), "r3".into()],
         vec!["v1".into(), "v2".into(), "v3".into()],
-        rep(hh_lab::analysis::BenefitKind::ArtifactBenefit),
+        rep(hharness_lab::analysis::BenefitKind::ArtifactBenefit),
     )
     .unwrap();
     assert_eq!(p.replay_verdicts.len(), 3);
     assert_eq!(p.original_runner_ref, "runner/original");
-    assert!(hh_bench::parity::parity_report(
+    assert!(hharness_bench::parity::parity_report(
         "runner/original",
         vec![],
         vec![],
-        rep(hh_lab::analysis::BenefitKind::SearchTimeBenefit),
+        rep(hharness_lab::analysis::BenefitKind::SearchTimeBenefit),
     )
     .is_err());
 }

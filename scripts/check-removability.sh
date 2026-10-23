@@ -57,35 +57,36 @@ run_helper_leg() {
 mkdir -p target/check-removability
 
 echo "== removability(0): hh-helper without tier-c1 =="
-cargo build -p hh-helper --no-default-features
+cargo build -p hharness-helper --no-default-features
 run_helper_leg target/check-removability/rem0-helper_live.log \
     env HH_REM0=1 HH_HELPER_BIN="$PWD/target/debug/hh-helper" \
-    cargo test -p hh-env --test helper_live ac_s2_removability0 -- --nocapture
+    cargo test -p hharness-env --test helper_live ac_s2_removability0 -- --nocapture
 
 echo "== tier-c1 restore + the unchanged tier-1 suite =="
-cargo build -p hh-helper
+cargo build -p hharness-helper
 run_helper_leg target/check-removability/helper_live.log \
-    cargo test -p hh-env --test helper_live
+    cargo test -p hharness-env --test helper_live
 
 echo "check-removability: OK (tier-0 honest refusals verified; tier-1 suite green)"
 
-echo "== removability(0): the S2.3 C1 surface (hh-ledger + hh-env) =="
+echo "== removability(0): the S2.3 C1 surface (hharness-ledger + hharness-env) =="
 # S2.3 (§5a.3 C1): scoped leases, `suspend`, wakeup subscriptions and
-# `compensate_run` are `tier-c1` on hh-ledger; `HealingPolicy` healing is
-# `tier-c1` on hh-env (which forwards the feature). Absent => typed
+# `compensate_run` are `tier-c1` on hharness-ledger; `HealingPolicy` healing is
+# `tier-c1` on hharness-env (which forwards the feature). Absent => typed
 # `UnsupportedTier{tier:"c1"}` / `Unsupported{heal}` refusals (CC6).
-cargo build -p hh-ledger --no-default-features
-cargo build -p hh-env --no-default-features
-cargo test -p hh-ledger --no-default-features --test durable_execution removability0
+cargo build -p hharness-ledger --no-default-features
+cargo build -p hharness-env --no-default-features
+cargo test -p hharness-ledger --no-default-features --test durable_execution removability0
 
 echo "== removability(extension): no base crate depends on the variant host =="
-# S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and the
+# S2.2 (§8.4 removability tiers): hharness-varhost, hh-plugin-fixture and the
 # packaged plugin binaries (hh-compact-evict-oldest; S4.16b's hh-memory-store;
-# S5.6's hh-tracker-fixture — the packaged `work_source_adapter` reference
-# variant) are the extension tier — removable without breaking the base class
+# S5.6's hh-tracker-fixture + R4.7's hh-github-issues — the packaged
+# `work_source_adapter` variants) are the extension tier — removable without
+# breaking the base class
 # contracts. The check: no *other* workspace crate names them as a normal
 # dependency (dev-dependency edges don't ship).
-EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest hh-memory-store hh-tracker-fixture"
+EXT="hharness-varhost hharness-plugin-fixture hharness-compact-evict-oldest hharness-memory-store hharness-tracker-fixture hharness-github-issues"
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 ext=set(sys.argv[1].split())
@@ -106,21 +107,21 @@ print('extension tier is edge-free into the base (removable)')
 
 echo "check-removability: extension tier verified removable"
 
-echo "== removability(hosting): no crate depends on hh-hosting =="
+echo "== removability(hosting): no crate depends on hharness-hosting =="
 # S3.4d (§6.6; AC-R-2.10.6-5): the Hosting ABI schema crate is a removable
 # tier — `hosting_edges = []`: no HIR entity, C0 contract or other workspace
-# crate names hh-hosting as a normal dependency (the projection's class data
-# lives in hh-ledger's `hosted_lowering` column — data, not a dependency —
+# crate names hharness-hosting as a normal dependency (the projection's class data
+# lives in hharness-ledger's `hosted_lowering` column — data, not a dependency —
 # so removing the crate removes the whole tier; T-LCD-06).
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 meta=json.load(sys.stdin)
 bad=[]
 for pkg in meta['packages']:
-    if pkg['name'] == 'hh-hosting':
+    if pkg['name'] == 'hharness-hosting':
         continue
     for d in pkg['dependencies']:
-        if d['name'] == 'hh-hosting' and d.get('kind') in (None, 'normal'):
+        if d['name'] == 'hharness-hosting' and d.get('kind') in (None, 'normal'):
             bad.append(pkg['name'] + ' -> ' + d['name'])
 if bad:
     print('hosting-tier edges into the base:')
@@ -135,8 +136,8 @@ echo "== removability(S4.6): C1 subagent slice independent; C3 is its only consu
 # §5e.3 CC6 note: the C1 `spawn` slice must survive removability(1); the
 # C3 orchestrator is the removable consumer. `cargo metadata` reports a
 # normal dependency's `kind` as null — accept both null and "normal" here.
-cargo build -p hh-subagent
-cargo test -p hh-subagent
+cargo build -p hharness-subagent
+cargo test -p hharness-subagent
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 meta=json.load(sys.stdin)
@@ -148,36 +149,36 @@ for pkg in meta['packages']:
     for d in pkg['dependencies']:
         if not normal(d):
             continue
-        if name == 'hh-subagent' and d['name'] == 'hh-orchestrator':
-            bad.append('hh-subagent -> hh-orchestrator (C1 depends on C3)')
-        if d['name'] == 'hh-subagent' and name != 'hh-subagent':
+        if name == 'hharness-subagent' and d['name'] == 'hharness-orchestrator':
+            bad.append('hharness-subagent -> hharness-orchestrator (C1 depends on C3)')
+        if d['name'] == 'hharness-subagent' and name != 'hharness-subagent':
             consumers.append(name)
-        if d['name'] == 'hh-orchestrator' and name != 'hh-orchestrator':
-            bad.append(name + ' -> hh-orchestrator (C3 is not removable)')
-extra=sorted(set(consumers)-{'hh-orchestrator'})
+        if d['name'] == 'hharness-orchestrator' and name != 'hharness-orchestrator':
+            bad.append(name + ' -> hharness-orchestrator (C3 is not removable)')
+extra=sorted(set(consumers)-{'hharness-orchestrator'})
 for name in extra:
-    bad.append(name + ' -> hh-subagent (C1 consumer outside C3)')
+    bad.append(name + ' -> hharness-subagent (C1 consumer outside C3)')
 if bad:
     print('subagent removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-subagent is edge-free upward; hh-orchestrator is its only consumer')
+print('hharness-subagent is edge-free upward; hharness-orchestrator is its only consumer')
 "
 
 echo "check-removability: S4.6 subagent/orchestrator boundary verified"
 
-echo "== removability(S4.9): C4 fleet tier — hh-fleet optional; hh-embed is its only consumer =="
-# §5i.1 CC6: the organizational layer is a removable tier. `hh-embed`'s
-# `tier-c4` feature and S5.6's `hh-fleet-adapter` (the L5 plugin boundary —
+echo "== removability(S4.9): C4 fleet tier — hharness-fleet optional; hharness-embed is its only consumer =="
+# §5i.1 CC6: the organizational layer is a removable tier. `hharness-embed`'s
+# `tier-c4` feature and S5.6's `hharness-fleet-adapter` (the L5 plugin boundary —
 # itself C4-tier and leaf-consumed only by the packaged fixture binary) are
 # the consumers (the embed edge an *optional* dependency); absent ⇒ the
 # `fleet.*` ops stay in the schema (CC7 single source) and answer
 # `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
-# Lower tiers are untouched: hh-fleet consumes hh-ledger / hh-budget /
-# hh-monitor / hh-embed-schema and nothing below C4 depends on hh-fleet.
-cargo build -p hh-embed --no-default-features
-cargo build -p hh-embed
-cargo build -p hh-fleet
+# Lower tiers are untouched: hharness-fleet consumes hharness-ledger / hharness-budget /
+# hharness-monitor / hharness-embed-schema and nothing below C4 depends on hh-fleet.
+cargo build -p hharness-embed --no-default-features
+cargo build -p hharness-embed
+cargo build -p hharness-fleet
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 meta=json.load(sys.stdin)
@@ -188,49 +189,49 @@ for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
         if not normal(d):
-            continue  # dev-deps don't ship (hh-varhost's fixture test consumes hh-fleet dev-only)
-        if name == 'hh-fleet' and d['name'] == 'hh-embed':
-            bad.append('hh-fleet -> hh-embed (C4 depends on its consumer)')
-        if d['name'] == 'hh-fleet' and name != 'hh-fleet':
+            continue  # dev-deps don't ship (hharness-varhost's fixture test consumes hharness-fleet dev-only)
+        if name == 'hharness-fleet' and d['name'] == 'hharness-embed':
+            bad.append('hharness-fleet -> hharness-embed (C4 depends on its consumer)')
+        if d['name'] == 'hharness-fleet' and name != 'hharness-fleet':
             consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
 for name, kind in consumers:
-    if name == 'hh-embed' and kind == 'REQUIRED':
-        bad.append('hh-embed -> hh-fleet must be OPTIONAL (tier-c4 feature)')
-    elif name not in ('hh-embed', 'hh-fleet-adapter'):
-        bad.append(name + ' -> hh-fleet (consumer outside the C4 boundary)')
-# hh-fleet-adapter is the C4 L5 boundary — leaf-consumed only by the
-# packaged fixture binary (itself extension-tier). Anything else depending
-# on it is an upward edge.
+    if name == 'hharness-embed' and kind == 'REQUIRED':
+        bad.append('hharness-embed -> hharness-fleet must be OPTIONAL (tier-c4 feature)')
+    elif name not in ('hharness-embed', 'hharness-fleet-adapter'):
+        bad.append(name + ' -> hharness-fleet (consumer outside the C4 boundary)')
+# hharness-fleet-adapter is the C4 L5 boundary — leaf-consumed only by the
+# packaged adapter variants (hh-tracker-fixture, hh-github-issues — both
+# extension-tier). Anything else depending on it is an upward edge.
 for pkg in meta['packages']:
     name = pkg['name']
     for d in pkg['dependencies']:
         if not normal(d):
             continue
-        if d['name'] == 'hh-fleet-adapter' and name not in ('hh-fleet-adapter', 'hh-tracker-fixture'):
-            bad.append(name + ' -> hh-fleet-adapter (consumer outside the C4/extension tier)')
+        if d['name'] == 'hharness-fleet-adapter' and name not in ('hharness-fleet-adapter', 'hharness-tracker-fixture', 'hharness-github-issues'):
+            bad.append(name + ' -> hharness-fleet-adapter (consumer outside the C4/extension tier)')
 for pkg in meta['packages']:
-    if pkg['name'] != 'hh-embed':
+    if pkg['name'] != 'hharness-embed':
         continue
     feats = pkg.get('features', {})
     if 'tier-c4' not in feats:
-        bad.append('hh-embed missing the tier-c4 feature gate')
+        bad.append('hharness-embed missing the tier-c4 feature gate')
 if bad:
     print('fleet removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-fleet is edge-free upward; hh-embed (optional) + hh-fleet-adapter are its only consumers')
+print('hharness-fleet is edge-free upward; hharness-embed (optional) + hharness-fleet-adapter are its only consumers')
 "
 
 echo "check-removability: S4.9 fleet boundary verified"
 
-echo "== removability(S6.1a): C4 evolution tier — hh-evolution optional; hh-embed is its only consumer =="
-# §05h CC6: the evolution pipeline is a removable C4 slice. `hh-embed`'s
+echo "== removability(S6.1a): C4 evolution tier — hharness-evolution optional; hharness-embed is its only consumer =="
+# §05h CC6: the evolution pipeline is a removable C4 slice. `hharness-embed`'s
 # `tier-c4` feature is the only consumer (an *optional* dependency);
 # absent ⇒ the `lab.evolution.*` ops stay in the schema (CC7 single
 # source) and answer `Unsupported{by: "tier-c4"}` — a typed refusal,
-# never silent degrade (the `cargo build -p hh-embed
+# never silent degrade (the `cargo build -p hharness-embed
 # --no-default-features` leg above already proves the absent-tier
-# build). hh-evolution consumes only kernel-side crates — never a
+# build). hharness-evolution consumes only kernel-side crates — never a
 # surface, never its consumer.
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
@@ -239,46 +240,46 @@ normal=lambda d: d.get('kind') in (None,'normal')
 bad=[]
 consumers=[]
 allowed_deps={
-    'hh-wire','hh-identity','hh-ontology','hh-provenance','hh-hir',
-    'hh-ledger','hh-budget','hh-lab','hh-experiment',
-    # S6.2 — hh-registry is kernel-side; the proposer conformance
+    'hharness-wire','hharness-identity','hharness-ontology','hharness-provenance','hharness-hir',
+    'hharness-ledger','hharness-budget','hharness-lab','hharness-experiment',
+    # S6.2 — hharness-registry is kernel-side; the proposer conformance
     # driver reports the registry's ConformanceVerdict (CC7 — the
     # verdict sum has one owner).
-    'hh-registry',
+    'hharness-registry',
 }
 for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
         if not normal(d):
             continue
-        if name == 'hh-evolution':
-            if d['name'] == 'hh-embed':
-                bad.append('hh-evolution -> hh-embed (C4 depends on its consumer)')
+        if name == 'hharness-evolution':
+            if d['name'] == 'hharness-embed':
+                bad.append('hharness-evolution -> hharness-embed (C4 depends on its consumer)')
             if d['name'] not in allowed_deps:
-                bad.append('hh-evolution -> ' + d['name'] + ' (non-kernel dependency)')
-        if d['name'] == 'hh-evolution' and name != 'hh-evolution':
+                bad.append('hharness-evolution -> ' + d['name'] + ' (non-kernel dependency)')
+        if d['name'] == 'hharness-evolution' and name != 'hharness-evolution':
             consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
 for name, kind in consumers:
-    if name != 'hh-embed':
-        bad.append(name + ' -> hh-evolution (consumer outside the C4 boundary)')
+    if name != 'hharness-embed':
+        bad.append(name + ' -> hharness-evolution (consumer outside the C4 boundary)')
     elif kind == 'REQUIRED':
-        bad.append('hh-embed -> hh-evolution must be OPTIONAL (tier-c4 feature)')
+        bad.append('hharness-embed -> hharness-evolution must be OPTIONAL (tier-c4 feature)')
 if bad:
     print('evolution removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-evolution is edge-free upward; hh-embed (optional) is its only consumer')
+print('hharness-evolution is edge-free upward; hharness-embed (optional) is its only consumer')
 "
 
 echo "check-removability: S6.1a evolution boundary verified"
 
-echo "== removability(S6.1b): C4 debt-manager tier — hh-debt optional; hh-embed is its only consumer =="
+echo "== removability(S6.1b): C4 debt-manager tier — hharness-debt optional; hharness-embed is its only consumer =="
 # §5h.6 CC6: the assumption-debt manager is a removable C4 slice.
-# `hh-embed`'s `tier-c4` feature is the only consumer (an *optional*
+# `hharness-embed`'s `tier-c4` feature is the only consumer (an *optional*
 # dependency); absent ⇒ the `lab.debt.{register,sweep,settle,retire,
 # propose,manager_open}` ops stay in the schema (CC7) and answer
 # `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
-# hh-debt consumes only kernel-side crates — never a surface, never its
+# hharness-debt consumes only kernel-side crates — never a surface, never its
 # consumer; it holds no authority handle over subject runs (D-2: it
 # authors specs and proposals; `commit_kernel_row_for` is the one write
 # path).
@@ -289,47 +290,47 @@ normal=lambda d: d.get('kind') in (None,'normal')
 bad=[]
 consumers=[]
 allowed_deps={
-    'hh-wire','hh-identity','hh-ontology','hh-provenance','hh-hir',
-    'hh-ledger','hh-budget','hh-lab','hh-experiment','hh-compiler',
+    'hharness-wire','hharness-identity','hharness-ontology','hharness-provenance','hharness-hir',
+    'hharness-ledger','hharness-budget','hharness-lab','hharness-experiment','hharness-compiler',
 }
 for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
         if not normal(d):
             continue
-        if name == 'hh-debt':
-            if d['name'] == 'hh-embed':
-                bad.append('hh-debt -> hh-embed (C4 depends on its consumer)')
+        if name == 'hharness-debt':
+            if d['name'] == 'hharness-embed':
+                bad.append('hharness-debt -> hharness-embed (C4 depends on its consumer)')
             if d['name'] not in allowed_deps:
-                bad.append('hh-debt -> ' + d['name'] + ' (non-kernel dependency)')
-        if d['name'] == 'hh-debt' and name != 'hh-debt':
+                bad.append('hharness-debt -> ' + d['name'] + ' (non-kernel dependency)')
+        if d['name'] == 'hharness-debt' and name != 'hharness-debt':
             consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
 for name, kind in consumers:
-    if name != 'hh-embed':
-        bad.append(name + ' -> hh-debt (consumer outside the C4 boundary)')
+    if name != 'hharness-embed':
+        bad.append(name + ' -> hharness-debt (consumer outside the C4 boundary)')
     elif kind == 'REQUIRED':
-        bad.append('hh-embed -> hh-debt must be OPTIONAL (tier-c4 feature)')
+        bad.append('hharness-embed -> hharness-debt must be OPTIONAL (tier-c4 feature)')
 if bad:
     print('debt-manager removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-debt is edge-free upward; hh-embed (optional) is its only consumer')
+print('hharness-debt is edge-free upward; hharness-embed (optional) is its only consumer')
 "
 
 echo "check-removability: S6.1b debt-manager boundary verified"
 
-echo "== removability(S6.4): co-evolution interface — hh-embed tier-c4 ops; absent tier answers Unsupported =="
+echo "== removability(S6.4): co-evolution interface — hharness-embed tier-c4 ops; absent tier answers Unsupported =="
 # §5h.8 CC6: the co-evolution interface adds no new crate — the records
-# and drivers live inside kernel-side hh-lab and the already-verified C4
-# slices (hh-evolution's consolidation/cycle, hh-debt's post-import
-# sweep, hh-fleet's org-policy defaults). The surface is hh-embed's
+# and drivers live inside kernel-side hharness-lab and the already-verified C4
+# slices (hharness-evolution's consolidation/cycle, hharness-debt's post-import
+# sweep, hharness-fleet's org-policy defaults). The surface is hharness-embed's
 # `coevolution_ops`, gated by `tier-c4`: absent ⇒ the
 # `lab.coevolution.*` / `lab.org_policy.*` / `lab.debt.post_import_sweep`
 # ops stay in the schema (CC7 single source) and answer
 # `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
 # The no-default-features test leg exercises the honest refusal; the
 # schema grep proves the ops remain declared regardless of the tier.
-cargo test -p hh-embed --no-default-features --test s6_4
+cargo test -p hharness-embed --no-default-features --test s6_4
 python3 - <<'EOF'
 import json, sys
 schema = json.load(open('schema/hh-embed-1.schema.json'))
@@ -375,12 +376,12 @@ EOF
 
 echo "check-removability: S6.4 co-evolution boundary verified"
 
-echo "== removability(S4.11): C1 MCP-server surface — hh-mcp-lab is a leaf consumer =="
+echo "== removability(S4.11): C1 MCP-server surface — hharness-mcp-lab is a leaf consumer =="
 # §7.3 CC6: the surface server is a removable slice — nothing below it
 # depends on it. Removing the feature = removing the crate: no workspace
-# package names `hh-mcp-lab` as a normal dependency (dev-deps don't ship),
-# and hh-mcp-lab itself consumes only the kernel-side crates (hh-embed,
-# hh-mcp, hh-ledger, hh-embed-schema, …) — never the reverse. The schema
+# package names `hharness-mcp-lab` as a normal dependency (dev-deps don't ship),
+# and hharness-mcp-lab itself consumes only the kernel-side crates (hharness-embed,
+# hharness-mcp, hharness-ledger, hharness-embed-schema, …) — never the reverse. The schema
 # (CC7 single source) is unchanged by the surface's absence: `hh-embed/1`
 # ops stay declared regardless of who fronts them.
 cargo metadata --format-version 1 --no-deps | python3 -c "
@@ -391,36 +392,36 @@ bad=[]
 for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
-        if d['name'] == 'hh-mcp-lab' and name != 'hh-mcp-lab' and normal(d):
-            bad.append(name + ' -> hh-mcp-lab (a kernel/base crate may not consume the surface)')
-        if name == 'hh-mcp-lab' and d['name'] == 'hh-mcp-lab':
-            bad.append('hh-mcp-lab self-edge')
+        if d['name'] == 'hharness-mcp-lab' and name != 'hharness-mcp-lab' and normal(d):
+            bad.append(name + ' -> hharness-mcp-lab (a kernel/base crate may not consume the surface)')
+        if name == 'hharness-mcp-lab' and d['name'] == 'hharness-mcp-lab':
+            bad.append('hharness-mcp-lab self-edge')
 # The surface may only sit ABOVE the kernel boundary — check it never
 # reaches into another surface/extension tier.
 allowed_deps = {
-    'hh-wire','hh-identity','hh-ledger','hh-embed','hh-embed-schema',
-    'hh-mcp','hh-env','hh-budget','hh-telemetry','hh-ontology',
-    'hh-provenance','hh-hir','hh-assembly',
+    'hharness-wire','hharness-identity','hharness-ledger','hharness-embed','hharness-embed-schema',
+    'hharness-mcp','hharness-env','hharness-budget','hharness-telemetry','hharness-ontology',
+    'hharness-provenance','hharness-hir','hharness-assembly',
 }
 for pkg in meta['packages']:
-    if pkg['name'] != 'hh-mcp-lab':
+    if pkg['name'] != 'hharness-mcp-lab':
         continue
     for d in pkg['dependencies']:
         if normal(d) and d['name'] not in allowed_deps:
-            bad.append('hh-mcp-lab -> ' + d['name'] + ' (surface depends on a non-kernel crate)')
+            bad.append('hharness-mcp-lab -> ' + d['name'] + ' (surface depends on a non-kernel crate)')
 if bad:
     print('mcp-lab removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-mcp-lab is edge-free upward; removing the crate removes the feature')
+print('hharness-mcp-lab is edge-free upward; removing the crate removes the feature')
 "
 
 echo "check-removability: S4.11 mcp-lab surface boundary verified"
 
 
-echo "== removability(S4.12): C1 embedding/SDK surface — hh-cli + hh-acp are leaf consumers =="
+echo "== removability(S4.12): C1 embedding/SDK surface — hharness-cli + hharness-acp are leaf consumers =="
 # §7.1/§7.4 CC6: the CLI + ACP surface family is a removable slice — the
-# only normal consumers of `hh-acp`/`hh-cli` are the surfaces themselves
+# only normal consumers of `hharness-acp`/`hharness-cli` are the surfaces themselves
 # (dev-deps don't ship); both consume only kernel-side crates and drive
 # `hh-embed/1` through the declared boundary, never the reverse. The
 # schema (CC7 single source) is unchanged by the surfaces' absence:
@@ -430,7 +431,7 @@ import json,sys
 meta=json.load(sys.argv[1]) if len(sys.argv)>1 else json.load(sys.stdin)
 normal=lambda d: d.get('kind') in (None,'normal')
 bad=[]
-surfaces={'hh-acp','hh-cli'}
+surfaces={'hharness-acp','hharness-cli'}
 for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
@@ -443,10 +444,10 @@ for pkg in meta['packages']:
 # The surfaces may only sit ABOVE the kernel boundary — they never reach
 # into another surface/extension tier crate.
 allowed_deps = {
-    'hh-wire','hh-identity','hh-ledger','hh-embed','hh-embed-schema',
-    'hh-embed-client-generated','hh-mcp','hh-env','hh-budget','hh-telemetry',
-    'hh-ontology','hh-provenance','hh-hir','hh-assembly','hh-compiler',
-    'hh-bundle','hh-registry','hh-acp',
+    'hharness-wire','hharness-identity','hharness-ledger','hharness-embed','hharness-embed-schema',
+    'hharness-embed-client-generated','hharness-mcp','hharness-env','hharness-budget','hharness-telemetry',
+    'hharness-ontology','hharness-provenance','hharness-hir','hharness-assembly','hharness-compiler',
+    'hharness-bundle','hharness-registry','hharness-acp',
 }
 for pkg in meta['packages']:
     if pkg['name'] not in surfaces:
@@ -458,7 +459,7 @@ if bad:
     print('cli/acp removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-cli + hh-acp are edge-free upward; removing the pair removes the feature')
+print('hharness-cli + hharness-acp are edge-free upward; removing the pair removes the feature')
 "
 
 echo "check-removability: S4.12 cli/acp surface boundary verified"

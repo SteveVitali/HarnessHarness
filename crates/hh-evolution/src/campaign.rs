@@ -11,15 +11,15 @@
 //! endorsement). The pipeline evaluates no task itself — the experiment
 //! engine is the sole evaluation substrate (§05h §4).
 
-use hh_hir::diff::{self, HirDiff};
-use hh_hir::document::HirDocument;
-use hh_identity::idp::idp_id;
-use hh_lab::bench::SplitAssignmentRecord;
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::{AuthorityClass, Origin, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::diff::{self, HirDiff};
+use hharness_hir::document::HirDocument;
+use hharness_identity::idp::idp_id;
+use hharness_lab::bench::SplitAssignmentRecord;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::{AuthorityClass, Origin, ProvenanceRecord};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::{EvolutionError, Refusal};
@@ -31,7 +31,7 @@ use crate::state::CandidateState;
 use crate::view::CampaignView;
 
 /// The kernel producer spelling for evolution-authored rows.
-pub const COMPONENT: &str = "hh-evolution";
+pub const COMPONENT: &str = "hharness-evolution";
 
 /// The `RunKind` a campaign serves on (§05h §4 — `run_kind = experiment`;
 /// no new run kind).
@@ -84,7 +84,7 @@ pub struct EvolutionCampaign {
     /// The campaign spec (immutable — supersession only).
     pub spec: EvolutionCampaignSpec,
     /// The LabDocs handle the deposits resolve through.
-    pub docs: hh_experiment::docs::LabDocs,
+    pub docs: hharness_experiment::docs::LabDocs,
 }
 
 type Res<T> = Result<T, EvolutionError>;
@@ -102,7 +102,7 @@ impl EvolutionCampaign {
     /// dedup key — same spec re-opens the same run).
     pub fn open(
         store: &mut Store,
-        docs: hh_experiment::docs::LabDocs,
+        docs: hharness_experiment::docs::LabDocs,
         holder: &str,
         writer_ttl_ms: u64,
         spec: EvolutionCampaignSpec,
@@ -219,7 +219,7 @@ impl EvolutionCampaign {
     /// rebuild).
     pub fn ensure(
         store: &mut Store,
-        docs: hh_experiment::docs::LabDocs,
+        docs: hharness_experiment::docs::LabDocs,
         run_id: &str,
         holder: &str,
         writer_ttl_ms: u64,
@@ -276,7 +276,7 @@ impl EvolutionCampaign {
         store: &mut Store,
         class: &str,
         payload: Json,
-        causes: Vec<hh_ledger::manifest::EventRef>,
+        causes: Vec<hharness_ledger::manifest::EventRef>,
     ) -> Res<EventEnvelope> {
         let env =
             store.commit_kernel_row_for(COMPONENT, &self.run_id, class, payload, vec![], causes)?;
@@ -311,7 +311,7 @@ impl EvolutionCampaign {
         stage: &str,
         report_ref: Option<&str>,
         extra: Json,
-        causes: Vec<hh_ledger::manifest::EventRef>,
+        causes: Vec<hharness_ledger::manifest::EventRef>,
     ) -> Res<EventEnvelope> {
         let mut m = match extra {
             Json::Obj(m) => m,
@@ -671,7 +671,7 @@ impl EvolutionCampaign {
         }
 
         // Classification deltas.
-        use hh_hir::diff::{AuthorityDelta, Delta};
+        use hharness_hir::diff::{AuthorityDelta, Delta};
         if diff.classification.authority_delta == AuthorityDelta::Widening {
             return Err(fail(
                 self,
@@ -817,11 +817,13 @@ impl EvolutionCampaign {
         // a `CompiledPayload` leaf without a `declared_interface`
         // refuses `OpaqueWithoutInterface` (the typed S1/S7 gate the
         // code-search family triggers), never a bare schema slip.
-        if let Err(errs) = hh_hir::validate::validate(&target) {
-            if errs
-                .iter()
-                .any(|e| matches!(e, hh_hir::errors::HirError::OpaqueWithoutInterface { .. }))
-            {
+        if let Err(errs) = hharness_hir::validate::validate(&target) {
+            if errs.iter().any(|e| {
+                matches!(
+                    e,
+                    hharness_hir::errors::HirError::OpaqueWithoutInterface { .. }
+                )
+            }) {
                 return Err(fail(
                     self,
                     store,
@@ -930,7 +932,7 @@ impl EvolutionCampaign {
             let mut v: Vec<String> = d
                 .ops
                 .iter()
-                .filter(|o: &&hh_hir::diff::DiffOp| o.tag().semantic)
+                .filter(|o: &&hharness_hir::diff::DiffOp| o.tag().semantic)
                 .map(|o| {
                     let path = match o {
                         diff::DiffOp::ReplaceField { path, .. }
@@ -993,11 +995,13 @@ impl EvolutionCampaign {
                 },
             ));
         }
-        if let Err(errs) = hh_hir::validate::validate(&target) {
-            if errs
-                .iter()
-                .any(|e| matches!(e, hh_hir::errors::HirError::OpaqueWithoutInterface { .. }))
-            {
+        if let Err(errs) = hharness_hir::validate::validate(&target) {
+            if errs.iter().any(|e| {
+                matches!(
+                    e,
+                    hharness_hir::errors::HirError::OpaqueWithoutInterface { .. }
+                )
+            }) {
                 return Err(fail(
                     self,
                     store,
@@ -1075,13 +1079,13 @@ impl EvolutionCampaign {
         &mut self,
         store: &mut Store,
         candidate_id: &str,
-        candidate: &hh_registry::extension::Candidate,
-        outcome: &hh_registry::extension::FetchOutcome,
+        candidate: &hharness_registry::extension::Candidate,
+        outcome: &hharness_registry::extension::FetchOutcome,
         requested_grants: std::collections::BTreeSet<String>,
-        proposer: &hh_registry::extension::lifecycle::ProposerContext,
-        view: &hh_registry::extension::lifecycle::TrustView,
-    ) -> Res<hh_registry::extension::lifecycle::InstallPlan> {
-        use hh_registry::extension::lifecycle;
+        proposer: &hharness_registry::extension::lifecycle::ProposerContext,
+        view: &hharness_registry::extension::lifecycle::TrustView,
+    ) -> Res<hharness_registry::extension::lifecycle::InstallPlan> {
+        use hharness_registry::extension::lifecycle;
         self.require_open()?;
         self.bound(store)?;
         let cur = self.candidate_state(candidate_id)?;
@@ -1134,12 +1138,12 @@ impl EvolutionCampaign {
                 // The registry's refusals land as the campaign's own —
                 // a rejected row lands before the error returns.
                 let r = match e {
-                    hh_registry::RegistryError::AuthorityWidening { .. } => {
+                    hharness_registry::RegistryError::AuthorityWidening { .. } => {
                         Refusal::AuthorityWidening {
                             detail: format!("{e:?}"),
                         }
                     }
-                    hh_registry::RegistryError::ModelInstallDenied { .. } => {
+                    hharness_registry::RegistryError::ModelInstallDenied { .. } => {
                         Refusal::PolicyWidening {
                             leaf: format!("model_install = deny — {e:?}"),
                         }
@@ -1157,7 +1161,7 @@ impl EvolutionCampaign {
             .candidate(candidate_id)
             .and_then(|r| r.history.last().map(|t| t.event_id.clone()))
             .map(|event_id| {
-                vec![hh_ledger::manifest::EventRef {
+                vec![hharness_ledger::manifest::EventRef {
                     run_id: self.run_id.clone(),
                     event_id,
                 }]
@@ -1432,7 +1436,7 @@ impl EvolutionCampaign {
     /// The candidate's deposited proposal doc → the decoded `HirDiff`
     /// (records-in: the deposit is the single copy; S7's re-check reads
     /// its classification).
-    fn proposal_diff(&self, candidate_id: &str) -> Res<hh_hir::diff::HirDiff> {
+    fn proposal_diff(&self, candidate_id: &str) -> Res<hharness_hir::diff::HirDiff> {
         // The proposal is content-addressed under PROPOSAL with the
         // candidate's id derivable — scan is not supported; the caller's
         // `propose` deposited under a known id. We resolve by re-deriving
@@ -1462,7 +1466,8 @@ impl EvolutionCampaign {
             .get("diff")
             .cloned()
             .ok_or_else(|| schema("proposal doc missing diff"))?;
-        hh_hir::wire::diff_from_json(&diff_json).map_err(|e| schema(format!("diff decode: {e:?}")))
+        hharness_hir::wire::diff_from_json(&diff_json)
+            .map_err(|e| schema(format!("diff decode: {e:?}")))
     }
 
     /// The candidate's deposited proposal doc → the diff's semantic op
@@ -1800,7 +1805,7 @@ impl EvolutionCampaign {
                 .ok_or_else(|| Refusal::UnmatchedSearchBudget {
                     detail: format!("arm `{}` carries no match_spec", arm.arm_id),
                 })?;
-            if ms.mode != hh_budget::matchspec::MatchMode::MatchedTotal {
+            if ms.mode != hharness_budget::matchspec::MatchMode::MatchedTotal {
                 return Err(fail(
                     self,
                     store,
@@ -1847,15 +1852,13 @@ impl EvolutionCampaign {
                                 arm.arm_id
                             ),
                         })?;
-                    let record =
-                        hh_ontology::eval::SearchBudgetRecord::from_json(&body).map_err(|e| {
-                            Refusal::SearchBudgetIncomplete {
-                                detail: format!(
-                                    "arm `{}` search_budget doc does not parse as a \
+                    let record = hharness_ontology::eval::SearchBudgetRecord::from_json(&body)
+                        .map_err(|e| Refusal::SearchBudgetIncomplete {
+                            detail: format!(
+                                "arm `{}` search_budget doc does not parse as a \
                                      SearchBudgetRecord: {e:?}",
-                                    arm.arm_id
-                                ),
-                            }
+                                arm.arm_id
+                            ),
                         })?;
                     if !record.is_complete() {
                         return Err(fail(
@@ -1930,7 +1933,7 @@ impl EvolutionCampaign {
         }
         // The report — `search_time_benefit` at `matched` budget.
         let report = self.load_comparison(report_ref)?;
-        if report.benefit_kind != hh_lab::analysis::BenefitKind::SearchTimeBenefit {
+        if report.benefit_kind != hharness_lab::analysis::BenefitKind::SearchTimeBenefit {
             return Err(fail(
                 self,
                 store,
@@ -1942,7 +1945,7 @@ impl EvolutionCampaign {
                 },
             ));
         }
-        if report.budget_match.status != hh_lab::analysis::BudgetMatchStatus::Matched {
+        if report.budget_match.status != hharness_lab::analysis::BudgetMatchStatus::Matched {
             return Err(fail(
                 self,
                 store,
@@ -1975,7 +1978,7 @@ impl EvolutionCampaign {
         &self,
         experiment_id: &str,
         stage: &[&str],
-    ) -> Res<hh_lab::experiment::ExperimentSpec> {
+    ) -> Res<hharness_lab::experiment::ExperimentSpec> {
         let spec = self
             .docs
             .spec(experiment_id)
@@ -2012,8 +2015,8 @@ impl EvolutionCampaign {
         } else {
             matches!(
                 spec.kind,
-                hh_lab::experiment::ExperimentKind::Comparative
-                    | hh_lab::experiment::ExperimentKind::Equivalence
+                hharness_lab::experiment::ExperimentKind::Comparative
+                    | hharness_lab::experiment::ExperimentKind::Equivalence
             )
         };
         if !kind_ok {
@@ -2029,7 +2032,7 @@ impl EvolutionCampaign {
 
     /// Load a deposited `ComparisonReport` (the `evidence` docs kind —
     /// the boundary deposits reports as `evolution_report` bodies).
-    fn load_comparison(&self, report_ref: &str) -> Res<hh_lab::analysis::ComparisonReport> {
+    fn load_comparison(&self, report_ref: &str) -> Res<hharness_lab::analysis::ComparisonReport> {
         let body = self
             .docs
             .get_named(doc_kind::REPORT, report_ref)
@@ -2038,7 +2041,7 @@ impl EvolutionCampaign {
             .ok_or_else(|| Refusal::SpecNotRegistered {
                 experiment_id: format!("report `{report_ref}` unresolvable"),
             })?;
-        hh_lab::analysis::ComparisonReport::from_json(&body)
+        hharness_lab::analysis::ComparisonReport::from_json(&body)
             .map_err(|e| schema(format!("comparison report: {e:?}")))
     }
 
@@ -2105,7 +2108,7 @@ impl EvolutionCampaign {
             ));
         }
         let report = self.load_comparison(report_ref)?;
-        if report.benefit_kind != hh_lab::analysis::BenefitKind::ArtifactBenefit {
+        if report.benefit_kind != hharness_lab::analysis::BenefitKind::ArtifactBenefit {
             return Err(fail(
                 self,
                 store,
@@ -2130,7 +2133,7 @@ impl EvolutionCampaign {
         // must not sit inside its own `held_out_from` closure over this
         // artifact: a benefit the selector's verdict helped produce
         // never grades the producing artifact — `JudgeLeakedIntoArtifact`
-        // (mirrors hh-verification's boundary check, durable here).
+        // (mirrors hharness-verification's boundary check, durable here).
         if let Some(sel_ref) = judge_selector_ref {
             if let Some(pol) = &self.spec.judge_policy {
                 if let Some(ab) = &pol.artifact_benefit_selector {
@@ -2292,7 +2295,7 @@ impl EvolutionCampaign {
                 },
             ));
         }
-        if report.budget_match.status != hh_lab::analysis::BudgetMatchStatus::Matched {
+        if report.budget_match.status != hharness_lab::analysis::BudgetMatchStatus::Matched {
             return Err(fail(
                 self,
                 store,
@@ -2396,13 +2399,13 @@ impl EvolutionCampaign {
         // must carry evidence (records-in: the caller supplies the
         // canonical CompatibilityRecord JSONs).
         for cj in compatibility {
-            let c = hh_lab::model::CompatibilityRecord::from_json(cj)
+            let c = hharness_lab::model::CompatibilityRecord::from_json(cj)
                 .map_err(|e| schema(format!("compatibility record: {e:?}")))?;
             let needs_evidence = matches!(
                 c.status,
-                hh_lab::model::CompatibilityStatus::Verified
-                    | hh_lab::model::CompatibilityStatus::Drifted { .. }
-                    | hh_lab::model::CompatibilityStatus::Broken { .. }
+                hharness_lab::model::CompatibilityStatus::Verified
+                    | hharness_lab::model::CompatibilityStatus::Drifted { .. }
+                    | hharness_lab::model::CompatibilityStatus::Broken { .. }
             );
             if needs_evidence && c.evidence_ref.is_none() {
                 return Err(fail(
@@ -2470,7 +2473,7 @@ impl EvolutionCampaign {
         // S7 refuses identically (the classification is the durable claim —
         // it rides the sealed deposit, never re-derived).
         let stored = self.proposal_diff(candidate_id)?;
-        if stored.classification.coordination_delta == hh_hir::diff::Delta::Loosening {
+        if stored.classification.coordination_delta == hharness_hir::diff::Delta::Loosening {
             return Err(fail(
                 self,
                 store,
@@ -2742,7 +2745,7 @@ impl EvolutionCampaign {
     /// `active` (with the conditioned-rule debt check); `aborted{reason}`
     ////`veto` reverts (`reverted{from: canary}` — the revert landing is
     /// the pipeline's own transition; the sealed-ancestor restore rides
-    /// `hh-hir`'s `invert` on the caller's side).
+    /// `hharness-hir`'s `invert` on the caller's side).
     ///
     /// `retrained_pin` (S6.4; R-2.9.5 6d — the *policy-conditioned
     /// expiry* leg): when the candidate's S6 profile pins a retrained
@@ -2757,7 +2760,7 @@ impl EvolutionCampaign {
         status: &str,
         reason: &str,
         conditioned_debts: &[Json],
-        retrained_pin: Option<&hh_lab::model::SnapshotClaim>,
+        retrained_pin: Option<&hharness_lab::model::SnapshotClaim>,
     ) -> Res<()> {
         self.require_open()?;
         self.bound(store)?;
@@ -2856,9 +2859,10 @@ impl EvolutionCampaign {
             .get(doc_kind::PROPOSAL, &proposal_ref)
             .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?
             .ok_or_else(|| schema("proposal doc missing"))?;
-        let d =
-            hh_hir::wire::diff_from_json(body.get("diff").ok_or_else(|| schema("no diff member"))?)
-                .map_err(|e| schema(format!("diff decode: {e:?}")))?;
+        let d = hharness_hir::wire::diff_from_json(
+            body.get("diff").ok_or_else(|| schema("no diff member"))?,
+        )
+        .map_err(|e| schema(format!("diff decode: {e:?}")))?;
         Ok(d.classification.touches_conditioned_rules)
     }
 
@@ -3180,7 +3184,7 @@ impl EvolutionCampaign {
 /// hosted contract is a `HostedCoordinateUnsupported` admission
 /// failure).
 fn hosted_descriptors(
-    docs: &hh_experiment::docs::LabDocs,
+    docs: &hharness_experiment::docs::LabDocs,
     spec: &EvolutionCampaignSpec,
 ) -> Res<Vec<crate::records::HostedCoordinateDescriptor>> {
     use crate::records::{HostedCoordinateDescriptor, HOSTING_ABI};

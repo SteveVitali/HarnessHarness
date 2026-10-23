@@ -1,13 +1,13 @@
 //! The §5h.1 §2.2 measurement-emission payload builders + strict decoders.
 //! These are ledger payloads produced by the named components — never a
 //! telemetry write path (ADR-0042 D2). `measurement.cost.attributed` payloads
-//! are `hh_budget`'s (`events::cost_attributed_payload`) — reused, never
+//! are `hharness_budget`'s (`events::cost_attributed_payload`) — reused, never
 //! redefined (CC7).
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::codec::{arr_at, expect_obj, int_at, reject_unknown, str_at};
 use crate::errors::CodecError;
@@ -187,7 +187,7 @@ pub fn export_delivered_from_json(j: &Json) -> Result<ExportDelivered, CodecErro
 /// every value names its producing oracle). Restricted to observations **not
 /// derivable** from other events; derived metrics are `metric_view` values,
 /// never emitted rows.
-pub fn metric_emitted_payload(value: &hh_ontology::eval::MetricValue) -> Json {
+pub fn metric_emitted_payload(value: &hharness_ontology::eval::MetricValue) -> Json {
     value.to_json()
 }
 

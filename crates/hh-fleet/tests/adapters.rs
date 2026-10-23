@@ -9,22 +9,22 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_budget::spec::BudgetMode;
-use hh_budget::{BudgetSpec, DimensionId, DimensionKey};
-use hh_fleet::capabilities::{AdapterCapabilities, CapState};
-use hh_fleet::engine::{FleetEngine, ReconcileReport};
-use hh_fleet::errors::FleetError;
-use hh_fleet::ingress::{
+use hharness_budget::spec::BudgetMode;
+use hharness_budget::{BudgetSpec, DimensionId, DimensionKey};
+use hharness_fleet::capabilities::{AdapterCapabilities, CapState};
+use hharness_fleet::engine::{FleetEngine, ReconcileReport};
+use hharness_fleet::errors::FleetError;
+use hharness_fleet::ingress::{
     poll_occurrence_id, push_occurrence_id, IngressError, IngressOutcome, WebhookAdapter,
 };
-use hh_fleet::source::{FixtureAdapter, SourceOccurrence, WorkSourceAdapter};
-use hh_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
-use hh_fleet::work_item::{derive_state, WorkItemInit};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256_hex;
+use hharness_fleet::source::{FixtureAdapter, SourceOccurrence, WorkSourceAdapter};
+use hharness_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
+use hharness_fleet::work_item::{derive_state, WorkItemInit};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256_hex;
 
 const HOLDER: &str = "fleet-adapter-test";
 const TTL: u64 = 60_000;
@@ -260,7 +260,7 @@ fn webhook_accepts_a_signed_delivery_and_carries_provenance() {
             assert_eq!(
                 occurrence_id,
                 "push:".to_string()
-                    + &hh_fleet::identity::source_ref("fleet-run-1", "tickets")
+                    + &hharness_fleet::identity::source_ref("fleet-run-1", "tickets")
                     + ":d-1"
             );
         }
@@ -873,7 +873,7 @@ fn github_replay_dedupes_durably_and_stale_is_a_spec_hash_noop() {
 
 #[test]
 fn github_issue_record_normalization() {
-    let rec = hh_fleet::github::issue_record(&gh_issue(7, "closed"));
+    let rec = hharness_fleet::github::issue_record(&gh_issue(7, "closed"));
     assert_eq!(rec.get("native_id").and_then(Json::as_str), Some("7"));
     assert_eq!(rec.get("state").and_then(Json::as_str), Some("closed"));
     assert_eq!(rec.get("title").and_then(Json::as_str), Some("issue 7"));

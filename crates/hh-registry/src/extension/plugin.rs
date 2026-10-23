@@ -39,14 +39,14 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::ContentAddress;
-use hh_plugin::contract::{
+use hharness_identity::idp::ContentAddress;
+use hharness_plugin::contract::{
     check_compatibility, contract_defining_tier, ClassContract, ContractIncompatible, ContractRef,
     EvalPoint, Negotiation,
 };
-use hh_plugin::dag::PluginDagInput;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_plugin::dag::PluginDagInput;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::kinds::Placement;
 use crate::records::RegistryRecord;
@@ -558,11 +558,11 @@ pub fn class_catalog(store: &RegistryStore) -> Vec<ClassContract> {
 /// dedicated policy record *kind* would be a `registry/2` bump; ADR-0262).
 /// The record-kind rows are generated from `RecordKind::ALL` — the one closed
 /// sum, never re-spelled here (CC1/CC7).
-pub fn admission_policies(store: &RegistryStore) -> Vec<hh_plugin::ContractVersionPolicy> {
+pub fn admission_policies(store: &RegistryStore) -> Vec<hharness_plugin::ContractVersionPolicy> {
     let mut out = store.policy().contract_version_policies.clone();
-    out.extend(hh_plugin::kernel_contract_policies());
+    out.extend(hharness_plugin::kernel_contract_policies());
     for k in crate::kinds::RecordKind::ALL {
-        out.push(hh_plugin::ContractVersionPolicy {
+        out.push(hharness_plugin::ContractVersionPolicy {
             contract: ContractRef::record_kind(k.as_str(), "*"),
             supported: vec!["1".to_string()],
             sunset: std::collections::BTreeMap::new(),
@@ -801,13 +801,13 @@ fn str_vec(j: &Json, k: &str, path: &str) -> Result<Vec<String>, ManifestError> 
 /// Decode `PluginManifest/1` from raw bytes (`idp/1` canonical JSON).
 pub fn manifest_from_bytes(bytes: &[u8]) -> Result<PluginManifest, ManifestError> {
     let s = std::str::from_utf8(bytes).map_err(|_| ManifestError::NotJson)?;
-    let j = hh_wire::json::parse(s).map_err(|_| ManifestError::NotJson)?;
+    let j = hharness_wire::json::parse(s).map_err(|_| ManifestError::NotJson)?;
     manifest_from_json(&j, "manifest")
 }
 
 fn cref_from_json(j: &Json, path: &str) -> Result<ContractRef, ManifestError> {
     ContractRef::from_json(j, path).map_err(|e| match e {
-        hh_plugin::ContractRefError::SchemaViolation { path, detail } => {
+        hharness_plugin::ContractRefError::SchemaViolation { path, detail } => {
             ManifestError::SchemaViolation { path, detail }
         }
     })
@@ -1015,7 +1015,7 @@ pub fn manifest_from_json(j: &Json, path: &str) -> Result<PluginManifest, Manife
     // summary — a Text leaf ≤ external (never model-facing; §06 R-NM).
     let sp = format!("{path}.summary");
     let summary = req(j, "summary", path)?.clone();
-    let summary_text = hh_hir::leaves::Text::from_json(&summary, &sp)
+    let summary_text = hharness_hir::leaves::Text::from_json(&summary, &sp)
         .map_err(|e| bad(&sp, format!("not a Text leaf: {e:?}")))?;
     if summary_text.authority > AuthorityClass::External {
         return Err(bad(

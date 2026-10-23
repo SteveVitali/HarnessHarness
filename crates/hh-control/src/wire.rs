@@ -1,4 +1,4 @@
-//! `hh_control::wire` — the canonical `control_strategy` wire documents
+//! `hharness_control::wire` — the canonical `control_strategy` wire documents
 //! (R2.6; the OQ-316 steer arm's companion). The OOP conformance lane
 //! (§8.4; `plugin_abi/1` `invoke`) drives a variant out-of-process, and
 //! the in-process reference lane drives the same corpus — both directions
@@ -29,15 +29,15 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::plan::{
+use hharness_compiler::plan::{
     BranchOnValidatorNode, DelegateNode, LoopNode, PinnedRef, PlanNode, PlanNodePayload,
     StepAction, StepMode, StepNode, StopRuleNode,
 };
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-use hh_ontology::control::{CancelledBy, ControlBoundary, StopKind, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+use hharness_ontology::control::{CancelledBy, ControlBoundary, StopKind, StopReason};
+use hharness_wire::json::Json;
 
 use crate::state::{
     decision_point_str, owner_str, parse_decision_point, parse_owner, ControlState,
@@ -353,7 +353,7 @@ fn plan_node_from_json(j: &Json) -> Option<PlanNode> {
     let payload = match req_str(j, "kind")? {
         "loop" => PlanNodePayload::Loop(LoopNode {
             bound_budget: pinned_ref_from_json(j.get("bound_budget")?)?,
-            replan_on: hh_compiler::plan::ReplanOn::parse(req_str(j, "replan_on")?)?,
+            replan_on: hharness_compiler::plan::ReplanOn::parse(req_str(j, "replan_on")?)?,
             body: plan_nodes_from_json(j.get("body")?)?,
         }),
         "step" => PlanNodePayload::Step(StepNode {
@@ -878,7 +878,7 @@ pub fn cue_from_json(j: &Json) -> Option<Cue> {
         "model_completed" => Cue::ModelCompleted {
             model_call_id: req_str(j, "model_call_id")?.to_string(),
             response_ref: req_str(j, "response_ref")?.to_string(),
-            stop_reason: hh_gateway::vocab::StopReason::parse(req_str(j, "stop_reason")?)?,
+            stop_reason: hharness_gateway::vocab::StopReason::parse(req_str(j, "stop_reason")?)?,
         },
         "effects_settled" => Cue::EffectsSettled {
             settled: match j.get("settled")? {
@@ -907,7 +907,10 @@ pub fn cue_from_json(j: &Json) -> Option<Cue> {
         "delegation_completed" => Cue::DelegationCompleted {
             child_run_id: req_str(j, "child_run_id")?.to_string(),
             result_ref: req_str(j, "result_ref")?.to_string(),
-            outcome_class: hh_ontology::control::OutcomeClass::parse(req_str(j, "outcome_class")?)?,
+            outcome_class: hharness_ontology::control::OutcomeClass::parse(req_str(
+                j,
+                "outcome_class",
+            )?)?,
         },
         "human_input" => Cue::HumanInput(human_input_from_json(j.get("input")?)?),
         "envelope_signal" => Cue::EnvelopeSignal(envelope_signal_from_json(j.get("signal")?)?),
@@ -1296,7 +1299,7 @@ pub fn report_from_json(j: &Json) -> Option<FinalReport> {
 }
 
 /// The `stop_reason` doc — the ontology `StopReason` codec re-spelled as a
-/// member (the sum is `hh_ontology::control`'s — CC10).
+/// member (the sum is `hharness_ontology::control`'s — CC10).
 pub fn stop_reason_to_json(r: &StopReason) -> Json {
     r.to_json()
 }
@@ -1366,7 +1369,7 @@ pub fn state_from_json(j: &Json) -> Option<ControlState> {
 mod tests {
     use super::*;
     use crate::strategy::{ConcurrentInput, SteerMode};
-    use hh_ontology::control::{DecisionPoint, Owner};
+    use hharness_ontology::control::{DecisionPoint, Owner};
 
     fn rt(j: &Json, f: impl Fn(&Json) -> bool, what: &str) {
         assert!(f(j), "round trip failed for {what}: {j:?}");
@@ -1386,7 +1389,7 @@ mod tests {
             Cue::ModelCompleted {
                 model_call_id: "m".into(),
                 response_ref: "r".into(),
-                stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
             },
             Cue::EffectsSettled {
                 settled: vec![
@@ -1414,7 +1417,7 @@ mod tests {
             Cue::DelegationCompleted {
                 child_run_id: "c".into(),
                 result_ref: "rr".into(),
-                outcome_class: hh_ontology::control::OutcomeClass::Scored,
+                outcome_class: hharness_ontology::control::OutcomeClass::Scored,
             },
             Cue::HumanInput(HumanInput::Steer {
                 payload_ref: "p".into(),

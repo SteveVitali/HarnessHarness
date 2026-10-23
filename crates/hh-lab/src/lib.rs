@@ -1,4 +1,4 @@
-//! `hh-lab` — the Lab's C0/Stage-1 schema plane (spec §6; ticket S1.24).
+//! `hharness-lab` — the Lab's C0/Stage-1 schema plane (spec §6; ticket S1.24).
 //!
 //! Requirement slices: R-2.9.4⁰ᵃ (benchmark/environment records — §5h.4),
 //! R-2.9.8⁰ (foreign-model claims — §5h.8), R-2.10.3⁰ᵃ (the experiment dialect
@@ -36,7 +36,7 @@
 //!
 //! The plain closed vocabulary lives in `hh-ontology::lab` /
 //! `hh-ontology::debt` (CC7 — the schema source owns the canonical forms); the
-//! HIR-facing debt record lives in `hh-hir`; this crate composes them into the
+//! HIR-facing debt record lives in `hharness-hir`; this crate composes them into the
 //! Lab-facing records.
 
 pub mod adaptive;

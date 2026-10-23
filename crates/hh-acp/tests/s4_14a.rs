@@ -12,11 +12,11 @@
 //! - The outcome parse is deny-by-default — an unrecognised outcome spelling
 //!   never defaults to allow.
 
-use hh_acp::permission::{
+use hharness_acp::permission::{
     inbound_losses, permission_loss_report, permission_losses, preserved_wire_member,
     PermissionOutcome, PermissionRequest, UNSUPPORTED_REQUEST_MEMBERS,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The kernel `security.permission.requested` payload the tests scan.
 fn requested_payload() -> Json {
@@ -77,7 +77,7 @@ fn unexpressible_members_lower_as_named_losses_never_dropped() {
     let report = permission_loss_report(&payload).expect("losses produce a report");
     assert_eq!(
         report.get("schema").and_then(Json::as_str),
-        Some(hh_compiler::acp::EDGE_LOSS_SCHEMA),
+        Some(hharness_compiler::acp::EDGE_LOSS_SCHEMA),
         "the report is `hh-edge-loss/1`-shaped"
     );
     assert_eq!(

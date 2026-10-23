@@ -1,4 +1,4 @@
-//! `hh-verification` — the C0/Stage-1 verification-plane substrate (spec §5f,
+//! `hharness-verification` — the C0/Stage-1 verification-plane substrate (spec §5f,
 //! R-2.7.2a, R-2.7.1⁰, R-2.7.3⁰; ADR-0109…0117).
 //!
 //! The plane turns what the model *says* about a run into typed claims, binds
@@ -62,5 +62,5 @@ pub mod vocab;
 
 /// The `reconciliation.holds` budget dimension spelling (F4; ADR-0113 D4 —
 /// a gauge cap on the run's `BudgetNode`, registered in
-/// `hh_ontology::dimensions`).
+/// `hharness_ontology::dimensions`).
 pub const RECONCILIATION_HOLDS: &str = "reconciliation.holds";

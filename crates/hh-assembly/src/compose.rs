@@ -20,8 +20,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
 use crate::grammar::{
@@ -29,7 +29,7 @@ use crate::grammar::{
     LayerProvenance, ProfileBinding, ASSEMBLY_DIALECT,
 };
 use crate::schema::merge_policy;
-use hh_hir::records::SlotBindings;
+use hharness_hir::records::SlotBindings;
 
 /// The `/slots` merge accumulator: the winning binding set, the winning
 /// precedence + authoring layer id, and per-position disablement flags with the
@@ -516,7 +516,8 @@ fn check_authority_caps(
     kernel: &ProvenanceRecord,
 ) {
     // Effective caps set by layers of strictly higher precedence, per subject.
-    let mut caps: BTreeMap<String, (hh_provenance::AuthorityClass, i64, String)> = BTreeMap::new();
+    let mut caps: BTreeMap<String, (hharness_provenance::AuthorityClass, i64, String)> =
+        BTreeMap::new();
     for l in order.iter().rev() {
         for (i, c) in l.fragment.constraints.iter().enumerate() {
             if c.kind != ConstraintKind::AuthorityCap {
@@ -532,7 +533,7 @@ fn check_authority_caps(
                 .subject
                 .get("ceiling")
                 .and_then(Json::as_str)
-                .and_then(hh_provenance::AuthorityClass::parse);
+                .and_then(hharness_provenance::AuthorityClass::parse);
             let Some(ceiling) = ceiling else {
                 continue; // a malformed ceiling is stage-4's diagnostic, not compose's
             };

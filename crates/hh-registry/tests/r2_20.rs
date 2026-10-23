@@ -17,21 +17,21 @@
 
 use std::collections::BTreeSet;
 
-use hh_identity::idp;
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::origin::HumanRole;
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::errors::RegistryError;
-use hh_registry::extension::lifecycle::{
+use hharness_identity::idp;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::origin::HumanRole;
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::errors::RegistryError;
+use hharness_registry::extension::lifecycle::{
     self, ProposerContext, ScanEntry, ScannerPolicy, SurfaceDriftPolicy, TrustView,
 };
-use hh_registry::extension::{
+use hharness_registry::extension::{
     DeclaredSource, ExtensionKind, ExtensionRecord, FetchOutcome, MergePolicy, SourceLocator,
     TrustStatus,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ fn view() -> TrustView {
         require_signature_for: BTreeSet::new(),
         hash_only_ceiling: AuthorityClass::External,
         max_age: None,
-        model_install: hh_registry::records::ModelInstallRule::AllowAttenuated,
+        model_install: hharness_registry::records::ModelInstallRule::AllowAttenuated,
         scanner_policy: ScannerPolicy::Advisory,
         live_policy_ids: vec![],
     }
@@ -72,8 +72,8 @@ fn entry(name: &str, kind: ExtensionKind, member: Json) -> ScanEntry {
     }
 }
 
-fn candidate(name: &str) -> hh_registry::extension::Candidate {
-    hh_registry::extension::Candidate {
+fn candidate(name: &str) -> hharness_registry::extension::Candidate {
+    hharness_registry::extension::Candidate {
         name: name.into(),
         kind: ExtensionKind::Skill,
         locator: SourceLocator {
@@ -480,7 +480,7 @@ fn delegate_origin_conferral_is_leg_crossing() {
     );
     record.trust.grants = vec![grant("perm:x")];
     // text_authority must stay consistent for the L1 half to pass before L2.
-    record.trust.text_authority = hh_registry::extension::default_text_authority(
+    record.trust.text_authority = hharness_registry::extension::default_text_authority(
         &record.kind,
         &record.provenance.origin,
         &record.trust.attestation_status,
@@ -494,7 +494,7 @@ fn delegate_origin_conferral_is_leg_crossing() {
     // A human-origin record carrying a grant does not trip L2 (seal's
     // `grants ⊆ authority_cap` gate is the honest bound there).
     record.provenance = human_prov();
-    record.trust.text_authority = hh_registry::extension::default_text_authority(
+    record.trust.text_authority = hharness_registry::extension::default_text_authority(
         &record.kind,
         &record.provenance.origin,
         &record.trust.attestation_status,
@@ -647,9 +647,9 @@ fn scanner_policy_strictest_and_fail_closed_parse() {
 /// live policy set — a permissive policy never loosens a stricter one.
 #[test]
 fn trust_view_projects_strictest_scanner_policy() {
-    use hh_registry::corpus;
-    use hh_registry::records::{RegistryRecord, TrustRootPolicy};
-    use hh_registry::store::RegistryStore;
+    use hharness_registry::corpus;
+    use hharness_registry::records::{RegistryRecord, TrustRootPolicy};
+    use hharness_registry::store::RegistryStore;
     use std::collections::BTreeMap;
 
     let d = std::env::temp_dir().join(format!("hh-r2-20-tv-{}", std::process::id()));
@@ -667,7 +667,7 @@ fn trust_view_projects_strictest_scanner_policy() {
             max_age: None,
             drift_policy: "quarantine".into(),
             scanner_policy: scanner.into(),
-            model_install: hh_registry::records::ModelInstallRule::AllowAttenuated,
+            model_install: hharness_registry::records::ModelInstallRule::AllowAttenuated,
             archive_policy: "advisory".into(),
             ext: BTreeMap::new(),
         })
@@ -891,7 +891,7 @@ fn activate_runs_surface_drift_check() {
     .unwrap()
     .record;
     rec.kind = ExtensionKind::McpServer;
-    rec.trust.text_authority = hh_registry::extension::default_text_authority(
+    rec.trust.text_authority = hharness_registry::extension::default_text_authority(
         &rec.kind,
         &rec.provenance.origin,
         &rec.trust.attestation_status,

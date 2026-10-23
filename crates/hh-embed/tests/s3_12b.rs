@@ -1,4 +1,4 @@
-//! S3.12b — the GATE-G2 gap-closure legs that only `hh-embed` can host
+//! S3.12b — the GATE-G2 gap-closure legs that only `hharness-embed` can host
 //! (docs/tickets/059a; readout G2-2 + the retirement caveat):
 //!
 //! - **Exemplar → `ComparisonReport` (AC-J3-8/-9's report half).** Both
@@ -6,8 +6,8 @@
 //!   `lab/control-strategy-family-v1`) schedule/launch/settle to
 //!   `NextVerdict::Done` through the real `ExperimentEngine` over a real
 //!   `Store` + `LabDocs`, then the accepted subject runs project through
-//!   `hh_results::project_row` → `hh_analysis::eval_run` →
-//!   `hh_analysis::analyze` → `hh_eval::compare` — the production
+//!   `hharness_results::project_row` → `hharness_analysis::eval_run` →
+//!   `hharness_analysis::analyze` → `hharness_eval::compare` — the production
 //!   records-in path, not a re-stated fixture. (The engine's own `closed`
 //!   row is attempted and its audit-field overrun asserted — DF-S3.12b-1:
 //!   an honestly-measured exemplar's E-4 `budget_match`/`utilization`
@@ -15,8 +15,8 @@
 //!   `ComparisonReport` carries a real `budget_match.status`
 //!   (`matched`: every arm's `control.budget.consumed` rows are equal on
 //!   every matched dimension, honestly recorded).
-//!   `hh-embed` hosts this test because `hh-lab` never depends on
-//!   `hh-eval` (CC10 — the compare kernel's home is the eval plane; the
+//!   `hharness-embed` hosts this test because `hharness-lab` never depends on
+//!   `hharness-eval` (CC10 — the compare kernel's home is the eval plane; the
 //!   embed boundary already wires records-in `EvalRun`s to
 //!   `lab.eval.compare`, this test exercises that same path directly).
 //! - **OQ-363 evidence.** `arm:steerable-a` (matched_cap) vs
@@ -24,61 +24,61 @@
 //!   ADR-0213's interim rule stands and the cross-mode refusal is live.
 //! - **Retirement end to end (the Reading-1 caveat).** A `retirement`
 //!   `ExperimentSpec` schedules/runs/settles through the real engine; the
-//!   settled rows project and compare through `hh_eval::compare`; the
-//!   `CompareOutcome` feeds `hh_eval::compare::removal_verdict`; the
-//!   verdict settles via `hh_lab::debt::settle_removal_test` and a
+//!   settled rows project and compare through `hharness_eval::compare`; the
+//!   `CompareOutcome` feeds `hharness_eval::compare::removal_verdict`; the
+//!   verdict settles via `hharness_lab::debt::settle_removal_test` and a
 //!   human-sealed `retire` produces the `expired → retired` transition.
 //!   No verdict is fed in — the chain is engine-driven.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_analysis::{analyze, eval_run, AnalysisInput};
-use hh_budget::matchspec::ArmSpec as BudgetArmSpec;
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey};
-use hh_eval::catalogue;
-use hh_eval::compare::RemovalOutcome;
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{SuiteContext, TaskContext};
-use hh_experiment::docs::LabDocs;
-use hh_experiment::engine::{EngineContext, ExperimentEngine, NextVerdict};
-use hh_experiment::view::ExperimentView;
-use hh_identity::idp::idp_id;
-use hh_lab::analysis::{
+use hharness_analysis::{analyze, eval_run, AnalysisInput};
+use hharness_budget::matchspec::ArmSpec as BudgetArmSpec;
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey};
+use hharness_eval::catalogue;
+use hharness_eval::compare::RemovalOutcome;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{SuiteContext, TaskContext};
+use hharness_experiment::docs::LabDocs;
+use hharness_experiment::engine::{EngineContext, ExperimentEngine, NextVerdict};
+use hharness_experiment::view::ExperimentView;
+use hharness_identity::idp::idp_id;
+use hharness_lab::analysis::{
     AnalysisSpec, BudgetMatchStatus, ComparisonReport, QuerySpec, ReportLabelKind,
 };
-use hh_lab::debt::{retire, settle_removal_test, SettleEffect};
-use hh_lab::exemplars::{
+use hharness_lab::debt::{retire, settle_removal_test, SettleEffect};
+use hharness_lab::exemplars::{
     compaction_family_v1, control_strategy_family_v1, CompactionFamilyPins,
     ControlStrategyFamilyPins, ExemplarPins, EXEMPLAR_REPLICATES,
 };
-use hh_lab::expand::{ArmConfiguration, ExpandTask};
-use hh_lab::experiment::{
+use hharness_lab::expand::{ArmConfiguration, ExpandTask};
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::config::Ref;
-use hh_ontology::control::StopReason;
-use hh_ontology::debt::{DebtStatus, RemovalTestKind, Verdict};
-use hh_ontology::eval::{
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::config::Ref;
+use hharness_ontology::control::StopReason;
+use hharness_ontology::debt::{DebtStatus, RemovalTestKind, Verdict};
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, IntervalMethod, MetricValue, MetricValueKind, Pairing,
     PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::ParticipantClass;
-use hh_ontology::FactorKind;
-use hh_provenance::{HumanRole, Origin, ProvenanceRecord};
-use hh_results::projection::project_row;
-use hh_results::row::ResultsRow;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::json::Json;
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::ParticipantClass;
+use hharness_ontology::FactorKind;
+use hharness_provenance::{HumanRole, Origin, ProvenanceRecord};
+use hharness_results::projection::project_row;
+use hharness_results::row::ResultsRow;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::json::Json;
 
-// ── rig (the hh-experiment engine.rs test shape) ────────────────────────────
+// ── rig (the hharness-experiment engine.rs test shape) ────────────────────────────
 
 fn tmp(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!("hh-embed-s312b-{}-{}", tag, std::process::id()));
@@ -233,7 +233,7 @@ fn finish_subject(
             value: MetricValueKind::Bool(task_success),
             applies_to: run_id.into(),
             oracle_ref: "oracle/stub.subject".into(),
-            detector: hh_ontology::compliance::Detector::Deterministic,
+            detector: hharness_ontology::compliance::Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
             calibration_ref: None,
@@ -325,7 +325,7 @@ fn run_to_close_ctx(
     tag: &str,
     n_tasks: usize,
     retirement_diff: Option<bool>,
-) -> hh_experiment::events::ExperimentReport {
+) -> hharness_experiment::events::ExperimentReport {
     drain_plans(rig, spec, eid, tag, n_tasks, retirement_diff);
     let mut eng = ExperimentEngine::new(
         &mut rig.store,
@@ -386,7 +386,7 @@ fn assert_close_audit_cap(
 /// facts, task contexts and watermarks the compare kernel reads.
 struct Projected {
     rows: Vec<ResultsRow>,
-    manifests: BTreeMap<String, hh_ledger::manifest::RunManifest>,
+    manifests: BTreeMap<String, hharness_ledger::manifest::RunManifest>,
     facts: BTreeMap<String, LedgerFacts>,
     tasks: Vec<TaskContext>,
     watermark: WatermarkSet,
@@ -468,7 +468,7 @@ fn analysis_spec(eid: &str, metrics: &[&str], filters: Json) -> AnalysisSpec {
     s
 }
 
-/// Resolve the lab-plane arm to its `hh_budget::matchspec::ArmSpec` — the
+/// Resolve the lab-plane arm to its `hharness_budget::matchspec::ArmSpec` — the
 /// `validate_match` input (the budget bodies are the resolver's; the
 /// `MatchSpec` is the arm's own).
 fn budget_arm(lab_arm: &ArmSpec) -> (String, BudgetArmSpec) {
@@ -496,7 +496,7 @@ fn budget_arm(lab_arm: &ArmSpec) -> (String, BudgetArmSpec) {
     )
 }
 
-/// Run `hh_analysis::analyze` for one arm pair over the projected rows and
+/// Run `hharness_analysis::analyze` for one arm pair over the projected rows and
 /// return the single produced `ComparisonReport`.
 fn compare_arms(
     rig: &Rig,
@@ -644,7 +644,7 @@ fn exemplar_compaction_produces_comparison_report() {
 #[test]
 fn exemplar_control_strategy_produces_comparison_report() {
     let mut r = rig("exemplar-control", 0);
-    let pricing = hh_budget::pricing::PricingTableRef {
+    let pricing = hharness_budget::pricing::PricingTableRef {
         table_id: "pricing:test".to_string(),
         version: "1".to_string(),
         pin: Some(pinned("pricing.table")),
@@ -706,7 +706,7 @@ fn exemplar_control_strategy_produces_comparison_report() {
     let decls = vec![catalogue::metric("task_success").unwrap()];
     let metrics = vec!["task_success".to_string()];
     let eval_runs = eval_runs_of(&p, &suites);
-    let input = hh_eval::compare::CompareInput {
+    let input = hharness_eval::compare::CompareInput {
         arm_a: "arm:steerable-a",
         arm_b: "arm:steerable-a-iso",
         metrics: &metrics,
@@ -717,17 +717,17 @@ fn exemplar_control_strategy_produces_comparison_report() {
         arm_specs: &arms,
         varied_factor: None,
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     };
-    match hh_eval::compare::compare(&input) {
-        Err(hh_eval::compare::CompareError::Match(e)) => {
+    match hharness_eval::compare::compare(&input) {
+        Err(hharness_eval::compare::CompareError::Match(e)) => {
             assert!(
                 matches!(
                     e.refusal,
-                    hh_budget::MatchRefusal::IncommensurableMatch { .. }
+                    hharness_budget::MatchRefusal::IncommensurableMatch { .. }
                 ),
                 "the cross-mode compare must refuse incommensurable: {e:?}"
             );
@@ -736,9 +736,9 @@ fn exemplar_control_strategy_produces_comparison_report() {
     }
 }
 
-/// The `Projected` rows → `EvalRun`s (`hh_analysis::project::eval_run` —
+/// The `Projected` rows → `EvalRun`s (`hharness_analysis::project::eval_run` —
 /// the projection `analyze`'s `project_runs` runs per row).
-fn eval_runs_of(p: &Projected, suites: &[SuiteContext]) -> Vec<hh_eval::runs::EvalRun> {
+fn eval_runs_of(p: &Projected, suites: &[SuiteContext]) -> Vec<hharness_eval::runs::EvalRun> {
     p.rows
         .iter()
         .map(|row| {
@@ -793,7 +793,7 @@ fn retirement_spec(rule_id: &str) -> ExperimentSpec {
             .collect(),
         eval_budget: "budget:eval".into(),
         search_budget: Some("budget:search".into()),
-        match_spec: Some(hh_budget::MatchSpec::matched_cap(&[
+        match_spec: Some(hharness_budget::MatchSpec::matched_cap(&[
             DimensionId::ModelCalls,
         ])),
         artifact_ref: Ref::new("def:x", pinned("retirement.artifact")),
@@ -884,7 +884,7 @@ fn retirement_spec(rule_id: &str) -> ExperimentSpec {
 /// chain, engine-driven end to end (Reading 1's caveat: the prior leg was
 /// fed-in verdicts). The retirement experiment schedules/launches/settles
 /// through the real `ExperimentEngine`; the settled subject runs project
-/// through `project_row`/`eval_run` into a real `hh_eval::compare` outcome;
+/// through `project_row`/`eval_run` into a real `hharness_eval::compare` outcome;
 /// `removal_verdict` reads the produced `ComparisonReport`s (point +
 /// interval within the pre-registered margin); the verdict settles the
 /// removal test and a human-sealed `retire` produces
@@ -905,7 +905,10 @@ fn retirement_chain_is_engine_driven_end_to_end() {
     let exp_run = eng.open_experiment(&eid).unwrap();
     drop(eng);
     let report = run_to_close_ctx(&mut r, &spec, &eid, "ret", 3, Some(true));
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
     // 2 arms × 3 tasks × 5 replicates = 30 settled plans.
     let view = ExperimentView::fold(r.store.events(&exp_run).unwrap());
     assert_eq!(view.plans.len(), 30);
@@ -927,7 +930,7 @@ fn retirement_chain_is_engine_driven_end_to_end() {
     let decls = vec![catalogue::metric("task_success").unwrap()];
     let metrics = vec!["task_success".to_string()];
     let arms = [budget_arm(&spec.arms[0]).1, budget_arm(&spec.arms[1]).1];
-    let input = hh_eval::compare::CompareInput {
+    let input = hharness_eval::compare::CompareInput {
         arm_a: "a",
         arm_b: "a-minus-r",
         metrics: &metrics,
@@ -938,12 +941,12 @@ fn retirement_chain_is_engine_driven_end_to_end() {
         arm_specs: &arms,
         varied_factor: None,
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     };
-    let outcome = hh_eval::compare::compare(&input).expect("the removal-diff compare");
+    let outcome = hharness_eval::compare::compare(&input).expect("the removal-diff compare");
     assert_eq!(outcome.reports.len(), 1);
     assert_eq!(
         outcome.reports[0].budget_match.status,
@@ -952,7 +955,8 @@ fn retirement_chain_is_engine_driven_end_to_end() {
 
     // The removal verdict over the produced outcome — identical per-task
     // values ⇒ delta 0, inside any positive margin ⇒ Pass.
-    let verdict = hh_eval::compare::removal_verdict(rule_id, &outcome, &decls, 50_000, 200_000);
+    let verdict =
+        hharness_eval::compare::removal_verdict(rule_id, &outcome, &decls, 50_000, 200_000);
     assert_eq!(verdict.verdict, RemovalOutcome::Pass);
     assert!(verdict.regressed_tasks.is_empty());
 
@@ -979,19 +983,19 @@ fn retirement_chain_is_engine_driven_end_to_end() {
     // The human-sealed retire — `expired → retired`, evidence = the report.
     let decided_by = ProvenanceRecord::minted(
         Origin::human("reviewer:1", HumanRole::Principal),
-        hh_provenance::PersistenceScope::Run,
+        hharness_provenance::PersistenceScope::Run,
         1,
     );
-    let record = hh_hir::debt::RetirementRecord {
+    let record = hharness_hir::debt::RetirementRecord {
         removal_test_report_ref: report_ref.clone(),
         verdict_ref: "verdict:1".into(),
         decided_by,
-        rationale: hh_hir::leaves::Text::new(
+        rationale: hharness_hir::leaves::Text::new(
             "the engine-driven removal test passed",
             "reviewer:1",
             ProvenanceRecord::minted(
                 Origin::human("reviewer:1", HumanRole::Principal),
-                hh_provenance::PersistenceScope::Run,
+                hharness_provenance::PersistenceScope::Run,
                 1,
             ),
         ),

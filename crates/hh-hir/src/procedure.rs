@@ -16,7 +16,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::document::Node;
 use crate::errors::HirError;
@@ -243,7 +243,7 @@ pub struct PreconditionReport {
 }
 
 /// The C0 segment-aware glob (`*` = one segment, `**` = any depth, `?` = one
-/// char) — the same grammar `hh-context`'s retrieval index compiles.
+/// char) — the same grammar `hharness-context`'s retrieval index compiles.
 pub fn path_glob_matches(pattern: &str, path: &str) -> bool {
     let pat: Vec<&str> = pattern.split('/').collect();
     let tgt: Vec<&str> = path.split('/').collect();

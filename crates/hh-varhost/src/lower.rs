@@ -28,14 +28,14 @@
 
 use std::collections::BTreeSet;
 
-use hh_containment::policy::{
+use hharness_containment::policy::{
     kernel_default, ContainmentPolicy, EnvInherit, ExecPolicy, ReadMode, UnixSocketMode,
 };
-use hh_hir::kinds::EffectDomain;
-use hh_hir::records::{Grant, GrantConstraints, Issuer, PermissionRecord, Validity};
-use hh_hir::refs::Ref;
-use hh_registry::extension::plugin::{PluginManifest, Requests};
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::records::{Grant, GrantConstraints, Issuer, PermissionRecord, Validity};
+use hharness_hir::refs::Ref;
+use hharness_registry::extension::plugin::{PluginManifest, Requests};
+use hharness_wire::json::Json;
 
 /// The lowering failure sum (each maps to the resolution pipeline's typed
 /// errors — `RequestsExceedCap` on cap misses, `SchemaViolation`-class on
@@ -172,7 +172,7 @@ pub fn lower_requests(
             ))
         })?;
         grants.push(Grant {
-            effect: hh_hir::kinds::EffectClass::domain_only(domain),
+            effect: hharness_hir::kinds::EffectClass::domain_only(domain),
             scope: e.scope.clone(),
             constraints: GrantConstraints {
                 budget: req.budget_share.clone(),
@@ -193,7 +193,7 @@ pub fn lower_requests(
         holder: ctx.holder.clone(),
         grants,
         issuer: Issuer {
-            authority: hh_provenance::authority::AuthorityClass::Principal,
+            authority: hharness_provenance::authority::AuthorityClass::Principal,
             reference: ctx.issuer_ref.to_string(),
         },
         validity: Validity::open_from(ctx.at),

@@ -8,8 +8,8 @@
 //! `sysexits` meanings at 64–78 only by convention — `result.exit_class`
 //! is the authoritative channel and scripts must branch on the string.
 
-use hh_embed_client_generated::EmbedError;
-use hh_wire::json::Json;
+use hharness_embed_client_generated::EmbedError;
+use hharness_wire::json::Json;
 
 /// The closed `ExitClass` sum (§7.1 §2.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

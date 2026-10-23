@@ -1,13 +1,13 @@
 //! `bundle(scope, kind = run, policy)` — the layer-M assembly pass over
-//! the stored projection (§5h.3 §2). Reads `hh-ledger` through `Store`
+//! the stored projection (§5h.3 §2). Reads `hharness-ledger` through `Store`
 //! only; takes the compiled artefact, environment record, model
 //! snapshots, and instrument fields as *inputs* (the caller owns those
 //! planes — kernel, env, catalog). Writes nothing: `bundle` is a read.
 
 use std::collections::BTreeMap;
 
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 use crate::export::{add_member, build_ledger_export, MemberBytes};
@@ -16,7 +16,7 @@ use crate::manifest::{
     BundleManifest, BundlePolicy, MemberRef, MemberStatus, SubjectSection, Unpinned,
 };
 
-/// A compiled-bundle member the caller produced (`hh-compiler` output).
+/// A compiled-bundle member the caller produced (`hharness-compiler` output).
 #[derive(Debug, Clone)]
 pub struct CompileOutcome {
     /// `CompiledBundle.bundle_id`.
@@ -75,7 +75,7 @@ pub struct AssembleInputs<'a> {
     /// The `extensions[]` members the sealed definition binds
     /// (§5g.5 §3's `resolved_dependencies.extensions[]` shape, refined by
     /// CF-145; S3.11b). The caller projects the `entry` JSONs from
-    /// `hh_registry::extension::trust_snapshot`; when `bytes` is carried,
+    /// `hharness_registry::extension::trust_snapshot`; when `bytes` is carried,
     /// `assemble` deposits them as a member and refuses on a digest
     /// mismatch (the `content` pin *is* the digest — AC-R-2.8.5-10);
     /// without bytes the pin lands `unpinned[not_captured]`, never silent.
@@ -135,10 +135,10 @@ pub struct Assembled {
 /// `placeholder_passthrough` mark (`tombstone: None`) is the *safe* form —
 /// it is not a leak.
 pub(crate) fn secret_scan(members: &MemberBytes) -> Result<(), BundleError> {
-    let detectors = hh_secrets::DetectorSet::standard(hh_secrets::MaskSet::default());
+    let detectors = hharness_secrets::DetectorSet::standard(hharness_secrets::MaskSet::default());
     for (addr, bytes) in members {
         if let Ok(text) = std::str::from_utf8(bytes) {
-            if let Some(hit) = hh_secrets::detect(text, &detectors)
+            if let Some(hit) = hharness_secrets::detect(text, &detectors)
                 .iter()
                 .find(|h| h.tombstone.is_some())
             {
@@ -461,7 +461,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     secret_scan(&members)?;
 
     // ── subject section ──────────────────────────────────────────────
-    let head = store.head(run_id).unwrap_or(hh_ledger::event::Head {
+    let head = store.head(run_id).unwrap_or(hharness_ledger::event::Head {
         seq: 0,
         event_id: String::new(),
         hash: String::new(),

@@ -6,16 +6,16 @@
 
 use std::path::PathBuf;
 
-use hh_identity::idp;
-use hh_provenance::{Origin, ProvenanceRecord};
-use hh_registry::errors::RegistryError;
-use hh_registry::extension::{
+use hharness_identity::idp;
+use hharness_provenance::{Origin, ProvenanceRecord};
+use hharness_registry::errors::RegistryError;
+use hharness_registry::extension::{
     resolve_candidate, trust_snapshot, Candidate, DeclaredSource, ExtensionKind, FetchOutcome,
     SourceLocator,
 };
-use hh_registry::records::{ForeignImport, RegistryRecord};
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::records::{ForeignImport, RegistryRecord};
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-reg-s311b-{}-{tag}", std::process::id()));
@@ -158,7 +158,7 @@ fn ac_r_2_8_5_10_unresolvable_and_wrong_kind_refs_refuse() {
                 digest: None,
                 label: None,
                 lifted_record: Json::Null,
-                loss_report: hh_registry::records::LossReport::default(),
+                loss_report: hharness_registry::records::LossReport::default(),
             }),
             &kernel(),
             None,

@@ -54,20 +54,20 @@
 
 use std::collections::BTreeSet;
 
-use hh_hir::diff::{ops_between, DiffClassification, DiffDerivation, HirDiff};
-use hh_hir::document::DefinitionVersionRef;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::KindRecord;
-use hh_hir::refs::RunRef;
-use hh_identity::idp::idp_id;
-use hh_provenance::endorse::endorse;
-use hh_provenance::{
+use hharness_hir::diff::{ops_between, DiffClassification, DiffDerivation, HirDiff};
+use hharness_hir::document::DefinitionVersionRef;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::KindRecord;
+use hharness_hir::refs::RunRef;
+use hharness_identity::idp::idp_id;
+use hharness_provenance::endorse::endorse;
+use hharness_provenance::{
     verify_attestation, Attestation, AttestationKind, AuthorityClass, ContentKind,
     EndorsementBasis, EndorsementError, Label, LabelEndorsed, Origin, ProvenanceRecord, TaintTag,
     TrustedAnchors,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::import;
@@ -1323,7 +1323,7 @@ pub fn surface_document(doc: &Json) -> Result<HirDocument, RegistryError> {
         .and_then(Json::as_str)
         .unwrap_or("")
         .to_string();
-    let root = hh_hir::refs::Ref::pinned(format!("surface:{server_ref}"), listing_hash);
+    let root = hharness_hir::refs::Ref::pinned(format!("surface:{server_ref}"), listing_hash);
     let mut hir = HirDocument::new(root);
     for (i, wire) in tools.iter().enumerate() {
         let (rec, _carried) = import::lift_tool(&server_ref, wire, i as u64);
@@ -1444,9 +1444,9 @@ pub fn check_surface(
                 (
                     "authority_delta",
                     Json::str(match classification.authority_delta {
-                        hh_hir::diff::AuthorityDelta::None => "none",
-                        hh_hir::diff::AuthorityDelta::Narrowing => "narrowing",
-                        hh_hir::diff::AuthorityDelta::Widening => "widening",
+                        hharness_hir::diff::AuthorityDelta::None => "none",
+                        hharness_hir::diff::AuthorityDelta::Narrowing => "narrowing",
+                        hharness_hir::diff::AuthorityDelta::Widening => "widening",
                     }),
                 ),
             ]),
@@ -1508,15 +1508,15 @@ impl SurfaceDrift {
                 surface_ops: 0,
                 provenance_only_ops: 0,
                 ext_ops: 0,
-                authority_delta: hh_hir::diff::AuthorityDelta::None,
-                budget_delta: hh_hir::diff::Delta::None,
-                validity_delta: hh_hir::diff::Delta::None,
-                coordination_delta: hh_hir::diff::Delta::None,
+                authority_delta: hharness_hir::diff::AuthorityDelta::None,
+                budget_delta: hharness_hir::diff::Delta::None,
+                validity_delta: hharness_hir::diff::Delta::None,
+                coordination_delta: hharness_hir::diff::Delta::None,
                 touches_conditioned_rules: Vec::new(),
             },
             provenance: ProvenanceRecord::minted(
                 Origin::kernel("registry.check_surface"),
-                hh_provenance::PersistenceScope::Run,
+                hharness_provenance::PersistenceScope::Run,
                 0,
             ),
             derivation: DiffDerivation::default(),

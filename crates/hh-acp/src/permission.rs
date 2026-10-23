@@ -5,7 +5,7 @@
 //! terminal `permission_refused` and the tool call never runs —
 //! never fall back to `always`/`never`).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `PermissionRequest` — the inbound `session/request_permission`
 /// the serve loop hands Π. The verbatim request body is preserved
@@ -170,7 +170,10 @@ pub fn permission_loss_report(payload: &Json) -> Option<Json> {
         return None;
     }
     Some(Json::obj([
-        ("schema", Json::str(hh_compiler::acp::EDGE_LOSS_SCHEMA)),
+        (
+            "schema",
+            Json::str(hharness_compiler::acp::EDGE_LOSS_SCHEMA),
+        ),
         (
             "binding",
             Json::obj([("update", Json::str("session/request_permission"))]),
@@ -241,7 +244,7 @@ pub fn inbound_losses(params: &Json) -> Vec<String> {
 }
 
 /// `PiGate` — the kernel's `Π`/`PermissionGate` surface the
-/// permission transport consults (the seam — `hh-env`'s
+/// permission transport consults (the seam — `hharness-env`'s
 /// `PermissionGate` implements this through the embed layer; tests
 /// use [`StaticPi`]). The adapter calls `decide` and forwards the
 /// outcome verbatim — it never decides.

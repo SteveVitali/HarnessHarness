@@ -298,10 +298,10 @@ pub fn classify(op: &str) -> Option<OpClass> {
 
 /// The `Refused{reason: op_not_admitted}` the gate emits — the closed
 /// spelling the browser's error panel and the ACs pin.
-pub fn refused_payload(op: &str) -> hh_wire::json::Json {
-    hh_wire::json::Json::obj([
-        ("error", hh_wire::json::Json::str("Refused")),
-        ("reason", hh_wire::json::Json::str("op_not_admitted")),
-        ("op", hh_wire::json::Json::str(op)),
+pub fn refused_payload(op: &str) -> hharness_wire::json::Json {
+    hharness_wire::json::Json::obj([
+        ("error", hharness_wire::json::Json::str("Refused")),
+        ("reason", hharness_wire::json::Json::str("op_not_admitted")),
+        ("op", hharness_wire::json::Json::str(op)),
     ])
 }

@@ -1,4 +1,4 @@
-//! `hh-ledger` — the §5a.1 event store / run ledger (S1.5, R-2.2.1).
+//! `hharness-ledger` — the §5a.1 event store / run ledger (S1.5, R-2.2.1).
 //!
 //! The authoritative record of every run: `open_run` / `append` / `read` / `head` /
 //! `subscribe` / `put_blob` / `get_blob` / `project` / `verify` / `lineage` over a
@@ -6,9 +6,9 @@
 //! durable-before-visible ordering; a content-addressed blob pool; and pure,
 //! rebuildable projections (`context_view`, `run_summary`).
 //!
-//! Everything the ledger stores flows through the one canonical form (`hh-wire`),
-//! the one identity scheme (`idp/1` in `hh-identity`), the one provenance schema
-//! (`hh-provenance`) and the one home-plane rule (`hh-ontology`) — CC1/CC7/CC10.
+//! Everything the ledger stores flows through the one canonical form (`hharness-wire`),
+//! the one identity scheme (`idp/1` in `hharness-identity`), the one provenance schema
+//! (`hharness-provenance`) and the one home-plane rule (`hharness-ontology`) — CC1/CC7/CC10.
 //!
 //! Layout:
 //! - [`manifest`] — the `RunManifest` (the immutable seq-0 fact) and the run-kind rules.

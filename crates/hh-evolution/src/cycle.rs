@@ -16,11 +16,11 @@
 //! budget is *declared* (the trainer spends it, never the harness —
 //! N9).
 
-use hh_experiment::docs::LabDocs;
-use hh_lab::coevolution::{
+use hharness_experiment::docs::LabDocs;
+use hharness_lab::coevolution::{
     self as coe, CoEvolutionCycleRecord, CyclePhase, CyclePolicy, CycleStopReason, PhasePlan,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::errors::EvolutionError;
 
@@ -32,7 +32,7 @@ pub mod doc_kind {
 }
 
 /// `CycleDriver` — the thin durable wrapper over the pure cycle folds
-/// in [`hh_lab::coevolution`]. The driver holds the *current* record;
+/// in [`hharness_lab::coevolution`]. The driver holds the *current* record;
 /// every mutator re-seals it (the `cycle_id = version_id` re-derives —
 /// an amendment is a new content address, the sidecar chain is the
 /// audit trail).

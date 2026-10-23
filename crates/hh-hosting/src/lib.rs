@@ -8,7 +8,7 @@
 //!   with the closed kind vocabulary and the I-1…I-5 validators (lifecycle
 //!   completeness, dense `seq`, extension preservation, the authority ceiling,
 //!   hosted stamping).
-//! * [`proj`] — `proj_ABI` (native → hosted, driven by `hh-ledger`'s
+//! * [`proj`] — `proj_ABI` (native → hosted, driven by `hharness-ledger`'s
 //!   `hosted_lowering` column — the class registry is the one class list,
 //!   CC7) and `lift` (hosted → native [`proj::LiftedRow`]s) with the declared
 //!   [`proj::LoweringLossReport`].
@@ -35,7 +35,7 @@
 //!   only, `budget_view` by CF-073), capability-vector gates, dense-seq
 //!   event ingest, terminal synthesis, runtime drift annotations, and the
 //!   `handle(op, params)` records-in surface the boundary's hosting plane
-//!   wires (`hh-embed` never depends on this crate — the seam is Json).
+//!   wires (`hharness-embed` never depends on this crate — the seam is Json).
 //! * [`budget`] — [`budget::derive_budget_enforcement`] (the Lab derives —
 //!   never the participant's claim) + the one ceiling predicate the §6.6 §8
 //!   decision points share.

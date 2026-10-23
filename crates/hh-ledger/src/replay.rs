@@ -29,7 +29,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::branch::{BranchRecord, EnvBinding};
 use crate::errors::LedgerError;
@@ -359,7 +359,8 @@ impl ReplayValidityReport {
     /// (deterministic across rebuilds — AC-R-2.2.4-11).
     pub fn content_ref(&self) -> String {
         let bytes = self.to_json().to_canonical_string();
-        hh_identity::idp::address(bytes.as_bytes(), "application/hh.replay-validity+json").id()
+        hharness_identity::idp::address(bytes.as_bytes(), "application/hh.replay-validity+json")
+            .id()
     }
 
     /// Fold a report back out of its canonical document (the rebuild path —
@@ -660,7 +661,7 @@ pub fn validity(
     let mut net_unconfined = false;
     for (effect_id, fold) in &folds {
         if fold.phase.past_commit()
-            && fold.risk_class.scope == hh_ontology::risk::RiskScope::External
+            && fold.risk_class.scope == hharness_ontology::risk::RiskScope::External
             && !observations.contains(effect_id)
         {
             net_unconfined = true;

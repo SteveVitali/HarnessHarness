@@ -12,7 +12,7 @@
 //! document lives blob-side). `status` is fixed to `unverified` — a receipt
 //! row can never carry a verification claim the kernel did not make.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The receipt's lift status — the only status a `lifecycle.ledger.receipt`
 /// row may carry. `unverified` because the receiver's attestation is external

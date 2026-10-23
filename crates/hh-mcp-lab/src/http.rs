@@ -2,7 +2,7 @@
 //! JSON-RPC frames one-request/one-response (`application/json`),
 //! `GET /mcp` opens the server→client SSE push channel
 //! (`text/event-stream`; DF-S4.11-1), and every request runs `Origin`
-//! gating through [`hh_mcp::http::OriginPolicy`] plus the
+//! gating through [`hharness_mcp::http::OriginPolicy`] plus the
 //! `Authorization: Bearer` → [`LabServer::resolve_credential`]
 //! mediation (DF-S4.11-2 — the WS-H3 credential seam).
 //!
@@ -41,8 +41,8 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
-use hh_mcp::http::OriginPolicy;
-use hh_wire::json::Json;
+use hharness_mcp::http::OriginPolicy;
+use hharness_wire::json::Json;
 
 use crate::binding::{CallerBinding, CredentialRefusal};
 use crate::server::{error_frame, LabServer, ServerEvent};
@@ -112,11 +112,11 @@ enum PreAuth {
     /// handshake succeeded but presented no client certificate — a bare
     /// `401` challenge answers; `Some` = the verified `PeerIdentity`
     /// the declared subject map resolves.
-    TlsPeer(Option<hh_embed::service::PeerIdentity>),
+    TlsPeer(Option<hharness_embed::service::PeerIdentity>),
 }
 
 /// A multiplexed connection slot — `S` is `TcpStream` on the plain arm,
-/// `hh_tls::ServerTlsStream` on the mTLS arm (one codec, TLS beneath;
+/// `hharness_tls::ServerTlsStream` on the mTLS arm (one codec, TLS beneath;
 /// rustls surfaces `WouldBlock` as a typed io error the loop already
 /// tolerates).
 struct Conn<S> {
@@ -300,7 +300,7 @@ fn post(
     sessions: &mut BTreeMap<String, ()>,
     next_session: &mut u64,
 ) -> Outcome {
-    let msg = match hh_wire::json::parse(&req.body) {
+    let msg = match hharness_wire::json::parse(&req.body) {
         Ok(m) => m,
         Err(_) => {
             return Outcome::Reply(reply(
@@ -433,7 +433,7 @@ pub fn serve_http_mtls(
     srv: &mut LabServer,
     listener: &TcpListener,
     origins: &OriginPolicy,
-    tls: &hh_embed::service::ServerTls,
+    tls: &hharness_embed::service::ServerTls,
 ) -> Result<(), ServeHttpError> {
     serve_loop(srv, listener, origins, |listener| {
         match listener.accept() {
@@ -484,7 +484,7 @@ impl OrderlyClose for TcpStream {
     }
 }
 
-impl OrderlyClose for hh_embed::service::ServerTlsStream {
+impl OrderlyClose for hharness_embed::service::ServerTlsStream {
     fn orderly_close(&mut self) {
         self.release();
     }

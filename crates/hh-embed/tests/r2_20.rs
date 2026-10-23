@@ -6,10 +6,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 static N: AtomicU64 = AtomicU64::new(0);
 
@@ -84,7 +84,7 @@ fn lab_hello(svc: &mut EmbedService) {
 }
 
 fn registrar() -> Json {
-    ProvenanceRecord::kernel("hh-embed", 0).to_json()
+    ProvenanceRecord::kernel("hharness-embed", 0).to_json()
 }
 
 fn candidate(name: &str) -> Json {
@@ -104,7 +104,7 @@ fn candidate(name: &str) -> Json {
 }
 
 fn outcome(payload: &[u8]) -> Json {
-    let pin = hh_identity::idp::address(payload, "application/octet-stream");
+    let pin = hharness_identity::idp::address(payload, "application/octet-stream");
     Json::obj([
         ("resolved", Json::str("git:x@abc")),
         ("content", Json::str(pin.id())),

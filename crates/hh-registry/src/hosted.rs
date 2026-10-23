@@ -10,14 +10,14 @@
 //!
 //! This module is **records-in/records-out** — it reads `ConformanceRecord`s
 //! the caller collected ([`crate::RegistryStore::hosted_conformance_entries`]) and the
-//! declaration map off the participant record body. No `hh-hosting` dependency:
-//! the reconcile speaks the registry's own types (CC5/CC6 — `hh-hosting`
+//! declaration map off the participant record body. No `hharness-hosting` dependency:
+//! the reconcile speaks the registry's own types (CC5/CC6 — `hharness-hosting`
 //! stays a removable tier).
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::kinds::ConformanceVerdict;
 use crate::records::ConformanceRecord;

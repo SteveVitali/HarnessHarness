@@ -12,9 +12,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_containment::attach::PolicySlot;
-use hh_containment::policy::{IsolationClass, ResourceLimits};
-use hh_containment::report::{verify_report, ContainmentReport};
+use hharness_containment::attach::PolicySlot;
+use hharness_containment::policy::{IsolationClass, ResourceLimits};
+use hharness_containment::report::{verify_report, ContainmentReport};
 
 use crate::errors::EnvError;
 use crate::record::{EnvironmentClass, ResolvedImage};
@@ -707,7 +707,7 @@ pub struct EnvHandle {
 
 /// `HostedEnvBinding` — the container-installed hosted-environment record
 /// (AC-R-2.2.5-13). The kernel is the eventing authority (the mint is
-/// `hh-env`-produced); `origin = participant` marks *who observed* the
+/// `hharness-env`-produced); `origin = participant` marks *who observed* the
 /// transition — the hosted adapter — never a second writer.
 #[derive(Debug, Clone)]
 pub struct HostedEnvBinding {

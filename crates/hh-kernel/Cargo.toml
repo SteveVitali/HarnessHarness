@@ -1,5 +1,5 @@
 [package]
-name = "hh-kernel"
+name = "hharness-kernel"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,11 +11,11 @@ name = "hh-kernel"
 path = "src/main.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-embed = { path = "../hh-embed" }
+hharness-wire = { path = "../hh-wire" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-embed = { path = "../hh-embed" }
 
 [dev-dependencies]
 # The generated, drift-checked client — used to prove the end-to-end codegen round trip over
 # stdio (a generated stub drives `hello` against the running kernel; AC-R-2.11.4-1 Stage-0).
-hh-embed-client-generated = { path = "../hh-embed-client-generated" }
+hharness-embed-client-generated = { path = "../hh-embed-client-generated" }

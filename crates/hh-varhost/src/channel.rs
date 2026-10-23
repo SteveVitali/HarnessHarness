@@ -13,8 +13,8 @@ use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use hh_embed_schema::plugin_abi::{AbiEnvelope, AbiError, AbiPayload};
-use hh_wire::json::Json;
+use hharness_embed_schema::plugin_abi::{AbiEnvelope, AbiError, AbiPayload};
+use hharness_wire::json::Json;
 
 /// The frame ceiling (4 MiB). An oversized frame is refused before its body
 /// is read — a hostile variant cannot make the host buffer unboundedly.
@@ -104,7 +104,7 @@ impl AbiChannel {
     pub fn send(&mut self, schema_hash: &str, payload: AbiPayload) -> Result<i64, ChannelError> {
         self.tx += 1;
         let env = AbiEnvelope {
-            protocol_version: hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR,
+            protocol_version: hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR,
             schema_hash: schema_hash.to_string(),
             seq: self.tx,
             payload,
@@ -128,7 +128,7 @@ impl AbiChannel {
         let bytes = self.io.read_frame(deadline)?;
         let text = String::from_utf8(bytes)
             .map_err(|_| ChannelError::Schema(AbiError::SchemaViolation))?;
-        let j = hh_wire::json::parse(&text)
+        let j = hharness_wire::json::parse(&text)
             .map_err(|_| ChannelError::Schema(AbiError::SchemaViolation))?;
         let Json::Obj(m) = &j else {
             return Err(ChannelError::Schema(AbiError::SchemaViolation));

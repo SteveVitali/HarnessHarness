@@ -1,11 +1,11 @@
 //! Strict-codec helpers — the closed-record rule (`BadMember` on any member the
 //! shape does not declare, `MissingMember`/`TypeMismatch` on the rest), the same
-//! pattern `hh-telemetry`/`hh-secrets`/`hh-containment` use (CC8/CC3).
+//! pattern `hharness-telemetry`/`hharness-secrets`/`hharness-containment` use (CC8/CC3).
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The strict-codec failure modes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,7 +184,7 @@ pub(crate) fn str_set_at(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `Label{authority, taint, readers}` → JSON.
-pub(crate) fn label_json(l: &hh_provenance::label::Label) -> Json {
+pub(crate) fn label_json(l: &hharness_provenance::label::Label) -> Json {
     Json::obj([
         ("authority", Json::str(l.authority.as_str())),
         (
@@ -196,10 +196,10 @@ pub(crate) fn label_json(l: &hh_provenance::label::Label) -> Json {
 }
 
 /// `ReaderSet` → JSON (`"public"` | `{restricted: [...]}`).
-pub(crate) fn readers_json(r: &hh_provenance::authority::ReaderSet) -> Json {
+pub(crate) fn readers_json(r: &hharness_provenance::authority::ReaderSet) -> Json {
     match r {
-        hh_provenance::authority::ReaderSet::Public => Json::str("public"),
-        hh_provenance::authority::ReaderSet::Restricted(s) => Json::obj([(
+        hharness_provenance::authority::ReaderSet::Public => Json::str("public"),
+        hharness_provenance::authority::ReaderSet::Restricted(s) => Json::obj([(
             "restricted",
             Json::Arr(s.iter().map(|p| Json::str(p.clone())).collect()),
         )]),
@@ -207,7 +207,7 @@ pub(crate) fn readers_json(r: &hh_provenance::authority::ReaderSet) -> Json {
 }
 
 /// `Validity{from, until|condition}` → JSON.
-pub(crate) fn validity_json(v: &hh_hir::records::Validity) -> Json {
+pub(crate) fn validity_json(v: &hharness_hir::records::Validity) -> Json {
     let mut m = BTreeMap::new();
     m.insert("from".to_string(), Json::Int(v.from as i64));
     if let Some(u) = v.until {
@@ -222,6 +222,6 @@ pub(crate) fn validity_json(v: &hh_hir::records::Validity) -> Json {
 /// `EventRef{run_id, event_id}` → `"run_id:event_id"` (the coordinate's
 /// rendered form — manifest.rs's private `event_ref_json` renders the same
 /// pair; this is the crate-local spelling).
-pub(crate) fn event_ref_str(e: &hh_ledger::manifest::EventRef) -> String {
+pub(crate) fn event_ref_str(e: &hharness_ledger::manifest::EventRef) -> String {
     format!("{}:{}", e.run_id, e.event_id)
 }

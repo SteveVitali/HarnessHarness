@@ -4,7 +4,7 @@
 //! `composition.derived_from` carries `{bundle_id, reason}`; the old
 //! manifest and members stay byte-identical (immutability I1).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::codec::Decoded;
 use crate::error::BundleError;

@@ -20,9 +20,9 @@
 //!   this module only guarantees the *subscription rows* exist so a
 //!   resumed parent's `deliver_wakeup` can fire `child_terminal`.
 
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_wire::json::Json;
 
 use crate::result::drain_child_terminal;
 use crate::spawn::{fold_children, kernel_ev_pub};
@@ -103,7 +103,8 @@ pub fn recover_parent(
                 if let Some(reservation_id) =
                     rec.spawned.get("reservation_id").and_then(Json::as_str)
                 {
-                    if let Ok(mut account) = hh_budget::account::Account::open(store, parent_run_id)
+                    if let Ok(mut account) =
+                        hharness_budget::account::Account::open(store, parent_run_id)
                     {
                         let _ = account.release(parent_lease, reservation_id);
                     }
@@ -123,10 +124,10 @@ pub fn recover_parent(
                 .wakeup_subscribe(
                     parent_run_id,
                     parent_lease,
-                    hh_ledger::wakeup::Trigger::ChildTerminal {
+                    hharness_ledger::wakeup::Trigger::ChildTerminal {
                         child_run_id: child_run_id.clone(),
                     },
-                    hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                    hharness_ledger::wakeup::WakeupPolicy::default_policy(),
                     &created_by,
                 )
                 .map_err(|e| SpawnError::Kernel(e.to_string()))?;

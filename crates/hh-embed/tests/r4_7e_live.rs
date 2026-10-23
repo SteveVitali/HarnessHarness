@@ -38,31 +38,31 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use hh_control::driver::{Driver, DriverConfig};
-use hh_control::loops::{JudgePort, RecordedJudge};
-use hh_control::output::{ParamKind, ParamSpec, SurfaceSpec};
-use hh_control::policy::{EnvelopePolicy, JudgedSpec};
-use hh_control::react::{react_preset, ReactMinimal};
-use hh_control::strategy::{ControlContext, StrategyParams};
-use hh_embed::context_adapters::AdapterLane;
-use hh_embed::gateway_model::{GatewayModel, ModelLane};
-use hh_embed::judge_adapters::{
+use hharness_control::driver::{Driver, DriverConfig};
+use hharness_control::loops::{JudgePort, RecordedJudge};
+use hharness_control::output::{ParamKind, ParamSpec, SurfaceSpec};
+use hharness_control::policy::{EnvelopePolicy, JudgedSpec};
+use hharness_control::react::{react_preset, ReactMinimal};
+use hharness_control::strategy::{ControlContext, StrategyParams};
+use hharness_embed::context_adapters::AdapterLane;
+use hharness_embed::gateway_model::{GatewayModel, ModelLane};
+use hharness_embed::judge_adapters::{
     calibrate, judge_fingerprint, link_judged_pair, CalibrationCase, CalibrationRun, JudgeBindSpec,
 };
-use hh_embed::runtime::{EmbedGate, KernelAssembler, KernelSink};
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::critic_rt::CalibrationContext;
-use hh_verification::critics::{CalibrationRecord, CriticDeclaration, IndependenceVector};
-use hh_verification::reconciler::ReconcilerDeclaration;
-use hh_verification::vocab::{
+use hharness_embed::runtime::{EmbedGate, KernelAssembler, KernelSink};
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::critic_rt::CalibrationContext;
+use hharness_verification::critics::{CalibrationRecord, CriticDeclaration, IndependenceVector};
+use hharness_verification::reconciler::ReconcilerDeclaration;
+use hharness_verification::vocab::{
     AdmissionMode, CalibrationStatus, ChargedTo, CriticKind, CriticUse, Detector, DivergenceClass,
     EvidenceMode, OracleClass, Site, SnapshotIndependence, VerdictType,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── provisioning ────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ struct LabelledSet {
 fn labelled_set() -> LabelledSet {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/r4_7e/labelled_cases.json");
-    let d = hh_wire::json::parse(
+    let d = hharness_wire::json::parse(
         &std::fs::read_to_string(&root).expect("the declared labelled set is committed"),
     )
     .expect("labelled set parses");
@@ -274,8 +274,8 @@ fn ctx() -> ControlContext {
         parameters: StrategyParams::default(),
         capabilities_available: vec!["hh.submit".into()],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     }
 }
@@ -299,7 +299,7 @@ fn submit_surface() -> SurfaceSpec {
         )]
         .into_iter()
         .collect(),
-        risk_class: Some(hh_ontology::risk::RiskClass::READ_ONLY),
+        risk_class: Some(hharness_ontology::risk::RiskClass::READ_ONLY),
         family: None,
     }
 }

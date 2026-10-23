@@ -16,14 +16,14 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 use crate::dispatch::{op_call, SurfaceError, ToolOutcome};
 use crate::exposure::ExposureDef;
 use crate::exposure::ExposureTool;
 use crate::session::SurfaceSession;
-use hh_embed::service::EmbedService;
+use hharness_embed::service::EmbedService;
 
 /// The sink spelling the delivered row records (`surface:mcp:<binding>`
 /// — a distinct sink from the web instrument's `surface:<session>`;
@@ -401,8 +401,8 @@ fn account_json_for(svc: &mut EmbedService, run_id: &str) -> Json {
         return Json::Null;
     };
     let totals = account.totals(
-        &hh_budget::account::TotalsScope::Run,
-        &hh_budget::account::TotalsGroupBy {
+        &hharness_budget::account::TotalsScope::Run,
+        &hharness_budget::account::TotalsGroupBy {
             charged_to: true,
             ..Default::default()
         },

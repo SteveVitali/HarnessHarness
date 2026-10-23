@@ -13,14 +13,14 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_identity::idp::ContentAddress;
-use hh_identity::repro::InstrumentRecord;
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::eval::OracleDeclaration;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_identity::idp::ContentAddress;
+use hharness_identity::repro::InstrumentRecord;
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::eval::OracleDeclaration;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::kinds::{
     Admission, Cardinality, ConformanceVerdict, OracleClass, OwnerRef, Placement, ProducedBy,
@@ -145,7 +145,7 @@ pub struct ClassRecord {
     /// only reach — the spec-DAG check and `admit_plugin`'s tier rule consume
     /// it). Empty = substrate-only (the class contract depends on the kernel
     /// substrate, which is C0 by definition).
-    pub depends_on: Vec<hh_plugin::ContractRef>,
+    pub depends_on: Vec<hharness_plugin::ContractRef>,
 }
 
 /// The `VariantRecord` (ADR-0023 shape + ADR-0151 D5 as amended / ADR-0153). The
@@ -483,10 +483,10 @@ pub struct RegistryPolicy {
     pub allowed_foreign_systems: BTreeSet<String>,
     /// The operator/layered `ContractVersionPolicy` records (§8.4 §3;
     /// ADR-0180 D3) — checked by `check_compatibility` inside `resolve`/
-    /// `admit_plugin` alongside the kernel table (`hh-plugin`'s
+    /// `admit_plugin` alongside the kernel table (`hharness-plugin`'s
     /// `kernel_contract_policies`). Carried on the policy because a dedicated
     /// `RecordKind` would be a `registry/2` dialect bump (ADR-0262).
-    pub contract_version_policies: Vec<hh_plugin::ContractVersionPolicy>,
+    pub contract_version_policies: Vec<hharness_plugin::ContractVersionPolicy>,
 }
 
 impl RegistryPolicy {
@@ -615,7 +615,7 @@ impl ModelInstallRule {
 /// (`require_signature_for`), the authority ceiling a hash-only pin may confer
 /// (`hash_only_ceiling`, default `external` — integrity, never endorsement),
 /// and the drift/scanner/model-install/archive postures carried as data (CC1 —
-/// one trust scheme shared with `hh-provenance`'s attestation machinery;
+/// one trust scheme shared with `hharness-provenance`'s attestation machinery;
 /// registration of this kind requires `principal`+ authority — see `store.rs`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrustRootPolicy {
@@ -632,7 +632,7 @@ pub struct TrustRootPolicy {
     /// record lands `quarantined` until a `pin` endorsement lifts it.
     pub require_signature_for: BTreeSet<String>,
     /// The authority ceiling a hash-only pin may confer (default `external`).
-    pub hash_only_ceiling: hh_provenance::AuthorityClass,
+    pub hash_only_ceiling: hharness_provenance::AuthorityClass,
     /// The freshness bound for signature-required records (transaction-time).
     pub max_age: Option<u64>,
     /// The signer-set drift posture (`quarantine` — a removed signer's records
@@ -724,7 +724,7 @@ pub struct RegistryEnvelope {
 pub struct CapabilityRecord {
     /// The `ToolCapability` node (`EntityKind::ToolCapability` — enforced at
     /// `record_from_json` and `register`).
-    pub node: hh_hir::document::Node,
+    pub node: hharness_hir::document::Node,
 }
 
 /// A typed registry record body — the closed Stage-1 schema set (kinds without a
@@ -766,28 +766,28 @@ pub enum RegistryRecord {
     Extension(crate::extension::ExtensionRecord),
     /// An `environment_family` — the §5h.4 `EnvironmentFamilyRecord` is the
     /// body (R-2.9.4⁰ᵃ; the ontology owns the schema — CC7; S1.24).
-    EnvironmentFamily(hh_ontology::lab::EnvironmentFamilyRecord),
+    EnvironmentFamily(hharness_ontology::lab::EnvironmentFamilyRecord),
     /// An `environment_record` — the §5a.5 record body is owned by the
-    /// environment plane (`hh-env`, which sits *above* this crate — the
+    /// environment plane (`hharness-env`, which sits *above* this crate — the
     /// dependency direction forbids a typed arm). The registry stores the
-    /// record's canonical `hh_identity::record::Record::canonical_full()` Json
+    /// record's canonical `hharness_identity::record::Record::canonical_full()` Json
     /// verbatim (records-in/records-out — R3) so `version_id =
-    /// idp("environment", H(body))` mints the same coordinate `hh-env`
+    /// idp("environment", H(body))` mints the same coordinate `hharness-env`
     /// computes (CC1). The registry projects only the pinned
     /// `semantic.containment_policy.version_id` into the dependency/stale
     /// index and snapshot closure — everything else is opaque.
     EnvironmentRecord(Json),
     /// A `participant` record — the §6.6 `ParticipantRecord` (R-2.10.6⁰). The
-    /// schema owner is `hh-hosting` (above this crate — same layering as
+    /// schema owner is `hharness-hosting` (above this crate — same layering as
     /// `EnvironmentRecord`): the registry stores the canonical body verbatim and
     /// gates only on the `kind: "participant"` tag (`record_from_json`).
     Participant(Json),
     /// An `adapter` record — the §6.6 `AdapterRecord` (R-2.10.6⁰). Same opaque
-    /// layering as `Participant`: `hh-hosting` owns the schema; the registry
+    /// layering as `Participant`: `hharness-hosting` owns the schema; the registry
     /// stores the canonical body verbatim (`kind: "adapter"` tag gated).
     Adapter(Json),
     /// A `leaderboard_definition` — the §6.5 named `LeaderboardDefinition`
-    /// record (R-2.10.5 C1; ADR-0294). `hh-results` owns the schema (the same
+    /// record (R-2.10.5 C1; ADR-0294). `hharness-results` owns the schema (the same
     /// opaque layering as `Participant`/`Adapter`): the registry stores the
     /// canonical body verbatim and gates the `kind: "leaderboard_definition"`
     /// tag (`record_from_json`); the definition's `definition_id` is its
@@ -795,14 +795,14 @@ pub enum RegistryRecord {
     /// namespace authority (OQ-372).
     LeaderboardDefinition(Json),
     /// A `sealed_definition` — a sealed `hir/1` document plus its own identity
-    /// (`R-2.10.1`; `hh-hir` owns the schema — `hh_hir::wire::sealed_*` is the
+    /// (`R-2.10.1`; `hharness-hir` owns the schema — `hharness_hir::wire::sealed_*` is the
     /// one codec, CC7). The record's `version_id`/`semantic_id` ARE the
     /// definition's own `definition_ref` coordinates (the same treatment
     /// `Capability` gives a `ToolCapability` node — one coordinate wherever the
     /// definition is pinned).
-    SealedDefinition(hh_hir::SealedDefinition),
+    SealedDefinition(hharness_hir::SealedDefinition),
     /// A `model_profile` — the `ModelProfile/1` view record (R-2.11.4 C1;
-    /// S4.12). `hh-compiler` owns the schema (`profile_to_json` is the one
+    /// S4.12). `hharness-compiler` owns the schema (`profile_to_json` is the one
     /// codec) and sits *above* this crate — the same opaque layering as
     /// `Participant`: the body is `{kind:"model_profile", profile:<view>}`
     /// and the registry stores the canonical Json verbatim.
@@ -861,7 +861,7 @@ impl RegistryRecord {
             // The opaque participant/adapter/leaderboard/profile bodies carry
             // no registry-level pins (their internal refs live inside the body
             // — `profile_ref`/`report_ref` are the compiler's own coordinates,
-            // never registry `version_id`s; `hh-compiler` owns any projection
+            // never registry `version_id`s; `hharness-compiler` owns any projection
             // that reads them).
             RegistryRecord::Participant(_)
             | RegistryRecord::Adapter(_)
@@ -901,12 +901,12 @@ impl RegistryRecord {
             // Observations it names (the snapshot closure — R7; unpinned selectors
             // cannot appear inside a sealed/registered body).
             RegistryRecord::Capability(c) => {
-                if let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic {
+                if let hharness_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic {
                     t.postconditions
                         .iter()
                         .filter_map(|r| match &r.version {
-                            hh_hir::refs::RefVersion::Pinned(v) => Some(v.clone()),
-                            hh_hir::refs::RefVersion::Selector(_) => None,
+                            hharness_hir::refs::RefVersion::Pinned(v) => Some(v.clone()),
+                            hharness_hir::refs::RefVersion::Selector(_) => None,
                         })
                         .collect()
                 } else {

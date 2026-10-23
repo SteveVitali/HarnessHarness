@@ -11,8 +11,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::idp_id;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_wire::json::Json;
 
 /// `SnapshotKind` — the closed sum (`path_baseline` is the Stage-1 member).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -227,7 +227,7 @@ impl PathBaseline {
         let mut entries = BTreeMap::new();
         for p in paths {
             if let Some(bytes) = read(p) {
-                let ca = hh_identity::idp::address(&bytes, "application/octet-stream");
+                let ca = hharness_identity::idp::address(&bytes, "application/octet-stream");
                 entries.insert(p.clone(), ca.id());
             }
         }

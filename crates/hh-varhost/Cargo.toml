@@ -1,5 +1,5 @@
 [package]
-name = "hh-varhost"
+name = "hharness-varhost"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,36 +10,36 @@ description = "The C0/Stage-2 out-of-process variant host — the kernel side of
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger" }
-hh-containment = { path = "../hh-containment" }
-hh-plugin = { path = "../hh-plugin" }
-hh-registry = { path = "../hh-registry" }
-hh-helper = { path = "../hh-helper" }
-hh-env = { path = "../hh-env" }
-hh-embed-schema = { path = "../hh-embed-schema" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-containment = { path = "../hh-containment" }
+hharness-plugin = { path = "../hh-plugin" }
+hharness-registry = { path = "../hh-registry" }
+hharness-helper = { path = "../hh-helper" }
+hharness-env = { path = "../hh-env" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
 
 [dev-dependencies]
 # The fixture runs in-process over `MemIo` for the protocol suite and as a
 # spawned `subprocess_confined` binary for the isolation suite — a
 # dev-dependency cycle (fixture → varhost is the runtime edge) is the
 # standard pattern and adds no production edge.
-hh-plugin-fixture = { path = "../hh-plugin-fixture" }
-hh-ontology = { path = "../hh-ontology" }
+hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
+hharness-ontology = { path = "../hh-ontology" }
 # R2.6 — the `control_strategy` OOP conformance lane builds the canonical
-# ctx/cue documents the fixture decodes (dev-only; hh-control has no
+# ctx/cue documents the fixture decodes (dev-only; hharness-control has no
 # varhost edge — no cycle).
-hh-control = { path = "../hh-control" }
+hharness-control = { path = "../hh-control" }
 # S4.16b — the `hh-memory-store` packaged-variant test drives the shared
 # `memory_store` conformance battery + `RemoteStore` binding (dev-only;
-# hh-context has no varhost edge — no cycle).
-hh-context = { path = "../hh-context" }
+# hharness-context has no varhost edge — no cycle).
+hharness-context = { path = "../hh-context" }
 # S5.6 — the `hh-tracker-fixture` packaged-variant test drives the
 # `work_source_adapter` class end-to-end out of process (dev-only; the
 # fleet crates have no varhost edge — no cycle).
-hh-fleet = { path = "../hh-fleet" }
-hh-fleet-adapter = { path = "../hh-fleet-adapter" }
+hharness-fleet = { path = "../hh-fleet" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
 tempfile = "3"

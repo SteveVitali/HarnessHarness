@@ -8,19 +8,19 @@
 mod common;
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::errors::{CompileError, LinkErrorKind};
-use hh_compiler::profile::{
+use hharness_compiler::compiler::compile;
+use hharness_compiler::errors::{CompileError, LinkErrorKind};
+use hharness_compiler::profile::{
     minimal_profiles, null_profile, profile_coordinate, CapabilityState, ModelProfile,
     ProfileRuleKind,
 };
-use hh_compiler::profile_test::{
+use hharness_compiler::profile_test::{
     evaluate_probe, test_profile as run_test_profile, ConformanceRecord, ConformanceVerdict,
     GoldenSurfaces, ProbeKind, ProbeOutcome, ProbeSpec, ProfileTestFixtures, ProfileTestReport,
     ValidityId, ValidityVerdict,
 };
-use hh_compiler::CompileInputs;
-use hh_wire::json::Json;
+use hharness_compiler::CompileInputs;
+use hharness_wire::json::Json;
 
 /// A sealed doc whose agent node leaves `native.profile` unbound — the link
 /// binds whatever `profile_refs`/`fallback_profile` names (the minimal and
@@ -28,15 +28,15 @@ use hh_wire::json::Json;
 fn unpinned_doc(
     tag: &str,
 ) -> (
-    hh_registry::store::RegistryStore,
-    hh_hir::SealedDefinition,
+    hharness_registry::store::RegistryStore,
+    hharness_hir::SealedDefinition,
     std::collections::BTreeMap<String, String>,
 ) {
     let mut doc = doc_with(&stage1_assembly());
     for n in &mut doc.nodes {
-        if let hh_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
-            if let hh_hir::records::AgentProcessBody::Native(nat) = &mut ap.body {
-                nat.profile = hh_hir::refs::ProfileRef::unbound();
+        if let hharness_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let hharness_hir::records::AgentProcessBody::Native(nat) = &mut ap.body {
+                nat.profile = hharness_hir::refs::ProfileRef::unbound();
             }
         }
     }
@@ -44,11 +44,11 @@ fn unpinned_doc(
 }
 
 fn compile_with(
-    sealed: &hh_hir::SealedDefinition,
+    sealed: &hharness_hir::SealedDefinition,
     profile: &ModelProfile,
-    view: &dyn hh_compiler::profile::ProfileView,
-    store: &hh_registry::store::RegistryStore,
-) -> Result<hh_compiler::seal::CompiledBundle, CompileError> {
+    view: &dyn hharness_compiler::profile::ProfileView,
+    store: &hharness_registry::store::RegistryStore,
+) -> Result<hharness_compiler::seal::CompiledBundle, CompileError> {
     compile(
         &CompileInputs {
             sealed: sealed.clone(),
@@ -60,7 +60,7 @@ fn compile_with(
         },
         view,
         store,
-        &hh_assembly::Stage1Catalog::stage1(),
+        &hharness_assembly::Stage1Catalog::stage1(),
         &kernel(),
     )
 }
@@ -204,10 +204,10 @@ fn ac_2_3_3_5_probe_verdicts_and_drift_gate() {
         ProfileRuleKind::Naming,
         &["tools/*/name"],
         Json::obj([("scheme", Json::str("prefix"))]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
     p.capabilities.native_function_calling = CapabilityState::Declared;
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     let mut report = ProfileTestReport::passing_for(&profile_coordinate(&p), &p.content_hash);
     report.probes.push(ConformanceRecord {
         profile_version: profile_coordinate(&p),
@@ -237,7 +237,7 @@ fn ac_2_3_3_5_probe_verdicts_and_drift_gate() {
         },
         &drifted,
         &store,
-        &hh_assembly::Stage1Catalog::stage1(),
+        &hharness_assembly::Stage1Catalog::stage1(),
         &kernel(),
     )
     .expect("recorded intent admits the drifted dependency");
@@ -265,7 +265,7 @@ fn ac_2_3_3_2_fallback_used_recorded() {
         },
         &view,
         &store,
-        &hh_assembly::Stage1Catalog::stage1(),
+        &hharness_assembly::Stage1Catalog::stage1(),
         &kernel(),
     )
     .expect("fallback binds");
@@ -280,9 +280,9 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
     doc.nodes
         .push(surfaced_tool_node("test:tool", "tool_a", &["path"], 5));
     for n in &mut doc.nodes {
-        if let hh_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
-            if let hh_hir::records::AgentProcessBody::Native(nat) = &mut ap.body {
-                nat.profile = hh_hir::refs::ProfileRef::unbound();
+        if let hharness_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let hharness_hir::records::AgentProcessBody::Native(nat) = &mut ap.body {
+                nat.profile = hharness_hir::refs::ProfileRef::unbound();
             }
         }
     }
@@ -292,7 +292,7 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
     let bundle = compile_with(&sealed, &patch, &view, &store).expect("compiles");
 
     // The observed golden addresses come from the real lowering.
-    let hh_compiler::seal::ModelSurfaceState::Lowered(surface) = &bundle.model_surface else {
+    let hharness_compiler::seal::ModelSurfaceState::Lowered(surface) = &bundle.model_surface else {
         panic!("lowered surface")
     };
     let observed_surfaces: std::collections::BTreeMap<String, String> = surface
@@ -302,7 +302,7 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
             // The golden address covers the *whole* compiled surface record
             // (id, schema, description — not just `surface_id`, whose basis
             // excludes the description leaf).
-            let addr = hh_identity::idp::idp_id(
+            let addr = hharness_identity::idp::idp_id(
                 "golden.surface",
                 format!(
                     "{}∥{}∥{}∥{}",
@@ -319,7 +319,7 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
             )
         })
         .collect();
-    let layout_hash = hh_identity::idp::idp_id(
+    let layout_hash = hharness_identity::idp::idp_id(
         "golden.layout",
         Json::Arr(
             surface
@@ -331,7 +331,7 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
         .to_canonical_string()
         .as_bytes(),
     );
-    let renderer_hash = hh_identity::idp::idp_id(
+    let renderer_hash = hharness_identity::idp::idp_id(
         "golden.renderer",
         surface.transcript_renderer.to_canonical_string().as_bytes(),
     );
@@ -377,13 +377,13 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
         ProfileRuleKind::DescriptionTemplate,
         &["tools/*/description_template"],
         Json::obj([("template", Json::str("edited {purpose}"))]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
-    edited.content_hash = hh_compiler::profile::profile_identity(&edited);
+    edited.content_hash = hharness_compiler::profile::profile_identity(&edited);
     assert_ne!(edited.content_hash, patch.content_hash);
     let edited_view = MapProfileView::of(vec![edited.clone()]);
     let edited_bundle = compile_with(&sealed, &edited, &edited_view, &store).expect("compiles");
-    let hh_compiler::seal::ModelSurfaceState::Lowered(edited_surface) =
+    let hharness_compiler::seal::ModelSurfaceState::Lowered(edited_surface) =
         &edited_bundle.model_surface
     else {
         panic!("lowered")
@@ -399,8 +399,8 @@ fn ac_2_3_3_3_golden_surfaces_v5() {
         .map(|t| t.binding.hir_node_id.clone())
         .collect();
     assert_eq!(orig_ids, edited_ids, "HIR semantic ids unchanged");
-    let golden_addr = |t: &hh_compiler::lower::CompiledToolSurface| {
-        hh_identity::idp::idp_id(
+    let golden_addr = |t: &hharness_compiler::lower::CompiledToolSurface| {
+        hharness_identity::idp::idp_id(
             "golden.surface",
             format!(
                 "{}∥{}∥{}∥{}",
@@ -429,9 +429,9 @@ fn ac_2_3_3_4_v4_capability_consistency() {
         ProfileRuleKind::CachingMarkers,
         &["caching_markers"],
         Json::obj([]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     let report = run_test_profile(&p, &ok_fixtures(), 1);
     match section(&report, ValidityId::V4) {
         ValidityVerdict::Fail { diagnostics } => {
@@ -446,7 +446,7 @@ fn ac_2_3_3_4_v4_capability_consistency() {
     let mut p2 = test_profile();
     p2.capabilities.tool_result_name_required = CapabilityState::Declared;
     p2.capabilities.assistant_required_after_tool_result = CapabilityState::Declared;
-    p2.content_hash = hh_compiler::profile::profile_identity(&p2);
+    p2.content_hash = hharness_compiler::profile::profile_identity(&p2);
     let report2 = run_test_profile(&p2, &ok_fixtures(), 1);
     assert_eq!(section(&report2, ValidityId::V4), &ValidityVerdict::Pass);
     let derived: Vec<&str> = report2
@@ -477,10 +477,10 @@ fn v1_v2_v3_sections() {
         ProfileRuleKind::Naming,
         &[],
         Json::obj([]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
     broken.rules[0].debt.removal_test = None; // incomplete
-    broken.content_hash = hh_compiler::profile::profile_identity(&broken);
+    broken.content_hash = hharness_compiler::profile::profile_identity(&broken);
     let report = run_test_profile(&broken, &ok_fixtures(), 1);
     assert!(matches!(
         section(&report, ValidityId::V3),
@@ -535,10 +535,10 @@ fn v9_role_placement() {
         ProfileRuleKind::PromptLayout,
         &["layout"],
         Json::obj([("order", order), ("role_map", role_map), ("slots", slots)]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
     p.capabilities.developer_role = CapabilityState::Declared;
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     let report = run_test_profile(&p, &ok_fixtures(), 1);
     assert_eq!(section(&report, ValidityId::V9), &ValidityVerdict::Pass);
 
@@ -549,7 +549,7 @@ fn v9_role_placement() {
             rm.remove("kernel");
         }
     }
-    p2.content_hash = hh_compiler::profile::profile_identity(&p2);
+    p2.content_hash = hharness_compiler::profile::profile_identity(&p2);
     let report = run_test_profile(&p2, &ok_fixtures(), 1);
     match section(&report, ValidityId::V9) {
         ValidityVerdict::Fail { diagnostics } => {
@@ -587,9 +587,9 @@ fn v8_error_format() {
         ProfileRuleKind::ErrorFormat,
         &["error_format"],
         Json::obj([("renderings", renderings)]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     let report = run_test_profile(&p, &ok_fixtures(), 1);
     assert_eq!(section(&report, ValidityId::V8), &ValidityVerdict::Pass);
 
@@ -600,7 +600,7 @@ fn v8_error_format() {
             rm.remove("unparseable");
         }
     }
-    p2.content_hash = hh_compiler::profile::profile_identity(&p2);
+    p2.content_hash = hharness_compiler::profile::profile_identity(&p2);
     let report = run_test_profile(&p2, &ok_fixtures(), 1);
     assert!(matches!(
         section(&report, ValidityId::V8),
@@ -638,13 +638,13 @@ fn test_report_codec_round_trip() {
         verdict: ConformanceVerdict::Supported,
         probe_run_id: "run-1".to_string(),
     });
-    let j = hh_compiler::profile_test::test_report_json(&report);
-    let back = hh_compiler::profile_test::test_report_from_json(&j).expect("decodes");
+    let j = hharness_compiler::profile_test::test_report_json(&report);
+    let back = hharness_compiler::profile_test::test_report_from_json(&j).expect("decodes");
     assert_eq!(back, report);
     // Canonical bytes are stable.
     assert_eq!(
         j.to_canonical_string(),
-        hh_compiler::profile_test::test_report_json(&back).to_canonical_string()
+        hharness_compiler::profile_test::test_report_json(&back).to_canonical_string()
     );
 }
 
@@ -652,7 +652,7 @@ fn test_report_codec_round_trip() {
 
 #[test]
 fn retire_rule_produces_a_valid_reduced_profile() {
-    use hh_compiler::profile::{retire_rule, RetireError};
+    use hharness_compiler::profile::{retire_rule, RetireError};
     let (patch, _replace) = minimal_profiles();
     let (reduced, diff) = retire_rule(&patch, "minimal-patch.naming").expect("retires");
     // P − R drops exactly the named rule and recomputes its content address.
@@ -664,7 +664,7 @@ fn retire_rule_produces_a_valid_reduced_profile() {
     assert_ne!(reduced.content_hash, patch.content_hash);
     assert_eq!(
         reduced.content_hash,
-        hh_compiler::profile::profile_identity(&reduced)
+        hharness_compiler::profile::profile_identity(&reduced)
     );
     // The diff records what the removal dropped.
     assert_eq!(diff.removed_rule, "minimal-patch.naming");
@@ -675,8 +675,8 @@ fn retire_rule_produces_a_valid_reduced_profile() {
     );
     assert!(!diff.removal_test_ref.is_empty());
     // The reduced profile is itself valid — the V2 closure predicate holds.
-    let owned = hh_compiler::profile::owned_fields(&reduced);
-    for m in hh_compiler::profile::member_diff(&null_profile(), &reduced) {
+    let owned = hharness_compiler::profile::owned_fields(&reduced);
+    for m in hharness_compiler::profile::member_diff(&null_profile(), &reduced) {
         assert!(owned.contains(&m), "unowned member {m}");
     }
     // Unknown rule → typed refusal.

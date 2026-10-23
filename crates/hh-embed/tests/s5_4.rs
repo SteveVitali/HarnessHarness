@@ -5,7 +5,7 @@
 //!   the DebtIndex fold, and the DebtReport + notice routing — all
 //!   records-in/records-out (the manager is out-of-process by
 //!   construction); the op result is *byte-identical* to the owning
-//!   `hh_lab::debt` fold (the two-surface contract: one canonical
+//!   `hharness_lab::debt` fold (the two-surface contract: one canonical
 //!   projection, `to_canonical_string` equality).
 //! - `lab.model.{snapshot_claim,regression}` — the synthetic DRIFT
 //!   claim + the `run_regression_suite` verdict, and the
@@ -18,16 +18,16 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_ontology::debt::{
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_ontology::debt::{
     DebtClass, DebtScope, DebtStatus, EvidenceRef, ExpiryCondition, ExpiryKind, ModelSelector,
     OwnerRef, RemovalTest, RemovalTestKind,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── service plumbing (mirrors tests/conformance.rs) ─────────────────────────
 
@@ -131,7 +131,7 @@ fn debt_record(rule_id: &str, kind: ExpiryKind) -> AssumptionDebtRecord {
 fn record_json(r: &AssumptionDebtRecord) -> Json {
     // The non-semantic spelling — `debt_from_json` requires the full
     // provenance-bearing members (the `semantic` form drops them).
-    hh_hir::debt_json(r, false)
+    hharness_hir::debt_json(r, false)
 }
 
 // ── lab.debt.evaluate ───────────────────────────────────────────────────────
@@ -209,11 +209,11 @@ fn debt_index_is_byte_identical_to_the_lab_fold() {
     ));
 
     // The owning fold — same records in, byte-identical rows out.
-    let folded = hh_lab::debt::debt_index(&[hh_lab::debt::DebtIndexEntry {
+    let folded = hharness_lab::debt::debt_index(&[hharness_lab::debt::DebtIndexEntry {
         home: Some(3),
         version_id: Some("v-1".into()),
         record: record.clone(),
-        transitions: vec![hh_lab::debt::DebtTransition {
+        transitions: vec![hharness_lab::debt::DebtTransition {
             debt_ref: "debt:r1".into(),
             from: DebtStatus::Active,
             to: DebtStatus::Expiring,
@@ -271,7 +271,7 @@ fn debt_report_routes_notices_through_owner_sinks() {
     let mut unreachable = debt_record("r2", ExpiryKind::Date);
     unreachable.owner = OwnerRef::principal("o2");
     let rows_doc = Json::Arr(vec![
-        hh_lab::debt::DebtIndexRow {
+        hharness_lab::debt::DebtIndexRow {
             rule_id: "r1".into(),
             owner: OwnerRef {
                 team: false,
@@ -299,7 +299,7 @@ fn debt_report_routes_notices_through_owner_sinks() {
             staleness_reasons: vec![],
         }
         .to_json(),
-        hh_lab::debt::DebtIndexRow {
+        hharness_lab::debt::DebtIndexRow {
             rule_id: "r2".into(),
             owner: unreachable.owner.clone(),
             status: DebtStatus::Expired,
@@ -532,7 +532,7 @@ fn analysis_component_targets_and_attribution_design() {
     );
     assert_eq!(design.get("method").and_then(Json::as_str), Some("M1"));
     // Byte-identity with the owning helper.
-    let expected = hh_analysis::ops::attribution_design(
+    let expected = hharness_analysis::ops::attribution_design(
         "design:d1",
         vec![Json::obj([
             ("kind", Json::str("procedure")),
@@ -559,7 +559,7 @@ fn the_s54_ops_are_schema_registered() {
         "lab.analysis.attribution_design",
     ] {
         assert!(
-            hh_embed_schema::ops::lookup(op).is_some(),
+            hharness_embed_schema::ops::lookup(op).is_some(),
             "{op} not in the op registry"
         );
     }

@@ -8,7 +8,7 @@
 //! this ticket's ruling (recorded in the run ledger + ADR):
 //!
 //! - `document` — the authored document scaffold `{root, nodes[], edges[]}`
-//!   (canonical `hir/1` node/edge JSON, decoded by `hh_hir::wire`'s codecs —
+//!   (canonical `hir/1` node/edge JSON, decoded by `hharness_hir::wire`'s codecs —
 //!   CC7). Required for a native source with no `base`; ignored content-wise
 //!   for the assembly section (the composed layers own it).
 //! - `hosted` — the typed home for the §6.1 §2.5 meta-harness members
@@ -19,7 +19,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The one source dialect (`hir/1` — the assembly grammar's dialect).
 pub const SOURCE_DIALECT: &str = "hir/1";
@@ -54,13 +54,13 @@ impl RootKind {
 
 /// One authored layer: `{provenance: LayerProvenance, fragment: <partial
 /// Assembly JSON>}`. The fragment is carried as canonical JSON and decoded
-/// member-wise by `hh_assembly::Assembly::from_json` at desugar — the kernel
+/// member-wise by `hharness_assembly::Assembly::from_json` at desugar — the kernel
 /// codec is the one decoder (CC7; a malformed fragment is a `C-LOAD-*`
 /// diagnostic, never a string error).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceLayer {
     /// The layer's provenance (`source_kind`, `id`, `version`, `precedence`).
-    pub provenance: hh_assembly::grammar::LayerProvenance,
+    pub provenance: hharness_assembly::grammar::LayerProvenance,
     /// The authored fragment (a partial `Assembly`).
     pub fragment: Json,
 }
@@ -235,7 +235,7 @@ pub struct AssemblySource {
 
 impl AssemblySource {
     /// The canonical JSON of the source (the codec's write direction — CC7:
-    /// `hh-lab` owns the `AssemblySource` schema).
+    /// `hharness-lab` owns the `AssemblySource` schema).
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
         m.insert("dialect".into(), Json::str(&self.dialect));
@@ -262,7 +262,7 @@ impl AssemblySource {
                         Json::obj([
                             (
                                 "provenance",
-                                hh_assembly::grammar::layer_json(&l.provenance),
+                                hharness_assembly::grammar::layer_json(&l.provenance),
                             ),
                             ("fragment", l.fragment.clone()),
                         ])
@@ -369,7 +369,7 @@ impl AssemblySource {
                             return Err(format!("{lp}.{k}: unknown member"));
                         }
                     }
-                    let provenance = hh_assembly::grammar::layer_from_json(
+                    let provenance = hharness_assembly::grammar::layer_from_json(
                         lm.get("provenance")
                             .ok_or_else(|| format!("{lp}.provenance is required"))?,
                         &format!("{lp}.provenance"),

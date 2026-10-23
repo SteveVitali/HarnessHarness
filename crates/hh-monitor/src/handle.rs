@@ -5,11 +5,11 @@
 //! coordinate — a string that *spells* one in a `Text` leaf, a tool result or a
 //! forged payload confers nothing (I-H1; AC-R-2.8.1-2).
 
-use hh_compiler::plan::PinnedRef;
-use hh_hir::records::Grant;
-use hh_hir::refs::Ref;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::records::Grant;
+use hharness_hir::refs::Ref;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 /// `HandleId` — allocated, opaque, time-ordered (ADR-0051 D1). The `hnd-`
 /// spelling is a formatting convention only: `HandleId::parse` accepts any

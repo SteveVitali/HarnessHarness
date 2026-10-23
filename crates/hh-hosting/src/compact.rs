@@ -34,8 +34,8 @@
 //! record rides `ext["_raw"]` (CC3 — nothing unreported is synthesized and
 //! nothing reported is dropped).
 
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 use crate::events::{
     EventChannel, HostedError, HostedEvent, HostedOrigin, HostedProvenance, Mediation,
@@ -75,7 +75,7 @@ impl CompactionSpelling {
     }
 }
 
-/// The `n/a{class}` member — the same shape `hh-analysis` stamps
+/// The `n/a{class}` member — the same shape `hharness-analysis` stamps
 /// (`{"n/a": "<class>"}` — a typed absence, never a zero or an estimate).
 pub fn na(class: &str) -> Json {
     Json::obj([("n/a", Json::str(class))])

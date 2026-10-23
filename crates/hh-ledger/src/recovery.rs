@@ -28,8 +28,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::classes::ScopeKind;
 use crate::effect::EffectPhase;
@@ -92,7 +92,7 @@ pub struct RestoreReport {
     /// `security.permission.pending` with no final `decided` — kept pending.
     pub pending_permissions: Vec<String>,
     /// Terminal-`observed` effects whose charge repost is the caller's to check
-    /// (the ledger records; `hh-budget` reposts — idempotent by source event).
+    /// (the ledger records; `hharness-budget` reposts — idempotent by source event).
     pub observed_effects: Vec<String>,
     /// The `lifecycle.run.resumed` audit row.
     pub resumed_event_id: String,

@@ -6,9 +6,9 @@
 //! UncodedRejection` exists to make an *uncoded* rejection a defect — it is never emitted
 //! for ordinary invalid input (AC-CC-11's corpus property).
 
-use hh_hir::leaves::Text;
-use hh_hir::HirError;
-use hh_provenance::ProvenanceRecord;
+use hharness_hir::leaves::Text;
+use hharness_hir::HirError;
+use hharness_provenance::ProvenanceRecord;
 
 /// `severity ∈ {error, warning, info}` (§3.3.8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -247,11 +247,11 @@ pub enum Code {
     /// **S1.10-owned**).
     LinkCapabilityRequires,
     /// `C-LINK-8 AmbiguousSelector` — a profile-selector tie at link (minted by
-    /// `hh_compiler::link` at the `resolve_chain` call; R3.6).
+    /// `hharness_compiler::link` at the `resolve_chain` call; R3.6).
     LinkAmbiguousSelector,
     /// `C-LINK-9 DialectNarrowingUndeclared` — a surface narrows the schema dialect
     /// without the declaration the bound profile requires (minted by
-    /// `hh_compiler::link` and `hh_compiler::family::check_dialect_transform`; R3.6).
+    /// `hharness_compiler::link` and `hharness_compiler::family::check_dialect_transform`; R3.6).
     LinkDialectNarrowing,
     // ── plan / resume / internal ─────────────────────────────────────────────────
     /// `C-PLAN-1 PlanRefusal` — the assembly service's `plan` refuses (§6; registered).
@@ -665,9 +665,9 @@ impl Code {
 }
 
 /// The canonical JSON of an `AssemblyDiagnostic` (CC7 — the schema source owns the
-/// encoding; consumed by `hh-compiler`'s `CompiledBundle.diagnostics[]`).
-pub fn diagnostic_json(d: &AssemblyDiagnostic) -> hh_wire::json::Json {
-    use hh_wire::json::Json;
+/// encoding; consumed by `hharness-compiler`'s `CompiledBundle.diagnostics[]`).
+pub fn diagnostic_json(d: &AssemblyDiagnostic) -> hharness_wire::json::Json {
+    use hharness_wire::json::Json;
     let mut pairs = vec![
         ("code", Json::str(d.code.code())),
         ("severity", Json::str(d.severity.as_str())),
@@ -689,10 +689,10 @@ pub fn diagnostic_json(d: &AssemblyDiagnostic) -> hh_wire::json::Json {
 
 /// Parse an `AssemblyDiagnostic` (the codec's read direction).
 pub fn diagnostic_from_json(
-    j: &hh_wire::json::Json,
+    j: &hharness_wire::json::Json,
     path: &str,
 ) -> Result<AssemblyDiagnostic, HirError> {
-    use hh_wire::json::Json;
+    use hharness_wire::json::Json;
     let get = |k: &str| -> Result<&Json, HirError> {
         j.get(k).ok_or_else(|| HirError::SchemaViolation {
             detail: format!("{path}.{k} missing"),
@@ -840,7 +840,7 @@ pub struct DerivedResults {
     pub benchmark_conditioned_rules: Vec<String>,
 }
 
-/// The opacity partition (7-O; `hh-provenance`'s `OpacityReport` rendered as data):
+/// The opacity partition (7-O; `hharness-provenance`'s `OpacityReport` rendered as data):
 /// per-`AuthorityClass` leaf counts plus the opaque share.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpacitySummary {
@@ -920,8 +920,8 @@ impl ValidationReport {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The canonical JSON of a `StageOutcome`: `{stage, ran, na?, errors, warnings, infos}`.
-pub fn stage_outcome_json(o: &StageOutcome) -> hh_wire::json::Json {
-    use hh_wire::json::Json;
+pub fn stage_outcome_json(o: &StageOutcome) -> hharness_wire::json::Json {
+    use hharness_wire::json::Json;
     let mut pairs = vec![
         ("stage", Json::Int(o.stage as i64)),
         ("ran", Json::Bool(o.ran)),
@@ -935,8 +935,11 @@ pub fn stage_outcome_json(o: &StageOutcome) -> hh_wire::json::Json {
     Json::obj(pairs)
 }
 
-fn stage_outcome_from_json(j: &hh_wire::json::Json, path: &str) -> Result<StageOutcome, HirError> {
-    use hh_wire::json::Json;
+fn stage_outcome_from_json(
+    j: &hharness_wire::json::Json,
+    path: &str,
+) -> Result<StageOutcome, HirError> {
+    use hharness_wire::json::Json;
     let get = |k: &str| -> Result<&Json, HirError> {
         j.get(k).ok_or_else(|| HirError::SchemaViolation {
             detail: format!("{path}.{k} missing"),
@@ -977,8 +980,8 @@ fn stage_outcome_from_json(j: &hh_wire::json::Json, path: &str) -> Result<StageO
 /// The canonical JSON of a `ValidationReport`:
 /// `{status, diagnostics[], derived{opacity?, identity_stability?, hosting_edges[],
 /// benchmark_conditioned_rules[]}, stages[]}`.
-pub fn report_json(r: &ValidationReport) -> hh_wire::json::Json {
-    use hh_wire::json::Json;
+pub fn report_json(r: &ValidationReport) -> hharness_wire::json::Json {
+    use hharness_wire::json::Json;
     let status = match r.status {
         ReportStatus::Pass => "pass",
         ReportStatus::PassWithWarnings => "pass_with_warnings",
@@ -1042,8 +1045,8 @@ pub fn report_json(r: &ValidationReport) -> hh_wire::json::Json {
 
 /// Parse a `ValidationReport` (the codec's read direction — complete reports
 /// round-trip; AC-R-2.10.1-2's diagnostic-serialisation property).
-pub fn report_from_json(j: &hh_wire::json::Json) -> Result<ValidationReport, HirError> {
-    use hh_wire::json::Json;
+pub fn report_from_json(j: &hharness_wire::json::Json) -> Result<ValidationReport, HirError> {
+    use hharness_wire::json::Json;
     let get = |k: &str| -> Result<&Json, HirError> {
         j.get(k).ok_or_else(|| HirError::SchemaViolation {
             detail: format!("report.{k} missing"),

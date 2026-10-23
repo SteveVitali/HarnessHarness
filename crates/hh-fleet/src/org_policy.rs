@@ -11,7 +11,7 @@
 //!   is its durable member).
 //!
 //! The records are *records-out* — the caller deposits/registers them
-//! through the §5h.6 path (`hh_hir::debt::validate_for_home` +
+//! through the §5h.6 path (`hharness_hir::debt::validate_for_home` +
 //! `lifecycle.debt.*`); the fleet layer never opens a run for them.
 //! Each record's `removal_test` is a `retirement_experiment` whose
 //! `template_ref` is the `lab/org-policy-v1` `ExperimentSpec`'s content
@@ -20,15 +20,15 @@
 //! ADR-0207 (e)'s maturity flag: every default's retention past its
 //! debt expiry needs the recipe's verdict).
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_ontology::debt::DebtStatus;
-use hh_ontology::debt::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_ontology::debt::DebtStatus;
+use hharness_ontology::debt::{
     DebtClass, DebtExpiry, DebtScope, DeficiencyClass, EvidenceRef, ExpiryCondition, ExpiryKind,
     ExpiryParams, HypothesisSubject, HypothesisTyped, OwnerRef, PredictedEffect, RemovalTest,
     RemovalTestKind, Revalidation, RevalidationAction, RevalidationOn,
 };
-use hh_provenance::ProvenanceRecord;
+use hharness_provenance::ProvenanceRecord;
 
 /// The recipe id the removal tests instantiate (`lab/org-policy-v1`'s
 /// `ExperimentSpec.design.id` — the `template_ref` the
@@ -95,7 +95,7 @@ pub fn fleet_default_debt_records(
                     created_by.clone(),
                 ),
                 evidence_refs: vec![EvidenceRef {
-                    kind: hh_ontology::debt::EvidenceKind::Source,
+                    kind: hharness_ontology::debt::EvidenceKind::Source,
                     reference: format!("fleet_default:{name}"),
                     observed_at: Some(created_at),
                     tier: None,

@@ -3,7 +3,7 @@
 //! stdio and asserts `(contract_major, schema_hash)`. Green = the generated stub, the schema
 //! source and the running kernel all agree. Fails if any of them drifts.
 
-use hh_embed_client_generated as client;
+use hharness_embed_client_generated as client;
 use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::process::{Command, Stdio};

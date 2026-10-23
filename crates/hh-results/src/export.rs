@@ -20,9 +20,9 @@
 
 use std::fs;
 
-use hh_identity::idp::idp_id;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::error::ResultsError;
 use crate::row::ResultsRow;
@@ -124,8 +124,8 @@ impl LoweringLossReport {
 
     /// The report's content address (the `loss_report_ref` the
     /// `measurement.export.delivered` rows carry).
-    pub fn content_ref(&self) -> hh_identity::idp::ContentAddress {
-        hh_identity::idp::address(
+    pub fn content_ref(&self) -> hharness_identity::idp::ContentAddress {
+        hharness_identity::idp::address(
             self.to_json().to_canonical_string().as_bytes(),
             "application/vnd.hh.loss-report+json",
         )
@@ -158,7 +158,7 @@ fn lower_row(row: &ResultsRow, loss: &mut Vec<LossEntry>) -> Vec<Json> {
     let mut out = Vec::new();
     for cell in &row.cells {
         match &cell.value {
-            hh_ontology::eval::MetricValueKind::Na(reason) => {
+            hharness_ontology::eval::MetricValueKind::Na(reason) => {
                 loss.push(LossEntry {
                     run_id: row.key.run_id.clone(),
                     field: format!("cells.{}.value", cell.metric_ref),

@@ -17,7 +17,7 @@
 //! parse, never silently widens):
 //!
 //! - `first_party` — `https:` origins on `admitted_origins`. Trust root:
-//!   TLS PKI (the `hh-tls` rustls/webpki graph, ADR-0365) plus the
+//!   TLS PKI (the `hharness-tls` rustls/webpki graph, ADR-0365) plus the
 //!   allowlist row — integrity is by-construction (S3 re-hash).
 //! - `signed_url` — presigned-URL carriers (`https:` carrying an
 //!   embedded signature param); `FetchEntry.expires` **enforced** — an
@@ -49,12 +49,12 @@
 //! The `transport_pending` interim is gone — every refusal the pool
 //! half used to park is a typed arm here.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 use crate::manifest::FetchEntry;
 
-/// The record's `schema` spelling (`hh/` MUST-data, `hh-bundle` home).
+/// The record's `schema` spelling (`hh/` MUST-data, `hharness-bundle` home).
 pub const FETCH_TRUST_SCHEMA: &str = "hh-bundle-fetch-trust/1";
 
 /// `FetchTrustPolicy` — the adopted MUST-data record.
@@ -104,7 +104,7 @@ impl FetchTrustPolicy {
     /// The record's version id — `idp/1` over its canonical document
     /// (the coordinate a bundle's `resolved_dependencies` pins).
     pub fn version_id(&self) -> String {
-        hh_identity::idp_id(
+        hharness_identity::idp_id(
             "fetch-trust-policy",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -332,7 +332,7 @@ fn credential_literal(uri: &str) -> bool {
         while let Some(at) = lower[from..].find(key).map(|i| i + from) {
             let value = &lower[at + key.len()..];
             let value = value.split('&').next().unwrap_or("");
-            if !hh_secrets::Placeholder::is_placeholder(value) {
+            if !hharness_secrets::Placeholder::is_placeholder(value) {
                 return true;
             }
             from = at + key.len();
@@ -358,7 +358,7 @@ fn host_norm(raw: &str) -> String {
 }
 
 /// The `(host, port)` an `https:` URI names — the authority split the
-/// same way `hh_wire::http::parse_http_url` reads it (default 443).
+/// same way `hharness_wire::http::parse_http_url` reads it (default 443).
 /// `None` on a malformed authority.
 fn https_authority(uri: &str) -> Option<(String, u16)> {
     let rest = uri.strip_prefix("https://")?;
@@ -427,7 +427,7 @@ fn query_value(uri: &str, want: &str) -> Option<String> {
 fn has_signed_params(uri: &str) -> bool {
     if uri
         .split(|c: char| !(c.is_alphanumeric() || c == ':' || c == '_' || c == '-'))
-        .any(hh_secrets::Placeholder::is_placeholder)
+        .any(hharness_secrets::Placeholder::is_placeholder)
     {
         return true;
     }
@@ -590,7 +590,7 @@ pub fn member_fetched_payload(
         ("location_uri", Json::str(location_uri)),
         (
             "fetched_at",
-            Json::str(hh_ledger::store::rfc3339_ms(fetched_at_ms)),
+            Json::str(hharness_ledger::store::rfc3339_ms(fetched_at_ms)),
         ),
         ("transport", Json::str(transport)),
         ("outcome", Json::str(outcome)),

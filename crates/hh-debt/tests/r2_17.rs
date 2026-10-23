@@ -11,35 +11,35 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::matchspec::MatchSpec;
-use hh_debt::records::{DebtManagerRecord, SchedulableEntry, SweepEntry};
-use hh_debt::reflexive::reflexive_record;
-use hh_debt::schedule::{
+use hharness_budget::matchspec::MatchSpec;
+use hharness_debt::records::{DebtManagerRecord, SchedulableEntry, SweepEntry};
+use hharness_debt::reflexive::reflexive_record;
+use hharness_debt::schedule::{
     schedule_batch, schedule_removal_test, DeferredReason, ScheduleContext, ScheduleOutcome,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_lab::experiment::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_ledger::ids::ManualClock;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::config::Ref;
-use hh_ontology::debt::{
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::config::Ref;
+use hharness_ontology::debt::{
     DeadWeightWindow, DebtClass, DebtExpiry, DebtPolicy, DebtScope, DebtStatus, DeficiencyClass,
     EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject,
     HypothesisTyped, OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind, Revalidation,
     RevalidationAction, RevalidationOn,
 };
-use hh_ontology::eval::{
+use hharness_ontology::eval::{
     Design, DesignKind, FactorKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
 
 // ── fixtures (same shapes as `s6_1b.rs` — kept local so this battery
 // stands alone) ──────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ fn pre_registration() -> PreRegistration {
         registered_at: 1,
         hypothesis: "removing the conditioned rule is non-inferior".into(),
         primary_metrics: vec!["task_success".into()],
-        equivalence_margin: Some(hh_wire::json::Json::str("margin:ni")),
+        equivalence_margin: Some(hharness_wire::json::Json::str("margin:ni")),
         min_n: 1,
         analysis_plan_ref: "analysis:plan".into(),
         task_split_hash: "sha256:cc33".into(),
@@ -271,7 +271,7 @@ fn sched_entry(debt_ref: &str, status: DebtStatus, used: bool) -> SchedulableEnt
     SchedulableEntry {
         debt_ref: debt_ref.to_string(),
         current_status: status,
-        evidence_grade: hh_ontology::debt::EvidenceGrade::Hypothesized,
+        evidence_grade: hharness_ontology::debt::EvidenceGrade::Hypothesized,
         used,
         probation_due: false,
         next_time_expiry_ms: None,
@@ -521,9 +521,11 @@ fn manager_record_validate_consumes_policy_spellings() {
 #[test]
 fn sweep_completed_row_carries_the_cadence_spelling() {
     let (_root, _clock, mut store, run) = rig("cadence");
-    let mut mgr =
-        hh_debt::manager::DebtManager::open(&store, &hh_hir::refs::RunRef { run: run.clone() })
-            .unwrap();
+    let mut mgr = hharness_debt::manager::DebtManager::open(
+        &store,
+        &hharness_hir::refs::RunRef { run: run.clone() },
+    )
+    .unwrap();
     let record = manager_record("m1");
     mgr.register(&mut store, &record).unwrap();
     let entry = entry_for(

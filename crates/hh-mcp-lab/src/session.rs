@@ -19,18 +19,18 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::account::ChargeRequest;
-use hh_budget::attribution::{Attribution, ChargedTo};
-use hh_budget::quantity::ResourceQuantity;
-use hh_budget::spec::{BudgetMode, BudgetNode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_embed::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::Lease;
-use hh_ontology::dimensions::DimensionId;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_budget::account::ChargeRequest;
+use hharness_budget::attribution::{Attribution, ChargedTo};
+use hharness_budget::quantity::ResourceQuantity;
+use hharness_budget::spec::{BudgetMode, BudgetNode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_embed::service::EmbedService;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::Lease;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 use crate::handles::HandleTable;
@@ -133,7 +133,7 @@ impl SurfaceSession {
             svc,
             &self.run_id,
             "control.budget.allocated",
-            hh_budget::events::allocated_payload(
+            hharness_budget::events::allocated_payload(
                 &BudgetNode {
                     budget_id: self.binding.budget_node.clone(),
                     scope: BudgetScope {
@@ -328,8 +328,8 @@ impl SurfaceSession {
                 reason: format!("account: {e:?}"),
             })?;
         let totals = account.totals(
-            &hh_budget::account::TotalsScope::Run,
-            &hh_budget::account::TotalsGroupBy {
+            &hharness_budget::account::TotalsScope::Run,
+            &hharness_budget::account::TotalsGroupBy {
                 charged_to: true,
                 ..Default::default()
             },
@@ -372,7 +372,7 @@ impl SurfaceSession {
             )
         })?;
         for (dim, req) in requested {
-            let key = hh_ontology::dimensions::DimensionKey::Primary(*dim);
+            let key = hharness_ontology::dimensions::DimensionKey::Primary(*dim);
             match account.remaining(&self.pool_node, key) {
                 Some(rem) => {
                     if *req > rem {
@@ -438,7 +438,7 @@ impl SurfaceSession {
         };
         let mut remaining = BTreeMap::new();
         for d in dims {
-            if let Some(key) = hh_ontology::dimensions::DimensionKey::parse(&d) {
+            if let Some(key) = hharness_ontology::dimensions::DimensionKey::parse(&d) {
                 if let Some(rem) = account.remaining(&self.pool_node, key) {
                     remaining.insert(d.clone(), Json::Int(rem));
                 }
@@ -454,7 +454,7 @@ impl SurfaceSession {
     pub fn events<'a>(
         &self,
         svc: &'a EmbedService,
-    ) -> Result<&'a [hh_ledger::event::EventEnvelope], EmbedError> {
+    ) -> Result<&'a [hharness_ledger::event::EventEnvelope], EmbedError> {
         svc.surface_events(&self.run_id)
     }
 }
@@ -479,7 +479,7 @@ pub fn parse_pool_spec(pool: &Json) -> Result<BudgetSpec, String> {
         ..Default::default()
     };
     for (k, rule) in &dims {
-        let key = hh_ontology::dimensions::DimensionKey::parse(k)
+        let key = hharness_ontology::dimensions::DimensionKey::parse(k)
             .ok_or_else(|| format!("pool dimension `{k}` unknown"))?;
         let limit = match rule {
             // `{hard: <int>}` — the BudgetInput lowering.
@@ -495,7 +495,7 @@ pub fn parse_pool_spec(pool: &Json) -> Result<BudgetSpec, String> {
             _ => return Err(format!("pool.{k} not a rule")),
         };
         spec.dimensions
-            .insert(key, hh_budget::spec::DimensionRule::hard(limit, key));
+            .insert(key, hharness_budget::spec::DimensionRule::hard(limit, key));
     }
     spec.validate().map_err(|e| format!("{e}"))?;
     Ok(spec)

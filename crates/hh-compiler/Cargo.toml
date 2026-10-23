@@ -1,5 +1,5 @@
 [package]
-name = "hh-compiler"
+name = "hharness-compiler"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,10 +14,10 @@ name = "hh-compile"
 path = "src/bin/hh-compile.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-assembly = { path = "../hh-assembly" }
-hh-registry = { path = "../hh-registry" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-assembly = { path = "../hh-assembly" }
+hharness-registry = { path = "../hh-registry" }

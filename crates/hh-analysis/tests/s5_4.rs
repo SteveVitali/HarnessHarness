@@ -21,28 +21,28 @@
 
 use std::collections::BTreeMap;
 
-use hh_analysis::{analyze, AnalysisError, AnalysisInput};
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::catalogue;
-use hh_eval::facts::LedgerFacts;
-use hh_lab::analysis::{AnalysisSpec, QuerySpec};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_analysis::{analyze, AnalysisError, AnalysisInput};
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::catalogue;
+use hharness_eval::facts::LedgerFacts;
+use hharness_lab::analysis::{AnalysisSpec, QuerySpec};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorDeclaration, FactorKind, FactorLevel,
     IntervalMethod, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_results::audit::AuditRef;
-use hh_results::row::{
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_results::audit::AuditRef;
+use hharness_results::row::{
     AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection, ResultsRow,
     RowKey,
 };
-use hh_results::scoring::ScoringContext;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::Json;
+use hharness_results::scoring::ScoringContext;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::Json;
 
 // ── fixture plumbing (mirrors tests/s5_3.rs) ─────────────────────────────────
 
@@ -134,8 +134,8 @@ fn arms(ids: &[&str]) -> Vec<(String, ArmSpec)> {
         .collect()
 }
 
-fn task(id: &str) -> hh_eval::runs::TaskContext {
-    hh_eval::runs::TaskContext {
+fn task(id: &str) -> hharness_eval::runs::TaskContext {
+    hharness_eval::runs::TaskContext {
         task_id: id.into(),
         suite_id: "suite-test".into(),
         split_label: SplitLabel::HeldOut,
@@ -144,8 +144,8 @@ fn task(id: &str) -> hh_eval::runs::TaskContext {
     }
 }
 
-fn suite() -> hh_eval::runs::SuiteContext {
-    hh_eval::runs::SuiteContext {
+fn suite() -> hharness_eval::runs::SuiteContext {
+    hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -209,7 +209,7 @@ fn row(arm: &str, task_id: &str, rep: u64, value: i64, metric: &str) -> ResultsR
         },
         cells: vec![Cell {
             metric_ref: metric.into(),
-            value: hh_ontology::eval::MetricValueKind::Bool(value > 0),
+            value: hharness_ontology::eval::MetricValueKind::Bool(value > 0),
             detector: Some("deterministic".into()),
             oracle_ref: Some("oracle/executable".into()),
             confidence: None,
@@ -306,8 +306,8 @@ struct Fixture {
     rows: Vec<ResultsRow>,
     manifests: BTreeMap<String, RunManifest>,
     facts: BTreeMap<String, LedgerFacts>,
-    tasks: Vec<hh_eval::runs::TaskContext>,
-    suites: Vec<hh_eval::runs::SuiteContext>,
+    tasks: Vec<hharness_eval::runs::TaskContext>,
+    suites: Vec<hharness_eval::runs::SuiteContext>,
     design: Design,
     arms: Vec<(String, ArmSpec)>,
     decls: Vec<MetricDeclaration>,
@@ -877,7 +877,7 @@ fn component_targets_enumerates_the_sealed_definition() {
         ("leaves", Json::Arr(vec![Json::str("leaf:a")])),
         ("decision_points", Json::Arr(vec![Json::str("dp:route")])),
     ]);
-    let targets = hh_analysis::ops::component_targets(&def, None);
+    let targets = hharness_analysis::ops::component_targets(&def, None);
     let kinds: Vec<&str> = targets
         .iter()
         .filter_map(|t| t.get("kind").and_then(Json::as_str))
@@ -894,7 +894,7 @@ fn component_targets_enumerates_the_sealed_definition() {
         assert!(kinds.contains(&k), "kind {k} missing: {targets:?}");
     }
     // `filter{kinds[], pattern}` narrows the enumeration.
-    let only_procs = hh_analysis::ops::component_targets(
+    let only_procs = hharness_analysis::ops::component_targets(
         &def,
         Some(&Json::obj([(
             "kinds",
@@ -906,7 +906,7 @@ fn component_targets_enumerates_the_sealed_definition() {
         only_procs[0].get("ref").and_then(Json::as_str),
         Some("proc:main")
     );
-    let pat = hh_analysis::ops::component_targets(
+    let pat = hharness_analysis::ops::component_targets(
         &def,
         Some(&Json::obj([("pattern", Json::str("leaf"))])),
     );
@@ -916,7 +916,7 @@ fn component_targets_enumerates_the_sealed_definition() {
 
 #[test]
 fn attribution_design_document_shape() {
-    let d = hh_analysis::ops::attribution_design(
+    let d = hharness_analysis::ops::attribution_design(
         "design:d1",
         vec![Json::obj([
             ("kind", Json::str("procedure")),

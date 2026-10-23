@@ -8,13 +8,13 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_hir::records::GrantConstraints;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::ProvenanceRecord;
+use hharness_hir::records::GrantConstraints;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::ProvenanceRecord;
 
-use hh_secrets::*;
+use hharness_secrets::*;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -42,7 +42,7 @@ fn github_spec() -> SecretChannelSpec {
             },
         }],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
-        delivery_modes: [hh_monitor::assess::SecretTransport::ProxyInjected]
+        delivery_modes: [hharness_monitor::assess::SecretTransport::ProxyInjected]
             .into_iter()
             .collect(),
         max_lifetime_ms: None,
@@ -89,7 +89,7 @@ fn lt07_subagent_scope_outside_parent_grant_is_scope_exceeds_channel() {
         "github",
         &["evil.example.com".into()].into_iter().collect(),
         GrantConstraints::default(),
-        &hh_hir::records::Issuer {
+        &hharness_hir::records::Issuer {
             authority: AuthorityClass::Principal,
             reference: "principal:test".into(),
         },
@@ -110,7 +110,7 @@ fn lt07_subagent_scope_outside_parent_grant_is_scope_exceeds_channel() {
             "github",
             &["api.github.com".into()].into_iter().collect(),
             GrantConstraints::default(),
-            &hh_hir::records::Issuer {
+            &hharness_hir::records::Issuer {
                 authority: AuthorityClass::Principal,
                 reference: "principal:test".into(),
             },
@@ -123,7 +123,7 @@ fn lt07_subagent_scope_outside_parent_grant_is_scope_exceeds_channel() {
         "github",
         &["api.github.com".into()].into_iter().collect(),
         GrantConstraints::default(),
-        &hh_hir::records::Issuer {
+        &hharness_hir::records::Issuer {
             authority: AuthorityClass::Delegate,
             reference: "sub:child-run".into(),
         },

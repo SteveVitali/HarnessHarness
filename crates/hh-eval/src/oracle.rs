@@ -14,8 +14,8 @@
 //! scored outcome (spec AC-12; §5h.3.3).
 
 use crate::json_util::SchemaError;
-use hh_ontology::eval::{LatticeValue, OracleClass, OracleDeclaration};
-use hh_wire::Json;
+use hharness_ontology::eval::{LatticeValue, OracleClass, OracleDeclaration};
+use hharness_wire::Json;
 
 /// `OracleRequest/1` — the out-of-process oracle contract (canonical JSON on
 /// stdin; the verdict on stdout).
@@ -209,7 +209,7 @@ pub fn trace_predicate(criterion: &str, transcript: &[u8]) -> Option<LatticeValu
 /// the caller treats as the generic-contract path, yielding `I`).
 fn decode_facts(bytes: &[u8]) -> Option<crate::facts::LedgerFacts> {
     let text = std::str::from_utf8(bytes).ok()?;
-    let j = hh_wire::json::parse(text).ok()?;
+    let j = hharness_wire::json::parse(text).ok()?;
     // `ledger_facts/1` document.
     if j.get("schema").and_then(Json::as_str) == Some("ledger_facts/1") {
         return crate::facts::LedgerFacts::from_json(&j).ok();
@@ -382,7 +382,7 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ontology::eval::{ChargedTo, VerdictType};
+    use hharness_ontology::eval::{ChargedTo, VerdictType};
 
     fn decl(class: OracleClass) -> OracleDeclaration {
         let mut d = OracleDeclaration {
@@ -394,7 +394,7 @@ mod tests {
             evidence_out: vec![],
             charged_to: ChargedTo::Subject,
             calibration_ref: None,
-            provenance: hh_provenance::ProvenanceRecord::kernel("hh-eval/test", 0),
+            provenance: hharness_provenance::ProvenanceRecord::kernel("hh-eval/test", 0),
         };
         if class == OracleClass::Judge {
             d.deterministic = false;

@@ -1,4 +1,4 @@
-//! The closed error sums for `hh-telemetry` — strict-codec failures, sink-policy
+//! The closed error sums for `hharness-telemetry` — strict-codec failures, sink-policy
 //! and export refusals, token-vector invariant violations, propagation parse
 //! failures and the registry check's findings. No `Box<dyn Error>`: every failure
 //! a caller can act on is a typed variant (CC3 — nothing silently lost).

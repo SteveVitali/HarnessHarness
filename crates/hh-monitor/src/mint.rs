@@ -16,13 +16,13 @@
 //! origin — at seal it is `definition`-endorsed); `model`/`evolution`/
 //! `participant` provenance on the `Permission` node may never confer.
 
-use hh_compiler::plan::PinnedRef;
-use hh_hir::kinds::EffectDomain;
-use hh_hir::records::{KindRecord, PermissionRecord};
-use hh_hir::refs::Ref;
-use hh_hir::{HirDocument, SealedDefinition};
-use hh_provenance::{AuthorityClass, Origin, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::records::{KindRecord, PermissionRecord};
+use hharness_hir::refs::Ref;
+use hharness_hir::{HirDocument, SealedDefinition};
+use hharness_provenance::{AuthorityClass, Origin, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
 
@@ -204,7 +204,7 @@ pub struct ApprovalMint {
     /// `ApproverGrant` (legitimacy ran at `respond`; mint records it).
     pub issuer: ProvenanceRecord,
     /// The granted effects (the pending capability's grant shape).
-    pub grants: Vec<hh_hir::records::Grant>,
+    pub grants: Vec<hharness_hir::records::Grant>,
     /// The ceiling — the grant's recorded ceiling, never above the pending's
     /// decided risk ceiling (raise-only).
     pub ceiling: AuthorityClass,
@@ -314,14 +314,14 @@ pub fn mint_preauthorization_handles(
         let KindRecord::HarnessRule(rule) = &node.semantic else {
             continue;
         };
-        let hh_hir::records::RuleAction::PreAuthorize(spec) = &rule.action else {
+        let hharness_hir::records::RuleAction::PreAuthorize(spec) = &rule.action else {
             continue;
         };
-        let grants: Vec<hh_hir::records::Grant> = match spec.get("grants") {
+        let grants: Vec<hharness_hir::records::Grant> = match spec.get("grants") {
             Some(Json::Arr(rows)) => rows
                 .iter()
                 .enumerate()
-                .map(|(i, g)| hh_hir::grant_from_json(g, &format!("grants[{i}]")).ok())
+                .map(|(i, g)| hharness_hir::grant_from_json(g, &format!("grants[{i}]")).ok())
                 .collect::<Option<Vec<_>>>()
                 .unwrap_or_default(),
             _ => Vec::new(),

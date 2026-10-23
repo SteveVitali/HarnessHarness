@@ -26,8 +26,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::assemble::Assembled;
 use crate::error::BundleError;
@@ -186,7 +186,7 @@ pub fn assemble_scoped(inputs: &ScopedInputs<'_>) -> Result<Assembled, BundleErr
             .iter()
             .any(|e| e.class == "lifecycle.run.finished");
         all_finished &= finished;
-        let head = store.head(run_id).unwrap_or(hh_ledger::event::Head {
+        let head = store.head(run_id).unwrap_or(hharness_ledger::event::Head {
             seq: 0,
             event_id: String::new(),
             hash: String::new(),

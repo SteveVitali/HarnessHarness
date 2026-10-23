@@ -9,28 +9,28 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::matchspec::{MatchMode, MatchSpec};
-use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
-use hh_evolution::errors::{EvolutionError, Refusal};
-use hh_evolution::lineage::{attribute_lineage, LineageDag};
-use hh_evolution::records::{
+use hharness_budget::matchspec::{MatchMode, MatchSpec};
+use hharness_evolution::campaign::{doc_kind, EvolutionCampaign};
+use hharness_evolution::errors::{EvolutionError, Refusal};
+use hharness_evolution::lineage::{attribute_lineage, LineageDag};
+use hharness_evolution::records::{
     AcceptanceItem, CandidateProposal, CorpusSpec, EvolutionAcceptanceReport,
     EvolutionCampaignSpec, FailureHypothesis, ItemStatus, JudgePolicy, PortabilityLabel,
     PredictedDelta, PredictedEffect, ScreenReport, SelectorDeclaration, SlotAllocation, StopRule,
 };
-use hh_experiment::docs::LabDocs;
-use hh_hir::diff::{self, DiffDerivation, HirDiff};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::idp_id;
-use hh_lab::bench::SplitAssignmentRecord;
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_experiment::docs::LabDocs;
+use hharness_hir::diff::{self, DiffDerivation, HirDiff};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::idp_id;
+use hharness_lab::bench::SplitAssignmentRecord;
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixture plumbing (the s6_1a shape) ──────────────────────────────────────
 
@@ -647,55 +647,55 @@ fn s5_judge_leaked_into_artifact_refuses() {
     docs.put_named(
         doc_kind::REPORT,
         "rep:held",
-        &hh_lab::analysis::ComparisonReport {
+        &hharness_lab::analysis::ComparisonReport {
             arm_a: "a".into(),
             arm_b: "b".into(),
             metric: "task_success".into(),
             pairing: "by_task".into(),
-            paired_effect: hh_lab::analysis::PairedEffect {
+            paired_effect: hharness_lab::analysis::PairedEffect {
                 point: Some(Json::str("0.05")),
                 interval: Some(Json::obj([("lo", Json::Int(1)), ("hi", Json::Int(9))])),
-                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+                method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
             },
             per_task_effects_ref: None,
-            budget_match: hh_lab::analysis::BudgetMatch {
+            budget_match: hharness_lab::analysis::BudgetMatch {
                 limits_equal: true,
                 consumption_imbalance: None,
                 tolerance_ppm: 50_000,
-                status: hh_lab::analysis::BudgetMatchStatus::Matched,
+                status: hharness_lab::analysis::BudgetMatchStatus::Matched,
                 search_unknown: false,
             },
-            benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+            benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
             held_out: true,
             estimated: None,
-            test: hh_lab::analysis::TestRecord {
-                kind: hh_lab::analysis::TestKind::PermutationSignflip,
+            test: hharness_lab::analysis::TestRecord {
+                kind: hharness_lab::analysis::TestKind::PermutationSignflip,
             },
-            sign_profile: hh_lab::analysis::SignProfile {
+            sign_profile: hharness_lab::analysis::SignProfile {
                 helped: 3,
                 hurt: 0,
                 unchanged: 1,
             },
-            tail_effects: hh_lab::analysis::TailEffects {
+            tail_effects: hharness_lab::analysis::TailEffects {
                 p50: Json::str("0.04"),
                 p95: Json::str("0.12"),
                 max: Json::str("0.30"),
             },
-            outcome_bounds: hh_lab::analysis::OutcomeBounds {
+            outcome_bounds: hharness_lab::analysis::OutcomeBounds {
                 lower: Json::str("0.0"),
                 upper: Json::str("1.0"),
-                verdict: hh_lab::analysis::OutcomeBoundsVerdict::Robust,
+                verdict: hharness_lab::analysis::OutcomeBoundsVerdict::Robust,
             },
-            multiplicity: hh_lab::analysis::Multiplicity {
+            multiplicity: hharness_lab::analysis::Multiplicity {
                 family_size: 1,
                 adjusted: "holm".into(),
                 raw_ppm: None,
                 adjusted_ppm: None,
                 label: None,
             },
-            label: hh_lab::analysis::ReportLabelKind::Headlined,
-            estimator_selection: hh_ontology::eval::EstimatorSelection {
-                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+            label: hharness_lab::analysis::ReportLabelKind::Headlined,
+            estimator_selection: hharness_ontology::eval::EstimatorSelection {
+                method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
                 selection_rule: "adr-0158.clt_floor".into(),
                 floors: BTreeMap::new(),
                 fallback_chain: vec![],
@@ -729,8 +729,8 @@ fn s5_judge_leaked_into_artifact_refuses() {
 // 3. The S5 attribution label gate (§5h.7).
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> hh_lab::experiment::ArmSpec {
-    hh_lab::experiment::ArmSpec {
+fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> hharness_lab::experiment::ArmSpec {
+    hharness_lab::experiment::ArmSpec {
         arm_id: id.into(),
         hypothesis: "the arm holds".into(),
         level_assignment: [("model".to_string(), lid.to_string())]
@@ -743,7 +743,7 @@ fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> hh_lab::experiment::ArmSpe
             mode,
             ..MatchSpec::matched_cap(&[])
         }),
-        artifact_ref: hh_ontology::config::Ref::new("def:x", "sha256:ee55"),
+        artifact_ref: hharness_ontology::config::Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,
@@ -754,9 +754,9 @@ fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> hh_lab::experiment::ArmSpe
 /// Drive `cid` through S4 (registered comparative spec + a matched
 /// `search_time_benefit` report) — the shared leg the S5 tests need.
 fn drive_s4(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid: &str, tag: &str) {
-    use hh_lab::experiment::*;
-    use hh_ontology::eval::*;
-    use hh_ontology::participant::ParticipantClass;
+    use hharness_lab::experiment::*;
+    use hharness_ontology::eval::*;
+    use hharness_ontology::participant::ParticipantClass;
     let seed_policy = SeedPolicy {
         harness_rng: true,
         requested_sampling_seed: true,
@@ -856,7 +856,7 @@ fn drive_s4(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid:
     docs.put_named(
         doc_kind::SEARCH_BUDGET,
         "budget:search",
-        &hh_ontology::eval::SearchBudgetRecord {
+        &hharness_ontology::eval::SearchBudgetRecord {
             rollouts: 4,
             model_calls: 4,
             tokens: 8_000,
@@ -879,7 +879,7 @@ fn drive_s4(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid:
         doc_kind::REPORT,
         &rep,
         &comparison_json(
-            hh_lab::analysis::BenefitKind::SearchTimeBenefit,
+            hharness_lab::analysis::BenefitKind::SearchTimeBenefit,
             false,
             Json::obj([("lo", Json::Int(1)), ("hi", Json::Int(9))]),
         ),
@@ -890,10 +890,10 @@ fn drive_s4(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid:
     assert_eq!(eng.view.state_of(cid), Some("searched"));
 }
 
-fn held_stage_spec(eng: &EvolutionCampaign) -> hh_lab::experiment::ExperimentSpec {
-    use hh_lab::experiment::*;
-    use hh_ontology::eval::*;
-    use hh_ontology::participant::ParticipantClass;
+fn held_stage_spec(eng: &EvolutionCampaign) -> hharness_lab::experiment::ExperimentSpec {
+    use hharness_lab::experiment::*;
+    use hharness_ontology::eval::*;
+    use hharness_ontology::participant::ParticipantClass;
     let seed_policy = SeedPolicy {
         harness_rng: true,
         requested_sampling_seed: true,
@@ -993,56 +993,60 @@ fn held_stage_spec(eng: &EvolutionCampaign) -> hh_lab::experiment::ExperimentSpe
     s
 }
 
-fn comparison_json(benefit: hh_lab::analysis::BenefitKind, held_out: bool, interval: Json) -> Json {
-    hh_lab::analysis::ComparisonReport {
+fn comparison_json(
+    benefit: hharness_lab::analysis::BenefitKind,
+    held_out: bool,
+    interval: Json,
+) -> Json {
+    hharness_lab::analysis::ComparisonReport {
         arm_a: "a".into(),
         arm_b: "b".into(),
         metric: "task_success".into(),
         pairing: "by_task".into(),
-        paired_effect: hh_lab::analysis::PairedEffect {
+        paired_effect: hharness_lab::analysis::PairedEffect {
             point: Some(Json::str("0.05")),
             interval: Some(interval),
-            method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+            method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
         },
         per_task_effects_ref: None,
-        budget_match: hh_lab::analysis::BudgetMatch {
+        budget_match: hharness_lab::analysis::BudgetMatch {
             limits_equal: true,
             consumption_imbalance: None,
             tolerance_ppm: 50_000,
-            status: hh_lab::analysis::BudgetMatchStatus::Matched,
+            status: hharness_lab::analysis::BudgetMatchStatus::Matched,
             search_unknown: false,
         },
         benefit_kind: benefit,
         held_out,
         estimated: None,
-        test: hh_lab::analysis::TestRecord {
-            kind: hh_lab::analysis::TestKind::PermutationSignflip,
+        test: hharness_lab::analysis::TestRecord {
+            kind: hharness_lab::analysis::TestKind::PermutationSignflip,
         },
-        sign_profile: hh_lab::analysis::SignProfile {
+        sign_profile: hharness_lab::analysis::SignProfile {
             helped: 3,
             hurt: 0,
             unchanged: 1,
         },
-        tail_effects: hh_lab::analysis::TailEffects {
+        tail_effects: hharness_lab::analysis::TailEffects {
             p50: Json::str("0.04"),
             p95: Json::str("0.12"),
             max: Json::str("0.30"),
         },
-        outcome_bounds: hh_lab::analysis::OutcomeBounds {
+        outcome_bounds: hharness_lab::analysis::OutcomeBounds {
             lower: Json::str("0.0"),
             upper: Json::str("1.0"),
-            verdict: hh_lab::analysis::OutcomeBoundsVerdict::Robust,
+            verdict: hharness_lab::analysis::OutcomeBoundsVerdict::Robust,
         },
-        multiplicity: hh_lab::analysis::Multiplicity {
+        multiplicity: hharness_lab::analysis::Multiplicity {
             family_size: 1,
             adjusted: "holm".into(),
             raw_ppm: None,
             adjusted_ppm: None,
             label: None,
         },
-        label: hh_lab::analysis::ReportLabelKind::Headlined,
-        estimator_selection: hh_ontology::eval::EstimatorSelection {
-            method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+        label: hharness_lab::analysis::ReportLabelKind::Headlined,
+        estimator_selection: hharness_ontology::eval::EstimatorSelection {
+            method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
             selection_rule: "adr-0158.clt_floor".into(),
             floors: BTreeMap::new(),
             fallback_chain: vec![],
@@ -1092,7 +1096,7 @@ fn s5_attribution_report_gate_binds_the_named_design() {
             doc_kind::REPORT,
             &format!("rep:held-{tag}"),
             &comparison_json(
-                hh_lab::analysis::BenefitKind::ArtifactBenefit,
+                hharness_lab::analysis::BenefitKind::ArtifactBenefit,
                 true,
                 Json::obj([("lo", Json::Int(1)), ("hi", Json::Int(9))]),
             ),
@@ -1168,7 +1172,7 @@ fn drive_to_active(
         doc_kind::REPORT,
         &format!("rep:held-{tag}"),
         &comparison_json(
-            hh_lab::analysis::BenefitKind::ArtifactBenefit,
+            hharness_lab::analysis::BenefitKind::ArtifactBenefit,
             true,
             Json::obj([("lo", Json::Int(1)), ("hi", Json::Int(9))]),
         ),
@@ -1186,7 +1190,7 @@ fn drive_to_active(
         false,
     )
     .unwrap_or_else(|e| panic!("held_out_eval: {e}"));
-    use hh_evolution::records::TransferRow;
+    use hharness_evolution::records::TransferRow;
     eng.transfer(
         store,
         cid,
@@ -1198,15 +1202,15 @@ fn drive_to_active(
             method: "clustered_clt".into(),
             held_out: true,
         }],
-        &[hh_lab::model::CompatibilityRecord {
+        &[hharness_lab::model::CompatibilityRecord {
             snapshot_ref: "snap:1".into(),
             definition_semantic_id: "def:base".into(),
             profile_semantic_id: "sha256:profile".into(),
-            status: hh_lab::model::CompatibilityStatus::Verified,
+            status: hharness_lab::model::CompatibilityStatus::Verified,
             evidence_ref: Some("ev:compat".into()),
             regression_suite_ref: Some("suite:regression".into()),
             created_at: 1,
-            expiry_condition: None::<hh_ontology::debt::ExpiryCondition>,
+            expiry_condition: None::<hharness_ontology::debt::ExpiryCondition>,
             provenance: prov(20),
         }
         .to_json()],
@@ -1215,7 +1219,7 @@ fn drive_to_active(
     eng.security_check(
         store,
         cid,
-        &hh_evolution::records::SecurityInvarianceReport {
+        &hharness_evolution::records::SecurityInvarianceReport {
             placement: "subprocess_confined".into(),
             has_interface: true,
             policy_leaves: BTreeMap::from([("policy:test".into(), "narrowing".into())]),

@@ -1,10 +1,10 @@
 //! `events` — the canonical payload builders for the verification-plane
 //! event classes (spec §5f.1 §3 "Ledger events", §5f.2 §3, §5f.4 §3;
 //! ADR-0110 D7, ADR-0112 D6, ADR-0113 D1, ADR-0115 D8). Builders are pure —
-//! appending is the ledger's; the class table (hh-ledger) owns admission.
+//! appending is the ledger's; the class table (hharness-ledger) owns admission.
 //! Every class here carries mandatory provenance (ADR-0035 §4 ∪ §5f.1 §6).
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::claims::{Claim, ReconciliationRecord};
 use crate::gate::{CompletionDecision, GateResult};
@@ -245,7 +245,7 @@ pub fn validator_verdict(v: &Verdict) -> Json {
 /// `control.critic.gated` —
 /// `{rule_ref, verdict_id, decision_point, iteration, followup_ref}` —
 /// the runtime critic-gate audit record (AC-R-2.7.3-6; the class is
-/// registered `row_audit` in hh-ledger).
+/// registered `row_audit` in hharness-ledger).
 pub fn critic_gated(
     rule_ref: &str,
     verdict: &crate::critics::CriticVerdict,
@@ -403,9 +403,9 @@ mod tests {
     use crate::vocab::{
         Agreement, ClaimKind, ExtractedBy, ReconcileMode, SeverityLevel, SubjectRef,
     };
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
-    use hh_provenance::record::ProvenanceRecord;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
+    use hharness_provenance::record::ProvenanceRecord;
 
     fn prov() -> ProvenanceRecord {
         ProvenanceRecord::minted(Origin::model("m", "r", "call:1"), PersistenceScope::Run, 1)

@@ -22,11 +22,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::ArmSpec;
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::eval::Design;
+use hharness_budget::matchspec::ArmSpec;
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::eval::Design;
 
-use hh_lab::analysis::{BenefitKind, ComparisonReport};
+use hharness_lab::analysis::{BenefitKind, ComparisonReport};
 
 use crate::compare::{compare, CompareError, CompareInput, DeviationReport, TaskEffect};
 use crate::runs::{EvalRun, TaskContext};
@@ -133,7 +133,7 @@ pub fn critic_experiment(
         family_size: Some(CRITIC_EXPERIMENT_METRICS.len() as u32),
         // A critic on/off contrast is a native component-level comparison —
         // `search_budget` mandatory (unknown is product-level only).
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     })?;
     Ok(CriticExperimentOutcome {
         reports: out.reports,
@@ -146,8 +146,8 @@ pub fn critic_experiment(
 
 // ── the value-of-compute row (R-2.10.4⁴; S6.3b) ────────────────────────────
 
-use hh_ontology::eval::MetricValueKind;
-use hh_wire::json::Json;
+use hharness_ontology::eval::MetricValueKind;
+use hharness_wire::json::Json;
 
 /// `CriticPlacementRow` — the value-of-compute row `critic_experiment`
 /// feeds (§6.4 §2.1's value table; ADR-0188's `PlacementFact` member

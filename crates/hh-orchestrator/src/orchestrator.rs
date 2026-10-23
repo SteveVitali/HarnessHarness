@@ -1,7 +1,7 @@
 //! The `orchestrator` component class (§5e.3 C3; ADR-0186). Binds a
 //! `TopologyPreset` into per-child `SubagentSpec`s (`topology_ref`,
 //! `delegation_reason`, `wait.mode`, `on_parent_end`, `messaging_policy`)
-//! and executes them through `hh-subagent`'s `spawn` — the one spawn path
+//! and executes them through `hharness-subagent`'s `spawn` — the one spawn path
 //! for every subagent surface (CF-394/407/451: no second spawn schema
 //! exists). Wait reduction `{all, any, quorum(k)}`, T6
 //! `detach_to_child`, and parent-mediated messaging live here — the C1
@@ -9,17 +9,17 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::HandleId;
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::HandleId;
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_wire::json::Json;
 
-use hh_subagent::spawn::{fold_children, EnvDeriver, SpawnCtx, SpawnHook};
-use hh_subagent::types::*;
-use hh_subagent::{messaging, ownership::OwnershipTable, result, spawn as kernel_spawn};
+use hharness_subagent::spawn::{fold_children, EnvDeriver, SpawnCtx, SpawnHook};
+use hharness_subagent::types::*;
+use hharness_subagent::{messaging, ownership::OwnershipTable, result, spawn as kernel_spawn};
 
 use crate::topology::{TopologyPreset, WaitPolicy};
 
@@ -40,7 +40,7 @@ pub struct ParentBinding {
     /// The parent's valid ownerships.
     pub ownerships: OwnershipTable,
     /// The parent's sealed tool table (`supplies.tools ⊆`).
-    pub tool_table: Vec<hh_hir::refs::Ref>,
+    pub tool_table: Vec<hharness_hir::refs::Ref>,
     /// The parent's `delegation_depth` gauge level.
     pub parent_depth: u64,
     /// The lease-holder spelling.
@@ -185,8 +185,8 @@ impl Orchestrator {
             for s in &stages {
                 let cap = s
                     .budget_spec
-                    .hard(hh_ontology::dimensions::DimensionKey::Primary(
-                        hh_ontology::dimensions::DimensionId::DelegationDepth,
+                    .hard(hharness_ontology::dimensions::DimensionKey::Primary(
+                        hharness_ontology::dimensions::DimensionId::DelegationDepth,
                     ))
                     .unwrap_or(0)
                     .max(0) as u64;
@@ -321,7 +321,7 @@ impl Orchestrator {
         binding: &ParentBinding,
         child_run_id: &str,
         decision: &EventRef,
-    ) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+    ) -> Result<hharness_ledger::event::SeqRange, SpawnError> {
         result::detach_to_child(
             store,
             &binding.parent_run_id,
@@ -344,8 +344,12 @@ impl Orchestrator {
     pub fn on_parent_restore(
         store: &mut Store,
         binding: &ParentBinding,
-    ) -> Result<hh_subagent::recovery::RecoveryReport, SpawnError> {
-        hh_subagent::recovery::recover_parent(store, &binding.parent_run_id, &binding.parent_lease)
+    ) -> Result<hharness_subagent::recovery::RecoveryReport, SpawnError> {
+        hharness_subagent::recovery::recover_parent(
+            store,
+            &binding.parent_run_id,
+            &binding.parent_lease,
+        )
     }
 
     /// Parent-mediated messaging — the relay scan: every `sent` row in

@@ -2,8 +2,8 @@
 //! ADR-0039 D1 as amended P2/P4). This is the **closed list of kernel resource
 //! dimensions** — counters and gauges — plus the registered `ext.*`/`hh.*` entries.
 //!
-//! The registry lives in the ontology crate so `hh-hir` can check `Budget.dimensions`
-//! keys against it (the DF-S1.4-1 seam) without a layering inversion; `hh-budget`
+//! The registry lives in the ontology crate so `hharness-hir` can check `Budget.dimensions`
+//! keys against it (the DF-S1.4-1 seam) without a layering inversion; `hharness-budget`
 //! re-exports it as the accounting layer's single source (CC7).
 //!
 //! # Rules landed here

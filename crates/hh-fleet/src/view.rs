@@ -3,8 +3,8 @@
 //! seq; the `cursor` is the durable-reconcile watermark (`event_count`
 //! folded — RC-8's restart-safe resume point).
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::errors::FleetError;
@@ -40,7 +40,7 @@ pub struct FleetCue {
     pub occurred_event: String,
     /// The subscription's trigger (decoded — `external{kind}`,
     /// `manual{principal}`, `timer{at_ms}`, `retry_due{scope_id}`).
-    pub trigger: hh_ledger::wakeup::Trigger,
+    pub trigger: hharness_ledger::wakeup::Trigger,
     /// The occurred row's `payload_ref` — for source occurrences, the
     /// `context.observation.recorded` event id carrying the `item` dossier.
     pub payload_ref: Option<String>,
@@ -68,7 +68,7 @@ pub struct FleetView {
     /// The folded ownership graph (`spec.ownership` + `owner_changed`).
     pub ownership: OwnershipGraph,
     /// `subscription_id → trigger` (the fold's sub→rule join).
-    pub sub_triggers: BTreeMap<String, hh_ledger::wakeup::Trigger>,
+    pub sub_triggers: BTreeMap<String, hharness_ledger::wakeup::Trigger>,
     /// `subscription_id → occurrence_key → occurred payload` — the
     /// occurred rows the fired rows name (`occurred_event` joins too).
     pub occurred: BTreeMap<String, Json>,
@@ -209,7 +209,7 @@ impl FleetView {
                 if let Some(sub) = e.payload.get("subscription") {
                     if let (Some(id), Some(trig)) = (
                         sub.get("subscription_id").and_then(Json::as_str),
-                        hh_ledger::wakeup::Trigger::from_json(
+                        hharness_ledger::wakeup::Trigger::from_json(
                             sub.get("trigger").unwrap_or(&Json::Null),
                         ),
                     ) {
@@ -233,7 +233,7 @@ impl FleetView {
                     .unwrap_or_default()
                     .to_string();
                 let trigger = self.sub_triggers.get(&sub_id).cloned().unwrap_or(
-                    hh_ledger::wakeup::Trigger::Manual {
+                    hharness_ledger::wakeup::Trigger::Manual {
                         principal: "unknown".into(),
                     },
                 );

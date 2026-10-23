@@ -34,16 +34,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use hh_identity::idp_digest;
-use hh_lab::bench::ForeignTaskId;
-use hh_lab::bench::{split_hash, SplitAssignmentRecord, SuiteManifest, SuiteValidityRecord};
-use hh_lab::model::ForeignRef;
-use hh_ontology::lab::{
+use hharness_identity::idp_digest;
+use hharness_lab::bench::ForeignTaskId;
+use hharness_lab::bench::{split_hash, SplitAssignmentRecord, SuiteManifest, SuiteValidityRecord};
+use hharness_lab::model::ForeignRef;
+use hharness_ontology::lab::{
     ContaminationStratum, EnvironmentFamily, EpisodeModel, HandleCapability, SplitLabel, Support,
     VerifierIsolation,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::adapters::{fixture_task, FixtureAdapter};
 use crate::records::BenchTask;
@@ -51,10 +51,10 @@ use crate::records::BenchTask;
 /// The committed corpus id — `LEDGER.md`'s `benchmarkSet` names this.
 pub const BENCHSET_ID: &str = "benchset.stage3.v1";
 
-/// The corpus directory inside `hh-bench`.
+/// The corpus directory inside `hharness-bench`.
 pub const BENCHSET_DIR: &str = "fixtures/benchset/stage3_v1";
 
-/// The committed corpus root (`<hh-bench>/fixtures/benchset/stage3_v1`).
+/// The committed corpus root (`<hharness-bench>/fixtures/benchset/stage3_v1`).
 pub fn default_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BENCHSET_DIR)
 }
@@ -94,11 +94,11 @@ pub enum BenchsetError {
         detail: String,
     },
     /// A `TaskRecord` failed `TaskRecord::validate`.
-    Task(hh_lab::bench::TaskError),
+    Task(hharness_lab::bench::TaskError),
     /// A `SuiteManifest`/`SplitAssignmentRecord` failed its checks.
-    Suite(hh_lab::bench::SuiteError),
+    Suite(hharness_lab::bench::SuiteError),
     /// A shared codec refused.
-    Schema(hh_lab::json_util::SchemaError),
+    Schema(hharness_lab::json_util::SchemaError),
 }
 
 impl std::fmt::Display for BenchsetError {
@@ -123,18 +123,18 @@ impl std::fmt::Display for BenchsetError {
 
 impl std::error::Error for BenchsetError {}
 
-impl From<hh_lab::bench::TaskError> for BenchsetError {
-    fn from(e: hh_lab::bench::TaskError) -> Self {
+impl From<hharness_lab::bench::TaskError> for BenchsetError {
+    fn from(e: hharness_lab::bench::TaskError) -> Self {
         BenchsetError::Task(e)
     }
 }
-impl From<hh_lab::bench::SuiteError> for BenchsetError {
-    fn from(e: hh_lab::bench::SuiteError) -> Self {
+impl From<hharness_lab::bench::SuiteError> for BenchsetError {
+    fn from(e: hharness_lab::bench::SuiteError) -> Self {
         BenchsetError::Suite(e)
     }
 }
-impl From<hh_lab::json_util::SchemaError> for BenchsetError {
-    fn from(e: hh_lab::json_util::SchemaError) -> Self {
+impl From<hharness_lab::json_util::SchemaError> for BenchsetError {
+    fn from(e: hharness_lab::json_util::SchemaError) -> Self {
         BenchsetError::Schema(e)
     }
 }
@@ -324,7 +324,7 @@ fn read_json(path: &Path) -> Result<Json, BenchsetError> {
         path: path.display().to_string(),
         detail: format!("utf8: {e}"),
     })?;
-    hh_wire::parse(&text).map_err(|e| BenchsetError::Malformed {
+    hharness_wire::parse(&text).map_err(|e| BenchsetError::Malformed {
         path: path.display().to_string(),
         detail: format!("json: {e}"),
     })

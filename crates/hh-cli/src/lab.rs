@@ -21,8 +21,8 @@
 
 use std::path::Path;
 
-use hh_embed_client_generated::OutputFormat;
-use hh_wire::json::Json;
+use hharness_embed_client_generated::OutputFormat;
+use hharness_wire::json::Json;
 
 use crate::boundary::{Boundary, CliError};
 use crate::cli::{ok_outcome, require_pos, Io};
@@ -81,7 +81,7 @@ fn file_text(p: &crate::cli::Parsed, io: &Io, i: usize, name: &str) -> Result<St
 /// forwarded to the service.
 fn source_json(p: &crate::cli::Parsed, io: &Io, i: usize, name: &str) -> Result<Json, CliError> {
     let text = file_text(p, io, i, name)?;
-    hh_wire::json::parse(&text).map_err(|e| {
+    hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at("malformed_json", name, &format!("{e}")))
     })
 }
@@ -322,7 +322,7 @@ pub fn cmd_definition_compile(
     let operand = require_pos(p, 0, "<definition-file|ref:…>")?;
     let definition = if operand == "-" {
         let text = file_text(p, io, 0, "<definition-file>")?;
-        let doc = hh_wire::json::parse(&text).map_err(|e| {
+        let doc = hharness_wire::json::parse(&text).map_err(|e| {
             CliError::Invocation(InvocationError::at(
                 "definition_invalid_json",
                 "<definition-file>",
@@ -467,7 +467,7 @@ pub fn cmd_registry_register(
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
     let text = file_text(p, io, 0, "<record-file>")?;
-    let body = hh_wire::json::parse(&text).map_err(|e| {
+    let body = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "record-file",
@@ -569,7 +569,7 @@ pub fn cmd_registry_conformance(
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
     let text = file_text(p, io, 0, "<report-file>")?;
-    let report = hh_wire::json::parse(&text).map_err(|e| {
+    let report = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "report-file",
@@ -689,7 +689,7 @@ pub fn cmd_experiment_register(
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
     let text = file_text(p, io, 0, "<spec-file>")?;
-    let spec = hh_wire::json::parse(&text).map_err(|e| {
+    let spec = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "spec-file",
@@ -1196,7 +1196,7 @@ pub fn cmd_eval_op(
         }
     };
     let text = file_text(p, io, 0, "<params-file>")?;
-    let params = hh_wire::json::parse(&text).map_err(|e| {
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "params-file",
@@ -1278,7 +1278,7 @@ pub fn cmd_participant_register(
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
     let text = file_text(p, io, 0, "<record-file>")?;
-    let body = hh_wire::json::parse(&text).map_err(|e| {
+    let body = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "record-file",
@@ -1329,7 +1329,7 @@ pub fn cmd_participant_probe(
                 &format!("{e}"),
             ))
         })?;
-        let body = hh_wire::json::parse(&text).map_err(|e| {
+        let body = hharness_wire::json::parse(&text).map_err(|e| {
             CliError::Invocation(InvocationError::at(
                 "malformed_json",
                 "--report",
@@ -1354,7 +1354,7 @@ pub fn cmd_participant_probe(
                     &format!("{e}"),
                 ))
             })?;
-            drive = hh_wire::json::parse(&text).map_err(|e| {
+            drive = hharness_wire::json::parse(&text).map_err(|e| {
                 CliError::Invocation(InvocationError::at(
                     "malformed_json",
                     "--probes",
@@ -1384,7 +1384,7 @@ pub fn cmd_participant_probe(
         })?;
         params.insert(
             "report_base".to_string(),
-            hh_wire::json::parse(&text).map_err(|e| {
+            hharness_wire::json::parse(&text).map_err(|e| {
                 CliError::Invocation(InvocationError::at(
                     "malformed_json",
                     "--base",
@@ -1428,7 +1428,7 @@ fn definition_operand(s: &str) -> Result<Json, CliError> {
             &format!("cannot read {s}: {e}"),
         ))
     })?;
-    let doc = hh_wire::json::parse(&text).map_err(|e| {
+    let doc = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "definition_invalid_json",
             "<definition>",
@@ -1533,7 +1533,7 @@ pub fn cmd_acp(
             serve.to_canonical_string()
         ))
     })?;
-    let artifact = hh_acp::AcpArtifact::from_json(&artifact_json)
+    let artifact = hharness_acp::AcpArtifact::from_json(&artifact_json)
         .map_err(|e| CliError::Transport(format!("hh-acp-target/1 decode: {e}")))?;
 
     // 2) The open spec every `session/new` drives — interactive asks
@@ -1570,7 +1570,7 @@ pub fn cmd_acp(
         ("approval_mode", Json::str("manual")),
     ]);
     if let Some(budget) = p.flag("budget") {
-        let bj = hh_wire::json::parse(&budget).map_err(|e| {
+        let bj = hharness_wire::json::parse(&budget).map_err(|e| {
             CliError::Invocation(InvocationError::at(
                 "budget_invalid_json",
                 "--budget",
@@ -1602,20 +1602,20 @@ pub fn cmd_acp(
     //    channel — piped stdin bytes (tests, a one-shot ACP exchange)
     //    or the live stdin/stdout pair (`hh acp` spawned by an editor).
     let call = crate::boundary::BoundaryEmbedCall::new(b);
-    let mut driver = hh_acp::EmbedDriver::new(call, spec);
+    let mut driver = hharness_acp::EmbedDriver::new(call, spec);
     let served = match &io.stdin {
         Some(bytes) => {
-            let mut t = hh_acp::StdioSessionTransport::new(
+            let mut t = hharness_acp::StdioSessionTransport::new(
                 std::io::Cursor::new(bytes.clone()),
                 &mut *io.out,
             );
-            hh_acp::serve_session(&artifact, &mut driver, &mut t)
+            hharness_acp::serve_session(&artifact, &mut driver, &mut t)
         }
         None => {
             let si = std::io::stdin();
             let so = std::io::stdout();
-            let mut t = hh_acp::StdioSessionTransport::new(si.lock(), so.lock());
-            hh_acp::serve_session(&artifact, &mut driver, &mut t)
+            let mut t = hharness_acp::StdioSessionTransport::new(si.lock(), so.lock());
+            hharness_acp::serve_session(&artifact, &mut driver, &mut t)
         }
     };
     served.map_err(|e| CliError::Transport(format!("acp serve: {}", e.refusal())))?;
@@ -1649,7 +1649,7 @@ pub fn cmd_leaderboard(
         }
     };
     let text = file_text(p, io, 0, "<params-file>")?;
-    let params = hh_wire::json::parse(&text).map_err(|e| {
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "params-file",
@@ -1683,7 +1683,7 @@ pub fn cmd_profile(
     match verb {
         "register" => {
             let text = file_text(p, io, 0, "<record-file>")?;
-            let body = hh_wire::json::parse(&text).map_err(|e| {
+            let body = hharness_wire::json::parse(&text).map_err(|e| {
                 CliError::Invocation(InvocationError::at(
                     "invalid_json",
                     "record-file",
@@ -1821,7 +1821,7 @@ pub fn cmd_debt_op(
         }
     };
     let text = file_text(p, io, 0, "<params-file>")?;
-    let params = hh_wire::json::parse(&text).map_err(|e| {
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "params-file",
@@ -1851,7 +1851,7 @@ pub fn cmd_model_op(
         }
     };
     let text = file_text(p, io, 0, "<params-file>")?;
-    let params = hh_wire::json::parse(&text).map_err(|e| {
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "params-file",
@@ -1882,7 +1882,7 @@ pub fn cmd_analysis_op(
         }
     };
     let text = file_text(p, io, 0, "<params-file>")?;
-    let params = hh_wire::json::parse(&text).map_err(|e| {
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
         CliError::Invocation(InvocationError::at(
             "invalid_json",
             "params-file",

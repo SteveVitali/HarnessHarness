@@ -7,15 +7,15 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use hh_compact_evict_oldest::compact;
+use hharness_compact_evict_oldest::compact;
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, StreamParams, TriState,
 };
-use hh_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
-use hh_varhost::channel::SocketIo;
-use hh_wire::json::Json;
+use hharness_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
+use hharness_varhost::channel::SocketIo;
+use hharness_wire::json::Json;
 
 /// The variant logic — `evict_oldest` over the `compaction_strategy`
 /// contract. Stateless; the pins come from argv (the host asserts them
@@ -39,7 +39,7 @@ impl VariantLogic for EvictOldest {
         HelloParams {
             plugin_abi_version: format!(
                 "plugin_abi/{}",
-                hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
+                hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
             ),
             plugin_version_id: self.version_id.clone(),
             plugin_content: self.content.clone(),

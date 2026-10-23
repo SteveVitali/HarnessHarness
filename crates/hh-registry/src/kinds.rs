@@ -3,10 +3,10 @@
 //! status sums of the three orthogonal axes (*admission* per record, *publication*
 //! per name-history entry, *conformance* per declaration field). A fourth status
 //! vocabulary anywhere in the registry is a schema error (R5, CF-324). The
-//! publication vocabulary itself is **reused** from `hh-identity`
-//! ([`hh_identity::names::NameStatus`]) — one scheme per concern (CC1).
+//! publication vocabulary itself is **reused** from `hharness-identity`
+//! ([`hharness_identity::names::NameStatus`]) — one scheme per concern (CC1).
 
-use hh_identity::kinds::RecordKind as IdentityKind;
+use hharness_identity::kinds::RecordKind as IdentityKind;
 
 /// The closed `registry/1` record-kind list (ADR-0151 D2 as amended — CF-387 adds
 /// `participant` and `adapter`; `conformance_report.subject_kind` gains
@@ -66,7 +66,7 @@ pub enum RecordKind {
     /// An `AdapterRecord`.
     Adapter,
     /// A `LeaderboardDefinition` — the §6.5 named-leaderboard record
-    /// (R-2.10.5 C1; ADR-0294). `hh-results` owns the schema (the same
+    /// (R-2.10.5 C1; ADR-0294). `hharness-results` owns the schema (the same
     /// opaque layering as `Participant`/`Adapter`/`EnvironmentRecord`):
     /// the registry stores the canonical body verbatim and gates the
     /// `kind: "leaderboard_definition"` tag; the name binds through
@@ -163,19 +163,19 @@ impl RecordKind {
                 | RecordKind::Extension
                 | RecordKind::EnvironmentFamily
                 | RecordKind::EnvironmentRecord
-                // Opaque bodies whose schemas land with R-2.10.6⁰ — `hh-hosting`
+                // Opaque bodies whose schemas land with R-2.10.6⁰ — `hharness-hosting`
                 // owns the schema; the registry stores the canonical Json
                 // verbatim (same layering as `EnvironmentRecord`).
                 | RecordKind::Participant
                 | RecordKind::Adapter
-                // The §6.5 leaderboard definition — `hh-results` owns the
+                // The §6.5 leaderboard definition — `hharness-results` owns the
                 // schema; the registry stores the canonical body verbatim
                 // (same opaque layering; ADR-0294).
                 | RecordKind::LeaderboardDefinition
-                // The typed sealed-definition record (R-2.10.1/S3.5 — `hh-hir`
-                // owns the schema; `hh_hir::wire::sealed_*` is the one codec).
+                // The typed sealed-definition record (R-2.10.1/S3.5 — `hharness-hir`
+                // owns the schema; `hharness_hir::wire::sealed_*` is the one codec).
                 | RecordKind::SealedDefinition
-                // Opaque bodies whose schemas live in `hh-compiler` (above this
+                // Opaque bodies whose schemas live in `hharness-compiler` (above this
                 // crate — the same layering as `Participant`): the registry
                 // stores the canonical Json verbatim and gates the `kind` tag
                 // (R-2.11.4/S4.12 — `profile show/status` resolve through the
@@ -186,7 +186,7 @@ impl RecordKind {
     }
 
     /// The `idp/1` domain tag under which this kind's `version_id` is minted (N3 —
-    /// per-kind domain separation). Where `hh-identity`'s closed `RecordKind`
+    /// per-kind domain separation). Where `hharness-identity`'s closed `RecordKind`
     /// already dedicates a domain tag to this record family the store **reuses it**
     /// (CC1 — one identity scheme; the same `VariantRecord` carries one `version_id`
     /// wherever it is referenced); the remaining registry kinds take the additive
@@ -201,7 +201,7 @@ impl RecordKind {
             RecordKind::Validator => IdentityKind::Validator.domain_tag().to_string(),
             RecordKind::IdentityProfile => IdentityKind::IdentityProfile.domain_tag().to_string(),
             // The environment plane's own identity tag (CC1 — the same canonical
-            // body mints the same `version_id` in `hh-env` and here).
+            // body mints the same `version_id` in `hharness-env` and here).
             RecordKind::EnvironmentRecord => {
                 IdentityKind::EnvironmentRecord.domain_tag().to_string()
             }

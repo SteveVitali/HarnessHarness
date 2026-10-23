@@ -5,7 +5,7 @@
 //! Mandatory on every HIR node and edge and on every class in the mandatory-provenance table
 //! ([`crate::mandatory`]); defaults are omitted from the canonical form when default. The
 //! record is excluded from `semantic_id` and included in `version_id` (ADR-0033 D7;
-//! ADR-0015) — identity composition is `hh-identity`'s concern, above this layer.
+//! ADR-0015) — identity composition is `hharness-identity`'s concern, above this layer.
 //!
 //! **CC2 anchors here:** `authority` is *derived* — minted by
 //! [`crate::origin::default_authority`] from `origin`, or raised only by a `security.label.
@@ -15,7 +15,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, PersistenceScope, ReaderSet, TaintTag};
 use crate::label::Label;
@@ -374,7 +374,7 @@ impl ProvenanceRecord {
     }
 
     /// The canonical JSON rendering of the record (the one canonicalizer — CC1/CC7:
-    /// `hh-wire` sorted-key compact JSON). Defaults are omitted (`taint`, `readers`,
+    /// `hharness-wire` sorted-key compact JSON). Defaults are omitted (`taint`, `readers`,
     /// `derived_from`, `attestation` appear only when non-default — §8.1 #3).
     pub fn to_json(&self) -> Json {
         let mut pairs = vec![

@@ -1,5 +1,5 @@
 //! The Stage-1 path-pattern matcher (interim — same discipline as
-//! `hh_monitor::args::scope_covers` under ADR-0212/OQ-132: the closed
+//! `hharness_monitor::args::scope_covers` under ADR-0212/OQ-132: the closed
 //! `ResourcePattern` grammar is still open, so the containment path rules use
 //! the declared interim: **normalised component-wise** matching).
 //!

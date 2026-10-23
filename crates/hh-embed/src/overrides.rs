@@ -31,10 +31,10 @@
 //! layer id — `get_artifact(overrides_layer_id)` serves the materialised
 //! `{layer_id, provenance, fragment}` record.
 
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::{AttendanceDeclaration, Override};
-use hh_hir::diff::{AuthorityDelta, Delta};
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::{AttendanceDeclaration, Override};
+use hharness_hir::diff::{AuthorityDelta, Delta};
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
 
@@ -53,7 +53,7 @@ impl EmbedService {
     /// cases must not open a run).
     pub(crate) fn materialise_overrides(
         &mut self,
-        sealed: &hh_hir::document::SealedDefinition,
+        sealed: &hharness_hir::document::SealedDefinition,
         overrides: &[Override],
         attendance: &AttendanceDeclaration,
     ) -> Result<Option<String>, EmbedError> {
@@ -62,7 +62,7 @@ impl EmbedService {
         }
         let fragment = Json::Arr(overrides.iter().map(Override::to_json).collect());
         // ADR-0147 D2 — `id = H(idp ∥ "override-layer" ∥ canonical(overrides))`.
-        let layer_id = hh_identity::address(
+        let layer_id = hharness_identity::address(
             format!("override-layer{}", fragment.to_canonical_string()).as_bytes(),
             "application/json",
         )
@@ -87,11 +87,13 @@ impl EmbedService {
             // preserved). Classify the single-edit pair so one bogus
             // pointer can't hide behind another override's real diff.
             let visible = match (
-                hh_hir::document::parse_document(&before.to_canonical_string().into_bytes()),
-                hh_hir::document::parse_document(&doc_json.to_canonical_string().into_bytes()),
+                hharness_hir::document::parse_document(&before.to_canonical_string().into_bytes()),
+                hharness_hir::document::parse_document(
+                    &doc_json.to_canonical_string().into_bytes(),
+                ),
             ) {
                 (Ok(b), Ok(t)) => {
-                    let c = hh_hir::classify_pair(&b, &t);
+                    let c = hharness_hir::classify_pair(&b, &t);
                     c.semantic_ops + c.surface_ops + c.provenance_only_ops + c.ext_ops > 0
                 }
                 // The aggregate parse below reports the unreadable
@@ -113,7 +115,7 @@ impl EmbedService {
         gate_speculation_floor(&sealed.document.to_json(), &doc_json)?;
 
         let patched_bytes = doc_json.to_canonical_string().into_bytes();
-        let patched = hh_hir::document::parse_document(&patched_bytes).map_err(|e| {
+        let patched = hharness_hir::document::parse_document(&patched_bytes).map_err(|e| {
             EmbedError::InvalidDefinition {
                 diagnostics: vec![format!(
                     "override patch produced an unreadable document: {e}"
@@ -122,7 +124,7 @@ impl EmbedService {
         })?;
 
         // ── I-1 — the HirDiff classification decides ────────────────
-        let c = hh_hir::classify_pair(&sealed.document, &patched);
+        let c = hharness_hir::classify_pair(&sealed.document, &patched);
         let widening =
             c.authority_delta == AuthorityDelta::Widening || c.budget_delta == Delta::Loosening;
         if widening {
@@ -355,7 +357,7 @@ fn speculation_members(doc: &Json) -> std::collections::BTreeMap<String, Json> {
 /// member of the `(sealed, patched)` pair — widening or removal is
 /// `AuthorityViolation`; an unparsable member is `InvalidDefinition`.
 fn gate_speculation_floor(before: &Json, after: &Json) -> Result<(), EmbedError> {
-    use hh_hir::speculation::SpeculationPolicy;
+    use hharness_hir::speculation::SpeculationPolicy;
     let old = speculation_members(before);
     let new = speculation_members(after);
     let parse = |path: &str, j: &Json| -> Result<SpeculationPolicy, EmbedError> {

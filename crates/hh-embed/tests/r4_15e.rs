@@ -15,17 +15,17 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::LedgerSignerCustody;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::LedgerSignerCustody;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: the conformance hir/1 document (same shape) ────────────────────
 
@@ -177,7 +177,9 @@ fn service_in(root: &Path) -> EmbedService {
     .unwrap()
 }
 
-fn service_open_result(root: &Path) -> Result<EmbedService, hh_embed_schema::errors::EmbedError> {
+fn service_open_result(
+    root: &Path,
+) -> Result<EmbedService, hharness_embed_schema::errors::EmbedError> {
     EmbedService::open(ServiceConfig {
         store_root: root.join("store"),
         kernel_version_id: "hh-kernel/0.1.0".into(),
@@ -329,7 +331,7 @@ fn unprovisioned_boot_stays_honestly_unsigned() {
         "no custody → no signer ids"
     );
     assert!(svc
-        .mint_custody_checkpoint(hh_ledger::audit::CheckpointKind::OnDemand)
+        .mint_custody_checkpoint(hharness_ledger::audit::CheckpointKind::OnDemand)
         .is_err());
 }
 
@@ -545,7 +547,7 @@ fn set_credential_resolver_preserves_the_signer_channel() {
     let mut svc = service_in(&root);
     // A host installing its own resolver must not orphan the signer
     // channel — the custody source composes in front of it.
-    svc.set_credential_resolver(Box::new(hh_secrets::DenyAllResolver));
+    svc.set_credential_resolver(Box::new(hharness_secrets::DenyAllResolver));
     let new_id = svc.rotate_ledger_signer().unwrap();
     assert!(svc.signer_key_ids().contains(&new_id));
     let crun = custody_run(&svc);

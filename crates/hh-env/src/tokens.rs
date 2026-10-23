@@ -18,7 +18,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use hh_identity::idp::{idp_digest, idp_id};
+use hharness_identity::idp::{idp_digest, idp_id};
 
 /// What a presented token resolves to.
 #[derive(Debug, Clone, PartialEq)]

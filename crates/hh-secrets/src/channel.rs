@@ -11,11 +11,11 @@
 
 use std::collections::BTreeSet;
 
-use hh_hir::records::GrantConstraints;
-use hh_identity::RecordKind;
-use hh_monitor::assess::SecretTransport;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::GrantConstraints;
+use hharness_identity::RecordKind;
+use hharness_monitor::assess::SecretTransport;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::codec;
 use crate::errors::CodecError;
@@ -225,7 +225,7 @@ impl DestinationBinding {
     /// Does this binding admit `host` (interim pattern rules — literal, `/*`
     /// suffix prefix, or `*`)?
     pub fn matches_host(&self, host: &str) -> bool {
-        hh_monitor::args::scope_covers(&self.host_pattern, Some(host))
+        hharness_monitor::args::scope_covers(&self.host_pattern, Some(host))
     }
 
     /// The canonical JSON.
@@ -763,7 +763,7 @@ impl SecretChannel {
     /// The `idp/1` version id of this revision (`RecordKind::SecretChannel` —
     /// CC1; the audit rows pin it).
     pub fn version_id(&self) -> String {
-        hh_identity::idp::identify_bytes(RecordKind::SecretChannel, &self.canonical_bytes())
+        hharness_identity::idp::identify_bytes(RecordKind::SecretChannel, &self.canonical_bytes())
     }
 
     /// The model-facing reference — `channel_id` + `description`, never a value.

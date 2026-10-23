@@ -2,7 +2,7 @@
 //! sealed [`EnvelopePolicy`] at the six guard points — **stop, refuse,
 //! delay or tighten only**: it never chooses the next action, never grants,
 //! never widens (INV-7; a verdict that would is an
-//! [`hh_ontology::control::InvariantId::Inv7`] violation, not a behaviour).
+//! [`hharness_ontology::control::InvariantId::Inv7`] violation, not a behaviour).
 //!
 //! The contract rows land here: `arm(run, envelope_policy_ref, lease)` →
 //! [`EnvelopeState`] (every counter derived from the ledger); `guard(point,
@@ -12,8 +12,8 @@
 //! `check(d') → admitted | refused{reason}` — the driver-facing view of
 //! G-DECIDE on a stamped [`ControlDecision`].
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 
 use crate::guards::{GuardContext, GuardInput, GuardVerdict};
 use crate::loops::LoopState;
@@ -163,7 +163,8 @@ impl Envelope {
                 // the declared label — both are still data).
                 if matches!(
                     decision.stamp.owner,
-                    hh_ontology::control::Owner::Model | hh_ontology::control::Owner::Code
+                    hharness_ontology::control::Owner::Model
+                        | hharness_ontology::control::Owner::Code
                 ) && delegation_reason.is_none()
                 {
                     return CheckVerdict::Refused {
@@ -331,8 +332,8 @@ mod tests {
     use super::*;
     use crate::policy::EnvelopePolicy;
     use crate::vocab::{ActMode, DecisionKind, DecisionStamp, OnPartial};
-    use hh_ontology::control::StopReason;
-    use hh_ontology::control::{DecisionPoint, Owner};
+    use hharness_ontology::control::StopReason;
+    use hharness_ontology::control::{DecisionPoint, Owner};
 
     fn sealed() -> EnvelopePolicy {
         EnvelopePolicy::stage1_default("b-1").seal().unwrap()
@@ -403,9 +404,9 @@ mod tests {
     #[test]
     fn a_violation_becomes_a_stop_verdict_with_the_event_row() {
         // INV-3 — a commit after the barrier.
-        use hh_ledger::classes::Durability;
-        use hh_ledger::event::{EventPlane, Producer, Scope};
-        use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+        use hharness_ledger::classes::Durability;
+        use hharness_ledger::event::{EventPlane, Producer, Scope};
+        use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
         let ev = |seq: u64, class: &str| EventEnvelope {
             event_id: format!("e{seq}"),
             run_id: "r".into(),

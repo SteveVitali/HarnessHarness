@@ -8,13 +8,13 @@ use std::net::{SocketAddr, TcpListener};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread::JoinHandle;
 
-use hh_embed_client_generated::NetClient;
-use hh_secrets::{Canary, DetectorSet, MaskSet};
-use hh_telemetry::sinks::{ContentClass, SinkPolicy};
-use hh_web::gate::GateConfig;
-use hh_web::session::Sessions;
-use hh_wire::http::{read_request, write_response};
-use hh_wire::json::Json;
+use hharness_embed_client_generated::NetClient;
+use hharness_secrets::{Canary, DetectorSet, MaskSet};
+use hharness_telemetry::sinks::{ContentClass, SinkPolicy};
+use hharness_web::gate::GateConfig;
+use hharness_web::session::Sessions;
+use hharness_wire::http::{read_request, write_response};
+use hharness_wire::json::Json;
 
 #[allow(dead_code)]
 pub const TOKEN: &str = "surface-token-32-hex-chars-0000000";
@@ -49,7 +49,7 @@ where
                 let mut r = BufReader::new(&stream);
                 match read_request(&mut r, 8 * 1024 * 1024) {
                     Ok(Some((_head, body))) => {
-                        let req = hh_wire::json::parse(&String::from_utf8_lossy(&body))
+                        let req = hharness_wire::json::parse(&String::from_utf8_lossy(&body))
                             .unwrap_or(Json::Null);
                         let method = req
                             .get("method")
@@ -131,8 +131,12 @@ pub fn fixture(kernel_addr: Option<SocketAddr>) -> (GateConfig, Sessions, Detect
 
 /// A request head over the canonical gate vocabulary.
 #[allow(dead_code)]
-pub fn head(method: &str, target: &str, headers: &[(&str, &str)]) -> hh_wire::http::RequestHead {
-    let mut h = hh_wire::http::RequestHead {
+pub fn head(
+    method: &str,
+    target: &str,
+    headers: &[(&str, &str)],
+) -> hharness_wire::http::RequestHead {
+    let mut h = hharness_wire::http::RequestHead {
         method: method.into(),
         target: target.into(),
         headers: Default::default(),
@@ -146,7 +150,7 @@ pub fn head(method: &str, target: &str, headers: &[(&str, &str)]) -> hh_wire::ht
 
 /// The fully-dressed API head (host + bearer + script header + JSON ct).
 #[allow(dead_code)]
-pub fn api_head() -> hh_wire::http::RequestHead {
+pub fn api_head() -> hharness_wire::http::RequestHead {
     head(
         "POST",
         "/api",

@@ -6,10 +6,10 @@ mod common;
 
 use common::*;
 
-use hh_hir::document::parse_document;
-use hh_hir::ops::canonicalize;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::document::parse_document;
+use hharness_hir::ops::canonicalize;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 fn bin() -> &'static str {
     env!("CARGO_BIN_EXE_hh-ir-op")
@@ -86,7 +86,7 @@ fn seal_diff_apply_invert_over_the_process_boundary() {
     // seal — deterministic sealed definition bytes equal to the in-crate seal.
     let at = tmp("at.txt", b"1700000000");
     let _ = at;
-    let sealed_in = hh_hir::seal(&base, 1700000000).unwrap();
+    let sealed_in = hharness_hir::seal(&base, 1700000000).unwrap();
     let sealed_in_bytes = sealed_in.canonical_bytes();
     // The CLI takes <doc> <sealed_at>: write the arg as a literal string path trick —
     // instead call it through a small shell-free wrapper: args are positional strings.
@@ -105,7 +105,7 @@ fn seal_diff_apply_invert_over_the_process_boundary() {
 
     // diff — provenance record is a canonical ProvenanceRecord file.
     let prov = ProvenanceRecord::minted(
-        hh_provenance::Origin::human("test:author", hh_provenance::HumanRole::Author),
+        hharness_provenance::Origin::human("test:author", hharness_provenance::HumanRole::Author),
         PersistenceScope::Run,
         9,
     );
@@ -174,7 +174,7 @@ fn migrate_and_project_over_the_process_boundary() {
     );
     let mut proj = o.stdout.clone();
     proj.pop();
-    let j = hh_wire::canonical::parse_canonical(&proj).unwrap();
+    let j = hharness_wire::canonical::parse_canonical(&proj).unwrap();
     let Json::Arr(nodes) = j.get("nodes").unwrap() else {
         panic!("nodes array")
     };

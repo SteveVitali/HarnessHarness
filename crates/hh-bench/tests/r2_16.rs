@@ -24,23 +24,23 @@
 
 use std::collections::BTreeMap;
 
-use hh_bench::benchset::{BenchSuite, Benchset, BenchsetTask};
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::benefits::{artifact_benefit, split_hash_agrees, BenefitError};
-use hh_eval::compare::{compare, CompareError, CompareInput};
-use hh_eval::runs::{CacheState, EvalRun, TaskContext};
-use hh_eval::LedgerFacts;
-use hh_lab::analysis::{BenefitKind, ComparisonReport};
-use hh_ontology::compliance::Detector;
-use hh_ontology::control::{InfraError, InfraErrorFamily, OutcomeClass, StopReason};
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_bench::benchset::{BenchSuite, Benchset, BenchsetTask};
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::benefits::{artifact_benefit, split_hash_agrees, BenefitError};
+use hharness_eval::compare::{compare, CompareError, CompareInput};
+use hharness_eval::runs::{CacheState, EvalRun, TaskContext};
+use hharness_eval::LedgerFacts;
+use hharness_lab::analysis::{BenefitKind, ComparisonReport};
+use hharness_ontology::compliance::Detector;
+use hharness_ontology::control::{InfraError, InfraErrorFamily, OutcomeClass, StopReason};
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, MetricValue, MetricValueKind, Pairing, PreRegistration, RoutingPolicy,
     SeedPolicy,
 };
-use hh_ontology::participant::{Granularity, Observability, ParticipantClass};
-use hh_wire::Json;
+use hharness_ontology::participant::{Granularity, Observability, ParticipantClass};
+use hharness_wire::Json;
 
 // ── corpus-keyed builders ───────────────────────────────────────────────────
 
@@ -168,9 +168,9 @@ fn native_arm(dim: DimensionId) -> ArmSpec {
 fn hosted_unknown_arm(dim: DimensionId) -> ArmSpec {
     let mut a = native_arm(dim);
     a.search_budget = None;
-    a.enforcement = hh_budget::matchspec::BudgetEnforcement::hosted(&[(
+    a.enforcement = hharness_budget::matchspec::BudgetEnforcement::hosted(&[(
         dim,
-        hh_budget::EnforcementLevel::Enforced,
+        hharness_budget::EnforcementLevel::Enforced,
     )]);
     a
 }
@@ -213,7 +213,7 @@ fn compare_input<'a>(
     tasks: &'a [TaskContext],
     design: &'a Design,
     arms: &'a [ArmSpec],
-    decl: &'a hh_ontology::compliance::MetricDeclaration,
+    decl: &'a hharness_ontology::compliance::MetricDeclaration,
     metrics: &'a [String],
     granularity: Granularity,
 ) -> CompareInput<'a> {
@@ -246,7 +246,7 @@ fn compare_input<'a>(
 fn combined_failure_fixture_over_corpus() {
     let bs = Benchset::load_default().unwrap();
     let suite = bs.suite("c").unwrap();
-    let decl = hh_eval::catalogue::metric("task_success").unwrap();
+    let decl = hharness_eval::catalogue::metric("task_success").unwrap();
     let (mut runs, tasks) = corpus_runs(suite, "subject", "baseline");
 
     // The combined cell — the baseline's first replicate carries all three
@@ -256,7 +256,7 @@ fn combined_failure_fixture_over_corpus() {
             .iter_mut()
             .find(|r| r.arm_id == "baseline" && r.replicate_index == 0)
             .unwrap();
-        crashed.outcome_class = hh_ontology::eval::derive_outcome_class(
+        crashed.outcome_class = hharness_ontology::eval::derive_outcome_class(
             &StopReason::InfrastructureFailure {
                 error_class: InfraError {
                     family: InfraErrorFamily::Env,
@@ -315,7 +315,7 @@ fn combined_failure_fixture_over_corpus() {
 fn unknown_search_budget_over_corpus() {
     let bs = Benchset::load_default().unwrap();
     let suite = bs.suite("d").unwrap(); // tau_bench — the hosted-class family
-    let decl = hh_eval::catalogue::metric("task_success").unwrap();
+    let decl = hharness_eval::catalogue::metric("task_success").unwrap();
     let (runs, tasks) = corpus_runs(suite, "subject", "baseline");
     let dim = DimensionId::ModelCalls;
     let arms = [native_arm(dim), hosted_unknown_arm(dim)];
@@ -354,8 +354,8 @@ fn unknown_search_budget_over_corpus() {
     .unwrap_err();
     assert!(matches!(
         err,
-        CompareError::Match(hh_budget::MatchError {
-            refusal: hh_budget::MatchRefusal::UnbudgetedArm,
+        CompareError::Match(hharness_budget::MatchError {
+            refusal: hharness_budget::MatchRefusal::UnbudgetedArm,
             ..
         })
     ));
@@ -372,7 +372,7 @@ fn unknown_search_budget_over_corpus() {
 fn leaked_split_over_corpus() {
     let bs = Benchset::load_default().unwrap();
     let suite = bs.suite("c").unwrap();
-    let decl = hh_eval::catalogue::metric("task_success").unwrap();
+    let decl = hharness_eval::catalogue::metric("task_success").unwrap();
     let (mut runs, tasks) = corpus_runs(suite, "subject", "baseline");
 
     // Arm A's runs searched before the split was committed: a real
@@ -462,7 +462,7 @@ fn hal_levels_bind_over_corpus() {
     let bs = Benchset::load_default().unwrap();
     let suite = bs.suite("a").unwrap();
     let task = suite.task_named(&suite.parity_subset[0]).unwrap();
-    let hal_profiles: Vec<_> = hh_eval::stage3_fault_profiles()
+    let hal_profiles: Vec<_> = hharness_eval::stage3_fault_profiles()
         .into_iter()
         .filter(|p| p.profile_id.starts_with("f/hal-"))
         .collect();
@@ -481,13 +481,13 @@ fn hal_levels_bind_over_corpus() {
         assert_eq!(p.faults.len(), 1);
         assert!(matches!(
             p.faults[0].fault_type,
-            hh_eval::FaultType::HalTimeout
-                | hh_eval::FaultType::HalErrorResponse
-                | hh_eval::FaultType::HalPartialFailure
-                | hh_eval::FaultType::HalRateLimit
-                | hh_eval::FaultType::HalNetworkError
-                | hh_eval::FaultType::HalInvalidResponse
-                | hh_eval::FaultType::HalEmptyResponse
+            hharness_eval::FaultType::HalTimeout
+                | hharness_eval::FaultType::HalErrorResponse
+                | hharness_eval::FaultType::HalPartialFailure
+                | hharness_eval::FaultType::HalRateLimit
+                | hharness_eval::FaultType::HalNetworkError
+                | hharness_eval::FaultType::HalInvalidResponse
+                | hharness_eval::FaultType::HalEmptyResponse
         ));
     }
 }

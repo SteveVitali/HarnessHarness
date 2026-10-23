@@ -9,7 +9,7 @@
 //!   value (the procedure ref stays on the HIR declaration);
 //! - `scope = workspace_local if world = closed else external`;
 //! - `repeat_safety` verbatim — which is why [`RepeatSafety`] lives here (one sum,
-//!   one spelling — CC1/CC7): `hh-hir`'s `EffectAttributes` field is this type.
+//!   one spelling — CC1/CC7): `hharness-hir`'s `EffectAttributes` field is this type.
 //!
 //! `effective_risk_class = max_by_danger(kernel_assessed, declared)` — componentwise
 //! maximum over the danger orders below (ADR-0031 §2). An absent/unparseable declared
@@ -27,13 +27,13 @@
 //! | `compensable` | at-most-once + mandatory idempotency key | probe first; `not_applied` ⇒ same-key retry; `undeterminable` ⇒ escalate | compensator (saga) |
 //! | `irreversible` | at-most-once; never auto-retried | never redispatched; escalated | none — `abandoned` or human |
 //!
-//! The types are pure vocabulary — `hh-ledger` validates payloads against them,
-//! `hh-budget` reads `reversibility` for the E1 `read_only` exemption, `hh-hir`
+//! The types are pure vocabulary — `hharness-ledger` validates payloads against them,
+//! `hharness-budget` reads `reversibility` for the E1 `read_only` exemption, `hharness-hir`
 //! projects declarations into them.
 
 use std::fmt;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `repeat_safety ∈ {idempotent, non_idempotent}` — the one sum shared by the HIR
 /// `EffectAttributes` declaration and the risk-class projection (ADR-0031 §1).

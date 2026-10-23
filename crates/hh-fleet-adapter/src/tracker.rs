@@ -9,8 +9,8 @@
 //! pinned `hh.fleet.fixture/1` document (the HUMAN-H2 proxy lane: the
 //! real tracker plugs the same ops; nothing here simulates it).
 
-use hh_fleet::source::{FixtureAdapter, SourceOccurrence, WorkSourceAdapter};
-use hh_wire::json::Json;
+use hharness_fleet::source::{FixtureAdapter, SourceOccurrence, WorkSourceAdapter};
+use hharness_wire::json::Json;
 
 use crate::abi::{self, AbiCodecError};
 
@@ -100,7 +100,7 @@ pub struct FixtureTracker {
 
 impl FixtureTracker {
     /// `from_doc(doc)` — parse the pinned fixture document.
-    pub fn from_doc(doc: Json) -> Result<FixtureTracker, hh_fleet::errors::FleetError> {
+    pub fn from_doc(doc: Json) -> Result<FixtureTracker, hharness_fleet::errors::FleetError> {
         Ok(FixtureTracker {
             inner: FixtureAdapter::from_doc(doc)?,
         })

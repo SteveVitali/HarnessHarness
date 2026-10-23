@@ -20,24 +20,24 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, VecDeque};
 use std::sync::Arc;
 
-use hh_control::driver::{
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome,
     LedgerSink, ModelOutcome, ModelPort,
 };
-use hh_control::loops::{JudgePort, JudgedConsult};
-use hh_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
-use hh_control::policy::{EnvelopePolicy, JudgedSpec};
-use hh_control::react::ReactMinimal;
-use hh_control::strategy::{ControlContext, ControlStrategy, StrategyParams};
-use hh_control::vocab::{ControlDecision, Cue, DecisionKind, DecisionStamp, SettledOutcome};
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{Event, EventEnvelope, EventPlane};
-use hh_ledger::manifest::ParticipantClass;
-use hh_ontology::control::{DecisionPoint, Owner, StopReason};
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::reconciler::{JudgedAssessment, ReconcilerDeclaration};
-use hh_verification::vocab::{Detector, DivergenceClass};
-use hh_wire::json::Json;
+use hharness_control::loops::{JudgePort, JudgedConsult};
+use hharness_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
+use hharness_control::policy::{EnvelopePolicy, JudgedSpec};
+use hharness_control::react::ReactMinimal;
+use hharness_control::strategy::{ControlContext, ControlStrategy, StrategyParams};
+use hharness_control::vocab::{ControlDecision, Cue, DecisionKind, DecisionStamp, SettledOutcome};
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{Event, EventEnvelope, EventPlane};
+use hharness_ledger::manifest::ParticipantClass;
+use hharness_ontology::control::{DecisionPoint, Owner, StopReason};
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::reconciler::{JudgedAssessment, ReconcilerDeclaration};
+use hharness_verification::vocab::{Detector, DivergenceClass};
+use hharness_wire::json::Json;
 
 // ── test doubles (r2_5's shape — minimal set for this battery) ─────────
 
@@ -111,7 +111,7 @@ struct ScriptedModel {
 impl ModelPort for ScriptedModel {
     fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
         self.script.pop_front().unwrap_or(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-empty".into(),
             text_empty: true,
             calls: vec![],
@@ -178,19 +178,24 @@ impl ScriptedStrategy {
 }
 
 impl ControlStrategy for ScriptedStrategy {
-    fn capabilities(&self) -> &hh_control::strategy::ControlCapabilities {
+    fn capabilities(&self) -> &hharness_control::strategy::ControlCapabilities {
         self.inner.capabilities()
     }
     fn open(
         &mut self,
         ctx: &ControlContext,
-    ) -> Result<hh_control::state::ControlState, hh_control::strategy::ControlError> {
+    ) -> Result<hharness_control::state::ControlState, hharness_control::strategy::ControlError>
+    {
         self.inner.open(ctx)
     }
-    fn observe(&self, state: &mut hh_control::state::ControlState, events: &[EventEnvelope]) {
+    fn observe(&self, state: &mut hharness_control::state::ControlState, events: &[EventEnvelope]) {
         self.inner.observe(state, events);
     }
-    fn decide(&self, state: &mut hh_control::state::ControlState, cue: &Cue) -> ControlDecision {
+    fn decide(
+        &self,
+        state: &mut hharness_control::state::ControlState,
+        cue: &Cue,
+    ) -> ControlDecision {
         let tag = match cue {
             Cue::ModelCompleted { .. } => "model_completed",
             _ => "other",
@@ -220,14 +225,15 @@ impl ControlStrategy for ScriptedStrategy {
         &mut self,
         checkpoint: &[u8],
         ctx: &ControlContext,
-    ) -> Result<hh_control::state::ControlState, hh_control::strategy::RestoreError> {
+    ) -> Result<hharness_control::state::ControlState, hharness_control::strategy::RestoreError>
+    {
         self.inner.restore(checkpoint, ctx)
     }
     fn terminate(
         &self,
-        state: &hh_control::state::ControlState,
+        state: &hharness_control::state::ControlState,
         reason: &StopReason,
-    ) -> hh_control::strategy::FinalReport {
+    ) -> hharness_control::strategy::FinalReport {
         self.inner.terminate(state, reason)
     }
 }
@@ -259,7 +265,7 @@ impl JudgePort for ScriptedJudge {
     }
     fn assess(
         &self,
-        _claim: &hh_verification::claims::Claim,
+        _claim: &hharness_verification::claims::Claim,
         _evidence: &[Json],
     ) -> Vec<JudgedConsult> {
         // The critic's own verdict rows stay durable — each returned
@@ -277,8 +283,8 @@ impl JudgePort for ScriptedJudge {
                     ("charged_to", Json::str("instrument")),
                 ]),
                 ProvenanceRecord::minted(
-                    hh_provenance::origin::Origin::model("judge-model", "run", "assess"),
-                    hh_provenance::PersistenceScope::Run,
+                    hharness_provenance::origin::Origin::model("judge-model", "run", "assess"),
+                    hharness_provenance::PersistenceScope::Run,
                     0,
                 ),
             ));
@@ -299,7 +305,7 @@ fn ctx() -> ControlContext {
     ControlContext {
         process_ref: "proc-1".into(),
         plan: vec![],
-        boundary: hh_control::react::react_preset(),
+        boundary: hharness_control::react::react_preset(),
         profile: Json::Null,
         account_ref: "acct".into(),
         budget_ref: "b-1".into(),
@@ -307,8 +313,8 @@ fn ctx() -> ControlContext {
         parameters: StrategyParams::default(),
         capabilities_available: vec!["hh.submit".into()],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     }
 }
@@ -335,7 +341,7 @@ fn submit_surface() -> SurfaceSpec {
 
 fn submit_call() -> ModelOutcome {
     ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         response_ref: "r-1".into(),
         text_empty: false,
         calls: vec![ParsedCall {
@@ -423,8 +429,8 @@ fn judge_consult_records_drain_through_the_fence() {
                 ("charged_to", Json::str("instrument")),
             ]),
             ProvenanceRecord::minted(
-                hh_provenance::origin::Origin::model("judge-model", "run", "judge.0"),
-                hh_provenance::PersistenceScope::Run,
+                hharness_provenance::origin::Origin::model("judge-model", "run", "judge.0"),
+                hharness_provenance::PersistenceScope::Run,
                 0,
             ),
         )]),
@@ -668,7 +674,7 @@ fn judged_reconciler_arm_folds_per_critic_records_at_completion() {
 #[test]
 fn recorded_judge_replay_abstains_and_drains_nothing() {
     let mut sink = MemSink::new();
-    let judge = Arc::new(hh_control::loops::RecordedJudge::default());
+    let judge = Arc::new(hharness_control::loops::RecordedJudge::default());
     let mut driver = Driver::open(
         ScriptedStrategy::new(vec![]),
         &ctx(),

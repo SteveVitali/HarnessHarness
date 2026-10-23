@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::LedgerError;
 use crate::ids::is_pinned_id;
@@ -249,7 +249,7 @@ pub struct TaskRef {
     /// The suite id.
     pub suite_id: String,
     /// The split label (benchmark hygiene — never a feature).
-    pub split_label: hh_ontology::lab::SplitLabel,
+    pub split_label: hharness_ontology::lab::SplitLabel,
 }
 
 /// `experiment{…}` — the manifest's experiment-binding member (§6.3/§6.5;
@@ -1042,7 +1042,7 @@ impl RunManifest {
                 split_label: t
                     .get("split_label")
                     .and_then(Json::as_str)
-                    .and_then(hh_ontology::lab::SplitLabel::parse)
+                    .and_then(hharness_ontology::lab::SplitLabel::parse)
                     .ok_or_else(|| bad("task_ref.split_label missing/not a SplitLabel".into()))?,
             }),
         };

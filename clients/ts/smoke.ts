@@ -47,7 +47,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 // The HIR/1 fixture document — the same minimal conforming shape the
-// hh-embed conformance suite resolves (agent + rule + budget +
+// hharness-embed conformance suite resolves (agent + rule + budget +
 // permission + Stage-1 assembly slots hh/round_robin + hh/full_window;
 // regenerate: print `document_json()` from conformance.rs).
 const DEFINITION = JSON.parse(

@@ -12,15 +12,15 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use hh_gateway::codec::WireFrame;
-use hh_gateway::dialects;
-use hh_gateway::gateway::{CredentialHandle, Transport};
-use hh_gateway::http_transport::HttpModelTransport;
-use hh_gateway::openai;
-use hh_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
-use hh_gateway::vocab::ModelErrorClass;
-use hh_tls::{ClientTls, ServerTls, ServerTlsStream};
-use hh_wire::json::Json;
+use hharness_gateway::codec::WireFrame;
+use hharness_gateway::dialects;
+use hharness_gateway::gateway::{CredentialHandle, Transport};
+use hharness_gateway::http_transport::HttpModelTransport;
+use hharness_gateway::openai;
+use hharness_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
+use hharness_gateway::vocab::ModelErrorClass;
+use hharness_tls::{ClientTls, ServerTls, ServerTlsStream};
+use hharness_wire::json::Json;
 
 fn pki(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../hh-tls/fixtures/pki/{name}"))
@@ -53,12 +53,12 @@ fn serve_tls_once(
         let mut s: ServerTlsStream = tls.accept(sock).unwrap();
         let (method, target) = {
             let mut r = BufReader::new(&mut s);
-            let (head, _body) = hh_wire::http::read_request(&mut r, 1024 * 1024)
+            let (head, _body) = hharness_wire::http::read_request(&mut r, 1024 * 1024)
                 .unwrap()
                 .expect("a request head");
             (head.method, head.target)
         };
-        hh_wire::http::write_response(
+        hharness_wire::http::write_response(
             &mut s,
             200,
             &[("Content-Type", "application/json")],
@@ -118,7 +118,7 @@ fn send_over_tls_folds_completion() {
     let (endpoint, join) = serve_tls_once(tls, COMPLETION.to_string());
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::with_tls(d, client());
-    let bytes = hh_gateway::codec::serialize(&plan(&endpoint, false));
+    let bytes = hharness_gateway::codec::serialize(&plan(&endpoint, false));
     let frames: Vec<(u64, WireFrame)> = t.send(&bytes, &anon(), &endpoint).unwrap();
     let (method, target) = join.join().unwrap();
     assert_eq!(
@@ -178,7 +178,7 @@ fn rogue_chain_refused_typed() {
 
 /// mTLS — the client presents `client.pem`; the handshake completes and
 /// the request crosses. (Server-side peer-identity extraction is the
-/// hh-tls battery's cell; this pins the transport's presentation half.)
+/// hharness-tls battery's cell; this pins the transport's presentation half.)
 #[test]
 fn mtls_presents_client_cert() {
     let tls = ServerTls::requiring_client_auth(
@@ -193,7 +193,7 @@ fn mtls_presents_client_cert() {
         .unwrap();
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::with_tls(d, c);
-    let bytes = hh_gateway::codec::serialize(&plan(&endpoint, false));
+    let bytes = hharness_gateway::codec::serialize(&plan(&endpoint, false));
     let frames = t.send(&bytes, &anon(), &endpoint).unwrap();
     assert!(!frames.is_empty());
     join.join().unwrap();

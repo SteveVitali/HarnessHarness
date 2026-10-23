@@ -13,7 +13,7 @@
 //! (`holder`, `channel_revision`, `provided`, `binding_ids[]`, …) are ADR-0058
 //! D4's audit fields — ids, revisions and closed enums, never content.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::RefusedCode;
 use crate::redact::{Leak, RedactionTombstone};

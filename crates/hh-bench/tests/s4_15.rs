@@ -1,4 +1,4 @@
-//! S4.15 hh-bench tests — the C1 measurement-depth legs (§5h.4;
+//! S4.15 hharness-bench tests — the C1 measurement-depth legs (§5h.4;
 //! AC-R-2.9.4-9/-10; ADR-0142 D3; ADR-0005):
 //!
 //! - `declare()` emits the full `AdapterDeclaration` (suite family,
@@ -20,14 +20,14 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use hh_bench::adapter::{AdapterError, BenchmarkAdapter, ExportFormat, HostingSurface};
-use hh_bench::adapters::FixtureAdapter;
-use hh_bench::benchset::{Benchset, BenchsetError};
-use hh_bench::foreign::{export, import_result, ForeignError};
-use hh_bench::grade::GradeRequest;
-use hh_ontology::lab::VerifierIsolation;
-use hh_ontology::participant::Granularity;
-use hh_wire::Json;
+use hharness_bench::adapter::{AdapterError, BenchmarkAdapter, ExportFormat, HostingSurface};
+use hharness_bench::adapters::FixtureAdapter;
+use hharness_bench::benchset::{Benchset, BenchsetError};
+use hharness_bench::foreign::{export, import_result, ForeignError};
+use hharness_bench::grade::GradeRequest;
+use hharness_ontology::lab::VerifierIsolation;
+use hharness_ontology::participant::Granularity;
+use hharness_wire::Json;
 
 const BIN: &str = env!("CARGO_BIN_EXE_hh-bench-adapter");
 
@@ -48,7 +48,8 @@ fn adapter_rpc(req: Json) -> (i32, Json) {
     let out = child.wait_with_output().unwrap();
     (
         out.status.code().unwrap_or(-1),
-        hh_wire::parse(&String::from_utf8_lossy(&out.stdout)).expect("response not canonical JSON"),
+        hharness_wire::parse(&String::from_utf8_lossy(&out.stdout))
+            .expect("response not canonical JSON"),
     )
 }
 
@@ -80,7 +81,7 @@ fn copy_corpus(dst: &std::path::Path) {
             }
         }
     }
-    cp(&hh_bench::benchset::default_dir(), dst);
+    cp(&hharness_bench::benchset::default_dir(), dst);
 }
 
 /// The `declare()` record carries every C1 member — surfaces, formats,
@@ -212,7 +213,7 @@ fn stratum_b_validity_gate() {
     let dir = tmp("b-no-audit");
     copy_corpus(&dir);
     let suite_path = dir.join("suite.swe_fresh").join("suite.json");
-    let j = hh_wire::parse(&std::fs::read_to_string(&suite_path).unwrap()).unwrap();
+    let j = hharness_wire::parse(&std::fs::read_to_string(&suite_path).unwrap()).unwrap();
     let Json::Obj(mut m) = j else {
         panic!("suite.json is an object")
     };
@@ -228,7 +229,7 @@ fn stratum_b_validity_gate() {
     let dir = tmp("b-null-audit");
     copy_corpus(&dir);
     let suite_path = dir.join("suite.swe_fresh").join("suite.json");
-    let j = hh_wire::parse(&std::fs::read_to_string(&suite_path).unwrap()).unwrap();
+    let j = hharness_wire::parse(&std::fs::read_to_string(&suite_path).unwrap()).unwrap();
     let Json::Obj(mut m) = j else {
         panic!("suite.json is an object")
     };

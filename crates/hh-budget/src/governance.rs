@@ -11,7 +11,7 @@
 //! loosen — that path is governance outside this ticket (the evolution gate is
 //! what R-2.1.6's AC-13 requires: refused in evolution contexts).
 
-use hh_hir::diff::{Delta, DiffClassification};
+use hharness_hir::diff::{Delta, DiffClassification};
 
 /// Who authored the `HirDiff` — the gate's context axis (`provenance.origin`
 /// classes: `human`/`migration` origins may loosen with governance review;
@@ -77,7 +77,7 @@ mod tests {
             surface_ops: 0,
             provenance_only_ops: 0,
             ext_ops: 0,
-            authority_delta: hh_hir::diff::AuthorityDelta::None,
+            authority_delta: hharness_hir::diff::AuthorityDelta::None,
             budget_delta: delta,
             validity_delta: Delta::None,
             coordination_delta: Delta::None,

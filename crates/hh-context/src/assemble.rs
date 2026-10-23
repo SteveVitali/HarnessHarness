@@ -33,10 +33,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::idp::idp_id;
-use hh_provenance::label::Label;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_provenance::label::Label;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::events::{self, EventSink};
 use crate::lifecycle;

@@ -12,7 +12,7 @@
 //! If `address`/`identify`/`Tree`/`Record` or the `idp/1` construction ever changes, these pins
 //! change and the test fails — that is the drift signal (CC7-style, for identity).
 
-use hh_identity::corpus::{golden_records, golden_trees, GoldenItem};
+use hharness_identity::corpus::{golden_records, golden_trees, GoldenItem};
 
 /// The pinned golden answers (name → `idp/1` id). Regenerate deliberately (never silently) if the
 /// corpus or the canonical form changes, and re-confirm cross-candidate agreement (DF-S1.2-2).

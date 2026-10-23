@@ -2,7 +2,7 @@
 //! ticket S3.6). The boundary halves: `replay` mints
 //! `lifecycle.replay.started`/`finished` on the target, runs the mode's
 //! driver (`reconstruct` — the ledger's view/env rebuild, nothing
-//! re-executes; `deterministic` — `hh_control::replay` re-drives the
+//! re-executes; `deterministic` — `hharness_control::replay` re-drives the
 //! declaring variant over the recorded inputs with the executor count at
 //! 0), and lands the `ReplayValidityReport` blob (`report_ref`).
 //!
@@ -19,16 +19,16 @@
 //! `intervention_ref` — their drive applies the intervention to the
 //! recorded feed (the `replay` op on the arm run).
 
-use hh_control::driver::DriverConfig;
-use hh_control::policy::EnvelopePolicy;
-use hh_control::strategy::{ControlContext, StrategyParams};
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::{CounterfactualParams, ReplayParams};
-use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, ReplayMode};
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::manifest::ObservabilityLevel;
-use hh_ledger::replay::{ReplayDriverMode, ValidityInput};
-use hh_wire::json::Json;
+use hharness_control::driver::DriverConfig;
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::strategy::{ControlContext, StrategyParams};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::{CounterfactualParams, ReplayParams};
+use hharness_ledger::branch::{BranchKind, EnvBinding, ForkOpts, ReplayMode};
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::manifest::ObservabilityLevel;
+use hharness_ledger::replay::{ReplayDriverMode, ValidityInput};
+use hharness_wire::json::Json;
 
 use crate::open::{driver_surfaces, leaf_arm_for, steering_for, strategy_for};
 use crate::runtime::{KernelAssembler, SUBMIT_SURFACE};
@@ -63,7 +63,7 @@ impl EmbedService {
             .map(|s| s.capabilities().deterministic_replay)
             .unwrap_or(false);
 
-        hh_ledger::replay::replay_started(&mut self.store, &target, driver_mode, until)
+        hharness_ledger::replay::replay_started(&mut self.store, &target, driver_mode, until)
             .map_err(ledger_err)?;
 
         let report = match driver_mode {
@@ -71,13 +71,14 @@ impl EmbedService {
                 // The `reconstruct` driver — views + env binding rebuilt,
                 // nothing re-executed (ADR-0028 §1). `reproduced` stays
                 // `None` — this mode never claims the reproduction half.
-                let _recon = hh_ledger::replay::reconstruct(&self.store, &target, until)
+                let _recon = hharness_ledger::replay::reconstruct(&self.store, &target, until)
                     .map_err(ledger_err)?;
                 let input = ValidityInput {
                     variant_declares,
                     ..Default::default()
                 };
-                hh_ledger::replay::validity(&self.store, &target, &input).map_err(ledger_err)?
+                hharness_ledger::replay::validity(&self.store, &target, &input)
+                    .map_err(ledger_err)?
             }
             ReplayDriverMode::Deterministic => {
                 // `deterministic` is a claim the variant must be entitled
@@ -98,7 +99,7 @@ impl EmbedService {
                 }
                 let events = self.store.envelopes(&target).map_err(ledger_err)?;
                 let until = until.unwrap_or_else(|| events.last().map(|e| e.seq).unwrap_or(0));
-                let recorded = hh_control::replay::extract_recorded(events, 0, Some(until));
+                let recorded = hharness_control::replay::extract_recorded(events, 0, Some(until));
                 let (ctx, policy, config) =
                     self.replay_driver_env(&target, &manifest, arm.as_ref());
                 let policy = policy.map_err(|e| EmbedError::Refused {
@@ -116,7 +117,7 @@ impl EmbedService {
                 let strategy = strategy_for(&variant).ok_or_else(|| EmbedError::Refused {
                     reason: format!("unknown_control_variant: {variant}"),
                 })?;
-                let outcome = hh_control::replay::deterministic_replay(
+                let outcome = hharness_control::replay::deterministic_replay(
                     strategy,
                     &ctx,
                     policy,
@@ -140,12 +141,13 @@ impl EmbedService {
                         .map(|d| (d.at_seq, d.expected.clone(), d.got.clone())),
                     ..Default::default()
                 };
-                hh_ledger::replay::validity(&self.store, &target, &input).map_err(ledger_err)?
+                hharness_ledger::replay::validity(&self.store, &target, &input)
+                    .map_err(ledger_err)?
             }
         };
 
         let report_ref = report.content_ref();
-        hh_ledger::replay::replay_finished(&mut self.store, &target, driver_mode, &report)
+        hharness_ledger::replay::replay_finished(&mut self.store, &target, driver_mode, &report)
             .map_err(ledger_err)?;
 
         Ok(Json::obj([
@@ -163,11 +165,11 @@ impl EmbedService {
     fn replay_driver_env(
         &self,
         run_id: &str,
-        manifest: &hh_ledger::manifest::RunManifest,
+        manifest: &hharness_ledger::manifest::RunManifest,
         arm: Option<&crate::open::LeafArm>,
     ) -> (
         ControlContext,
-        Result<EnvelopePolicy, hh_control::policy::PolicyError>,
+        Result<EnvelopePolicy, hharness_control::policy::PolicyError>,
         DriverConfig,
     ) {
         let surfaces = arm
@@ -180,7 +182,7 @@ impl EmbedService {
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
             plan: vec![],
-            boundary: hh_control::react::react_preset(),
+            boundary: hharness_control::react::react_preset(),
             profile: Json::Null,
             account_ref: manifest
                 .budget
@@ -217,17 +219,17 @@ impl EmbedService {
     /// nothing (the scripted lane's record carries no consult state).
     fn replay_ports(
         &self,
-        manifest: &hh_ledger::manifest::RunManifest,
-    ) -> Result<hh_control::replay::ReplayPorts, EmbedError> {
+        manifest: &hharness_ledger::manifest::RunManifest,
+    ) -> Result<hharness_control::replay::ReplayPorts, EmbedError> {
         let sealed = manifest
             .harness_def_ref
             .as_deref()
             .and_then(|r| self.persisted_definition(r).ok());
         let Some(sealed) = sealed else {
-            return Ok(hh_control::replay::ReplayPorts::default());
+            return Ok(hharness_control::replay::ReplayPorts::default());
         };
         let Some(params) = crate::open::router_slot_params(&sealed.document) else {
-            return Ok(hh_control::replay::ReplayPorts::default());
+            return Ok(hharness_control::replay::ReplayPorts::default());
         };
         let table = crate::open::role_table_from_manifest(manifest);
         let arm = self
@@ -247,7 +249,7 @@ impl EmbedService {
             .map_err(|e| EmbedError::Refused {
                 reason: format!("replay_router_slot: {e}"),
             })?;
-        Ok(hh_control::replay::ReplayPorts {
+        Ok(hharness_control::replay::ReplayPorts {
             routing: Some(Box::new(arm.routing)),
             cache: arm.cache.map(|c| Box::new(c) as _),
         })
@@ -266,7 +268,7 @@ impl EmbedService {
         let parent = self.store.manifest(&source).map_err(ledger_err)?.clone();
 
         // ── the design gates (T-LCD-14; ADR-0199) ─────────────────────
-        let match_spec = hh_budget::matchspec::MatchSpec::from_json(&p.design.budget)
+        let match_spec = hharness_budget::matchspec::MatchSpec::from_json(&p.design.budget)
             .ok_or(EmbedError::UnbudgetedArm)?;
         if !p.design.factual_arm {
             return Err(EmbedError::Refused {
@@ -392,20 +394,21 @@ impl EmbedService {
                         .unwrap_or_else(|| source.clone());
                     format!(
                         "sha256:{}",
-                        hh_wire::sha256::sha256_hex(
+                        hharness_wire::sha256::sha256_hex(
                             format!("cf-crn:{}:{}:{i}", config_seed, p.at_seq).as_bytes()
                         )
                     )
                 } else {
                     format!(
                         "sha256:{}",
-                        hh_wire::sha256::sha256_hex(
+                        hharness_wire::sha256::sha256_hex(
                             format!("cf-seed:{source}:{}:{role}:{i}", p.at_seq).as_bytes()
                         )
                     )
                 };
-                let mut child =
-                    hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+                let mut child = hharness_ledger::manifest::RunManifest::minimal(
+                    hharness_ledger::manifest::RunKind::Agent,
+                );
                 child.configuration_id = parent.configuration_id.clone();
                 child.configuration_version_id = parent.configuration_version_id.clone();
                 child.harness_def_ref = parent.harness_def_ref.clone();
@@ -483,7 +486,8 @@ impl EmbedService {
                 .filter(|e| e.seq <= p.at_seq as u64)
                 .cloned()
                 .collect();
-            let recorded = hh_control::replay::extract_recorded(events, p.at_seq as u64, None);
+            let recorded =
+                hharness_control::replay::extract_recorded(events, p.at_seq as u64, None);
             let arm = leaf_arm_for(&self.store, &source);
             let variant = arm
                 .as_ref()
@@ -498,7 +502,7 @@ impl EmbedService {
                     .and_then(Json::as_str)
                     .unwrap_or("")
                     .to_string();
-                hh_ledger::replay::replay_started(
+                hharness_ledger::replay::replay_started(
                     &mut self.store,
                     &arm_run,
                     ReplayDriverMode::Deterministic,
@@ -513,7 +517,7 @@ impl EmbedService {
                     let policy = match policy {
                         Ok(p) => p,
                         Err(e) => {
-                            let report = hh_ledger::replay::validity(
+                            let report = hharness_ledger::replay::validity(
                                 &self.store,
                                 &arm_run,
                                 &ValidityInput {
@@ -528,7 +532,7 @@ impl EmbedService {
                                 },
                             )
                             .map_err(ledger_err)?;
-                            hh_ledger::replay::replay_finished(
+                            hharness_ledger::replay::replay_finished(
                                 &mut self.store,
                                 &arm_run,
                                 ReplayDriverMode::Deterministic,
@@ -552,7 +556,7 @@ impl EmbedService {
                         // verdict — never a silent skip (the `started` row
                         // is already durable; the pair must close) and
                         // never a `react/minimal` substitute.
-                        let report = hh_ledger::replay::validity(
+                        let report = hharness_ledger::replay::validity(
                             &self.store,
                             &arm_run,
                             &ValidityInput {
@@ -567,7 +571,7 @@ impl EmbedService {
                             },
                         )
                         .map_err(ledger_err)?;
-                        hh_ledger::replay::replay_finished(
+                        hharness_ledger::replay::replay_finished(
                             &mut self.store,
                             &arm_run,
                             ReplayDriverMode::Deterministic,
@@ -588,7 +592,7 @@ impl EmbedService {
                     let ports = match self.replay_ports(&parent) {
                         Ok(p) => p,
                         Err(e) => {
-                            let report = hh_ledger::replay::validity(
+                            let report = hharness_ledger::replay::validity(
                                 &self.store,
                                 &arm_run,
                                 &ValidityInput {
@@ -599,7 +603,7 @@ impl EmbedService {
                                 },
                             )
                             .map_err(ledger_err)?;
-                            hh_ledger::replay::replay_finished(
+                            hharness_ledger::replay::replay_finished(
                                 &mut self.store,
                                 &arm_run,
                                 ReplayDriverMode::Deterministic,
@@ -615,7 +619,7 @@ impl EmbedService {
                             continue;
                         }
                     };
-                    match hh_control::replay::deterministic_replay(
+                    match hharness_control::replay::deterministic_replay(
                         strategy,
                         &ctx,
                         policy,
@@ -637,8 +641,9 @@ impl EmbedService {
                                     .map(|d| (d.at_seq, d.expected.clone(), d.got.clone())),
                                 ..Default::default()
                             };
-                            let report = hh_ledger::replay::validity(&self.store, &arm_run, &input)
-                                .map_err(ledger_err)?;
+                            let report =
+                                hharness_ledger::replay::validity(&self.store, &arm_run, &input)
+                                    .map_err(ledger_err)?;
                             (
                                 report,
                                 Json::obj([
@@ -656,8 +661,9 @@ impl EmbedService {
                                 diverged: Some((0, "drive".into(), format!("{e:?}"))),
                                 ..Default::default()
                             };
-                            let report = hh_ledger::replay::validity(&self.store, &arm_run, &input)
-                                .map_err(ledger_err)?;
+                            let report =
+                                hharness_ledger::replay::validity(&self.store, &arm_run, &input)
+                                    .map_err(ledger_err)?;
                             (
                                 report,
                                 Json::obj([
@@ -675,11 +681,11 @@ impl EmbedService {
                         variant_declares: false,
                         ..Default::default()
                     };
-                    let report = hh_ledger::replay::validity(&self.store, &arm_run, &input)
+                    let report = hharness_ledger::replay::validity(&self.store, &arm_run, &input)
                         .map_err(ledger_err)?;
                     (report, Json::obj([("reproduced", Json::Bool(false))]))
                 };
-                hh_ledger::replay::replay_finished(
+                hharness_ledger::replay::replay_finished(
                     &mut self.store,
                     &arm_run,
                     ReplayDriverMode::Deterministic,

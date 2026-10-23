@@ -156,13 +156,13 @@ impl std::fmt::Display for AccountingViolation {
 impl std::error::Error for AccountingViolation {}
 
 /// Whether the charge's `model_ref` equals the route row's selection.
-fn charge_matches_route(model_ref: &hh_wire::Json, route: &crate::facts::RouteRow) -> bool {
+fn charge_matches_route(model_ref: &hharness_wire::Json, route: &crate::facts::RouteRow) -> bool {
     if route.rerouted {
         // `model.rerouted.to` is the provider-model id — the reroute row's
         // `selected` slot is empty by shape.
         model_ref
             .get("provider_model_id")
-            .and_then(hh_wire::Json::as_str)
+            .and_then(hharness_wire::Json::as_str)
             == route.to.as_deref()
     } else {
         route.selected.as_ref() == Some(model_ref)
@@ -327,9 +327,11 @@ pub fn model_accounting(facts: &LedgerFacts) -> Vec<AccountingViolation> {
     // ── avoided-cost provenance (AC-R-2.3.4-6) ─────────────────────────
     for r in &facts.cache_resolutions {
         if let Some(avoided) = &r.avoided {
-            let ok = avoided.get("provenance").and_then(hh_wire::Json::as_str)
+            let ok = avoided
+                .get("provenance")
+                .and_then(hharness_wire::Json::as_str)
                 == Some("estimated_from_pricing")
-                || avoided.get("estimated_from_pricing") == Some(&hh_wire::Json::Bool(true));
+                || avoided.get("estimated_from_pricing") == Some(&hharness_wire::Json::Bool(true));
             if !ok {
                 out.push(AccountingViolation::AvoidedProvenance { seq: r.seq });
             }

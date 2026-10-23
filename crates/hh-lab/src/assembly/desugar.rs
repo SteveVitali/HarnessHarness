@@ -24,25 +24,25 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::compose::Layer;
-use hh_assembly::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
-use hh_assembly::grammar::{Assembly, EntityBinding, LayerProvenance, LayerSourceKind};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::leaves::Text;
-use hh_hir::records::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::compose::Layer;
+use hharness_assembly::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
+use hharness_assembly::grammar::{Assembly, EntityBinding, LayerProvenance, LayerSourceKind};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
     AgentProcessBody, AgentProcessRecord, BudgetRecord, CapabilityDeclarationRecord,
     ContextItemRecord, KindRecord, MemoryRecord, OpaqueProcess, PermissionRecord, ProcedureRecord,
     ProcedureStep, Supplies, Validity,
 };
-use hh_hir::refs::{ComponentVariantRef, Ref, RefVersion};
-use hh_identity::idp::idp_id;
-use hh_identity::names::ResolveMode;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::records::RegistryRecord;
-use hh_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
-use hh_wire::json::Json;
+use hharness_hir::refs::{ComponentVariantRef, Ref, RefVersion};
+use hharness_identity::idp::idp_id;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::records::RegistryRecord;
+use hharness_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
+use hharness_wire::json::Json;
 
 use crate::assembly::source::{
     AssemblySource, HostedSpec, Import, ImportKind, ModelBinding, RootKind, SOURCE_DIALECT,
@@ -154,7 +154,7 @@ pub fn base_definition(
     registry: &RegistryStore,
     snapshot_id: Option<&str>,
     mode: ResolveMode,
-) -> Result<hh_hir::document::SealedDefinition, String> {
+) -> Result<hharness_hir::document::SealedDefinition, String> {
     let input = if let Some(v) = base.strip_prefix("version:") {
         ResolveInput::Version(v.to_string())
     } else if base.contains('/') {
@@ -190,7 +190,7 @@ pub fn base_definition(
 /// (`layers`/`resolved`/`ext` stripped: the derived members are this
 /// assembly's to compute, never the base's).
 fn base_fragment(
-    s: &hh_hir::document::SealedDefinition,
+    s: &hharness_hir::document::SealedDefinition,
     kernel: &ProvenanceRecord,
 ) -> (Assembly, Vec<AssemblyDiagnostic>) {
     let mut diags = Vec::new();
@@ -222,10 +222,12 @@ fn import_prov(path_or_ref: &str, content: &[u8], seq: u64) -> ProvenanceRecord 
         },
         PersistenceScope::Definition,
         seq,
-        hh_provenance::Attestation {
-            kind: hh_provenance::AttestationKind::Pin,
-            subject_hash: hh_identity::idp::idp_id("hh.import", content),
-            anchor: hh_provenance::AttestationAnchor::Signer("hh-lab/assembly-source".to_string()),
+        hharness_provenance::Attestation {
+            kind: hharness_provenance::AttestationKind::Pin,
+            subject_hash: hharness_identity::idp::idp_id("hh.import", content),
+            anchor: hharness_provenance::AttestationAnchor::Signer(
+                "hh-lab/assembly-source".to_string(),
+            ),
             verified_by: "kernel:hh-lab/assembly".to_string(),
             verified_at: seq,
         },
@@ -489,7 +491,8 @@ fn parse_value(v: &str) -> Json {
             if let Ok(i) = v.parse::<i64>() {
                 Json::Int(i)
             } else if v.starts_with('{') || v.starts_with('[') || v.starts_with('"') {
-                hh_wire::canonical::parse_canonical(v.as_bytes()).unwrap_or(Json::Str(v.into()))
+                hharness_wire::canonical::parse_canonical(v.as_bytes())
+                    .unwrap_or(Json::Str(v.into()))
             } else {
                 Json::Str(v.into())
             }
@@ -498,7 +501,7 @@ fn parse_value(v: &str) -> Json {
 }
 
 /// The `experiment` layer id — `H(idp ∥ "override-layer" ∥
-/// canonical(overrides))` (ADR-0147 D2; the established `hh-embed`
+/// canonical(overrides))` (ADR-0147 D2; the established `hharness-embed`
 /// spelling).
 pub fn overrides_layer_id(overrides: &[String]) -> String {
     let mut sorted: Vec<String> = overrides.to_vec();
@@ -580,9 +583,11 @@ pub fn apply_experiment(
                 // Group override: the lhs may be a class id or a slot key.
                 a.slots.insert(
                     class_id.clone(),
-                    hh_hir::records::SlotBindings::One(hh_hir::records::SlotBinding::of(
-                        ComponentVariantRef::selected(class_id, variant_id, "latest"),
-                    )),
+                    hharness_hir::records::SlotBindings::One(
+                        hharness_hir::records::SlotBinding::of(ComponentVariantRef::selected(
+                            class_id, variant_id, "latest",
+                        )),
+                    ),
                 );
                 touched.push(format!("slots.{class_id}"));
             }
@@ -660,12 +665,12 @@ fn apply_path(
                             .iter()
                             .filter_map(Json::as_str)
                             .map(|v| {
-                                hh_hir::records::SlotBinding::of(ComponentVariantRef::selected(
+                                hharness_hir::records::SlotBinding::of(ComponentVariantRef::selected(
                                     slot, v, "latest",
                                 ))
                             })
                             .collect::<Vec<_>>(),
-                        Json::Str(v) => vec![hh_hir::records::SlotBinding::of(
+                        Json::Str(v) => vec![hharness_hir::records::SlotBinding::of(
                             ComponentVariantRef::selected(slot, v, "latest"),
                         )],
                         _ => vec![],
@@ -683,19 +688,19 @@ fn apply_path(
                     }
                     if append {
                         match a.slots.get_mut(slot) {
-                            Some(hh_hir::records::SlotBindings::Many(v)) => v.extend(bindings),
-                            Some(hh_hir::records::SlotBindings::One(b)) => {
+                            Some(hharness_hir::records::SlotBindings::Many(v)) => v.extend(bindings),
+                            Some(hharness_hir::records::SlotBindings::One(b)) => {
                                 let mut v = vec![b.clone()];
                                 v.extend(bindings);
                                 a.slots.insert(
                                     slot.to_string(),
-                                    hh_hir::records::SlotBindings::Many(v),
+                                    hharness_hir::records::SlotBindings::Many(v),
                                 );
                             }
                             None => {
                                 a.slots.insert(
                                     slot.to_string(),
-                                    hh_hir::records::SlotBindings::Many(bindings),
+                                    hharness_hir::records::SlotBindings::Many(bindings),
                                 );
                             }
                         }
@@ -703,11 +708,11 @@ fn apply_path(
                         a.slots.insert(
                             slot.to_string(),
                             if bindings.len() == 1 {
-                                hh_hir::records::SlotBindings::One(
+                                hharness_hir::records::SlotBindings::One(
                                     bindings.into_iter().next().unwrap(),
                                 )
                             } else {
-                                hh_hir::records::SlotBindings::Many(bindings)
+                                hharness_hir::records::SlotBindings::Many(bindings)
                             },
                         );
                     }
@@ -715,8 +720,8 @@ fn apply_path(
                 Some("enabled") => {
                     let flag = matches!(value, Json::Bool(true));
                     match a.slots.get_mut(slot) {
-                        Some(hh_hir::records::SlotBindings::One(b)) => b.enabled = flag,
-                        Some(hh_hir::records::SlotBindings::Many(v)) => {
+                        Some(hharness_hir::records::SlotBindings::One(b)) => b.enabled = flag,
+                        Some(hharness_hir::records::SlotBindings::Many(v)) => {
                             for b in v {
                                 b.enabled = flag;
                             }
@@ -734,10 +739,10 @@ fn apply_path(
                 Some(rest) if rest.starts_with("params.") => {
                     let key = rest.trim_start_matches("params.");
                     match a.slots.get_mut(slot) {
-                        Some(hh_hir::records::SlotBindings::One(b)) => {
+                        Some(hharness_hir::records::SlotBindings::One(b)) => {
                             b.params.insert(key.to_string(), value.clone());
                         }
-                        Some(hh_hir::records::SlotBindings::Many(v)) => {
+                        Some(hharness_hir::records::SlotBindings::Many(v)) => {
                             if let Some(b) = v.first_mut() {
                                 b.params.insert(key.to_string(), value.clone());
                             }
@@ -789,7 +794,7 @@ fn apply_path(
         }
         "parameters" => {
             let p = tail.unwrap_or("");
-            match hh_assembly::grammar::parameter_spec_from_json(
+            match hharness_assembly::grammar::parameter_spec_from_json(
                 value,
                 &format!("/assembly/parameters/{p}"),
             ) {
@@ -808,7 +813,7 @@ fn apply_path(
         }
         "entities" => {
             let id = tail.unwrap_or("");
-            match hh_assembly::grammar::entity_binding_from_json(value, &format!("/assembly/entities/{id}")) {
+            match hharness_assembly::grammar::entity_binding_from_json(value, &format!("/assembly/entities/{id}")) {
                 Ok(eb) => {
                     a.entities.insert(id.to_string(), eb);
                 }
@@ -823,7 +828,7 @@ fn apply_path(
             }
         }
         "profile_binding" => {
-            match hh_assembly::grammar::profile_binding_from_json(value) {
+            match hharness_assembly::grammar::profile_binding_from_json(value) {
                 Ok(b) => a.profile_binding = b,
                 Err(e) => diags.push(ddiag(
                     Code::LoadParse,
@@ -836,7 +841,7 @@ fn apply_path(
             }
         }
         "constraints" => {
-            match hh_assembly::grammar::constraint_from_json(value, "/assembly/constraints[-]") {
+            match hharness_assembly::grammar::constraint_from_json(value, "/assembly/constraints[-]") {
                 Ok(mut c) => {
                     c.source = Some(LayerProvenance {
                         source_kind: LayerSourceKind::Experiment,
@@ -897,9 +902,9 @@ fn apply_delete(
         "profile_binding" => {
             let had = !matches!(
                 a.profile_binding,
-                hh_assembly::grammar::ProfileBinding::Unbound
+                hharness_assembly::grammar::ProfileBinding::Unbound
             );
-            a.profile_binding = hh_assembly::grammar::ProfileBinding::Unbound;
+            a.profile_binding = hharness_assembly::grammar::ProfileBinding::Unbound;
             had
         }
         "ext" => tail.map(|t| a.ext.remove(t).is_some()).unwrap_or(false),
@@ -949,7 +954,7 @@ fn hosted_scaffold(
     seq: &mut u64,
 ) -> (
     HirDocument,
-    BTreeMap<String, hh_assembly::grammar::ParameterSpec>,
+    BTreeMap<String, hharness_assembly::grammar::ParameterSpec>,
     BTreeMap<String, Json>,
 ) {
     let next = |s: &mut u64| {
@@ -971,10 +976,10 @@ fn hosted_scaffold(
     let rule_id = format!("{root_sid}/accounting");
     let mut rule = Node::new(
         EntityKind::HarnessRule,
-        KindRecord::HarnessRule(hh_hir::records::HarnessRuleRecord {
+        KindRecord::HarnessRule(hharness_hir::records::HarnessRuleRecord {
             rule_id: rule_id.clone(),
             trigger: Json::Null,
-            action: hh_hir::records::RuleAction::RequestApproval(Json::Null),
+            action: hharness_hir::records::RuleAction::RequestApproval(Json::Null),
             scope: Json::Null,
             conditioned_on: None,
             assumption_debt: None,
@@ -988,7 +993,11 @@ fn hosted_scaffold(
     let budget_id = format!("{root_sid}/budget");
     let budget_rec = match &h.budget {
         Some(j) => {
-            match hh_hir::wire::semantic_record_from_json(EntityKind::Budget, j, "/hosted/budget") {
+            match hharness_hir::wire::semantic_record_from_json(
+                EntityKind::Budget,
+                j,
+                "/hosted/budget",
+            ) {
                 Ok(r) => r,
                 Err(e) => {
                     diags.push(ddiag(
@@ -1022,7 +1031,7 @@ fn hosted_scaffold(
     // Permission — authored body or the empty-grants default.
     let perm_id = format!("{root_sid}/permissions");
     let perm_rec = match &h.permissions {
-        Some(j) => match hh_hir::wire::semantic_record_from_json(
+        Some(j) => match hharness_hir::wire::semantic_record_from_json(
             EntityKind::Permission,
             j,
             "/hosted/permissions",
@@ -1040,7 +1049,7 @@ fn hosted_scaffold(
                 KindRecord::Permission(PermissionRecord {
                     holder: Ref::selected(&root_sid, "latest"),
                     grants: vec![],
-                    issuer: hh_hir::records::Issuer {
+                    issuer: hharness_hir::records::Issuer {
                         authority: AuthorityClass::Kernel,
                         reference: "hh-lab/assembly".into(),
                     },
@@ -1052,7 +1061,7 @@ fn hosted_scaffold(
         None => KindRecord::Permission(PermissionRecord {
             holder: Ref::selected(&root_sid, "latest"),
             grants: vec![],
-            issuer: hh_hir::records::Issuer {
+            issuer: hharness_hir::records::Issuer {
                 authority: AuthorityClass::Kernel,
                 reference: "hh-lab/assembly".into(),
             },
@@ -1072,7 +1081,7 @@ fn hosted_scaffold(
             .name
             .clone()
             .unwrap_or_else(|| format!("{root_sid}/tool/{i}"));
-        match hh_hir::wire::semantic_record_from_json(
+        match hharness_hir::wire::semantic_record_from_json(
             EntityKind::ToolCapability,
             &t.record,
             &format!("/hosted/tools/{i}"),
@@ -1140,7 +1149,7 @@ fn hosted_scaffold(
             nodes.push(ci);
             supplies.context.push(Ref::selected(sid, "latest"));
         } else {
-            match hh_hir::wire::semantic_record_from_json(
+            match hharness_hir::wire::semantic_record_from_json(
                 EntityKind::ContextItem,
                 &ins.record,
                 &format!("/hosted/instructions/{i}"),
@@ -1182,7 +1191,7 @@ fn hosted_scaffold(
                 continue;
             }
         };
-        match hh_hir::wire::semantic_record_from_json(
+        match hharness_hir::wire::semantic_record_from_json(
             kind,
             &p.record,
             &format!("/hosted/policies/{i}"),
@@ -1229,8 +1238,10 @@ fn hosted_scaffold(
     let mechanism = h
         .hosting_mechanism
         .as_deref()
-        .map(hh_ontology::participant::HostingMechanism::parse)
-        .unwrap_or(Some(hh_ontology::participant::HostingMechanism::SessionAbi));
+        .map(hharness_ontology::participant::HostingMechanism::parse)
+        .unwrap_or(Some(
+            hharness_ontology::participant::HostingMechanism::SessionAbi,
+        ));
     let mechanism = match mechanism {
         Some(m) => m,
         None => {
@@ -1242,10 +1253,13 @@ fn hosted_scaffold(
                 "use session_abi | model_boundary_intercept | container_installed",
                 kernel,
             ));
-            hh_ontology::participant::HostingMechanism::SessionAbi
+            hharness_ontology::participant::HostingMechanism::SessionAbi
         }
     };
-    if matches!(mechanism, hh_ontology::participant::HostingMechanism::None) {
+    if matches!(
+        mechanism,
+        hharness_ontology::participant::HostingMechanism::None
+    ) {
         diags.push(ddiag(
             Code::LoadParse,
             "/hosted/hosting_mechanism",
@@ -1260,10 +1274,10 @@ fn hosted_scaffold(
         Some(j) => decode_capability_declaration(j, kernel, diags),
         None => CapabilityDeclarationRecord::all_unknown(),
     };
-    let observability: BTreeSet<hh_ontology::participant::Observability> = h
+    let observability: BTreeSet<hharness_ontology::participant::Observability> = h
         .observability
         .iter()
-        .filter_map(|s| hh_ontology::participant::Observability::parse(s))
+        .filter_map(|s| hharness_ontology::participant::Observability::parse(s))
         .collect();
 
     let mut root = Node::new(
@@ -1299,7 +1313,7 @@ fn hosted_scaffold(
     // `C-PARAM-6` at stage 3.
     let mut params_space = BTreeMap::new();
     for (p, j) in &h.parameters {
-        match hh_assembly::grammar::parameter_spec_from_json(j, &format!("/hosted/parameters/{p}"))
+        match hharness_assembly::grammar::parameter_spec_from_json(j, &format!("/hosted/parameters/{p}"))
         {
             Ok(ps) => {
                 params_space.insert(p.clone(), ps);
@@ -1325,9 +1339,9 @@ fn decode_capability_declaration(
 ) -> CapabilityDeclarationRecord {
     let mut d = CapabilityDeclarationRecord::all_unknown();
     let state = |v: &Json| match v.as_str() {
-        Some("supported") => Some(hh_hir::records::CapabilityState::Supported),
-        Some("unsupported") => Some(hh_hir::records::CapabilityState::Unsupported),
-        Some("unknown") => Some(hh_hir::records::CapabilityState::Unknown),
+        Some("supported") => Some(hharness_hir::records::CapabilityState::Supported),
+        Some("unsupported") => Some(hharness_hir::records::CapabilityState::Unsupported),
+        Some("unknown") => Some(hharness_hir::records::CapabilityState::Unknown),
         _ => None,
     };
     if let Json::Obj(m) = j {
@@ -1437,7 +1451,7 @@ pub fn desugar(
                 if !f.slots.is_empty()
                     || !matches!(
                         f.profile_binding,
-                        hh_assembly::grammar::ProfileBinding::Unbound
+                        hharness_assembly::grammar::ProfileBinding::Unbound
                     )
                 {
                     diags.push(ddiag(
@@ -1468,7 +1482,7 @@ pub fn desugar(
 
     // D1 — the base layer (lowest precedence).
     let mut layers: Vec<Layer> = Vec::new();
-    let mut base_doc: Option<hh_hir::document::SealedDefinition> = None;
+    let mut base_doc: Option<hharness_hir::document::SealedDefinition> = None;
     if let Some(b) = &source.base {
         match base_definition(b, registry, snapshot_id, ResolveMode::Audit) {
             Ok(sealed) => {
@@ -1604,7 +1618,7 @@ pub fn desugar(
                     ("nodes", Json::Arr(sd.nodes.clone())),
                     ("edges", Json::Arr(sd.edges.clone())),
                 ]);
-                match hh_hir::wire::document_from_json(&dj) {
+                match hharness_hir::wire::document_from_json(&dj) {
                     Ok(d) => d,
                     Err(e) => {
                         diags.push(ddiag(
@@ -1647,10 +1661,10 @@ pub fn desugar(
         if let KindRecord::AgentProcess(ap) = &n.semantic {
             if let AgentProcessBody::Native(np) = &ap.body {
                 let has_selector = np.slots.values().any(|bs| match bs {
-                    hh_hir::records::SlotBindings::One(b) => {
+                    hharness_hir::records::SlotBindings::One(b) => {
                         matches!(b.variant.version, RefVersion::Selector(_))
                     }
-                    hh_hir::records::SlotBindings::Many(v) => v
+                    hharness_hir::records::SlotBindings::Many(v) => v
                         .iter()
                         .any(|b| matches!(b.variant.version, RefVersion::Selector(_))),
                 });
@@ -1690,7 +1704,7 @@ pub fn derivation_key(
 ) -> String {
     let layer_json = |l: &LayerProvenance, f: &Assembly| {
         Json::obj([
-            ("provenance", hh_assembly::grammar::layer_json(l)),
+            ("provenance", hharness_assembly::grammar::layer_json(l)),
             ("fragment", f.to_json()),
         ])
     };
@@ -1734,12 +1748,12 @@ pub fn lab_ext(
 ) -> Json {
     let mut ls: Vec<Json> = layers
         .iter()
-        .map(|l| hh_assembly::grammar::layer_json(&l.provenance))
+        .map(|l| hharness_assembly::grammar::layer_json(&l.provenance))
         .collect();
     let mut overrides = Json::Null;
     let mut tombstones = Json::Null;
     if let Some(e) = experiment {
-        ls.push(hh_assembly::grammar::layer_json(&e.provenance));
+        ls.push(hharness_assembly::grammar::layer_json(&e.provenance));
         overrides = Json::Arr(e.ops.iter().map(|o| Json::str(format!("{o:?}"))).collect());
         tombstones = Json::Arr(e.tombstones.iter().map(|t| Json::str(t.clone())).collect());
     }

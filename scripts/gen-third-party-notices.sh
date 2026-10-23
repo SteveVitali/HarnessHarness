@@ -69,11 +69,11 @@ if missing:
 # Packages whose admission or license family needs a stated notice. Keyed by
 # name (applies to every locked version of it).
 DIRECT = {
-    "ring":           "admitted by ADR-0359 — `hh-secrets` DPoP verify + blob-pool AEAD",
-    "rustls":         "admitted by ADR-0365 — `hh-tls` closed HTTPS/mTLS scope (`ring` backend)",
-    "rustls-webpki":  "admitted by ADR-0365 — certificate verification inside `hh-tls`",
-    "webpki-roots":   "admitted by ADR-0365 — Mozilla root store inside `hh-tls`",
-    "tempfile":       "dev-dependency of `hh-varhost` tests only — never a shipped artifact",
+    "ring":           "admitted by ADR-0359 — `hharness-secrets` DPoP verify + blob-pool AEAD",
+    "rustls":         "admitted by ADR-0365 — `hharness-tls` closed HTTPS/mTLS scope (`ring` backend)",
+    "rustls-webpki":  "admitted by ADR-0365 — certificate verification inside `hharness-tls`",
+    "webpki-roots":   "admitted by ADR-0365 — Mozilla root store inside `hharness-tls`",
+    "tempfile":       "dev-dependency of `hharness-varhost` tests only — never a shipped artifact",
 }
 NOTES = {
     "ring": ("ring is licensed Apache-2.0 AND ISC. Portions are derived from "

@@ -16,9 +16,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hh_experiment::docs::LabDocs;
-use hh_ledger::store::Store;
-use hh_wire::json::{parse as json_parse, Json};
+use hharness_experiment::docs::LabDocs;
+use hharness_ledger::store::Store;
+use hharness_wire::json::{parse as json_parse, Json};
 
 use crate::annotations::{self, RowAnnotations};
 use crate::error::ResultsError;
@@ -434,7 +434,7 @@ impl ResultsStore {
             rows,
             next_cursor,
             watermark_set: wm,
-            view_hash: hh_identity::idp::idp_id(
+            view_hash: hharness_identity::idp::idp_id(
                 "results_view",
                 view.to_canonical_string().as_bytes(),
             ),
@@ -593,7 +593,7 @@ impl ResultsStore {
                 Ok(m) => m,
                 Err(_) => continue,
             };
-            if manifest.run_kind != hh_ledger::manifest::RunKind::Agent {
+            if manifest.run_kind != hharness_ledger::manifest::RunKind::Agent {
                 continue;
             }
             self.project_and_record(store, docs, &run_id, None, None, DerivedReason::Initial)?;

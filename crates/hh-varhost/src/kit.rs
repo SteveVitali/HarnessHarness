@@ -37,11 +37,13 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{AbiError, ConformanceParams, GuardParams, GuardSubjectKind};
-use hh_identity::repro::InstrumentRecord;
-use hh_registry::kinds::{ConformanceVerdict, Placement, ProducedBy, SubjectKind};
-use hh_registry::records::{ConformanceReport, ReportHost, ReportResult};
-use hh_wire::json::Json;
+use hharness_embed_schema::plugin_abi::{
+    AbiError, ConformanceParams, GuardParams, GuardSubjectKind,
+};
+use hharness_identity::repro::InstrumentRecord;
+use hharness_registry::kinds::{ConformanceVerdict, Placement, ProducedBy, SubjectKind};
+use hharness_registry::records::{ConformanceReport, ReportHost, ReportResult};
+use hharness_wire::json::Json;
 
 use crate::host::{InvokeOutcome, VariantHost};
 use crate::ports::HostPorts;
@@ -220,7 +222,7 @@ pub fn run_kit<P: HostPorts, E: SessionEvents>(
             ),
         ),
     ]);
-    let report_id = hh_identity::idp_id(
+    let report_id = hharness_identity::idp_id(
         "hh-conformance-report",
         preimage.to_canonical_string().as_bytes(),
     );
@@ -515,8 +517,8 @@ fn layer_reach_static(pkg: &VariantPackage, rows: &mut Vec<KitRow>) {
     }
 }
 
-fn verdict_label(v: hh_embed_schema::plugin_abi::GuardVerdict) -> &'static str {
-    use hh_embed_schema::plugin_abi::GuardVerdict::*;
+fn verdict_label(v: hharness_embed_schema::plugin_abi::GuardVerdict) -> &'static str {
+    use hharness_embed_schema::plugin_abi::GuardVerdict::*;
     match v {
         Pass => "pass",
         Annotate(_) => "annotate",

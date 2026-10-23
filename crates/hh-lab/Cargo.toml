@@ -1,16 +1,16 @@
 [package]
-name = "hh-lab"
+name = "hharness-lab"
 version = "0.0.1"
 edition = "2021"
 license.workspace = true
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-budget = { path = "../hh-budget" }
-hh-registry = { path = "../hh-registry" }
-hh-assembly = { path = "../hh-assembly" }
-hh-compiler = { path = "../hh-compiler" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-budget = { path = "../hh-budget" }
+hharness-registry = { path = "../hh-registry" }
+hharness-assembly = { path = "../hh-assembly" }
+hharness-compiler = { path = "../hh-compiler" }

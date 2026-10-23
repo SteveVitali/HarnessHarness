@@ -14,13 +14,13 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::quantity::ResourceVector;
-use hh_compiler::profile::SelectorView;
-use hh_gateway::router::{
+use hharness_budget::quantity::ResourceVector;
+use hharness_compiler::profile::SelectorView;
+use hharness_gateway::router::{
     select_with, BudgetPort, HealthView, ModelRoleTable, RoutingDecision, RoutingPolicy,
     RoutingRefusal, RoutingRequest, RoutingViews,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeSet;
 
 /// The ensemble procedure kind — the closed sum (§5b.2 names
@@ -289,22 +289,22 @@ pub fn run_ensemble(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_compiler::profile::{
+    use hharness_compiler::profile::{
         self as prof, CapabilityState, DebtStatus, ExpiryCondition, ExpiryKind, ModelCoordinate,
         ModelProfile, ModelRole, ProfileCompatibility, ProfileDebtRecord, ProfileSelector,
         SelectorView, VersionPattern,
     };
-    use hh_gateway::router::{
+    use hharness_gateway::router::{
         MigrationLossBound, NoHealth, RoleBinding, RouteCandidate, RoutingPolicyKind,
     };
-    use hh_gateway::ModelRef;
-    use hh_ontology::dimensions::DimensionId;
+    use hharness_gateway::ModelRef;
+    use hharness_ontology::dimensions::DimensionId;
 
     fn debt(status: DebtStatus) -> ProfileDebtRecord {
         ProfileDebtRecord {
             rule_id: "r.profile".into(),
             hypothesis: "h".into(),
-            evidence_refs: vec![hh_compiler::profile::EvidenceRef::legacy("ev:1")],
+            evidence_refs: vec![hharness_compiler::profile::EvidenceRef::legacy("ev:1")],
             owner: "o".into(),
             reach_via: Vec::new(),
             expiry_condition: ExpiryCondition {
@@ -312,8 +312,8 @@ mod tests {
                 value: None,
             },
             removal_test_ref: "t:1".into(),
-            removal_test: Some(hh_compiler::profile::RemovalTest::new(
-                hh_compiler::profile::RemovalTestKind::Documentation,
+            removal_test: Some(hharness_compiler::profile::RemovalTest::new(
+                hharness_compiler::profile::RemovalTestKind::Documentation,
             )),
             status,
             debt_class: None,
@@ -512,7 +512,7 @@ mod tests {
         let decided: Vec<Json> = out
             .members
             .iter()
-            .map(|m| hh_gateway::events::route_decided(&m.decision))
+            .map(|m| hharness_gateway::events::route_decided(&m.decision))
             .collect();
         assert_eq!(decided.len(), 3);
         let decided_ids: BTreeSet<String> = decided

@@ -1,7 +1,7 @@
 //! R2.16 — the `declare_*` engine preconditions and the `search_budget =
 //! unknown` admission at the spec layer (DF-S1.22-1/DF-S1.22-2; ADR-0046 D1;
-//! AC-R-2.9.2 §5h.2 §2). The compare/report halves run in `hh-eval`; the
-//! recorded-corpus halves in `hh-bench`.
+//! AC-R-2.9.2 §5h.2 §2). The compare/report halves run in `hharness-eval`; the
+//! recorded-corpus halves in `hharness-bench`.
 //!
 //! - `declare_arm`'s engine precondition — a sealed configuration whose
 //!   `budget_vector` is not the arm's `eval_budget` refuses
@@ -12,16 +12,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey};
-use hh_identity::idp::idp_id;
-use hh_ontology::config::Ref;
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey};
+use hharness_identity::idp::idp_id;
+use hharness_ontology::config::Ref;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
 
-use hh_lab::exemplars::{compaction_family_v1, CompactionFamilyPins, ExemplarPins};
-use hh_lab::expand::{expand, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
-use hh_lab::experiment::{ExperimentRefusal, SpecContext};
+use hharness_lab::exemplars::{compaction_family_v1, CompactionFamilyPins, ExemplarPins};
+use hharness_lab::expand::{expand, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
+use hharness_lab::experiment::{ExperimentRefusal, SpecContext};
 
 fn pinned(tag: &str) -> String {
     idp_id(&format!("test.{tag}"), tag.as_bytes())
@@ -72,7 +72,7 @@ fn budget_map() -> BTreeMap<String, BudgetSpec> {
 
 fn ctx() -> SpecContext<'static> {
     let budgets: &'static BTreeMap<String, BudgetSpec> = Box::leak(Box::new(budget_map()));
-    let resolve: Box<hh_lab::experiment::BudgetResolver<'static>> =
+    let resolve: Box<hharness_lab::experiment::BudgetResolver<'static>> =
         Box::new(move |r: &str| budgets.get(r).cloned());
     let sealed: Box<dyn Fn(&str) -> bool> = Box::new(|_: &str| true);
     SpecContext {
@@ -105,7 +105,7 @@ fn expand_refuses_budget_mismatch_within_arm() {
 
     // The clean half — the resolver's `budget_ref` names the arm's
     // `eval_budget` exactly.
-    let honest = |a: &hh_lab::experiment::ArmSpec| {
+    let honest = |a: &hharness_lab::experiment::ArmSpec| {
         Ok(ArmConfiguration {
             configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
             configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
@@ -125,7 +125,7 @@ fn expand_refuses_budget_mismatch_within_arm() {
 
     // The refusal — the sealed configuration's `budget_vector` names a
     // different budget than the arm declared.
-    let drifted = |a: &hh_lab::experiment::ArmSpec| {
+    let drifted = |a: &hharness_lab::experiment::ArmSpec| {
         Ok(ArmConfiguration {
             configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
             configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
@@ -154,7 +154,7 @@ fn expand_refuses_budget_mismatch_within_arm() {
 
     // `budget_ref = None` — the resolver carries only ids; the check defers
     // to the record-level `Arm::validate` gate (the config ids still bind).
-    let id_only = |a: &hh_lab::experiment::ArmSpec| {
+    let id_only = |a: &hharness_lab::experiment::ArmSpec| {
         Ok(ArmConfiguration {
             configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
             configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),

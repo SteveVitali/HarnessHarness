@@ -1,7 +1,7 @@
 //! The Hosting ABI's shared constants (spec §6.6; S4.5a; ADR-0166 D4–D5).
 //!
-//! The probe catalogue lives in `hh-hosting`; the quarantine act lives in
-//! `hh-registry`; neither may depend on the other (`hosting_edges = []`
+//! The probe catalogue lives in `hharness-hosting`; the quarantine act lives in
+//! `hharness-registry`; neither may depend on the other (`hosting_edges = []`
 //! keeps the hosting tier removable). The **P0 quarantine set** is §6.6
 //! data both sides consume — it homes here, next to the `lifecycle.hosted.*`
 //! class registrations and the `hosted_lowering` column (the ledger is the

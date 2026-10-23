@@ -1,4 +1,4 @@
-//! `hh-evolution` S6.4 coverage — R-2.9.5 6d / R-2.9.8 (§5h.5/§5h.8;
+//! `hharness-evolution` S6.4 coverage — R-2.9.5 6d / R-2.9.8 (§5h.5/§5h.8;
 //! ADR-0325; AC-R-2.9.8-{6–9,11}): the campaign-side `consolidation_
 //! candidates` view (the durable prefix's `active` transitions are the
 //! cycle-count numerator — never a caller assertion), the
@@ -10,19 +10,19 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_evolution::consolidation::{check_retrained_pin_scope, consolidation_candidates};
-use hh_evolution::cycle::{doc_kind, CycleDriver};
-use hh_evolution::errors::{EvolutionError, Refusal};
-use hh_evolution::state::Transition;
-use hh_evolution::view::{CampaignView, CandidateRecord};
-use hh_experiment::docs::LabDocs;
-use hh_lab::coevolution::{
+use hharness_evolution::consolidation::{check_retrained_pin_scope, consolidation_candidates};
+use hharness_evolution::cycle::{doc_kind, CycleDriver};
+use hharness_evolution::errors::{EvolutionError, Refusal};
+use hharness_evolution::state::Transition;
+use hharness_evolution::view::{CampaignView, CandidateRecord};
+use hharness_experiment::docs::LabDocs;
+use hharness_lab::coevolution::{
     BrokenPolicy, ConsolidationPolicy, CyclePhase, CyclePolicy, CycleStopReason, LessonFact,
     NeverConsolidate, PhasePlan, SwitchRule,
 };
-use hh_lab::model::{PolicyVersionExposed, SnapshotClaim};
-use hh_ontology::debt::ModelSelector;
-use hh_wire::Json;
+use hharness_lab::model::{PolicyVersionExposed, SnapshotClaim};
+use hharness_ontology::debt::ModelSelector;
+use hharness_wire::Json;
 
 fn tmp(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!("hh-evolution-s64-{}-{}", tag, std::process::id()));

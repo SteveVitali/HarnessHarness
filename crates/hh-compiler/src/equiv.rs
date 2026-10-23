@@ -7,8 +7,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::{records::ToolCapabilityRecord, ToolSurface};
-use hh_wire::json::Json;
+use hharness_hir::{records::ToolCapabilityRecord, ToolSurface};
+use hharness_wire::json::Json;
 
 use crate::errors::CompileError;
 use crate::plan::PinnedRef;
@@ -184,7 +184,7 @@ pub struct SurfaceBinding {
     pub dialect: String,
     /// The authored run-time admitted-mode set (`ToolSurface.exposure_mode.
     /// admitted_modes`; the definition side of I-NARROW).
-    pub admitted_modes: std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+    pub admitted_modes: std::collections::BTreeSet<hharness_hir::tools::ExposureMode>,
     /// `pinned` — definition/kernel-set, immutable to policy (I-NARROW);
     /// pinned surfaces stay `direct` and cannot be evicted.
     pub pinned: bool,
@@ -197,7 +197,7 @@ pub struct SurfaceBinding {
 /// surface declares argument names already in the capability's `input_schema`; E2 checks
 /// membership — a name outside the schema is an E2 `fail`, not a bind-time guess).
 pub fn bind_surface(
-    node: &hh_hir::Node,
+    node: &hharness_hir::Node,
     surface: &ToolSurface,
     _input_schema: &Json,
 ) -> SurfaceBinding {
@@ -221,11 +221,13 @@ pub fn bind_surface(
         .and_then(Json::as_str)
         .unwrap_or(DEFAULT_SCHEMA_DIALECT)
         .to_string();
-    let authored = hh_hir::tools::authored_exposure(Some(&surface.exposure_mode)).unwrap_or(
-        hh_hir::tools::AuthoredExposure {
+    let authored = hharness_hir::tools::authored_exposure(Some(&surface.exposure_mode)).unwrap_or(
+        hharness_hir::tools::AuthoredExposure {
             hidden: false,
             pinned: false,
-            admitted: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+            admitted: [hharness_hir::tools::ExposureMode::Direct]
+                .into_iter()
+                .collect(),
         },
     );
     let mut binding = SurfaceBinding {
@@ -253,8 +255,8 @@ pub fn bind_surface(
     };
     // `effects_bound` is the declared effect-domain set of the capability (S1
     // inclusion is `effects_bound ⊆ effects(capability_refs)` — equality at C0).
-    if let hh_hir::records::KindRecord::ToolCapability(t) = &node.semantic {
-        if let hh_hir::kinds::ToolEffects::Declared(set) = &t.effects {
+    if let hharness_hir::records::KindRecord::ToolCapability(t) = &node.semantic {
+        if let hharness_hir::kinds::ToolEffects::Declared(set) = &t.effects {
             binding.effects_bound = set.iter().map(|e| e.domain.name().to_string()).collect();
         }
     }
@@ -336,14 +338,14 @@ impl EvidenceVerdict {
 /// on `truncate` renderers.
 pub fn check_equivalence(
     binding: &SurfaceBinding,
-    capability: &hh_hir::Node,
+    capability: &hharness_hir::Node,
     suite: Option<&crate::e4::E4SuiteSpec>,
     error_spec: Option<&crate::surface::ErrorFormatSpec>,
     result_spec: Option<&crate::surface::ResultRenderSpec>,
     validators_bound: bool,
 ) -> Result<EquivalenceEvidence, CompileError> {
     let t = match &capability.semantic {
-        hh_hir::KindRecord::ToolCapability(t) => t,
+        hharness_hir::KindRecord::ToolCapability(t) => t,
         _ => {
             return Err(CompileError::UncheckableSurface {
                 surface: binding.surface_name.clone(),
@@ -357,9 +359,9 @@ pub fn check_equivalence(
     // declared effects verbatim (a binding whose recorded effect set differs is a fail —
     // at Stage 1 the binding derives effects from C, so this checks the input surface's
     // declared set when it carries one).
-    let declared: Vec<hh_hir::EffectClass> = match &t.effects {
-        hh_hir::ToolEffects::Pure => Vec::new(),
-        hh_hir::ToolEffects::Declared(s) => s.iter().cloned().collect(),
+    let declared: Vec<hharness_hir::EffectClass> = match &t.effects {
+        hharness_hir::ToolEffects::Pure => Vec::new(),
+        hharness_hir::ToolEffects::Declared(s) => s.iter().cloned().collect(),
     };
     let e1 = EvidenceVerdict::pass(); // binding carries C's set by construction; a
                                       // caller-authored mismatch is caught by E7's identity check below.
@@ -371,7 +373,7 @@ pub fn check_equivalence(
     // target names a declared input_schema property; a `const` value must satisfy
     // the parameter's declared domain.
     let declared_args: &[String] = match &capability.surface {
-        Some(hh_hir::SurfaceRecord::Tool(ts)) => &ts.argument_order,
+        Some(hharness_hir::SurfaceRecord::Tool(ts)) => &ts.argument_order,
         _ => &[],
     };
     let e2 = e2_check(binding, t, declared_args);
@@ -385,8 +387,8 @@ pub fn check_equivalence(
     // (`edit_file`/`execute`/`read_file`) require `pass` at Stage 3 — a suite absence
     // there is a `fail`, not an `n/a`.
     let open_world = match &t.effects {
-        hh_hir::ToolEffects::Pure => false,
-        hh_hir::ToolEffects::Declared(set) => {
+        hharness_hir::ToolEffects::Pure => false,
+        hharness_hir::ToolEffects::Declared(set) => {
             set.is_empty() || !set.iter().all(|e| e.is_closed_world())
         }
     };

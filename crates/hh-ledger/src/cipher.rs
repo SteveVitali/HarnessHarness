@@ -2,7 +2,7 @@
 //! encryption with per-event keys"; R-2.8.6's last DF-S1.15-3 cell; ADR-0345
 //! revisit trigger (a) fired and answered; ADR-0361).
 //!
-//! # Custody never crosses into `hh-ledger`
+//! # Custody never crosses into `hharness-ledger`
 //!
 //! Same posture as the checkpoint-signer seam (`AuditSigner`/`AuditKeyResolver`
 //! — ADR-0067 (e); ADR-0331 D3; OQ-170): the embed layer resolves key material
@@ -27,7 +27,7 @@
 //! can report sealed residency and the bound `key_id` honestly. The codec
 //! lives here — the one spelling (CC1); the AEAD construction is the
 //! `BlobCipher` impl's own business (the workspace's `ring`-backed
-//! construction is `hh_secrets::aead::RingBlobCipher`, the only impl the
+//! construction is `hharness_secrets::aead::RingBlobCipher`, the only impl the
 //! ADR-0359 scope admits).
 //!
 //! # Failure classes (§5g.6 I-A8 — binding)
@@ -40,7 +40,7 @@
 //! * the plaintext the open yields still has to hash back to the address —
 //!   a mismatch is `BlobCorrupt` (defense in depth; AEAD already binds it).
 
-use hh_identity::idp::ContentAddress;
+use hharness_identity::idp::ContentAddress;
 
 /// The sealed-frame magic (`"HHBE"` — HarnessHarness Blob Encrypted).
 pub const SEALED_MAGIC: &[u8; 4] = b"HHBE";
@@ -145,7 +145,7 @@ pub fn frame_header(bytes: &[u8]) -> Option<SealHeader> {
 /// The blob-pool cipher seam — `seal`/`open` over the plaintext content
 /// address. Custody stays outside the ledger exactly like the signer seam:
 /// the boundary resolves key material (a `kernel_use` channel, R-2.8.3) and
-/// wraps it; `hh-ledger` sees only this surface (ADR-0361 D1).
+/// wraps it; `hharness-ledger` sees only this surface (ADR-0361 D1).
 ///
 /// `address` is the `idp/1` content address **of the plaintext** — the
 /// construction binds every frame to it (wrong-address or foreign-key frames

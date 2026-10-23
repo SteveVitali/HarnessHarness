@@ -16,12 +16,12 @@
 
 use std::collections::BTreeMap;
 
-use hh_context::assemble::{self, AssemblyRequest};
-use hh_context::compact::{
+use hharness_context::assemble::{self, AssemblyRequest};
+use hharness_context::compact::{
     self, CompactInput, CompactionOp, CompactionStatus, CompactionStrategy, CompactionTrigger,
     SummarizeInput, Summarizer, SummarizerError, SummarizerOutput,
 };
-use hh_context::compact_family::{
+use hharness_context::compact_family::{
     self, decode_compaction_reminder, decode_compaction_rule, model_owned_ops,
     model_owned_proposal, reminder_candidate, resolve_compaction_policy, CheckpointExtractor,
     CheckpointOutput, FreshWindowWithNotes, ModelCompactCall, ProviderCompactInput,
@@ -30,36 +30,38 @@ use hh_context::compact_family::{
     MODEL_OWNED_REF, PROVIDER_COMPACTION_REF, STRUCTURED_CHECKPOINT_REF, SUMMARIZE_ROLLING_REF,
     WORLD_STATE_REFRESH_REF,
 };
-use hh_context::events::CollectSink;
-use hh_context::memory::{MemoryDraft, MemoryStore, WriteContext};
-use hh_context::plan::{
+use hharness_context::events::CollectSink;
+use hharness_context::memory::{MemoryDraft, MemoryStore, WriteContext};
+use hharness_context::plan::{
     Candidate, ContextPlan, CutPoint, DerivedFrom, Estimate, ExcerptReport, OffloadHandle,
     PlannedItem, SlotFill, ValidityPolicy,
 };
-use hh_context::policy::{
+use hharness_context::policy::{
     self, AdmittedCandidate, ConditionedRule, ContextPolicy, PolicyRequest, RegistrationError,
     RuleCondition,
 };
-use hh_context::policy_family::{
+use hharness_context::policy_family::{
     self, DemotionWrapper, JitHandles, PriorityEviction, RecencyPlusPins, RetrievalAugmented,
     WorldStateDiff,
 };
-use hh_context::procedure::{resolve_procedure_target, ProcedureTargetError, ProcedureTargetRule};
-use hh_context::retrieve::{
+use hharness_context::procedure::{
+    resolve_procedure_target, ProcedureTargetError, ProcedureTargetRule,
+};
+use hharness_context::retrieve::{
     self, Embedder, RetrievalBudget, RetrievalError, RetrievalIndexes, RetrievalRequest,
     SlotConstraints, SIMILARITY_RERANK,
 };
-use hh_context::vocab::{
+use hharness_context::vocab::{
     CandidateKind, CandidateState, ConflictPolicy, Layer, LifecycleStateKind, MemoryContent,
     MemoryKind, PriorityClass, Retention, RetrievalQuery,
 };
-use hh_hir::records::{AssumptionDebtRecord, DebtStatus, Validity};
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::{AssumptionDebtRecord, DebtStatus, Validity};
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -184,11 +186,11 @@ fn compact_input<'a>(
 fn debt(rule_id: &str) -> AssumptionDebtRecord {
     AssumptionDebtRecord {
         rule_id: rule_id.to_string(),
-        hypothesis: hh_hir::leaves::Text::new("h", "alice", kprov()),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
-        owner: hh_hir::OwnerRef::principal("alice"),
-        expiry_condition: hh_hir::ExpiryCondition {
-            kind: hh_hir::ExpiryKind::ModelVersionChange,
+        hypothesis: hharness_hir::leaves::Text::new("h", "alice", kprov()),
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hharness_hir::OwnerRef::principal("alice"),
+        expiry_condition: hharness_hir::ExpiryCondition {
+            kind: hharness_hir::ExpiryKind::ModelVersionChange,
             value: None,
         },
         removal_test_ref: "sha256:test".into(),
@@ -792,7 +794,7 @@ fn ac_r_2_4_1_11_all_five_variants_declare_and_select() {
         admitted(&c_new_env, &["external"]),
         admitted(&c_mem, &["external"]),
     ];
-    let layout = hh_context::plan::default_layout();
+    let layout = hharness_context::plan::default_layout();
     let null = Json::Null;
     // Every variant's declaration passes the shared conditioned-rule check.
     for (i, d) in [
@@ -934,8 +936,8 @@ fn ac_r_2_4_1_11_demotion_wrappers_route_to_external_never_inward() {
         min_view_seq: None,
         candidates: vec![c.clone()],
         advisories: Vec::new(),
-        layout: hh_context::plan::default_layout(),
-        budget: hh_context::plan::ContextBudget {
+        layout: hharness_context::plan::default_layout(),
+        budget: hharness_context::plan::ContextBudget {
             window_cap: 10_000,
             margin: 0,
             reservations: Vec::new(),
@@ -948,7 +950,7 @@ fn ac_r_2_4_1_11_demotion_wrappers_route_to_external_never_inward() {
     let mut sink = CollectSink::default();
     let bare = assemble::assemble(
         &req(Vec::new()),
-        &hh_context::policy::DefaultPolicy::default(),
+        &hharness_context::policy::DefaultPolicy::default(),
         "layout/default",
         "none",
         1,
@@ -963,7 +965,7 @@ fn ac_r_2_4_1_11_demotion_wrappers_route_to_external_never_inward() {
     let mut sink = CollectSink::default();
     let out = assemble::assemble(
         &req(wrappers),
-        &hh_context::policy::DefaultPolicy::default(),
+        &hharness_context::policy::DefaultPolicy::default(),
         "layout/default",
         "none",
         1,
@@ -1057,7 +1059,7 @@ fn draft_text(text: &str, scope: PersistenceScope) -> MemoryDraft {
     MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             text,
             "owner",
             ProvenanceRecord::kernel("kernel:mem", 0),

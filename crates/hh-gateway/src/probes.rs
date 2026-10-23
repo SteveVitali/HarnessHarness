@@ -11,9 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::ProvenanceRecord;
-use hh_registry::records::{ConformanceRecord, ObservedIn};
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::records::{ConformanceRecord, ObservedIn};
+use hharness_wire::json::Json;
 
 use crate::attempts::EventSink;
 use crate::dialect::WireDialect;
@@ -654,17 +654,17 @@ pub fn exec_probe_decl(decl: &ProbeExecDecl, observed_at: u64) -> Result<ProbeEx
     // same observed outcome replays to the same id).
     let preimage = records
         .iter()
-        .map(|r| hh_registry::schema::hosted_entry_json(r).to_canonical_string())
+        .map(|r| hharness_registry::schema::hosted_entry_json(r).to_canonical_string())
         .collect::<Vec<_>>()
         .join("");
-    let probe_run_id = hh_identity::idp_id("model.profile.probe_run", preimage.as_bytes());
+    let probe_run_id = hharness_identity::idp_id("model.profile.probe_run", preimage.as_bytes());
 
     let status_flip = records.iter().any(|r| {
         decl.dependency_capabilities.contains(&r.dimension)
             && matches!(
                 r.verdict,
-                hh_registry::kinds::ConformanceVerdict::Drift
-                    | hh_registry::kinds::ConformanceVerdict::Unsupported
+                hharness_registry::kinds::ConformanceVerdict::Drift
+                    | hharness_registry::kinds::ConformanceVerdict::Unsupported
             )
     });
     Ok(ProbeExecOutcome {

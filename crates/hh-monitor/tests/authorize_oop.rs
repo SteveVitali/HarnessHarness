@@ -15,27 +15,31 @@
 //!   workspace scan in `tcb`/acceptance; here the *dynamic* half: the
 //!   decision cannot consume content that never arrives).
 
-use hh_compiler::equiv::bind_surface;
-use hh_compiler::plan::PinnedRef;
-use hh_hir::document::Node;
-use hh_hir::kinds::{
+use hharness_compiler::equiv::bind_surface;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::document::Node;
+use hharness_hir::kinds::{
     EffectAttributes, EffectDomain, Mutability, RepeatSafety, Reversibility, ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
     Grant, GrantConstraints, KindRecord, Resources, ScopeBindings, SurfaceRecord,
     ToolCapabilityRecord, ToolSurface,
 };
-use hh_hir::refs::Ref;
-use hh_hir::EffectClass;
-use hh_monitor::assess::{AssessmentInputs, Tri};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_monitor::wire::AuthorizeInput;
-use hh_provenance::{AuthorityClass, HumanRole, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::refs::Ref;
+use hharness_hir::EffectClass;
+use hharness_monitor::assess::{AssessmentInputs, Tri};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_monitor::wire::AuthorizeInput;
+use hharness_provenance::{
+    AuthorityClass, HumanRole, Label, Origin, PersistenceScope, ProvenanceRecord,
+};
+use hharness_wire::json::Json;
 
 // ── fixtures (the acceptance.rs spellings, minimal) ─────────────────────────
 
@@ -57,7 +61,7 @@ fn model_args() -> ProvenanceRecord {
 
 fn tool_node(id: &str, args: &[&str], effects: Vec<EffectClass>, seq: u64) -> Node {
     let mut n = Node::new(
-        hh_hir::kinds::EntityKind::ToolCapability,
+        hharness_hir::kinds::EntityKind::ToolCapability,
         KindRecord::ToolCapability(ToolCapabilityRecord {
             purpose: Text::new("a test tool", "test:owner", prov(seq)),
             input_schema: Json::obj([(
@@ -143,7 +147,7 @@ fn root_handle(id: &str, grants: Vec<Grant>, ceiling: AuthorityClass) -> Authori
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -326,7 +330,7 @@ fn authorize_input_round_trip() {
     let input = AuthorizeInput::capture(&m, &p, Some("model:test@v1".into()));
     let wire = input.to_json();
     let bytes = wire.to_canonical_string();
-    let parsed = hh_wire::canonical::parse_canonical(bytes.as_bytes()).unwrap();
+    let parsed = hharness_wire::canonical::parse_canonical(bytes.as_bytes()).unwrap();
     let decoded = AuthorizeInput::from_json(&parsed).expect("decode");
     assert_eq!(decoded.to_json().to_canonical_string(), bytes);
 }
@@ -419,7 +423,7 @@ fn oop_capability_unresolvable_refused() {
 /// a recorded `decided{deny}` and its denial count re-derive identically.
 #[test]
 fn oop_approval_state_carried() {
-    use hh_monitor::approval::{ApprovalState, ApprovalStats, DenialFallback, DenialPolicy};
+    use hharness_monitor::approval::{ApprovalState, ApprovalStats, DenialFallback, DenialPolicy};
     let mut m = monitor(Mode::Unattended, vec![fs_write_cap()], vec![]);
     m.denial_policy = Some(DenialPolicy {
         max_denials: 0,
@@ -445,7 +449,7 @@ fn oop_approval_state_carried() {
     );
     let input = AuthorizeInput::capture(&m, &p, None);
     let wire = input.to_json().to_canonical_string();
-    let parsed = hh_wire::canonical::parse_canonical(wire.as_bytes()).unwrap();
+    let parsed = hharness_wire::canonical::parse_canonical(wire.as_bytes()).unwrap();
     let decoded = AuthorizeInput::from_json(&parsed).expect("decode");
     let m2 = decoded.monitor();
     assert_eq!(m2.approvals.stats.requested, 1);
@@ -506,7 +510,7 @@ fn oop_flow_contract_byte_identical_and_profile_invariant() {
     // recipient — the flow stage asks with `{approval, sanitize}`.
     let mut body = Label::at(AuthorityClass::Principal);
     body.readers =
-        hh_provenance::ReaderSet::Restricted(["bob@corp".to_string()].into_iter().collect());
+        hharness_provenance::ReaderSet::Restricted(["bob@corp".to_string()].into_iter().collect());
     p.effect = EffectClass {
         domain: EffectDomain::MessageHuman,
         attributes: Some(EffectAttributes {
@@ -516,7 +520,7 @@ fn oop_flow_contract_byte_identical_and_profile_invariant() {
             reversibility: Reversibility::Compensable,
         }),
     };
-    p.flow = hh_monitor::monitor::FlowInputs {
+    p.flow = hharness_monitor::monitor::FlowInputs {
         param_labels: [
             ("to".to_string(), Label::at(AuthorityClass::Principal)),
             ("body".to_string(), body),

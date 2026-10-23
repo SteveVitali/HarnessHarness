@@ -16,21 +16,21 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_containment::attach::PolicySlot;
-use hh_containment::policy::ResourceLimits;
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::provider::{ProviderAdapter, ProviderHandle, ProviderMeter, ProvisionRequest};
-use hh_env::record::{
+use hharness_containment::attach::PolicySlot;
+use hharness_containment::policy::ResourceLimits;
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::provider::{ProviderAdapter, ProviderHandle, ProviderMeter, ProvisionRequest};
+use hharness_env::record::{
     CanaryChannel, EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe,
 };
-use hh_identity::idp::address;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_secrets::{CredentialBroker, RefusedCode, SecretChannelSpec, StaticVault};
-use hh_wire::json::Json;
+use hharness_identity::idp::address;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_secrets::{CredentialBroker, RefusedCode, SecretChannelSpec, StaticVault};
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -76,8 +76,8 @@ fn test_canary(channel_id: &str) -> CanaryChannel {
     CanaryChannel {
         channel_id: channel_id.to_string(),
         spec: SecretChannelSpec {
-            kind: hh_secrets::CredentialKind::ApiKey,
-            source: hh_secrets::SecretSource::OperatorVault {
+            kind: hharness_secrets::CredentialKind::ApiKey,
+            source: hharness_secrets::SecretSource::OperatorVault {
                 vault_ref: format!("canary:{channel_id}"),
             },
             destinations: vec![],
@@ -85,10 +85,10 @@ fn test_canary(channel_id: &str) -> CanaryChannel {
             delivery_modes: BTreeSet::new(),
             max_lifetime_ms: None,
             rotation_policy: None,
-            sender_constraint: hh_secrets::SenderConstraint::None,
+            sender_constraint: hharness_secrets::SenderConstraint::None,
             constraints: Default::default(),
             bindable: false,
-            access_class: hh_secrets::AccessClass::KernelOnly,
+            access_class: hharness_secrets::AccessClass::KernelOnly,
             canary: true,
             description: "image-manifest tripwire".into(),
         },
@@ -193,7 +193,9 @@ fn r2_10_stage3_image_without_canary_refuses() {
             &lease,
             &test_record(EnvironmentClass::RemoteEphemeral, vec![]),
             roots_for("m-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -225,7 +227,9 @@ fn r2_10_declared_canary_without_broker_refuses() {
                 vec![test_canary("img.canary")],
             ),
             roots_for("nb-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             None,
         )
@@ -251,7 +255,9 @@ fn r2_10_non_canary_member_refuses() {
             &lease,
             &test_record(EnvironmentClass::ProviderHosted, vec![bogus]),
             roots_for("nc-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -276,7 +282,7 @@ fn r2_10_channel_id_conflict_refuses() {
         .register_channel(
             "img.canary",
             other.spec,
-            hh_provenance::ProvenanceRecord::kernel("kernel:test", 1_000),
+            hharness_provenance::ProvenanceRecord::kernel("kernel:test", 1_000),
         )
         .unwrap();
     let e = d
@@ -288,7 +294,9 @@ fn r2_10_channel_id_conflict_refuses() {
                 vec![test_canary("img.canary")],
             ),
             roots_for("c-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -319,7 +327,9 @@ fn r2_10_stage3_provision_registers_canary_and_tripwire_fires() {
                 vec![test_canary("img.canary")],
             ),
             roots_for("c2-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -344,13 +354,13 @@ fn r2_10_stage3_provision_registers_canary_and_tripwire_fires() {
         &mut s,
         &run,
         &lease,
-        hh_secrets::BindRequest {
+        hharness_secrets::BindRequest {
             dpop_proof: None,
             channel_id: "img.canary".into(),
             holder: "agent.main".into(),
             env_handle_ref: h.env_handle_id.clone(),
-            env_isolation: hh_containment::policy::IsolationClass::External,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::External,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt:dec-1".into(),
             destinations: ["api.evil.example.com".into()].into_iter().collect(),
         },
@@ -383,7 +393,9 @@ fn r2_10_hosted_provision_registers_canary() {
                 vec![test_canary("img.canary")],
             ),
             roots_for("h-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             "participant:test",
             "hh.hosting/1:test",
@@ -411,7 +423,9 @@ fn r2_10_reprovision_same_image_is_idempotent() {
                 vec![test_canary("img.canary")],
             ),
             roots_for(tag),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -436,7 +450,9 @@ fn r2_10_derived_child_inherits_canary_ids() {
                 vec![test_canary("img.canary")],
             ),
             roots_for("d-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -445,12 +461,12 @@ fn r2_10_derived_child_inherits_canary_ids() {
     // lands the handle in `provisioning`).
     {
         let h = d.handle_mut(&parent.env_handle_id).unwrap();
-        if h.state == hh_env::handle::HandleState::Declared {
-            h.transition(hh_env::handle::HandleState::Provisioning, 1_000)
+        if h.state == hharness_env::handle::HandleState::Declared {
+            h.transition(hharness_env::handle::HandleState::Provisioning, 1_000)
                 .unwrap();
         }
-        if h.state == hh_env::handle::HandleState::Provisioning {
-            h.transition(hh_env::handle::HandleState::Ready, 1_001)
+        if h.state == hharness_env::handle::HandleState::Provisioning {
+            h.transition(hharness_env::handle::HandleState::Ready, 1_001)
                 .unwrap();
         }
     }
@@ -459,9 +475,9 @@ fn r2_10_derived_child_inherits_canary_ids() {
             &mut s,
             &lease,
             &parent.env_handle_id,
-            hh_env::handle::DeriveMode::FreshFromImage,
+            hharness_env::handle::DeriveMode::FreshFromImage,
             None,
-            hh_env::handle::OnParentEnd::Teardown,
+            hharness_env::handle::OnParentEnd::Teardown,
         )
         .unwrap();
     assert_eq!(child.canary_channels, vec!["img.canary".to_string()]);
@@ -484,7 +500,9 @@ fn r2_10_local_class_declared_canary_registers() {
                 vec![test_canary("local.canary")],
             ),
             roots_for("l-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             Some(&mut broker),
         )
@@ -501,7 +519,9 @@ fn r2_10_local_class_declared_canary_registers() {
                 vec![test_canary("local.canary2")],
             ),
             roots_for("l2-ws"),
-            PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+            PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+                1_000,
+            ))),
             OnLoss::FailRun,
             None,
         )
@@ -523,7 +543,9 @@ fn r2_10_provisioned_row_is_content_free() {
             vec![test_canary("img.canary")],
         ),
         roots_for("cf-ws"),
-        PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
+        PolicySlot::Inline(Box::new(hharness_containment::policy::kernel_default(
+            1_000,
+        ))),
         OnLoss::FailRun,
         Some(&mut broker),
     )

@@ -15,27 +15,27 @@ committed `Cargo.lock`; license expressions come from
 
 ### ring 0.17.14 — Apache-2.0 AND ISC
 
-_admitted by ADR-0359 — `hh-secrets` DPoP verify + blob-pool AEAD._
+_admitted by ADR-0359 — `hharness-secrets` DPoP verify + blob-pool AEAD._
 
 ring is licensed Apache-2.0 AND ISC. Portions are derived from OpenSSL and BoringSSL and carry the OpenSSL/SSLeay license terms; see the crate's LICENSE file.
 
 ### rustls 0.23.46 — Apache-2.0 OR ISC OR MIT
 
-_admitted by ADR-0365 — `hh-tls` closed HTTPS/mTLS scope (`ring` backend)._
+_admitted by ADR-0365 — `hharness-tls` closed HTTPS/mTLS scope (`ring` backend)._
 
 ### rustls-webpki 0.103.16 — ISC
 
-_admitted by ADR-0365 — certificate verification inside `hh-tls`._
+_admitted by ADR-0365 — certificate verification inside `hharness-tls`._
 
 ISC-licensed; see the ISC text in the appendix below.
 
 ### tempfile 3.27.0 — MIT OR Apache-2.0
 
-_dev-dependency of `hh-varhost` tests only — never a shipped artifact._
+_dev-dependency of `hharness-varhost` tests only — never a shipped artifact._
 
 ### webpki-roots 1.0.10 — CDLA-Permissive-2.0
 
-_admitted by ADR-0365 — Mozilla root store inside `hh-tls`._
+_admitted by ADR-0365 — Mozilla root store inside `hharness-tls`._
 
 The crate is licensed CDLA-Permissive-2.0. The embedded data is Mozilla's root certificate store, licensed MPL-2.0 — a data set, not a code license.
 

@@ -1,4 +1,4 @@
-//! `hh-varhost` — the C0/Stage-2 out-of-process variant host (spec §8.4,
+//! `hharness-varhost` — the C0/Stage-2 out-of-process variant host (spec §8.4,
 //! R-2.12.2; ticket S2.2; DF-S1.9-1).
 //!
 //! The kernel side of `plugin_abi/1` for `subprocess_confined` variants:
@@ -37,7 +37,7 @@ pub use ports::{CallbackCtx, HostPorts, NullPorts, RecordingPorts};
 pub use screen::{screen_inbound, ScreenView, ScreenViolation, PLUGIN_VERBS};
 pub use session::{attach, spawn, BindingRecord, HelperGuard, SpawnSpec, VariantSession};
 
-use hh_embed_schema::plugin_abi::{AbiError, BindFailure};
+use hharness_embed_schema::plugin_abi::{AbiError, BindFailure};
 
 /// The host's failure sum — every variant maps to an `AbiError` spelling
 /// or a typed `BindFailure`; nothing untyped crosses the boundary.

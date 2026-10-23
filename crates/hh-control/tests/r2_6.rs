@@ -28,17 +28,17 @@
 
 use std::collections::BTreeMap;
 
-use hh_control::react::{self, ReactSteerable, REACT_STEERABLE_REF};
-use hh_control::state::{ControlState, PlanCursor};
-use hh_control::strategy::{
+use hharness_control::react::{self, ReactSteerable, REACT_STEERABLE_REF};
+use hharness_control::state::{ControlState, PlanCursor};
+use hharness_control::strategy::{
     ConcurrentInput, ControlContext, ControlStrategy, SteerMode, StrategyParams,
 };
-use hh_control::vocab::{
+use hharness_control::vocab::{
     ControlDecision, Cue, DecisionKind, DeliveryMode, EnvelopeSignal, HumanInput, WokenTrigger,
 };
-use hh_control::wire;
-use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_control::wire;
+use hharness_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
+use hharness_wire::json::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────
 
@@ -339,7 +339,10 @@ fn plan_walker_open_without_procedure_is_missing_procedure() {
     let c = ctx_with_steering((SteerMode::Unsupported, ConcurrentInput::QueueOnly));
     let err = v.open(&c).unwrap_err();
     assert!(
-        matches!(err, hh_control::strategy::ControlError::MissingProcedure),
+        matches!(
+            err,
+            hharness_control::strategy::ControlError::MissingProcedure
+        ),
         "{err:?}"
     );
 }
@@ -348,7 +351,7 @@ fn plan_walker_open_without_procedure_is_missing_procedure() {
 
 #[test]
 fn plan_execute_interrupt_is_a_typed_stop() {
-    let mut v = hh_control::plan_exec::PlanExecute::new();
+    let mut v = hharness_control::plan_exec::PlanExecute::new();
     let mut c = ctx_with_steering((SteerMode::Unsupported, ConcurrentInput::QueueOnly));
     c.boundary = v.capabilities().boundary_preset.clone();
     let mut st = v.open(&c).unwrap();
@@ -362,7 +365,7 @@ fn plan_execute_interrupt_is_a_typed_stop() {
 
 #[test]
 fn plan_execute_cancel_requested_is_a_typed_stop() {
-    let mut v = hh_control::plan_exec::PlanExecute::new();
+    let mut v = hharness_control::plan_exec::PlanExecute::new();
     let mut c = ctx_with_steering((SteerMode::Unsupported, ConcurrentInput::QueueOnly));
     c.boundary = v.capabilities().boundary_preset.clone();
     let mut st = v.open(&c).unwrap();
@@ -389,7 +392,7 @@ fn plan_execute_stray_woken_steer_parks_not_replans() {
     // `plan_execute` declares no steering — a woken{steer} that still
     // arrives (replayed under a stale arm) parks; the plan owns the step
     // order, so nothing improvises a re-plan.
-    let mut v = hh_control::plan_exec::PlanExecute::new();
+    let mut v = hharness_control::plan_exec::PlanExecute::new();
     let mut c = ctx_with_steering((SteerMode::Unsupported, ConcurrentInput::QueueOnly));
     c.boundary = v.capabilities().boundary_preset.clone();
     let mut st = v.open(&c).unwrap();

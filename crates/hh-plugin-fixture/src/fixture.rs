@@ -16,27 +16,27 @@
 
 use std::collections::BTreeMap;
 
-use hh_control::strategy::{ControlContext, ControlStrategy};
-use hh_control::wire;
-use hh_embed_schema::plugin_abi::{
+use hharness_control::strategy::{ControlContext, ControlStrategy};
+use hharness_control::wire;
+use hharness_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, Narrow, StreamParams, TriState,
 };
-use hh_hir::kinds::{EffectDomain, ValidatorKind};
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_ontology::participant::Observability;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::events;
-use hh_verification::evidence::{build_bundle, bundle_json, EvidenceHandle};
-use hh_verification::validators::{self, EvidenceRequirement, ValidatorDeclaration, Verdict};
-use hh_verification::vocab::{
+use hharness_hir::kinds::{EffectDomain, ValidatorKind};
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_ontology::participant::Observability;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::events;
+use hharness_verification::evidence::{build_bundle, bundle_json, EvidenceHandle};
+use hharness_verification::validators::{self, EvidenceRequirement, ValidatorDeclaration, Verdict};
+use hharness_verification::vocab::{
     ChargedTo, CriterionRole, Detector, EvidenceKind, Freshness, Integrity, Isolation, OracleClass,
     VerdictPhase, VerdictStatus, VerdictType, VerdictValue,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::{PluginCtx, VariantLogic};
 
@@ -57,19 +57,19 @@ pub enum Mode {
     /// `propose` / `select_parent` over `invoke` — the out-of-process
     /// lane the class suite drives through the variant host.
     Proposer,
-    /// `control` (R2.6) — hosts a registered `hh-control` variant over
+    /// `control` (R2.6) — hosts a registered `hharness-control` variant over
     /// `plugin_abi/1` `invoke` ops (`open`/`observe`/`decide`/
     /// `terminate`/`checkpoint`/`restore` — the `control_strategy`
     /// contract's method set). The bound variant is *named by the bind*
     /// (`BindParams::variant.semantic_id`, or the `--variant` flag) and
-    /// resolved through the same `hh_control::react::variant_for`
+    /// resolved through the same `hharness_control::react::variant_for`
     /// registry `open.rs` consults; documents cross the boundary as
-    /// canonical `hh_control::wire` records — one registry, one codec on
+    /// canonical `hharness_control::wire` records — one registry, one codec on
     /// both sides of the process boundary (DF-S1.20-1).
     Control,
     /// `validator` (R2.15) — the `Validator` component's contract battery
     /// over `invoke` ops (`declare`/`bind`/`collect`/`check`, spec §5f.1;
-    /// ADR-0110): the stub runs the *real* `hh-verification` validators
+    /// ADR-0110): the stub runs the *real* `hharness-verification` validators
     /// (`validators::declare`/`bind`, `build_bundle`, the `Verdict`
     /// contract + `events::validator_verdict` codec) so the class
     /// conformance suite drives the true semantics out of process, not a
@@ -103,7 +103,7 @@ pub enum FixtureVerdict {
     Widen,
 }
 
-/// One `control`-mode binding: the registered `hh-control` variant impl
+/// One `control`-mode binding: the registered `hharness-control` variant impl
 /// plus the `ControlContext` `open` was handed (kept for `restore`).
 struct ControlBinding {
     variant: Box<dyn ControlStrategy>,
@@ -365,7 +365,7 @@ impl FixtureLogic {
     }
 
     /// The `control` invoke lane (R2.6) — each op takes its inputs as
-    /// canonical `hh_control::wire` documents and returns canonical
+    /// canonical `hharness_control::wire` documents and returns canonical
     /// documents. A `ControlError`/`RestoreError` becomes the codec's
     /// `{error: …}` refusal doc (typed, distinguishable from a schema
     /// crash); malformed inputs answer `schema_violation` — typed on the
@@ -543,7 +543,7 @@ impl FixtureLogic {
 
     /// The `validator` invoke lane (R2.15; spec §5f.1 §3) — the four
     /// contract ops over canonical documents, running the real
-    /// `hh-verification` semantics (`declare`/`bind` validation,
+    /// `hharness-verification` semantics (`declare`/`bind` validation,
     /// `build_bundle`, the `Verdict` contract):
     ///
     /// - `declare` → the declaration doc (`validators::declare` checked
@@ -917,7 +917,7 @@ impl FixtureLogic {
                 Ok(vec![Json::obj([("probe", Json::str("forged_verb"))])])
             }
             "violate:oversize" => {
-                let bytes = vec![b'x'; hh_varhost::channel::MAX_FRAME_BYTES + 1];
+                let bytes = vec![b'x'; hharness_varhost::channel::MAX_FRAME_BYTES + 1];
                 let _ = ctx_send_bytes(ctx, &bytes);
                 Ok(vec![Json::obj([("probe", Json::str("oversize"))])])
             }
@@ -1057,7 +1057,7 @@ fn ctx_next_tx(ctx: &PluginCtx) -> i64 {
     ctx.next_tx()
 }
 fn ctx_schema_hash(_ctx: &PluginCtx) -> String {
-    hh_embed_schema::plugin_abi::plugin_abi_schema_hash()
+    hharness_embed_schema::plugin_abi::plugin_abi_schema_hash()
 }
 
 impl VariantLogic for FixtureLogic {
@@ -1068,7 +1068,7 @@ impl VariantLogic for FixtureLogic {
         HelloParams {
             plugin_abi_version: format!(
                 "plugin_abi/{}",
-                hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
+                hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
             ),
             plugin_version_id: self.version_id.clone(),
             plugin_content: self.content.clone(),
@@ -1104,7 +1104,7 @@ impl VariantLogic for FixtureLogic {
                         .map(str::to_string)
                 })
                 .unwrap_or_else(|| "hh/react-steerable".to_string());
-            let Some(variant) = hh_control::react::variant_for(&named) else {
+            let Some(variant) = hharness_control::react::variant_for(&named) else {
                 eprintln!("hh-plugin-fixture: unknown control variant {named}");
                 return Err(BindFailure::NotInstalled);
             };
@@ -1134,13 +1134,13 @@ impl VariantLogic for FixtureLogic {
             return self.proposer(&params.operation, &params.inputs);
         }
         // The `control` lane (R2.6) — the `control_strategy` contract's
-        // method set over canonical `hh_control::wire` documents.
+        // method set over canonical `hharness_control::wire` documents.
         if self.mode == Mode::Control {
             return self.control_invoke(params);
         }
         // The `validator` lane (R2.15) — the `Validator` component's
         // `declare`/`bind`/`collect`/`check` contract over canonical
-        // `hh-verification` documents.
+        // `hharness-verification` documents.
         if self.mode == Mode::Validator {
             return self.validator_invoke(params);
         }

@@ -18,7 +18,7 @@
 //! resolvable to the exact bytes); [`lowering_loss_json`]/[`probes_json`]
 //! produce the addressed records. `security.containment.amended` and the
 //! `security.egress.*` rows are Stage-2 (`amend()`/the mediator) — declared
-//! in `hh_ledger::classes`, built there.
+//! in `hharness_ledger::classes`, built there.
 //!
 //! The `unverified.field_group` member spells a `FieldGroup` when the
 //! failure is group-scoped; the whole-attach failures (helper absent,
@@ -27,7 +27,7 @@
 //! missing evidence, and "no group could be evidenced" is a first-class
 //! answer (ADR-0243 D6).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::backend::ViolationKind;
 use crate::policy::ContainmentPolicy;
@@ -42,7 +42,7 @@ pub const REPORT_GROUP: &str = "report";
 /// The content-addressed blob ref of a canonical JSON record — the
 /// `*_ref` members' value (`sha256:<hex>` under `idp/1`'s `blob` domain).
 pub fn blob_ref(j: &Json) -> String {
-    hh_identity::idp::address(j.to_canonical_string().as_bytes(), "application/json").id()
+    hharness_identity::idp::address(j.to_canonical_string().as_bytes(), "application/json").id()
 }
 
 /// The `lowering_loss` blob — `[{field, backend, reason, kind,
@@ -162,7 +162,7 @@ use crate::amend::diff_json;
 use crate::amend::AmendOutcome;
 use crate::egress::{token_hash, EgressDecision, EgressRequest};
 use crate::policy::AmendmentBasis;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
 
 /// The `decision_request`'s content address — `request_ref` is resolvable to
 /// the exact record the mediator decided on (CC3).
@@ -307,21 +307,25 @@ pub fn egress_decided_payload(
 /// @<authority>` (an identity coordinate spelling, never record content).
 pub fn endorser_tag(p: &ProvenanceRecord) -> String {
     let coord = match &p.origin {
-        hh_provenance::Origin::Human { author_ref, .. } => format!("human:{author_ref}"),
-        hh_provenance::Origin::Kernel { component_ref } => format!("kernel:{component_ref}"),
-        hh_provenance::Origin::Model { model_ref, .. } => format!("model:{model_ref}"),
-        hh_provenance::Origin::Tool { capability, .. } => format!("tool:{capability}"),
-        hh_provenance::Origin::Evolution { candidate_id, .. } => {
+        hharness_provenance::Origin::Human { author_ref, .. } => format!("human:{author_ref}"),
+        hharness_provenance::Origin::Kernel { component_ref } => format!("kernel:{component_ref}"),
+        hharness_provenance::Origin::Model { model_ref, .. } => format!("model:{model_ref}"),
+        hharness_provenance::Origin::Tool { capability, .. } => format!("tool:{capability}"),
+        hharness_provenance::Origin::Evolution { candidate_id, .. } => {
             format!("evolution:{candidate_id}")
         }
-        hh_provenance::Origin::Import { source_system, .. } => format!("import:{source_system}"),
-        hh_provenance::Origin::Migration { from_dialect } => format!("migration:{from_dialect}"),
-        hh_provenance::Origin::Participant {
+        hharness_provenance::Origin::Import { source_system, .. } => {
+            format!("import:{source_system}")
+        }
+        hharness_provenance::Origin::Migration { from_dialect } => {
+            format!("migration:{from_dialect}")
+        }
+        hharness_provenance::Origin::Participant {
             participant_ref, ..
         } => {
             format!("participant:{participant_ref}")
         }
-        hh_provenance::Origin::Cache { entry_ref } => format!("cache:{entry_ref}"),
+        hharness_provenance::Origin::Cache { entry_ref } => format!("cache:{entry_ref}"),
     };
     format!("{coord}@{}", p.authority.as_str())
 }

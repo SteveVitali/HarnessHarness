@@ -16,7 +16,7 @@
 
 use crate::events;
 use crate::vocab::{AttemptPolicy, ModelError, RetryClass};
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The event sink the driver emits `model.call.attempt.*` payloads through —
 /// the kernel appends them (the gateway is the sole emitter; the store is the

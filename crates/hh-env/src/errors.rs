@@ -4,8 +4,8 @@
 //! fail-closed rule makes every evidence failure `ContainmentUnverified`-shaped;
 //! capability failures are `Unsupported`/`UnknownCapability`, never coerced).
 
-use hh_containment::attach::AttachError;
-use hh_ledger::LedgerError;
+use hharness_containment::attach::AttachError;
+use hharness_ledger::LedgerError;
 
 /// `EnvironmentError` — the typed refusal for every `EnvDriver`/handle
 /// operation. `Display` is the audit detail; the variants are the closed sum.
@@ -43,7 +43,7 @@ pub enum EnvError {
         image_kind: &'static str,
     },
     /// The attach path failed closed (I-C4) — wraps `AttachError`; the
-    /// `unverified` event was already appended by `hh-containment`'s caller.
+    /// `unverified` event was already appended by `hharness-containment`'s caller.
     ContainmentUnverified {
         /// The field group (`attach|report|fs|net|proc|resources`).
         field_group: String,

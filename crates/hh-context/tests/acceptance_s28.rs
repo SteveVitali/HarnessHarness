@@ -74,34 +74,34 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_context::compact::{
+use hharness_context::compact::{
     self, CompactError, CompactInput, CompactionOp, CompactionProposal, CompactionStatus,
     CompactionTrigger, Placeholder, Requirement, EVICT_OLDEST_REF,
 };
-use hh_context::events::CollectSink;
-use hh_context::lifecycle::{self, LifecycleError};
-use hh_context::memory::{
+use hharness_context::events::CollectSink;
+use hharness_context::lifecycle::{self, LifecycleError};
+use hharness_context::memory::{
     DependencyStamp, Freshness, InvalidationContract, MemoryDraft, MemoryError, MemoryStore,
     WriteContext,
 };
-use hh_context::plan::{
+use hharness_context::plan::{
     Candidate, ContextPlan, CutPoint, DerivedFrom, Estimate, ExcerptReport, OffloadHandle,
     PlannedItem, SlotFill, ValidityPolicy,
 };
-use hh_context::procedure::{self, ProcedureIndexEntry, SELECT_METHOD};
-use hh_context::retrieve::{self, RetrievalBudget, RetrievalRequest, SlotConstraints};
-use hh_context::vocab::{
+use hharness_context::procedure::{self, ProcedureIndexEntry, SELECT_METHOD};
+use hharness_context::retrieve::{self, RetrievalBudget, RetrievalRequest, SlotConstraints};
+use hharness_context::vocab::{
     CandidateKind, CandidateState, ConflictPolicy, DependencyKind, Granularity, Layer,
     LifecycleState, LifecycleStateKind, MemoryContent, MemoryKind, PriorityClass, Retention,
     RetrievalQuery, RevocationReason, SubjectKey, TriggerKind,
 };
-use hh_hir::records::Validity;
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope, ReaderSet};
-use hh_provenance::label::Label;
-use hh_provenance::origin::{HumanRole, Origin};
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::Validity;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope, ReaderSet};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -564,11 +564,11 @@ fn ac_r_2_4_2_2_derivation_provenance_rules() {
     );
     assert_eq!(prin.authority, AuthorityClass::Principal);
     let inputs = vec![
-        hh_provenance::derive::DerivationInput {
+        hharness_provenance::derive::DerivationInput {
             input_ref: "sha256:a".into(),
             record: ext.clone(),
         },
-        hh_provenance::derive::DerivationInput {
+        hharness_provenance::derive::DerivationInput {
             input_ref: "sha256:b".into(),
             record: prin.clone(),
         },
@@ -579,11 +579,11 @@ fn ac_r_2_4_2_2_derivation_provenance_rules() {
     assert_eq!(rec.authority, AuthorityClass::External);
     // All-principal inputs → the projection stays principal.
     let prin_inputs = vec![
-        hh_provenance::derive::DerivationInput {
+        hharness_provenance::derive::DerivationInput {
             input_ref: "sha256:b".into(),
             record: prin.clone(),
         },
-        hh_provenance::derive::DerivationInput {
+        hharness_provenance::derive::DerivationInput {
             input_ref: "sha256:c".into(),
             record: prin.clone(),
         },
@@ -1022,11 +1022,11 @@ fn store_with_pointer() -> (MemoryStore, String) {
         ])),
         contract: Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         }),
         scope: PersistenceScope::Run,
         declared_inputs: vec![],
@@ -1105,11 +1105,11 @@ fn s106_revoked_outranking_candidate_withheld_replacement_served() {
         ])),
         contract: Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         }),
         scope: PersistenceScope::Run,
         declared_inputs: vec![],
@@ -1259,18 +1259,18 @@ fn ac_r_2_4_4_8_delegate_writer_cannot_write_user_scope() {
     let d = MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             "user-scope fact",
             "owner",
             delegate_prov(),
         ))),
         contract: Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         }),
         scope: PersistenceScope::User,
         declared_inputs: vec![],
@@ -1375,17 +1375,17 @@ fn ac_r_2_4_4_2_dependency_changed_expires_row_granularity_survives() {
                 granularity: Granularity::Row,
                 validator_ref: None,
             }],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: None,
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         })
     };
     let d1 = MemoryDraft {
         kind: MemoryKind::Recovery,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             "recovery note on cap:t1",
             "owner",
             model_prov(),
@@ -1402,7 +1402,7 @@ fn ac_r_2_4_4_2_dependency_changed_expires_row_granularity_survives() {
     };
     let mut d2 = d1.clone();
     d2.contract = contract("cap:cache", "t1");
-    d2.content = MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+    d2.content = MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
         "recovery note on cap:cache",
         "owner",
         model_prov(),
@@ -1439,17 +1439,17 @@ fn ac_r_2_4_4_3_stale_by_dependency_propagates_over_justifications() {
     let contract = || {
         Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         })
     };
     let a = MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             "fact A",
             "owner",
             model_prov(),
@@ -1469,19 +1469,19 @@ fn ac_r_2_4_4_3_stale_by_dependency_propagates_over_justifications() {
     // justification on A.
     let mut j = a.clone();
     j.kind = MemoryKind::Journal;
-    j.content = MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+    j.content = MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
         "journal J",
         "owner",
         model_prov(),
     )));
-    j.justifications = vec![hh_context::memory::Justification {
-        kind: hh_context::memory::JustificationKind::DeliveredMemory,
-        ref_: hh_identity::refs::VersionedRef::pinned(
-            hh_identity::kinds::RecordKind::Memory,
+    j.justifications = vec![hharness_context::memory::Justification {
+        kind: hharness_context::memory::JustificationKind::DeliveredMemory,
+        ref_: hharness_identity::refs::VersionedRef::pinned(
+            hharness_identity::kinds::RecordKind::Memory,
             va.version_id.clone(),
             model_prov(),
         ),
-        at: hh_ledger::manifest::EventRef {
+        at: hharness_ledger::manifest::EventRef {
             run_id: "run1".into(),
             event_id: "e1".into(),
         },
@@ -1490,7 +1490,7 @@ fn ac_r_2_4_4_3_stale_by_dependency_propagates_over_justifications() {
     // A journal from a call that did NOT deliver A is unaffected.
     let mut j2 = a.clone();
     j2.kind = MemoryKind::Journal;
-    j2.content = MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+    j2.content = MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
         "journal J2",
         "owner",
         model_prov(),
@@ -1538,21 +1538,21 @@ fn ac_r_2_4_4_7_max_age_expires_bytes_intact_revalidate_renews() {
     let d = MemoryDraft {
         kind: MemoryKind::Preference,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             "prefers tabs",
             "owner",
             model_prov(),
         ))),
         contract: Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: None,
             freshness: Some(Freshness::MaxAge {
                 max_age: 10,
                 from: 1,
             }),
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::MustRevalidate,
+            revalidation: hharness_context::vocab::Revalidation::MustRevalidate,
         }),
         scope: PersistenceScope::Run,
         declared_inputs: vec![],
@@ -1592,14 +1592,14 @@ fn ac_r_2_4_4_7_max_age_expires_bytes_intact_revalidate_renews() {
     let g2 = store.take_lease(PersistenceScope::Run, "agent");
     let renewed = InvalidationContract {
         dependencies: vec![],
-        cache_hint: hh_context::vocab::CacheHint::Cacheable,
+        cache_hint: hharness_context::vocab::CacheHint::Cacheable,
         validator_ref: None,
         freshness: Some(Freshness::MaxAge {
             max_age: 100,
             from: 21,
         }),
         invalidation_condition: None,
-        revalidation: hh_context::vocab::Revalidation::MustRevalidate,
+        revalidation: hharness_context::vocab::Revalidation::MustRevalidate,
     };
     let out = lifecycle::revalidate(
         &mut store,
@@ -1654,11 +1654,11 @@ fn ac_r_2_4_4_4_conflict_sets_coexist_withhold_and_resolve() {
     let contract = || {
         Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         })
     };
     let d1 = MemoryDraft {
@@ -1686,8 +1686,8 @@ fn ac_r_2_4_4_4_conflict_sets_coexist_withhold_and_resolve() {
     // (`escalate_on_unresolved`); the judged/`coexist` tail is C2.
     assert!(matches!(
         set.resolution,
-        hh_context::vocab::ConflictResolution::Escalated { .. }
-            | hh_context::vocab::ConflictResolution::Coexist
+        hharness_context::vocab::ConflictResolution::Escalated { .. }
+            | hharness_context::vocab::ConflictResolution::Coexist
     ));
     // `withhold_all` withholds both members at filter time.
     let items: Vec<lifecycle::FilterItem> = set
@@ -1744,7 +1744,7 @@ fn ac_r_2_4_4_4_conflict_sets_coexist_withhold_and_resolve() {
     .unwrap();
     assert!(matches!(
         resolved.resolution,
-        hh_context::vocab::ConflictResolution::Superseded { .. }
+        hharness_context::vocab::ConflictResolution::Superseded { .. }
     ));
 }
 
@@ -1761,11 +1761,11 @@ fn ac_r_2_4_4_5_low_authority_supersede_is_refused_and_coexists() {
     let contract = || {
         Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         })
     };
     // A principal-authority fact (human write).
@@ -1791,9 +1791,9 @@ fn ac_r_2_4_4_5_low_authority_supersede_is_refused_and_coexists() {
     let mut lo = hi.clone();
     lo.content = MemoryContent::Structured(Json::obj([("v", Json::str("new"))]));
     lo.provenance = Some(model_prov());
-    lo.supersedes = Some(hh_context::memory::SupersedeClaim {
+    lo.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: v_hi.version_id.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     match store.put(lo, &ctx) {
         Err(MemoryError::AuthorityInsufficient { .. }) => {}
@@ -1833,11 +1833,11 @@ fn ac_r_2_4_1_2_and_2_4_4_6_promotion_only_path_to_principal() {
         content: MemoryContent::Structured(Json::obj([("v", Json::str("fact"))])),
         contract: Some(InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            cache_hint: hharness_context::vocab::CacheHint::Cacheable,
             validator_ref: Some("v/x".into()),
             freshness: None,
             invalidation_condition: None,
-            revalidation: hh_context::vocab::Revalidation::Never,
+            revalidation: hharness_context::vocab::Revalidation::Never,
         }),
         scope: PersistenceScope::Session,
         declared_inputs: vec![],

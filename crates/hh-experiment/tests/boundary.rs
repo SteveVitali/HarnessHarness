@@ -1,4 +1,4 @@
-//! `hh-experiment` boundary-companion tests — `lab/compaction-boundary-v1`
+//! `hharness-experiment` boundary-companion tests — `lab/compaction-boundary-v1`
 //! (AC-R-2.4.2-12; ADR-0077 d7; the `R-2.4.2²` C2 slice; S4.16b):
 //!
 //! - the driver forks by reference at a `context.compaction.started` cut
@@ -14,14 +14,14 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_experiment::boundary::{drive_compaction_boundary, BoundaryRefusal, BOUNDARY_TURNS};
-use hh_ledger::branch::ForkOpts;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_experiment::boundary::{drive_compaction_boundary, BoundaryRefusal, BOUNDARY_TURNS};
+use hharness_ledger::branch::ForkOpts;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn tmp(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!("hh-boundary-test-{}-{}", tag, std::process::id()));

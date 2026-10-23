@@ -13,12 +13,12 @@
 
 use std::time::{Duration, Instant};
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     plugin_abi_schema_hash, AbiError, AbiPayload, BindParams, BindResult, CallbackCall,
     CallbackResult, ConformanceParams, GuardParams, GuardVerdict, HostCallback, InvokeParams,
     InvokeResult, StreamParams,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::channel::ChannelError;
 use crate::lower::stamp_json;
@@ -563,7 +563,7 @@ impl<P: HostPorts, E: SessionEvents> VariantHost<P, E> {
                 }
             };
             if let Err(v) = s.screen(&env) {
-                let digest = hh_identity::address(
+                let digest = hharness_identity::address(
                     env.payload.to_json().to_canonical_string().as_bytes(),
                     "application/json",
                 )
@@ -684,9 +684,11 @@ fn verdict_label(v: &GuardVerdict) -> &'static str {
     match v {
         GuardVerdict::Pass => "pass",
         GuardVerdict::Annotate(_) => "annotate",
-        GuardVerdict::Narrow(hh_embed_schema::plugin_abi::Narrow::Deny { .. }) => "narrow:deny",
-        GuardVerdict::Narrow(hh_embed_schema::plugin_abi::Narrow::Ask { .. }) => "narrow:ask",
-        GuardVerdict::Narrow(hh_embed_schema::plugin_abi::Narrow::Attenuate { .. }) => {
+        GuardVerdict::Narrow(hharness_embed_schema::plugin_abi::Narrow::Deny { .. }) => {
+            "narrow:deny"
+        }
+        GuardVerdict::Narrow(hharness_embed_schema::plugin_abi::Narrow::Ask { .. }) => "narrow:ask",
+        GuardVerdict::Narrow(hharness_embed_schema::plugin_abi::Narrow::Attenuate { .. }) => {
             "narrow:attenuate"
         }
         GuardVerdict::ProposeReplacement(_) => "propose_replacement",
@@ -697,7 +699,7 @@ fn verdict_label(v: &GuardVerdict) -> &'static str {
 /// `inputs_digest`/`outputs_digest` — the canonical-documents content
 /// address (V2 — the ledger records what crossed).
 pub fn digest_docs(docs: &[Json]) -> String {
-    hh_identity::address(
+    hharness_identity::address(
         Json::Arr(docs.to_vec()).to_canonical_string().as_bytes(),
         "application/json",
     )

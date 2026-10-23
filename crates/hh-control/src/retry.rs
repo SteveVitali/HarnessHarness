@@ -15,8 +15,8 @@
 //! `irreversible` effects never auto-redispatch (INV-8 — enforced at
 //! G-PRE-DISPATCH via [`redispatch_permitted`]).
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 
 use crate::policy::{MaxAttempts, RetryPolicy, ScopeTerminal, TimeoutPolicy};
 use crate::vocab::ScopeKind;
@@ -308,9 +308,9 @@ pub fn reserve_pool_child_size(
 mod tests {
     use super::*;
     use crate::policy::{Backoff, RetrySpec};
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
 
     fn ev(seq: u64, class: &str, payload: Json) -> EventEnvelope {
         EventEnvelope {

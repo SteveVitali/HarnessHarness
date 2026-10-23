@@ -1,22 +1,22 @@
-//! `hh-lab` exemplar tests — the two canonical `ExperimentSpec` documents at
+//! `hharness-lab` exemplar tests — the two canonical `ExperimentSpec` documents at
 //! Stage-3 size (ADR-0156 D1/D2; spec §6.3 §2.5; AC-R-2.10.3-8/-9 document
 //! half). The engine-level execution evidence lives in
 //! `hh-experiment/tests/engine.rs`.
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::MatchSpec;
-use hh_budget::pricing::PricingTableRef;
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey, MatchMode};
-use hh_identity::idp::idp_id;
-use hh_ontology::config::Ref;
-use hh_ontology::eval::DesignKind;
-use hh_ontology::lab::SplitLabel;
+use hharness_budget::matchspec::MatchSpec;
+use hharness_budget::pricing::PricingTableRef;
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey, MatchMode};
+use hharness_identity::idp::idp_id;
+use hharness_ontology::config::Ref;
+use hharness_ontology::eval::DesignKind;
+use hharness_ontology::lab::SplitLabel;
 
-use hh_lab::exemplars::*;
-use hh_lab::expand::{expand, ArmConfiguration, ExpandContext, ExpandTask};
-use hh_lab::experiment::{ExperimentRefusal, ExperimentSpec, SpecContext};
+use hharness_lab::exemplars::*;
+use hharness_lab::expand::{expand, ArmConfiguration, ExpandContext, ExpandTask};
+use hharness_lab::experiment::{ExperimentRefusal, ExperimentSpec, SpecContext};
 
 fn pinned(tag: &str) -> String {
     idp_id(&format!("test.{tag}"), tag.as_bytes())
@@ -111,7 +111,7 @@ fn budget_map() -> BTreeMap<String, BudgetSpec> {
 
 fn ctx() -> SpecContext<'static> {
     let budgets: &'static BTreeMap<String, BudgetSpec> = Box::leak(Box::new(budget_map()));
-    let resolve: Box<hh_lab::experiment::BudgetResolver<'static>> =
+    let resolve: Box<hharness_lab::experiment::BudgetResolver<'static>> =
         Box::new(move |r: &str| budgets.get(r).cloned());
     let sealed: Box<dyn Fn(&str) -> bool> = Box::new(|_: &str| true);
     SpecContext {
@@ -132,8 +132,8 @@ fn tasks(n: usize) -> Vec<ExpandTask> {
 }
 
 fn arm_cfg(
-    a: &hh_lab::experiment::ArmSpec,
-) -> Result<ArmConfiguration, hh_lab::expand::ExpandError> {
+    a: &hharness_lab::experiment::ArmSpec,
+) -> Result<ArmConfiguration, hharness_lab::expand::ExpandError> {
     Ok(ArmConfiguration {
         configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
         configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
@@ -587,7 +587,7 @@ fn delegation_v1_registers_and_expands() {
         .iter()
         .filter(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedCap)
         .all(|a| a.match_spec.as_ref().unwrap().dimensions
-            == vec![hh_ontology::dimensions::DimensionId::TimeWallMs]));
+            == vec![hharness_ontology::dimensions::DimensionId::TimeWallMs]));
     assert_eq!(spec.replicates_per_cell, EXEMPLAR_REPLICATES);
     let topo = spec
         .factors
@@ -596,7 +596,7 @@ fn delegation_v1_registers_and_expands() {
         .expect("topology factor");
     assert_eq!(
         topo.granularity,
-        Some(hh_ontology::participant::Granularity::ComponentLevel)
+        Some(hharness_ontology::participant::Granularity::ComponentLevel)
     );
     assert_eq!(topo.levels.len(), 5);
     let env = spec
@@ -750,7 +750,7 @@ fn coordination_topology_v1_registers_and_expands() {
             .unwrap_or_else(|| panic!("{name} factor"));
         assert_eq!(
             f.granularity,
-            Some(hh_ontology::participant::Granularity::ComponentLevel),
+            Some(hharness_ontology::participant::Granularity::ComponentLevel),
             "{name}"
         );
     }
@@ -813,27 +813,23 @@ fn compaction_boundary_v1_registers_and_stamps_fork_snapshot() {
     let plan = expand(&spec, &t, &expand_ctx()).unwrap();
     // Every run plan carries `fork_snapshot` — the companion's task
     // coordinates are `fork_by_reference` cuts at `compaction.started`.
-    assert!(plan.run_plans.iter().all(
-        |p| p.environment_derivation == hh_lab::experiment::EnvironmentDerivation::ForkSnapshot
-    ));
+    assert!(plan.run_plans.iter().all(|p| p.environment_derivation
+        == hharness_lab::experiment::EnvironmentDerivation::ForkSnapshot));
     // An unmarked spec still expands to `fresh_from_image` (the C0 default
     // is never re-keyed by the marker's absence).
     let plain = compaction_family_v1(&pins(), &compaction_pins(), 1);
     let plan2 = expand(&plain, &t, &expand_ctx()).unwrap();
-    assert!(plan2
-        .run_plans
-        .iter()
-        .all(|p| p.environment_derivation
-            == hh_lab::experiment::EnvironmentDerivation::FreshFromImage));
+    assert!(plan2.run_plans.iter().all(|p| p.environment_derivation
+        == hharness_lab::experiment::EnvironmentDerivation::FreshFromImage));
     // An unknown spelling is a typed schema refusal, never a silent default.
     let mut bad = spec.clone();
     bad.ext.insert(
         "environment_derivation".to_string(),
-        hh_wire::json::Json::str("borrowed_vm"),
+        hharness_wire::json::Json::str("borrowed_vm"),
     );
     assert!(matches!(
         expand(&bad, &t, &expand_ctx()),
-        Err(hh_lab::expand::ExpandError::Refusal(
+        Err(hharness_lab::expand::ExpandError::Refusal(
             ExperimentRefusal::Schema(_)
         ))
     ));
@@ -846,12 +842,12 @@ fn summary_fidelity_judged_is_instrument_charged_and_never_headline() {
     assert_eq!(m.name, "grounding.summary_fidelity_judged");
     // ADR-0077 d4: judged fidelity is instrument-charged and never a
     // headline metric.
-    assert_eq!(m.charged_to, hh_ontology::eval::ChargedTo::Instrument);
+    assert_eq!(m.charged_to, hharness_ontology::eval::ChargedTo::Instrument);
     assert!(!m.headline);
     // `detector = judged`, `oracle = judge` (ADR-0047) — no deterministic
     // path may produce the value.
-    use hh_ontology::compliance::Detector;
-    use hh_ontology::eval::OracleClass;
+    use hharness_ontology::compliance::Detector;
+    use hharness_ontology::eval::OracleClass;
     assert_eq!(
         m.detector_classes_allowed,
         [Detector::Judged].into_iter().collect()
@@ -862,11 +858,11 @@ fn summary_fidelity_judged_is_instrument_charged_and_never_headline() {
     );
     // Judged stages require `model_io`; native rows only (hosted rows read
     // `n/a{class}` — ADR-0075 d9).
-    use hh_ontology::participant::Observability;
+    use hharness_ontology::participant::Observability;
     assert!(m.requires_observability.contains(&Observability::ModelIo));
     assert_eq!(
         m.applies_to_classes,
-        [hh_ontology::participant::ParticipantClass::Native]
+        [hharness_ontology::participant::ParticipantClass::Native]
             .into_iter()
             .collect()
     );
@@ -876,6 +872,6 @@ fn summary_fidelity_judged_is_instrument_charged_and_never_headline() {
     bad.headline = true;
     assert!(matches!(
         bad.validate(),
-        Err(hh_ontology::compliance::MetricError::HeadlineAdmitsNonDeterministic { .. })
+        Err(hharness_ontology::compliance::MetricError::HeadlineAdmitsNonDeterministic { .. })
     ));
 }

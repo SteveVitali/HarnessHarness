@@ -5,7 +5,7 @@
 //! spelling grammar to `exp/<experiment_id>/` and shared reverse-DNS namespaces while keeping
 //! the one index and the one history structure (CC1).
 
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
 
 use crate::kinds::RecordKind;
 use crate::refs::{Name, NameSelector, VersionedRef};
@@ -378,7 +378,7 @@ fn label_major(label: Option<&str>) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::{HumanRole, Origin, PersistenceScope};
+    use hharness_provenance::{HumanRole, Origin, PersistenceScope};
 
     /// A delegate-class (agent/model) publisher — the canonical record, `delegate` authority.
     fn agent() -> ProvenanceRecord {

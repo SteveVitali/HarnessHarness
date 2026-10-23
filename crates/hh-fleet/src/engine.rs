@@ -9,18 +9,18 @@
 //! path; Rule-P keeps them kernel-produced through
 //! `commit_kernel_row_for`).
 
-use hh_budget::account::{Account, TotalsGroupBy, TotalsScope};
-use hh_budget::errors::BudgetError;
-use hh_budget::quantity::ResourceVector;
-use hh_budget::spec::{BudgetScope, BudgetScopeKind};
-use hh_ledger::errors::LedgerError;
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::leases::LeaseScope;
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_wire::json::Json;
+use hharness_budget::account::{Account, TotalsGroupBy, TotalsScope};
+use hharness_budget::errors::BudgetError;
+use hharness_budget::quantity::ResourceVector;
+use hharness_budget::spec::{BudgetScope, BudgetScopeKind};
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::leases::LeaseScope;
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::FleetError;
@@ -32,7 +32,7 @@ use crate::view::{Cursor, FleetView};
 use crate::work_item::{derive_state, WorkItemInit, WorkItemView};
 
 /// The kernel producer spelling for fleet-authored rows.
-pub const COMPONENT: &str = "hh-fleet";
+pub const COMPONENT: &str = "hharness-fleet";
 
 /// The `RunKind` the engine serves — a fleet activation.
 pub const RUN_KIND: RunKind = RunKind::Fleet;
@@ -1297,7 +1297,7 @@ impl FleetEngine {
             Some(b) => b.clone(),
             None => return Ok(None),
         };
-        spec.mode = hh_budget::spec::BudgetMode::Slice;
+        spec.mode = hharness_budget::spec::BudgetMode::Slice;
         // The `ext.effects.external_irreversible` bound never rides the
         // slice spec — the ceiling's accounting is the pool reservation
         // below; a mirrored cap would refuse every declared item
@@ -2521,11 +2521,11 @@ impl FleetEngine {
                 let j = store.manifest(&r).ok().map(|man| {
                     let hosted = matches!(
                         man.participant_class,
-                        hh_ledger::manifest::ParticipantClass::Hosted
+                        hharness_ledger::manifest::ParticipantClass::Hosted
                     );
                     let has_events = man
                         .observability_level
-                        .contains(&hh_ledger::manifest::ObservabilityLevel::Events);
+                        .contains(&hharness_ledger::manifest::ObservabilityLevel::Events);
                     Json::obj([
                         ("hosted", Json::Bool(hosted)),
                         ("events_observability", Json::Bool(has_events)),
@@ -2871,7 +2871,7 @@ impl FleetEngine {
                 .map(|l| l.leaf_id())
                 .collect(),
         };
-        let fingerprint = hh_monitor::approval::policy_fingerprint(
+        let fingerprint = hharness_monitor::approval::policy_fingerprint(
             &self.view.spec.policy_ref,
             "attended",
             &leaf_ids,
@@ -2888,16 +2888,16 @@ impl FleetEngine {
     /// `check_activation_delta(candidate_leaves)` — would the candidate
     /// narrowing set keep the activation Π-narrowing? `widening{cells}`
     /// refuses (a candidate that moves any probed cell toward `allow` —
-    /// §5g.1 §2.4's rule through `hh_monitor::policy::policy_delta`).
+    /// §5g.1 §2.4's rule through `hharness_monitor::policy::policy_delta`).
     pub fn check_activation_delta(
         &self,
-        candidate: &[hh_embed_schema::types::NarrowingLeaf],
+        candidate: &[hharness_embed_schema::types::NarrowingLeaf],
     ) -> Result<Json, FleetError> {
-        use hh_hir::EffectDomain;
-        use hh_monitor::policy::{
+        use hharness_hir::EffectDomain;
+        use hharness_monitor::policy::{
             default_table, policy_delta, Cond, Mode, PiVerdict, PolicyDelta, PolicyRow,
         };
-        use hh_ontology::risk::RiskScope;
+        use hharness_ontology::risk::RiskScope;
         let base = default_table(&self.view.spec.policy_ref, Mode::Attended);
         // Leaves → narrowing rows appended to the base table — `deny` /
         // `ask` / `allow_lease` map onto `PiVerdict`; the probe grid
@@ -3280,7 +3280,7 @@ fn fleet_totals_json(account: Option<&Account>, view: &FleetView) -> Json {
         for (k, items) in cells {
             let mut consumed = ResourceVector::zero();
             let mut spend: BTreeMap<String, i64> = BTreeMap::new();
-            let mut confidence: Option<hh_budget::pricing::Confidence> = None;
+            let mut confidence: Option<hharness_budget::pricing::Confidence> = None;
             for it in &items {
                 if let (Some(acc), Some(slice)) = (account, view.slice_ids.get(&it.run_item_id)) {
                     let t = acc.totals(
@@ -3411,9 +3411,9 @@ pub fn observe_run<A: WorkSourceAdapter>(
     // Covering subscriptions — the run's active wakeup subscriptions;
     // `external` coverage matches `kind` (`*` wildcard), `manual` matches
     // `manual` (the principal is the caller's claim).
-    let covers = |subs: &[hh_ledger::wakeup::WakeupSubscription], trigger: &Trigger| {
+    let covers = |subs: &[hharness_ledger::wakeup::WakeupSubscription], trigger: &Trigger| {
         subs.iter()
-            .filter(|s| s.state == hh_ledger::wakeup::SubscriptionState::Active)
+            .filter(|s| s.state == hharness_ledger::wakeup::SubscriptionState::Active)
             .find(|s| {
                 std::mem::discriminant(&s.trigger) == std::mem::discriminant(trigger)
                     && match (&s.trigger, trigger) {

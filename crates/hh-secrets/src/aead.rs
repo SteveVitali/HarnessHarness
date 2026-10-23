@@ -5,8 +5,8 @@
 //!
 //! # The one construction (CC1)
 //!
-//! `RingBlobCipher` implements [`hh_ledger::cipher::BlobCipher`] over
-//! `ring::aead::AES_256_GCM` — the sealed `HHBE` frame `hh-ledger`'s blob
+//! `RingBlobCipher` implements [`hharness_ledger::cipher::BlobCipher`] over
+//! `ring::aead::AES_256_GCM` — the sealed `HHBE` frame `hharness-ledger`'s blob
 //! pool stores and reads. There is no second AEAD spelling anywhere in
 //! the workspace.
 //!
@@ -16,7 +16,7 @@
 //! custody seam (the embed layer's `CredentialBroker::kernel_use` answer —
 //! the broker mediates, never the ledger). Each blob seals under a
 //! *derived* per-blob key, the HKDF-expand-shaped single-block expand over
-//! the workspace's admitted HMAC (CC1 — `hh_wire::sha256::hmac_sha256`,
+//! the workspace's admitted HMAC (CC1 — `hharness_wire::sha256::hmac_sha256`,
 //! no second KDF, no `ring::hkdf` — outside the ADR-0359 scope):
 //!
 //! ```text
@@ -50,9 +50,9 @@
 //! - **No `unsafe`, no new dep.** `ring` stays inside this crate under
 //!   ADR-0359's pin; this module is the R3.8-reserved surface.
 
-use hh_identity::idp::ContentAddress;
-use hh_ledger::cipher::{self, BlobCipher, SealHeader};
-use hh_wire::sha256::hmac_sha256;
+use hharness_identity::idp::ContentAddress;
+use hharness_ledger::cipher::{self, BlobCipher, SealHeader};
+use hharness_wire::sha256::hmac_sha256;
 use ring::aead;
 use ring::rand::{SecureRandom, SystemRandom};
 

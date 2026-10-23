@@ -1,10 +1,10 @@
 [package]
-name = "hh-env"
+name = "hharness-env"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The C0/Stage-1 execution-environment abstraction + sandboxed tool execution — EnvironmentRecord (idp/1), EnvHandle + the declared→ready→torn_down state machine, fail-closed attach via hh-containment, env_apply, the fs.*/upload/download/path_baseline effect surface under R-NOSIDE/R-NONET, the three kernel-clock counters, the seven-stage execution contract (resolve→authorize→prepare→commit→execute→capture→observe), ExecutorDeclaration/bind, the ToolExecutor seam + in-process LocalExecutor, CaptureItem + content-addressed EffectCaptureManifest, AttributionToken mint/resolve/hash, the closed ErrorClass sum with the three-origin rule and kernel-derived retryability (spec §5a.5/§5d.5, R-2.2.5/R-2.5.5; ticket S1.16; ADR-0136/0137/0138 + ADR-0100/0101/0102)."
+description = "The C0/Stage-1 execution-environment abstraction + sandboxed tool execution — EnvironmentRecord (idp/1), EnvHandle + the declared→ready→torn_down state machine, fail-closed attach via hharness-containment, env_apply, the fs.*/upload/download/path_baseline effect surface under R-NOSIDE/R-NONET, the three kernel-clock counters, the seven-stage execution contract (resolve→authorize→prepare→commit→execute→capture→observe), ExecutorDeclaration/bind, the ToolExecutor seam + in-process LocalExecutor, CaptureItem + content-addressed EffectCaptureManifest, AttributionToken mint/resolve/hash, the closed ErrorClass sum with the three-origin rule and kernel-derived retryability (spec §5a.5/§5d.5, R-2.2.5/R-2.5.5; ticket S1.16; ADR-0136/0137/0138 + ADR-0100/0101/0102)."
 
 [lib]
 path = "src/lib.rs"
@@ -12,51 +12,51 @@ path = "src/lib.rs"
 [features]
 # `tier-c1` — the C1 durability surface (§5a.3): the `HealingPolicy`-bound
 # `heal` path. Absent ⇒ the op refuses typed `Unsupported{tier}` (CC6 —
-# never a silent degrade) and `hh-ledger`'s C1 ops refuse with it.
+# never a silent degrade) and `hharness-ledger`'s C1 ops refuse with it.
 default = ["tier-c1"]
-tier-c1 = ["hh-ledger/tier-c1"]
+tier-c1 = ["hharness-ledger/tier-c1"]
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 # The ADR-0365 TLS home — `LocalTlsTransport` terminates `https_connect`
 # legs at the mediator (tls.terminate honoured, never silently plain).
-hh-tls = { path = "../hh-tls" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger", default-features = false }
+hharness-tls = { path = "../hh-tls" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ledger = { path = "../hh-ledger", default-features = false }
 # `authorize` is the monitor's — the dispatcher consumes `KernelDecision` and
 # emits `decided_payload`; executors never decide (ADR-0100 I-3).
-hh-monitor = { path = "../hh-monitor" }
+hharness-monitor = { path = "../hh-monitor" }
 # `PinnedRef`/`SurfaceBinding`/`ArgTransform` — the resolved-capability +
 # surface-binding types the `resolve` stage consumes (the tool plane produces
 # `CanonicalArgs` via `args::eval`; `Proposal.capability_ref` is the pinned
-# pair). hh-compiler sits below hh-env in the DAG (no cycle).
-hh-compiler = { path = "../hh-compiler" }
+# pair). hharness-compiler sits below hharness-env in the DAG (no cycle).
+hharness-compiler = { path = "../hh-compiler" }
 # `RegistryStore::get` for the spec's `bind(version_id, environment, executors)`
 # verb (R-2.5.1; ADR-0088 D5) — the capability record is read, the executor
-# declarations are this crate's. hh-registry sits below hh-env in the DAG.
-hh-registry = { path = "../hh-registry" }
+# declarations are this crate's. hharness-registry sits below hharness-env in the DAG.
+hharness-registry = { path = "../hh-registry" }
 # `attach`/`verify_report`/`floor_gate`/`PolicySlot`/`ContainmentReport` — the
 # DF-S1.12-3 handle seam lands here.
-hh-containment = { path = "../hh-containment" }
+hharness-containment = { path = "../hh-containment" }
 # `K4Cache` — the K4 tool-result cache over `MemoryStore` (R-2.3.4¹; §5b.4;
 # S2.10): the dispatcher consults it post-`authorized`/pre-`prepare` and
-# deposits at `action.tool.completed`. hh-context sits below hh-env in the
+# deposits at `action.tool.completed`. hharness-context sits below hharness-env in the
 # DAG (no cycle).
-hh-context = { path = "../hh-context" }
+hharness-context = { path = "../hh-context" }
 # `env_apply` (placeholders only) at attach + `redact` on the capture path
 # (ADR-0101 D5 — a hostile executor's output is masked before any visibility).
-hh-secrets = { path = "../hh-secrets" }
+hharness-secrets = { path = "../hh-secrets" }
 # `prepare`'s `reserve` (ADR-0040 D3 — reserve-before-spend) binds through the
 # `ReservationSource` seam implemented on `budget::Account`.
-hh-budget = { path = "../hh-budget" }
+hharness-budget = { path = "../hh-budget" }
 # The kernel local checks (a)–(c) at the `verify` placement — `run_local_checks`
 # over the terminal capture after `action.effect.observed` (S1.21; ADR-0111
-# D1/(e); AC-R-2.7.1-1). hh-verification sits below hh-env in the DAG.
-hh-verification = { path = "../hh-verification" }
+# D1/(e); AC-R-2.7.1-1). hharness-verification sits below hharness-env in the DAG.
+hharness-verification = { path = "../hh-verification" }
 # The `hh-helper/1` schema codec + `fstree` + podman backend — the single
 # schema source for the helper wire (S2.1; the dedicated helper binary is
 # spawned per contained environment and driven over the bridged channel).
-hh-helper = { path = "../hh-helper" }
+hharness-helper = { path = "../hh-helper" }

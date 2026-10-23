@@ -4,7 +4,7 @@
 //! conditions (`Fenced` on the writer, `Tampered`) surface only as
 //! `SessionDetached{reason, event_ref}` at the boundary.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The closed error sum. Response-position closed sums grow only by a
 /// dialect bump (ADR-0178 D3) — every variant is declared here at Stage 1

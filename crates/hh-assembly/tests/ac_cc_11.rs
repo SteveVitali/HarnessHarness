@@ -25,22 +25,22 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::*;
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::compose::{compose, Layer};
-use hh_assembly::diagnostics::{AssemblyDiagnostic, Code, Severity, Stage};
-use hh_assembly::grammar::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::compose::{compose, Layer};
+use hharness_assembly::diagnostics::{AssemblyDiagnostic, Code, Severity, Stage};
+use hharness_assembly::grammar::{
     Assembly, Constraint, ConstraintKind, ExtensionBlock, LayerProvenance, LayerSourceKind,
     MergePolicy, ParamRequirement, ParamType, ParameterSpec, ResolvedInfo,
 };
-use hh_assembly::Stage1Catalog;
-use hh_hir::document::{HirDocument, SealedDefinition};
-use hh_hir::records::{SlotBinding, SlotBindings};
-use hh_hir::refs::{ComponentVariantRef, RefVersion};
-use hh_identity::names::ResolveMode;
-use hh_registry::extension::{DeclaredSource, ExtensionKind};
-use hh_registry::kinds::Placement;
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_assembly::Stage1Catalog;
+use hharness_hir::document::{HirDocument, SealedDefinition};
+use hharness_hir::records::{SlotBinding, SlotBindings};
+use hharness_hir::refs::{ComponentVariantRef, RefVersion};
+use hharness_identity::names::ResolveMode;
+use hharness_registry::extension::{DeclaredSource, ExtensionKind};
+use hharness_registry::kinds::Placement;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
 // ── the coverage table ──────────────────────────────────────────────────────
 
@@ -234,11 +234,11 @@ fn index() -> BTreeMap<&'static str, Row> {
     ));
     put(u(
         "C-REF-2",
-        "armed mapping, no producible trigger: `resolve`'s `reg_err` maps `RegistryError::Ambiguous` here and `RegistryStore::resolve` produces it from `ResolveOutcome::Ambiguous`, but the one resolver — `hh_identity::names::NameIndex::resolve` — deterministically selects the latest live head, and `resolve_extensions`' `latest` selector takes max(registered_at, version_id); no document yields a multi-candidate ambiguity. Re-opens when a name-index or selector path returns >1 admissible candidate (e.g. a divergent-history rule in `NameIndex` or an extension-selector tie rule).",
+        "armed mapping, no producible trigger: `resolve`'s `reg_err` maps `RegistryError::Ambiguous` here and `RegistryStore::resolve` produces it from `ResolveOutcome::Ambiguous`, but the one resolver — `hharness_identity::names::NameIndex::resolve` — deterministically selects the latest live head, and `resolve_extensions`' `latest` selector takes max(registered_at, version_id); no document yields a multi-candidate ambiguity. Re-opens when a name-index or selector path returns >1 admissible candidate (e.g. a divergent-history rule in `NameIndex` or an extension-selector tie rule).",
     ));
     put(u(
         "C-REF-3",
-        "publish-admission owned: `RegistryStore::publish` raises `RegistryError::NameCollision` on a contested (namespace, name) — assembly `resolve` never publishes, so `reg_err`'s arm is unreachable, and the one in-tree publish surface (`hh_lab::assembly::service::apply`) spells every publish refusal `C-PLAN-1`. Re-opens if resolve gains a collision check or the publish refusal gains per-kind spellings.",
+        "publish-admission owned: `RegistryStore::publish` raises `RegistryError::NameCollision` on a contested (namespace, name) — assembly `resolve` never publishes, so `reg_err`'s arm is unreachable, and the one in-tree publish surface (`hharness_lab::assembly::service::apply`) spells every publish refusal `C-PLAN-1`. Re-opens if resolve gains a collision check or the publish refusal gains per-kind spellings.",
     ));
     put(f(
         "C-REF-4",
@@ -424,11 +424,11 @@ fn index() -> BTreeMap<&'static str, Row> {
     put(x("C-PROF-2", "hh-compiler::lower + hh-lab::assembly::service — the expressibility refusal is minted downstream"));
     put(u(
         "C-PROF-3",
-        "experiment-plane owned: the §3.3.2/§6.3 rule (a `non_portable` — pinned-profile — level must not vary across the harness factor) is enforced at `hh_lab::experiment` registration as `ExperimentRefusal::ProfilePinnedAcrossProfiles`; the experiment plane reports its own refusal taxonomy, never an `AssemblyDiagnostic`. Re-opens if an experiment-plane refusal is ever bridged into a `ValidationReport`, or a plan-time `non_portable` check lands in `validate`.",
+        "experiment-plane owned: the §3.3.2/§6.3 rule (a `non_portable` — pinned-profile — level must not vary across the harness factor) is enforced at `hharness_lab::experiment` registration as `ExperimentRefusal::ProfilePinnedAcrossProfiles`; the experiment plane reports its own refusal taxonomy, never an `AssemblyDiagnostic`. Re-opens if an experiment-plane refusal is ever bridged into a `ValidationReport`, or a plan-time `non_portable` check lands in `validate`.",
     ));
     put(u(
         "C-LCD-1",
-        "armed but unreachable: `validate`'s 7-L4 scan emits `LcdHostingEdge` for any edge kind whose spelling contains `host`, but HIR/1's closed `EdgeKind` set (`hh_hir::kinds`) carries no hosting kind — an authored `host` edge dies earlier as a `C-KERN-*` parse/validate refusal. Re-opens when a hosting `EdgeKind` lands in a future dialect (the C1+ hosted-binding work) or a hosting-edge member encoding lands that the scan reads.",
+        "armed but unreachable: `validate`'s 7-L4 scan emits `LcdHostingEdge` for any edge kind whose spelling contains `host`, but HIR/1's closed `EdgeKind` set (`hharness_hir::kinds`) carries no hosting kind — an authored `host` edge dies earlier as a `C-KERN-*` parse/validate refusal. Re-opens when a hosting `EdgeKind` lands in a future dialect (the C1+ hosted-binding work) or a hosting-edge member encoding lands that the scan reads.",
     ));
     put(f(
         "C-LCD-2",
@@ -473,7 +473,7 @@ fn index() -> BTreeMap<&'static str, Row> {
     // ── locator / trust / secrets / extensions. ────────────────────────────
     put(u(
         "C-LOC-1",
-        "instantiate-owned: `hh_assembly::instantiate` records `BindFailure{locality_unsupported}` plus a `component_bound` lifecycle event when a bound variant's `implementation.placement` is not `in_process` (Stage-1 binds in-process only — DF-S1.9-1 names the out-of-process host the Stage-2 slice); bind failures are lifecycle events and a `BindFailure`, never `AssemblyDiagnostic`s. Re-opens if the bind pass gains a diagnostic surface (a plan/validate placement admission check, or a reporting instantiate verb).",
+        "instantiate-owned: `hharness_assembly::instantiate` records `BindFailure{locality_unsupported}` plus a `component_bound` lifecycle event when a bound variant's `implementation.placement` is not `in_process` (Stage-1 binds in-process only — DF-S1.9-1 names the out-of-process host the Stage-2 slice); bind failures are lifecycle events and a `BindFailure`, never `AssemblyDiagnostic`s. Re-opens if the bind pass gains a diagnostic surface (a plan/validate placement admission check, or a reporting instantiate verb).",
     ));
     put(u(
         "C-TRUST-1",
@@ -560,11 +560,11 @@ fn index() -> BTreeMap<&'static str, Row> {
     put(x("C-LINK-7", "hh-compiler::link"));
     put(x(
         "C-LINK-8",
-        "hh-compiler::link — minted with the `AmbiguousSelector` refusal at the `resolve_chain` call (R3.6); `hh-lab::assembly::service` stage-6b reports it verbatim (suites: hh-compiler `link_ambiguous_selector_tie_mints_c_link_8`, hh-lab `r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8`)",
+        "hh-compiler::link — minted with the `AmbiguousSelector` refusal at the `resolve_chain` call (R3.6); `hh-lab::assembly::service` stage-6b reports it verbatim (suites: hharness-compiler `link_ambiguous_selector_tie_mints_c_link_8`, hharness-lab `r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8`)",
     ));
     put(x(
         "C-LINK-9",
-        "hh-compiler::link + hh-compiler::family — minted with the `DialectNarrowingUndeclared` refusal at both producers (R3.6); stage-6b reports it verbatim (suites: hh-compiler `link_refuses_undeclared_dialect_narrowing`, `ac_r_2_5_2_5_dialect_narrowing_must_be_declared`)",
+        "hh-compiler::link + hh-compiler::family — minted with the `DialectNarrowingUndeclared` refusal at both producers (R3.6); stage-6b reports it verbatim (suites: hharness-compiler `link_refuses_undeclared_dialect_narrowing`, `ac_r_2_5_2_5_dialect_narrowing_must_be_declared`)",
     ));
     put(x(
         "C-PLAN-1",
@@ -577,7 +577,7 @@ fn index() -> BTreeMap<&'static str, Row> {
     ));
     put(u(
         "C-RES-1",
-        "resume-verdict owned: `hh_assembly::verify_resume` returns `ResumeVerdict::Incompatible{reasons}` — a typed verdict, and its one consumer (`hh-embed::open`'s resume leg) reports it as `EmbedError::DefinitionChanged{reasons}` (boundary-error strings), never an `AssemblyDiagnostic`. Re-opens if the resume-incompatible surface is bridged to diagnostics — a reporting resume verb or a diagnostics payload on `DefinitionChanged`.",
+        "resume-verdict owned: `hharness_assembly::verify_resume` returns `ResumeVerdict::Incompatible{reasons}` — a typed verdict, and its one consumer (`hh-embed::open`'s resume leg) reports it as `EmbedError::DefinitionChanged{reasons}` (boundary-error strings), never an `AssemblyDiagnostic`. Re-opens if the resume-incompatible surface is bridged to diagnostics — a reporting resume verb or a diagnostics payload on `DefinitionChanged`.",
     ));
     put(n(
         "C-INT-1",
@@ -587,7 +587,7 @@ fn index() -> BTreeMap<&'static str, Row> {
     // exhaustive match is the compile-time drift control; per-variant
     // document fixtures belong to the kernel's own validate corpus. One
     // end-to-end fixture proves the mirror path (stage 5 → `C-KERN-*`). ────
-    for v in hh_assembly::diagnostics::KERN_VARIANTS {
+    for v in hharness_assembly::diagnostics::KERN_VARIANTS {
         let code: &'static str = Box::leak(format!("C-KERN-{v}").into_boxed_str());
         if *v == "UnresolvedRef" {
             put(f(
@@ -643,8 +643,8 @@ fn param_spec(t: ParamType, req: ParamRequirement, sweepable: bool) -> Parameter
 }
 
 fn validate_authored(doc: &HirDocument, catalog: &dyn ClassCatalog) -> Vec<AssemblyDiagnostic> {
-    hh_assembly::validate_assembly(
-        hh_assembly::Subject::Authored(doc),
+    hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Authored(doc),
         catalog,
         None,
         &kernel(),
@@ -653,12 +653,12 @@ fn validate_authored(doc: &HirDocument, catalog: &dyn ClassCatalog) -> Vec<Assem
 }
 
 fn resolve_env<'a>(
-    store: &'a mut hh_registry::store::RegistryStore,
+    store: &'a mut hharness_registry::store::RegistryStore,
     catalog: &'a dyn ClassCatalog,
     mode: ResolveMode,
     notices: Option<&'a mut Vec<AssemblyDiagnostic>>,
-) -> hh_assembly::resolve::ResolveEnv<'a> {
-    hh_assembly::resolve::ResolveEnv {
+) -> hharness_assembly::resolve::ResolveEnv<'a> {
+    hharness_assembly::resolve::ResolveEnv {
         registry: store,
         catalog,
         snapshot_id: None,
@@ -671,11 +671,11 @@ fn resolve_env<'a>(
 
 fn resolve_errs(
     doc: &HirDocument,
-    store: &mut hh_registry::store::RegistryStore,
+    store: &mut hharness_registry::store::RegistryStore,
 ) -> Vec<AssemblyDiagnostic> {
     let cat = Stage1Catalog::stage1();
     let mut env = resolve_env(store, &cat, ResolveMode::Audit, None);
-    hh_assembly::resolve(doc, &mut env).expect_err("the fixture must refuse")
+    hharness_assembly::resolve(doc, &mut env).expect_err("the fixture must refuse")
 }
 
 fn git_source() -> DeclaredSource {
@@ -687,7 +687,7 @@ fn git_source() -> DeclaredSource {
 
 fn ext_block(
     sources: Vec<DeclaredSource>,
-    refs: Vec<hh_registry::extension::ExtensionRef>,
+    refs: Vec<hharness_registry::extension::ExtensionRef>,
 ) -> ExtensionBlock {
     ExtensionBlock {
         sources,
@@ -696,13 +696,13 @@ fn ext_block(
     }
 }
 
-fn resolved_sealed(tag: &str) -> (SealedDefinition, hh_registry::store::RegistryStore) {
+fn resolved_sealed(tag: &str) -> (SealedDefinition, hharness_registry::store::RegistryStore) {
     let (mut store, _vids) = seeded_store(tag);
     let cat = Stage1Catalog::stage1();
     let doc = doc_with(&stage1_assembly());
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit, None);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     (sealed, store)
 }
@@ -720,8 +720,8 @@ fn f_load_parse() -> Vec<AssemblyDiagnostic> {
 }
 
 fn f_load_dialect() -> Vec<AssemblyDiagnostic> {
-    hh_assembly::schema::load(
-        &hh_assembly::schema::encode(&stage1_assembly()),
+    hharness_assembly::schema::load(
+        &hharness_assembly::schema::encode(&stage1_assembly()),
         Some("hir/2"),
     )
     .expect_err("wrong dialect refuses")
@@ -814,14 +814,14 @@ fn f_ref_stale() -> Vec<AssemblyDiagnostic> {
     store
         .revoke(
             &vids["control_strategy"],
-            hh_identity::supersede::SupersedeReason::Revocation,
+            hharness_identity::supersede::SupersedeReason::Revocation,
             &kernel(),
             None,
         )
         .unwrap();
     let doc = doc_with(&a);
     let mut env = resolve_env(&mut store, &cat, ResolveMode::Execute, None);
-    hh_assembly::resolve(&doc, &mut env).expect_err("a revoked head refuses")
+    hharness_assembly::resolve(&doc, &mut env).expect_err("a revoked head refuses")
 }
 
 fn f_ref_deny_noop() -> Vec<AssemblyDiagnostic> {
@@ -839,7 +839,7 @@ fn f_ref_deny_noop() -> Vec<AssemblyDiagnostic> {
     let mut notices = Vec::new();
     {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit, Some(&mut notices));
-        hh_assembly::resolve(&doc, &mut env).expect("a no-op deny-list still resolves");
+        hharness_assembly::resolve(&doc, &mut env).expect("a no-op deny-list still resolves");
     }
     notices
 }
@@ -884,16 +884,16 @@ fn f_class_cardinality() -> Vec<AssemblyDiagnostic> {
 
 /// A catalog returning hand-shaped records — lets a malformed contract reach
 /// stage 2 (register-time checks would refuse it at the store boundary).
-struct MapCatalog(BTreeMap<String, hh_registry::records::ClassRecord>);
+struct MapCatalog(BTreeMap<String, hharness_registry::records::ClassRecord>);
 
 impl ClassCatalog for MapCatalog {
-    fn class(&self, class_id: &str) -> Option<hh_registry::records::ClassRecord> {
+    fn class(&self, class_id: &str) -> Option<hharness_registry::records::ClassRecord> {
         self.0.get(class_id).cloned()
     }
     fn class_ids(&self) -> Vec<String> {
         self.0.keys().cloned().collect()
     }
-    fn variant(&self, _version_id: &str) -> Option<hh_registry::records::VariantRecord> {
+    fn variant(&self, _version_id: &str) -> Option<hharness_registry::records::VariantRecord> {
         None
     }
 }
@@ -1023,7 +1023,7 @@ fn f_cons() -> Vec<AssemblyDiagnostic> {
 /// A `ProfileView` over raw record JSON (stage 6a's read seam).
 struct JsonProfiles(BTreeMap<String, Json>);
 
-impl hh_assembly::validate::ProfileView for JsonProfiles {
+impl hharness_assembly::validate::ProfileView for JsonProfiles {
     fn profile(&self, coordinate: &str) -> Option<Json> {
         self.0.get(coordinate).cloned()
     }
@@ -1060,24 +1060,25 @@ fn f_prof_incompatible() -> Vec<AssemblyDiagnostic> {
             "latest",
         ))),
     );
-    a.profile_binding = hh_assembly::grammar::ProfileBinding::Pinned(hh_hir::refs::ProfileRef {
-        profile: "sha256:profile".into(),
-        pinned: true,
-    });
+    a.profile_binding =
+        hharness_assembly::grammar::ProfileBinding::Pinned(hharness_hir::refs::ProfileRef {
+            profile: "sha256:profile".into(),
+            pinned: true,
+        });
     let doc = doc_with(&a);
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit, None);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
-    let regcat = hh_assembly::catalog::RegistryCatalog::new(&store, None);
+    let regcat = hharness_assembly::catalog::RegistryCatalog::new(&store, None);
     let mut no_caps = BTreeMap::new();
     no_caps.insert(
         "sha256:profile".to_string(),
         Json::obj([("capabilities", Json::obj([]))]),
     );
     let profiles = JsonProfiles(no_caps);
-    hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&sealed),
+    hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&sealed),
         &regcat,
         Some(&profiles),
         &kernel(),
@@ -1090,7 +1091,7 @@ fn f_lcd_surface() -> Vec<AssemblyDiagnostic> {
     // content must be free of surface/provenance/version members (7-T10).
     let mut doc = doc_with(&stage1_assembly());
     let mut n = tool_node("test:tool", 5);
-    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
+    if let hharness_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
         t.input_schema = Json::obj([("version", Json::Int(1))]);
     }
     doc.nodes.push(n);
@@ -1112,7 +1113,7 @@ fn f_lcd_bench() -> Vec<AssemblyDiagnostic> {
 fn f_lcd_registry_op() -> Vec<AssemblyDiagnostic> {
     let mut doc = doc_with(&stage1_assembly());
     let mut n = tool_node("test:regtool", 5);
-    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
+    if let hharness_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
         t.source = Json::obj([
             ("kind", Json::str("registry")),
             ("operation", Json::str("lab.registry.query")),
@@ -1138,13 +1139,13 @@ fn f_ext_unpinned() -> Vec<AssemblyDiagnostic> {
     let ext_j = Json::obj([
         (
             "sources",
-            Json::Arr(vec![hh_registry::extension::declared_source_json(
+            Json::Arr(vec![hharness_registry::extension::declared_source_json(
                 &git_source(),
             )]),
         ),
         (
             "refs",
-            Json::Arr(vec![hh_registry::extension::extension_ref_json(
+            Json::Arr(vec![hharness_registry::extension::extension_ref_json(
                 &extension_ref("demo", ExtensionKind::Skill, "git", Some("latest")),
             )]),
         ),
@@ -1158,8 +1159,8 @@ fn f_ext_unpinned() -> Vec<AssemblyDiagnostic> {
         definition_ref: sealed.definition_ref.clone(),
         closed_world_tools: sealed.closed_world_tools.clone(),
     };
-    hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&fabricated),
+    hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&fabricated),
         &Stage1Catalog::stage1(),
         None,
         &kernel(),
@@ -1240,7 +1241,7 @@ fn f_link_unbound() -> Vec<AssemblyDiagnostic> {
         definition_ref: sealed.definition_ref.clone(),
         closed_world_tools: sealed.closed_world_tools.clone(),
     };
-    hh_assembly::link_precheck(&fabricated).expect_err("selector → C-LINK-1")
+    hharness_assembly::link_precheck(&fabricated).expect_err("selector → C-LINK-1")
 }
 
 fn f_kern_e2e() -> Vec<AssemblyDiagnostic> {
@@ -1249,7 +1250,7 @@ fn f_kern_e2e() -> Vec<AssemblyDiagnostic> {
     // `HirError`, assembly surfaces it as `C-KERN-UnresolvedRef`.
     let mut doc = doc_with(&stage1_assembly());
     for n in doc.nodes.iter_mut() {
-        if let hh_hir::records::KindRecord::Budget(b) = &mut n.semantic {
+        if let hharness_hir::records::KindRecord::Budget(b) = &mut n.semantic {
             b.accounting = sel("test:ghost");
         }
     }
@@ -1404,7 +1405,7 @@ impl Rng {
 fn fuzzed_corpus_yields_no_c_int_1() {
     // The AC's third leg: mutated inputs may refuse, but every refusal lands
     // on a *named* code — `C-INT-1` anywhere is a defect.
-    let base = hh_assembly::schema::encode(&stage1_assembly());
+    let base = hharness_assembly::schema::encode(&stage1_assembly());
     let mut rng = Rng(0x9E3779B97F4A7C15);
     for i in 0..600usize {
         let mut bytes = base.clone();
@@ -1441,13 +1442,13 @@ fn fuzzed_corpus_yields_no_c_int_1() {
         }
         let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut produced: Vec<String> = Vec::new();
-            match hh_assembly::schema::load(&bytes, None) {
+            match hharness_assembly::schema::load(&bytes, None) {
                 Ok(a) => {
                     // A decodable-but-mutated assembly still passes through
                     // validate — the whole pipeline must stay typed.
                     let doc = doc_with(&a);
-                    let r = hh_assembly::validate_assembly(
-                        hh_assembly::Subject::Authored(&doc),
+                    let r = hharness_assembly::validate_assembly(
+                        hharness_assembly::Subject::Authored(&doc),
                         &Stage1Catalog::stage1(),
                         None,
                         &kernel(),
@@ -1458,9 +1459,9 @@ fn fuzzed_corpus_yields_no_c_int_1() {
             }
             // The document half too — canonical bytes mutated the same way.
             let mut doc = doc_with(&stage1_assembly());
-            doc.assembly = hh_wire::canonical::parse_canonical(&bytes).ok();
-            let r = hh_assembly::validate_assembly(
-                hh_assembly::Subject::Authored(&doc),
+            doc.assembly = hharness_wire::canonical::parse_canonical(&bytes).ok();
+            let r = hharness_assembly::validate_assembly(
+                hharness_assembly::Subject::Authored(&doc),
                 &Stage1Catalog::stage1(),
                 None,
                 &kernel(),
@@ -1485,7 +1486,7 @@ fn fuzzed_corpus_yields_no_c_int_1() {
 /// never `validate:6b`/another validation stage.
 #[test]
 fn cf_492_seal_is_a_closed_stage_member_and_round_trips() {
-    use hh_assembly::diagnostics::{diagnostic_from_json, diagnostic_json};
+    use hharness_assembly::diagnostics::{diagnostic_from_json, diagnostic_json};
     // The canonical spelling.
     assert_eq!(Stage::Seal.as_str(), "seal");
     // A `C-SEAL-1` diagnostic at `seal` round-trips through the codec.
@@ -1497,7 +1498,7 @@ fn cf_492_seal_is_a_closed_stage_member_and_round_trips() {
         source_layer: None,
         subject: "seal".into(),
         stage: Stage::Seal,
-        detail: hh_assembly::diagnostics::detail_text(
+        detail: hharness_assembly::diagnostics::detail_text(
             "stage-5 seal refused: re-encoded bundle hashes differently",
             &kernel(),
         ),

@@ -29,7 +29,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::binding::{CallerBinding, CallerKind};
 use crate::server::LabServer;
@@ -399,7 +399,7 @@ pub fn drain_due_wakeups(srv: &mut LabServer, binding: &CallerBinding) {
     for (tid, run_id, sid) in targets {
         let fresh = match srv.svc.deliver_due_wakeups(&sid) {
             Ok(w) => w,
-            Err(hh_embed_schema::errors::EmbedError::UnknownSession) => {
+            Err(hharness_embed_schema::errors::EmbedError::UnknownSession) => {
                 // A wakeup-driven reattach reports `cause: "wakeup"` —
                 // the durable `lifecycle.run.resumed{recovery_decision.
                 // cause}` the hosted-resume mapping requires

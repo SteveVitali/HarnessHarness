@@ -23,12 +23,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::lab::{
+use hharness_ontology::lab::{
     EnvironmentFamily, HandleCapability, SubmissionKind, Support, VerifierIsolation,
 };
-use hh_ontology::participant::Granularity;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_ontology::participant::Granularity;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::records::{EnvironmentHandle, ExposedTask, Submission};
 

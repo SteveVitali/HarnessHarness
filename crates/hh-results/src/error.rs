@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-use hh_ledger::errors::{LedgerError, MissingReason};
+use hharness_ledger::errors::{LedgerError, MissingReason};
 
 /// The results-store error — every variant a typed refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub enum ResultsError {
         head: u64,
     },
     /// `scoring.metric_registry_version` names a registry this build does not
-    /// carry (the Stage-3 registry is the compiled-in `hh-eval` catalogue —
+    /// carry (the Stage-3 registry is the compiled-in `hharness-eval` catalogue —
     /// one version; a pin to anything else is the refusal).
     RegistryVersionUnknown {
         /// The requested version.

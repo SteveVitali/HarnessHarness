@@ -24,16 +24,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::effect::idempotency_key;
-use hh_ledger::event::{Cursor, Direction, Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::replay::{
+use hharness_ledger::effect::idempotency_key;
+use hharness_ledger::event::{Cursor, Direction, Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::replay::{
     self, DependencyProbe, ReplayDriverMode, ReplayValidityReport, SourceKind, ValidityInput,
     ValidityMode,
 };
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_wire::json::Json;
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -86,7 +86,10 @@ fn ev(id: &str, class: &str, payload: Json) -> Event {
 fn k_ev(id: &str, class: &str, payload: Json) -> Event {
     let mut e = ev(id, class, payload);
     e.producer = Producer::kernel("kernel:test");
-    e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
+    e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
+        "kernel:test",
+        0,
+    ));
     e
 }
 
@@ -506,7 +509,7 @@ fn ac_r_2_2_2_11_effects_by_key_is_durable_and_observation_is_served() {
 
     // The projection answers key → {effect_id, phase, outcome}.
     let evs = s.envelopes(&run).unwrap();
-    let view = hh_ledger::views::effects_by_key_view(&run, evs, None);
+    let view = hharness_ledger::views::effects_by_key_view(&run, evs, None);
     let Json::Obj(m) = view.payload.get("effects").unwrap().clone() else {
         panic!("effects_by_key payload malformed")
     };
@@ -524,7 +527,7 @@ fn ac_r_2_2_2_11_effects_by_key_is_durable_and_observation_is_served() {
     // The durable-side lookup the dispatcher consults.
     let hit = replay::key_lookup(&s, &run, &key).unwrap().unwrap();
     assert_eq!(hit.0, effect_id);
-    assert_eq!(hit.1, hh_ledger::effect::EffectPhase::Observed);
+    assert_eq!(hit.1, hharness_ledger::effect::EffectPhase::Observed);
     assert_eq!(replay::key_lookup(&s, &run, "sha256:nope").unwrap(), None);
 
     drop(s);
@@ -537,7 +540,7 @@ fn ac_r_2_2_2_11_effects_by_key_is_durable_and_observation_is_served() {
     )
     .unwrap();
     let evs2 = s2.envelopes(&run).unwrap();
-    let view2 = hh_ledger::views::effects_by_key_view(&run, evs2, None);
+    let view2 = hharness_ledger::views::effects_by_key_view(&run, evs2, None);
     assert_eq!(
         view2.view_hash, view.view_hash,
         "effects_by_key did not survive restart"
