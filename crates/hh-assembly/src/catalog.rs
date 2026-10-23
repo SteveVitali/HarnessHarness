@@ -48,6 +48,9 @@ impl Stage1Catalog {
             // R-2.7 — the `router` slot's `routing_policy` class
             // (DF-S1.18-1; optional, never required).
             hh_registry::suites::routing_policy_class(),
+            // R4.5b — the `model_port` slot's class (DF-S1.18-1's live
+            // leg; ADR-0364 D4; optional — absent ⇒ scripted lane).
+            hh_registry::suites::model_port_class(),
         ] {
             classes.insert(c.class_id.clone(), c);
         }

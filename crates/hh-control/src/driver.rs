@@ -47,6 +47,41 @@ use crate::vocab::{
 pub trait ModelPort {
     /// Issue the call (`model_call_id` is the scope the driver allocated).
     fn call(&mut self, model_call_id: &str, request: &Json) -> ModelOutcome;
+
+    /// R4.5b (ADR-0364 D4) — the members the port stamps on
+    /// `model.call.requested`, called before that row lands so plan facts
+    /// (`plan_hash`, `token_estimate`, `endpoint_ref`, `model_ref`,
+    /// `credential_binding_id`) are durable before the call opens. The
+    /// driver owns the row; the port contributes members — the scripted
+    /// lane's default `[]` keeps the row byte-identical.
+    /// `prefix` is the durable ledger prefix the port's plan render reads
+    /// (transcript reconstruction reads the same rows the next call sees).
+    fn requested_members(
+        &mut self,
+        _model_call_id: &str,
+        _request: &Json,
+        _prefix: &[EventEnvelope],
+    ) -> Vec<(&'static str, Json)> {
+        Vec::new()
+    }
+
+    /// R4.5b — the members the port stamps on the terminal
+    /// `model.call.completed`/`model.call.failed` row (`usage`, `timing`,
+    /// `served_model` — the gateway lane's facts; the driver owns the row's
+    /// base members). Default `[]` — the scripted lane is unchanged.
+    fn terminal_members(&mut self, _model_call_id: &str) -> Vec<(&'static str, Json)> {
+        Vec::new()
+    }
+
+    /// R4.5b — the canonical `hh.model_io/1` blobs the port produced since
+    /// the last drain (`(media_type, bytes)` — the `response_ref` the port
+    /// stamped on its outcome is the blob's `idp` address). The driver
+    /// deposits them through the fenced `StoreSeam` *before* the terminal
+    /// row lands — durable-before-visible (CC3), and the blob is present
+    /// whenever a row references it.
+    fn take_model_io(&mut self) -> Vec<(String, Vec<u8>)> {
+        Vec::new()
+    }
 }
 
 /// A parsed model outcome — the members G-INTERPRET and the cue read.
@@ -931,6 +966,13 @@ pub struct Driver<S: ControlStrategy> {
     submission: Option<String>,
     /// The model-call retry counter for the F2 seam.
     config: DriverConfig,
+    /// R4.5b — replay-scheduled external cues `(mark, cue)`: `mark` is
+    /// the recorded prefix length the cue's durable anchor sat at; the
+    /// run loop drains a scheduled cue into the inbox once the sink's
+    /// prefix reaches it, so a deterministic re-drive sees the recorded
+    /// enqueue order (a pre-drive `human_input` lands behind `RunOpened`,
+    /// not just at the park boundary).
+    replay_cues: std::collections::VecDeque<(u64, Cue)>,
     /// A guard's `stop` verdict pending the drain (the envelope owns the
     /// reason — `run` picks it up after `execute`).
     stop_pending: Option<StopReason>,
@@ -1088,6 +1130,7 @@ impl<S: ControlStrategy> Driver<S> {
             submission: None,
             config,
             stop_pending: None,
+            replay_cues: std::collections::VecDeque::new(),
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
             ledger_run_id: sink
@@ -1205,6 +1248,7 @@ impl<S: ControlStrategy> Driver<S> {
             submission: None,
             config,
             stop_pending: None,
+            replay_cues: std::collections::VecDeque::new(),
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
             ledger_run_id: sink
@@ -1347,6 +1391,7 @@ impl<S: ControlStrategy> Driver<S> {
             submission,
             config,
             stop_pending: None,
+            replay_cues: std::collections::VecDeque::new(),
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
             ledger_run_id: sink
@@ -1381,6 +1426,45 @@ impl<S: ControlStrategy> Driver<S> {
     /// ledger-ordered — I7: cues are the strategy's only input).
     pub fn submit(&mut self, cue: Cue) {
         self.inbox.push_back(cue);
+    }
+
+    /// `schedule_replay_cues` — the deterministic re-drive's recorded
+    /// external-cue stream with its enqueue marks (see `replay_cues`).
+    /// Live paths never call this — the driver's own cue flow is
+    /// untouched by construction.
+    pub(crate) fn schedule_replay_cues(&mut self, cues: std::collections::VecDeque<(u64, Cue)>) {
+        self.replay_cues = cues;
+    }
+
+    /// `pop_replay_cue` — the park-boundary fallback: a scheduled cue
+    /// whose mark was never reached (a diverging re-drive) is still fed
+    /// in record order rather than dropping silently.
+    pub(crate) fn pop_replay_cue(&mut self) -> Option<Cue> {
+        self.replay_cues.pop_front().map(|(_, c)| c)
+    }
+
+    /// The scheduled-cue backlog (`replay`'s unconsumed check).
+    pub(crate) fn replay_cues_len(&self) -> usize {
+        self.replay_cues.len()
+    }
+
+    /// Release every scheduled replay cue whose enqueue mark the sink's
+    /// prefix has reached — FIFO into the inbox. Called after each row
+    /// append (and once more at the run-loop top for the parked case) so
+    /// a cue lands *ahead of* the internal pushes a later emit in the
+    /// same iteration mints — the live ordering, where the service's
+    /// wakeup edge enqueued the cue the moment its anchor row minted.
+    /// A tail push at loop top alone would let the just-finished
+    /// iteration's pushes jump ahead of the recorded enqueue point.
+    fn release_due_replay_cues(&mut self, sink: &dyn LedgerSink) {
+        while self
+            .replay_cues
+            .front()
+            .is_some_and(|(m, _)| sink.prefix().len() as u64 >= *m)
+        {
+            let (_, c) = self.replay_cues.pop_front().unwrap();
+            self.inbox.push_back(c);
+        }
     }
 
     /// The folded `GuardContext` at `now` — `remaining` is the caller's
@@ -2002,6 +2086,10 @@ impl<S: ControlStrategy> Driver<S> {
             self.consolidation_round(sink, "open")?;
         }
         loop {
+            // The parked fallback — cue release normally happens inside
+            // the row-append path (`release_due_replay_cues`); a mark
+            // already covered by the seed prefix releases here.
+            self.release_due_replay_cues(sink);
             let cue = match self.inbox.pop_front() {
                 Some(c) => c,
                 None => {
@@ -2222,6 +2310,7 @@ impl<S: ControlStrategy> Driver<S> {
             payload,
         );
         sink.append(vec![ev]).map_err(DriverError::Append)?;
+        self.release_due_replay_cues(sink);
         self.decision_events.push(ev_id.to_string());
         self.last_decision_ref = Some(EventRef {
             run_id: self.ledger_run_id.clone(),
@@ -2681,6 +2770,12 @@ impl<S: ControlStrategy> Driver<S> {
         // R2.14 — the M3 open boundary's member stamp (the phase
         // profile's sampling intervals open here).
         requested_members.push(("at_ms", self.stamp_ms(sink)));
+        // R4.5b — the port's own plan facts (`plan_hash`/`token_estimate`/
+        // `endpoint_ref`/… for a live lane; `[]` for the scripted lane —
+        // the row's byte shape is unchanged there).
+        for m in model.requested_members(&mc, request, sink.prefix()) {
+            requested_members.push(m);
+        }
         self.append(
             sink,
             "model.call.requested",
@@ -2711,6 +2806,25 @@ impl<S: ControlStrategy> Driver<S> {
                 model.call(&mc, request)
             }
         };
+        // R4.5b — the port's `hh.model_io/1` blobs deposit through the
+        // fenced store seam *now* — before the terminal row that carries
+        // `response_ref` lands (CC3 durable-before-visible; a deposit
+        // failure is a driver append failure, never a dangling ref).
+        for (media, bytes) in model.take_model_io() {
+            if let Some(seam) = sink.store_seam() {
+                let _deposited = seam
+                    .store
+                    .put_blob(&bytes, &media)
+                    .map_err(|e| DriverError::Append(format!("model_io deposit: {e}")))?;
+            } else {
+                // A sink without a store seam (replay/record sinks) never
+                // carries live model_io — a port producing any against it
+                // is a contract violation, surfaced not dropped.
+                return Err(DriverError::Append(
+                    "model_io produced against a seam-less sink".into(),
+                ));
+            }
+        }
         // G-INTERPRET — output validation + loop detectors + empty ladder.
         let interp = self.envelope.guard(
             sink.prefix(),
@@ -2879,7 +2993,14 @@ impl<S: ControlStrategy> Driver<S> {
                     // off the sealed `error_actions` table; the row set is
                     // `attempt.failed → call.failed → [side rows] →
                     // [route.decided] → [compact] → retry.scheduled`.
-                    self.routed_failure(sink, &mc, attempt, &outcome, &class)?;
+                    self.routed_failure(
+                        sink,
+                        &mc,
+                        attempt,
+                        &outcome,
+                        &class,
+                        model.terminal_members(&mc),
+                    )?;
                 } else {
                     let mut failed_members = vec![
                         ("model_call_id", Json::str(&mc)),
@@ -2888,6 +3009,11 @@ impl<S: ControlStrategy> Driver<S> {
                     ];
                     if let Some(ms) = outcome.retry_after_ms {
                         failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+                    }
+                    // R4.5b — the port's terminal members (usage/timing on
+                    // a failed leg is how provider-side spend stays honest).
+                    for m in model.terminal_members(&mc) {
+                        failed_members.push(m);
                     }
                     failed_members.push(("at_ms", self.stamp_ms(sink)));
                     self.append(
@@ -3008,6 +3134,11 @@ impl<S: ControlStrategy> Driver<S> {
                         hh_gateway::events::attempt_completed(&mc, attempt as u32, 0, None),
                         Some(&mc),
                     )?;
+                }
+                // R4.5b — the port's terminal members (`usage`/`timing`/
+                // `served_model` — the live lane's facts; `[]` scripted).
+                for m in model.terminal_members(&mc) {
+                    completed_members.push(m);
                 }
                 // R2.14 — the M3 close boundary's member stamp.
                 completed_members.push(("at_ms", self.stamp_ms(sink)));
@@ -3178,6 +3309,7 @@ impl<S: ControlStrategy> Driver<S> {
         attempt: u64,
         outcome: &ModelOutcome,
         class: &str,
+        extra_terminal: Vec<(&'static str, Json)>,
     ) -> Result<(), DriverError> {
         let err_class = hh_gateway::vocab::ModelErrorClass::parse(class)
             .unwrap_or(hh_gateway::vocab::ModelErrorClass::Unknown);
@@ -3212,6 +3344,9 @@ impl<S: ControlStrategy> Driver<S> {
                 ];
                 if let Some(ms) = outcome.retry_after_ms {
                     failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+                }
+                for m in &extra_terminal {
+                    failed_members.push(m.clone());
                 }
                 failed_members.push(("at_ms", self.stamp_ms(sink)));
                 self.append(
@@ -3263,6 +3398,9 @@ impl<S: ControlStrategy> Driver<S> {
         ];
         if let Some(ms) = outcome.retry_after_ms {
             failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+        }
+        for m in &extra_terminal {
+            failed_members.push(m.clone());
         }
         failed_members.push(("at_ms", self.stamp_ms(sink)));
         self.append(
@@ -3431,6 +3569,7 @@ impl<S: ControlStrategy> Driver<S> {
                 ]),
             );
             sink.append(vec![intended]).map_err(DriverError::Append)?;
+            self.release_due_replay_cues(sink);
             // G-PRE-DISPATCH — retry eligibility, deadline, INV-3.
             let pre = self.envelope.guard(
                 sink.prefix(),
@@ -5459,6 +5598,7 @@ impl<S: ControlStrategy> Driver<S> {
         );
         ev.provenance = Some(provenance);
         sink.append(vec![ev]).map_err(DriverError::Append)?;
+        self.release_due_replay_cues(sink);
         let tail: Vec<EventEnvelope> = sink
             .prefix()
             .iter()
@@ -5527,6 +5667,7 @@ impl<S: ControlStrategy> Driver<S> {
             payload,
         );
         sink.append(vec![ev]).map_err(DriverError::Append)?;
+        self.release_due_replay_cues(sink);
         let tail: Vec<EventEnvelope> = sink
             .prefix()
             .iter()
@@ -5599,6 +5740,7 @@ impl<S: ControlStrategy> Driver<S> {
         );
         ev.producer.component_variant_ref = component.to_string();
         sink.append(vec![ev]).map_err(DriverError::Append)?;
+        self.release_due_replay_cues(sink);
         let tail: Vec<EventEnvelope> = sink
             .prefix()
             .iter()
@@ -5676,6 +5818,7 @@ impl<S: ControlStrategy> Driver<S> {
             payload,
         );
         sink.append(vec![ev]).map_err(DriverError::Append)?;
+        self.release_due_replay_cues(sink);
         // Fold the tail into the strategy state (the `pending_intents`/
         // `open_effects` fold — idempotent on `last_cue_seq`).
         let tail: Vec<EventEnvelope> = sink

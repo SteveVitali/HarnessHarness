@@ -2044,6 +2044,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_lane: crate::gateway_model::ModelLane::from_manifest(&child),
             model_fail_plan: Default::default(),
             client: None,
             contract_json: None,

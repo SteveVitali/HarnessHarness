@@ -378,6 +378,7 @@ fn round_trip(
             &mut rasm,
             Some("hh.submit"),
             id,
+            hh_control::replay::ReplayPorts::default(),
         )
         .expect("replay runs");
         assert!(out.reproduced(), "{id} diverged: {:?}", out.diverged);

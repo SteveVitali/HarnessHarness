@@ -133,9 +133,26 @@ impl std::error::Error for JsonError {}
 /// objects, arrays, strings, integers, booleans and null. Floats are rejected (integers
 /// only — see the canonicalization rule above).
 pub fn parse(input: &str) -> Result<Json, JsonError> {
+    parse_impl(input, false)
+}
+
+/// `parse_provider(input)` — the *inbound* provider-bytes read (R4.5b):
+/// the same grammar, but a non-integer number lexeme is preserved
+/// verbatim as `Json::Str` — `8.782312925170068` lands as the string
+/// `"8.782312925170068"`, never truncated to an integer and never
+/// silently dropped (provider-opaque data is carried, not coerced; the
+/// canonical `Json` form stays float-free so every downstream hash +
+/// `to_canonical_string` stays deterministic). The *outbound* direction
+/// keeps `parse`'s strictness — the kernel never emits a float.
+pub fn parse_provider(input: &str) -> Result<Json, JsonError> {
+    parse_impl(input, true)
+}
+
+fn parse_impl(input: &str, float_lexemes: bool) -> Result<Json, JsonError> {
     let mut p = Parser {
         bytes: input.as_bytes(),
         pos: 0,
+        float_lexemes,
     };
     p.skip_ws();
     let v = p.value()?;
@@ -149,6 +166,9 @@ pub fn parse(input: &str) -> Result<Json, JsonError> {
 struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
+    /// `true` = provider mode (`parse_provider`): a non-integer number
+    /// lexeme parses to `Json::Str(lexeme)` — the raw token preserved.
+    float_lexemes: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -300,13 +320,46 @@ impl<'a> Parser<'a> {
         while let Some(b) = self.peek() {
             if b.is_ascii_digit() {
                 self.pos += 1;
-            } else if b == b'.' || b == b'e' || b == b'E' {
-                return Err(JsonError("non-integer numbers are not permitted".into()));
             } else {
                 break;
             }
         }
+        // The fraction/exponent tail — `.`/`e`/`E` opens it, a `+`/`-`
+        // binds only immediately after an exponent marker. Strict mode
+        // refuses the first non-integer byte; provider mode scans the
+        // whole lexeme and preserves it verbatim as `Json::Str`.
+        let mut is_float = false;
+        while let Some(b) = self.peek() {
+            let opens = b == b'.' || b == b'e' || b == b'E';
+            let exp_sign = (b == b'+' || b == b'-')
+                && is_float
+                && matches!(
+                    self.bytes.get(self.pos.wrapping_sub(1)),
+                    Some(b'e') | Some(b'E')
+                );
+            if !(opens || exp_sign) {
+                break;
+            }
+            if opens && !is_float && !self.float_lexemes {
+                return Err(JsonError("non-integer numbers are not permitted".into()));
+            }
+            is_float = true;
+            self.pos += 1;
+            while let Some(b) = self.peek() {
+                if b.is_ascii_digit() {
+                    self.pos += 1;
+                } else {
+                    break;
+                }
+            }
+        }
         let text = std::str::from_utf8(&self.bytes[start..self.pos]).unwrap();
+        if is_float {
+            // The raw lexeme preserved as a string — a value the model
+            // plane can surface verbatim (e.g. usage `timings`) without
+            // inventing a float type into the canonical form.
+            return Ok(Json::Str(text.to_string()));
+        }
         text.parse::<i64>()
             .map(Json::Int)
             .map_err(|_| JsonError(format!("bad integer {text:?}")))

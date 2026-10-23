@@ -36,13 +36,18 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
     local-reachability:provider) printf 'local-ollama';;
     local-reachability:kind)     printf 'script';;
     local-reachability:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    local-run:ticket)   printf 'R4.5b';;
+    local-run:provider) printf 'local-ollama';;
+    local-run:kind)     printf 'cargo-test';;
+    local-run:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    local-run:test)     printf 'hh-embed:r4_5b_live:r45b_live_ollama_run_ledger_verify_replay';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;

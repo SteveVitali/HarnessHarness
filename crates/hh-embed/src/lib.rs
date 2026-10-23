@@ -42,6 +42,7 @@ pub(crate) mod experiment_ops;
 pub(crate) mod extension_ops;
 pub(crate) mod fleet_ops;
 pub mod frames;
+pub(crate) mod gateway_model;
 pub(crate) mod hosting_ops;
 pub mod inject;
 pub(crate) mod lab_c1_ops;

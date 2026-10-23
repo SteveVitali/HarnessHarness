@@ -43,12 +43,15 @@ pub mod attempts;
 pub mod cache;
 pub mod codec;
 pub mod dialect;
+pub mod dialects;
 pub mod errors;
 pub mod events;
 pub mod gateway;
 pub mod grammar;
+pub mod http_transport;
 pub mod layout;
 pub mod message;
+pub mod openai;
 pub mod plan;
 pub mod probes;
 pub mod router;
@@ -76,6 +79,7 @@ pub use dialect::{
     AuthKind, DebtEvidence, DebtRecord, DialectRule, Framing, PlanSchema, RetryAfterSource,
     UsageMapping, UsageMappingDefault, WireDialect,
 };
+pub use dialects::{openai_compatible, openai_compatible_doc, OPENAI_COMPATIBLE_ID};
 pub use errors::{CodecError, GatewayError};
 pub use gateway::{
     charge_model, stamp_participant, CallHandle, CredentialHandle, CredentialPort,
@@ -85,6 +89,7 @@ pub use grammar::{
     decode_frame, DecodeState, Delta, GrammarViolation, ModelEvent, ModelEventKind, Timing,
     UsageArrivalKind,
 };
+pub use http_transport::HttpModelTransport;
 pub use layout::{
     check_layout, check_marker_carriers, check_prefix_affecting, check_purpose_isolation,
     check_static_stability, check_tool_order_prefix, check_transcript_append, is_volatile_kind,

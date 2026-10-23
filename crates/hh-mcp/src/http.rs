@@ -12,7 +12,7 @@
 //! the `Authorization` header — never in a payload or a ledger row.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::BufReader;
 use std::net::{TcpListener, TcpStream};
 
 use hh_wire::json::Json;
@@ -143,29 +143,37 @@ impl HttpTransport {
     /// `POST` one JSON-RPC line — the raw response (status/headers/body)
     /// for the OAuth path's `401` challenge handling. Non-2xx statuses
     /// are returned, not flattened — the caller decides.
+    ///
+    /// The wire shape is `hh_wire::http`'s one codec (R4.5b; ADR-0364
+    /// D1 — CC1: no second HTTP/1.1 spelling in-tree).
     pub fn post(&mut self, body: &str) -> Result<HttpResponse, String> {
         let mut s = TcpStream::connect(&self.addr).map_err(|e| format!("connect: {e}"))?;
-        let mut req = format!(
-            "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nAccept: application/json\r\nOrigin: {}\r\nContent-Length: {}\r\nConnection: close\r\n",
-            self.target,
-            self.addr,
-            self.origin,
-            body.len(),
-        );
+        s.set_read_timeout(Some(std::time::Duration::from_secs(30)))
+            .ok();
+        let bearer_header = self.bearer.as_ref().map(|b| format!("Bearer {b}"));
+        let mut hdrs: Vec<(&str, &str)> = vec![
+            ("Host", &self.addr),
+            ("Content-Type", "application/json"),
+            ("Accept", "application/json"),
+            ("Origin", &self.origin),
+            ("Connection", "close"),
+        ];
         if let Some(sid) = &self.session_id {
-            req.push_str(&format!("Mcp-Session-Id: {sid}\r\n"));
+            hdrs.push(("Mcp-Session-Id", sid.as_str()));
         }
-        if let Some(b) = &self.bearer {
-            req.push_str(&format!("Authorization: Bearer {b}\r\n"));
+        if let Some(b) = &bearer_header {
+            hdrs.push(("Authorization", b.as_str()));
         }
-        req.push_str("\r\n");
-        s.write_all(req.as_bytes())
-            .and_then(|()| s.write_all(body.as_bytes()))
+        hh_wire::http::write_request(&mut s, "POST", &self.target, &hdrs, body.as_bytes())
             .map_err(|e| format!("write: {e}"))?;
-        let mut buf = Vec::new();
-        s.read_to_end(&mut buf).map_err(|e| format!("read: {e}"))?;
-        let text = String::from_utf8_lossy(&buf).to_string();
-        parse_response(&text)
+        let mut r = BufReader::new(s);
+        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+            .map_err(|e| format!("read: {e}"))?;
+        Ok(HttpResponse {
+            status: head.status,
+            headers: head.headers,
+            body: String::from_utf8_lossy(&body).to_string(),
+        })
     }
 
     /// `subscriptions/listen` — the server→client drain: returns the
@@ -212,31 +220,6 @@ impl Transport for HttpTransport {
     }
 }
 
-/// Parse `HTTP/1.1 <status>` + headers + body (Connection: close
-/// fixture form — the body is everything after the blank line).
-fn parse_response(text: &str) -> Result<HttpResponse, String> {
-    let (head, body) = text
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| "malformed response".to_string())?;
-    let mut lines = head.split("\r\n");
-    let status = lines
-        .next()
-        .and_then(|l| l.split_whitespace().nth(1))
-        .and_then(|c| c.parse::<u16>().ok())
-        .ok_or_else(|| "no status".to_string())?;
-    let mut headers = BTreeMap::new();
-    for l in lines {
-        if let Some((k, v)) = l.split_once(':') {
-            headers.insert(k.trim().to_lowercase(), v.trim().to_string());
-        }
-    }
-    Ok(HttpResponse {
-        status,
-        headers,
-        body: body.to_string(),
-    })
-}
-
 /// `ServeHttpError` — the serve loop's failures.
 #[derive(Debug)]
 pub enum ServeHttpError {
@@ -254,26 +237,21 @@ impl std::fmt::Display for ServeHttpError {
 
 impl std::error::Error for ServeHttpError {}
 
-/// Write one HTTP response (Connection: close — the fixture form).
+/// Write one HTTP response (Connection: close — the fixture form). The
+/// wire shape is `hh_wire::http`'s one codec (R4.5b; ADR-0364 D1).
 fn respond(
     stream: &mut TcpStream,
     status: u16,
-    reason: &str,
+    _reason: &str,
     headers: &[(&str, &str)],
     body: &str,
 ) -> Result<(), ServeHttpError> {
-    let mut head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n",
-        body.len()
-    );
-    for (k, v) in headers {
-        head.push_str(&format!("{k}: {v}\r\n"));
-    }
-    head.push_str("\r\n");
-    stream
-        .write_all(head.as_bytes())
-        .and_then(|()| stream.write_all(body.as_bytes()))
-        .map_err(ServeHttpError::Io)
+    let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
+    hdrs.push(("Content-Type", "application/json"));
+    hdrs.push(("Connection", "close"));
+    hdrs.extend_from_slice(headers);
+    hh_wire::http::write_response(stream, status, &hdrs, body.as_bytes())
+        .map_err(|e| ServeHttpError::Io(std::io::Error::other(e.to_string())))
 }
 
 /// `serve_http(listener, load, mode, origins, bearer)` — the Streamable
@@ -307,47 +285,24 @@ pub fn serve_http(
             Ok(s) => s,
             Err(e) => return Err(ServeHttpError::Io(e)),
         });
-        // Request line + headers + Content-Length body.
-        let mut request_line = String::new();
-        if reader
-            .read_line(&mut request_line)
-            .map_err(ServeHttpError::Io)?
-            == 0
-        {
-            continue;
-        }
-        let mut headers = BTreeMap::new();
-        let mut line = String::new();
-        loop {
-            line.clear();
-            let n = reader.read_line(&mut line).map_err(ServeHttpError::Io)?;
-            if n == 0 || line.trim().is_empty() {
-                break;
+        // One `hh_wire::http` request (head + body — the body reads BEFORE
+        // any rejection: a socket closed with unread inbound data resets
+        // (RST) and the client loses the response; the guards still run
+        // before any *dispatch*, the bytes are inert until parsed below).
+        // Chunked request bodies decode inside the codec (R4.5b).
+        let (head, body) = match hh_wire::http::read_request(&mut reader, 8 * 1024 * 1024) {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            Err(_) => {
+                respond(&mut stream, 400, "Bad Request", &[], "{}")?;
+                continue;
             }
-            if let Some((k, v)) = line.split_once(':') {
-                headers.insert(k.trim().to_lowercase(), v.trim().to_string());
-            }
-        }
-        let parts: Vec<&str> = request_line.split_whitespace().collect();
-        if parts.len() < 2 {
-            respond(&mut stream, 400, "Bad Request", &[], "{}")?;
-            continue;
-        }
-        let (method, _uri) = (parts[0], parts[1]);
-        if method != "POST" {
+        };
+        let headers = head.headers;
+        if head.method != "POST" {
             respond(&mut stream, 405, "Method Not Allowed", &[], "{}")?;
             continue;
         }
-        // Read the request body BEFORE any rejection — a socket closed
-        // with unread inbound data resets (RST) and the client loses the
-        // response. The guards still run before any *dispatch*; the body
-        // bytes are inert until parsed below.
-        let len: usize = headers
-            .get("content-length")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-        let mut body = vec![0u8; len];
-        reader.read_exact(&mut body).map_err(ServeHttpError::Io)?;
         // The Origin guard — before any dispatch (DNS-rebinding).
         if let Err(r) = origins.check(headers.get("origin").map(String::as_str)) {
             let body = Json::obj([("error", Json::str(r.to_string()))]).to_canonical_string();
@@ -428,6 +383,7 @@ pub fn serve_http(
 mod tests {
     use super::*;
     use crate::artifact::{ArtifactTool, ServedArtifact};
+    use std::io::{Read, Write};
 
     fn artifact() -> ServedArtifact {
         ServedArtifact {

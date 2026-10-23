@@ -105,6 +105,11 @@ impl EmbedService {
                     reason: format!("envelope_policy: {e:?}"),
                 })?;
                 let mut assembler = KernelAssembler::default();
+                // R4.5b — the measured `assembly_ms` stamp is substituted
+                // from the record (a re-measure can never be byte-
+                // identical); the assembled-sequence compare still checks
+                // every other member honestly.
+                assembler.replay_assembly_ms(&recorded);
                 // The bound variant must resolve to a registered impl — a
                 // replayed run's strategy is the one the ledger named;
                 // unknown is a typed refusal, never `react/minimal`.
@@ -120,7 +125,8 @@ impl EmbedService {
                     &recorded,
                     &mut assembler,
                     Some(SUBMIT_SURFACE),
-                    &format!("replay:{target}"),
+                    &target,
+                    self.replay_ports(&manifest)?,
                 )
                 .map_err(|e| EmbedError::Refused {
                     reason: format!("replay_driver: {e:?}"),
@@ -200,6 +206,48 @@ impl EmbedService {
                 ..DriverConfig::default()
             },
         )
+    }
+
+    /// Re-arm the routed lane for a deterministic re-drive: the consult's
+    /// `d-N` allocations and `model.route.decided` dispositions must
+    /// re-run against the replayed prefix or the `mc-N`/`d-N` ids skew
+    /// (the id allocator is shared). The consult is a pure fold — no live
+    /// dial — so arming the real `KernelRouting` reproduces the record
+    /// exactly. A run whose definition bound no `router` slot arms
+    /// nothing (the scripted lane's record carries no consult state).
+    fn replay_ports(
+        &self,
+        manifest: &hh_ledger::manifest::RunManifest,
+    ) -> Result<hh_control::replay::ReplayPorts, EmbedError> {
+        let sealed = manifest
+            .harness_def_ref
+            .as_deref()
+            .and_then(|r| self.persisted_definition(r).ok());
+        let Some(sealed) = sealed else {
+            return Ok(hh_control::replay::ReplayPorts::default());
+        };
+        let Some(params) = crate::open::router_slot_params(&sealed.document) else {
+            return Ok(hh_control::replay::ReplayPorts::default());
+        };
+        let table = crate::open::role_table_from_manifest(manifest);
+        let arm = self
+            .arm_routing_lane(
+                &params,
+                &table,
+                &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
+                manifest
+                    .configuration_version_id
+                    .clone()
+                    .unwrap_or_default()
+                    .as_str(),
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("replay_router_slot: {e}"),
+            })?;
+        Ok(hh_control::replay::ReplayPorts {
+            routing: Some(Box::new(arm.routing)),
+            cache: arm.cache.map(|c| Box::new(c) as _),
+        })
     }
 
     /// `counterfactual{session_id, run_id?, at_seq, intervention, design,
@@ -458,6 +506,7 @@ impl EmbedService {
                     let (ctx, policy, config) =
                         self.replay_driver_env(&arm_run, &parent, arm.as_ref());
                     let mut assembler = KernelAssembler::default();
+                    assembler.replay_assembly_ms(&recorded);
                     let policy = match policy {
                         Ok(p) => p,
                         Err(e) => {
@@ -533,6 +582,36 @@ impl EmbedService {
                         ]));
                         continue;
                     };
+                    let ports = match self.replay_ports(&parent) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            let report = hh_ledger::replay::validity(
+                                &self.store,
+                                &arm_run,
+                                &ValidityInput {
+                                    variant_declares: true,
+                                    reproduced: Some(false),
+                                    diverged: Some((0, "drive".into(), format!("{e:?}"))),
+                                    ..Default::default()
+                                },
+                            )
+                            .map_err(ledger_err)?;
+                            hh_ledger::replay::replay_finished(
+                                &mut self.store,
+                                &arm_run,
+                                ReplayDriverMode::Deterministic,
+                                &report,
+                            )
+                            .map_err(ledger_err)?;
+                            dispersion.push(Json::obj([
+                                ("run_id", Json::str(arm_run.clone())),
+                                ("mode", Json::str(report.mode.as_str())),
+                                ("report_ref", Json::str(report.content_ref())),
+                                ("outcome", Json::Null),
+                            ]));
+                            continue;
+                        }
+                    };
                     match hh_control::replay::deterministic_replay(
                         strategy,
                         &ctx,
@@ -542,7 +621,8 @@ impl EmbedService {
                         &recorded,
                         &mut assembler,
                         Some(SUBMIT_SURFACE),
-                        &format!("replay:{arm_run}"),
+                        &arm_run,
+                        ports,
                     ) {
                         Ok(outcome) => {
                             let input = ValidityInput {

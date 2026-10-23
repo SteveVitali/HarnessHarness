@@ -62,6 +62,10 @@ struct CarriedRuntime {
     /// re-arms the declared script whole (the staged plan is process
     /// staging — the durable attempt rows are the record).
     model_fail_plan: std::collections::VecDeque<crate::runtime::StagedCall>,
+    /// The `model_port` slot's realized live lane (R4.5b) — an
+    /// in-process takeover carries it; a durable resume re-reads the
+    /// manifest's `model_lane` member.
+    model_lane: Option<crate::gateway_model::ModelLane>,
 }
 
 /// The resumed-leaf arm product — the driver, its `leaf.arm` record,
@@ -615,7 +619,9 @@ impl EmbedService {
             &sealed,
             &hh_assembly::CompositionInputs {
                 model_ref: role_table.semantic_id(),
-                profile: primary_semantic.unwrap_or_else(|| "profile:none".to_string()),
+                profile: primary_semantic
+                    .clone()
+                    .unwrap_or_else(|| "profile:none".to_string()),
                 environment_ref: "local_host".to_string(),
                 budget: budget_input.clone(),
                 seed: "0".to_string(),
@@ -753,6 +759,27 @@ impl EmbedService {
         // ref that resolves — the declared coordinate stays legible on
         // `profile_binding.roles.primary.profile_ref`, never widened).
         manifest.model_profile_ref = primary_record_ref;
+        // R4.5b (DF-S1.18-1) — the `model_port` slot's live binding,
+        // recorded *before* `open_run` seals the manifest:
+        // `decode_model_lane` realizes the dialect/endpoint/model leg
+        // into a `ModelLane`; the lane persists verbatim on the
+        // manifest's `model_lane` member (a durable resume re-binds the
+        // *recorded* lane — never re-derives it). An absent slot is the
+        // scripted `EmbedModel` lane, byte-identical (AC1).
+        let model_lane = match crate::gateway_model::model_port_slot_params(&sealed.document) {
+            Some(params) => Some(crate::gateway_model::decode_model_lane(
+                &params,
+                &primary_semantic
+                    .clone()
+                    .unwrap_or_else(|| "profile:none".to_string()),
+            )?),
+            None => None,
+        };
+        if let Some(lane) = &model_lane {
+            manifest
+                .extra
+                .insert("model_lane".to_string(), lane.to_json());
+        }
         // §5c.1 (R3.4; DF-S1.19-2) — `window_cap` is the primary
         // profile's declared `context_window`: the durable
         // `model_context_window` member carries the realized value
@@ -1083,6 +1110,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_lane,
             model_fail_plan,
             client: client.cloned(),
             contract_json: contract_json.cloned(),
@@ -1372,6 +1400,7 @@ impl EmbedService {
                     delivered_wokens: std::mem::take(&mut s.delivered_wokens),
                     leaf_arm: std::mem::take(&mut s.leaf_arm),
                     model_fail_plan: std::mem::take(&mut s.model_fail_plan),
+                    model_lane: s.model_lane.take(),
                 });
             }
         };
@@ -1631,6 +1660,7 @@ impl EmbedService {
                     budget_ceiling: BTreeMap::new(),
                     leaf_arm,
                     model_fail_plan,
+                    model_lane: crate::gateway_model::ModelLane::from_manifest(&manifest),
                 }
             }
         };
@@ -1724,6 +1754,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_lane: rt.model_lane,
             model_fail_plan: rt.model_fail_plan,
             client: None,
             contract_json: None,
@@ -1817,6 +1848,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_lane: crate::gateway_model::ModelLane::from_manifest(&manifest),
             model_fail_plan: Default::default(),
             client: client.cloned(),
             contract_json: contract_json.cloned(),
@@ -2852,7 +2884,7 @@ impl EmbedService {
     /// `router_arm_from_params` over the registry's `registered()`
     /// snapshot (CF-046's snapshot-confined read — the arm reads the
     /// records, never a live registry) and the arm-time `now_ms`.
-    fn arm_routing_lane(
+    pub(crate) fn arm_routing_lane(
         &self,
         params: &Json,
         table: &hh_gateway::router::ModelRoleTable,
@@ -3231,7 +3263,7 @@ pub(crate) fn compute_rules_for(
 /// unbound (the legacy scripted lane runs byte-identical). The params
 /// record decodes under `router_arm_from_params` — a malformed member
 /// fails the open loudly, never a default policy.
-fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
+pub(crate) fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
     for n in &doc.nodes {
         if let KindRecord::AgentProcess(a) = &n.semantic {
             if let AgentProcessBody::Native(np) = &a.body {
@@ -3254,7 +3286,9 @@ fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
 /// open-time construction's honest re-derivation (an expired binding's
 /// `intent_ref` gate already ran at open; the durable
 /// `model.profile.expired_used` rows are the record).
-fn role_table_from_manifest(manifest: &RunManifest) -> hh_gateway::router::ModelRoleTable {
+pub(crate) fn role_table_from_manifest(
+    manifest: &RunManifest,
+) -> hh_gateway::router::ModelRoleTable {
     let mut table = hh_gateway::router::ModelRoleTable::default();
     if let Some(Json::Obj(roles)) = manifest
         .extra

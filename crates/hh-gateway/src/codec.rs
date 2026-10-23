@@ -274,13 +274,15 @@ pub fn read_retry_after(dialect: &WireDialect, body: &Json, headers: Option<&Jso
                 .or_else(|| body.get("error").and_then(|e| e.get("retry_after")))
                 .and_then(Json::as_int),
         };
-        if let Some(ms) = v {
-            // A `retry-after` is seconds on the wire in `header` form, ms in
-            // `body` form — the dialect's source spelling disambiguates; both
-            // land in `ms` (a header value ≤ `cap` in seconds is read as
-            // seconds × 1000 only when small — the C0 read is ms either way;
-            // the cap check is what the gate tests).
-            let ms = ms.max(0) as u64;
+        if let Some(v) = v {
+            // A `retry-after` header is *seconds* on the wire (RFC 9110
+            // §10.2.3); a `retry_after` body member spells ms. The dialect's
+            // source disambiguates — both land in `ms`, capped by
+            // `retry_after_cap_ms` (R-RT-4).
+            let ms = match source {
+                crate::dialect::RetryAfterSource::Header => (v.max(0) as u64).saturating_mul(1_000),
+                crate::dialect::RetryAfterSource::Body => v.max(0) as u64,
+            };
             if ms > dialect.retry_after_cap_ms {
                 return None; // capped — the caller fails `rate_limited`.
             }
