@@ -120,7 +120,8 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 - **Tests** are acceptance batteries named per ticket:
   `crates/hh-*/tests/<ticket>.rs` (e.g. `crates/hh-embed/tests/cap_2_composed.rs`).
   Every new behaviour gets a test that fails if removed; `ignore`d tests cite
-  a `DF-*` deferral row.
+  a `DF-*` deferral row or, for live legs, the live-evidence ADR
+  (`#[ignore = "live — ADR-0363: scripts/live-verify.sh <leg>"]`).
 
 ## Critical gotchas
 
@@ -145,12 +146,18 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
    the build-memory files, the standing rule covers every file): write via
    shell/python and verify with `git diff` before committing —
    `git show --stat` must list every file a commit claims.
-5. **Offline/hermetic by design.** The verified ceiling is fixture-verified —
-   never write `staging-verified`, `live-executed` or `public` claims
+5. **Offline/hermetic by design — with one gated exception.** The default
+   verified ceiling is fixture-verified; `staging-verified` and `public`
+   claims stay forbidden until L4.6/R4.18 earn them
    (`docs/build/OPERATIONAL_READINESS.md` is the capability account).
-   `foreign-run-verified` — a foreign toolchain's recorded replay of the
-   committed `hh-xcheck` bundle (PR #136's E2 legs) — is a distinct
-   evidence class, below the in-tree ceiling and never conflated with it.
+   `live-executed` is claimable **only** with a cited `hh-live-evidence/1`
+   record under `docs/build/reports/live/` produced by
+   `scripts/live-verify.sh` (ADR-0363) — never a bare claim, and a leg
+   that did not execute records `skipped(<reason>)`/`environment-pending`,
+   never a pass. `foreign-run-verified` — a foreign toolchain's recorded
+   replay of the committed `hh-xcheck` bundle (PR #136's E2 legs) — is a
+   distinct evidence class, below the in-tree ceiling and never conflated
+   with `fixture-verified` or `live-executed`.
 6. **The manifest chain is a stack, not a queue:** work forks from the
    previous ticket's branch; append-only history; a gate is a pause, not a
    block; secrets never enter a ledger (`provided: yes/no` only).

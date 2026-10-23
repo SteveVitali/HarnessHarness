@@ -1,0 +1,32 @@
+title = "HarnessHarness gitleaks config — R4.5a / ADR-0363 (D8)"
+
+# Extends the gitleaks default rule set. The staged-diff gate
+# (`scripts/live-verify.sh`) and the one-off full-history baseline both run
+# with this config; L4.3 reuses it in CI (CC1 — one config).
+
+[extend]
+useDefault = true
+
+# Full-history baseline (`gitleaks git --redact --log-opts=--all`, run
+# 2026-10-21, 627 commits): exactly 7 findings, all `generic-api-key`, all
+# the committed *fake* fixture literals below — each allowlisted by
+# path+rule. Any baseline hit outside this set is a real finding: STOP,
+# rotate the credential, ask the operator.
+
+[[allowlists]]
+description = "fake ghp_live…/sk-live-… literals planted as known-value/canary fixtures for hh-secrets detector tests (acceptance.rs:245,377,593 at b97b2bc) — synthetic, never real credentials"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^crates/hh-secrets/tests/acceptance\.rs$''']
+
+[[allowlists]]
+description = "fake credential literals in the SV security-verification battery fixtures (sv.rs:553,867,908 at b97b2bc) — synthetic, never real credentials"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^crates/hh-secrets/tests/sv\.rs$''']
+
+[[allowlists]]
+description = "fake credential literal in the hh-telemetry acceptance fixtures (acceptance.rs:220 at 0932916) — synthetic, never a real credential"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^crates/hh-telemetry/tests/acceptance\.rs$''']

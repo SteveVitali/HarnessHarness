@@ -1,0 +1,24 @@
+{
+  "schema": "hh-live-pricing/1",
+  "retrieved": "2026-10-21",
+  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+  "authority": "SPEND.jsonl is an estimate from this table; the provider consoles' billing is the spend authority — the operator reconciles the ledger total against the consoles at GATE-G6 (ADR-0363 D4)",
+  "cap_usd": 100,
+  "allocations_usd": {
+    "R4.5d": 5,
+    "R4.5e": 5,
+    "R4.6": 15,
+    "R4.7b": 5,
+    "R4.7e": 15,
+    "L4.6": 30,
+    "reserve": 25
+  },
+  "allocation_note": "every ticket not listed allocates USD 0; the reserve spends only on the operator's recorded words",
+  "models": {
+    "local/*": {
+      "prompt_per_1k_usd": 0,
+      "completion_per_1k_usd": 0,
+      "note": "local Ollama — the zero-spend offline-repeatable leg (2026-10-20 providers ruling)"
+    }
+  }
+}

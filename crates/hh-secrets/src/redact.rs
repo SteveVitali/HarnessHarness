@@ -429,6 +429,10 @@ pub enum ScanTarget {
     /// The broker's live-path boundary (`bind`/`mediate`/`kernel_use`) — the
     /// detail names the verb and channel (canary attempts only).
     Mediation(String),
+    /// A committed-artifact file under the live-evidence gate
+    /// (`hh-secret-scan`; ADR-0363 D6) — the detail is the repo-relative
+    /// path.
+    Artifact(String),
 }
 
 impl ScanTarget {
@@ -442,6 +446,7 @@ impl ScanTarget {
             ScanTarget::Definition(_) => "definition",
             ScanTarget::SinkDelivery(_) => "sink_delivery",
             ScanTarget::Mediation(_) => "mediation",
+            ScanTarget::Artifact(_) => "artifact",
         }
     }
 
@@ -455,6 +460,7 @@ impl ScanTarget {
             ScanTarget::Definition(d) => d.clone(),
             ScanTarget::SinkDelivery(s) => s.clone(),
             ScanTarget::Mediation(d) => d.clone(),
+            ScanTarget::Artifact(p) => p.clone(),
         };
         if detail.is_empty() {
             self.as_str().to_string()

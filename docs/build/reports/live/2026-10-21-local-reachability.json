@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "HH_LOCAL_MODEL is served by the OpenAI-compatible model listing at HH_LOCAL_BASE_URL"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:11434",
+  "git_head": "615a8a25078b5cb82fa7ddd47bb0d4948682ba76",
+  "harness": "devin-cli/swe-2-high/subagent",
+  "leg": "local-reachability",
+  "model_reported": "qwen2.5:7b-instruct",
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-21T15:56:14Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5a.md",
+    "sha256": "4077d42aa21c8f746cc6032b44766e750c3af495aa594150aa0961caff72507f"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 0.0,
+  "ticket": "R4.5a",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-21-local-reachability.transcript.txt",
+  "transcript_sha256": "678fa9a9cfe4fe46995f0ba4c6bfa0ab03ea82b88d9309ec238a761c87bae782"
+}
