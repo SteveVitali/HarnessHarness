@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -182,6 +182,12 @@ leg_field() { # $1 leg, $2 field
     capstone-bundle-repro:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
     capstone-bundle-repro:test)     printf 'hharness-embed:l4_6_live:l46_live_bundle_repro';;
     capstone-bundle-repro:host)     printf '127.0.0.1:11434';;
+    l4-6b-replay:ticket)   printf 'L4.6b';;
+    l4-6b-replay:provider) printf 'none';;
+    l4-6b-replay:kind)     printf 'script';;
+    l4-6b-replay:names)    printf '';;
+    l4-6b-replay:test)     printf 'hharness-embed:l4_6b:l46b_replay_effect_run';;
+    l4-6b-replay:host)     printf '127.0.0.1';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -1147,6 +1153,41 @@ run_leg_capstone_cell() { # $1 leg
 run_leg_capstone_ledger_replay() { run_leg_capstone_cell "capstone-ledger-replay"; }
 run_leg_capstone_web() { run_leg_capstone_cell "capstone-web"; }
 run_leg_capstone_bundle_repro() { run_leg_capstone_cell "capstone-bundle-repro"; }
+
+# `l4-6b-replay` — L4.6b's USD-0 re-verification of the diverged
+# capstone hh-cli-attach arm (ADR-0381, leg (a)): a dispatching record —
+# `action.tool.proposed` + the §5a.2 write-ahead chains — produced over
+# binding (c) itself (`hh-kernel serve --http` + the scripted EmbedModel
+# lane; no provider dial, no credential names), then replayed
+# `driver_mode:deterministic` from a fresh read-only attach session on
+# the same store. The verdict must be `deterministic` with no
+# `replay_diverged` reason — pre-fix this arm answered `invalid`
+# (3/3 on the anthropic lane). Marker: L4_6B_REPLAY.
+run_leg_l4_6b_replay() {
+  require cargo
+  local spec crate tbin filt
+  spec=$(leg_field "l4-6b-replay" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  ENDPOINT_HOST=$(leg_field "l4-6b-replay" host); MODEL_REPORTED=""; RESP_HDRS=""
+  ASSERTIONS="the diverged capstone arm re-run at USD 0: an effect-dispatching record (hh.submit completion — action.tool.proposed + the write-ahead ceremony pair) produced over binding (c) by hh-kernel serve --http + the scripted lane, then replayed{deterministic} from a read-only attach session — verdict deterministic, no replay_diverged, zero model.*/effect rows minted by the replay"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  (cd "$REPO" && cargo build -q -p hharness-kernel) \
+    || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks
+    marks=$(grep -oE 'L4_6B_REPLAY[: ].*' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
 
 # `capstone-fleet-webhook` — R4.7's full sandbox loop (the trap-guarded
 # webhook + test issue create/delete on SteveVitali/hh-live-sandbox via

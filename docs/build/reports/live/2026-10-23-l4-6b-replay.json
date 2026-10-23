@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "the diverged capstone arm re-run at USD 0: an effect-dispatching record (hh.submit completion \u2014 action.tool.proposed + the write-ahead ceremony pair) produced over binding (c) by hh-kernel serve --http + the scripted lane, then replayed{deterministic} from a read-only attach session \u2014 verdict deterministic, no replay_diverged, zero model.*/effect rows minted by the replay; L4_6B_REPLAY: run=run-1792729736180-000000-57b6cbe8 attach=sess-4 replay=deterministic byte-identical;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "6e7cd8a09d35ed2c0adf482f2b1ac6e79a03b7ef",
+  "harness": "devin-l4.6b",
+  "leg": "l4-6b-replay",
+  "model_reported": null,
+  "provided": {},
+  "provider": "none",
+  "recorded_at": "2026-10-23T04:28:56Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6b.md",
+    "sha256": "be18a19bd0d109cc4b7feb249b80efa40d51ea985f6ec792bf55ca64c80ddaaf"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6b",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-l4-6b-replay.transcript.txt",
+  "transcript_sha256": "93117a6130c5d582743a581080bbec5a3a4249a3b117a549129274504a41a4f0"
+}

@@ -762,7 +762,6 @@ fn l46_live_reference_task() {
             usages.push(u);
         }
         served_model = sm.or(served_model);
-        drop(call);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -808,7 +807,6 @@ fn l46_live_reference_task() {
             usages.push(u);
         }
         served_model = sm.or(served_model);
-        drop(call);
         let _ = child.kill();
         let _ = child.wait();
 
@@ -826,7 +824,6 @@ fn l46_live_reference_task() {
         if !matches!(u, Json::Null) {
             usages.push(u);
         }
-        drop(call);
         let _ = child.kill();
         let _ = child.wait();
         let _ = std::fs::remove_dir_all(&dir);
@@ -883,7 +880,6 @@ fn l46_live_ledger_replay() {
     let l = local_lane();
     let _ = assert_live_run(&mut call, &sess, &events, &l, "replay-leg");
     println!("CAPSTONE_REPLAY: run={run} verify=ok replay=deterministic byte-identical");
-    drop(call);
     let _ = child.kill();
     let _ = child.wait();
     let _ = std::fs::remove_dir_all(&dir);

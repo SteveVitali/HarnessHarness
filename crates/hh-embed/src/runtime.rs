@@ -334,7 +334,7 @@ impl EffectGate for EmbedGate {
     /// The boundary's gate component — the `emitted` rows are this
     /// boundary's Π-floor records (`decided`/`authorized`/`prepared`/
     /// `committed`), minted under `hharness-embed`, never `hharness-control`.
-    fn producer_component(&self) -> &'static str {
+    fn producer_component(&self) -> &str {
         "hh-embed/effect-gate"
     }
 

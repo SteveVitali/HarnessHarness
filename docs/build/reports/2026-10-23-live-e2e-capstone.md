@@ -95,6 +95,25 @@ recorded in `SPEND.jsonl`. The AC "replay of each live run is
 byte-identical offline" is therefore **not met on evidence** — this is
 the ticket's surfaced blocker for the operator's ruling.
 
+> **2026-10-23 — DISCHARGED by L4.6b (ADR-0381, leg (a)).** The operator
+> ruling inserted L4.6b and the fix landed on
+> `svitali/harnessharness-l4.6b`: `extract_recorded` reclassifies the
+> recorded gate-`emitted` ceremony rows into the replay lattice and
+> `ReplayGate` re-serves them verbatim via `GateOutcome.emitted`, so the
+> driver re-appends them through `append_producer` and the shared
+> `next_id` allocator mints the same `e-N`s — every later `mc-N`/`d-N`
+> matches the record. The rejected alternative — positional/by-content
+> matching of recorded terminals (leg (b)) — is named in ADR-0381: it
+> would conceal the allocator-contract divergence the report exists to
+> surface. Verified by committed tests that fail if removed
+> (`ceremony_dispatch_run_replays_byte_identical` + two loud-divergence
+> mutations in `hh-control`; `l46b_effect_dispatch_replay_byte_identical`
+> in `hh-embed`, writer + read-only attach arms, WAL-mutation arm) and
+> by the USD-0 live leg `l4-6b-replay`
+> (`docs/build/reports/live/2026-10-23-l4-6b-replay.json`) — the diverged
+> arm's shape re-run over binding (c): `deterministic`, byte-identical,
+> no `replay_diverged` reason.
+
 ## AC layers
 
 - `live-executed`: the nine passing legs above (each cites its

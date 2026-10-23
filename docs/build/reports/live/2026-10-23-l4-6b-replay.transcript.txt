@@ -1,0 +1,11 @@
+$ cargo test -p hharness-embed --test l4_6b l46b_replay_effect_run-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/l4_6b.rs (target/debug/deps/l4_6b-ec10346a18f0c332)
+
+running 1 test
+L4_6B_REPLAY: run=run-1792729736180-000000-57b6cbe8 attach=sess-4 replay=deterministic byte-identical
+test l46b_replay_effect_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.42s
+

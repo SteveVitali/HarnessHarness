@@ -278,8 +278,11 @@ pub trait EffectGate {
     /// decided{allow}` minted under `hharness-control` is an envelope grant —
     /// refused as a violation; the gate is the effect boundary, its
     /// records carry its own identity). Defaulted for Stage-1 scripted
-    /// gates; real boundaries override with their own ref.
-    fn producer_component(&self) -> &'static str {
+    /// gates; real boundaries override with their own ref. `&str` (not
+    /// `&'static`) so the replay gate can serve the *recorded* component —
+    /// the re-minted ceremony rows carry the boundary that produced them
+    /// (L4.6b).
+    fn producer_component(&self) -> &str {
         "effect-gate"
     }
 }
