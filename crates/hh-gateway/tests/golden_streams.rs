@@ -1017,12 +1017,18 @@ impl Transport for ScriptedTransport {
         self.sends += 1;
         Ok(self.responses.pop_front().unwrap_or_default())
     }
-    fn discover(&mut self, _e: &str) -> Result<Json, ModelError> {
+    fn discover(&mut self, _c: &CredentialHandle, _e: &str) -> Result<Json, ModelError> {
         self.descriptor
             .clone()
             .ok_or_else(|| ModelError::new(ModelErrorClass::UnsupportedFeature, "no descriptor"))
     }
-    fn probe_capability(&mut self, capability: &str, _e: &str) -> Result<Json, ModelError> {
+    fn probe_capability(
+        &mut self,
+        capability: &str,
+        _c: &CredentialHandle,
+        _e: &str,
+        _m: &str,
+    ) -> Result<Json, ModelError> {
         if self.canary_ok {
             return Ok(Json::str("answered"));
         }
@@ -1345,8 +1351,20 @@ fn transport_probes_pinned_vs_observed() {
     }
     pinned.insert("cap.streaming".into(), Json::Bool(false)); // contradicts
     pinned.remove("cap.deferred_requests"); // unpinned → declared = null
-    let records = run_transport_probes(&d, &mut t, "ep.test", &pinned, &[], 1_700_000_000)
-        .expect("probe run");
+    let records = run_transport_probes(
+        &d,
+        &mut t,
+        &CredentialHandle {
+            binding_id: None,
+            provided: false,
+        },
+        "ep.test",
+        "m-1",
+        &pinned,
+        &[],
+        1_700_000_000,
+    )
+    .expect("probe run");
     assert!(!records.is_empty());
     let streaming = records
         .iter()
@@ -1359,7 +1377,12 @@ fn transport_probes_pinned_vs_observed() {
     let records = run_transport_probes(
         &d,
         &mut t2,
+        &CredentialHandle {
+            binding_id: None,
+            provided: false,
+        },
         "ep.test",
+        "m-1",
         &BTreeMap::new(),
         &["cap.batch_api".to_string()],
         1_700_000_000,

@@ -1,0 +1,46 @@
+{
+  "assertions": [
+    "probe_exec executed for all three families at open: model.profile.probed{records[],observed.usage} durable before the first model.call.requested; the health_aware arm selects from the probe-derived health (model.route.decided, LIVE_SELECTED); the routed local call completes with usage; no provisioned value in any payload/blob; ledger verifies; the hosted families' measured probe usage prices against the pinned rows"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 3.3e-05,
+  "endpoint_host": null,
+  "git_head": "9d3b7b3b9935d267745a3f714feef8d366eed935",
+  "harness": "unknown",
+  "leg": "routing-probe",
+  "model_reported": "qwen2.5:7b-instruct",
+  "provided": {
+    "ANTHROPIC_API_KEY": "yes",
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes",
+    "OPENAI_API_KEY": "yes"
+  },
+  "provider": "multi-provider",
+  "recorded_at": "2026-10-21T22:34:10Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5e.md",
+    "sha256": "6a818a7b553c4de3937e16d05a5171336769734eefcfe052c9e7664042ca777c"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 15.200633,
+  "ticket": "R4.5e",
+  "token_usage": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "convention": "hh-inclusive/1",
+    "input_total": 141,
+    "input_uncached": 141,
+    "normalizer_ref": "openai-compatible@1",
+    "output_reasoning": 0,
+    "output_total": 2
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-21-routing-probe.transcript.txt",
+  "transcript_sha256": "47b7b1b3bf3b621fd04644e5c78a711e13a776d945790b07c95fa8f4005e9af1"
+}

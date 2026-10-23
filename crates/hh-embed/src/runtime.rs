@@ -2043,6 +2043,10 @@ pub struct KernelRouting {
     profiles: StaticProfiles,
     /// The declared-ceiling reservation account.
     budget: KernelBudget,
+    /// The slot's dated declared pricing view (R4.5e) — `cost_cap`/G-5
+    /// reads it; a stale table withholds the view (`NoPrice` per
+    /// candidate, never zero-cost).
+    pricing: Option<hh_gateway::router::DeclaredPricing>,
     /// `seq → now_ms` — the first-observation stamp per durable row (the
     /// health projection's `ts_ms` input; a re-fold re-stamps nothing).
     stamps: BTreeMap<u64, u64>,
@@ -2054,16 +2058,20 @@ pub struct KernelRouting {
 impl KernelRouting {
     /// Arm the port: `lane` is the decoded slot declaration; `profiles`
     /// the registry `registered()` snapshot; `ceilings` the declared
-    /// `budget_id → tokens.output.visible` ceilings.
+    /// `budget_id → tokens.output.visible` ceilings; `pricing` the
+    /// slot's dated declared pricing view (`None` ⇒ `NoPrice` on a
+    /// cost-reading policy, never zero-cost).
     pub fn new(
         lane: RoutingLane,
         profiles: Vec<hh_compiler::profile::ModelProfile>,
         ceilings: BTreeMap<String, i64>,
+        pricing: Option<hh_gateway::router::DeclaredPricing>,
     ) -> KernelRouting {
         KernelRouting {
             lane,
             profiles: StaticProfiles(profiles),
             budget: KernelBudget::new(ceilings),
+            pricing,
             stamps: BTreeMap::new(),
             pending: Vec::new(),
         }
@@ -2104,10 +2112,33 @@ impl KernelRouting {
                 )
             })
             .collect();
+        // R4.5e — the `profile_ref → target` join the probe fold reads:
+        // every bound candidate's profile_ref maps its `model.profile.
+        // probed` verdicts onto the candidate's health key.
+        let probe_targets: BTreeMap<String, (String, String)> = self
+            .lane
+            .table
+            .roles
+            .values()
+            .flat_map(|b| {
+                std::iter::once(&b.primary)
+                    .chain(b.alternates.iter())
+                    .map(|c| {
+                        (
+                            c.model_ref.profile_ref.clone(),
+                            (
+                                c.model_ref.provider_model_id.clone(),
+                                c.model_ref.serving_route.clone().unwrap_or_default(),
+                            ),
+                        )
+                    })
+            })
+            .collect();
         hh_gateway::router::project_health(
             &rows,
             &hh_gateway::router::HealthConfig::default(),
             &singles,
+            &probe_targets,
         )
     }
 }
@@ -2126,7 +2157,15 @@ impl RoutingPort for KernelRouting {
         prefix: &[EventEnvelope],
     ) -> Result<hh_gateway::router::RoutingDecision, hh_gateway::router::RoutingRefusal> {
         let health = self.health(prefix, now_ms);
-        let views = hh_gateway::router::RoutingViews::none();
+        let mut views = hh_gateway::router::RoutingViews::none();
+        // R4.5e — the dated declared pricing view; a stale table is
+        // withheld so `cost_cap` reads `NoPrice`, never a stale price.
+        let pricing = self
+            .pricing
+            .as_ref()
+            .filter(|p| !p.stale(now_ms))
+            .map(|p| p as &dyn hh_gateway::router::PricingView);
+        views.pricing = pricing;
         hh_gateway::router::select_with(
             request,
             &self.profiles,
@@ -2154,7 +2193,13 @@ impl RoutingPort for KernelRouting {
         prefix: &[EventEnvelope],
     ) -> hh_gateway::router::AttemptDisposition {
         let health = self.health(prefix, now_ms);
-        let views = hh_gateway::router::RoutingViews::none();
+        let mut views = hh_gateway::router::RoutingViews::none();
+        let pricing = self
+            .pricing
+            .as_ref()
+            .filter(|p| !p.stale(now_ms))
+            .map(|p| p as &dyn hh_gateway::router::PricingView);
+        views.pricing = pricing;
         hh_gateway::router::on_attempt_failed(
             request,
             prior,
@@ -2309,6 +2354,10 @@ pub struct RouterArm {
     /// `model.profile.probed` (+ `model.profile.status.changed` when a
     /// probe's declared `status` contradicts the bound profile's).
     pub probe_rows: Vec<(String, Json)>,
+    /// The `probe_exec[]` live lanes (R4.5e) — the open path executes
+    /// them through `hh_gateway::probes::exec_probe_decl` and appends
+    /// their mint rows to `probe_rows`; resume never re-runs them.
+    pub probe_execs: Vec<hh_gateway::probes::ProbeExecDecl>,
     /// The `model_fail` script (drained per `EmbedModel::call`).
     pub model_fail: std::collections::VecDeque<StagedCall>,
 }
@@ -2418,6 +2467,72 @@ pub fn router_arm_from_params(
         };
         KernelK5::new(binding, now_ms)
     });
+    // The declared pricing view — `{table_ref, source, retrieved,
+    // max_age_days, models{provider_model_id → rates}}`: provenance is
+    // mandatory (a view that can't name its date is no declared view);
+    // staleness verdicts per-read at select (`NoPrice`).
+    let pricing = params
+        .get("pricing")
+        .map(|p| hh_gateway::router::DeclaredPricing::from_json(p).map_err(bad))
+        .transpose()?;
+    // R4.5e — `probe_exec[]` — the live `probe_profile`/`ProbeSpec`
+    // lanes the open path executes against the admitted dialects:
+    // `{profile_ref, dialect, endpoint, credential_ref?, provider_model_id, pinned{},
+    // canaries[], dependency_capabilities[], status_declared}` — `model`
+    // is spelled `provider_model_id` (T-LCD-01's member surface).
+    // `endpoint`/`provider_model_id` resolve `env:NAME` to the coordinate value (the
+    // sanctioned names-only indirection); `credential_ref` keeps the
+    // `env:` coordinate spelling — the broker binds it at exec.
+    let mut probe_execs = Vec::new();
+    if let Some(Json::Arr(execs)) = params.get("probe_exec") {
+        for (i, e) in execs.iter().enumerate() {
+            let req = |k: &str| {
+                e.get(k)
+                    .and_then(Json::as_str)
+                    .ok_or_else(|| bad(format!("probe_exec[{i}].{k} missing")))
+            };
+            let resolve = |k: &str| -> Result<String, String> {
+                let s = req(k)?;
+                if let Some(name) = s.strip_prefix("env:") {
+                    return std::env::var(name)
+                        .map_err(|_| bad(format!("probe_exec[{i}].{k}: env {name} unset")));
+                }
+                Ok(s.to_string())
+            };
+            let pinned = match e.get("pinned") {
+                Some(Json::Obj(m)) => m.clone(),
+                Some(_) => return Err(bad(format!("probe_exec[{i}].pinned must be an object"))),
+                None => BTreeMap::new(),
+            };
+            let str_list = |k: &str| -> Vec<String> {
+                match e.get(k) {
+                    Some(Json::Arr(a)) => a
+                        .iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            };
+            probe_execs.push(hh_gateway::probes::ProbeExecDecl {
+                profile_ref: req("profile_ref")?.to_string(),
+                dialect_coordinate: req("dialect")?.to_string(),
+                endpoint_ref: resolve("endpoint")?,
+                credential_ref: e
+                    .get("credential_ref")
+                    .and_then(Json::as_str)
+                    .map(str::to_string),
+                provider_model_id: resolve("provider_model_id")?,
+                pinned,
+                canaries: str_list("canaries"),
+                dependency_capabilities: str_list("dependency_capabilities"),
+                status_declared: e
+                    .get("status_declared")
+                    .and_then(Json::as_str)
+                    .unwrap_or("active")
+                    .to_string(),
+            });
+        }
+    }
     // The declared probes — `model.profile.probed` rows minted at arm;
     // a record's declared `status` member that contradicts the bound
     // profile's status additionally mints `model.profile.status.changed`
@@ -2441,7 +2556,7 @@ pub fn router_arm_from_params(
                 .unwrap_or_else(|| format!("probe-{i}"));
             probe_rows.push((
                 "model.profile.probed".to_string(),
-                hh_gateway::events::profile_probed(profile_ref, &probe_run_id, &records),
+                hh_gateway::events::profile_probed(profile_ref, &probe_run_id, &records, None),
             ));
             if let Some(status) = records
                 .iter()
@@ -2489,9 +2604,10 @@ pub fn router_arm_from_params(
         }
     }
     Ok(RouterArm {
-        routing: KernelRouting::new(lane, profiles, ceilings),
+        routing: KernelRouting::new(lane, profiles, ceilings, pricing),
         cache,
         probe_rows,
+        probe_execs,
         model_fail,
     })
 }

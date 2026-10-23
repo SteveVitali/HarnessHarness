@@ -146,9 +146,9 @@ fn https_dials_tls_foreign_scheme_refuses() {
     let bytes = hh_gateway::codec::serialize(&p);
     let err = t.send(&bytes, &anon(), "https://127.0.0.1:1").unwrap_err();
     assert_eq!(err.class, ModelErrorClass::Network);
-    let err = t.discover("https://127.0.0.1:1").unwrap_err();
+    let err = t.discover(&anon(), "https://127.0.0.1:1").unwrap_err();
     assert_eq!(err.class, ModelErrorClass::Network);
-    let err = t.discover("ftp://127.0.0.1:1").unwrap_err();
+    let err = t.discover(&anon(), "ftp://127.0.0.1:1").unwrap_err();
     assert_eq!(err.class, ModelErrorClass::UnsupportedFeature);
     assert_eq!(err.provider_code.as_deref(), Some("unsupported_scheme"));
 }
@@ -264,7 +264,7 @@ fn discover_returns_model_listing() {
     let (endpoint, join) = serve_once(response);
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
-    let doc = t.discover(&endpoint).unwrap();
+    let doc = t.discover(&anon(), &endpoint).unwrap();
     let (method, target, _) = join.join().unwrap();
     assert_eq!(method, "GET");
     assert_eq!(target, "/models");
@@ -309,7 +309,7 @@ fn written_request_is_wire_parseable() {
     let (endpoint, join) = serve_once(response);
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
-    let _ = t.discover(&endpoint).unwrap();
+    let _ = t.discover(&anon(), &endpoint).unwrap();
     let (method, _, _) = join.join().unwrap();
     assert_eq!(method, "GET");
     let _: Vec<WireFrame> = Vec::new();

@@ -141,7 +141,7 @@ fn discover_over_tls_lists() {
     );
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::with_tls(d, client());
-    let doc = t.discover(&endpoint).unwrap();
+    let doc = t.discover(&anon(), &endpoint).unwrap();
     let (method, target) = join.join().unwrap();
     assert_eq!((method.as_str(), target.as_str()), ("GET", "/models"));
     match doc.get("data") {
@@ -159,7 +159,7 @@ fn private_issuer_needs_explicit_roots() {
     let (endpoint, join) = serve_tls_once(tls, COMPLETION.to_string());
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d); // webpki roots only
-    let err = t.discover(&endpoint).unwrap_err();
+    let err = t.discover(&anon(), &endpoint).unwrap_err();
     assert_eq!(err.class, ModelErrorClass::Network, "{err:?}");
     let _ = join.join();
 }
@@ -171,7 +171,7 @@ fn rogue_chain_refused_typed() {
     let (endpoint, join) = serve_tls_once(tls, COMPLETION.to_string());
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::with_tls(d, client());
-    let err = t.discover(&endpoint).unwrap_err();
+    let err = t.discover(&anon(), &endpoint).unwrap_err();
     assert_eq!(err.class, ModelErrorClass::Network, "{err:?}");
     let _ = join.join();
 }
@@ -212,7 +212,7 @@ fn missing_client_cert_refused() {
     let (endpoint, join) = serve_tls_once(tls, COMPLETION.to_string());
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::with_tls(d, client());
-    let err = t.discover(&endpoint).unwrap_err();
+    let err = t.discover(&anon(), &endpoint).unwrap_err();
     assert!(
         matches!(
             err.class,

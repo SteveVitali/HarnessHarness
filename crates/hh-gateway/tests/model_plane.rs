@@ -1061,6 +1061,13 @@ fn learned_policy_requires_evolution_pipeline_evidence() {
             "expiry_condition".into(),
             Json::Arr(vec![Json::str("model_version_change")]),
         );
+        // R4.5e — the replayable recorded outcomes the arm ranks by
+        // (`model_ref_spelling → score`); the missing-table leg stays a
+        // `PolicyInvalid` (asserted via the override cases).
+        m.insert(
+            "scores".into(),
+            Json::obj([("prof.test@1/m-1@route-a", Json::Int(10))]),
+        );
         for (k, v) in overrides {
             m.insert(k.to_string(), v.clone());
         }
@@ -1102,6 +1109,10 @@ fn learned_policy_requires_evolution_pipeline_evidence() {
             evo(&[("budget_match", Json::str("unmatched"))]),
         ),
         ("no-expiry", evo(&[("expiry_condition", Json::Arr(vec![]))])),
+        // R4.5e — the recorded outcomes are the arm's declared signal:
+        // a `learned` policy that cannot name them is `PolicyInvalid`,
+        // never a binding-order default.
+        ("no-scores", evo(&[("scores", Json::Null)])),
     ] {
         let r = select(
             &routing_request(),
@@ -1952,6 +1963,7 @@ impl PricingView for Prices {
         candidate: &RouteCandidate,
         _table: &str,
         _max: u64,
+        _now_ms: u64,
     ) -> Option<i64> {
         self.0.get(&candidate.model_ref.provider_model_id).copied()
     }
@@ -2847,6 +2859,7 @@ fn health_projection_counts_failures_and_cools() {
             .collect::<Vec<_>>(),
         &HealthConfig::default(),
         &BTreeSet::new(),
+        &BTreeMap::new(),
     );
     let st = health
         .stats(&ModelRef {
@@ -2867,6 +2880,7 @@ fn health_projection_counts_failures_and_cools() {
             .collect::<Vec<_>>(),
         &HealthConfig::default(),
         &BTreeSet::from([("m-1".to_string(), "route-a".to_string())]),
+        &BTreeMap::new(),
     );
     assert!(solo
         .stats(&ModelRef {
@@ -3201,7 +3215,11 @@ impl Transport for DiscoverTransport {
             "no send",
         ))
     }
-    fn discover(&mut self, _endpoint_ref: &str) -> Result<Json, ModelError> {
+    fn discover(
+        &mut self,
+        _credential: &CredentialHandle,
+        _endpoint_ref: &str,
+    ) -> Result<Json, ModelError> {
         Ok(self.descriptor.clone())
     }
 }
@@ -3240,7 +3258,16 @@ fn compatibility_token_change_gates_dispatch_until_relowered() {
 
     // Unchanged token → no claim, nothing pending.
     let claim = g
-        .check_compatibility_token("ep-a", Some(&pinned), "prof.test@1", "m-1")
+        .check_compatibility_token(
+            &CredentialHandle {
+                binding_id: None,
+                provided: false,
+            },
+            "ep-a",
+            Some(&pinned),
+            "prof.test@1",
+            "m-1",
+        )
         .expect("discover runs");
     assert!(claim.is_none());
     assert!(g.pending_relower.is_empty());
@@ -3264,7 +3291,16 @@ fn compatibility_token_change_gates_dispatch_until_relowered() {
     };
     g.load_dialect(dialect());
     let claim = g
-        .check_compatibility_token("ep-a", Some(&pinned), "prof.test@1", "m-1")
+        .check_compatibility_token(
+            &CredentialHandle {
+                binding_id: None,
+                provided: false,
+            },
+            "ep-a",
+            Some(&pinned),
+            "prof.test@1",
+            "m-1",
+        )
         .expect("discover runs")
         .expect("a changed token claims");
     assert_eq!(
@@ -3653,4 +3689,297 @@ fn model_role_table_profile_binding_projection() {
         Some(t.roles["primary"].profile_ref.as_str())
     );
     assert_eq!(primary.get("pinned"), Some(&Json::Bool(true)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R4.5e — the live-signal arms' hermetic cells (DF-S1.18-1 / ADR-0284 (b)):
+// `learned` replays recorded outcomes, `health_aware` never defaults
+// healthy, the dated declared pricing view refuses stale, and the probe
+// verdicts fold into health. Every cell fails if the behaviour is removed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `learned` ranks by the declared `evolution.scores` recorded outcomes:
+/// the higher-scored candidate wins against binding order; a candidate
+/// without a recorded outcome is `policy_excluded` (never an invented
+/// score); a bound-but-unscored set is `ChainExhausted`.
+#[test]
+fn learned_ranks_by_recorded_outcome() {
+    let env = two_candidate_env();
+    let learned = |scores: Json| {
+        let mut p = routing_policy(RoutingPolicyKind::Learned);
+        p.params = Json::obj([(
+            "evolution",
+            Json::obj([
+                ("search_budget_ref", Json::str("sb:r1")),
+                ("artifact_benefit_ref", Json::str("ab:r1")),
+                ("match_mode", Json::str("matched_total")),
+                ("budget_match", Json::str("matched")),
+                (
+                    "expiry_condition",
+                    Json::Arr(vec![Json::str("model_version_change")]),
+                ),
+                ("scores", scores),
+            ]),
+        )]);
+        p
+    };
+    // m-2's recorded score outranks m-1's — the recorded outcome beats
+    // binding order.
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &learned(Json::obj([
+            ("prof.test@1/m-1@route-a", Json::Int(10)),
+            ("prof.b@1/m-2@route-b", Json::Int(90)),
+        ])),
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("recorded outcome selects");
+    assert_eq!(d.selected.provider_model_id, "m-2");
+    assert_eq!(d.candidates_considered[1].score, Some(90));
+    // A candidate with no recorded outcome is `policy_excluded` — the
+    // arm never invents a score.
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &learned(Json::obj([("prof.test@1/m-1@route-a", Json::Int(10))])),
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("the scored candidate selects");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+    assert_eq!(
+        d.candidates_considered[1].verdict,
+        CandidateVerdict::Rejected(CandidateRejectReason::PolicyExcluded)
+    );
+    // An empty outcome table exhausts the chain — typed, never a pick.
+    let r = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &learned(Json::obj([])),
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    );
+    assert!(matches!(r, Err(RoutingRefusal::ChainExhausted { .. })));
+    // The decision records its declared input.
+    assert!(d.inputs_read.iter().any(|i| i == "recorded_outcomes"));
+}
+
+/// `health_aware` never defaults healthy: an arm whose admitted set
+/// carries no health observation at all is `PolicyInvalid`; an
+/// unobserved candidate sorts below every observed one.
+#[test]
+fn health_aware_refuses_without_any_observation() {
+    let env = two_candidate_env();
+    let policy = routing_policy(RoutingPolicyKind::HealthAware);
+    // No health view rows at all → typed refusal, never binding order.
+    let r = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    );
+    assert!(
+        matches!(r, Err(RoutingRefusal::PolicyInvalid { .. })),
+        "got {r:?}"
+    );
+    // One observed, one unobserved — the measured candidate wins; the
+    // unmeasured never defaults ahead of it.
+    let health = Health(BTreeMap::from([(
+        "m-2".to_string(),
+        TargetHealth {
+            attempts: 3,
+            failures: 0,
+            p95_ms: None,
+            cooldown_until_ms: None,
+        },
+    )]));
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &health,
+        &RoutingViews::none(),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("the observed candidate selects");
+    assert_eq!(d.selected.provider_model_id, "m-2");
+    assert_eq!(d.candidates_considered[0].score, None);
+}
+
+/// The dated declared pricing view: a fresh table prices per the
+/// reserve-size bound; a stale table answers `None` on every read
+/// (`NoPrice`, never a stale or zero price); missing provenance is
+/// malformed.
+#[test]
+fn declared_pricing_refuses_stale() {
+    let env = two_candidate_env();
+    let mut policy = routing_policy(RoutingPolicyKind::CostCap);
+    policy.params = Json::obj([
+        ("max_spend_per_call", Json::Int(1_000_000_000)),
+        ("pricing_table_ref", Json::str("pt-1")),
+    ]);
+    let view = DeclaredPricing::from_json(&Json::obj([
+        ("table_ref", Json::str("pt-1")),
+        ("source", Json::str("operator-pinned table")),
+        ("retrieved", Json::str("2026-10-20")),
+        ("max_age_days", Json::Int(30)),
+        (
+            "models",
+            Json::obj([(
+                "m-2",
+                Json::obj([
+                    ("prompt_per_1k_uusd", Json::Int(1_000)),
+                    ("completion_per_1k_uusd", Json::Int(2_000)),
+                ]),
+            )]),
+        ),
+    ]))
+    .expect("the declared view decodes");
+    // Fresh — m-2's row prices; m-1 has no row (`NoPrice` per candidate).
+    let fresh = view.retrieved_ms + 86_400_000;
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views(&view, &NoQualityPrior, &NoMigration),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        fresh,
+        &BTreeSet::new(),
+    )
+    .expect("fresh declared view prices");
+    assert_eq!(d.selected.provider_model_id, "m-2");
+    assert_eq!(
+        d.candidates_considered[0].verdict,
+        CandidateVerdict::Rejected(CandidateRejectReason::NoPrice)
+    );
+    // Stale — the view withholds every read: `NoPrice`, never stale.
+    let stale = view.retrieved_ms + view.max_age_ms + 1;
+    assert!(view.stale(stale));
+    let r = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views(&view, &NoQualityPrior, &NoMigration),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        stale,
+        &BTreeSet::new(),
+    );
+    assert!(matches!(r, Err(RoutingRefusal::NoPrice { .. })));
+    // Malformed provenance is no declared view.
+    for bad in [
+        Json::obj([
+            ("table_ref", Json::str("pt-1")),
+            ("source", Json::str("s")),
+            ("max_age_days", Json::Int(30)),
+        ]),
+        Json::obj([
+            ("table_ref", Json::str("pt-1")),
+            ("source", Json::str("s")),
+            ("retrieved", Json::str("not-a-date")),
+            ("max_age_days", Json::Int(30)),
+        ]),
+    ] {
+        assert!(DeclaredPricing::from_json(&bad).is_err());
+    }
+}
+
+/// `project_health` folds `model.profile.probed` verdicts onto the
+/// profile's bound target through `probe_targets`: `SUPPORTED` counts a
+/// success observation, `DRIFT`/`UNSUPPORTED` a failure, every other
+/// verdict no observation.
+#[test]
+fn health_projection_folds_probe_verdicts() {
+    let rows: Vec<(u64, u64, &str, Json)> = vec![
+        (
+            1,
+            1_000,
+            "model.profile.probed",
+            Json::obj([
+                ("profile_ref", Json::str("prof.test@1")),
+                ("probe_run_id", Json::str("idp:probe")),
+                (
+                    "records",
+                    Json::Arr(vec![
+                        Json::obj([("verdict", Json::str("SUPPORTED"))]),
+                        Json::obj([("verdict", Json::str("SUPPORTED"))]),
+                        Json::obj([("verdict", Json::str("DRIFT"))]),
+                        Json::obj([("verdict", Json::str("SKIPPED"))]),
+                    ]),
+                ),
+            ]),
+        ),
+        // A probed row naming an unbound profile folds nowhere.
+        (
+            2,
+            1_001,
+            "model.profile.probed",
+            Json::obj([
+                ("profile_ref", Json::str("prof.unbound@1")),
+                (
+                    "records",
+                    Json::Arr(vec![Json::obj([("verdict", Json::str("DRIFT"))])]),
+                ),
+            ]),
+        ),
+    ];
+    let targets = BTreeMap::from([(
+        "prof.test@1".to_string(),
+        ("m-1".to_string(), "route-a".to_string()),
+    )]);
+    let health = project_health(
+        &rows
+            .iter()
+            .map(|(s, t, c, p)| (*s, *t, *c, p))
+            .collect::<Vec<_>>(),
+        &HealthConfig::default(),
+        &BTreeSet::new(),
+        &targets,
+    );
+    let st = health
+        .stats(&ModelRef {
+            profile_ref: "prof.test@1".into(),
+            provider_model_id: "m-1".into(),
+            snapshot_id: None,
+            serving_route: Some("route-a".into()),
+            effort: None,
+        })
+        .expect("the probe verdicts folded");
+    assert_eq!(
+        st.attempts, 3,
+        "2 SUPPORTED + 1 DRIFT — SKIPPED observes nothing"
+    );
+    assert_eq!(st.failures, 1);
 }
