@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -52,6 +52,20 @@ leg_field() { # $1 leg, $2 field
     https-reachability:provider) printf 'public-https';;
     https-reachability:kind)     printf 'script';;
     https-reachability:names)    printf '';;
+    anthropic-call:ticket)   printf 'R4.5d';;
+    anthropic-call:provider) printf 'anthropic';;
+    anthropic-call:kind)     printf 'script';;
+    anthropic-call:names)    printf 'ANTHROPIC_API_KEY';;
+    anthropic-call:test)     printf 'hh-embed:r4_5d_live:r45d_live_anthropic_call';;
+    anthropic-call:pricekey) printf 'anthropic/claude-haiku-4-5-20251001';;
+    anthropic-call:host)     printf 'api.anthropic.com:443';;
+    openai-call:ticket)   printf 'R4.5d';;
+    openai-call:provider) printf 'openai';;
+    openai-call:kind)     printf 'script';;
+    openai-call:names)    printf 'OPENAI_API_KEY';;
+    openai-call:test)     printf 'hh-embed:r4_5d_live:r45d_live_openai_call';;
+    openai-call:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
+    openai-call:host)     printf 'api.openai.com:443';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -247,6 +261,68 @@ run_leg_https_reachability() { # R4.5c — the real rustls client, USD 0
   MODEL_REPORTED=""
 }
 
+# R4.5d — the hosted-provider legs: one minimal real call each through
+# `GatewayModel` (the `r4_5d_live` ignored cells). The test prints
+# `LIVE_USAGE:`/`LIVE_MODEL:` markers the leg parses into the evidence
+# record's `token_usage` and prices against the pinned `pricing.json`
+# row (`LEG_COST_MEASURED` — measured usage × pinned rates; the declared
+# `--budget` stays the worst-case gate).
+run_leg_hosted_call() { # $1 leg — sets the leg globals from the test run
+  require cargo; require python3
+  local spec crate tbin filt
+  spec=$(leg_field "$1" test) \
+    || { RESULT="skipped(no-test-field)"; TRANSCRIPT_RAW=""; RESP_HDRS=""; return; }
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  # The credential NAMEs export to the cargo child — values never print.
+  local n
+  for n in $(leg_field "$1" names); do export "$n"; done
+  ENDPOINT_HOST=$(leg_field "$1" host)
+  ASSERTIONS="one minimal hosted call through GatewayModel: model.call.requested carries the launch_env:* coordinate binding_id; model.call.completed lands with usage{available,record{view,raw}}; the credential value appears in no payload/blob; ledger verifies; measured usage rides token_usage + the pinned-rate cost_usd"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local rc=0
+  if {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local usage model pricekey
+  usage=$(grep '^LIVE_USAGE: ' "$TRANSCRIPT_RAW" | head -1 | sed 's/^LIVE_USAGE: //' || true)
+  model=$(grep '^LIVE_MODEL: ' "$TRANSCRIPT_RAW" | head -1 | sed 's/^LIVE_MODEL: //' || true)
+  if [ $rc -eq 0 ]; then
+    RESULT="pass"; MODEL_REPORTED="$model"
+    if [ -n "$usage" ]; then
+      LEG_TOKEN_USAGE="$usage"
+      pricekey=$(leg_field "$1" pricekey)
+      LEG_COST_MEASURED=$(python3 - "$PRICING" "$pricekey" "$usage" <<'PY'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+row = pricing["models"].get(sys.argv[2])
+if row is None:
+    sys.exit("live-verify: NoPrice — no pinned row for " + sys.argv[2])
+u = json.loads(sys.argv[3])
+def f(k):
+    v = u.get(k)
+    return float(v) if v is not None else 0.0
+i, o, cr, cw = f("input_total"), f("output_total"), f("cache_read"), f("cache_write")
+uncached = max(i - cr - cw, 0.0)
+c = (uncached * row["prompt_per_1k_usd"]
+     + cr * row.get("cache_read_per_1k_usd", row["prompt_per_1k_usd"])
+     + cw * row.get("cache_write_per_1k_usd", row["prompt_per_1k_usd"])
+     + o * row["completion_per_1k_usd"]) / 1000.0
+print("%.6f" % c)
+PY
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    fi
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+
+run_leg_anthropic_call() { run_leg_hosted_call "anthropic-call"; }
+run_leg_openai_call() { run_leg_hosted_call "openai-call"; }
+
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
 emit_record() { # $1 leg $2 ticket $3 out.json — python writer, all inputs via env
   python3 - "$1" "$2" "$3" <<'PY'
@@ -285,7 +361,8 @@ rec = {
     "model_reported": env["LV_MODEL"] or None,
     "transcript_sha256": env["LV_TSHA"] or None,
     "transcript_path": env["LV_TREL"] or None,
-    "token_usage": None,
+    "token_usage": (json.loads(env["LV_TOKEN_USAGE"])
+                  if env.get("LV_TOKEN_USAGE") else None),
     "cost_usd": float(env["LV_COST"]),
     "cost_pricing": {"table": "docs/build/reports/live/pricing.json",
                      "source": pricing["source"],
@@ -320,6 +397,7 @@ cmd_run() { # $1 leg $2 budget $3 harness
   TMPD_L=$(mktemp -d); trap 'rm -rf "$TMPD_L"' EXIT
   RESULT="skipped(not-run)"; ASSERTIONS=""; MODEL_REPORTED=""
   ENDPOINT_HOST=""; TRANSCRIPT_RAW=""; RESP_HDRS=""
+  LEG_COST_MEASURED=""; LEG_TOKEN_USAGE=""
   case "$(leg_field "$leg" kind)" in
     script)     "run_leg_${leg//-/_}";;
     cargo-test) run_leg_cargo_test "$leg";;
@@ -343,7 +421,10 @@ cmd_run() { # $1 leg $2 budget $3 harness
     fi
   fi
 
-  local cum_after cost="$budget"
+  # A leg may report the *measured* cost (usage × the pinned pricing
+  # row); absent that the declared --budget stays the recorded cost —
+  # the budget_gate has already bounded it against the allocation.
+  local cum_after cost="${LEG_COST_MEASURED:-$budget}"
   cum_after=$(python3 -c "print(round($(spend_cumulative) + $cost, 6))")
 
   # build the record + spend line into TMPD first — artifacts are swept
@@ -356,6 +437,7 @@ cmd_run() { # $1 leg $2 budget $3 harness
     LV_TREL="$trec" \
     LV_COST="$cost" LV_CUM_AFTER="$cum_after" LV_HARNESS="$harness" \
     LV_NAMES="$names" LV_PROVIDER="$provider" LV_RESP_HDRS="$RESP_HDRS" \
+    LV_TOKEN_USAGE="$LEG_TOKEN_USAGE" \
     PRICING="$PRICING" REPO="$REPO"
   emit_record "$leg" "$ticket" "$TMPD_L/record.json" \
     || { fail "record writer failed"; exit 7; }

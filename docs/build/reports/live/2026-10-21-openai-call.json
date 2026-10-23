@@ -1,0 +1,43 @@
+{
+  "assertions": [
+    "one minimal hosted call through GatewayModel: model.call.requested carries the launch_env:* coordinate binding_id; model.call.completed lands with usage{available,record{view,raw}}; the credential value appears in no payload/blob; ledger verifies; measured usage rides token_usage + the pinned-rate cost_usd"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 2e-05,
+  "endpoint_host": "api.openai.com:443",
+  "git_head": "0d01088b2f3213f1fb5e20415893caeaa39b9f64",
+  "harness": "devin-cli/swe-2-high/subagent",
+  "leg": "openai-call",
+  "model_reported": "gpt-4.1-mini-2025-04-14",
+  "provided": {
+    "OPENAI_API_KEY": "yes"
+  },
+  "provider": "openai",
+  "recorded_at": "2026-10-21T20:08:06Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R4.5d.md",
+    "sha256": "6f68380ad4d0f842c301b76b1aa194982ada3ede9f21f0ad91dc8e87283de5df"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 0.20062,
+  "ticket": "R4.5d",
+  "token_usage": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "convention": "hh-inclusive/1",
+    "input_total": 43,
+    "input_uncached": 43,
+    "normalizer_ref": "openai@1",
+    "output_reasoning": 0,
+    "output_total": 2
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-21-openai-call.transcript.txt",
+  "transcript_sha256": "7361d65252d8e475900bdd59d8e53799db238f2ea9f37e6a2f73a60d64303ed9"
+}

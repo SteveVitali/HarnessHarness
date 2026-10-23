@@ -2,3 +2,9 @@
 {"ts":"2026-10-21T17:14:37Z","ticket":"R4.5b","leg":"local-run","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-local-run.json"}
 {"ts":"2026-10-21T18:02:41Z","ticket":"R4.5b","leg":"local-run","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-local-run.json"}
 {"ts":"2026-10-21T19:04:27Z","ticket":"R4.5c","leg":"https-reachability","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-https-reachability.json"}
+{"ts":"2026-10-21T20:01:56Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.05,"cumulative_usd":0.05,"record":"2026-10-21-anthropic-call.json"}
+{"ts":"2026-10-21T20:05:04Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.05,"cumulative_usd":0.1,"record":"2026-10-21-anthropic-call.json"}
+{"ts":"2026-10-21T20:05:11Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.05,"cumulative_usd":0.15,"record":"2026-10-21-openai-call.json"}
+{"ts":"2026-10-21T20:07:46Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.05,"cumulative_usd":0.2,"record":"2026-10-21-openai-call.json"}
+{"ts":"2026-10-21T20:08:02Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.000575,"cumulative_usd":0.200575,"record":"2026-10-21-anthropic-call.json"}
+{"ts":"2026-10-21T20:08:06Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.000020,"cumulative_usd":0.20062,"record":"2026-10-21-openai-call.json"}

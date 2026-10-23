@@ -1,0 +1,17 @@
+$ cargo test -p hh-embed --test r4_5d_live r45d_live_openai_call-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/r4_5d_live.rs (target/debug/deps/r4_5d_live-086cb350446f9385)
+
+running 1 test
+live run opened: run-1792613282776-000000-70471d0c
+rows: model.call.requested,model.call.completed,model.call.requested,model.call.completed,model.call.requested,model.call.completed,model.call.requested,model.call.completed
+live call completed: stop_reason=end_turn
+LIVE_USAGE: {"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":43,"input_uncached":43,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":2}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+leak sweep clean — the value appears in no payload/blob
+ledger verified
+test r45d_live_openai_call ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 3.48s
+
