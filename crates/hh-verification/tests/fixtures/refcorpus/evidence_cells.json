@@ -1,0 +1,61 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d evidence cells — pinned-payload tamper arms, held_out delivery leak, bundle-frozen, admission modes (AC-R-2.7.1-5/-6; AC-R-2.7.3-4/-11; DF-S1.21-2).",
+  "pin_cells": [
+    {
+      "name": "tampered_payload",
+      "ac": "AC-R-2.7.1-6",
+      "handle_ref": "pin:test_suite",
+      "expected": "sha256:aaa111",
+      "observed": "sha256:bbb222",
+      "expect": "evidence_tampered"
+    },
+    {
+      "name": "untampered_payload",
+      "ac": "AC-R-2.7.1-6",
+      "handle_ref": "pin:test_suite",
+      "expected": "sha256:aaa111",
+      "observed": "sha256:aaa111",
+      "expect": "ok"
+    }
+  ],
+  "frozen_cells": [
+    {"name": "bundle_frozen_match", "ac": "AC-R-2.7.3-4", "inputs_digest": "sha256:inputs-1", "observed_digest": "sha256:inputs-1", "expect": "ok"},
+    {"name": "bundle_frozen_mutated", "ac": "AC-R-2.7.3-4", "inputs_digest": "sha256:inputs-1", "observed_digest": "sha256:inputs-9", "expect": "evidence_tampered"}
+  ],
+  "held_out": {
+    "ac": "AC-R-2.7.1-5",
+    "criteria": [
+      {"criterion_id": "crit:public", "validator_ref": "val:1", "required": true, "visibility": "visible"},
+      {"criterion_id": "crit:hidden", "validator_ref": "val:2", "required": true, "visibility": "held_out"}
+    ],
+    "delivered_rows": [
+      {"seq": 1, "class": "context.artefact.delivered", "authority": "kernel", "payload": {"delivery_id": "d-1", "criterion_ref": "crit:public", "kind": "procedure"}},
+      {"seq": 2, "class": "context.artefact.delivered", "authority": "kernel", "payload": {"delivery_id": "d-2", "criterion_ref": "crit:public", "kind": "tool_surface"}}
+    ]
+  },
+  "admission_cells": [
+    {
+      "name": "principal_only_omits_external",
+      "ac": "AC-R-2.7.3-11",
+      "mode": "principal_only",
+      "items": [
+        {"item_ref": "it:kernel", "authority": "kernel", "evidence_class": "measured"},
+        {"item_ref": "it:injected", "authority": "external", "evidence_class": "claimed"}
+      ],
+      "expect_kept": ["it:kernel"],
+      "expect_omitted": ["it:injected"]
+    },
+    {
+      "name": "quarantined_external_relabels",
+      "ac": "AC-R-2.7.3-11",
+      "mode": "quarantined_external",
+      "items": [
+        {"item_ref": "it:kernel", "authority": "kernel", "evidence_class": "measured"},
+        {"item_ref": "it:injected", "authority": "external", "evidence_class": "claimed"}
+      ],
+      "expect_kept": ["it:kernel", "it:injected"],
+      "expect_omitted": []
+    }
+  ]
+}

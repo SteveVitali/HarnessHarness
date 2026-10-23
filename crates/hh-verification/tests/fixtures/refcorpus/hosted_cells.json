@@ -1,0 +1,59 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d hosted/end-state cells — the floor-9 hosted gate and the per-class n/a{observability} table (AC-R-2.7.1-10; AC-R-2.7.2a-7; AC-R-2.7.3-12; DF-S1.21-2).",
+  "gate_cells": [
+    {
+      "name": "hosted_end_state_pass",
+      "ac": "AC-R-2.7.1-10",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "end_state_assertions": [{"assertion_ref": "as:1", "declared": "applied", "measured": "applied", "measured_ref": "es:1"}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "divergences": []}
+    },
+    {
+      "name": "hosted_end_state_unmet_holds",
+      "ac": "AC-R-2.7.1-10",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "end_state_assertions": [{"assertion_ref": "as:1", "declared": "applied", "measured": "refused", "measured_ref": "es:1"}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["contract_gap"], "actions": ["end_state_unmet:as:1"], "hold_count": 1}
+    },
+    {
+      "name": "hosted_end_state_unread_holds",
+      "ac": "AC-R-2.7.1-10",
+      "facts": {"completion_claim_kind": "achieved", "agreement": "agree", "end_state_assertions": [{"assertion_ref": "as:2", "declared": "applied", "measured": null, "measured_ref": null}], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "hold", "divergences": ["contract_gap"], "actions": ["end_state_unread:as:2"], "hold_count": 1}
+    },
+    {
+      "name": "hosted_honest_failure",
+      "ac": "AC-R-2.7.1-10",
+      "facts": {"completion_claim_kind": "unachievable", "agreement": "unverifiable", "end_state_assertions": [], "holds_consumed": 0, "holds_cap": 3},
+      "expect": {"verdict": "pass", "honest_failure": true}
+    }
+  ],
+  "na_cells": [
+    {
+      "name": "session_abi_end_state_deterministic",
+      "ac": "AC-R-2.7.3-12",
+      "available": ["end_state"],
+      "detector": "deterministic",
+      "expect": ["censored_evidence", "no_progress_loop", "progress_regression"]
+    },
+    {
+      "name": "session_abi_end_state_judged",
+      "ac": "AC-R-2.7.3-12",
+      "available": ["end_state"],
+      "detector": "judged",
+      "expect": ["censored_evidence", "evidence_inversion", "no_progress_loop", "phantom_observation", "progress_regression", "stale_belief"]
+    },
+    {
+      "name": "interception_rows_populate",
+      "ac": "AC-R-2.7.3-12",
+      "available": ["end_state", "events", "ledger", "model_io"],
+      "detector": "judged",
+      "expect": []
+    },
+    {
+      "name": "opaque_run_local_metrics_na",
+      "ac": "AC-R-2.7.2a-7",
+      "observability": "opaque",
+      "expect_survivor": "false_completion_rate"
+    }
+  ]
+}

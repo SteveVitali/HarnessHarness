@@ -1,0 +1,98 @@
+{
+  "corpus": "refcorpus/1",
+  "purpose": "R4.7d critic cells — independence declarations, consume/verdict cells, probes, panels, comparatives (AC-R-2.7.3-2..-7/-11; DF-S1.21-2).",
+  "declaration_cells": [
+    {
+      "name": "gate_judge_same_snapshot",
+      "ac": "AC-R-2.7.3-3",
+      "overrides": {"use": "gate", "critic_kind": "judge", "deterministic": false, "oracle_class": "judge", "snapshot": "same_snapshot"},
+      "expect": {"err": "judge_not_independent"}
+    },
+    {
+      "name": "report_judge_same_family_registers",
+      "ac": "AC-R-2.7.3-3",
+      "overrides": {"use": "report", "critic_kind": "judge", "deterministic": false, "oracle_class": "judge", "snapshot": "different_snapshot_same_family"},
+      "expect": {"ok": true, "summary_axis": "different_snapshot_same_family"}
+    },
+    {
+      "name": "gate_judge_expired_calibration",
+      "ac": "AC-R-2.7.3-3",
+      "overrides": {"use": "gate", "critic_kind": "judge", "deterministic": false, "oracle_class": "judge", "calibration_status": "expired"},
+      "expect": {"err": "gate_without_calibration"}
+    },
+    {
+      "name": "gate_judge_authorize_shared_capability",
+      "ac": "AC-R-2.7.3-3",
+      "overrides": {"use": "gate", "critic_kind": "judge", "deterministic": false, "oracle_class": "judge", "placement": "authorize", "capability": "shared_readonly"},
+      "expect": {"err": "independence_below_minimum"}
+    }
+  ],
+  "probe_cells": [
+    {"name": "fs_write_refused", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:fs_read", "domain": "fs_write", "scope": "run", "expect": "domain_prohibited"},
+    {"name": "net_egress_refused", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:fs_read", "domain": "net_egress", "scope": "run", "expect": "domain_prohibited"},
+    {"name": "memory_write_session_refused", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:memory_write", "domain": "memory_write", "scope": "session", "expect": "scope_widened"},
+    {"name": "memory_write_run_admitted", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:memory_write", "domain": "memory_write", "scope": "run", "expect": "ok"},
+    {"name": "fs_read_admitted", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:fs_read", "domain": "fs_read", "scope": "run", "expect": "ok"},
+    {"name": "undeclared_capability_refused", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:ghost", "domain": "fs_read", "scope": "run", "expect": "undeclared_capability"}
+  ],
+  "uncited_cell": {
+    "ac": "AC-R-2.7.3-2",
+    "findings": [
+      {"code": "f1", "evidence_ref": "it:1", "message": "cited one"},
+      {"code": "f2", "evidence_ref": "it:2", "message": "cited two"},
+      {"code": "f3", "evidence_ref": "it:999", "message": "hallucinated"}
+    ],
+    "bundle_items": ["it:1", "it:2"],
+    "expect": {"kept": 2, "uncited_findings": 1}
+  },
+  "consume_cells": [
+    {"name": "gate_verdict_never_task_success", "ac": "AC-R-2.7.3-5", "verdict_use": "gate", "consume": "task_success", "expect": "verdict_misuse"},
+    {"name": "gate_verdict_never_headline", "ac": "AC-R-2.7.3-5", "verdict_use": "gate", "consume": "headline", "expect": "verdict_misuse"},
+    {"name": "evolution_leak_refused", "ac": "AC-R-2.7.3-5", "verdict_use": "report", "held_out_from": ["artifact:a"], "consume": {"evolution": "artifact:a"}, "expect": "judge_leaked_into_artifact"},
+    {"name": "evolution_outside_closure_admitted", "ac": "AC-R-2.7.3-5", "verdict_use": "report", "held_out_from": ["artifact:a"], "consume": {"evolution": "artifact:b"}, "expect": "ok"},
+    {"name": "veto_only_affirmative_never_gates", "ac": "AC-R-2.7.3-5", "verdict_use": "gate", "critic_kind": "monitor", "consume": "gate", "expect": "verdict_misuse"}
+  ],
+  "comparative_cells": [
+    {"name": "one_order_refused", "ac": "AC-R-2.7.3-6", "orders": ["ab"], "expect": "comparative_incomplete"},
+    {"name": "two_orders_consistent", "ac": "AC-R-2.7.3-6", "orders": ["ab", "ba"], "values": [true, true], "expect": {"calibrated": true, "consistency_ppm": 1000000, "verdict": true}},
+    {"name": "two_orders_disagree_conservative", "ac": "AC-R-2.7.3-6", "orders": ["ab", "ba"], "values": [true, false], "expect": {"calibrated": false, "consistency_ppm": 0, "verdict": false}}
+  ],
+  "panel_cell": {
+    "ac": "AC-R-2.7.3-7",
+    "members": [
+      {"verdict_id": "m-1", "status": "decided", "value": true},
+      {"verdict_id": "m-2", "status": "decided", "value": true},
+      {"verdict_id": "m-3", "status": "oracle_failure", "cause": "unparseable", "value": null},
+      {"verdict_id": "m-4", "status": "decided", "value": false}
+    ],
+    "expect": {"withheld": ["m-3"], "decision_rule": "majority", "decided_members": 3}
+  },
+  "taint_cells": [
+    {
+      "name": "cited_external_taints_raise_only",
+      "ac": "AC-R-2.7.3-11",
+      "bundle_items": [{"item_ref": "it:1", "authority": "external"}, {"item_ref": "it:2", "authority": "kernel"}],
+      "cited": ["it:1"],
+      "expect_taint": ["it:1"],
+      "expect_pi": "raise_only"
+    },
+    {
+      "name": "kernel_cited_is_full",
+      "ac": "AC-R-2.7.3-11",
+      "bundle_items": [{"item_ref": "it:2", "authority": "kernel"}],
+      "cited": ["it:2"],
+      "expect_taint": [],
+      "expect_pi": "full"
+    }
+  ],
+  "isolation_cells": [
+    {"name": "spawn_domain_violates", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:spawn", "parent": ["fs_read"], "expect": "isolation_violation"},
+    {"name": "capability_outside_parent", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:env_read", "parent": ["fs_read"], "expect": "isolation_violation"},
+    {"name": "read_within_parent_ok", "ac": "AC-R-2.7.3-4", "capability_ref": "cap:fs_read", "parent": ["fs_read", "memory_read"], "expect": "ok"}
+  ],
+  "agreement_cell": {
+    "ac": "AC-R-2.7.3-9",
+    "counts": {"agree": 3, "diverge": 1, "unverifiable": 2, "stale": 1},
+    "expect": {"claim_state_agreement_ppm": 750000, "has_c0_divergence": true}
+  }
+}

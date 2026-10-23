@@ -1,0 +1,4756 @@
+{
+ "corpus": "refcorpus/1",
+ "purpose": "R4.7d recorded 500-event run \u2014 ledger_only rebuild equality + instrument-charged per-claim cost (AC-R-2.7.2a-8; DF-S1.21-2).",
+ "rows": [
+  {
+   "seq": 1,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-0",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 2,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-1",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 3,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-2",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 4,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-3",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 5,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-4",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 6,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-5",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 7,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-6",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 8,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-7",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 9,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-8",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 10,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-9",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 11,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-10",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 12,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-11",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 13,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-12",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 14,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-13",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 15,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-14",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 16,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-15",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 17,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-16",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 18,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-17",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 19,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-18",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 20,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-19",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 21,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-20",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 22,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-21",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 23,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-22",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 24,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-23",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 25,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-24",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 26,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-25",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 27,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-26",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 28,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-27",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 29,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-28",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 30,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-29",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 31,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-30",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 32,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-31",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 33,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-32",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 34,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-33",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 35,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-34",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 36,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-35",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 37,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-36",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 38,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-37",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 39,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-38",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 40,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-39",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 41,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-40",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 42,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-41",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 43,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-42",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 44,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-43",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 45,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-44",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 46,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-45",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 47,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-46",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 48,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-47",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 49,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-48",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 50,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-49",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 51,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-50",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 52,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-51",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 53,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-52",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 54,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-53",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 55,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-54",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 56,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-55",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 57,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-56",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 58,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-57",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 59,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-58",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 60,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-59",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 61,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-60",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 62,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-61",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 63,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-62",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 64,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-63",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 65,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-64",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 66,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-65",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 67,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-66",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 68,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-67",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 69,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-68",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 70,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-69",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 71,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-70",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 72,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-71",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 73,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-72",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 74,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-73",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 75,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-74",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 76,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-75",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 77,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-76",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 78,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-77",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 79,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-78",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 80,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-79",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 81,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-80",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 82,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-81",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 83,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-82",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 84,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-83",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 85,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-84",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 86,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-85",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 87,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-86",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 88,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-87",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 89,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-88",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 90,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-89",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 91,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-90",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 92,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-91",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 93,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-92",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 94,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-93",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 95,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-94",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 96,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-95",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 97,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-96",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 98,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-97",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 99,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-98",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 100,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-99",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 101,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-100",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 102,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-101",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 103,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-102",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 104,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-103",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 105,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-104",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 106,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-105",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 107,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-106",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 108,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-107",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 109,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-108",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 110,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-109",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 111,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-110",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 112,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-111",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 113,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-112",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 114,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-113",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 115,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-114",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 116,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-115",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 117,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-116",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 118,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-117",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 119,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-118",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 120,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-119",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 121,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-120",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 122,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-121",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 123,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-122",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 124,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-123",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 125,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-124",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 126,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-125",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 127,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-126",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 128,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-127",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 129,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-128",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 130,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-129",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 131,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-130",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 132,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-131",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 133,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-132",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 134,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-133",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 135,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-134",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 136,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-135",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 137,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-136",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 138,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-137",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 139,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-138",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 140,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-139",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 141,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-140",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 142,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-141",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 143,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-142",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 144,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-143",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 145,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-144",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 146,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-145",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 147,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-146",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 148,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-147",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 149,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-148",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 150,
+   "class": "action.effect.intended",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-149",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 151,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-0",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 152,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-1",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 153,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-2",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 154,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-3",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 155,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-4",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 156,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-5",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 157,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-6",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 158,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-7",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 159,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-8",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 160,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-9",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 161,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-10",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 162,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-11",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 163,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-12",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 164,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-13",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 165,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-14",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 166,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-15",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 167,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-16",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 168,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-17",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 169,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-18",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 170,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-19",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 171,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-20",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 172,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-21",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 173,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-22",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 174,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-23",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 175,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-24",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 176,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-25",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 177,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-26",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 178,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-27",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 179,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-28",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 180,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-29",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 181,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-30",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 182,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-31",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 183,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-32",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 184,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-33",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 185,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-34",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 186,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-35",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 187,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-36",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 188,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-37",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 189,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-38",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 190,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-39",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 191,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-40",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 192,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-41",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 193,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-42",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 194,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-43",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 195,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-44",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 196,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-45",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 197,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-46",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 198,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-47",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 199,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-48",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 200,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-49",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 201,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-50",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 202,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-51",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 203,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-52",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 204,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-53",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 205,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-54",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 206,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-55",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 207,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-56",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 208,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-57",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 209,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-58",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 210,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-59",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 211,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-60",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 212,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-61",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 213,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-62",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 214,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-63",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 215,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-64",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 216,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-65",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 217,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-66",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 218,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-67",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 219,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-68",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 220,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-69",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 221,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-70",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 222,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-71",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 223,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-72",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 224,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-73",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 225,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-74",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 226,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-75",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 227,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-76",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 228,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-77",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 229,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-78",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 230,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-79",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 231,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-80",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 232,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-81",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 233,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-82",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 234,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-83",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 235,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-84",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 236,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-85",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 237,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-86",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 238,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-87",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 239,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-88",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 240,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-89",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 241,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-90",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 242,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-91",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 243,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-92",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 244,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-93",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 245,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-94",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 246,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-95",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 247,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-96",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 248,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-97",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 249,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-98",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 250,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-99",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 251,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-100",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 252,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-101",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 253,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-102",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 254,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-103",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 255,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-104",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 256,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-105",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 257,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-106",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 258,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-107",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 259,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-108",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 260,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-109",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 261,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-110",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 262,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-111",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 263,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-112",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 264,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-113",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 265,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-114",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 266,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-115",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 267,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-116",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 268,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-117",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 269,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-118",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 270,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-119",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 271,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-120",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 272,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-121",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 273,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-122",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 274,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-123",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 275,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-124",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 276,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-125",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 277,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-126",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 278,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-127",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 279,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-128",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 280,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-129",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 281,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-130",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 282,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-131",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 283,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-132",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 284,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-133",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 285,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-134",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 286,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-135",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 287,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-136",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 288,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-137",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 289,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-138",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 290,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-139",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 291,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-140",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 292,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-141",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 293,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-142",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 294,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-143",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 295,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-144",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 296,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-145",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 297,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-146",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 298,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-147",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 299,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-148",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 300,
+   "class": "action.effect.committed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-149",
+    "attempt_no": 1
+   }
+  },
+  {
+   "seq": 301,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-0",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 302,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-1",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 303,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-2",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 304,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-3",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 305,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-4",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 306,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-5",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 307,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-6",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 308,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-7",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 309,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-8",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 310,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-9",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 311,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-10",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 312,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-11",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 313,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-12",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 314,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-13",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 315,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-14",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 316,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-15",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 317,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-16",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 318,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-17",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 319,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-18",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 320,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-19",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 321,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-20",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 322,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-21",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 323,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-22",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 324,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-23",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 325,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-24",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 326,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-25",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 327,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-26",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 328,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-27",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 329,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-28",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 330,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-29",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 331,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-30",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 332,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-31",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 333,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-32",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 334,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-33",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 335,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-34",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 336,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-35",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 337,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-36",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 338,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-37",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 339,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-38",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 340,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-39",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 341,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-40",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 342,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-41",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 343,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-42",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 344,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-43",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 345,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-44",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 346,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-45",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 347,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-46",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 348,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-47",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 349,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-48",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 350,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-49",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 351,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-50",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 352,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-51",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 353,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-52",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 354,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-53",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 355,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-54",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 356,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-55",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 357,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-56",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 358,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-57",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 359,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-58",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 360,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-59",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 361,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-60",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 362,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-61",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 363,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-62",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 364,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-63",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 365,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-64",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 366,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-65",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 367,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-66",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 368,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-67",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 369,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-68",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 370,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-69",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 371,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-70",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 372,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-71",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 373,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-72",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 374,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-73",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 375,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-74",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 376,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-75",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 377,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-76",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 378,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-77",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 379,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-78",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 380,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-79",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 381,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-80",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 382,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-81",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 383,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-82",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 384,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-83",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 385,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-84",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 386,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-85",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 387,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-86",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 388,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-87",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 389,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-88",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 390,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-89",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 391,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-90",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 392,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-91",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 393,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-92",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 394,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-93",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 395,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-94",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 396,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-95",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 397,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-96",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 398,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-97",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 399,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-98",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 400,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-99",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 401,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-100",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 402,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-101",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 403,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-102",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 404,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-103",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 405,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-104",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 406,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-105",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 407,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-106",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 408,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-107",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 409,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-108",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 410,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-109",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 411,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-110",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 412,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-111",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 413,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-112",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 414,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-113",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 415,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-114",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 416,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-115",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 417,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-116",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 418,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-117",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 419,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-118",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 420,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-119",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 421,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-120",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 422,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-121",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 423,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-122",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 424,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-123",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 425,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-124",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 426,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-125",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 427,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-126",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 428,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-127",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 429,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-128",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 430,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-129",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 431,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-130",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 432,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-131",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 433,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-132",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 434,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-133",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 435,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-134",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 436,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-135",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 437,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-136",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 438,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-137",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 439,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-138",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 440,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-139",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 441,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-140",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 442,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-141",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 443,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-142",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 444,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-143",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 445,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-144",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 446,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-145",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 447,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-146",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 448,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-147",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 449,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-148",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 450,
+   "class": "action.effect.observed",
+   "authority": "kernel",
+   "payload": {
+    "effect_id": "e-149",
+    "outcome": "applied"
+   }
+  },
+  {
+   "seq": 451,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-0",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 452,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-1",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 453,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-2",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 454,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-3",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 455,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-4",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 456,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-5",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 457,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-6",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 458,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-7",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 459,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-8",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 460,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-9",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 461,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-10",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 462,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-11",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 463,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-12",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 464,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-13",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 465,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-14",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 466,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-15",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 467,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-16",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 468,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-17",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 469,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-18",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 470,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-19",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 471,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-20",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 472,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-21",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 473,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-22",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 474,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-23",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 475,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-24",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 476,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-25",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 477,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-26",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 478,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-27",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 479,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-28",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 480,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-29",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 481,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-30",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 482,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-31",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 483,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-32",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 484,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-33",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 485,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-34",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 486,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-35",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 487,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-36",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 488,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-37",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 489,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-38",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 490,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-39",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 491,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-40",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 492,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-41",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 493,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-42",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 494,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-43",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 495,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-44",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 496,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-45",
+    "criterion_ref": "crit:0",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 497,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-46",
+    "criterion_ref": "crit:1",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 498,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-47",
+    "criterion_ref": "crit:2",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 499,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-48",
+    "criterion_ref": "crit:3",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  },
+  {
+   "seq": 500,
+   "class": "verification.validator.verdict",
+   "authority": "kernel",
+   "payload": {
+    "verdict_id": "v-49",
+    "criterion_ref": "crit:4",
+    "status": "decided",
+    "value": true,
+    "detector": "deterministic",
+    "phase": "completion",
+    "charged_to": "subject"
+   }
+  }
+ ]
+}
