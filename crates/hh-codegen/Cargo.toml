@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The schema-export → codegen pipeline (ADR-0050 (e), CC7). Reads the single schema source (hharness-embed-schema) and emits the checked-in, drift-checked artifacts: the canonical schema export and the generated client bindings."
 
 [[bin]]
@@ -11,5 +17,5 @@ name = "hh-codegen"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }

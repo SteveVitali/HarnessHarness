@@ -96,6 +96,7 @@ jobs:
           bash scripts/ci/test-live-verify-workflow.sh
           bash scripts/ci/test-check-living-docs.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
+          bash scripts/ci/test-publish-order.sh
 
       # ci-mode: both — the step-mode lint reads this file and the working tree.
       - name: CI step-mode lint
@@ -187,6 +188,32 @@ jobs:
         env:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --workspace --no-deps
+
+      # L4.5 / ADR-0380 (b): the workspace is checked at exactly the declared
+      # `rust-version` — the manifest's claim is verified, never asserted.
+      # One matrix leg suffices (check is host-independent).
+      - name: MSRV check (declared rust-version)
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        run: |
+          MSRV="$(sed -n '/\[workspace\.package\]/,/^\[/s/^rust-version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          [ -n "$MSRV" ] || { echo "workspace rust-version unreadable"; exit 2; }
+          echo "declared rust-version: $MSRV"
+          rustup toolchain install "$MSRV" --profile minimal --no-self-update
+          cargo +"$MSRV" check --workspace --all-targets
+
+      # L4.5 / ADR-0380 (a): every publishable crate carries the full
+      # crates.io metadata set; the publish=false set matches the ADR's
+      # record exactly. Reads manifests + cargo metadata — gated like the
+      # build legs. One matrix leg suffices.
+      - name: Publish metadata check
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        run: bash scripts/check-publish-metadata.sh
+
+      # L4.5 / ADR-0380 (d): every publishable crate documents clean under
+      # its declared docs.rs settings (`[package.metadata.docs.rs]`).
+      - name: docs.rs settings doc check
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        run: bash scripts/check-docsrs.sh
 
       # R4.5 / DF-S0.3-2: E1 self-check + E2 (python3) + E3 (node >= 22)
       # foreign verifies, answers regenerated at run time. Reads crates/ +

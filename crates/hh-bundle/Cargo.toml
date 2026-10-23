@@ -4,25 +4,31 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-3 reproducible harness bundle — the content-addressed run-bundle plane (spec §5h.3, R-2.9.3⁰; ticket S3.1; ADR-0139/0140/0141). The hh-bundle/1 BundleManifest (header + ADR-0038 sections + the reproducibility block), MemberRef/Claim/Unpinned/FetchEntry, the chunked LedgerExport tree, encode/decode (directory + tar — identity is the tree rule, never archive bytes), staged validate_bundle (S1–S7 plus the S8 secret/locator scan), the basis-derived max_supported_level, and the ReproReport/ImportRecord records. Pure over store reads + member bytes; the reproduce driver and boundary ops live in hh-embed."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-secrets = { path = "../hh-secrets" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
 # ComparisonReport/BudgetMatch (the R3 reproduce report's `distributions`
 # member) are §6.4 records — the lab schema plane is the one schema
 # source (CC7); hharness-bundle carries the record, never redefines it.
-hharness-lab = { path = "../hh-lab" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
 # `cost_view` is the one cost fold (CC1) — the interchange export reads the
 # projection's fields rather than re-folding `measurement.cost.attributed`.
-hharness-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
 
 [dev-dependencies]
 # SpendRow/cost_attributed_payload — the cost-row fixture the interchange

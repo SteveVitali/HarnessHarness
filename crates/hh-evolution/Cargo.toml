@@ -4,22 +4,28 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C5 §05h evolution pipeline (R-2.9.5; ticket S6.1a; ADR-0195/0196): the closed S0–S10 candidate state machine over durable `measurement.evolution.*` rows (kernel producer `hharness-evolution`, one `run_kind = experiment` campaign run, fold-of-the-prefix view — the fleet engine pattern), the `EvolutionCampaignSpec`/typed records (hypothesis, screen, search, held-out, transfer, security-invariance, acceptance, retirement), the closed refusal table (S1 static, S3 screen, S4 M3 matched_total, S5 artifact_benefit, S6 transfer/compatibility, S7 security invariance, S8 human-seal, S9 canary/rollout, S10 retire/revalidate), and the campaign driver. Records-in/records-out — the pipeline evaluates no task itself; the experiment engine is the sole evaluation substrate. Reuses hharness-hir (diff/apply/invert/classify/validate), hharness-budget (matched_total), hharness-lab/hharness-experiment (specs, reports, LabDocs), hharness-ledger (classes, leases, kernel rows) — no second store, no second authority path (CC1/CC3/CC10)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-registry = { path = "../hh-registry" }
-hharness-lab = { path = "../hh-lab" }
-hharness-experiment = { path = "../hh-experiment" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-context = { path = "../hh-context" }

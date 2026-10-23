@@ -4,13 +4,19 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 identity, versioning & artifact-identity model (spec §8.3, R-2.12.1): the idp/1 identity profile, ContentAddress, VersionedRef and the five identity kinds, address/identify/verify over the single canonicalizer (CC1), configuration ids, single-namespace publish/resolve, supersede/revoke, RevocationRecord, StaleIndex, the sameness ladder L0-L4, reproducibility levels R0-R3, InstrumentRecord and the results/audit row keys."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
 # The canonical §8.1 provenance/authority record this crate carries on every VersionedRef
 # and name-history entry (DF-S1.2-1; CC1 — identity never defines a second record).
-hharness-provenance = { path = "../hh-provenance" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }

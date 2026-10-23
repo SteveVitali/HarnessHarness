@@ -4,26 +4,32 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 credential broker — SecretRef/SecretChannel, the kernel-side CredentialBroker (register/grant/bind/mediate/mint/revoke/rotate/kernel_use/fingerprint), the deny-by-default EnvSpec projection, source redaction + the known-value mask set, the four secret_* veto metric declarations, and the security.credential.*/security.secret.* payload builders (spec §5g.3, R-2.8.3; ticket S1.13; ADR-0057/0058/0059)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
 # The spec's own edge direction (R-2.8.3 consumes the R-2.8.1 records): `bind`
 # reads the `security.permission.{decided,granted,revoked}` projections the
 # monitor's schema owns — the PDP/CDP split is the monitor decides, the broker
 # delivers (ADR-0058).
-hharness-monitor = { path = "../hh-monitor" }
+hharness-monitor = { path = "../hh-monitor", version = "0.1.0" }
 # The `wrapped_long_lived` isolation floor reuses the containment vocabulary's
 # `IsolationClass` (CC7 — `process_sandbox` is its spelling).
-hharness-containment = { path = "../hh-containment" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
 # The ADR-0359 dep admission — the workspace's one external runtime crate:
 # `ring =0.17.14`, scoped to `src/dpop.rs`'s verification construction
 # (`signature::{UnparsedPublicKey, ED25519, ECDSA_P256_SHA256_ASN1}` plus the

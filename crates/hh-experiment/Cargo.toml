@@ -4,17 +4,23 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-3 single-worker experiment engine (spec §6.3 §2.2–§2.5, R-2.10.3⁰ᵇ; ticket S3.4a): LabDocs document store, the measurement.experiment.* event payloads, the ExperimentView fold (S-1 rebuild equality), and the register/expand/open/next/claim/launch/settle/pause/resume/close/restore lifecycle over the experiment run's fenced writer (S-2 exactly-once, S-3 budget equality, S-4 pause/close gate, S-6 seed-reproducible order; ADR-0154/0155/0162)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-lab = { path = "../hh-lab" }
-hharness-eval = { path = "../hh-eval" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }

@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 model adapter / gateway and the C0 model-plane slices (spec §5b.1–§5b.4, R-2.3.1, the R-2.3.2 C0 static slice, R-2.3.3⁰, R-2.3.4⁰; ticket S1.18; ADR-0118…0128). The model-blind, dialect-parameterised gateway — WireDialect/1 descriptors with complete debt records, the normalized ModelEvent grammar (G1–G7) + ModelMessage (T1–T7), closed StopReason/ModelErrorClass with kernel retry_class defaults, AttemptPolicy as data + R-RT-1…6, usage on model.call.completed through hharness-telemetry's TokenVector, kernel-held credentials (provided: yes/no only), the H4 endpoint allow-list refusal; the C0 static router slice (ModelRoleTable, RoutingPolicy{static,role_table}, guards G-1/G-2/G-4, the closed RoutingRefusal sum, model.route.decided); the §5b.3⁰ profile slice lands in hharness-compiler (the ModelProfile/1 owner) reconciled — selector resolution, null profile, expiry state machine, test-record schemas; the §5b.4⁰ slice lands here — CacheSemantics as data, LC-1…LC-9 layout invariants, the affinity key, expected/observed cache state, model.cache.resolved."
 
 [lib]
@@ -14,20 +20,20 @@ name = "hh-gateway-stub"
 path = "src/bin/hh-gateway-stub.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
 # The ADR-0365 TLS home — `ClientTls` beneath the one codec for `https:`
 # endpoints (the ticket's named consumer; only hharness-tls may name rustls).
-hharness-tls = { path = "../hh-tls" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-registry = { path = "../hh-registry" }
-hharness-budget = { path = "../hh-budget" }
-hharness-telemetry = { path = "../hh-telemetry" }
-hharness-secrets = { path = "../hh-secrets" }
-hharness-containment = { path = "../hh-containment" }
+hharness-tls = { path = "../hh-tls", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
 # The model-plane records this crate consumes are the profile owner's own types —
 # ModelProfile/1, the CF-049 debt shape, ModelRole, selector resolution (CC1 —
 # never a duplicate model). The dependency direction is gateway → compiler; the
 # compiler never names the gateway.
-hharness-compiler = { path = "../hh-compiler" }
+hharness-compiler = { path = "../hh-compiler", version = "0.1.0" }

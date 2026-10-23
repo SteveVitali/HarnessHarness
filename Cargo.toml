@@ -504,16 +504,30 @@ members = [
     # was deleted at S1.20 — the canonical `hharness-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired
     # with it (CC1; nothing persistent depended on it).
+    # `crates/hharness` — the umbrella facade crate (L4.5; ADR-0380): re-exports
+    # every publishable public-API crate under short names (`hharness::ledger`,
+    # `hharness::hir`, …) so `cargo add hharness` pulls the whole public surface;
+    # `tier-c1`/`tier-c4` forward the tier features honestly.
+    "crates/hharness",
 ]
 # Throwaway spike trees (ADR-0050 R1–R6; doc 3 §11.0) live outside the workspace: they build
 # against the persistent kernel but are never a build dependency of it.
 exclude = ["spikes"]
 
+# L4.5 / ADR-0380: the crates.io publish metadata. `rust-version = "1.94"` is the
+# pinned toolchain, declared deliberately — no installed older toolchain proves a
+# lower floor offline, and CI builds the workspace at exactly this version.
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.94"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/SteveVitali/MetaHarness"
+homepage = "https://github.com/SteveVitali/MetaHarness"
+documentation = "https://docs.rs/hharness"
+readme = "README.md"
+keywords = ["agent-runtime", "harness", "kernel", "provenance", "replay"]
+categories = ["development-tools", "rust-patterns"]
 
 [profile.release]
 opt-level = 3

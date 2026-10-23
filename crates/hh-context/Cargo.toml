@@ -4,20 +4,26 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 context builder / policy engine and C0 memory slices (spec §5c.1/§5c.3/§5c.4, R-2.4.1, R-2.4.3⁰, R-2.4.4⁰; ticket S1.19; ADR-0072…0083). The content-addressed ContextPlan and its candidate/slot/budget schemas, the six kernel-reserved slots and floors with InvalidLayout/VolatileInStaticTier at link, the default policy + the no-widen policy seam (PolicyViolation), the fixed kernel step order with ContextWindowExceeded → CompactionRequired handled as stop at Stage 0/1, context.assembled emission; the C0 MemoryStore over immutable memory versions with scope-lease fencing, lexical_index + memory_stale_index materialized views stamped through hharness-ledger's View, deterministic retrieve under the fixed validity→authority→readers→rank order; the R-2.4.4⁰ lifecycle pure functions E1–E4, deterministic conflict sets, promote/revalidate."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
 # The risk-class vocabulary (R-2.2.2) — K4 admissibility reads
 # `RiskClass`/`Reversibility`/`RepeatSafety` (S2.10, R-2.3.4¹).
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
 # `MeasuredAt::Runtime` stamps `assembly_ms{measured_at}` — the declared
 # measurement vocabulary is reused, never re-spelled (CC7; DF-S1.14-1).
-hharness-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }

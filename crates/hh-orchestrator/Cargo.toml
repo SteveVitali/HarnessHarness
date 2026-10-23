@@ -4,23 +4,29 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C3/Stage-4 sub-agent orchestrator class (spec §5e.3, R-2.6.3; ticket S4.6; ADR-0186): the `orchestrator` component class binding the closed `TopologyPreset` catalogue (T0 `single`, T1 `orchestrator_worker`, T2 `pipeline`, T6 `background_detached`; T3/T4/T5/T7 declared and bound by their own tickets), the runtime that executes admitted `delegate` decisions through `hharness-subagent`'s `spawn`, wait policies `{all, any, quorum(k)}`, tree-local peer messaging under the sealed `MessagingPolicy`, `detach_to_child` + goal-inbox completion delivery, the mandatory typed `delegation_reason`, and the `lab/delegation-v1` first execution under `MatchSpec{matched_total}`. The one consumer of the C1 slice — independently removable (CC6: nothing below C3 depends on this crate)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-monitor = { path = "../hh-monitor" }
-hharness-env = { path = "../hh-env" }
-hharness-control = { path = "../hh-control" }
-hharness-subagent = { path = "../hh-subagent" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-monitor = { path = "../hh-monitor", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-control = { path = "../hh-control", version = "0.1.0" }
+hharness-subagent = { path = "../hh-subagent", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-gateway = { path = "../hh-gateway" }

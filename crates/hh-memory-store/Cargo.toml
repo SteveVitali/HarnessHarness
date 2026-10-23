@@ -1,9 +1,17 @@
 [package]
 name = "hharness-memory-store"
+# ADR-0380 (a): fixture / packaged-plugin / test-support — never published
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The packaged `memory_store` variant (§5c.3, R-2.4.3¹; ADR-0078 d2/0080; ticket S4.16b) — a deterministic `MemoryStore` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. Every op of the `MemoryStorePort` surface (`{put, bind, revoke, resolve, manifest, enumerate, stale_candidates, reads_of, writes_by, record_read, set_stamp, set_validator_verdict, mark_scope_ended, publish_replacement}` plus the contract's read/lease accessors) dispatches through the ONE canonical codec in `hharness_context::memory_abi` (CC7 — no second spelling); domain refusals ride inside outputs as the typed refusal envelope, ABI-level `AbiError`s stay at the channel. Packaged at `plugins/hh-memory-store`."
 
 [[bin]]
@@ -11,8 +19,8 @@ name = "hh-memory-store"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
 hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
-hharness-varhost = { path = "../hh-varhost" }
-hharness-context = { path = "../hh-context" }
+hharness-varhost = { path = "../hh-varhost", version = "0.1.0" }
+hharness-context = { path = "../hh-context", version = "0.1.0" }
