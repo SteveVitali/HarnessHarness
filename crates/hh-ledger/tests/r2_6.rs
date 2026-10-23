@@ -16,15 +16,15 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{
     DeliveryMode, FireOutcome, OccurOutcome, ScheduleKind, Trigger, WakeupPolicy,
 };
-use hh_ledger::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::LedgerError;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -103,7 +103,10 @@ fn eff(id: &str, class: &str, effect_id: &str, payload: Json, fencing: u64) -> E
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -187,7 +190,7 @@ fn observed(id: &str, effect_id: &str, outcome: &str, gen: u64) -> Event {
     )
 }
 
-fn events(s: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn events(s: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     s.events(run).unwrap().to_vec()
 }
 

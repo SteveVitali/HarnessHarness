@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use hh_provenance::{AuthorityClass, EndorsementError, PersistenceScope, ProvenanceError};
+use hharness_provenance::{AuthorityClass, EndorsementError, PersistenceScope, ProvenanceError};
 
 /// `Missing{reason}` (ADR-0068 R3): a blob/get failure class — never `Tampered`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -336,7 +336,7 @@ pub enum LedgerError {
     },
     /// The view kind is registered but folded by its owning crate —
     /// `Store::project` only projects the ledger's own kinds; `trace_view`,
-    /// `cost_view` and `metric_view` fold in `hh-telemetry` over `read` output
+    /// `cost_view` and `metric_view` fold in `hharness-telemetry` over `read` output
     /// (ADR-0042 D2 — the owning crate owns the projection).
     OwnerProjected {
         /// The requested kind.
@@ -606,8 +606,8 @@ impl From<EndorsementError> for LedgerError {
     }
 }
 
-impl From<hh_provenance::DecodeError> for LedgerError {
-    fn from(e: hh_provenance::DecodeError) -> LedgerError {
+impl From<hharness_provenance::DecodeError> for LedgerError {
+    fn from(e: hharness_provenance::DecodeError) -> LedgerError {
         LedgerError::ProvenanceDecode { detail: e.detail }
     }
 }

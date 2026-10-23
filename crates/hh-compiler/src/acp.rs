@@ -2,7 +2,7 @@
 //! `target: acp`; ADR-0096 D5 — projections live in the compiler's
 //! target module). This module is the **single source** of the
 //! event-class lowering table, the tool-kind projection and the
-//! A2A `TaskState` projection (CC1 — `hh-acp`'s `render_session`
+//! A2A `TaskState` projection (CC1 — `hharness-acp`'s `render_session`
 //! consumes these same rows; there is no second table).
 //!
 //! The `hh-acp-target/1` artefact (§5d.4 D2's `LowerTarget<acp>`
@@ -20,9 +20,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::kinds::EffectDomain;
-use hh_hir::records::KindRecord;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::records::KindRecord;
+use hharness_wire::json::Json;
 
 use crate::lcd::{GranularityCeiling, LossEntry, LossKind, LossSeverity, LoweringLossReport};
 use crate::link::{LinkedGraph, TargetSpec};
@@ -378,7 +378,7 @@ pub fn lower_event(class: &str, payload: &Json) -> Option<(String, Json)> {
                 ("status", Json::str("in_progress")),
                 (
                     "_meta",
-                    Json::obj([("hh", Json::obj([("phase", Json::str("committed"))]))]),
+                    Json::obj([("hharness", Json::obj([("phase", Json::str("committed"))]))]),
                 ),
             ]),
         ),
@@ -571,7 +571,7 @@ pub fn lower_acp(
                 (
                     "_meta",
                     Json::obj([(
-                        "hh",
+                        "hharness",
                         Json::obj([
                             (
                                 "hh_methods",
@@ -717,7 +717,7 @@ fn acp_losses(linked: &LinkedGraph) -> Vec<LossEntry> {
 
 /// `lift_acp(artefact)` — reconstruct the `agent&run`
 /// minimum-carried-set (§3.2.7's lift contract at `configuration`
-/// granularity): the agent identity (`agentInfo` + the `_meta.hh`
+/// granularity): the agent identity (`agentInfo` + the `_meta.hharness`
 /// semantic id) + the session-surface declarations
 /// (`agentCapabilities`, `configOptions`). Everything the artefact
 /// does not carry reports on the caller's loss list — the lift
@@ -736,7 +736,7 @@ pub fn lift_acp(artefact: &Json) -> Result<crate::target::PartialHIR, CompileErr
     let agent_semantic = init
         .get("agentCapabilities")
         .and_then(|c| c.get("_meta"))
-        .and_then(|m| m.get("hh"))
+        .and_then(|m| m.get("hharness"))
         .and_then(|h| h.get("agent_semantic_id"))
         .and_then(Json::as_str)
         .unwrap_or_default()

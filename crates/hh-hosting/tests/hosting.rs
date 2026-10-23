@@ -3,11 +3,11 @@
 //! Covers: the `HostedEvent` codec + I-1…I-5 validators, `proj_ABI` +
 //! `lift` + the `LoweringLossReport`, the `ParticipantRecord`/`AdapterRecord`
 //! schemas, adapter zero, and the AC-R-2.10.6-2 parity claim (adapter zero
-//! vs native over `hh_telemetry::metric_view`).
+//! vs native over `hharness_telemetry::metric_view`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hosting::{
+use hharness_hosting::{
     adapter_zero::{
         adapter_zero_descriptor, adapter_zero_ext, adapter_zero_record, check_adapter_zero,
         project_native_run, ADAPTER_ZERO_ID,
@@ -22,13 +22,13 @@ use hh_hosting::{
         HOSTING_EXT_KEY,
     },
 };
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-use hh_ontology::control::{InfraErrorFamily, StopReason};
-use hh_ontology::participant::{HostingMechanism, Observability};
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+use hharness_ontology::control::{InfraErrorFamily, StopReason};
+use hharness_ontology::participant::{HostingMechanism, Observability};
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,10 @@ fn env(seq: u64, class: &str, scope: Scope, payload: Json) -> EventEnvelope {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         prev_hash: format!("h{}", seq.saturating_sub(1)),
         payload,
         hash: format!("h{seq}"),
@@ -453,7 +456,7 @@ fn project_emits_typed_kinds_dense_seq_and_declared_loss() {
     assert!(validate_session(&p.events, &obs).is_ok());
     // The loss report declares the `none` class, both `hint` classes, and the
     // `narrowed` droppings — nothing silently lost (CC3).
-    let loss: BTreeMap<&str, &hh_hosting::proj::LossEntry> = p
+    let loss: BTreeMap<&str, &hharness_hosting::proj::LossEntry> = p
         .loss
         .entries
         .iter()
@@ -615,7 +618,7 @@ fn participant_record_codec_and_derived_identity() {
     ));
     // A non-hosted class refuses.
     let mut d = adapter_zero_descriptor();
-    d.class = hh_ontology::participant::ParticipantClass::Native;
+    d.class = hharness_ontology::participant::ParticipantClass::Native;
     assert!(matches!(
         ParticipantRecord::new(
             "x",
@@ -676,7 +679,10 @@ fn adapter_record_codec_claims_and_debt() {
 fn adapter_zero_fixture_is_self_consistent() {
     check_adapter_zero().expect("adapter zero self-consistency");
     let d = adapter_zero_descriptor();
-    assert_eq!(d.class, hh_ontology::participant::ParticipantClass::Hosted);
+    assert_eq!(
+        d.class,
+        hharness_ontology::participant::ParticipantClass::Hosted
+    );
     assert_eq!(d.hosting_mechanism, HostingMechanism::SessionAbi);
     // `{events, end_state}` + `model_io` (intercepted), never `ledger`.
     assert!(d.observability_level.contains(&Observability::Events));
@@ -689,7 +695,7 @@ fn adapter_zero_fixture_is_self_consistent() {
 
 /// Wrap a lifted row into a minimal durable envelope for the fold (the
 /// metric fold reads `class`/`payload`/`scope`; the stamps are inert here).
-fn lifted_envelope(row: &hh_hosting::proj::LiftedRow, seq: u64) -> EventEnvelope {
+fn lifted_envelope(row: &hharness_hosting::proj::LiftedRow, seq: u64) -> EventEnvelope {
     env(
         seq,
         &row.class,
@@ -725,8 +731,8 @@ fn ac_r_2_10_6_2_adapter_zero_parity_over_metric_view() {
     .into_iter()
     .collect();
 
-    let nv = hh_telemetry::metric_view("r1", "r1", &native_declared, &native, None);
-    let hv = hh_telemetry::metric_view("r1", "r1", &hosted_obs, &hosted_events, None);
+    let nv = hharness_telemetry::metric_view("r1", "r1", &native_declared, &native, None);
+    let hv = hharness_telemetry::metric_view("r1", "r1", &hosted_obs, &hosted_events, None);
 
     let Json::Obj(n_metrics) = &nv.payload.get("metrics").cloned().unwrap_or(Json::Null) else {
         panic!("native metrics")
@@ -738,7 +744,7 @@ fn ac_r_2_10_6_2_adapter_zero_parity_over_metric_view() {
 
     let mut parity_checked = 0;
     let mut na_checked = 0;
-    for m in hh_telemetry::catalogue::PROCESS_METRICS {
+    for m in hharness_telemetry::catalogue::PROCESS_METRICS {
         let required: BTreeSet<Observability> = m.requires_observability.iter().copied().collect();
         let ncell = n_metrics.get(m.name).expect("native cell");
         let hcell = h_metrics.get(m.name).expect("hosted cell");
@@ -779,7 +785,7 @@ fn ac_r_2_10_6_2_adapter_zero_parity_over_metric_view() {
         .map(|e| (e.class.as_str(), e.loss_class))
         .collect();
     for e in &native {
-        match hh_ledger::classes::hosted_lowering(&e.class) {
+        match hharness_ledger::classes::hosted_lowering(&e.class) {
             "none" => assert_eq!(
                 loss_classes.get(e.class.as_str()),
                 Some(&LossClass::NoSlot),
@@ -816,10 +822,10 @@ fn s4_13_session_resumed_lifts_to_native_class() {
             Json::obj([("resume_set_heads", Json::Arr(vec![Json::str("rs:1")]))]),
         ),
     ]);
-    let lifted = hh_hosting::proj::lift_event(&e);
+    let lifted = hharness_hosting::proj::lift_event(&e);
     assert_eq!(lifted.class, "lifecycle.session.resumed");
     assert!(
-        hh_ledger::classes::lookup(&lifted.class).is_some(),
+        hharness_ledger::classes::lookup(&lifted.class).is_some(),
         "the lift target must be a registered native class"
     );
     assert_eq!(
@@ -842,7 +848,7 @@ fn s4_13_session_resumed_lifts_to_native_class() {
     // spellings — a native `lifecycle.session.resumed` lowers back to
     // `session.resumed` (the hosted table declares the pairing).
     assert_eq!(
-        hh_ledger::classes::hosted_lowering("lifecycle.session.resumed"),
+        hharness_ledger::classes::hosted_lowering("lifecycle.session.resumed"),
         "session.resumed"
     );
 }
@@ -853,8 +859,8 @@ fn s4_13_session_resumed_lifts_to_native_class() {
 /// panic, never a guess — AC-R-2.2.2-9's unknown-status clause).
 #[test]
 fn s4_13_lift_stop_reason_table_and_unknown_preserved() {
-    use hh_hosting::proj::{lift_stop_reason, lift_stop_reason_json};
-    use hh_ontology::control::StopReason;
+    use hharness_hosting::proj::{lift_stop_reason, lift_stop_reason_json};
+    use hharness_ontology::control::StopReason;
     assert!(matches!(
         lift_stop_reason("end_turn"),
         StopReason::Completed
@@ -900,7 +906,7 @@ fn s4_13_lift_stop_reason_table_and_unknown_preserved() {
 /// preserved — never `read_only`, never a fabricated terminal.
 #[test]
 fn s4_13_hosted_status_map_five_plus_unknown() {
-    use hh_hosting::hosted_status::{hosted_lifecycle_payload, map_tool_call_status};
+    use hharness_hosting::hosted_status::{hosted_lifecycle_payload, map_tool_call_status};
     assert_eq!(
         map_tool_call_status("pending").class(),
         "action.effect.intended"
@@ -942,7 +948,7 @@ fn s4_13_hosted_status_map_five_plus_unknown() {
         ("turn_id", Json::str("t1")),
         ("stop_reason_raw", Json::str("max_tokens")),
     ]);
-    let lifted = hh_hosting::proj::lift_event(&e);
+    let lifted = hharness_hosting::proj::lift_event(&e);
     assert_eq!(lifted.class, "lifecycle.turn.finished");
     assert_eq!(lifted.turn_id.as_deref(), Some("t1"));
     assert_eq!(
@@ -960,7 +966,7 @@ fn s4_13_hosted_status_map_five_plus_unknown() {
     // Unknown kinds land as `lifecycle.hosted.native_record` — nothing
     // silently drops (CC3).
     let e = hosted("_vendor.heartbeat", "s1", 9);
-    let lifted = hh_hosting::proj::lift_event(&e);
+    let lifted = hharness_hosting::proj::lift_event(&e);
     assert_eq!(lifted.class, "lifecycle.hosted.native_record");
     assert_eq!(
         lifted.payload.get("kind").and_then(Json::as_str),
@@ -1102,7 +1108,7 @@ fn m18_measured_and_reported_coexist_as_distinct_provenance() {
 /// metrics the host cannot observe stamped `n/a{hosted_opaque}`.
 #[test]
 fn ac_r_2_4_2_11_hosted_compaction_lift() {
-    use hh_hosting::compact::{normalize_compaction, CompactionSpelling};
+    use hharness_hosting::compact::{normalize_compaction, CompactionSpelling};
 
     // Inspect's `CompactionEvent` — the transcript record (op reported).
     let inspect_raw = Json::obj([

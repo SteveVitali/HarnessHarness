@@ -1,15 +1,15 @@
 //! The assembly lifecycle events (§3.3.4): `lifecycle.component.bound` per binding at
 //! `instantiate`, `lifecycle.definition.changed` recording an accepted resume change —
-//! appended through the run's **single fenced writer** (`hh_ledger::Store::append` under
-//! the writer `Lease`), mirroring `hh_registry::events::emit` (CC7). Payloads carry ids
+//! appended through the run's **single fenced writer** (`hharness_ledger::Store::append` under
+//! the writer `Lease`), mirroring `hharness_registry::events::emit` (CC7). Payloads carry ids
 //! and spellings only — never implementation bodies, never secrets (CC3/CC2).
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::LedgerError;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::LedgerError;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 /// `lifecycle.component.bound` — emitted per binding attempt at `instantiate`.
 pub const COMPONENT_BOUND: &str = "lifecycle.component.bound";

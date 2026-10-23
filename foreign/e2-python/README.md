@@ -29,7 +29,7 @@ primitive was transliterated.
 
 ```sh
 python3 foreign/e2-python/foreign.py crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e2.json
-cargo run -p hh-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e2.json
+cargo run -p hharness-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e2.json
 # → verify: 49 passed, 0 failed   (exit 0)
 ```
 

@@ -13,13 +13,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{AbiError, BindParams};
-use hh_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
-use hh_varhost::{
+use hharness_embed_schema::plugin_abi::{AbiError, BindParams};
+use hharness_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
+use hharness_varhost::{
     spawn, HostError, InvokeOutcome, RecordingPorts, SpawnSpec, VariantHost, VariantPackage,
     VariantSession, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -32,7 +32,7 @@ fn fixture_bin() -> Option<PathBuf> {
 }
 
 fn helper_present() -> bool {
-    hh_env::helper::helper_binary().is_some()
+    hharness_env::helper::helper_binary().is_some()
 }
 
 fn manifest(env_keys: Vec<String>) -> PluginManifest {
@@ -110,14 +110,14 @@ fn spec(
         package: pkg,
         session_id: format!("iso-{}", std::process::id()),
         backend: backend.into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: dir,
         exec_args,
         cap,
         ambient_env: ambient,
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(

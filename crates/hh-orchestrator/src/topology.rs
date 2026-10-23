@@ -6,9 +6,9 @@
 //! ADR-0123's), T7 (hosted peer — C2's) are declared and refuse
 //! `ModeUnsupported`/their own slice's ticket.
 
-use hh_env::handle::OnParentEnd;
-use hh_subagent::types::{DelegationReason, MessagingPolicy, WaitMode};
-use hh_wire::json::Json;
+use hharness_env::handle::OnParentEnd;
+use hharness_subagent::types::{DelegationReason, MessagingPolicy, WaitMode};
+use hharness_wire::json::Json;
 
 /// `TopologyPreset ∈ {T0..T7}` — the closed catalogue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

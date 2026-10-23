@@ -17,17 +17,17 @@
 
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::{Detector, MetricDeclaration, MetricError};
-use hh_ontology::eval::{
+use hharness_ontology::compliance::{Detector, MetricDeclaration, MetricError};
+use hharness_ontology::eval::{
     ChargedTo, IntervalMethod, MediationChannel, MediationRequirement, MetricLevel,
     MetricValueType, OracleClass, OracleDeclaration, OracleError, OutcomeClassPolicy,
     ReplicateReducer, VerdictType,
 };
-use hh_ontology::lab::EnvironmentFamily;
-use hh_ontology::participant::{Granularity, Observability, ParticipantClass};
-use hh_ontology::{Dimension, Direction};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_ontology::lab::EnvironmentFamily;
+use hharness_ontology::participant::{Granularity, Observability, ParticipantClass};
+use hharness_ontology::{Dimension, Direction};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::compliance::names;
 use crate::vetoes::veto_id;
@@ -938,7 +938,7 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
     // `attribution_quality` — the M1 report's quality surface (the
     // attributed share / effect coverage — native-only: hosted rows render
     // `n/a{class}` under the §5h.7 class rule). `debt.*` — the assumption-
-    // debt health metrics — the closed `hh_ontology::debt::
+    // debt health metrics — the closed `hharness_ontology::debt::
     // DEBT_HEALTH_METRICS` set (§5h.6 §5; one spelling source — CC1),
     // native-only: hosted surfaces never mint debt rows.
     metrics.push(MetricDeclaration {
@@ -952,7 +952,7 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
             ..base()
         }
     });
-    for name in hh_ontology::debt::DEBT_HEALTH_METRICS {
+    for name in hharness_ontology::debt::DEBT_HEALTH_METRICS {
         metrics.push(MetricDeclaration {
             name: (*name).into(),
             dimension: Dimension::Evolvability,
@@ -1007,8 +1007,8 @@ pub fn oracle_declarations() -> Vec<OracleDeclaration> {
             requires_observability: obs.iter().copied().collect(),
             verdict_type: VerdictType::Bool,
             evidence_out: vec![
-                hh_ontology::eval::EvidenceKind::EndState,
-                hh_ontology::eval::EvidenceKind::LedgerRange,
+                hharness_ontology::eval::EvidenceKind::EndState,
+                hharness_ontology::eval::EvidenceKind::LedgerRange,
             ],
             charged_to: ChargedTo::Instrument,
             calibration_ref: None,
@@ -1174,7 +1174,10 @@ pub fn check_catalogue() -> CatalogueReport {
         metrics: metrics.len(),
         oracles: oracles.len(),
         findings,
-        metric_registry_version: hh_identity::idp_id("eval.metric_registry", canonical.as_bytes()),
+        metric_registry_version: hharness_identity::idp_id(
+            "eval.metric_registry",
+            canonical.as_bytes(),
+        ),
     }
 }
 

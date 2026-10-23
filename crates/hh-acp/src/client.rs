@@ -10,9 +10,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::acp::AcpDialect;
-use hh_mcp::protocol::{NegotiateError, ProtocolBinding};
-use hh_wire::json::Json;
+use hharness_compiler::acp::AcpDialect;
+use hharness_mcp::protocol::{NegotiateError, ProtocolBinding};
+use hharness_wire::json::Json;
 
 use crate::permission::{PermissionOutcome, PermissionRequest, PiGate};
 use crate::protocol::{acp_binding, negotiate_era, AcpEra, ACP_VERSION};
@@ -126,7 +126,7 @@ pub struct AcpClient<T: SessionTransport> {
     /// The minted binding record (set by `attach_session`).
     binding: Option<ProtocolBinding>,
     /// The agent's semantic id from `initialize` (`agentCapabilities.
-    /// _meta.hh.agent_semantic_id`).
+    /// _meta.hharness.agent_semantic_id`).
     agent_semantic_id: Option<String>,
     /// The attach descriptor (set by `attach_session`).
     descriptor: Option<AttachDescriptor>,
@@ -215,7 +215,7 @@ impl<T: SessionTransport> AcpClient<T> {
         self.agent_semantic_id = result
             .get("agentCapabilities")
             .and_then(|c| c.get("_meta"))
-            .and_then(|m| m.get("hh"))
+            .and_then(|m| m.get("hharness"))
             .and_then(|h| h.get("agent_semantic_id"))
             .and_then(Json::as_str)
             .map(String::from);
@@ -261,7 +261,7 @@ impl<T: SessionTransport> AcpClient<T> {
                 let hh = result
                     .get("agentCapabilities")
                     .and_then(|c| c.get("_meta"))
-                    .and_then(|m| m.get("hh"))
+                    .and_then(|m| m.get("hharness"))
                     .cloned()
                     .unwrap_or(Json::obj([]));
                 let admits = |m: &str| -> bool {

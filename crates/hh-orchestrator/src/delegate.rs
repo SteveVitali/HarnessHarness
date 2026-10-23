@@ -1,5 +1,5 @@
-//! `SpawnDelegatePort` — the `hh_control::driver::DelegatePort` impl that
-//! executes an admitted `delegate` decision through `hh-subagent`'s one
+//! `SpawnDelegatePort` — the `hharness_control::driver::DelegatePort` impl that
+//! executes an admitted `delegate` decision through `hharness-subagent`'s one
 //! `spawn` path (R-2.6.3; R3.3; CC2 — the decision *asks*, the child
 //! lease/grant machinery *confers*: attenuation, budget `≤` parent and the
 //! ownership table are the substrate's own checks, never re-declared
@@ -24,14 +24,14 @@
 //! substrate's typed failure, surfaced verbatim. Both land on the parent
 //! run's fenced writer through `StoreSeam` — durable-before-visible (CC3).
 
-use hh_control::driver::{DelegateOutcome, DelegatePort, StoreSeam};
-use hh_ledger::manifest::EventRef;
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_wire::json::Json;
+use hharness_control::driver::{DelegateOutcome, DelegatePort, StoreSeam};
+use hharness_ledger::manifest::EventRef;
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_wire::json::Json;
 
-use hh_subagent::spawn::{EnvDeriver, SpawnCtx};
-use hh_subagent::types::{SpawnError, SubagentSpec};
+use hharness_subagent::spawn::{EnvDeriver, SpawnCtx};
+use hharness_subagent::types::{SpawnError, SubagentSpec};
 
 use crate::orchestrator::ParentBinding;
 
@@ -67,8 +67,8 @@ impl DelegatePort for SpawnDelegatePort {
                         detail: format!("spec_ref {addr} is not a sha256 address"),
                     };
                 };
-                let ca = hh_identity::idp::ContentAddress {
-                    idp: hh_identity::idp::IDP_1.idp_id,
+                let ca = hharness_identity::idp::ContentAddress {
+                    idp: hharness_identity::idp::IDP_1.idp_id,
                     algorithm: "sha256",
                     digest: digest.to_string(),
                     media_type: "application/json".into(),
@@ -77,7 +77,7 @@ impl DelegatePort for SpawnDelegatePort {
                 match seam.store.get_blob(&ca) {
                     Ok(bytes) => match std::str::from_utf8(&bytes)
                         .ok()
-                        .and_then(|t| hh_wire::json::parse(t).ok())
+                        .and_then(|t| hharness_wire::json::parse(t).ok())
                     {
                         Some(j) => j,
                         None => {
@@ -136,7 +136,7 @@ impl DelegatePort for SpawnDelegatePort {
             hosted_plane: None,
             hook: None,
         };
-        match hh_subagent::spawn::spawn(&mut ctx, &spec) {
+        match hharness_subagent::spawn::spawn(&mut ctx, &spec) {
             Ok(s) => DelegateOutcome::Spawned {
                 child_run_id: s.child_run_id,
             },

@@ -42,16 +42,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
-use hh_ledger::manifest::RunManifest;
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::eval::{MediationChannel, MetricValue};
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
-use hh_results::row::ResultsRow;
-use hh_wire::Json;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
+use hharness_ledger::manifest::RunManifest;
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::eval::{MediationChannel, MetricValue};
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
+use hharness_results::row::ResultsRow;
+use hharness_wire::Json;
 
 use crate::error::AnalysisError;
 
@@ -268,8 +268,8 @@ pub fn eval_run(
             detector: c
                 .detector
                 .as_deref()
-                .and_then(hh_ontology::compliance::Detector::parse)
-                .unwrap_or(hh_ontology::compliance::Detector::Deterministic),
+                .and_then(hharness_ontology::compliance::Detector::parse)
+                .unwrap_or(hharness_ontology::compliance::Detector::Deterministic),
             confidence: c.confidence,
             evidence_ref: c.evidence.first().map(|e| e.hash.clone()),
             calibration_ref: None,

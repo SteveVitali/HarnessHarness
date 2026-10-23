@@ -4,7 +4,7 @@
 //! [`AuthClaims`] record (data — claims never decide authority, T2),
 //! the token request is dispatched through a [`CredentialMediator`]
 //! seam (H3's custody boundary — production wires the
-//! `hh-secrets` `CredentialBroker`; fixtures an in-process AS), and the
+//! `hharness-secrets` `CredentialBroker`; fixtures an in-process AS), and the
 //! returned bearer lives only in the transport's `Authorization`
 //! header. Records carry a `fingerprint()`, never the token.
 //!
@@ -19,7 +19,7 @@
 //! and echoed to the mediator as the request's `issuer` member — the
 //! fixture AS verifies it, the edge records it as a claim.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `AuthClaims` — the lifted `WWW-Authenticate` challenge (D5: the edge
 /// lifts the peer's claims into a record the *caller* may inspect; the
@@ -104,7 +104,7 @@ pub fn pkce_pair() -> (String, String) {
     let mut bytes = [0u8; 32];
     getrandom(&mut bytes);
     let verifier = b64url(&bytes);
-    let challenge = b64url(hh_wire::sha256::sha256_bytes(verifier.as_bytes()).as_slice());
+    let challenge = b64url(hharness_wire::sha256::sha256_bytes(verifier.as_bytes()).as_slice());
     (verifier, challenge)
 }
 
@@ -174,13 +174,13 @@ impl TokenGrant {
     /// The record-safe fingerprint (`idp` of the token bytes — the
     /// reference a binding/`auth` member may carry; never the token).
     pub fn fingerprint(&self) -> String {
-        hh_identity::idp::idp_id("oauth_token", self.access_token.as_bytes())
+        hharness_identity::idp::idp_id("oauth_token", self.access_token.as_bytes())
     }
 }
 
 /// `CredentialMediator` — the H3 custody seam (§5d.4 D3/D5's "through
 /// H3"): the edge dispatches the token request to it; production wires
-/// `hh-secrets`' `CredentialBroker` (channel `oauth`), fixtures an
+/// `hharness-secrets`' `CredentialBroker` (channel `oauth`), fixtures an
 /// in-process authorization server. The mediator *owns* the secret —
 /// the returned [`TokenGrant`] is the transport's header material only.
 pub trait CredentialMediator {
@@ -289,7 +289,8 @@ impl OAuthFlow {
             scope: claims.scope.clone(),
             issuer: claims.issuer.clone(),
             code_verifier: verifier,
-            state: b64url(hh_wire::sha256::sha256_bytes(self.resource.as_bytes()).as_slice())[..16]
+            state: b64url(hharness_wire::sha256::sha256_bytes(self.resource.as_bytes()).as_slice())
+                [..16]
                 .to_string(),
         };
         let grant = mediator

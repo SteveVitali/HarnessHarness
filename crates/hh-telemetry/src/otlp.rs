@@ -24,7 +24,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::clocks::ts_ms;
 use crate::export::LossEntry;

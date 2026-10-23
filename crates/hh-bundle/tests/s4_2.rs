@@ -1,4 +1,4 @@
-//! `hh-bundle` S4.2 integration tests — the scoped kinds
+//! `hharness-bundle` S4.2 integration tests — the scoped kinds
 //! (`arm`/`experiment`/`lineage`), the S9 `cross_section` checks
 //! (`ContainmentMismatch`, `UnmatchedBudget`, `PreRegistrationLate`,
 //! `RowOrphan`, `DeclarationMissing`), `diff`, the lifecycle surface
@@ -9,24 +9,24 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::attestation::{attest, sign_attestation, BundleAttestation};
-use hh_bundle::audit::audit_bundle;
-use hh_bundle::codec::{decode_container, decode_dir, encode_container, encode_dir};
-use hh_bundle::diff::bundle_diff;
-use hh_bundle::error::BundleError;
-use hh_bundle::export::{export_target, PublicationPolicy};
-use hh_bundle::fetch::{fetch, member_bytes_or_refused};
-use hh_bundle::lifecycle::{lineage_edges, migrate_bundle, supersede_bundle};
-use hh_bundle::manifest::{BundleManifest, BundlePolicy, MemberStatus};
-use hh_bundle::scoped::{
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::attestation::{attest, sign_attestation, BundleAttestation};
+use hharness_bundle::audit::audit_bundle;
+use hharness_bundle::codec::{decode_container, decode_dir, encode_container, encode_dir};
+use hharness_bundle::diff::bundle_diff;
+use hharness_bundle::error::BundleError;
+use hharness_bundle::export::{export_target, PublicationPolicy};
+use hharness_bundle::fetch::{fetch, member_bytes_or_refused};
+use hharness_bundle::lifecycle::{lineage_edges, migrate_bundle, supersede_bundle};
+use hharness_bundle::manifest::{BundleManifest, BundlePolicy, MemberStatus};
+use hharness_bundle::scoped::{
     assemble_scoped, ChildBundle, ScopedInputs, KIND_ARM, KIND_EXPERIMENT, KIND_LINEAGE,
 };
-use hh_bundle::validate::{validate_publication, CheckStatus};
-use hh_ledger::manifest::{ExperimentBinding, RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::validate::{validate_publication, CheckStatus};
+use hharness_ledger::manifest::{ExperimentBinding, RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -59,7 +59,7 @@ fn rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     m.experiment = Some(ExperimentBinding {
@@ -176,7 +176,9 @@ fn child_of(m: &BundleManifest, kind: &str) -> ChildBundle {
 }
 
 /// S9's rows (the `cross_section` stage).
-fn s9(report: &hh_bundle::validate::BundleValidationReport) -> &[hh_bundle::validate::CheckRow] {
+fn s9(
+    report: &hharness_bundle::validate::BundleValidationReport,
+) -> &[hharness_bundle::validate::CheckRow] {
     &report
         .stages
         .iter()
@@ -185,7 +187,7 @@ fn s9(report: &hh_bundle::validate::BundleValidationReport) -> &[hh_bundle::vali
         .checks
 }
 
-fn has_code(report: &hh_bundle::validate::BundleValidationReport, code: &str) -> bool {
+fn has_code(report: &hharness_bundle::validate::BundleValidationReport, code: &str) -> bool {
     s9(report)
         .iter()
         .any(|c| c.status == CheckStatus::Fail && c.code.as_deref() == Some(code))
@@ -400,7 +402,7 @@ fn s9_containment_mismatch_and_unmatched_budget() {
     assert!(has_code(&report, "UnmatchedBudget"), "{:?}", s9(&report));
 }
 
-fn run_assembled(rig: &Rig) -> hh_bundle::assemble::Assembled {
+fn run_assembled(rig: &Rig) -> hharness_bundle::assemble::Assembled {
     let get = |a: &str| (a == rig.def_addr).then(|| rig.def_bytes.clone());
     assemble(&run_inputs(rig, &rig.run, Json::Null, &get)).unwrap()
 }
@@ -416,11 +418,11 @@ fn diff_reports_member_deltas_and_sameness() {
     b.manifest.created_at = "2026-01-02T00:00:00.000Z".into();
     b.manifest.version_id = String::new();
     b.manifest.version_id = b.manifest.compute_id();
-    let da = hh_bundle::codec::Decoded {
+    let da = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
-    let db = hh_bundle::codec::Decoded {
+    let db = hharness_bundle::codec::Decoded {
         manifest: b.manifest.clone(),
         members: b.members.clone(),
     };
@@ -470,7 +472,7 @@ fn supersede_stamps_derived_from_and_recomputes_version_id() {
 fn migrate_is_supersession_with_new_version_id() {
     let rig = rig("mig");
     let a = run_assembled(&rig);
-    let decoded = hh_bundle::codec::Decoded {
+    let decoded = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
@@ -503,11 +505,11 @@ fn migrate_is_supersession_with_new_version_id() {
 fn attestation_verifies_under_the_key_table() {
     let rig = rig("att");
     let a = run_assembled(&rig);
-    let decoded = hh_bundle::codec::Decoded {
+    let decoded = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
-    let signer = hh_ledger::audit::FixedSigner::new("k1", b"key-1".to_vec());
+    let signer = hharness_ledger::audit::FixedSigner::new("k1", b"key-1".to_vec());
     let att = sign_attestation(
         &a.manifest.version_id,
         Json::obj([("statement", Json::str("validated"))]),
@@ -543,7 +545,7 @@ fn attestation_verifies_under_the_key_table() {
 fn audit_flags_empty_subject_and_bad_links() {
     let rig = rig("audit");
     let a = run_assembled(&rig);
-    let decoded = hh_bundle::codec::Decoded {
+    let decoded = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
@@ -553,7 +555,7 @@ fn audit_flags_empty_subject_and_bad_links() {
     let mut broken = decoded.manifest.clone();
     broken.subject.run_ids = vec![];
     broken.subject.experiment = BTreeMap::new();
-    let d2 = hh_bundle::codec::Decoded {
+    let d2 = hharness_bundle::codec::Decoded {
         manifest: broken,
         members: decoded.members.clone(),
     };
@@ -571,7 +573,7 @@ fn audit_flags_empty_subject_and_bad_links() {
 fn export_targets_lower_and_policy_withholds() {
     let rig = rig("exp-t");
     let a = run_assembled(&rig);
-    let decoded = hh_bundle::codec::Decoded {
+    let decoded = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
@@ -596,7 +598,7 @@ fn export_targets_lower_and_policy_withholds() {
 fn fetch_is_digest_checked_and_missing_bytes_refuse() {
     let rig = rig("fetch");
     let a = run_assembled(&rig);
-    let mut decoded = hh_bundle::codec::Decoded {
+    let mut decoded = hharness_bundle::codec::Decoded {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
@@ -606,7 +608,7 @@ fn fetch_is_digest_checked_and_missing_bytes_refuse() {
     decoded
         .manifest
         .fetch
-        .push(hh_bundle::manifest::FetchEntry {
+        .push(hharness_bundle::manifest::FetchEntry {
             address: member_addr.clone(),
             size: None,
             locations: vec!["mem://pool".into()],
@@ -693,7 +695,7 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
     // correct digest and one that mismatches the supplied bytes.
     let traj = b"{\"steps\":[]}".to_vec();
     let lock = b"foreign-dep==9.9.9\n".to_vec();
-    let ok_digest = hh_identity::idp_id("blob", &traj);
+    let ok_digest = hharness_identity::idp_id("blob", &traj);
     let files: BTreeMap<String, Vec<u8>> = [
         ("trial/traj.json".to_string(), traj.clone()),
         ("trial/requirements.txt".to_string(), lock.clone()),
@@ -709,11 +711,11 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
     ]
     .into_iter()
     .collect();
-    let lift = hh_bundle::import::lift_foreign(
+    let lift = hharness_bundle::import::lift_foreign(
         &rig.store,
         &rig.other,
         &files,
-        hh_bundle::ForeignFormat::HarborTrialDir,
+        hharness_bundle::ForeignFormat::HarborTrialDir,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",
@@ -800,12 +802,12 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
     // Unknown formats refuse typed — since R4.9 the spelling gate is
     // the closed `ForeignFormat` sum (`parse` never guesses); a known
     // export-only format refuses `ForeignDirectionRefused` (OQ-030).
-    assert!(hh_bundle::ForeignFormat::parse("bogus").is_none());
-    match hh_bundle::import::lift_foreign(
+    assert!(hharness_bundle::ForeignFormat::parse("bogus").is_none());
+    match hharness_bundle::import::lift_foreign(
         &rig.store,
         &rig.other,
         &files,
-        hh_bundle::ForeignFormat::InterchangeTrajectory,
+        hharness_bundle::ForeignFormat::InterchangeTrajectory,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",
@@ -824,7 +826,7 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
 
 /// A foreign lift mints **no experiment binding** — the imported job's
 /// bundle subject carries an empty `experiment` map and the import record
-/// names none. Rows lifted from it stay unbound, and `hh-results`' L6 gate
+/// names none. Rows lifted from it stay unbound, and `hharness-results`' L6 gate
 /// excludes them `undisclosed` under `require_experiment`
 /// (`hh-results/tests/results.rs::disclosure_summary_counts_and_marks_
 /// undisclosed` covers the leaderboard half; OQ-377's Stage-4/C2 question —
@@ -837,11 +839,11 @@ fn foreign_import_mints_no_experiment_binding() {
         [("trial/traj.json".to_string(), b"{\"steps\":[]}".to_vec())]
             .into_iter()
             .collect();
-    let lift = hh_bundle::import::lift_foreign(
+    let lift = hharness_bundle::import::lift_foreign(
         &rig.store,
         &rig.other,
         &files,
-        hh_bundle::ForeignFormat::HarborTrialDir,
+        hharness_bundle::ForeignFormat::HarborTrialDir,
         ProvenanceRecord::kernel("s42.test", 0).to_json(),
         "2026-01-01T00:00:00.000Z".into(),
         "sha256:kernel",

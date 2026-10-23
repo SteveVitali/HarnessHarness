@@ -1,5 +1,5 @@
 //! The evolution pipeline's wire records (§05h §4/§5; S6.1a) — strict
-//! canonical-JSON codecs (`Json` + `hh_lab::json_util`), unknown members
+//! canonical-JSON codecs (`Json` + `hharness_lab::json_util`), unknown members
 //! refused, one spelling per fact (CC7).
 //!
 //! Records-in / records-out: every stage gate consumes the *record* the
@@ -7,14 +7,14 @@
 //! …); the pipeline never fabricates evidence — a missing or malformed
 //! record is a typed refusal, never a default (CC3/CC9).
 
-use hh_hir::diff::HirDiff;
-use hh_identity::idp::idp_id;
-use hh_lab::json_util::{
+use hharness_hir::diff::HirDiff;
+use hharness_identity::idp::idp_id;
+use hharness_lab::json_util::{
     bool_at, enum_vec_at, expect_obj, int_at, member_at, opt_bool_at, opt_int_at, opt_str_at,
     reject_unknown, str_at, str_vec_at, SchemaError,
 };
-use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
-use hh_wire::json::Json;
+use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// The campaign spec's dialect spelling.
@@ -1201,7 +1201,7 @@ pub const HYPOTHESIS_KINDS: &[&str] = &["failure", "insufficiency", "observation
 
 /// `CandidateProposal` — the S1 intake record: `{base_ref, diff, slot,
 /// hypothesis?}`. `diff` is the canonical `HirDiff` JSON (the caller's
-/// `diff(base, target)` output — `hh-hir`'s own codec, CC7).
+/// `diff(base, target)` output — `hharness-hir`'s own codec, CC7).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CandidateProposal {
     /// The sealed base definition ref the diff applies over.
@@ -1393,11 +1393,11 @@ impl FailureHypothesis {
 }
 
 impl CandidateProposal {
-    /// The canonical JSON — `diff` rides `hh-hir`'s own codec (CC7).
+    /// The canonical JSON — `diff` rides `hharness-hir`'s own codec (CC7).
     pub fn to_json(&self) -> Json {
         Json::obj([
             ("base_ref", Json::str(&self.base_ref)),
-            ("diff", hh_hir::wire::diff_to_json(&self.diff)),
+            ("diff", hharness_hir::wire::diff_to_json(&self.diff)),
             ("slot", Json::str(&self.slot)),
             (
                 "hypothesis",
@@ -1440,7 +1440,7 @@ impl CandidateProposal {
             ],
             "CandidateProposal",
         )?;
-        let diff = hh_hir::wire::diff_from_json(
+        let diff = hharness_hir::wire::diff_from_json(
             m.get("diff")
                 .ok_or_else(|| SchemaError::v("CandidateProposal.diff", "missing"))?,
         )

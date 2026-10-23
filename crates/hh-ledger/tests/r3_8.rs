@@ -17,17 +17,17 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::cipher::{self, BlobCipher, SealHeader};
-use hh_ledger::errors::{LedgerError, MissingReason};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{BlobEncryptionDecl, RunKind, RunManifest};
-use hh_ledger::retention::RetentionPolicy;
-use hh_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::views::ViewKind;
-use hh_ledger::BlobStatus;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::cipher::{self, BlobCipher, SealHeader};
+use hharness_ledger::errors::{LedgerError, MissingReason};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{BlobEncryptionDecl, RunKind, RunManifest};
+use hharness_ledger::retention::RetentionPolicy;
+use hharness_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::views::ViewKind;
+use hharness_ledger::BlobStatus;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -64,7 +64,7 @@ impl BlobCipher for FixtureCipher {
     }
     fn seal(
         &self,
-        address: &hh_identity::idp::ContentAddress,
+        address: &hharness_identity::idp::ContentAddress,
         plaintext: &[u8],
     ) -> Result<Vec<u8>, String> {
         let mask = address.digest.as_bytes();
@@ -84,7 +84,7 @@ impl BlobCipher for FixtureCipher {
     }
     fn open(
         &self,
-        address: &hh_identity::idp::ContentAddress,
+        address: &hharness_identity::idp::ContentAddress,
         frame: &[u8],
     ) -> Result<Vec<u8>, String> {
         let (h, ct) = cipher::parse_frame(frame).ok_or("not an HHBE v1 frame")?;
@@ -116,14 +116,14 @@ impl BlobCipher for FailingCipher {
     }
     fn seal(
         &self,
-        _address: &hh_identity::idp::ContentAddress,
+        _address: &hharness_identity::idp::ContentAddress,
         _plaintext: &[u8],
     ) -> Result<Vec<u8>, String> {
         Err("custody refused the seal".to_string())
     }
     fn open(
         &self,
-        _address: &hh_identity::idp::ContentAddress,
+        _address: &hharness_identity::idp::ContentAddress,
         _frame: &[u8],
     ) -> Result<Vec<u8>, String> {
         Err("custody refused the open".to_string())
@@ -159,7 +159,7 @@ fn k_ev(id: &str, class: &str, payload: Json) -> Event {
 
 /// The blob file bytes at `root` for a content address — the at-rest
 /// residency the byte-level assertions read.
-fn stored(root: &Path, addr: &hh_identity::idp::ContentAddress) -> Vec<u8> {
+fn stored(root: &Path, addr: &hharness_identity::idp::ContentAddress) -> Vec<u8> {
     std::fs::read(root.join("blobs").join(&addr.digest)).unwrap()
 }
 
@@ -187,14 +187,14 @@ fn emit_ref_row(s: &mut Store, run: &str, lease: &Lease, id: &str, addr_str: &st
     .unwrap();
 }
 
-fn encryption_member(view: &hh_ledger::views::View) -> Json {
+fn encryption_member(view: &hharness_ledger::views::View) -> Json {
     let Json::Obj(p) = &view.payload else {
         panic!("audit_view payload not an object")
     };
     p.get("encryption").cloned().expect("encryption member")
 }
 
-fn addr_str(addr: &hh_identity::idp::ContentAddress) -> String {
+fn addr_str(addr: &hharness_identity::idp::ContentAddress) -> String {
     format!("{}:{}", addr.algorithm, addr.digest)
 }
 
@@ -256,7 +256,7 @@ fn tampered_ciphertext_is_blob_corrupt_not_plaintext() {
     std::fs::write(&path, &bytes).unwrap();
     // The fixture's `open` cannot authenticate — it unmasks garbage, and the
     // pool's own plaintext-digest check refuses `BlobCorrupt` (I-A8's
-    // defense-in-depth leg; the authenticated-tamper leg is hh-secrets').
+    // defense-in-depth leg; the authenticated-tamper leg is hharness-secrets').
     match s.get_blob(&addr) {
         Err(LedgerError::BlobCorrupt { address }) => assert_eq!(address, addr_str(&addr)),
         other => panic!("tampered sealed blob must refuse BlobCorrupt, got {other:?}"),
@@ -266,7 +266,7 @@ fn tampered_ciphertext_is_blob_corrupt_not_plaintext() {
 #[test]
 fn malformed_hhbe_frame_is_blob_corrupt() {
     let (s, _run, _lease) = open("malformed", RunManifest::minimal(RunKind::Agent));
-    let addr = hh_identity::idp::address(b"x", "text/plain");
+    let addr = hharness_identity::idp::address(b"x", "text/plain");
     std::fs::create_dir_all(s.root().join("blobs")).unwrap();
     std::fs::write(
         s.root().join("blobs").join(&addr.digest),
@@ -346,7 +346,7 @@ fn seal_fault_is_cipher_fault_and_writes_nothing() {
         }
         other => panic!("a refusing seal must fail CipherFault, got {other:?}"),
     }
-    let addr = hh_identity::idp::address(b"never sealed", "text/plain");
+    let addr = hharness_identity::idp::address(b"never sealed", "text/plain");
     assert!(
         !s.root().join("blobs").join(&addr.digest).exists(),
         "a refused seal writes no plaintext — CC3, never a silent degrade"
@@ -619,8 +619,8 @@ fn manifest_blob_encryption_round_trips_and_validates() {
     assert!(bad.validate().is_err());
 }
 
-fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
-    hh_ledger::retention::RetentionPolicy {
+fn gc_policy(policy_ref: &str) -> hharness_ledger::retention::RetentionPolicy {
+    hharness_ledger::retention::RetentionPolicy {
         policy_ref: policy_ref.to_string(),
         blob_residency_ms: 0,
         bundle_retention_ms: 0,

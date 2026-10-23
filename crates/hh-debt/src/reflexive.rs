@@ -11,16 +11,16 @@
 //! other record — the *only* manager-special parts are this constructor
 //! and the window evaluation in `ManagerView::no_dead_weight_verdict`.
 
-use hh_hir::debt::RemovalTestContext;
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_ontology::debt::{
+use hharness_hir::debt::RemovalTestContext;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_ontology::debt::{
     DeadWeightWindow, DebtClass, DebtExpiry, DebtPolicy, DebtScope, DebtStatus, DeficiencyClass,
     EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject,
     HypothesisTyped, OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind, RemovalVerdict,
     Revalidation, RevalidationAction, RevalidationOn,
 };
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
 
 use crate::errors::DebtManagerError;
 use crate::view::ManagerView;
@@ -109,7 +109,7 @@ pub fn reflexive_record(
         created_at: Some(created_at_ms),
         supersedes: None,
     };
-    hh_hir::debt::validate_for_home(
+    hharness_hir::debt::validate_for_home(
         &record,
         HOME16_RECORD_KIND,
         HOME16_FIELD,

@@ -13,9 +13,9 @@
 //! submission *apply* is a scored failure (0 ppm), never an oracle failure
 //! (§5h.4 §6).
 
-use hh_lab::bench::{GraderKind, TaskRecord};
-use hh_ontology::eval::LatticeValue;
-use hh_wire::Json;
+use hharness_lab::bench::{GraderKind, TaskRecord};
+use hharness_ontology::eval::LatticeValue;
+use hharness_wire::Json;
 
 use crate::infra::{detect_infrastructure_failure, InfraSignal};
 use crate::records::Submission;
@@ -56,7 +56,8 @@ pub fn parse_typed_reward(stdout: &str) -> Result<i64, RewardParseError> {
     if stdout.trim().is_empty() {
         return Err(RewardParseError::Empty);
     }
-    let j = hh_wire::parse(stdout).map_err(|e| RewardParseError::Unparseable(e.to_string()))?;
+    let j =
+        hharness_wire::parse(stdout).map_err(|e| RewardParseError::Unparseable(e.to_string()))?;
     let reward = j
         .get("reward")
         .ok_or(RewardParseError::Missing)?
@@ -114,7 +115,7 @@ pub struct GradeRequest {
     pub task: TaskRecord,
     /// The verifier isolation mode the family/task resolves to
     /// (`separate` default; `shared` only where declared).
-    pub isolation: hh_ontology::lab::VerifierIsolation,
+    pub isolation: hharness_ontology::lab::VerifierIsolation,
 }
 
 /// `grade_result/1` — the grade output: a typed reward plus the infra
@@ -165,7 +166,10 @@ pub fn grade(
     signal: &InfraSignal,
 ) -> Result<GradeResult, GradeError> {
     let infra = detect_infrastructure_failure(signal);
-    let separate = matches!(req.isolation, hh_ontology::lab::VerifierIsolation::Separate);
+    let separate = matches!(
+        req.isolation,
+        hharness_ontology::lab::VerifierIsolation::Separate
+    );
     // An unapplied submission scores 0 without consulting the verifier —
     // the artifact never reached the environment (§5h.4 §6).
     if !req.submission.applied {
@@ -190,7 +194,7 @@ pub fn grade(
     }
     // Verifier-tier failures ⇒ oracle_failure (typed refusal upstream).
     if let Some(oc) = infra.class.outcome_class() {
-        if oc == hh_ontology::control::OutcomeClass::OracleFailure {
+        if oc == hharness_ontology::control::OutcomeClass::OracleFailure {
             return Err(GradeError::VerifierFailed(format!(
                 "{}: {}",
                 infra.class.as_str(),

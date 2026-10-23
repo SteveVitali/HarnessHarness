@@ -6,9 +6,9 @@
 //! caller commits through the ledger append path. Source bundles are
 //! never rewritten (D1: supersession by new version_id only).
 
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::codec::Decoded;
 use crate::error::BundleError;
@@ -227,8 +227,8 @@ pub fn lift(decoded: &Decoded, format: &str, now_ms: u64) -> Result<ImportLift, 
         ("notes", Json::Arr(vec![])),
     ]);
     let mapping_digest =
-        hh_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
-    let import_id = hh_identity::idp_id(
+        hharness_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
+    let import_id = hharness_identity::idp_id(
         "bundle.import",
         format!("{}:{}", manifest.version_id, now_ms).as_bytes(),
     );
@@ -326,7 +326,7 @@ fn is_lock_file(path: &str) -> bool {
 /// (never coerced, never silently dropped — AC-8/AC-9).
 #[allow(clippy::too_many_arguments)] // the lift's coordinates are the record's shape.
 pub fn lift_foreign(
-    store: &hh_ledger::store::Store,
+    store: &hharness_ledger::store::Store,
     run_id: &str,
     files: &std::collections::BTreeMap<String, Vec<u8>>,
     ftype: crate::foreign::ForeignFormat,
@@ -382,7 +382,7 @@ pub fn lift_foreign(
         if name == "digests.json" || name == "checksums.json" {
             if let Some(Json::Obj(m)) = std::str::from_utf8(bytes)
                 .ok()
-                .and_then(|t| hh_wire::json::parse(t).ok())
+                .and_then(|t| hharness_wire::json::parse(t).ok())
             {
                 for (k, v) in &m {
                     if let Some(d) = v.as_str() {
@@ -423,7 +423,7 @@ pub fn lift_foreign(
         // — warning-level, never coerced).
         if let Some(declared) = declared_digests.get(path.as_str()) {
             let bare = |s: &str| s.rsplit(':').next().unwrap_or(s).to_string();
-            let recomputed = hh_identity::idp_id("blob", bytes);
+            let recomputed = hharness_identity::idp_id("blob", bytes);
             if bare(declared) != bare(&recomputed) && *declared != recomputed {
                 conflicts.push(crate::fetch::integrity_conflict(
                     path,
@@ -653,7 +653,7 @@ pub fn lift_foreign(
         if let Some(src) = files
             .get("manifest.json")
             .and_then(|b| std::str::from_utf8(b).ok())
-            .and_then(|t| hh_wire::json::parse(t).ok())
+            .and_then(|t| hharness_wire::json::parse(t).ok())
         {
             if let Some(Json::Arr(ms)) = src.get("members") {
                 for m in ms {
@@ -695,8 +695,8 @@ pub fn lift_foreign(
         ),
     ]);
     let mapping_digest =
-        hh_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
-    let import_id = hh_identity::idp_id(
+        hharness_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
+    let import_id = hharness_identity::idp_id(
         "bundle.import",
         format!("{}:{}", manifest.version_id, now_ms).as_bytes(),
     );

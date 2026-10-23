@@ -28,9 +28,9 @@
 //! spin on its own exhaustion while the root is spent). E1's "decision points
 //! only" is enforced by `Account::exhaust` refusing while an effect scope is open.
 
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::errors::BudgetError;
@@ -115,7 +115,7 @@ pub struct BudgetTree {
     /// block exhaustion — DF-S1.6-1, §5a.2's open-risk set). A missing or
     /// unreadable `effective_risk_class` projects to `RiskClass::UNKNOWN` (the
     /// most dangerous class — legacy rows stay conservative).
-    pub open_effects: BTreeMap<String, hh_ontology::risk::RiskClass>,
+    pub open_effects: BTreeMap<String, hharness_ontology::risk::RiskClass>,
     /// `effect_id → last probe verdict` — invariant 4 needs it: a `not_applied`
     /// settlement is effect-terminal only when the class forecloses retry
     /// (`irreversible`, or non-`idempotent` without a `not_applied` probe —
@@ -128,8 +128,11 @@ pub struct BudgetTree {
 /// Invariant 4 (ADR-0030 §1; ADR-0238 §1): a `not_applied` settlement stays
 /// redispatchable iff the class isn't `irreversible` and either
 /// `repeat_safety = idempotent` or the last probe returned `not_applied`.
-fn not_applied_retryable(rc: &hh_ontology::risk::RiskClass, last_probe: Option<&String>) -> bool {
-    use hh_ontology::risk::{RepeatSafety, RiskReversibility};
+fn not_applied_retryable(
+    rc: &hharness_ontology::risk::RiskClass,
+    last_probe: Option<&String>,
+) -> bool {
+    use hharness_ontology::risk::{RepeatSafety, RiskReversibility};
     rc.reversibility != RiskReversibility::Irreversible
         && (rc.repeat_safety == RepeatSafety::Idempotent
             || last_probe.map(String::as_str) == Some("not_applied"))
@@ -168,7 +171,7 @@ impl BudgetTree {
         let eff = e.scope.effect_id.as_deref().or_else(|| {
             e.payload
                 .get("original_effect_id")
-                .and_then(hh_wire::json::Json::as_str)
+                .and_then(hharness_wire::json::Json::as_str)
         });
         if let Some(eff) = eff {
             self.event_effect
@@ -178,8 +181,8 @@ impl BudgetTree {
                     let rc = e
                         .payload
                         .get("effective_risk_class")
-                        .and_then(hh_ontology::risk::RiskClass::from_json)
-                        .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                        .and_then(hharness_ontology::risk::RiskClass::from_json)
+                        .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN);
                     self.open_effects.insert(eff.to_string(), rc);
                 }
                 "action.effect.observed" => {
@@ -189,7 +192,7 @@ impl BudgetTree {
                     match e
                         .payload
                         .get("outcome")
-                        .and_then(hh_wire::json::Json::as_str)
+                        .and_then(hharness_wire::json::Json::as_str)
                     {
                         Some("partial") => {}
                         Some("not_applied") => {
@@ -197,7 +200,7 @@ impl BudgetTree {
                                 .open_effects
                                 .get(eff)
                                 .cloned()
-                                .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                                .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN);
                             if !not_applied_retryable(&rc, self.probe_verdicts.get(eff)) {
                                 self.open_effects.remove(eff);
                             }
@@ -215,7 +218,7 @@ impl BudgetTree {
                     let verdict = e
                         .payload
                         .get("verdict")
-                        .and_then(hh_wire::json::Json::as_str);
+                        .and_then(hharness_wire::json::Json::as_str);
                     if let Some(v) = verdict {
                         self.probe_verdicts.insert(eff.to_string(), v.to_string());
                     }
@@ -228,7 +231,7 @@ impl BudgetTree {
                                 .open_effects
                                 .get(eff)
                                 .cloned()
-                                .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                                .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN);
                             if !not_applied_retryable(&rc, Some(&"not_applied".to_string())) {
                                 self.open_effects.remove(eff);
                             }
@@ -571,7 +574,7 @@ impl BudgetTree {
             for (key, rule) in &n.node.spec.dimensions {
                 let Some(c) = &rule.hard else { continue };
                 if key.primary().map(|d| d.class())
-                    == Some(hh_ontology::dimensions::DimensionClass::Gauge)
+                    == Some(hharness_ontology::dimensions::DimensionClass::Gauge)
                 {
                     continue; // gauges are E5, not exhaustion
                 }
@@ -604,7 +607,7 @@ impl BudgetTree {
             .ok_or_else(|| BudgetError::UnknownBudget {
                 budget_id: budget_id.to_string(),
             })?;
-        if dimension.class() != hh_ontology::dimensions::DimensionClass::Gauge {
+        if dimension.class() != hharness_ontology::dimensions::DimensionClass::Gauge {
             return Err(BudgetError::DimensionNotBudgetable {
                 dimension: dimension.as_str().to_string(),
             });

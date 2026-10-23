@@ -27,21 +27,21 @@
 //! kernel never *reads* procedure prose; the `Text` leaf in the procedure
 //! record travels content-addressed through `supplies.procedures`).
 
-use hh_budget::BudgetMode;
-use hh_env::handle::OnParentEnd;
-use hh_hir::kinds::EffectClass;
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant};
-use hh_hir::Ref;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_budget::BudgetMode;
+use hharness_env::handle::OnParentEnd;
+use hharness_hir::kinds::EffectClass;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant};
+use hharness_hir::Ref;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::types::{
     ChildProcess, ChildRole, ContextIsolation, DelegationReason, EnvIsolation, ReturnContract,
     SubagentSpec, Supplies, WaitMode,
 };
-use hh_budget::spec::BudgetSpec;
+use hharness_budget::spec::BudgetSpec;
 
 /// The caller-supplied members of the `subagent_task` spec — everything the
 /// constructor cannot derive from the pinned refs themselves.

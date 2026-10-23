@@ -1,4 +1,4 @@
-//! `hh-compiler` S3.2 acceptance suite (spec §3.2; ticket S3.2; R-2.1.2,
+//! `hharness-compiler` S3.2 acceptance suite (spec §3.2; ticket S3.2; R-2.1.2,
 //! R-2.1.3): stage 3 `lower_profile` under the two ADR-0020 minimal profiles,
 //! stage 4 provider tool-API + MCP targets with typed loss reports, `lift`'s
 //! `PartialHIR` (T-LCD-11), `relower`, the executable E4 suite and E5/E6 checks,
@@ -10,23 +10,25 @@
 mod common;
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::equiv::{self, EvidenceVerdict};
-use hh_compiler::errors::CompileError;
-use hh_compiler::lcd::LossKind;
-use hh_compiler::profile::{minimal_profiles, profile_coordinate, profile_identity, ModelProfile};
-use hh_compiler::relower::relower;
-use hh_compiler::seal::ModelSurfaceState;
-use hh_compiler::target::{lift, HH_META_KEY};
-use hh_compiler::CompileInputs;
-use hh_hir::records::*;
-use hh_hir::refs::ProfileRef;
-use hh_wire::json::Json;
+use hharness_compiler::compiler::compile;
+use hharness_compiler::equiv::{self, EvidenceVerdict};
+use hharness_compiler::errors::CompileError;
+use hharness_compiler::lcd::LossKind;
+use hharness_compiler::profile::{
+    minimal_profiles, profile_coordinate, profile_identity, ModelProfile,
+};
+use hharness_compiler::relower::relower;
+use hharness_compiler::seal::ModelSurfaceState;
+use hharness_compiler::target::{lift, HH_META_KEY};
+use hharness_compiler::CompileInputs;
+use hharness_hir::records::*;
+use hharness_hir::refs::ProfileRef;
+use hharness_wire::json::Json;
 
 /// The mini-SWE-agent-class reference fixture (ADR-0144 anchor): rule + budget +
 /// permission + agent + `edit_file` (surfaced — the capability the two minimal
 /// profiles shape differently) + `get_file` + a procedure that invokes them.
-fn reference_doc(profile_pin: ProfileRef) -> hh_hir::document::HirDocument {
+fn reference_doc(profile_pin: ProfileRef) -> hharness_hir::document::HirDocument {
     let mut doc = doc_with(&stage1_assembly());
     // Re-pin the agent's profile per the caller (unbound for the two-profile arms).
     for n in doc.nodes.iter_mut() {
@@ -174,7 +176,7 @@ fn with_suite(profile: &ModelProfile, suite: Json) -> ModelProfile {
 }
 
 fn inputs_multi(
-    sealed: &hh_hir::SealedDefinition,
+    sealed: &hharness_hir::SealedDefinition,
     profile: &ModelProfile,
     targets: Vec<&str>,
 ) -> CompileInputs {
@@ -184,7 +186,7 @@ fn inputs_multi(
         fallback_profile: None,
         targets: targets
             .into_iter()
-            .map(|t| hh_compiler::link::TargetSpec {
+            .map(|t| hharness_compiler::link::TargetSpec {
                 target_id: t.to_string(),
                 spec_version: "1.0".to_string(),
                 content_hash: format!("sha256:target-{t}"),
@@ -196,13 +198,13 @@ fn inputs_multi(
 }
 
 fn compile_with(
-    sealed: &hh_hir::SealedDefinition,
-    store: &hh_registry::store::RegistryStore,
+    sealed: &hharness_hir::SealedDefinition,
+    store: &hharness_registry::store::RegistryStore,
     profile: &ModelProfile,
     targets: Vec<&str>,
-) -> hh_compiler::seal::CompiledBundle {
+) -> hharness_compiler::seal::CompiledBundle {
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     compile(
         &inputs_multi(sealed, profile, targets),
         &profiles,
@@ -213,7 +215,7 @@ fn compile_with(
     .expect("compile")
 }
 
-fn lowered(b: &hh_compiler::seal::CompiledBundle) -> &hh_compiler::seal::ModelSurface {
+fn lowered(b: &hharness_compiler::seal::CompiledBundle) -> &hharness_compiler::seal::ModelSurface {
     match &b.model_surface {
         ModelSurfaceState::Lowered(s) => s,
         _ => panic!("stage 3 lowers the surface"),
@@ -296,7 +298,7 @@ fn ac_cp_02_surface_diff_stays_within_owned_fields() {
     // The union of fields owned by the two profiles' rules.
     let owned: std::collections::BTreeSet<String> = [&patch, &string_replace]
         .iter()
-        .flat_map(|p| hh_compiler::profile::owned_fields(p))
+        .flat_map(|p| hharness_compiler::profile::owned_fields(p))
         .collect();
     for d in &diff {
         let ok = owned.iter().any(|o| {
@@ -374,7 +376,7 @@ fn t_lcd_11_provider_target_has_no_lift_but_declared_losses() {
         .expect("the provider loss report");
     assert_eq!(
         report.granularity_ceiling,
-        hh_compiler::lcd::GranularityCeiling::Configuration
+        hharness_compiler::lcd::GranularityCeiling::Configuration
     );
 }
 
@@ -452,7 +454,7 @@ fn lift_recovers_every_carried_field_the_report_does_not_declare_lost() {
 fn t_lcd_03_reference_harness_compiles_and_reports_opacity() {
     let (store, sealed, _v) = sealed_doc_with("t03", reference_doc(unbound()), vec![], vec![]);
     // AC-IR-03 (T-02): `opacity` reports the reference definition's leaves.
-    let report = hh_hir::ops::opacity(&sealed.document, None);
+    let report = hharness_hir::ops::opacity(&sealed.document, None);
     assert!(
         report.by_class.total() > 0,
         "the reference definition has leaves"
@@ -476,9 +478,9 @@ fn t_lcd_03_reference_harness_compiles_and_reports_opacity() {
 #[test]
 fn ac_cp_12_bundle_opacity_report_equals_validation() {
     let (store, sealed, _v) = sealed_doc_with("cp12", reference_doc(unbound()), vec![], vec![]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
-    let validation = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&sealed),
+    let cat = hharness_assembly::Stage1Catalog::stage1();
+    let validation = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&sealed),
         &cat,
         None,
         &kernel(),
@@ -510,21 +512,21 @@ fn ablate_removes_a_node_and_stamps_lineage() {
     let (_store, sealed, _v) = sealed_doc_with("ablate", doc, vec![], vec![]);
     // Ablating a node with dependents is a typed refusal, never a silent
     // dangling ref.
-    let errs = hh_hir::ops::ablate(&sealed, "test:get_file", 99)
+    let errs = hharness_hir::ops::ablate(&sealed, "test:get_file", 99)
         .expect_err("the procedure still references get_file");
     assert!(errs
         .iter()
-        .any(|e| matches!(e, hh_hir::HirError::UnresolvedRef { .. })));
+        .any(|e| matches!(e, hharness_hir::HirError::UnresolvedRef { .. })));
     // An unreferenced node ablates cleanly; the derivation is *recorded*.
     let before = sealed.document.nodes.len();
-    let out = hh_hir::ops::ablate(&sealed, "test:spare", 99).expect("ablate");
+    let out = hharness_hir::ops::ablate(&sealed, "test:spare", 99).expect("ablate");
     assert_eq!(out.document.nodes.len(), before - 1);
     assert!(out.document.node("test:spare").is_none());
     assert!(out
         .document
         .edges
         .iter()
-        .any(|e| e.kind == hh_hir::kinds::EdgeKind::DerivedFrom));
+        .any(|e| e.kind == hharness_hir::kinds::EdgeKind::DerivedFrom));
 }
 
 // ── relower — stages 3–5 under a new profile (§3.2.2 Re-lowering) ────────────
@@ -538,7 +540,7 @@ fn relower_issues_a_new_bundle_id_and_keeps_the_plan() {
     let old = compile_with(&sealed, &store, &patch, vec!["mcp"]);
     let inputs = inputs_multi(&sealed, &string_replace, vec!["mcp"]);
     let profiles = MapProfileView::of(vec![string_replace.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let (new, migration) = relower(
         &old,
         &inputs,
@@ -554,7 +556,7 @@ fn relower_issues_a_new_bundle_id_and_keeps_the_plan() {
     assert_eq!(migration.from_bundle, old.bundle_id);
     assert_eq!(migration.to_bundle, new.bundle_id);
     assert!(!migration.rewritten_items.is_empty());
-    let ev = hh_compiler::relowered_event(&migration);
+    let ev = hharness_compiler::relowered_event(&migration);
     assert_eq!(
         ev.get("reason").and_then(Json::as_str),
         Some("profile_swap")
@@ -600,12 +602,12 @@ fn relower_retire_arm_and_artefact_determinism() {
     let mut retired = patch.clone();
     retired
         .rules
-        .retain(|r| r.kind != hh_compiler::profile::ProfileRuleKind::ToolShape);
+        .retain(|r| r.kind != hharness_compiler::profile::ProfileRuleKind::ToolShape);
     retired.tests = Json::obj([("e4_suites", Json::Arr(vec![identity_suite()]))]);
     retired.content_hash = profile_identity(&retired);
     let inputs = inputs_multi(&sealed, &retired, vec!["mcp"]);
     let profiles = MapProfileView::of(vec![retired.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let (new, migration) = relower(
         &old,
         &inputs,
@@ -640,7 +642,7 @@ fn e4_runs_the_declared_suite_and_passes() {
     // declared suite the compile refuses.
     let (patch, _) = minimal_profiles();
     let profiles = MapProfileView::of(vec![patch.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let err = compile(
         &inputs_multi(&sealed, &patch, vec!["mcp"]),
         &profiles,
@@ -701,7 +703,7 @@ fn e4_a_diverging_case_fails_the_compile() {
     let (_, string_replace) = minimal_profiles();
     let p = with_suite(&string_replace, suite);
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let err = compile(
         &inputs_multi(&sealed, &p, vec!["mcp"]),
         &profiles,
@@ -737,7 +739,7 @@ fn e5_declared_error_classes_need_a_covering_spec() {
     let (patch, _) = minimal_profiles();
     let patch = with_suite(&patch, patch_suite());
     let profiles = MapProfileView::of(vec![patch.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let err = compile(
         &inputs_multi(&sealed, &patch, vec!["mcp"]),
         &profiles,
@@ -755,7 +757,7 @@ fn e5_declared_error_classes_need_a_covering_spec() {
     let mut p2 = patch.clone();
     p2.rules.push(rule(
         "r-err",
-        hh_compiler::profile::ProfileRuleKind::ErrorFormat,
+        hharness_compiler::profile::ProfileRuleKind::ErrorFormat,
         &["tools/*/error_format"],
         Json::obj([(
             "renderings",
@@ -764,7 +766,7 @@ fn e5_declared_error_classes_need_a_covering_spec() {
                 ("not_found", Json::str("ENOENT")),
             ]),
         )]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
     p2.content_hash = profile_identity(&p2);
     let profiles2 = MapProfileView::of(vec![p2.clone()]);
@@ -797,7 +799,7 @@ fn ac_cp_04_loss_report_shape_and_granularity_ceiling() {
     // MCP carries the minimum set in `_meta` — the ceiling is `component`.
     assert_eq!(
         report.granularity_ceiling,
-        hh_compiler::lcd::GranularityCeiling::Component
+        hharness_compiler::lcd::GranularityCeiling::Component
     );
     for e in &report.entries {
         assert!(matches!(
@@ -833,33 +835,36 @@ fn ac_r_2_4_5_4_two_profiles_two_targets() {
         .iter()
         .find(|n| n.semantic_id() == "test:proc")
         .expect("the reference doc carries test:proc");
-    let d1 = hh_hir::procedure::select_target(
+    let d1 = hharness_hir::procedure::select_target(
         proc,
         None,
-        &hh_hir::procedure::SelectCtx::default(),
+        &hharness_hir::procedure::SelectCtx::default(),
         &std::collections::BTreeMap::new(),
     )
     .unwrap();
-    assert_eq!(d1.target, hh_hir::procedure::CompilationTarget::Instruction);
-    let p1 = hh_compiler::plan::lower_procedure(
+    assert_eq!(
+        d1.target,
+        hharness_hir::procedure::CompilationTarget::Instruction
+    );
+    let p1 = hharness_compiler::plan::lower_procedure(
         &sealed.document,
         proc,
-        hh_hir::procedure::CompilationTarget::Instruction,
+        hharness_hir::procedure::CompilationTarget::Instruction,
         Some("profile:minimal-patch"),
         None,
     )
     .unwrap();
-    let p2 = hh_compiler::plan::lower_procedure(
+    let p2 = hharness_compiler::plan::lower_procedure(
         &sealed.document,
         proc,
-        hh_hir::procedure::CompilationTarget::Instruction,
+        hharness_hir::procedure::CompilationTarget::Instruction,
         Some("profile:minimal-string-replace"),
         None,
     )
     .unwrap();
     let (
-        hh_compiler::plan::ProcedureProduct::Instruction { body: b1 },
-        hh_compiler::plan::ProcedureProduct::Instruction { body: b2 },
+        hharness_compiler::plan::ProcedureProduct::Instruction { body: b1 },
+        hharness_compiler::plan::ProcedureProduct::Instruction { body: b2 },
     ) = (p1, p2)
     else {
         panic!("instruction product")
@@ -872,32 +877,36 @@ fn ac_r_2_4_5_4_two_profiles_two_targets() {
 
     // workflow_node under a `workflow_execution` control strategy — the
     // two Invoke steps lower to `step` plan nodes.
-    let wf_ctx = hh_hir::procedure::SelectCtx {
+    let wf_ctx = hharness_hir::procedure::SelectCtx {
         workflow_execution_declared: true,
         ..Default::default()
     };
-    let d2 =
-        hh_hir::procedure::select_target(proc, None, &wf_ctx, &std::collections::BTreeMap::new())
-            .unwrap();
+    let d2 = hharness_hir::procedure::select_target(
+        proc,
+        None,
+        &wf_ctx,
+        &std::collections::BTreeMap::new(),
+    )
+    .unwrap();
     assert_eq!(
         d2.target,
-        hh_hir::procedure::CompilationTarget::WorkflowNode
+        hharness_hir::procedure::CompilationTarget::WorkflowNode
     );
-    let wf = hh_compiler::plan::lower_procedure(
+    let wf = hharness_compiler::plan::lower_procedure(
         &sealed.document,
         proc,
-        hh_hir::procedure::CompilationTarget::WorkflowNode,
+        hharness_hir::procedure::CompilationTarget::WorkflowNode,
         None,
         None,
     )
     .unwrap();
-    let hh_compiler::plan::ProcedureProduct::WorkflowNode { nodes } = wf else {
+    let hharness_compiler::plan::ProcedureProduct::WorkflowNode { nodes } = wf else {
         panic!("workflow product")
     };
     assert_eq!(nodes.len(), 2, "two Invoke steps → two step nodes");
     assert!(nodes
         .iter()
-        .all(|n| matches!(n.payload, hh_compiler::plan::PlanNodePayload::Step(_))));
+        .all(|n| matches!(n.payload, hharness_compiler::plan::PlanNodePayload::Step(_))));
 
     // Permission/effect/budget tables identical across the two-profile
     // bundles — they derive from the shared RuntimePlan.
@@ -928,14 +937,14 @@ fn ac_r_2_4_5_4_subagent_target_never_falls_back() {
         .find(|n| n.semantic_id() == "test:proc")
         .unwrap();
     assert!(matches!(
-        hh_compiler::plan::lower_procedure(
+        hharness_compiler::plan::lower_procedure(
             &sealed.document,
             proc,
-            hh_hir::procedure::CompilationTarget::SubagentTask,
+            hharness_hir::procedure::CompilationTarget::SubagentTask,
             None,
             None,
         ),
-        Err(hh_compiler::errors::CompileError::PlanError { .. })
+        Err(hharness_compiler::errors::CompileError::PlanError { .. })
     ));
 }
 
@@ -944,7 +953,7 @@ fn ac_r_2_4_5_4_subagent_target_never_falls_back() {
 /// with typed placeholders; `plan_id` unchanged (the runtime plan is equal).
 #[test]
 fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
-    use hh_compiler::profile::ProfileRuleKind;
+    use hharness_compiler::profile::ProfileRuleKind;
     let (store, sealed, _v) =
         sealed_doc_with("relower13", reference_doc(unbound()), vec![], vec![]);
     let (patch, string_replace) = minimal_profiles();
@@ -963,7 +972,7 @@ fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
     dropped.content_hash = profile_identity(&dropped);
     let inputs = inputs_multi(&sealed, &dropped, vec!["mcp"]);
     let profiles = MapProfileView::of(vec![dropped.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let (new, migration) = relower(
         &old,
         &inputs,
@@ -982,7 +991,7 @@ fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
         .any(|d| d.get("kind").and_then(Json::as_str) == Some("stale_signature")));
     // The event carries the dropped items under
     // `model.surface.relowered.dropped_items[]`.
-    let ev = hh_compiler::relowered_event(&migration);
+    let ev = hharness_compiler::relowered_event(&migration);
     match ev.get("dropped_items") {
         Some(Json::Arr(items)) => assert!(items
             .iter()
@@ -997,13 +1006,13 @@ fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
 /// (rule i); `DelegationUnavailable` stays the honest refusal when the
 /// demanded path cannot bind; `lower_procedure` emits the `delegate` node
 /// whose `spec` is the canonical `SubagentSpec` document the kernel `spawn`
-/// consumes (the spec schema is `hh-subagent`'s — the compiler carries it
+/// consumes (the spec schema is `hharness-subagent`'s — the compiler carries it
 /// as data, so the test carries a marker JSON, not a second encoding).
 #[test]
 fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
-    use hh_compiler::plan::{PlanNodePayload, SubagentTaskSpec};
-    use hh_hir::procedure::{CompilationTarget, SelectCtx, SelectError};
-    use hh_hir::refs::Ref;
+    use hharness_compiler::plan::{PlanNodePayload, SubagentTaskSpec};
+    use hharness_hir::procedure::{CompilationTarget, SelectCtx, SelectError};
+    use hharness_hir::refs::Ref;
     let (_store, sealed, _v) = sealed_doc_with("s458a", reference_doc(unbound()), vec![], vec![]);
     let proc = sealed
         .document
@@ -1019,24 +1028,25 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
     };
 
     // Rule (iii) — I(P) ∧ bound ∧ declared selects `subagent_task`.
-    let d = hh_hir::procedure::select_target(proc, None, &sub_ctx, &empty_index).unwrap();
+    let d = hharness_hir::procedure::select_target(proc, None, &sub_ctx, &empty_index).unwrap();
     assert_eq!(d.target, CompilationTarget::SubagentTask);
     assert!(d.i, "the I(P) predicate drove the choice");
 
     // No binding/declaration → rule (iv) falls through to `instruction`
     // (the path exists in the closed sum but nothing demands it).
     let d2 =
-        hh_hir::procedure::select_target(proc, None, &SelectCtx::default(), &empty_index).unwrap();
+        hharness_hir::procedure::select_target(proc, None, &SelectCtx::default(), &empty_index)
+            .unwrap();
     assert_eq!(d2.target, CompilationTarget::Instruction);
 
     // A demanded `subagent_task` override refuses `DelegationUnavailable`
     // when the path cannot bind — never a silent instruction fallback.
-    let override_profile = hh_hir::procedure::ProcedureProfile {
-        target_override: Some(hh_hir::records::CompileHint::SubagentTask),
+    let override_profile = hharness_hir::procedure::ProcedureProfile {
+        target_override: Some(hharness_hir::records::CompileHint::SubagentTask),
         ..Default::default()
     };
     assert!(matches!(
-        hh_hir::procedure::select_target(
+        hharness_hir::procedure::select_target(
             proc,
             Some(&override_profile),
             &SelectCtx::default(),
@@ -1045,9 +1055,13 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
         Err(SelectError::DelegationUnavailable { .. })
     ));
     // …and selects when it can bind.
-    let d3 =
-        hh_hir::procedure::select_target(proc, Some(&override_profile), &sub_ctx, &empty_index)
-            .unwrap();
+    let d3 = hharness_hir::procedure::select_target(
+        proc,
+        Some(&override_profile),
+        &sub_ctx,
+        &empty_index,
+    )
+    .unwrap();
     assert_eq!(d3.target, CompilationTarget::SubagentTask);
 
     // lower_procedure — the DelegateSpec node (AC-R-2.4.5-8's compile-time
@@ -1057,7 +1071,7 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
         ("process", Json::obj([("kind", Json::str("native"))])),
         ("isolation", Json::obj([("context", Json::str("fresh"))])),
     ]);
-    let product = hh_compiler::plan::lower_procedure(
+    let product = hharness_compiler::plan::lower_procedure(
         &sealed.document,
         proc,
         CompilationTarget::SubagentTask,
@@ -1069,7 +1083,7 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
         }),
     )
     .unwrap();
-    let hh_compiler::plan::ProcedureProduct::SubagentTask { node } = product else {
+    let hharness_compiler::plan::ProcedureProduct::SubagentTask { node } = product else {
         panic!("subagent product")
     };
     assert_eq!(node.hir_node_id, "test:proc", "trace coordinate preserved");
@@ -1086,7 +1100,7 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
     // A demanded `subagent_task` without its DelegateSpec refuses
     // `PlanError` — never a silent instruction fallback.
     assert!(matches!(
-        hh_compiler::plan::lower_procedure(
+        hharness_compiler::plan::lower_procedure(
             &sealed.document,
             proc,
             CompilationTarget::SubagentTask,
@@ -1099,7 +1113,7 @@ fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
     // Unpinned delegate refs refuse — the plan never carries a selector
     // (the stage-1 pin obligation is checked, not assumed).
     assert!(matches!(
-        hh_compiler::plan::lower_procedure(
+        hharness_compiler::plan::lower_procedure(
             &sealed.document,
             proc,
             CompilationTarget::SubagentTask,

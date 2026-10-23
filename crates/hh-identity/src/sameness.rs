@@ -124,7 +124,7 @@ pub fn is_resumable(s: Sameness) -> bool {
 mod tests {
     use super::*;
     use crate::kinds::RecordKind;
-    use hh_provenance::ProvenanceRecord;
+    use hharness_provenance::ProvenanceRecord;
 
     fn vr(vid: &str, sem: Option<&str>) -> VersionedRef {
         let mut r = VersionedRef::pinned(

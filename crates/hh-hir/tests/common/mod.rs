@@ -9,13 +9,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::document::{Edge, HirDocument, Node};
-use hh_hir::kinds::{EdgeKind, EffectClass, EntityKind, ToolEffects};
-use hh_hir::leaves::Text;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::document::{Edge, HirDocument, Node};
+use hharness_hir::kinds::{EdgeKind, EffectClass, EntityKind, ToolEffects};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 /// Minted human-authored provenance at definition scope (minted = at ceiling, validates).
 pub fn prov(seq: u64) -> ProvenanceRecord {
@@ -98,10 +98,10 @@ pub fn debt_record(rule_id: &str, seq: u64) -> AssumptionDebtRecord {
     AssumptionDebtRecord {
         rule_id: rule_id.into(),
         hypothesis: text("debt hypothesis", seq),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
-        owner: hh_hir::OwnerRef::principal("test:owner"),
-        expiry_condition: hh_hir::ExpiryCondition {
-            kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hharness_hir::OwnerRef::principal("test:owner"),
+        expiry_condition: hharness_hir::ExpiryCondition {
+            kind: hharness_hir::ExpiryKind::EvidenceRefreshDue,
             value: None,
         },
         removal_test_ref: "sha256:test".into(),
@@ -109,10 +109,10 @@ pub fn debt_record(rule_id: &str, seq: u64) -> AssumptionDebtRecord {
         // `AssumptionDebtRecord/1` per-home completeness for the `harness_rule`
         // home (DebtHomes/1 id 1: `debt_class` + `scope.model_selectors` are
         // required fields there — the seal-time `validate_for_home` battery).
-        debt_class: Some(hh_hir::DebtClass::Hypothesized),
+        debt_class: Some(hharness_hir::DebtClass::Hypothesized),
         hypothesis_typed: None,
-        scope: Some(hh_hir::DebtScope {
-            model_selectors: vec![hh_hir::ModelSelector::Exact {
+        scope: Some(hharness_hir::DebtScope {
+            model_selectors: vec![hharness_hir::ModelSelector::Exact {
                 model_id: "test:model".into(),
             }],
             ..Default::default()
@@ -120,10 +120,10 @@ pub fn debt_record(rule_id: &str, seq: u64) -> AssumptionDebtRecord {
         expiry: None,
         runway_ms: None,
         revalidation: None,
-        removal_test: Some(hh_hir::RemovalTest {
-            kind: hh_hir::RemovalTestKind::Inspection,
+        removal_test: Some(hharness_hir::RemovalTest {
+            kind: hharness_hir::RemovalTestKind::Inspection,
             criteria: Some("human inspection".into()),
-            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+            ..hharness_hir::RemovalTest::new(hharness_hir::RemovalTestKind::Inspection)
         }),
         created_by: None,
         created_at: None,
@@ -191,7 +191,7 @@ pub fn perm_node(id: &str, holder: &str, grants: Vec<Grant>, seq: u64) -> Node {
 pub fn grant(domain: &str, scope: &str, delegable: bool) -> Grant {
     Grant {
         effect: EffectClass::domain_only(
-            hh_hir::kinds::EffectDomain::parse(domain).expect("effect domain"),
+            hharness_hir::kinds::EffectDomain::parse(domain).expect("effect domain"),
         ),
         scope: scope.into(),
         constraints: GrantConstraints::default(),
@@ -249,7 +249,7 @@ pub fn hosted_agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
                     observability_levels: BTreeSet::new(),
                     participant_version: "sha256:pv".into(),
                     version_identity: None,
-                    hosting_mechanism: hh_ontology::participant::HostingMechanism::SessionAbi,
+                    hosting_mechanism: hharness_ontology::participant::HostingMechanism::SessionAbi,
                     supplies: Supplies::default(),
                     budget: sel(budget),
                     permissions: sel(perm),

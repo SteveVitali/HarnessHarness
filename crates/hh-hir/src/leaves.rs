@@ -9,9 +9,9 @@
 //! rendering but is absent from the canonical form — which is what makes `ReplaceLeaf`
 //! (hash→hash) sufficient for `apply` (§3.1.5).
 
-use hh_identity::idp::identify_text;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_identity::idp::identify_text;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::errors::HirError;
 
@@ -123,7 +123,7 @@ impl Text {
             .to_string();
         let authority = get("authority")?
             .as_str()
-            .and_then(hh_provenance::AuthorityClass::parse)
+            .and_then(hharness_provenance::AuthorityClass::parse)
             .ok_or_else(|| HirError::UnknownKind {
                 kind: format!("{path}.authority: bad AuthorityClass"),
             })?;
@@ -158,7 +158,8 @@ impl Text {
                 a.self_consistent()
                     && matches!(
                         a.kind,
-                        hh_provenance::AttestationKind::Seal | hh_provenance::AttestationKind::Pin
+                        hharness_provenance::AttestationKind::Seal
+                            | hharness_provenance::AttestationKind::Pin
                     )
             }),
         };
@@ -345,7 +346,7 @@ fn interface_from_json(j: &Json, path: &str) -> Result<DeclaredInterface, HirErr
 /// `default_text_authority`, never bare `default_authority` — free text is capped at
 /// `external` regardless of a closed-world declaration (DF-S1.3-3).
 pub fn mint_text_provenance(origin: Origin, created_at: u64) -> ProvenanceRecord {
-    let authority = hh_provenance::default_text_authority(&origin, None);
+    let authority = hharness_provenance::default_text_authority(&origin, None);
     let mut rec = ProvenanceRecord::minted(origin, PersistenceScope::Run, created_at);
     rec.authority = authority;
     rec
@@ -357,7 +358,7 @@ mod tests {
 
     fn human_prov() -> ProvenanceRecord {
         ProvenanceRecord::minted(
-            Origin::human("author:a", hh_provenance::HumanRole::Author),
+            Origin::human("author:a", hharness_provenance::HumanRole::Author),
             PersistenceScope::Definition,
             0,
         )

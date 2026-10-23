@@ -16,7 +16,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, PersistenceScope, ReaderSet, TaintTag};
 use crate::origin::Origin;

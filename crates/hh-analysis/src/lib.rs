@@ -1,13 +1,13 @@
-//! `hh-analysis` — the C0/Stage-3 estimator kernel (spec §6.4,
+//! `hharness-analysis` — the C0/Stage-3 estimator kernel (spec §6.4,
 //! `R-2.10.4⁰ᵇ`; ticket S3.4c; ADR-0157/0158/0159/0160).
 //!
 //! The kernel is the pure, versioned, class-aware function
 //! `analyze(spec: AnalysisSpec, rows @ watermark_set) → AnalysisReport`
 //! over *results rows*: the store-backed half of the §6.4 contract. The
-//! pure records-in/records-out computation stays in `hh-eval`
+//! pure records-in/records-out computation stays in `hharness-eval`
 //! (`lab.eval.*`); this crate is the `lab.analysis.*` side — it projects
-//! `hh_results::ResultsRow`s (+ their `RunManifest`s and `LedgerFacts`)
-//! into `hh_eval::EvalRun`s and drives the one estimator implementation
+//! `hharness_results::ResultsRow`s (+ their `RunManifest`s and `LedgerFacts`)
+//! into `hharness_eval::EvalRun`s and drives the one estimator implementation
 //! (CC1 — no second compare/stats/benefit code path exists here).
 //!
 //! Landed operation set (C0/Stage-3):

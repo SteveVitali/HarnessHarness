@@ -3,13 +3,13 @@
 //! rows, plus the `context_metrics` fold (AC-R-2.4.2-9, AC-R-2.4.3-9,
 //! AC-R-2.4.4-11/-12).
 
-use hh_eval::catalogue;
-use hh_eval::context_metrics;
-use hh_eval::oracle::{run_oracle, trace_predicate, OracleRequest};
-use hh_ontology::eval::LatticeValue;
-use hh_ontology::eval::OracleClass;
+use hharness_eval::catalogue;
+use hharness_eval::context_metrics;
+use hharness_eval::oracle::{run_oracle, trace_predicate, OracleRequest};
+use hharness_ontology::eval::LatticeValue;
+use hharness_ontology::eval::OracleClass;
 
-fn trace_oracle() -> hh_ontology::eval::OracleDeclaration {
+fn trace_oracle() -> hharness_ontology::eval::OracleDeclaration {
     catalogue::oracle_declarations()
         .into_iter()
         .find(|o| o.class == OracleClass::TracePredicate)
@@ -167,18 +167,18 @@ fn context_metrics_fold_counts_the_compliance_chain() {
         r#"{"seq":4,"class":"context.memory.written","payload":{"version_id":"v9","label":{"authority":"promoted_endorsed"}}}"#,
         r#"{"seq":5,"class":"context.memory.read","payload":{"delivered":["v1"],"withheld":["v2"]}}"#
     );
-    let j = hh_wire::json::parse(&rows).unwrap();
+    let j = hharness_wire::json::parse(&rows).unwrap();
     let Json::Arr(rs) = j else { panic!() };
-    let rows: Vec<hh_eval::facts::FactRow> = rs
+    let rows: Vec<hharness_eval::facts::FactRow> = rs
         .iter()
-        .map(|r| hh_eval::facts::FactRow {
+        .map(|r| hharness_eval::facts::FactRow {
             seq: r.get("seq").and_then(Json::as_int).unwrap() as u64,
             event_id: None,
             class: r.get("class").and_then(Json::as_str).unwrap().to_string(),
             payload: r.get("payload").cloned().unwrap(),
         })
         .collect();
-    let facts = hh_eval::facts::LedgerFacts::from_rows(&rows);
+    let facts = hharness_eval::facts::LedgerFacts::from_rows(&rows);
     let m = context_metrics::fold(&facts);
     assert_eq!(m.memory_delivered, 2, "one artefact + one read delivery");
     assert_eq!(m.memory_activated, 1);
@@ -197,10 +197,10 @@ fn context_metrics_fold_counts_the_compliance_chain() {
     // The catalogue declares every emitted row.
     for name in emitted.keys() {
         assert!(
-            hh_eval::catalogue::metric(name).is_some(),
+            hharness_eval::catalogue::metric(name).is_some(),
             "catalogue misses {name}"
         );
     }
 }
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;

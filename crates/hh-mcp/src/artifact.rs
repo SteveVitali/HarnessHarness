@@ -6,7 +6,7 @@
 //! `tools/list` and `server/discover` are byte-identical for every
 //! connection serving one bundle (AC-R-2.11.3-1), ordered by
 //! `(semantic_id, name)` (§3.2.5's canonical-order rule). A tool's
-//! `_meta` carries `dev.cognition/hir` — the member's whole HIR block
+//! `_meta` carries `hharness/hir` — the member's whole HIR block
 //! verbatim plus the serve-time `bundle_id` stamp (§3.2.5's minimum
 //! carried set `{semantic_id, bundle_id, effects, permission class,
 //! provenance pointer, budget ref}` survives the serve boundary —
@@ -15,16 +15,16 @@
 //!
 //! `annotations` and `outputSchema` ride through verbatim — claims,
 //! never read for a decision (T2). A member tool whose `_meta` carries
-//! `dev.cognition/input_required` declares the fixture's paused-effect
+//! `hharness/input_required` declares the fixture's paused-effect
 //! shape: `tools/call` answers `resultType: "input_required"` with the
 //! declared `inputRequests` and an opaque `requestState`; a call
 //! carrying `requestState` answers the `resumed` echo (ADR-0097 D3).
 //!
 //! `<hh-prefix>` is unallocated upstream (OQ-068; ADR-0210) — the
-//! fixture freezes `dev.cognition/hir` and the ADR-0275 ruling records
+//! fixture freezes `hharness/hir` and the ADR-0275 ruling records
 //! the placeholder.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The served-artifact record's schema id.
 pub const MCP_ARTIFACT_SCHEMA: &str = "hh-mcp-artifact/1";
@@ -43,13 +43,13 @@ pub const PROTOCOL_VERSION: &str = "2025-06-18";
 /// effects, permission_class, provenance, budget_ref, …}` — §3.2.5's
 /// minimum carried set; the `<hh-prefix>` slot is OQ-068-unallocated —
 /// this is the fixture's frozen spelling).
-pub const HH_META_KEY: &str = "dev.cognition/hir";
+pub const HH_META_KEY: &str = "hharness/hir";
 
 /// The `_meta` key a member tool uses to declare the fixture's
 /// paused-effect shape — `{"inputRequests": [...]}` under it means
 /// `tools/call` answers `resultType: "input_required"` (ADR-0097 D3;
 /// AC-R-2.5.4-12's fixture half).
-pub const INPUT_REQUIRED_META_KEY: &str = "dev.cognition/input_required";
+pub const INPUT_REQUIRED_META_KEY: &str = "hharness/input_required";
 
 /// The typed refusal/error sum the artifact + call path produce.
 #[derive(Debug, Clone, PartialEq)]
@@ -112,10 +112,10 @@ pub struct ArtifactTool {
     /// claims only; the served surface never reads them and the lift
     /// raises them to `declared_claims`, T2/D5).
     pub annotations: Option<Json>,
-    /// The HIR semantic id (the `_meta[dev.cognition/hir].semantic_id`
+    /// The HIR semantic id (the `_meta[hharness/hir].semantic_id`
     /// member — stable across renames; AC-R-2.11.3-1).
     pub semantic_id: String,
-    /// The member's `dev.cognition/hir` block verbatim minus
+    /// The member's `hharness/hir` block verbatim minus
     /// `semantic_id`/`bundle_id` (`effects`, `permission_class`,
     /// `provenance`, `budget_ref` … — the rest of the minimum carried
     /// set survives the serve boundary).
@@ -124,7 +124,7 @@ pub struct ArtifactTool {
     /// preserved, never interpreted.
     pub ext_meta: Json,
     /// The fixture's `input_required` declaration
-    /// (`_meta[dev.cognition/input_required]` — `{inputRequests:[…]}`),
+    /// (`_meta[hharness/input_required]` — `{inputRequests:[…]}`),
     /// when the member carries it.
     pub input_requests: Option<Json>,
 }
@@ -132,7 +132,7 @@ pub struct ArtifactTool {
 impl ArtifactTool {
     /// The MCP `Tool` JSON — `{name, description?, inputSchema,
     /// outputSchema?, annotations?, _meta}`. `_meta` = `ext_meta` ∪
-    /// `{dev.cognition/hir: hir_meta ∪ {semantic_id, bundle_id}}` — the
+    /// `{hharness/hir: hir_meta ∪ {semantic_id, bundle_id}}` — the
     /// whole carried set is always present and the member's own unknown
     /// `_meta` keys survive untouched.
     pub fn to_mcp_json(&self, bundle_id: &str) -> Json {
@@ -226,7 +226,7 @@ pub fn lower_mcp_target(
     let text = std::str::from_utf8(member_bytes).map_err(|_| McpError::Malformed {
         detail: "member is not utf-8".to_string(),
     })?;
-    let doc = hh_wire::json::parse(text).map_err(|e| McpError::Malformed {
+    let doc = hharness_wire::json::parse(text).map_err(|e| McpError::Malformed {
         detail: format!("member is not canonical json: {e}"),
     })?;
     let schema = doc
@@ -303,7 +303,7 @@ pub fn lower_mcp_target(
             }
             _ => (name.clone(), Json::obj([]), Json::obj([])),
         };
-        // The fixture's paused-effect declaration (its own `dev.cognition`
+        // The fixture's paused-effect declaration (its own `hharness`
         // extension key — served verbatim and read only here).
         let input_requests = meta
             .get(INPUT_REQUIRED_META_KEY)
@@ -329,7 +329,7 @@ pub fn lower_mcp_target(
     });
     let projection = Json::Arr(tools.iter().map(|t| t.to_mcp_json(bundle_id)).collect());
     let catalogue_hash =
-        hh_identity::idp_id("mcp.catalogue", projection.to_canonical_string().as_bytes());
+        hharness_identity::idp_id("mcp.catalogue", projection.to_canonical_string().as_bytes());
     Ok(ServedArtifact {
         bundle_id: bundle_id.to_string(),
         bundle_version: bundle_version.to_string(),
@@ -393,7 +393,7 @@ fn scan_handles(j: &Json, path: &str, now_ms: u64) -> Option<(String, bool)> {
 ///    (ADR-0097 D3: the retry echoes the opaque blob unmodified);
 /// 3. a handle-bearing argument → `HandleExpired` then
 ///    `NoCoveringGrant` (R-4);
-/// 4. a tool declaring `dev.cognition/input_required` →
+/// 4. a tool declaring `hharness/input_required` →
 ///    `{resultType: "input_required", inputRequests, requestState}` —
 ///    a *paused* call, never terminal;
 /// 5. otherwise `stage_pending`.
@@ -431,7 +431,7 @@ pub fn tools_call(artifact: &ServedArtifact, params: &Json, now_ms: u64) -> Json
                     // The paused call — an opaque `requestState` the
                     // retry echoes (content-addressed over the ask).
                     Some(input_requests) => {
-                        let state = hh_identity::idp_id(
+                        let state = hharness_identity::idp_id(
                             "mcp.request_state",
                             Json::obj([
                                 ("tool", Json::str(t.name.clone())),

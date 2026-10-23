@@ -20,17 +20,17 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
-use hh_mcp_lab::server::LabServer;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
+use hharness_mcp_lab::server::LabServer;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixtures (same shape as the s5_7 battery) ──────────────────────
 
@@ -476,7 +476,7 @@ fn due_wakeup_drains_to_tasks_push_durable_first() {
             (
                 "client",
                 Json::obj(vec![
-                    ("name", Json::str("hh-mcp-lab")),
+                    ("name", Json::str("hharness-mcp-lab")),
                     ("version", Json::str("1")),
                     ("kind", Json::str("mcp_server")),
                 ]),
@@ -576,7 +576,7 @@ fn future_wakeup_pushes_nothing() {
             (
                 "client",
                 Json::obj(vec![
-                    ("name", Json::str("hh-mcp-lab")),
+                    ("name", Json::str("hharness-mcp-lab")),
                     ("version", Json::str("1")),
                     ("kind", Json::str("mcp_server")),
                 ]),

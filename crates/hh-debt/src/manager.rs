@@ -2,29 +2,29 @@
 //! registry run carries the `lifecycle.debt.*` book of record (the S5.4
 //! convention — the registry audit run); the manager folds it into a
 //! `ManagerView`, and every op mints its rows through
-//! `Store::commit_kernel_row_for` (kernel producer `hh-debt` — one
+//! `Store::commit_kernel_row_for` (kernel producer `hharness-debt` — one
 //! authority path, audit-grade, provenance-bearing).
 //!
 //! Ops: `register` (the service record lands); `sweep` (the standing
 //! monitor — probation open + `evaluate_debt` + `schedule_removal_test` +
 //! the reflexive verdict + `sweep.completed`); `settle` (verdict in →
 //! `removal_test.settled` + any status transitions); `retire` (the
-//! human-sealed gate — `hh_lab::debt::retire`); `propose` (the
+//! human-sealed gate — `hharness_lab::debt::retire`); `propose` (the
 //! evolution-origin gate — proposal only); `index`/`report` (the
-//! records-in fleet report — `hh_lab::debt::debt_index` +
+//! records-in fleet report — `hharness_lab::debt::debt_index` +
 //! `AssumptionDebtHealth`, notices routed only to declared sinks).
 
-use hh_hir::refs::RunRef;
-use hh_lab::debt::{
+use hharness_hir::refs::RunRef;
+use hharness_lab::debt::{
     evaluate_debt, settle_removal_test, AssumptionDebtHealth, DebtIndexEntry, DebtTransition,
 };
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::store::Store;
-use hh_ontology::debt::{
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::store::Store;
+use hharness_ontology::debt::{
     DebtPolicy, DebtStatus, EvidenceGrade, ExpiryKind, RemovalTestKind, RemovalVerdict, Verdict,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::errors::{DebtManagerError, Refusal};
 use crate::propose::{propose_retirement, ProposalDiff, RetirementProposal};
@@ -35,7 +35,7 @@ use crate::view::ManagerView;
 
 /// The kernel producer name every manager-minted row carries (one
 /// authority path — `commit_kernel_row_for`).
-pub const COMPONENT: &str = "hh-debt";
+pub const COMPONENT: &str = "hharness-debt";
 
 /// `DebtManager` — the durable-prefix service handle. `open`/`ensure` are
 /// the same call: the durable prefix *is* the state (CC3 — restart
@@ -99,7 +99,7 @@ impl DebtManager {
         store: &mut Store,
         class: &str,
         payload: Json,
-        causes: Vec<hh_ledger::manifest::EventRef>,
+        causes: Vec<hharness_ledger::manifest::EventRef>,
     ) -> Res<EventEnvelope> {
         let env = store
             .commit_kernel_row_for(COMPONENT, &self.run_id, class, payload, vec![], causes)
@@ -351,7 +351,7 @@ impl DebtManager {
 
     /// `post_import_sweep(manager_id, snapshot_ref, sweep, entries, now_ms,
     /// reserve)` — the S6.4 import-driven sweep (R-2.9.8 §2.3): the Lab's
-    /// `hh_lab::coevolution::post_import_sweep` partitions the scoped
+    /// `hharness_lab::coevolution::post_import_sweep` partitions the scoped
     /// debts (`covered`/`scheduled`/`unchanged`) — the manager mints the
     /// durable half:
     ///
@@ -377,7 +377,7 @@ impl DebtManager {
         store: &mut Store,
         manager_id: &str,
         snapshot_ref: &str,
-        sweep: &hh_lab::coevolution::PostImportSweep,
+        sweep: &hharness_lab::coevolution::PostImportSweep,
         entries: &[SweepEntry],
         now_ms: u64,
         reserve: Option<&dyn Fn(&str) -> bool>,
@@ -533,7 +533,7 @@ impl DebtManager {
     }
 
     /// `settle(debt_ref, kind, report_ref, verdict, reason, now_ms)` —
-    /// the settled-verdict op: `hh_lab::debt::settle_removal_test` derives
+    /// the settled-verdict op: `hharness_lab::debt::settle_removal_test` derives
     /// the verdict + record-facing transitions; the verdict mints
     /// `removal_test.settled`, the transitions mint `status.changed` (the
     /// `pass → retirement-eligible` half is a *verdict*, never a status
@@ -570,7 +570,7 @@ impl DebtManager {
     }
 
     /// `retire(debt_ref, record)` — the human-sealed gate (AC-R-2.9.6-4):
-    /// `hh_lab::debt::retire` refuses without a `pass` verdict on the debt
+    /// `hharness_lab::debt::retire` refuses without a `pass` verdict on the debt
     /// and a human `decided_by`; the admitted outcome mints
     /// `status.changed{to: retired}` with `supersedes{reason: expiry}` —
     /// the caller's new-version seal carries the supersession member.
@@ -578,8 +578,8 @@ impl DebtManager {
         &mut self,
         store: &mut Store,
         debt_ref: &str,
-        record: &hh_hir::debt::RetirementRecord,
-    ) -> Res<hh_lab::debt::RetirementOutcome> {
+        record: &hharness_hir::debt::RetirementRecord,
+    ) -> Res<hharness_lab::debt::RetirementOutcome> {
         let status = self
             .view
             .status
@@ -588,20 +588,23 @@ impl DebtManager {
             .unwrap_or(DebtStatus::Active);
         let verdicts: Vec<RemovalVerdict> =
             self.view.settled.iter().map(|(_, v)| v.clone()).collect();
-        let outcome =
-            hh_lab::debt::retire(debt_ref, status, &verdicts, record).map_err(|e| match e {
-                hh_lab::debt::RetireError::RetirementNotEvidenced { .. } => {
+        let outcome = hharness_lab::debt::retire(debt_ref, status, &verdicts, record).map_err(
+            |e| match e {
+                hharness_lab::debt::RetireError::RetirementNotEvidenced { .. } => {
                     Refusal::RetirementNotEvidenced {
                         debt_ref: debt_ref.to_string(),
                     }
                 }
-                hh_lab::debt::RetireError::NotHumanSealed { .. } => Refusal::NotARetirementDiff {
-                    detail: "decided_by is not human provenance".to_string(),
-                },
-                hh_lab::debt::RetireError::AlreadyRetired { .. } => Refusal::Unsupported {
+                hharness_lab::debt::RetireError::NotHumanSealed { .. } => {
+                    Refusal::NotARetirementDiff {
+                        detail: "decided_by is not human provenance".to_string(),
+                    }
+                }
+                hharness_lab::debt::RetireError::AlreadyRetired { .. } => Refusal::Unsupported {
                     detail: "the debt is already retired".to_string(),
                 },
-            })?;
+            },
+        )?;
         let mut p = outcome.transition.to_json();
         if let Json::Obj(m) = &mut p {
             m.insert(
@@ -630,10 +633,10 @@ impl DebtManager {
     }
 
     /// `index(entries)` — the fleet-level debt index projection
-    /// (`hh_lab::debt::debt_index` — the materialized view the report
+    /// (`hharness_lab::debt::debt_index` — the materialized view the report
     /// derives from; records-in).
-    pub fn index(&self, entries: &[DebtIndexEntry]) -> Vec<hh_lab::debt::DebtIndexRow> {
-        hh_lab::debt::debt_index(entries)
+    pub fn index(&self, entries: &[DebtIndexEntry]) -> Vec<hharness_lab::debt::DebtIndexRow> {
+        hharness_lab::debt::debt_index(entries)
     }
 
     /// `report(entries, policy, now_ms)` — the fleet-level report +
@@ -646,16 +649,16 @@ impl DebtManager {
         policy: &DebtPolicy,
         now_ms: u64,
     ) -> (
-        hh_lab::debt::DebtReport,
+        hharness_lab::debt::DebtReport,
         std::collections::BTreeMap<String, Vec<Json>>,
     ) {
-        let index = hh_lab::debt::debt_index(entries);
+        let index = hharness_lab::debt::debt_index(entries);
         let health = AssumptionDebtHealth {
             warn_within_ms: policy.warn_within_ms,
         };
         let report = health.report(&index, now_ms);
         let notices = health.notices(&index, &report);
-        let routed = hh_lab::debt::route_notices(&notices, policy);
+        let routed = hharness_lab::debt::route_notices(&notices, policy);
         (report, routed)
     }
 }

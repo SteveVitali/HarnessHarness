@@ -30,7 +30,7 @@ pub struct ProviderHandle {
     /// The adapter's region/zone claim, when reported.
     pub region: Option<String>,
     /// Adapter-reported extras (opaque; recorded verbatim).
-    pub extra: BTreeMap<String, hh_wire::json::Json>,
+    pub extra: BTreeMap<String, hharness_wire::json::Json>,
 }
 
 /// What `provision` hands the adapter — the environment record's resolved

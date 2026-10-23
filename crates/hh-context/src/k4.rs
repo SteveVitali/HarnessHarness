@@ -45,15 +45,15 @@
 //! ([`K4Cache::resolved_payload`]) — hits, misses, bypasses, withhelds,
 //! refusals (ADR-0128 d.3).
 
-use hh_hir::kinds::EffectDomain;
-use hh_identity::idp::idp_id;
-use hh_identity::names::ResolveMode;
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility};
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::{Derivation, DerivationKind, ProvenanceRecord};
-use hh_provenance::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_identity::idp::idp_id;
+use hharness_identity::names::ResolveMode;
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility};
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::{Derivation, DerivationKind, ProvenanceRecord};
+use hharness_provenance::PersistenceScope;
+use hharness_wire::json::Json;
 
 use crate::lifecycle::lifecycle_state;
 use crate::memory::{
@@ -658,11 +658,13 @@ impl K4Cache {
             declared_inputs: Vec::new(),
             justifications: Vec::new(),
             supersedes: None,
-            validity: entry.valid_until.map(|until| hh_hir::records::Validity {
-                from: ctx.at_seq,
-                until: Some(until),
-                condition: None,
-            }),
+            validity: entry
+                .valid_until
+                .map(|until| hharness_hir::records::Validity {
+                    from: ctx.at_seq,
+                    until: Some(until),
+                    condition: None,
+                }),
             provenance: Some(entry.provenance.clone()),
             // One supersession line per member set — a re-execution's write
             // joins the same line.
@@ -729,8 +731,8 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-    use hh_provenance::label::Label;
+    use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+    use hharness_provenance::label::Label;
 
     fn ctx_label() -> Label {
         Label::at(AuthorityClass::Principal)
@@ -829,7 +831,7 @@ mod tests {
         let risky = RiskClass {
             reversibility: RiskReversibility::ReadOnly,
             repeat_safety: RepeatSafety::NonIdempotent,
-            scope: hh_ontology::risk::RiskScope::WorkspaceLocal,
+            scope: hharness_ontology::risk::RiskScope::WorkspaceLocal,
         };
         assert!(matches!(
             K4Cache::admissible(&risky, true),

@@ -5,7 +5,7 @@
 //! `catalog`), deterministic given a snapshot (AC-E1-7).
 //!
 //! - `project_risk` is the CF-104 projection — re-exported from
-//!   [`hh_hir::risk::capability_risk`] (one implementation, CC7);
+//!   [`hharness_hir::risk::capability_risk`] (one implementation, CC7);
 //!   `unverified` ⇒ the most dangerous class (ADR-0031 §2).
 //! - `required_grants` is the V-EFF view `[{domain, scope_kind, param_path?}]`
 //!   the monitor's coverage check reads — never stored.
@@ -19,12 +19,12 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_hir::kinds::{EffectDomain, ToolEffects, World};
-use hh_hir::records::ToolCapabilityRecord;
-use hh_hir::tools::ScopeKind;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::risk::RiskClass;
-use hh_wire::json::Json;
+use hharness_hir::kinds::{EffectDomain, ToolEffects, World};
+use hharness_hir::records::ToolCapabilityRecord;
+use hharness_hir::tools::ScopeKind;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::risk::RiskClass;
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::records::{CapabilityRecord, RegistryRecord, RegistrySnapshot};
@@ -35,7 +35,13 @@ use crate::store::RegistryStore;
 pub fn capability_at<'a>(
     store: &'a RegistryStore,
     version_id: &str,
-) -> Result<(&'a CapabilityRecord, &'a hh_provenance::ProvenanceRecord), RegistryError> {
+) -> Result<
+    (
+        &'a CapabilityRecord,
+        &'a hharness_provenance::ProvenanceRecord,
+    ),
+    RegistryError,
+> {
     match store.get(version_id) {
         Some((env, RegistryRecord::Capability(c))) => Ok((c, &env.registrar)),
         Some(_) => Err(RegistryError::KindMismatch {
@@ -53,7 +59,7 @@ pub fn capability_at<'a>(
 /// The record's *node* provenance carries the declaration authority.
 pub fn project_risk(store: &RegistryStore, version_id: &str) -> Result<RiskClass, RegistryError> {
     let (c, _registrar) = capability_at(store, version_id)?;
-    Ok(hh_hir::risk::capability_risk(
+    Ok(hharness_hir::risk::capability_risk(
         capability_semantic(c)?,
         c.node.provenance.authority,
     ))
@@ -62,7 +68,7 @@ pub fn project_risk(store: &RegistryStore, version_id: &str) -> Result<RiskClass
 /// The record's `ToolCapability` semantic member.
 fn capability_semantic(c: &CapabilityRecord) -> Result<&ToolCapabilityRecord, RegistryError> {
     match &c.node.semantic {
-        hh_hir::records::KindRecord::ToolCapability(t) => Ok(t),
+        hharness_hir::records::KindRecord::ToolCapability(t) => Ok(t),
         _ => Err(RegistryError::SchemaViolation {
             path: "semantic".to_string(),
             detail: "capability record's semantic member is not a tool_capability".to_string(),
@@ -92,14 +98,14 @@ pub fn required_grants(
 ) -> Result<Vec<RequiredGrant>, RegistryError> {
     let (c, _r) = capability_at(store, version_id)?;
     let t = capability_semantic(c)?;
-    let bindings = hh_hir::tools::scope_bindings(&t.scope_bindings)
+    let bindings = hharness_hir::tools::scope_bindings(&t.scope_bindings)
         .ok()
         .flatten()
         .unwrap_or_default();
     let mut out = Vec::new();
     if let ToolEffects::Declared(set) = &t.effects {
         for e in set {
-            let scope_kind = hh_hir::tools::domain_scope_kind(e.domain);
+            let scope_kind = hharness_hir::tools::domain_scope_kind(e.domain);
             let param_path = scope_kind.and_then(|k| {
                 bindings
                     .iter()
@@ -264,13 +270,13 @@ pub fn catalog(
             continue;
         };
         let t = capability_semantic(c)?;
-        let source_kind = hh_hir::tools::source_kind(&t.source).unwrap_or_default();
+        let source_kind = hharness_hir::tools::source_kind(&t.source).unwrap_or_default();
         let domains: Vec<String> = match &t.effects {
             ToolEffects::Pure => Vec::new(),
             ToolEffects::Declared(set) => set.iter().map(|e| e.domain.name().to_string()).collect(),
         };
         let namespace = match &c.node.surface {
-            Some(hh_hir::records::SurfaceRecord::Tool(ts)) => Some(ts.namespace.clone()),
+            Some(hharness_hir::records::SurfaceRecord::Tool(ts)) => Some(ts.namespace.clone()),
             _ => None,
         };
         let worlds: BTreeSet<World> = match &t.effects {
@@ -374,7 +380,7 @@ pub fn search_projection(
             ToolEffects::Declared(set) => set.iter().map(|e| e.domain.name().to_string()).collect(),
         },
         namespace: match &c.node.surface {
-            Some(hh_hir::records::SurfaceRecord::Tool(ts)) => Some(ts.namespace.clone()),
+            Some(hharness_hir::records::SurfaceRecord::Tool(ts)) => Some(ts.namespace.clone()),
             _ => None,
         },
     })

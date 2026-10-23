@@ -6,13 +6,13 @@
 //!
 //! Everything here is compile-time — pure, content-addressed, declared-records
 //! only (T-LCD-08/-12; ADR-0019 purity). The run-time half lives in
-//! `hh-context`'s `select_surfaces` (R-2.5.3 evaluates the selectors here).
+//! `hharness-context`'s `select_surfaces` (R-2.5.3 evaluates the selectors here).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::records::{AssumptionDebtRecord, ToolSurface};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::{AssumptionDebtRecord, ToolSurface};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::equiv::{ArgMapEntry, ArgTransform, EvidenceVerdict, Inclusion, SurfaceBinding};
 use crate::errors::CompileError;
@@ -450,10 +450,10 @@ pub struct SchemaDialectTransform {
 /// (R3.6) — the op-check has no kernel provenance of its own, so the
 /// compiler's own record stamps `detail` (the `link_precheck`
 /// `ProvenanceRecord::kernel("assembly", 0)` convention).
-fn dn_diag(dialect: &str, detail: &str) -> hh_assembly::AssemblyDiagnostic {
+fn dn_diag(dialect: &str, detail: &str) -> hharness_assembly::AssemblyDiagnostic {
     crate::link::diag(
-        hh_assembly::Code::LinkDialectNarrowing,
-        hh_assembly::Severity::Error,
+        hharness_assembly::Code::LinkDialectNarrowing,
+        hharness_assembly::Severity::Error,
         "/assembly",
         dialect,
         detail,
@@ -570,11 +570,11 @@ pub struct SafetyInput<'a> {
     /// The synthesized text's declared authority class — S3 checks it is
     /// `≤ delegate` (`unverified` for imports) and its target slot never
     /// carries `definition` authority.
-    pub synthesized_authority: Option<hh_provenance::AuthorityClass>,
+    pub synthesized_authority: Option<hharness_provenance::AuthorityClass>,
     /// The target slot's minimum authority (S3's placement bound — a
     /// synthesized description landing in a `definition`-floor slot is a
     /// widening).
-    pub target_slot_min_authority: Option<hh_provenance::AuthorityClass>,
+    pub target_slot_min_authority: Option<hharness_provenance::AuthorityClass>,
 }
 
 /// `check_safety(input) → SafetyEvidence` (ADR-0091 D3; AC-R-2.5.2-8): the
@@ -624,9 +624,9 @@ pub fn check_safety(input: &SafetyInput<'_>) -> SafetyEvidence {
     // S3 — synthesized text ≤ delegate and never in a definition-floor slot.
     let s3 = match (input.synthesized_authority, input.target_slot_min_authority) {
         (Some(auth), slot) => {
-            if auth > hh_provenance::AuthorityClass::Delegate {
+            if auth > hharness_provenance::AuthorityClass::Delegate {
                 EvidenceVerdict::fail("synthesized text carries authority > delegate")
-            } else if slot.is_some_and(|m| m > hh_provenance::AuthorityClass::Delegate) {
+            } else if slot.is_some_and(|m| m > hharness_provenance::AuthorityClass::Delegate) {
                 EvidenceVerdict::fail(
                     "synthesized text would render into a definition-authority role",
                 )
@@ -832,7 +832,7 @@ pub fn code_mode_nested_call(
     args: &Json,
     ordinal: u64,
 ) -> CodeModeNestedCall {
-    let effect_id = hh_identity::idp::idp_id(
+    let effect_id = hharness_identity::idp::idp_id(
         "code_mode_effect.1",
         format!(
             "{parent_effect_id}:{surface_id}:{ordinal}:{}",
@@ -857,7 +857,7 @@ pub fn code_mode_catalogue(bindings: &[SurfaceBinding]) -> Vec<&SurfaceBinding> 
         .iter()
         .filter(|b| {
             b.admitted_modes
-                .contains(&hh_hir::tools::ExposureMode::CodeMode)
+                .contains(&hharness_hir::tools::ExposureMode::CodeMode)
         })
         .collect()
 }
@@ -875,7 +875,7 @@ pub struct ShimCall {
     /// The parsed arguments (the target `SurfaceArgMap` interprets them).
     pub args: Json,
     /// `authority = delegate` — constant (the parsed call's ceiling).
-    pub authority: hh_provenance::AuthorityClass,
+    pub authority: hharness_provenance::AuthorityClass,
 }
 
 /// `shim_resolve(name, args, table)` — the shim's `resolve_name` half:
@@ -890,7 +890,7 @@ pub fn shim_resolve(
         Some(surface_id) => Ok(ShimCall {
             surface_id: surface_id.clone(),
             args,
-            authority: hh_provenance::AuthorityClass::Delegate,
+            authority: hharness_provenance::AuthorityClass::Delegate,
         }),
         None => Err(crate::surface::SurfaceFailure::UnknownSurface),
     }
@@ -929,7 +929,7 @@ pub fn shim_metering(caller_role: &str) -> ShimMetering {
 /// `plan_map_ref(map)` — the pinned `Procedure` `version_id` coordinate a
 /// `BindingMapping::PlanMap` carries (`idp("plan_map.1", canonical)`).
 pub fn plan_map_ref(map: &PlanMap) -> String {
-    hh_identity::idp::idp_id("plan_map.1", map_json(map).to_canonical_string().as_bytes())
+    hharness_identity::idp::idp_id("plan_map.1", map_json(map).to_canonical_string().as_bytes())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -957,7 +957,7 @@ pub fn plan_map_ref(map: &PlanMap) -> String {
 /// its declared effect-domain spellings.
 pub fn bind_composite(
     surface: &ToolSurface,
-    home: &hh_hir::Node,
+    home: &hharness_hir::Node,
     plan: &PlanMap,
     allowed_capabilities: &BTreeSet<String>,
     capability_effects: &BTreeMap<String, BTreeSet<String>>,
@@ -1000,7 +1000,7 @@ pub fn bind_composite(
 /// grammar — the `arg_map` is [`freeform_map`] verbatim.
 pub fn bind_freeform(
     surface: &ToolSurface,
-    home: &hh_hir::Node,
+    home: &hharness_hir::Node,
     spec: &FreeformSpec,
 ) -> SurfaceBinding {
     let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
@@ -1029,7 +1029,11 @@ pub struct ShimSpec {
 /// defining entry is `resolve_name(table_ref)` (the table pin rides the
 /// `arg_map` — it is in the `surface_id` basis, so a table change is a new
 /// surface identity — E7).
-pub fn bind_shim(surface: &ToolSurface, home: &hh_hir::Node, spec: &ShimSpec) -> SurfaceBinding {
+pub fn bind_shim(
+    surface: &ToolSurface,
+    home: &hharness_hir::Node,
+    spec: &ShimSpec,
+) -> SurfaceBinding {
     let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
     b.exposure_mode = CompileExposureMode::Shim;
     b.arg_map = [(
@@ -1052,8 +1056,8 @@ pub fn bind_shim(surface: &ToolSurface, home: &hh_hir::Node, spec: &ShimSpec) ->
 /// D7): the binding's *compile-time* mode is `code_mode`; the authored
 /// run-time admission carries `ExposureMode::CodeMode` (the run-time leg —
 /// `check_callable` admits program-originated calls only on that mode — is
-/// `hh_compiler::exposure::check_callable`, unchanged).
-pub fn bind_code_mode(surface: &ToolSurface, home: &hh_hir::Node) -> SurfaceBinding {
+/// `hharness_compiler::exposure::check_callable`, unchanged).
+pub fn bind_code_mode(surface: &ToolSurface, home: &hharness_hir::Node) -> SurfaceBinding {
     let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
     b.exposure_mode = CompileExposureMode::CodeMode;
     b.surface_id = crate::surface::surface_id(&b);
@@ -1210,7 +1214,9 @@ pub fn composite_binding(
         family_id,
         variant_id,
         dialect: crate::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     };
@@ -1313,13 +1319,13 @@ pub struct BranchEvidence {
 /// `capabilities` maps semantic id → the `ToolCapability` node.
 pub fn check_plan_map_evidence(
     map: &PlanMap,
-    capabilities: &BTreeMap<String, hh_hir::Node>,
+    capabilities: &BTreeMap<String, hharness_hir::Node>,
 ) -> Result<Vec<BranchEvidence>, CompileError> {
     let mut out = Vec::new();
     fn go(
         steps: &[PlanStep],
         path: String,
-        caps: &BTreeMap<String, hh_hir::Node>,
+        caps: &BTreeMap<String, hharness_hir::Node>,
         out: &mut Vec<BranchEvidence>,
     ) -> Result<(), CompileError> {
         for (i, s) in steps.iter().enumerate() {
@@ -1360,7 +1366,9 @@ pub fn check_plan_map_evidence(
                         family_id: None,
                         variant_id: None,
                         dialect: crate::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
-                        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+                        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+                            .into_iter()
+                            .collect(),
                         pinned: false,
                         hidden: false,
                     };

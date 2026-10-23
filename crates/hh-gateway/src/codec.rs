@@ -13,7 +13,7 @@
 //! `redacted_reasoning`) are moved byte-for-byte (AC-R-2.3.1-8 — a fixture's
 //! opaque payload round-trips bit-identically).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::dialect::DialectRule;
 use crate::dialect::WireDialect;
@@ -232,7 +232,7 @@ pub fn classify_http_error(dialect: &WireDialect, status: u32, body: &Json) -> M
     let mut err = ModelError::new(class, text);
     err.http_status = Some(status);
     err.provider_code = code;
-    err.raw_ref = Some(hh_identity::idp_id(
+    err.raw_ref = Some(hharness_identity::idp_id(
         "frame.error.1",
         body.to_canonical_string().as_bytes(),
     ));
@@ -335,12 +335,12 @@ pub fn is_metadata_frame(dialect: &WireDialect, frame_kind: &str) -> bool {
 /// `cache_read_input_tokens`; details-nested `{prompt, completion}`; flat
 /// `{prompt_tokens, completion_tokens}`). Shape detection reads members,
 /// never provider identity (T-LCD-02/03).
-pub fn detect_provider_usage(raw: &Json) -> Option<hh_telemetry::ProviderUsage> {
+pub fn detect_provider_usage(raw: &Json) -> Option<hharness_telemetry::ProviderUsage> {
     let int = |j: &Json, k: &str| j.get(k).and_then(Json::as_int).unwrap_or(0);
     if raw.get("prompt").is_some() && raw.get("completion").is_some() {
         let p = raw.get("prompt").unwrap_or(&Json::Null);
         let c = raw.get("completion").unwrap_or(&Json::Null);
-        return Some(hh_telemetry::ProviderUsage::DetailsNested {
+        return Some(hharness_telemetry::ProviderUsage::DetailsNested {
             prompt_total: int(p, "total") + int(p, "tokens"),
             prompt_cached: int(p, "cached") + int(p, "cached_tokens"),
             prompt_cache_write: int(p, "cache_write") + int(p, "cache_write_tokens"),
@@ -349,7 +349,7 @@ pub fn detect_provider_usage(raw: &Json) -> Option<hh_telemetry::ProviderUsage> 
         });
     }
     if raw.get("prompt_tokens").is_some() || raw.get("completion_tokens").is_some() {
-        return Some(hh_telemetry::ProviderUsage::Flat {
+        return Some(hharness_telemetry::ProviderUsage::Flat {
             prompt_tokens: int(raw, "prompt_tokens"),
             completion_tokens: int(raw, "completion_tokens"),
         });
@@ -357,7 +357,7 @@ pub fn detect_provider_usage(raw: &Json) -> Option<hh_telemetry::ProviderUsage> 
     if raw.get("cache_read_input_tokens").is_some()
         || raw.get("cache_creation_input_tokens").is_some()
     {
-        return Some(hh_telemetry::ProviderUsage::ExclusiveCached {
+        return Some(hharness_telemetry::ProviderUsage::ExclusiveCached {
             input_tokens: int(raw, "input_tokens"),
             cache_read_input_tokens: int(raw, "cache_read_input_tokens"),
             cache_creation_input_tokens: int(raw, "cache_creation_input_tokens"),
@@ -365,7 +365,7 @@ pub fn detect_provider_usage(raw: &Json) -> Option<hh_telemetry::ProviderUsage> 
         });
     }
     if raw.get("input_tokens").is_some() || raw.get("output_tokens").is_some() {
-        return Some(hh_telemetry::ProviderUsage::InclusiveCached {
+        return Some(hharness_telemetry::ProviderUsage::InclusiveCached {
             input_tokens: int(raw, "input_tokens"),
             cached_tokens: int(raw, "cached_tokens"),
             cache_creation_tokens: int(raw, "cache_creation_tokens"),
@@ -380,7 +380,7 @@ pub fn detect_provider_usage(raw: &Json) -> Option<hh_telemetry::ProviderUsage> 
 /// record, per the dialect's `usage_arrival` (ADR-0119 d.3): `final_only`
 /// accepts only the terminal frame's usage; `cumulative_stream`/`delta_stream`
 /// accept in-stream frames; `absent` yields nothing. Normalization itself is
-/// `hh_telemetry::normalize_usage` (CC1 — one convention,
+/// `hharness_telemetry::normalize_usage` (CC1 — one convention,
 /// `hh-inclusive/1`); `normalizer_ref` is the Model Profile's `usage_mapping`
 /// ref (mandatory on the vector).
 pub fn normalize_usage(
@@ -388,14 +388,14 @@ pub fn normalize_usage(
     raw: &Json,
     is_final: bool,
     normalizer_ref: &str,
-) -> Option<hh_telemetry::TokenVector> {
+) -> Option<hharness_telemetry::TokenVector> {
     match dialect.usage_arrival {
         UsageArrival::Absent => return None,
         UsageArrival::FinalOnly if !is_final => return None,
         _ => {}
     }
     let shape = detect_provider_usage(raw)?;
-    hh_telemetry::normalize_usage(&shape, normalizer_ref).ok()
+    hharness_telemetry::normalize_usage(&shape, normalizer_ref).ok()
 }
 
 /// `parse_provider_opaque(raw, owner)` — an opaque block payload `{bytes_b64 |
@@ -483,7 +483,7 @@ pub fn collect(
     stop: Option<(StopReason, Option<String>)>,
     served_model: Option<String>,
     stop_details: Option<crate::vocab::StopDetails>,
-    usage: Option<hh_telemetry::TokenVector>,
+    usage: Option<hharness_telemetry::TokenVector>,
     snapshot_id: Option<String>,
     response_id: Option<String>,
 ) -> Result<ModelMessage, ModelError> {

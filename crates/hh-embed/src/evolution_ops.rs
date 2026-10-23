@@ -14,10 +14,10 @@
 //! A `--no-default-features` build answers `Unsupported{by: "tier-c4"}`
 //! — the ops stay in the schema (CC7) and the tier is removable (CC6).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 #[cfg(feature = "tier-c4")]
 fn bad(path: &str, code: &str) -> EmbedError {
@@ -43,20 +43,20 @@ fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
 #[cfg(feature = "tier-c4")]
 pub(crate) mod imp {
     use super::{bad, req, req_str};
-    use hh_embed_schema::errors::EmbedError;
-    use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
-    use hh_evolution::errors::EvolutionError;
-    use hh_evolution::records::{
+    use hharness_embed_schema::errors::EmbedError;
+    use hharness_evolution::campaign::{doc_kind, EvolutionCampaign};
+    use hharness_evolution::errors::EvolutionError;
+    use hharness_evolution::records::{
         CandidateProposal, EvolutionAcceptanceReport, EvolutionCampaignSpec, FailureHypothesis,
         ScreenReport, SecurityInvarianceReport, TransferRow,
     };
-    use hh_hir::document::HirDocument;
-    use hh_ledger::store::Store;
-    use hh_provenance::ProvenanceRecord;
-    use hh_wire::json::Json;
+    use hharness_hir::document::HirDocument;
+    use hharness_ledger::store::Store;
+    use hharness_provenance::ProvenanceRecord;
+    use hharness_wire::json::Json;
     use std::collections::BTreeMap;
 
-    /// The writer-lease holder evolution campaigns take (`hh-embed`'s
+    /// The writer-lease holder evolution campaigns take (`hharness-embed`'s
     /// pipeline facade — the campaign's own spec names the principal).
     const EVO_HOLDER: &str = "hh-embed:evolution";
     /// The writer TTL (the `fleet.*` convention).
@@ -68,9 +68,9 @@ pub(crate) mod imp {
     /// failures surface as `SchemaViolation`.
     pub(crate) fn evo_err(e: EvolutionError) -> EmbedError {
         match e {
-            EvolutionError::Store(hh_ledger::errors::LedgerError::WouldBlock { active_holder }) => {
-                EmbedError::WouldBlock { active_holder }
-            }
+            EvolutionError::Store(hharness_ledger::errors::LedgerError::WouldBlock {
+                active_holder,
+            }) => EmbedError::WouldBlock { active_holder },
             EvolutionError::Schema(d) => EmbedError::SchemaViolation {
                 path: "/evolution".to_string(),
                 code: d,
@@ -86,7 +86,7 @@ pub(crate) mod imp {
     pub(crate) fn campaign<'m>(
         engines: &'m mut BTreeMap<String, EvolutionCampaign>,
         store: &mut Store,
-        docs: hh_experiment::docs::LabDocs,
+        docs: hharness_experiment::docs::LabDocs,
         run: &str,
     ) -> Result<&'m mut EvolutionCampaign, EmbedError> {
         if !engines.contains_key(run) {
@@ -154,7 +154,7 @@ pub(crate) mod imp {
                 let run = req_str(params, "run")?.to_string();
                 let proposal = CandidateProposal::from_json(req(params, "proposal")?)
                     .map_err(|e| bad("/proposal", &format!("{e:?}")))?;
-                let base_doc = hh_hir::wire::document_from_json(req(params, "base_doc")?)
+                let base_doc = hharness_hir::wire::document_from_json(req(params, "base_doc")?)
                     .map_err(|e| bad("/base_doc", &format!("{e:?}")))?;
                 let _doc: &HirDocument = &base_doc;
                 let docs = svc.lab_docs()?;
@@ -305,14 +305,14 @@ pub(crate) mod imp {
                 // `model_version_change`-scoped debt check
                 // (policy-conditioned expiry; ADR-0194 D6).
                 let retrained_pin = match params.get("retrained_pin") {
-                    Some(j) if !matches!(j, Json::Null) => {
-                        Some(hh_lab::model::SnapshotClaim::from_json(j).map_err(|e| {
+                    Some(j) if !matches!(j, Json::Null) => Some(
+                        hharness_lab::model::SnapshotClaim::from_json(j).map_err(|e| {
                             EmbedError::SchemaViolation {
                                 path: "/retrained_pin".into(),
                                 code: format!("{e:?}"),
                             }
-                        })?)
-                    }
+                        })?,
+                    ),
                     _ => None,
                 };
                 let docs = svc.lab_docs()?;
@@ -380,7 +380,7 @@ pub(crate) mod imp {
                 let candidate_id = cid(params)?;
                 let proposal = CandidateProposal::from_json(req(params, "proposal")?)
                     .map_err(|e| bad("/proposal", &format!("{e:?}")))?;
-                let base_doc = hh_hir::wire::document_from_json(req(params, "base_doc")?)
+                let base_doc = hharness_hir::wire::document_from_json(req(params, "base_doc")?)
                     .map_err(|e| bad("/base_doc", &format!("{e:?}")))?;
                 let docs = svc.lab_docs()?;
                 let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
@@ -486,7 +486,7 @@ pub(crate) mod imp {
                 let run = req_str(params, "run")?.to_string();
                 let docs = svc.lab_docs()?;
                 let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
-                let dag = hh_evolution::lineage::LineageDag::from_view(
+                let dag = hharness_evolution::lineage::LineageDag::from_view(
                     &eng.view,
                     &eng.spec.base_definition_ref,
                 );
@@ -501,7 +501,7 @@ pub(crate) mod imp {
                 if !reports.is_empty() {
                     out.push((
                         "attribution",
-                        hh_evolution::lineage::attribute_lineage(&dag, &reports),
+                        hharness_evolution::lineage::attribute_lineage(&dag, &reports),
                     ));
                 }
                 Ok(Json::obj(out))

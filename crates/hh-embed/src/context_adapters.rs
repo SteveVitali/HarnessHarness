@@ -28,19 +28,19 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use hh_context::compact::{
+use hharness_context::compact::{
     SummarizeInput, Summarizer, SummarizerError, SummarizerFailure, SummarizerOutput,
 };
-use hh_context::compact_family::{
+use hharness_context::compact_family::{
     ProviderCompactInput, ProviderCompactOutcome, ProviderCompaction,
 };
-use hh_context::retrieve::Embedder;
-use hh_gateway::credentials::BrokerCredentialPort;
-use hh_gateway::gateway::{CredentialHandle, CredentialPort};
-use hh_gateway::http_transport::{Family, HttpModelTransport};
-use hh_wire::json::Json;
+use hharness_context::retrieve::Embedder;
+use hharness_gateway::credentials::BrokerCredentialPort;
+use hharness_gateway::gateway::{CredentialHandle, CredentialPort};
+use hharness_gateway::http_transport::{Family, HttpModelTransport};
+use hharness_wire::json::Json;
 
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 use crate::gateway_model::{dialect_by_id, GatewayModel, ModelLane, TlsLane};
 
@@ -137,7 +137,7 @@ impl AdapterLane {
     /// `pub(crate)` — `judge_adapters` arms lanes at link (R4.7e).
     pub(crate) fn arm_transport(
         &self,
-    ) -> Result<(hh_gateway::dialect::WireDialect, HttpModelTransport), EmbedError> {
+    ) -> Result<(hharness_gateway::dialect::WireDialect, HttpModelTransport), EmbedError> {
         let dialect =
             dialect_by_id(&self.dialect_ref).ok_or_else(|| EmbedError::InvalidDefinition {
                 diagnostics: vec![format!(
@@ -155,7 +155,7 @@ impl AdapterLane {
     /// surprise. `pub(crate)` — `judge_adapters` binds at link (R4.7e).
     pub(crate) fn bind_credential(
         &self,
-        auth_kinds: &[hh_gateway::dialect::AuthKind],
+        auth_kinds: &[hharness_gateway::dialect::AuthKind],
     ) -> Result<CredentialHandle, EmbedError> {
         BrokerCredentialPort::default()
             .bind(
@@ -234,7 +234,7 @@ impl LaneEmbedder {
     /// embeddings API.
     pub fn new(lane: AdapterLane, embedder_ref: &str) -> Result<LaneEmbedder, EmbedError> {
         let (dialect, transport) = lane.arm_transport()?;
-        if hh_gateway::http_transport::family_of(&dialect) != Family::ChatCompletions {
+        if hharness_gateway::http_transport::family_of(&dialect) != Family::ChatCompletions {
             return Err(EmbedError::Unsupported {
                 by: format!(
                     "{} has no embeddings API — the provider publishes none",
@@ -476,9 +476,10 @@ impl Summarizer for LaneSummarizer {
         if let Some(class) = &shot.outcome.error_class {
             // `empty_response` (the boundary's typed no-content class) maps
             // to the port's `empty` failure — never an empty summary_text.
-            let kind = if shot.outcome.stop_reason == hh_gateway::vocab::StopReason::Cancelled {
+            let kind = if shot.outcome.stop_reason == hharness_gateway::vocab::StopReason::Cancelled
+            {
                 SummarizerFailure::Aborted
-            } else if class == hh_gateway::vocab::ModelErrorClass::EmptyResponse.as_str() {
+            } else if class == hharness_gateway::vocab::ModelErrorClass::EmptyResponse.as_str() {
                 SummarizerFailure::Empty
             } else {
                 SummarizerFailure::Error
@@ -513,7 +514,9 @@ impl Summarizer for LaneSummarizer {
         let io_refs: Vec<Json> = shot
             .model_io
             .iter()
-            .map(|(media, bytes)| Json::str(hh_identity::idp::address(bytes, media.as_str()).id()))
+            .map(|(media, bytes)| {
+                Json::str(hharness_identity::idp::address(bytes, media.as_str()).id())
+            })
             .collect();
         let usage = Json::obj([
             ("view", shot.usage),
@@ -557,7 +560,7 @@ impl LaneProviderCompaction {
         capability_ref: &str,
     ) -> Result<LaneProviderCompaction, EmbedError> {
         let (dialect, transport) = lane.arm_transport()?;
-        if hh_gateway::http_transport::family_of(&dialect) != Family::Messages {
+        if hharness_gateway::http_transport::family_of(&dialect) != Family::Messages {
             return Err(EmbedError::Unsupported {
                 by: format!(
                     "{} has no lane-native compaction API that answers a summary \

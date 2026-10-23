@@ -1,4 +1,4 @@
-//! `hh-embed-schema` — **the single schema source** for the `hh-embed/1`
+//! `hharness-embed-schema` — **the single schema source** for the `hh-embed/1`
 //! contract (R-2.11.4; §7.4; ADR-0176/0178/0179/0180/0183; CC7: "every
 //! class-document schema is exported from the kernel's single schema
 //! source and shared with the §7 kernel↔surfaces binding; plugin/client
@@ -19,7 +19,7 @@
 //! Rust types cannot drift (tests assert the registry, the error sum,
 //! and the export agree).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 pub mod errors;
 pub mod frames;
@@ -679,7 +679,7 @@ fn types_schema() -> Json {
             ("modified", &[("amended_args", "json", true)]),
             // R2.12 (DF-S2.7-1b) — the remedy-consume arm: `remedy` is the
             // canonical `Remedy` record (`{kind, …members}` — §5g.2 §3's
-            // closed sum; the kernel decodes it against `hh_provenance`,
+            // closed sum; the kernel decodes it against `hharness_provenance`,
             // the boundary schema keeps it an opaque `json` member).
             ("remedy", &[("remedy", "json", true)]),
         ]),
@@ -1490,11 +1490,11 @@ pub fn canonical_schema_bytes() -> String {
 }
 
 /// The content address of the canonical schema export: an `idp/1`
-/// [`hh_identity::ContentAddress`] over the canonical schema bytes,
+/// [`hharness_identity::ContentAddress`] over the canonical schema bytes,
 /// rendered `sha256:<hex>` (§7.4; ADR-0036; CC1 — the one
 /// content-addressing scheme in the tree).
 pub fn schema_hash() -> String {
-    hh_identity::address(
+    hharness_identity::address(
         canonical_schema_bytes().as_bytes(),
         "application/schema+json",
     )
@@ -1523,7 +1523,7 @@ mod tests {
     fn schema_hash_is_idp1_content_address() {
         assert_eq!(schema_hash(), schema_hash());
         assert!(schema_hash().starts_with("sha256:"));
-        let expect = hh_identity::address(
+        let expect = hharness_identity::address(
             canonical_schema_bytes().as_bytes(),
             "application/schema+json",
         )

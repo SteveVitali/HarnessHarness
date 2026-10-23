@@ -15,9 +15,9 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use hh_wire::json::parse;
-use hh_xcheck::check::{self_check, verify_answers, CheckReport};
-use hh_xcheck::export::export_bundle;
+use hharness_wire::json::parse;
+use hharness_xcheck::check::{self_check, verify_answers, CheckReport};
+use hharness_xcheck::export::export_bundle;
 
 fn usage() -> ExitCode {
     eprintln!(
@@ -79,7 +79,7 @@ fn main() -> ExitCode {
             };
             let candidate = answers
                 .get("candidate")
-                .and_then(hh_wire::json::Json::as_str)
+                .and_then(hharness_wire::json::Json::as_str)
                 .unwrap_or("unknown");
             match verify_answers(Path::new(&args[2]), &answers) {
                 Ok(r) => {

@@ -6,7 +6,7 @@
 //!
 //! - **`mcp`** — `hh-mcp-target/1`: the canonical tool catalogue as a pure function of
 //!   the bundle (`tools[]` sorted `(semantic_id, surface_name)`), each tool carrying
-//!   the minimum carried set in `_meta["dev.cognition/hir"]` (`semantic_id`, the
+//!   the minimum carried set in `_meta["hharness/hir"]` (`semantic_id`, the
 //!   `EffectClass` set, the permission class, the provenance pointer
 //!   `{origin, authority}`, the budget reference) plus the ADR-0096 D5 hint
 //!   projection (`readOnlyHint ⇐ ∀ mutability = read_only`; `destructiveHint ⇐ ∃
@@ -31,10 +31,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::kinds::Mutability;
-use hh_hir::records::KindRecord;
-use hh_hir::ToolEffects;
-use hh_wire::json::Json;
+use hharness_hir::kinds::Mutability;
+use hharness_hir::records::KindRecord;
+use hharness_hir::ToolEffects;
+use hharness_wire::json::Json;
 
 use crate::errors::CompileError;
 use crate::lcd::{GranularityCeiling, LossEntry, LossKind, LossSeverity, LoweringLossReport};
@@ -44,7 +44,7 @@ use crate::seal::ModelSurface;
 
 /// The `_meta` key the minimum carried set travels under (MCP `_meta["<hh-prefix>/
 /// hir"]`; the reverse-DNS prefix is ADR-0210/OQ-068's interim allocation).
-pub const HH_META_KEY: &str = "dev.cognition/hir";
+pub const HH_META_KEY: &str = "hharness/hir";
 
 /// `hh-mcp-target/1` and `hh-provider-request/1` artefact dialects.
 pub const MCP_ARTEFACT_DIALECT: &str = "hh-mcp-target/1";
@@ -89,15 +89,18 @@ pub fn lower_target(
 }
 
 /// The MCP hint projection — ADR-0096 D5's fixed map (CF-047/CF-102).
-fn mcp_hints(effects: &[hh_hir::EffectClass], resources_declared: bool) -> BTreeMap<String, bool> {
+fn mcp_hints(
+    effects: &[hharness_hir::EffectClass],
+    resources_declared: bool,
+) -> BTreeMap<String, bool> {
     let mut hints = BTreeMap::new();
-    let all = |pred: &dyn Fn(&hh_hir::kinds::EffectAttributes) -> bool| {
+    let all = |pred: &dyn Fn(&hharness_hir::kinds::EffectAttributes) -> bool| {
         !effects.is_empty()
             && effects
                 .iter()
                 .all(|e| e.attributes.as_ref().map(pred).unwrap_or(false))
     };
-    let any = |pred: &dyn Fn(&hh_hir::kinds::EffectAttributes) -> bool| {
+    let any = |pred: &dyn Fn(&hharness_hir::kinds::EffectAttributes) -> bool| {
         effects
             .iter()
             .any(|e| e.attributes.as_ref().map(pred).unwrap_or(false))
@@ -112,7 +115,8 @@ fn mcp_hints(effects: &[hh_hir::EffectClass], resources_declared: bool) -> BTree
     );
     hints.insert(
         "idempotentHint".to_string(),
-        all(&|a| a.repeat_safety == hh_hir::kinds::RepeatSafety::Idempotent) || effects.is_empty(),
+        all(&|a| a.repeat_safety == hharness_hir::kinds::RepeatSafety::Idempotent)
+            || effects.is_empty(),
     );
     hints.insert(
         "openWorldHint".to_string(),
@@ -125,7 +129,7 @@ fn mcp_hints(effects: &[hh_hir::EffectClass], resources_declared: bool) -> BTree
 fn capability_of<'a>(
     linked: &'a LinkedGraph,
     sid: &str,
-) -> Result<&'a hh_hir::records::ToolCapabilityRecord, CompileError> {
+) -> Result<&'a hharness_hir::records::ToolCapabilityRecord, CompileError> {
     let node = linked
         .sealed
         .document
@@ -292,8 +296,11 @@ fn lower_mcp(
             .document
             .node(&t.binding.hir_node_id)
             .expect("checked");
-        let resources_declared = matches!(&cap.resources, hh_hir::records::Resources::Declared(_));
-        let effect_set: Vec<hh_hir::EffectClass> = match &cap.effects {
+        let resources_declared = matches!(
+            &cap.resources,
+            hharness_hir::records::Resources::Declared(_)
+        );
+        let effect_set: Vec<hharness_hir::EffectClass> = match &cap.effects {
             ToolEffects::Pure => Vec::new(),
             ToolEffects::Declared(s) => s.iter().cloned().collect(),
         };
@@ -490,7 +497,7 @@ fn lower_provider(
         // silent direct-only narrowing (the refusal shape §3.2.5 owns).
         if t.binding
             .admitted_modes
-            .contains(&hh_hir::tools::ExposureMode::Deferred)
+            .contains(&hharness_hir::tools::ExposureMode::Deferred)
             && !deferred_declared
         {
             entries.push(LossEntry {
@@ -529,7 +536,7 @@ fn lower_provider(
                 Json::Bool(
                     t.binding
                         .admitted_modes
-                        .contains(&hh_hir::tools::ExposureMode::Deferred),
+                        .contains(&hharness_hir::tools::ExposureMode::Deferred),
                 ),
             ),
             ("description", Json::str(t.description.clone())),

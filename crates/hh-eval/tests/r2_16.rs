@@ -27,31 +27,31 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::matchspec::{validate_match_at, ArmSpec, MatchMode, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{MatchError, MatchRefusal};
-use hh_eval::benefits::{artifact_benefit, split_hash_agrees, BenefitError};
-use hh_eval::compare::{compare, CompareError, CompareInput};
-use hh_eval::judge::{
+use hharness_budget::matchspec::{validate_match_at, ArmSpec, MatchMode, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{MatchError, MatchRefusal};
+use hharness_eval::benefits::{artifact_benefit, split_hash_agrees, BenefitError};
+use hharness_eval::compare::{compare, CompareError, CompareInput};
+use hharness_eval::judge::{
     admit_judge, emit_judged, judge_context_for, recheck_judged, JudgeAdmission, JudgeError,
 };
-use hh_eval::runs::{CacheState, EvalRun, TaskContext};
-use hh_eval::LedgerFacts;
-use hh_eval::{catalogue, FaultType};
-use hh_ontology::compliance::{Detector, MetricDeclaration};
-use hh_ontology::control::{InfraError, InfraErrorFamily, OutcomeClass, StopReason};
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_eval::runs::{CacheState, EvalRun, TaskContext};
+use hharness_eval::LedgerFacts;
+use hharness_eval::{catalogue, FaultType};
+use hharness_ontology::compliance::{Detector, MetricDeclaration};
+use hharness_ontology::control::{InfraError, InfraErrorFamily, OutcomeClass, StopReason};
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     ChargedTo, Design, DesignKind, EvidenceKind, MetricValue, MetricValueKind, OracleClass,
     OracleDeclaration, Pairing, PreRegistration, RoutingPolicy, SeedPolicy, VerdictType,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Granularity, Observability, ParticipantClass};
-use hh_provenance::ProvenanceRecord;
-use hh_verification::critic_rt::CalibrationContext;
-use hh_verification::critics::{CalibrationAgreement, CalibrationRecord, IndependenceVector};
-use hh_verification::vocab::{CalibrationStatus, CriticUse};
-use hh_wire::Json;
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{Granularity, Observability, ParticipantClass};
+use hharness_provenance::ProvenanceRecord;
+use hharness_verification::critic_rt::CalibrationContext;
+use hharness_verification::critics::{CalibrationAgreement, CalibrationRecord, IndependenceVector};
+use hharness_verification::vocab::{CalibrationStatus, CriticUse};
+use hharness_wire::Json;
 
 // ── shared builders ─────────────────────────────────────────────────────────
 
@@ -182,9 +182,9 @@ fn hosted_unknown_search_arm(dim: DimensionId) -> ArmSpec {
     // with instrumented call interception declares `enforced` for the
     // matched dimension (an `unenforceable` level is refused even when the
     // search budget itself is `unknown`).
-    a.enforcement = hh_budget::matchspec::BudgetEnforcement::hosted(&[(
+    a.enforcement = hharness_budget::matchspec::BudgetEnforcement::hosted(&[(
         dim,
-        hh_budget::EnforcementLevel::Enforced,
+        hharness_budget::EnforcementLevel::Enforced,
     )]);
     a
 }
@@ -209,7 +209,7 @@ fn input<'a>(
         arm_specs: arms,
         varied_factor: Some("model"),
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
         granularity,
@@ -244,7 +244,7 @@ fn hal_fault_types_are_first_class() {
 /// through `fault_profile/1`.
 #[test]
 fn hal_profiles_in_the_stage3_catalogue() {
-    let profiles = hh_eval::stage3_fault_profiles();
+    let profiles = hharness_eval::stage3_fault_profiles();
     let hal_ids: BTreeSet<&str> = profiles
         .iter()
         .filter(|p| p.profile_id.starts_with("f/hal-"))
@@ -264,7 +264,7 @@ fn hal_profiles_in_the_stage3_catalogue() {
     for p in &profiles {
         let j = p.to_json();
         assert_eq!(
-            hh_eval::FaultProfile::from_json(&j).unwrap(),
+            hharness_eval::FaultProfile::from_json(&j).unwrap(),
             *p,
             "{} round-trips",
             p.profile_id
@@ -296,7 +296,7 @@ fn search_unknown_is_product_level_only() {
     for a in &mut total_arms {
         a.match_spec = Some(MatchSpec {
             mode: MatchMode::MatchedTotal,
-            pricing_table_ref: Some(hh_budget::PricingTableRef {
+            pricing_table_ref: Some(hharness_budget::PricingTableRef {
                 table_id: "price/std.v1".into(),
                 version: "v1".into(),
                 pin: Some("sha256:pt".into()),
@@ -343,7 +343,7 @@ fn compare_flags_search_unknown() {
         "the report flags the unknown search budget"
     );
     // JSON round-trip keeps the flag (the record, not a convention).
-    let decoded = hh_lab::analysis::ComparisonReport::from_json(&r.to_json()).unwrap();
+    let decoded = hharness_lab::analysis::ComparisonReport::from_json(&r.to_json()).unwrap();
     assert!(decoded.budget_match.search_unknown);
 }
 
@@ -435,7 +435,7 @@ fn calibration_record(fingerprint: &str, calibrated_at: u64) -> CalibrationRecor
         judge_snapshot_fingerprint: fingerprint.into(),
         labelled_set_ref: "labelled/alignment.v3".into(),
         n_per_verdict_class: 12,
-        reference_oracle: hh_verification::vocab::ReferenceOracle::Executable,
+        reference_oracle: hharness_verification::vocab::ReferenceOracle::Executable,
         agreement: CalibrationAgreement {
             statistic: "cohen_kappa".into(),
             value_ppm: 900_000,
@@ -554,7 +554,7 @@ fn judge_calibration_folds_at_runtime() {
     assert_eq!(
         admit_judge(&oracle, &ctx),
         Ok(JudgeAdmission::Unavailable {
-            reason: hh_ontology::compliance::NaReason::NoDetector
+            reason: hharness_ontology::compliance::NaReason::NoDetector
         })
     );
     // The same expired fold on a report use is exploratory evidence.
@@ -663,7 +663,7 @@ fn recheck_judged_re_admits_against_run_facts() {
 /// failure (stop reason), budget exhaustion (the consumed vector hit the
 /// ceiling) and verifier crash (`oracle_failed`) — derives `oracle_failure`
 /// (the precedence rule: an oracle failure is never scored, never the
-/// stop reason's class). The corpus half runs in `hh-bench`.
+/// stop reason's class). The corpus half runs in `hharness-bench`.
 #[test]
 fn combined_failure_derives_oracle_failure() {
     // The three non-scored classes in one fixture.
@@ -678,21 +678,21 @@ fn combined_failure_derives_oracle_failure() {
         dimension: DimensionId::ModelCalls,
     };
     assert_eq!(
-        hh_ontology::eval::derive_outcome_class(&infra(), true),
+        hharness_ontology::eval::derive_outcome_class(&infra(), true),
         OutcomeClass::OracleFailure,
         "verifier crash outranks the infrastructure stop"
     );
     assert_eq!(
-        hh_ontology::eval::derive_outcome_class(&budget(), true),
+        hharness_ontology::eval::derive_outcome_class(&budget(), true),
         OutcomeClass::OracleFailure
     );
     // Without the crash the stop-reason classes stand.
     assert_eq!(
-        hh_ontology::eval::derive_outcome_class(&infra(), false),
+        hharness_ontology::eval::derive_outcome_class(&infra(), false),
         OutcomeClass::InfrastructureFailure
     );
     assert_eq!(
-        hh_ontology::eval::derive_outcome_class(&budget(), false),
+        hharness_ontology::eval::derive_outcome_class(&budget(), false),
         OutcomeClass::BudgetExhausted
     );
 }
@@ -715,7 +715,7 @@ fn compare_stratifies_the_combined_failure_classes() {
     // replicate 1 (the run still carries its settled outcome; the metric
     // value a crashed oracle never emitted is simply absent).
     let crashed = runs.iter_mut().find(|r| r.run_id == "r-B-t2-1").unwrap();
-    crashed.outcome_class = hh_ontology::eval::derive_outcome_class(
+    crashed.outcome_class = hharness_ontology::eval::derive_outcome_class(
         &StopReason::InfrastructureFailure {
             error_class: InfraError {
                 family: InfraErrorFamily::Env,

@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -27,7 +27,7 @@ fn dir(tag: &str) -> PathBuf {
 fn open(tag: &str) -> (Store, String, Lease) {
     let mut s = Store::open_with(
         dir(tag),
-        Box::new(hh_ledger::ids::ManualClock::at(1_000)),
+        Box::new(hharness_ledger::ids::ManualClock::at(1_000)),
         Some(Box::new(SeqIds::new())),
         DEFAULT_BLOB_MAX_BYTES,
     )
@@ -55,7 +55,10 @@ fn dep_row(id: &str, method: &str, client: Option<Json>) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload: Json::obj([
             ("method", Json::str(method)),
@@ -150,7 +153,7 @@ fn deprecated_use_counts_survive_rebuild() {
     {
         let mut s = Store::open_with(
             d.clone(),
-            Box::new(hh_ledger::ids::ManualClock::at(1_000)),
+            Box::new(hharness_ledger::ids::ManualClock::at(1_000)),
             Some(Box::new(SeqIds::new())),
             DEFAULT_BLOB_MAX_BYTES,
         )
@@ -171,7 +174,7 @@ fn deprecated_use_counts_survive_rebuild() {
     }
     let reopened = Store::open_with(
         d,
-        Box::new(hh_ledger::ids::ManualClock::at(2_000)),
+        Box::new(hharness_ledger::ids::ManualClock::at(2_000)),
         Some(Box::new(SeqIds::new())),
         DEFAULT_BLOB_MAX_BYTES,
     )

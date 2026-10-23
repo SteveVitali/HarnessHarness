@@ -33,7 +33,7 @@
 //! - **P13** — UI and API share the bound origin (one port, one host —
 //!   `same-origin` is the only legal fetch site).
 
-use hh_wire::http::RequestHead;
+use hharness_wire::http::RequestHead;
 
 /// The script-only custom header mutating routes require (P4 — a value
 /// a CORS-preflight-free simple request cannot carry).
@@ -87,7 +87,7 @@ impl GateConfig {
     /// pass `true` for non-API paths). Returns the HTTP status to emit;
     /// `Ok` means route.
     pub fn check(&self, head: &RequestHead, write: bool, public_shell: bool) -> Result<(), u16> {
-        let (path, query) = hh_wire::http::split_target(&head.target);
+        let (path, query) = hharness_wire::http::split_target(&head.target);
         // P9 — a token on the target refuses before anything reads it.
         if let Some(q) = query {
             let ql = q.to_ascii_lowercase();

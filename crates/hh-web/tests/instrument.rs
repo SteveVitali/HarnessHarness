@@ -8,15 +8,15 @@
 mod common;
 
 use common::*;
-use hh_web::server::{serve_request, Served};
-use hh_web::views::VIEW_IDS;
-use hh_wire::json::Json;
+use hharness_web::server::{serve_request, Served};
+use hharness_web::views::VIEW_IDS;
+use hharness_wire::json::Json;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 
 fn served_json(s: Served) -> (u16, Json) {
     match s {
-        Served::Json(c, t) => (c, hh_wire::json::parse(&t).unwrap_or(Json::Null)),
+        Served::Json(c, t) => (c, hharness_wire::json::parse(&t).unwrap_or(Json::Null)),
         other => panic!(
             "expected JSON, got {:?}",
             matches!(other, Served::Static(..))
@@ -647,7 +647,7 @@ fn aux_sink_withholding() {
     svc.sink.content_classes.clear();
     svc.sink
         .content_classes
-        .insert(hh_telemetry::sinks::ContentClass::Accounting);
+        .insert(hharness_telemetry::sinks::ContentClass::Accounting);
     svc.sink.requires_consent = false;
     let (c, j) = served_json(serve_request(
         &gate,

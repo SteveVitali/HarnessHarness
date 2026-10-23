@@ -9,9 +9,9 @@
 
 use std::collections::BTreeSet;
 
-use hh_containment::policy::IsolationClass;
-use hh_hir::kinds::EffectClass;
-use hh_wire::json::Json;
+use hharness_containment::policy::IsolationClass;
+use hharness_hir::kinds::EffectClass;
+use hharness_wire::json::Json;
 
 use crate::deadline::DeadlineLadder;
 use crate::errors::EnvError;
@@ -144,7 +144,7 @@ pub struct ExecutorDeclaration {
     pub streams: bool,
     /// The `EffectDomain`s the executor can run (the bound capability's
     /// domain must be a member).
-    pub domains: BTreeSet<hh_hir::kinds::EffectDomain>,
+    pub domains: BTreeSet<hharness_hir::kinds::EffectDomain>,
 }
 
 /// `bind` failure — an insufficient declaration is a typed refusal.
@@ -209,7 +209,7 @@ impl std::error::Error for BindError {}
 /// `execution_requirement` members the bind check reads.
 pub fn bind(
     decl: &ExecutorDeclaration,
-    domain: hh_hir::kinds::EffectDomain,
+    domain: hharness_hir::kinds::EffectDomain,
     requirement: &ExecutionRequirement,
 ) -> Result<(), BindError> {
     // Domain coverage.
@@ -371,7 +371,7 @@ pub struct ExecutionRequirement {
     /// `capability_requires[]` — `Ref<ToolCapability>` members the link must
     /// resolve in the same registry snapshot (E1 `capability_requires` —
     /// §5d.1 check points: `capability_requires` at `link`).
-    pub capability_requires: Vec<hh_hir::refs::Ref>,
+    pub capability_requires: Vec<hharness_hir::refs::Ref>,
 }
 
 impl Default for ExecutionRequirement {
@@ -431,11 +431,10 @@ impl ExecutionRequirement {
                 .iter()
                 .enumerate()
                 .map(|(i, m)| {
-                    hh_hir::refs::Ref::from_json(m, &format!("capability_requires[{i}]")).map_err(
-                        |e| BindError::MalformedRequirement {
+                    hharness_hir::refs::Ref::from_json(m, &format!("capability_requires[{i}]"))
+                        .map_err(|e| BindError::MalformedRequirement {
                             member: format!("capability_requires[{i}]: {e}"),
-                        },
-                    )
+                        })
                 })
                 .collect::<Result<Vec<_>, _>>()?,
             Some(_) => {
@@ -701,18 +700,16 @@ impl std::error::Error for BindFailure {}
 /// [`ExecutorBinding`] (deterministic: executors are tried in declaration
 /// order).
 pub fn bind_capability(
-    store: &hh_registry::store::RegistryStore,
+    store: &hharness_registry::store::RegistryStore,
     version_id: &str,
     environment: &dyn EnvironmentProbe,
     executors: &[ExecutorDeclaration],
 ) -> Result<ExecutorBinding, BindFailure> {
-    let (cap, _registrar) =
-        hh_registry::capability::capability_at(store, version_id).map_err(|e| {
-            BindFailure::NotInstalled {
-                detail: format!("capability lookup failed: {e:?}"),
-            }
+    let (cap, _registrar) = hharness_registry::capability::capability_at(store, version_id)
+        .map_err(|e| BindFailure::NotInstalled {
+            detail: format!("capability lookup failed: {e:?}"),
         })?;
-    let hh_hir::records::KindRecord::ToolCapability(t) = &cap.node.semantic else {
+    let hharness_hir::records::KindRecord::ToolCapability(t) = &cap.node.semantic else {
         return Err(BindFailure::NotInstalled {
             detail: "record is not a capability".into(),
         });
@@ -744,8 +741,8 @@ pub fn bind_capability(
     // `Selector` version is not bindable — the link names pinned records).
     for dep in &requirement.capability_requires {
         let vid = match &dep.version {
-            hh_hir::refs::RefVersion::Pinned(v) => v.clone(),
-            hh_hir::refs::RefVersion::Selector(s) => {
+            hharness_hir::refs::RefVersion::Pinned(v) => v.clone(),
+            hharness_hir::refs::RefVersion::Selector(s) => {
                 return Err(BindFailure::NotInstalled {
                     detail: format!(
                         "capability_requires unpinned selector {}@{s}",
@@ -754,7 +751,7 @@ pub fn bind_capability(
                 })
             }
         };
-        match hh_registry::capability::capability_at(store, &vid) {
+        match hharness_registry::capability::capability_at(store, &vid) {
             Ok((dep_cap, _)) => {
                 if dep_cap.node.semantic_id() != dep.semantic_id {
                     return Err(BindFailure::NotInstalled {
@@ -779,9 +776,9 @@ pub fn bind_capability(
         .and_then(Json::as_str)
         .unwrap_or("kernel_internal")
         .to_string();
-    let domains: Vec<hh_hir::kinds::EffectDomain> = match &t.effects {
-        hh_hir::kinds::ToolEffects::Pure => Vec::new(),
-        hh_hir::kinds::ToolEffects::Declared(set) => set.iter().map(|e| e.domain).collect(),
+    let domains: Vec<hharness_hir::kinds::EffectDomain> = match &t.effects {
+        hharness_hir::kinds::ToolEffects::Pure => Vec::new(),
+        hharness_hir::kinds::ToolEffects::Declared(set) => set.iter().map(|e| e.domain).collect(),
     };
     let mut first_failure: Option<BindFailure> = None;
     for decl in executors {
@@ -867,7 +864,7 @@ pub struct UsabilityReport {
 /// catalog view"). Deterministic: the same `(store snapshot, version_id,
 /// probe answers, executors)` yields the same report.
 pub fn usability(
-    store: &hh_registry::store::RegistryStore,
+    store: &hharness_registry::store::RegistryStore,
     version_id: &str,
     environment: &dyn EnvironmentProbe,
     executors: &[ExecutorDeclaration],
@@ -889,14 +886,14 @@ pub fn usability(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_containment::policy::IsolationClass;
-    use hh_hir::document::Node;
-    use hh_hir::kinds::{EntityKind, ToolEffects};
-    use hh_hir::leaves::Text;
-    use hh_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
-    use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-    use hh_registry::records::{CapabilityRecord, RegistryRecord};
-    use hh_registry::store::RegistryStore;
+    use hharness_containment::policy::IsolationClass;
+    use hharness_hir::document::Node;
+    use hharness_hir::kinds::{EntityKind, ToolEffects};
+    use hharness_hir::leaves::Text;
+    use hharness_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
+    use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+    use hharness_registry::records::{CapabilityRecord, RegistryRecord};
+    use hharness_registry::store::RegistryStore;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
 
@@ -1090,7 +1087,7 @@ mod tests {
     fn ac_r_2_5_1_8_capability_requires_checked_at_link() {
         let mut store = RegistryStore::open(dir("e251-8-capreq"), &prov()).unwrap();
         let dep_vid = register_cap(&mut store, Json::obj([]));
-        let dep_semantic = hh_registry::capability::capability_at(&store, &dep_vid)
+        let dep_semantic = hharness_registry::capability::capability_at(&store, &dep_vid)
             .unwrap()
             .0
             .node

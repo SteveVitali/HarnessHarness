@@ -1,9 +1,9 @@
-//! `hh-eval` — the Stage-3 evaluation kernel (spec §5h; R-2.9.2; S3.3).
+//! `hharness-eval` — the Stage-3 evaluation kernel (spec §5h; R-2.9.2; S3.3).
 //!
 //! Modules:
 //! - [`catalogue`] — the metric/oracle catalogue as first-class
 //!   `MetricDeclaration`/`OracleDeclaration` rows (the typed `n/a` algebra
-//!   lives in `hh-ontology`; the catalogue validates, never invents);
+//!   lives in `hharness-ontology`; the catalogue validates, never invents);
 //! - [`stats`] — the deterministic estimator layer (quantiles, Wilson, CLT,
 //!   clustered-CLT, paired bootstrap, Bayesian-beta, pass^k/pass@k);
 //! - [`runs`]/[`facts`] — the canonical `EvalRun` view and the ledger →

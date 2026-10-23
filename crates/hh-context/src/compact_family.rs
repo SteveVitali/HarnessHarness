@@ -17,8 +17,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::records::AssumptionDebtRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_wire::json::Json;
 
 use crate::compact::{
     assess, execute, CompactError, CompactInput, CompactOutcome, CompactionOp, CompactionProposal,
@@ -379,7 +379,7 @@ impl CompactionStrategy for SummarizeRolling {
             if f.candidate
                 .as_ref()
                 .map(|c| c.label.authority)
-                .is_some_and(|a| a == hh_provenance::AuthorityClass::Principal)
+                .is_some_and(|a| a == hharness_provenance::AuthorityClass::Principal)
             {
                 keep_ids.insert(i);
                 principal_kept += f.item.tokens;
@@ -1328,7 +1328,7 @@ pub fn reminder_candidate(
     if !rearmable(record) {
         return None;
     }
-    let cid = hh_identity::idp::idp_id(
+    let cid = hharness_identity::idp::idp_id(
         crate::compact::COMPACTION_IDP,
         format!("reminder:{run_id}:{}", record.compaction_id).as_bytes(),
     );
@@ -1344,9 +1344,9 @@ pub fn reminder_candidate(
         },
         source_event: None,
         source_seq: at_seq,
-        label: hh_provenance::label::Label::at(hh_provenance::AuthorityClass::Kernel),
-        provenance: hh_provenance::record::ProvenanceRecord::kernel("kernel:compact", at_seq),
-        validity: hh_hir::records::Validity::open_from(0),
+        label: hharness_provenance::label::Label::at(hharness_provenance::AuthorityClass::Kernel),
+        provenance: hharness_provenance::record::ProvenanceRecord::kernel("kernel:compact", at_seq),
+        validity: hharness_hir::records::Validity::open_from(0),
         readers: None,
         slot_hint: Some(reminder.placement.clone()),
         volatile: false,

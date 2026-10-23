@@ -21,9 +21,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::InvariantId;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::InvariantId;
+use hharness_wire::json::Json;
 
 use crate::vocab::GuardPoint;
 
@@ -466,9 +466,9 @@ pub fn rebuild_equal(recorded_view: &Json, folded_view: &Json) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
 
     fn ev(seq: u64, class: &str, effect: Option<&str>, payload: Json) -> EventEnvelope {
         EventEnvelope {
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn inv9_rebuild_equality_is_canonical() {
         let a = Json::obj([("x", Json::Int(1))]);
-        let b = hh_wire::json::parse(&a.to_canonical_string()).unwrap();
+        let b = hharness_wire::json::parse(&a.to_canonical_string()).unwrap();
         assert!(rebuild_equal(&a, &b));
         assert!(!rebuild_equal(&a, &Json::obj([("x", Json::Int(2))])));
     }

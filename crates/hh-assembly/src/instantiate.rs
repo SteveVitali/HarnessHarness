@@ -7,13 +7,13 @@
 //! nothing). Stage-1 binds `placement = in_process` only; any other placement is
 //! `locality_unsupported` (the out-of-process host is Stage 2 — DF-S1.9-1).
 
-use hh_budget::account::Account;
-use hh_hir::document::SealedDefinition;
-use hh_hir::records::{AgentProcessBody, KindRecord, SlotBinding, SlotBindings};
-use hh_hir::refs::RefVersion;
-use hh_registry::kinds::Placement;
-use hh_registry::records::{ClassRecord, RegistryRecord, VariantRecord};
-use hh_registry::store::RegistryStore;
+use hharness_budget::account::Account;
+use hharness_hir::document::SealedDefinition;
+use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBinding, SlotBindings};
+use hharness_hir::refs::RefVersion;
+use hharness_registry::kinds::Placement;
+use hharness_registry::records::{ClassRecord, RegistryRecord, VariantRecord};
+use hharness_registry::store::RegistryStore;
 
 use crate::catalog::ClassCatalog;
 use crate::events::{component_bound, AssemblyEvent};
@@ -106,7 +106,7 @@ pub struct BoundComponent {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HarnessInstance {
     /// The definition's `{semantic_id, version_id}`.
-    pub definition_ref: hh_hir::document::DefinitionVersionRef,
+    pub definition_ref: hharness_hir::document::DefinitionVersionRef,
     /// The bound profile's coordinate, when bound.
     pub profile: Option<String>,
     /// The bound components (enabled slots only — a disabled binding is ablated, never

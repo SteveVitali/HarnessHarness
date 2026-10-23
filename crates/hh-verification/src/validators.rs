@@ -8,12 +8,12 @@
 
 use std::collections::BTreeSet;
 
-use hh_hir::kinds::{EffectDomain, ValidatorKind};
-use hh_identity::refs::VersionedRef;
-use hh_ontology::participant::Observability;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_hir::kinds::{EffectDomain, ValidatorKind};
+use hharness_identity::refs::VersionedRef;
+use hharness_ontology::participant::Observability;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::evidence::{inputs_digest, EvidenceBundle};
 use crate::vocab::{
@@ -667,7 +667,7 @@ pub fn exit_status_class(cap: &TerminalCapture) -> ExitClass {
 
 /// The OQ-219 interim JSON-Schema keyword subset the kernel's
 /// `schema_conformance` check admits — **identical** to
-/// `hh_compiler::equiv::E3_ADMITTED_KEYWORDS` (the one interim subset,
+/// `hharness_compiler::equiv::E3_ADMITTED_KEYWORDS` (the one interim subset,
 /// ADR-0212; a test pins the equality so the two sides cannot drift — CC7).
 /// A keyword outside this set makes the check `inconclusive{unchecked_keyword}`
 /// — the checker never guesses (T-LCD-15).
@@ -858,7 +858,7 @@ pub struct DiffSanityRule {
     /// The conditioned thresholds.
     pub thresholds: DiffSanityThresholds,
     /// The assumption-debt record (T-LCD-05; mandatory).
-    pub debt: hh_hir::records::AssumptionDebtRecord,
+    pub debt: hharness_hir::records::AssumptionDebtRecord,
 }
 
 impl DiffSanityRule {
@@ -870,34 +870,34 @@ impl DiffSanityRule {
         let rule_id = "hir/kernel/diff_sanity";
         DiffSanityRule {
             rule_ref: VersionedRef::pinned(
-                hh_identity::kinds::RecordKind::Validator,
+                hharness_identity::kinds::RecordKind::Validator,
                 "hir/kernel/diff_sanity@1",
                 provenance.clone(),
             ),
             thresholds: DiffSanityThresholds::default(),
-            debt: hh_hir::records::AssumptionDebtRecord {
+            debt: hharness_hir::records::AssumptionDebtRecord {
                 rule_id: rule_id.into(),
-                hypothesis: hh_hir::leaves::Text::new(
+                hypothesis: hharness_hir::leaves::Text::new(
                     "provisional OQ-267 bounds discriminate pathological diffs for                      the conditioned model/task classes; revisit when OQ-267 lands",
                     "hir/kernel/diff_sanity",
                     provenance.clone(),
                 ),
-                evidence_refs: vec![hh_hir::EvidenceRef::legacy("OQ-267")],
-                owner: hh_hir::OwnerRef::principal("kernel"),
-                expiry_condition: hh_hir::ExpiryCondition {
-                    kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+                evidence_refs: vec![hharness_hir::EvidenceRef::legacy("OQ-267")],
+                owner: hharness_hir::OwnerRef::principal("kernel"),
+                expiry_condition: hharness_hir::ExpiryCondition {
+                    kind: hharness_hir::ExpiryKind::EvidenceRefreshDue,
                     value: None,
                 },
                 removal_test_ref: "hir/kernel/diff_sanity/removal_test".into(),
-                status: hh_hir::DebtStatus::Active,
-                debt_class: Some(hh_hir::DebtClass::Hypothesized),
+                status: hharness_hir::DebtStatus::Active,
+                debt_class: Some(hharness_hir::DebtClass::Hypothesized),
                 hypothesis_typed: None,
-                scope: Some(hh_hir::DebtScope::default()),
+                scope: Some(hharness_hir::DebtScope::default()),
                 expiry: None,
                 runway_ms: None,
                 revalidation: None,
-                removal_test: Some(hh_hir::RemovalTest::new(
-                    hh_hir::RemovalTestKind::Inspection,
+                removal_test: Some(hharness_hir::RemovalTest::new(
+                    hharness_hir::RemovalTestKind::Inspection,
                 )),
                 created_by: Some(provenance.clone()),
                 created_at: None,
@@ -908,7 +908,7 @@ impl DiffSanityRule {
 
     /// The `conditioned_rules` listing entry (`(rule_id, debt)` — the
     /// `lcd_report`/`VariantRecord` shape; AC-R-2.7.1-12).
-    pub fn conditioned_entry(&self) -> (String, hh_hir::records::AssumptionDebtRecord) {
+    pub fn conditioned_entry(&self) -> (String, hharness_hir::records::AssumptionDebtRecord) {
         (self.debt.rule_id.clone(), self.debt.clone())
     }
 }
@@ -1294,7 +1294,7 @@ pub fn bundle_digest(bundle: &EvidenceBundle) -> &str {
 /// ablates it (no verdict).
 #[allow(clippy::too_many_arguments)]
 pub fn run_declared_postcondition(
-    validator_ref: &hh_hir::refs::Ref,
+    validator_ref: &hharness_hir::refs::Ref,
     cap: &TerminalCapture,
     diff_sanity: Option<&DiffSanityRule>,
     provenance: ProvenanceRecord,
@@ -1312,10 +1312,10 @@ pub fn run_declared_postcondition(
                     validator_ref.semantic_id, cap.effect_id
                 ),
                 validator_ref: VersionedRef::pinned(
-                    hh_identity::kinds::RecordKind::Validator,
+                    hharness_identity::kinds::RecordKind::Validator,
                     match &validator_ref.version {
-                        hh_hir::refs::RefVersion::Pinned(v) => v.clone(),
-                        hh_hir::refs::RefVersion::Selector(s) => {
+                        hharness_hir::refs::RefVersion::Pinned(v) => v.clone(),
+                        hharness_hir::refs::RefVersion::Selector(s) => {
                             format!("{}@{s}", validator_ref.semantic_id)
                         }
                     },
@@ -1388,10 +1388,10 @@ pub fn run_declared_postcondition(
     let stamped = match check {
         LocalCheckId::DiffSanity => diff_sanity.unwrap().rule_ref.clone(),
         _ => VersionedRef::pinned(
-            hh_identity::kinds::RecordKind::Validator,
+            hharness_identity::kinds::RecordKind::Validator,
             match &validator_ref.version {
-                hh_hir::refs::RefVersion::Pinned(v) => v.clone(),
-                hh_hir::refs::RefVersion::Selector(s) => {
+                hharness_hir::refs::RefVersion::Pinned(v) => v.clone(),
+                hharness_hir::refs::RefVersion::Selector(s) => {
                     format!("{}@{s}", validator_ref.semantic_id)
                 }
             },
@@ -1417,7 +1417,7 @@ pub fn run_declared_postcondition(
 /// verdict — ablation is explicit, never silent).
 #[allow(clippy::too_many_arguments)]
 pub fn run_verify_steps(
-    steps: &[hh_hir::records::ProcedureStep],
+    steps: &[hharness_hir::records::ProcedureStep],
     cap: &TerminalCapture,
     diff_sanity: Option<&DiffSanityRule>,
     provenance: ProvenanceRecord,
@@ -1427,14 +1427,16 @@ pub fn run_verify_steps(
     steps
         .iter()
         .filter_map(|s| match s {
-            hh_hir::records::ProcedureStep::Verify { validator } => run_declared_postcondition(
-                validator,
-                cap,
-                diff_sanity,
-                provenance.clone(),
-                evidence_head_seq,
-                measured_at,
-            ),
+            hharness_hir::records::ProcedureStep::Verify { validator } => {
+                run_declared_postcondition(
+                    validator,
+                    cap,
+                    diff_sanity,
+                    provenance.clone(),
+                    evidence_head_seq,
+                    measured_at,
+                )
+            }
             _ => None,
         })
         .collect()
@@ -1693,9 +1695,9 @@ pub fn check_end_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_identity::kinds::RecordKind;
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
+    use hharness_identity::kinds::RecordKind;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
 
     fn kernel_prov() -> ProvenanceRecord {
         ProvenanceRecord::kernel("hir/kernel/check", 3)
@@ -1792,8 +1794,8 @@ mod tests {
 
     #[test]
     fn judge_requires_profile_debt_and_no_determinism() {
-        let judge = ValidatorKind::Judge(Box::new(hh_hir::kinds::JudgeProfile {
-            rubric: hh_hir::leaves::Text::new(
+        let judge = ValidatorKind::Judge(Box::new(hharness_hir::kinds::JudgeProfile {
+            rubric: hharness_hir::leaves::Text::new(
                 "rubric",
                 "test",
                 ProvenanceRecord::minted(
@@ -1802,9 +1804,9 @@ mod tests {
                     1,
                 ),
             ),
-            profile: hh_hir::refs::ProfileRef::unbound(),
+            profile: hharness_hir::refs::ProfileRef::unbound(),
             calibration_ref: None,
-            charged_to: hh_hir::kinds::ChargedTo::Instrument,
+            charged_to: hharness_hir::kinds::ChargedTo::Instrument,
         }));
         let mut d = decl(judge);
         d.deterministic = false;
@@ -1965,7 +1967,7 @@ mod tests {
         // subset (ADR-0212) — a drift between the two fails here.
         assert_eq!(
             CONFORMANCE_ADMITTED_KEYWORDS,
-            hh_compiler::equiv::E3_ADMITTED_KEYWORDS
+            hharness_compiler::equiv::E3_ADMITTED_KEYWORDS
         );
     }
 
@@ -2033,7 +2035,7 @@ mod tests {
         let (rule_id, debt) = rule.conditioned_entry();
         assert_eq!(rule_id, "hir/kernel/diff_sanity");
         assert_eq!(debt.rule_id, rule_id);
-        assert_eq!(debt.status, hh_hir::DebtStatus::Active);
+        assert_eq!(debt.status, hharness_hir::DebtStatus::Active);
         assert!(debt.removal_test.is_some());
         assert!(!debt.removal_test_ref.is_empty());
     }
@@ -2046,18 +2048,18 @@ mod tests {
         let rule = diff_rule();
         let mut c = cap(Some(EffectDomain::FsWrite));
         c.diff_files = Some(1);
-        let kref = hh_hir::refs::Ref {
+        let kref = hharness_hir::refs::Ref {
             semantic_id: "hir/kernel/diff_sanity".into(),
-            version: hh_hir::refs::RefVersion::Pinned("hir/kernel/diff_sanity@1".into()),
+            version: hharness_hir::refs::RefVersion::Pinned("hir/kernel/diff_sanity@1".into()),
         };
         let v = run_declared_postcondition(&kref, &c, Some(&rule), kernel_prov(), 9, 9)
             .expect("resolved");
         assert_eq!(v.validator_ref.version_id, "hir/kernel/diff_sanity@1");
         assert_eq!(v.value, VerdictValue::Bool(true));
 
-        let other = hh_hir::refs::Ref {
+        let other = hharness_hir::refs::Ref {
             semantic_id: "ext/custom_judge".into(),
-            version: hh_hir::refs::RefVersion::Pinned("ext/custom_judge@1".into()),
+            version: hharness_hir::refs::RefVersion::Pinned("ext/custom_judge@1".into()),
         };
         let v = run_declared_postcondition(&other, &c, Some(&rule), kernel_prov(), 9, 9)
             .expect("inconclusive verdict");
@@ -2074,7 +2076,7 @@ mod tests {
         let mut c = cap(Some(EffectDomain::FsWrite));
         c.diff_files = Some(1);
         let steps = vec![
-            hh_hir::records::ProcedureStep::Instruction(hh_hir::leaves::Text::new(
+            hharness_hir::records::ProcedureStep::Instruction(hharness_hir::leaves::Text::new(
                 "step",
                 "test",
                 ProvenanceRecord::minted(
@@ -2083,18 +2085,20 @@ mod tests {
                     1,
                 ),
             )),
-            hh_hir::records::ProcedureStep::Verify {
-                validator: hh_hir::refs::Ref {
+            hharness_hir::records::ProcedureStep::Verify {
+                validator: hharness_hir::refs::Ref {
                     semantic_id: "hir/kernel/schema_conformance".into(),
-                    version: hh_hir::refs::RefVersion::Pinned(
+                    version: hharness_hir::refs::RefVersion::Pinned(
                         "hir/kernel/schema_conformance@1".into(),
                     ),
                 },
             },
-            hh_hir::records::ProcedureStep::Verify {
-                validator: hh_hir::refs::Ref {
+            hharness_hir::records::ProcedureStep::Verify {
+                validator: hharness_hir::refs::Ref {
                     semantic_id: "hir/kernel/diff_sanity".into(),
-                    version: hh_hir::refs::RefVersion::Pinned("hir/kernel/diff_sanity@1".into()),
+                    version: hharness_hir::refs::RefVersion::Pinned(
+                        "hir/kernel/diff_sanity@1".into(),
+                    ),
                 },
             },
         ];
@@ -2125,8 +2129,8 @@ mod tests {
 
     fn judge_decl() -> ValidatorDeclaration {
         let mut d = decl(ValidatorKind::Judge(Box::new(
-            hh_hir::kinds::JudgeProfile {
-                rubric: hh_hir::leaves::Text::new(
+            hharness_hir::kinds::JudgeProfile {
+                rubric: hharness_hir::leaves::Text::new(
                     "rubric",
                     "test",
                     ProvenanceRecord::minted(
@@ -2135,9 +2139,9 @@ mod tests {
                         1,
                     ),
                 ),
-                profile: hh_hir::refs::ProfileRef::unbound(),
+                profile: hharness_hir::refs::ProfileRef::unbound(),
                 calibration_ref: None,
-                charged_to: hh_hir::kinds::ChargedTo::Instrument,
+                charged_to: hharness_hir::kinds::ChargedTo::Instrument,
             },
         )));
         d.deterministic = false;

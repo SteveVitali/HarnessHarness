@@ -3,7 +3,7 @@
 //!
 //! The four declarations live in [`crate::catalogue`]; this module is the
 //! fold that produces their values from a run's *projected* ledger rows —
-//! the same `FactRow` view [`LedgerFacts`] reads. `hh-eval` reads ledger
+//! the same `FactRow` view [`LedgerFacts`] reads. `hharness-eval` reads ledger
 //! data, never containment/env code (CC5/CC6 — the fold composes over the
 //! recorded rows wherever a run produced them).
 //!
@@ -30,7 +30,7 @@
 //!
 //! [`LedgerFacts`]: crate::facts::LedgerFacts
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::facts::FactRow;
 use crate::stats::PPM;
@@ -41,7 +41,7 @@ fn ms<'a>(p: &'a Json, member: &str) -> Option<&'a str> {
 }
 
 /// The proxy-surface field spellings a `lowering_loss_fields` member can
-/// carry (the `proxy_env_is_not_mediation` family — `hh-containment`'s
+/// carry (the `proxy_env_is_not_mediation` family — `hharness-containment`'s
 /// closed reason tags name these declared fields; ADR-0341 D4/D5).
 const PROXY_SURFACE_FIELDS: &[&str] = &["net.upstream_proxy", "proc.env"];
 

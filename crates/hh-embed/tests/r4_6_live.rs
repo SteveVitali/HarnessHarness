@@ -37,20 +37,20 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::*;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::*;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 /// The committed, pinned battery — the offline arm's fixture.
 const BATTERY: &str = include_str!("fixtures/r4_6/lt03-battery.json");
@@ -211,8 +211,8 @@ fn github_spec() -> SecretChannelSpec {
         }],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
         delivery_modes: [
-            hh_monitor::assess::SecretTransport::ProxyInjected,
-            hh_monitor::assess::SecretTransport::WrappedLongLived,
+            hharness_monitor::assess::SecretTransport::ProxyInjected,
+            hharness_monitor::assess::SecretTransport::WrappedLongLived,
         ]
         .into_iter()
         .collect(),
@@ -261,8 +261,8 @@ fn live_broker() -> (Store, String, Lease, CredentialBroker, String) {
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: dref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -547,7 +547,7 @@ fn run_family(
         r.to_canonical_string()
     );
 
-    let battery = hh_wire::json::parse(BATTERY).unwrap();
+    let battery = hharness_wire::json::parse(BATTERY).unwrap();
     let tasks = match battery.get("tasks") {
         Some(Json::Arr(t)) => t.clone(),
         _ => panic!("battery.tasks"),
@@ -618,10 +618,10 @@ fn run_family(
                 Some(r) => r,
                 None => continue,
             };
-            let parsed = hh_identity::idp::parse_id(resp_ref).expect("idp id");
+            let parsed = hharness_identity::idp::parse_id(resp_ref).expect("idp id");
             let blob = std::fs::read(svc.store().root().join("blobs").join(&parsed.digest_hex))
                 .expect("model_io blob resolves");
-            let io: Json = hh_wire::json::parse(&String::from_utf8_lossy(&blob)).unwrap();
+            let io: Json = hharness_wire::json::parse(&String::from_utf8_lossy(&blob)).unwrap();
             let req_text = io
                 .get("request_body")
                 .map(|r| r.to_canonical_string())
@@ -724,8 +724,8 @@ fn r46_lt03_live_corpus_arm() {
             channel_id: "tripwire".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt-x".into(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },

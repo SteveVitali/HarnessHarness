@@ -2,7 +2,7 @@
 //! S3.3).
 //!
 //! `compare` is matched-budget-or-refuse (CC9): the *declared* match rules
-//! live in `hh_budget::matchspec::validate_match` — the single source
+//! live in `hharness_budget::matchspec::validate_match` — the single source
 //! (CC1) — and this module adds the §5h.2 runtime preconditions on top:
 //!
 //! - task set + split labels identical across arms;
@@ -28,19 +28,19 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_budget::errors::MatchError;
-use hh_budget::matchspec::{ArmSpec, MatchMode};
-use hh_ontology::compliance::{MetricDeclaration, NaReason};
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::eval::{
+use hharness_budget::errors::MatchError;
+use hharness_budget::matchspec::{ArmSpec, MatchMode};
+use hharness_ontology::compliance::{MetricDeclaration, NaReason};
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::eval::{
     BootstrapPairedMethod, Design, DeviationPolicy, Direction, EstimatorSelection, IntervalMethod,
     LatticeValue, MetricValueKind, Pairing, ReplicateReducer, RoutingPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, SplitLabel};
-use hh_ontology::participant::Granularity;
-use hh_wire::Json;
+use hharness_ontology::lab::{ContaminationStratum, SplitLabel};
+use hharness_ontology::participant::Granularity;
+use hharness_wire::Json;
 
-use hh_lab::analysis::{
+use hharness_lab::analysis::{
     BenefitKind, BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity, OutcomeBounds,
     OutcomeBoundsVerdict, PairedEffect, ReportLabelKind, SignProfile, TailEffects, TestKind,
     TestRecord,
@@ -55,7 +55,7 @@ pub const DEFAULT_IMBALANCE_TOLERANCE_PPM: u64 = 100_000;
 /// The comparison's typed refusals (never warnings — CC9/T-LCD-14).
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompareError {
-    /// `hh_budget::matchspec::validate_match` refused (MissingMatchSpec,
+    /// `hharness_budget::matchspec::validate_match` refused (MissingMatchSpec,
     /// UnbudgetedArm, IncommensurableMatch, MissingPricingTable).
     Match(MatchError),
     /// A run in the comparison is marked non-comparable (exploratory).
@@ -336,7 +336,7 @@ fn run_value(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
     match &v {
         MetricValueKind::Na(_) => {
             if decl.outcome_class_policy.policy_for(run.outcome_class)
-                == hh_ontology::eval::OutcomePolicy::CountAsFailure
+                == hharness_ontology::eval::OutcomePolicy::CountAsFailure
                 && run.outcome_class != OutcomeClass::Scored
             {
                 Some(0)
@@ -397,10 +397,10 @@ fn factor_member(varied: Option<&str>, field: &str) -> bool {
 
 /// `compare` — the matched-budget paired comparison (§5h.2 §2.1).
 pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
-    // ── 1. declared-match validation (hh-budget is the single source) ────
+    // ── 1. declared-match validation (hharness-budget is the single source) ────
     //      The comparison's declared granularity gates the `search_budget =
     //      unknown` admission (product-level only — ADR-0046 D1/ADR-0159 D6).
-    hh_budget::matchspec::validate_match_at(input.arm_specs, input.granularity)
+    hharness_budget::matchspec::validate_match_at(input.arm_specs, input.granularity)
         .map_err(CompareError::Match)?;
     let search_unknown = input.arm_specs.iter().any(|a| a.search_budget.is_none());
     let spec0 = input.arm_specs[0]
@@ -409,10 +409,10 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
         .expect("validate_match checked");
     if spec0.mode == MatchMode::None {
         // Exploratory — validate_match already refuses; belt-and-braces.
-        return Err(CompareError::Match(hh_budget::MatchError {
+        return Err(CompareError::Match(hharness_budget::MatchError {
             arm: Some(0),
-            refusal: hh_budget::MatchRefusal::IncommensurableMatch {
-                reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+            refusal: hharness_budget::MatchRefusal::IncommensurableMatch {
+                reason: hharness_budget::RefusalReason::ExploratoryNoMatch,
                 dimension: None,
                 enforceability: None,
             },
@@ -779,7 +779,7 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
         }
 
         // The paired effect — mean of per-task deltas + paired bootstrap.
-        let seed = hh_identity::idp_digest(
+        let seed = hharness_identity::idp_digest(
             "eval.compare",
             format!("{}|{}|{}", input.arm_a, input.arm_b, name).as_bytes(),
         );
@@ -810,7 +810,7 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
         };
 
         let table_json = Json::Arr(effects.iter().map(|e| e.to_json()).collect());
-        let table_ref = hh_identity::idp_id(
+        let table_ref = hharness_identity::idp_id(
             "eval.per_task_effects",
             table_json.to_canonical_string().as_bytes(),
         );
@@ -1134,7 +1134,7 @@ pub fn contrast(
     let point = stats::mean(&vals).ok_or_else(|| CompareError::ContrastUndefined {
         detail: "mean over empty DiD set".into(),
     })?;
-    let seed = hh_identity::idp_digest(
+    let seed = hharness_identity::idp_digest(
         "eval.contrast",
         format!(
             "{metric}|{}",

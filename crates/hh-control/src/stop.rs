@@ -25,9 +25,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{InfraError, InfraErrorFamily, KernelInfraCause, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{InfraError, InfraErrorFamily, KernelInfraCause, StopReason};
+use hharness_wire::json::Json;
 
 /// `DrainReport` — `stop()`'s output record (the
 /// `lifecycle.run.finished.drain_report_ref` target).
@@ -280,9 +280,9 @@ pub fn assess_drain(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
 
     fn ev(seq: u64, class: &str, effect: Option<&str>) -> EventEnvelope {
         EventEnvelope {

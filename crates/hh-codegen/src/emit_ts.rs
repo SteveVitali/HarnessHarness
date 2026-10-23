@@ -18,14 +18,14 @@
 //! (R4.2, found by the executed leg). `scripts/e3-smoke.sh` +
 //! `clients/ts/smoke.ts` are the executable leg.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::fmt::Write as _;
 
 const HEADER: &str = "\
 // generated — do not edit.
 //
-// Source of truth: the `hh-embed-schema` crate (the single schema source, CC7). Regenerate
-// with `cargo run -p hh-codegen -- --root <repo>`; `scripts/check-drift.sh` fails the build
+// Source of truth: the `hharness-embed-schema` crate (the single schema source, CC7). Regenerate
+// with `cargo run -p hharness-codegen -- --root <repo>`; `scripts/check-drift.sh` fails the build
 // if this file drifts from the schema. Runs under node >= 22 (type stripping — erasable
 // syntax only), the `node:http` stdlib transport only, no npm dependencies. A generated
 // client contains no runtime logic beyond the transport binding (ADR-0179): it asserts `(contract_major,
@@ -591,7 +591,7 @@ function need(o: JsonObj, k: string): Json {
 }
 
 /// Serialize to canonical (sorted-key, compact) JSON — the same wire
-/// spelling `hh_wire::json::Json::to_canonical_string` emits: keys sorted
+/// spelling `hharness_wire::json::Json::to_canonical_string` emits: keys sorted
 /// (UTF-16 code-unit order; identical to the codec's UTF-8 byte order for
 /// the contract's ASCII key space), minimal escapes, integers only.
 export function canon(v: Json): string {
@@ -633,7 +633,7 @@ const CLIENT_HEAD: &str = r##"/// The binding-(c) client (the `local_network` su
 /// loopback HTTP — `POST /hh-embed/1` is one JSON-RPC request →
 /// response, and `GET /hh-embed/1/events?wait_ms=` drains `stream.frame`
 /// + `upcall.*` notifications as NDJSON. It speaks the exact wire shape
-/// `hh-embed`'s (c) server emits (bearer + exact-Host + no
+/// `hharness-embed`'s (c) server emits (bearer + exact-Host + no
 /// Origin/`Sec-Fetch-*`; the token never rides a URL — P9) and mirrors
 /// the generated Rust `NetClient`'s deliberately dumb transport: one
 /// `node:http` request per call (`Connection: close`), canonical bytes

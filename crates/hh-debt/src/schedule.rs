@@ -13,12 +13,14 @@
 
 use std::collections::BTreeSet;
 
-use hh_hir::debt::{validate_removal_test_at, DebtError, RemovalTestContext, TemplateView};
-use hh_hir::records::AssumptionDebtRecord;
-use hh_lab::experiment::{ExperimentKind, ExperimentSpec};
-use hh_ontology::debt::{DebtPolicy, DebtStatus, RemovalTestKind, UnexecutableReason, DEBT_HOMES};
-use hh_ontology::eval::is_pinned_version_id;
-use hh_wire::json::Json;
+use hharness_hir::debt::{validate_removal_test_at, DebtError, RemovalTestContext, TemplateView};
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_lab::experiment::{ExperimentKind, ExperimentSpec};
+use hharness_ontology::debt::{
+    DebtPolicy, DebtStatus, RemovalTestKind, UnexecutableReason, DEBT_HOMES,
+};
+use hharness_ontology::eval::is_pinned_version_id;
+use hharness_wire::json::Json;
 
 use crate::errors::{DebtManagerError, Refusal};
 use crate::records::SchedulableEntry;
@@ -163,7 +165,7 @@ pub fn priority_class(entry: &SchedulableEntry) -> u8 {
     match entry.current_status {
         DebtStatus::Expired if entry.used => 0,
         DebtStatus::Expiring if entry.used => 1,
-        _ if entry.evidence_grade == hh_ontology::debt::EvidenceGrade::Hypothesized
+        _ if entry.evidence_grade == hharness_ontology::debt::EvidenceGrade::Hypothesized
             && entry.probation_due =>
         {
             2
@@ -229,20 +231,20 @@ pub fn instantiate(
     template
 }
 
-/// The context-parameterized half of `hh_hir::debt::validate_removal_test`
+/// The context-parameterized half of `hharness_hir::debt::validate_removal_test`
 /// under the resolvers the schedule point honestly binds (R2.17 — the
 /// DF-S1.24-1 rowed members):
 ///
 /// - `policy` — the operative `DebtPolicy` (`InsufficientRunway` binds
 ///   `min_runway_ms`);
 /// - `declared_sinks` — the policy's `notice_sinks` table (`OwnerUnreachable`;
-///   the same set `hh_lab::debt::route_notices` intersects);
+///   the same set `hharness_lab::debt::route_notices` intersects);
 /// - `resolve_template` — the caller-resolved `ExperimentSpec` (records-in:
-///   the boundary resolves `template_ref` through `LabDocs`/`hh-registry`);
+///   the boundary resolves `template_ref` through `LabDocs`/`hharness-registry`);
 /// - `split_assigned`/`artifact_sealed` — derived from the resolved
 ///   template's own members (the suite's `split_assignment_ref`; every
 ///   arm's `artifact_ref.version_id` pinned under the one §5h.2 §2
-///   spelling `hh_ontology::eval::is_pinned_version_id`).
+///   spelling `hharness_ontology::eval::is_pinned_version_id`).
 ///
 /// Absent resolvers stay skipped (the `RemovalTestContext` contract):
 /// `probe_ref_known`/`zero_use_scope_resolved` gate kinds that defer

@@ -24,16 +24,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
-use hh_ledger::effect::EffectPhase;
-use hh_ledger::event::{Cursor, Direction, Event, EventFrame, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::saga::CompensationIntent;
-use hh_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::LedgerError;
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
+use hharness_ledger::effect::EffectPhase;
+use hharness_ledger::event::{Cursor, Direction, Event, EventFrame, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::saga::CompensationIntent;
+use hharness_ledger::store::{Lease, RedactTarget, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::LedgerError;
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -197,7 +197,7 @@ fn to_applied(s: &mut Store, run: &str, lease: &Lease, eid: &str, rc: Json) {
     .unwrap();
 }
 
-fn events<'a>(s: &'a Store, run: &str) -> &'a [hh_ledger::event::EventEnvelope] {
+fn events<'a>(s: &'a Store, run: &str) -> &'a [hharness_ledger::event::EventEnvelope] {
     s.envelopes(run).unwrap()
 }
 
@@ -490,8 +490,8 @@ fn ac_2_2_4_7_rollback_compensates_in_reverse_and_moves_the_head() {
         .and_then(Json::as_str)
         .unwrap()
         .to_string();
-    let addr = hh_identity::idp::parse_id(&record_ref)
-        .map(|p| hh_identity::idp::ContentAddress {
+    let addr = hharness_identity::idp::parse_id(&record_ref)
+        .map(|p| hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: p.digest_hex,
@@ -604,7 +604,7 @@ fn ac_2_2_4_8_fork_pins_source_prefix_content_against_gc_and_redact() {
     // Redaction is pinned the same way — the endorsement gate passes, the
     // pin refuses.
     let endorser = ProvenanceRecord::minted(
-        Origin::human("human:alice", hh_provenance::HumanRole::Principal),
+        Origin::human("human:alice", hharness_provenance::HumanRole::Principal),
         PersistenceScope::Run,
         0,
     );
@@ -714,8 +714,8 @@ fn trace_only_marks_the_record_read_only() {
     assert_eq!(rec2.downgrade_reason.as_deref(), Some("coverage"));
 }
 
-fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
-    hh_ledger::retention::RetentionPolicy {
+fn gc_policy(policy_ref: &str) -> hharness_ledger::retention::RetentionPolicy {
+    hharness_ledger::retention::RetentionPolicy {
         policy_ref: policy_ref.to_string(),
         blob_residency_ms: 0,
         bundle_retention_ms: 0,

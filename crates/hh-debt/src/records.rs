@@ -1,14 +1,14 @@
-//! The `hh-debt` record types (S6.1b; §5h.6 §3): the
+//! The `hharness-debt` record types (S6.1b; §5h.6 §3): the
 //! `DebtManagerRecord` service record (AC-R-2.9.6-12 — `maturity`, the
 //! home-16 reflexive `AssumptionDebtRecord`, `DebtPolicy.schedule`), the
 //! sweep input/output rows, and the scheduled-test bookkeeping the
 //! `ManagerView` fold rebuilds.
 
-use hh_hir::records::AssumptionDebtRecord;
-use hh_lab::debt::{DebtObservables, DebtTransition};
-use hh_lab::experiment::ExperimentSpec;
-use hh_ontology::debt::{DebtPolicy, RemovalTestKind, RemovalVerdict};
-use hh_wire::json::Json;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_lab::debt::{DebtObservables, DebtTransition};
+use hharness_lab::experiment::ExperimentSpec;
+use hharness_ontology::debt::{DebtPolicy, RemovalTestKind, RemovalVerdict};
+use hharness_wire::json::Json;
 
 use crate::errors::DebtManagerError;
 
@@ -72,12 +72,12 @@ impl DebtManagerRecord {
                 crate::schedule::PRIORITY_SPELLINGS
             )));
         }
-        hh_hir::debt::validate_for_home(
+        hharness_hir::debt::validate_for_home(
             &self.reflexive_debt,
             "assumption_debt_manager",
             "debt",
             &self.policy,
-            &hh_hir::debt::RemovalTestContext::member_level(),
+            &hharness_hir::debt::RemovalTestContext::member_level(),
         )
         .map_err(|e| bad(format!("reflexive_debt: {e:?}")))?;
         if self.reflexive_debt.removal_test.as_ref().map(|t| t.kind)
@@ -109,7 +109,7 @@ impl DebtManagerRecord {
             ("policy", self.policy.to_json()),
             (
                 "reflexive_debt",
-                hh_hir::debt_json(&self.reflexive_debt, false),
+                hharness_hir::debt_json(&self.reflexive_debt, false),
             ),
             ("reflexive_debt_ref", Json::str(self.reflexive_debt_ref())),
         ])
@@ -138,7 +138,7 @@ impl DebtManagerRecord {
             maturity: str_at("maturity")?,
             policy: DebtPolicy::from_json(policy, "/policy")
                 .map_err(|e| bad(format!("policy: {}", e.detail)))?,
-            reflexive_debt: hh_hir::debt_from_json(reflexive, "/reflexive_debt")
+            reflexive_debt: hharness_hir::debt_from_json(reflexive, "/reflexive_debt")
                 .map_err(|e| bad(format!("reflexive_debt: {e:?}")))?,
         })
     }
@@ -177,9 +177,9 @@ pub struct SchedulableEntry {
     pub debt_ref: String,
     /// The derived current status spelling (`active`/`expiring`/`expired`/
     /// `retired` — folded, not stored).
-    pub current_status: hh_ontology::debt::DebtStatus,
+    pub current_status: hharness_ontology::debt::DebtStatus,
     /// The derived evidence grade.
-    pub evidence_grade: hh_ontology::debt::EvidenceGrade,
+    pub evidence_grade: hharness_ontology::debt::EvidenceGrade,
     /// Whether the record is used by a live definition (`used_by` non-empty).
     pub used: bool,
     /// Whether the ledgered probation entry is past due (DF-S5.4-1 — the

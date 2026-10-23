@@ -14,15 +14,15 @@
 
 use std::collections::BTreeSet;
 
-use hh_ontology::debt::{
+use hharness_ontology::debt::{
     debt_home, required_fields, DebtHome, DebtPolicy, DebtScope, ExpiryKind, RemovalTestKind,
     UnexecutableReason,
 };
 
 use crate::leaves::Text;
 use crate::records::AssumptionDebtRecord;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 /// `RetirementRecord{removal_test_report_ref, verdict_ref, decided_by,
 /// rationale}` — the human-sealed discharge record a `retired` debt carries
@@ -205,11 +205,12 @@ pub fn validate_removal_test_at(
     // conditioned-on rule; AC-R-2.9.6-2). The home's `needs_model_scope`
     // marks where the scope is *expected*; the refusal fires on the record's
     // own conditioning.
-    let needs_scope = record.debt_class == Some(hh_ontology::debt::DebtClass::ModelConditioned)
+    let needs_scope = record.debt_class
+        == Some(hharness_ontology::debt::DebtClass::ModelConditioned)
         || record
             .created_by
             .as_ref()
-            .map(|p| matches!(p.origin, hh_provenance::Origin::Evolution { .. }))
+            .map(|p| matches!(p.origin, hharness_provenance::Origin::Evolution { .. }))
             .unwrap_or(false);
     if needs_scope {
         let has_scope = record
@@ -236,9 +237,10 @@ pub fn validate_removal_test_at(
         let version_expiry = record
             .expiry
             .as_ref()
-            .map(|x| x.condition == hh_ontology::debt::ExpiryKind::ModelVersionChange)
+            .map(|x| x.condition == hharness_ontology::debt::ExpiryKind::ModelVersionChange)
             .unwrap_or(false)
-            || record.expiry_condition.kind == hh_ontology::debt::ExpiryKind::ModelVersionChange;
+            || record.expiry_condition.kind
+                == hharness_ontology::debt::ExpiryKind::ModelVersionChange;
         if !version_expiry {
             return Err(DebtError::UnexecutableRemovalTest {
                 reason: UnexecutableReason::MissingSnapshotScope,

@@ -1,4 +1,4 @@
-//! `hh-fleet` S6.4 coverage — §5i.1 6d / ADR-0207 D6 / ADR-0325
+//! `hharness-fleet` S6.4 coverage — §5i.1 6d / ADR-0207 D6 / ADR-0325
 //! (AC-R-2.12.6-12; T-LCD-05): every fleet default is a conditioned
 //! rule whose removal test is the `lab/org-policy-v1` recipe — the
 //! `fleet_default_debt_records` projection mints one
@@ -7,13 +7,13 @@
 //! `schedule`-revalidation contract (records-out — the caller deposits
 //! through the §5h.6 path).
 
-use hh_fleet::org_policy::{
+use hharness_fleet::org_policy::{
     default_rule_id, fleet_default_debt_records, FLEET_DEFAULTS, ORG_POLICY_RECIPE,
 };
-use hh_ontology::debt::{
+use hharness_ontology::debt::{
     DebtClass, ExpiryKind, RemovalTestKind, RevalidationAction, RevalidationOn,
 };
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
 
 fn human(author: &str) -> ProvenanceRecord {
     ProvenanceRecord::minted(
@@ -23,8 +23,8 @@ fn human(author: &str) -> ProvenanceRecord {
     )
 }
 
-fn owner() -> hh_ontology::debt::OwnerRef {
-    hh_ontology::debt::OwnerRef {
+fn owner() -> hharness_ontology::debt::OwnerRef {
+    hharness_ontology::debt::OwnerRef {
         team: true,
         id: "team:platform".into(),
         reach_via: vec!["sink:ops".into()],
@@ -71,7 +71,7 @@ fn every_fleet_default_carries_the_recipe_removal_test() {
         assert!(reval.on.contains(&RevalidationOn::Schedule));
         assert_eq!(reval.action, Some(RevalidationAction::RefreshEvidence));
         // The record is active at mint.
-        assert_eq!(r.status, hh_ontology::debt::DebtStatus::Active);
+        assert_eq!(r.status, hharness_ontology::debt::DebtStatus::Active);
     }
 
     // The recipe coordinate is the exemplar's id — the template the

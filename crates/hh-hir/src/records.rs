@@ -11,19 +11,19 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::control::ControlBoundary;
+use hharness_ontology::control::ControlBoundary;
 /// The canonical `/1` debt vocabulary — re-exported so debt-bearing record
 /// owners and fixtures share the one schema source (CC7).
-pub use hh_ontology::debt::{
+pub use hharness_ontology::debt::{
     DebtClass, DebtExpiry, DebtPolicy, DebtRef, DebtScope, DebtStatus, DeficiencyClass,
     EvidenceGrade, EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, HypothesisTyped,
     ModelSelector, OwnerRef, RemovalTest, RemovalTestKind, RemovalVerdict, Revalidation,
     UnexecutableReason,
 };
-use hh_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord, TaintTag};
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord, TaintTag};
+use hharness_wire::json::Json;
 
-use hh_ontology::participant::HostingMechanism;
+use hharness_ontology::participant::HostingMechanism;
 
 use crate::kinds::{
     EdgeKind, EffectClass, EntityKind, PreconditionDomain, ToolEffects, ValidatorKind,
@@ -510,7 +510,7 @@ pub struct NativeProcess {
     pub profile: ProfileRef,
     /// The slot bindings: slot name → bound variants.
     pub slots: BTreeMap<String, SlotBindings>,
-    /// The control boundary (the CC11 shared record — `hh_ontology` owns the type).
+    /// The control boundary (the CC11 shared record — `hharness_ontology` owns the type).
     pub control_boundary: ControlBoundary,
     /// The process budget.
     pub budget: Ref,
@@ -600,7 +600,7 @@ impl Locality {
 /// `version_identity = H(declaration ∥ participant_version)` — a participant body change is
 /// a new version, per the §3.1.2 participant rule.
 ///
-/// `hosting_mechanism` is `hh_ontology`'s closed sum (`{none, session_abi,
+/// `hosting_mechanism` is `hharness_ontology`'s closed sum (`{none, session_abi,
 /// model_boundary_intercept, container_installed}` — underscore form in records);
 /// `none` is legal only on a native descriptor — `validate` fails a `hosted` body carrying
 /// it (CF-351).
@@ -611,7 +611,7 @@ pub struct OpaqueProcess {
     /// The capability declaration record — the fifteen-field tri-state.
     pub declared_capabilities: CapabilityDeclarationRecord,
     /// The declared observability levels.
-    pub observability_levels: BTreeSet<hh_ontology::participant::Observability>,
+    pub observability_levels: BTreeSet<hharness_ontology::participant::Observability>,
     /// The participant's own version coordinate (the declaration identity).
     pub participant_version: String,
     /// `H(declaration ∥ participant_version)` — set by `seal`; validated when present.
@@ -771,7 +771,7 @@ impl CapabilityDeclarationRecord {
 
 /// `Budget = {dimensions, scope, parent, accounting}` (§3.1.3; ADR-0039). Dimension keys
 /// are the kernel counter/gauge list plus the derived bound names — the closed registry
-/// landed at S1.6 (`hh_ontology::dimensions`; DF-S1.4-1 closed there); `validate`
+/// landed at S1.6 (`hharness_ontology::dimensions`; DF-S1.4-1 closed there); `validate`
 /// refuses unknown keys (`SchemaViolation`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BudgetRecord {
@@ -927,7 +927,7 @@ pub struct AssumptionDebtRecord {
     /// `/1`: the revalidation policy `{on[], action}`.
     pub revalidation: Option<Revalidation>,
     /// `/1`: the typed removal test (instantiates per kind; validated by
-    /// `hh_hir::debt::validate_removal_test`).
+    /// `hharness_hir::debt::validate_removal_test`).
     pub removal_test: Option<RemovalTest>,
     /// `/1`: who created the record (provenance).
     pub created_by: Option<ProvenanceRecord>,
@@ -942,7 +942,7 @@ impl AssumptionDebtRecord {
     /// The derived `evidence_grade` (ADR-0197 — derived from `evidence_refs`,
     /// never stored).
     pub fn evidence_grade(&self) -> EvidenceGrade {
-        hh_ontology::debt::evidence_grade(&self.evidence_refs)
+        hharness_ontology::debt::evidence_grade(&self.evidence_refs)
     }
 
     /// Whether the field `name` is *present* on the record for

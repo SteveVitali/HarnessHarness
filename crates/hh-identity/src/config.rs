@@ -7,7 +7,7 @@
 //! idp/1 construction (CC1); the ontology's κ (`hh-ontology::config`) delegates here so there is
 //! exactly one configuration-id scheme in the tree.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::idp::idp_id;
 use crate::kinds::RecordKind;

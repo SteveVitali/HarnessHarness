@@ -11,11 +11,11 @@
 //! are attenuated to what is coverable, never rounded up — a request the parent
 //! cannot cover is `AuthorityWidening`, not a clipped grant.
 
-use hh_compiler::plan::PinnedRef;
-use hh_hir::records::{Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::records::{Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::args::scope_covers;
 use crate::handle::{AuthorityHandle, HandleId, HandleValidity, OriginBasis};
@@ -28,7 +28,7 @@ pub enum DelegateError {
     /// A requested grant is not ⊆ any `delegable` grant of the parent.
     AuthorityWidening {
         /// The widening grant's domain.
-        domain: hh_hir::EffectDomain,
+        domain: hharness_hir::EffectDomain,
     },
     /// The parent handle is not `delegable` (no delegable grant covered the
     /// request).

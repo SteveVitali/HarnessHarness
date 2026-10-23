@@ -26,22 +26,22 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use hh_control::driver::{
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome,
     LedgerSink, ModelOutcome, ModelPort, VerifyPort,
 };
-use hh_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
-use hh_control::plan_exec::{PlanExecute, PLAN_SURFACE_ID};
-use hh_control::policy::EnvelopePolicy;
-use hh_control::react::ReactMinimal;
-use hh_control::replay::{deterministic_replay, extract_recorded};
-use hh_control::strategy::{ControlContext, ControlStrategy, PlanProvenance, StrategyParams};
-use hh_control::vocab::SettledOutcome;
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{Event, EventEnvelope, EventPlane};
-use hh_ledger::manifest::ParticipantClass;
-use hh_ontology::control::StopReason;
-use hh_wire::json::Json;
+use hharness_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
+use hharness_control::plan_exec::{PlanExecute, PLAN_SURFACE_ID};
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::react::ReactMinimal;
+use hharness_control::replay::{deterministic_replay, extract_recorded};
+use hharness_control::strategy::{ControlContext, ControlStrategy, PlanProvenance, StrategyParams};
+use hharness_control::vocab::SettledOutcome;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{Event, EventEnvelope, EventPlane};
+use hharness_ledger::manifest::ParticipantClass;
+use hharness_ontology::control::StopReason;
+use hharness_wire::json::Json;
 
 // ── test doubles (the deterministic Stage-3 ports) ──────────────────────
 
@@ -117,7 +117,7 @@ impl ModelPort for ScriptedModel {
     fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
         self.calls += 1;
         self.script.pop_front().unwrap_or(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-empty".into(),
             text_empty: true,
             calls: vec![],
@@ -208,7 +208,7 @@ impl AssemblerPort for NullAssembler {
 /// (deterministic-detector verdicts only — a `judged` verdict is never a
 /// gate fact, F7).
 struct ScriptedVerify {
-    verdicts: Vec<hh_verification::validators::Verdict>,
+    verdicts: Vec<hharness_verification::validators::Verdict>,
 }
 
 impl VerifyPort for ScriptedVerify {
@@ -216,7 +216,7 @@ impl VerifyPort for ScriptedVerify {
         &mut self,
         _refs: &[String],
         _subject: &Json,
-    ) -> Vec<hh_verification::validators::Verdict> {
+    ) -> Vec<hharness_verification::validators::Verdict> {
         self.verdicts.clone()
     }
 }
@@ -225,7 +225,7 @@ fn ctx() -> ControlContext {
     ControlContext {
         process_ref: "proc-1".into(),
         plan: vec![],
-        boundary: hh_control::react::react_preset(),
+        boundary: hharness_control::react::react_preset(),
         profile: Json::Null,
         account_ref: "acct".into(),
         budget_ref: "b-1".into(),
@@ -233,8 +233,8 @@ fn ctx() -> ControlContext {
         parameters: StrategyParams::default(),
         capabilities_available: vec![],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     }
 }
@@ -302,7 +302,7 @@ fn submit_surface() -> SurfaceSpec {
 
 fn call(surface: &str, args: &str) -> ModelOutcome {
     ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         response_ref: "r-1".into(),
         text_empty: false,
         calls: vec![ParsedCall {
@@ -322,14 +322,16 @@ fn submit_call() -> ModelOutcome {
 /// The contract fixture — `criteria`/`invariants` are `AcceptanceCriterion`
 /// records; `validator_ref` is what `require_validator(…)` actions name.
 fn contract(
-    criteria: Vec<hh_verification::gate::AcceptanceCriterion>,
-) -> hh_verification::gate::TaskContract {
-    hh_verification::gate::TaskContract {
-        contract_id: hh_verification::gate::TaskContract::compute_contract_id("goal-1", &criteria),
+    criteria: Vec<hharness_verification::gate::AcceptanceCriterion>,
+) -> hharness_verification::gate::TaskContract {
+    hharness_verification::gate::TaskContract {
+        contract_id: hharness_verification::gate::TaskContract::compute_contract_id(
+            "goal-1", &criteria,
+        ),
         goal_ref: "goal-1".into(),
         criteria,
         invariants: vec![],
-        completion_policy: hh_verification::vocab::CompletionPolicy::AllRequired,
+        completion_policy: hharness_verification::vocab::CompletionPolicy::AllRequired,
         evidence_kinds_required: vec![],
         budget_ref: "b-1".into(),
         sealed: true,
@@ -337,25 +339,25 @@ fn contract(
     }
 }
 
-fn criterion(id: &str, validator: &str) -> hh_verification::gate::AcceptanceCriterion {
-    hh_verification::gate::AcceptanceCriterion {
+fn criterion(id: &str, validator: &str) -> hharness_verification::gate::AcceptanceCriterion {
+    hharness_verification::gate::AcceptanceCriterion {
         criterion_id: id.into(),
         validator_ref: validator.into(),
-        record: hh_verification::gate::default_validates_record(),
+        record: hharness_verification::gate::default_validates_record(),
     }
 }
 
 fn decided_pass_verdict(
     criterion_ref: &str,
     validator: &str,
-) -> hh_verification::validators::Verdict {
-    use hh_verification::vocab::*;
-    hh_verification::validators::Verdict {
+) -> hharness_verification::validators::Verdict {
+    use hharness_verification::vocab::*;
+    hharness_verification::validators::Verdict {
         verdict_id: format!("verdict:{criterion_ref}"),
-        validator_ref: hh_identity::refs::VersionedRef::pinned(
-            hh_identity::kinds::RecordKind::Validator,
+        validator_ref: hharness_identity::refs::VersionedRef::pinned(
+            hharness_identity::kinds::RecordKind::Validator,
             validator,
-            hh_provenance::ProvenanceRecord::kernel("hh-test/verify", 0),
+            hharness_provenance::ProvenanceRecord::kernel("hh-test/verify", 0),
         ),
         oracle_class: OracleClass::Executable,
         target: "run".into(),
@@ -378,7 +380,7 @@ fn decided_pass_verdict(
         calibration_ref: None,
         independence_summary: None,
         uncited_findings: 0,
-        provenance: hh_provenance::ProvenanceRecord::kernel("hh-test/verify", 0),
+        provenance: hharness_provenance::ProvenanceRecord::kernel("hh-test/verify", 0),
         measured_at: 0,
     }
 }
@@ -507,7 +509,7 @@ fn gate_hold_loops_then_exhausts_reconciliation_holds() {
         r.report.stop_reason,
         StopReason::BudgetExhausted {
             budget_id: "b-1".into(),
-            dimension: hh_ontology::dimensions::DimensionId::ReconciliationHolds,
+            dimension: hharness_ontology::dimensions::DimensionId::ReconciliationHolds,
         }
     );
     // Exactly `DEFAULT_HOLDS_CAP` hold rows — the cap evaluation decides
@@ -519,7 +521,7 @@ fn gate_hold_loops_then_exhausts_reconciliation_holds() {
         .count();
     assert_eq!(
         holds as u64,
-        hh_verification::gate::DEFAULT_HOLDS_CAP,
+        hharness_verification::gate::DEFAULT_HOLDS_CAP,
         "exactly the cap of holds lands"
     );
     // The hold's divergence + required action are durable.
@@ -616,7 +618,7 @@ fn gate_unverifiable_policy_decides_succeeded_unverified() {
     let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
     let mut c = contract(vec![criterion("crit-unv", "validator:v-1")]);
     c.completion_policy =
-        hh_verification::vocab::CompletionPolicy::Unverifiable("no_detector".into());
+        hharness_verification::vocab::CompletionPolicy::Unverifiable("no_detector".into());
     let mut driver = Driver::open_react(
         &ctx(),
         policy,
@@ -920,7 +922,7 @@ fn plan_execute_invalid_plan_replans_then_format_failure() {
 /// is `valid:false`; a valid plan's `hh.plan` self-call is refused too.
 #[test]
 fn plan_validate_closed_schema_and_closed_world() {
-    use hh_control::plan_exec::plan_validate;
+    use hharness_control::plan_exec::plan_validate;
     let declared = vec![fs_read(), submit_surface(), plan_surface()];
     // Valid plan.
     assert!(plan_validate(
@@ -959,7 +961,7 @@ fn drive(
     gate: ScriptedGate,
     config: DriverConfig,
     contract_ctx: Option<ControlContext>,
-) -> (hh_control::driver::RunResult, Vec<EventEnvelope>) {
+) -> (hharness_control::driver::RunResult, Vec<EventEnvelope>) {
     let mut sink = MemSink::new();
     let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
     let ctx = contract_ctx.unwrap_or_else(ctx);
@@ -972,7 +974,7 @@ fn drive(
     let mut asm = NullAssembler;
     let r = match driver.run(&mut model, &mut g, &mut asm, &mut sink) {
         Ok(r) => r,
-        Err(hh_control::driver::DriverError::Port { port: "inbox", .. }) => {
+        Err(hharness_control::driver::DriverError::Port { port: "inbox", .. }) => {
             // Parked — nothing more to feed; the run suspended.
             panic!("run parked mid-battery — the script needs a cue");
         }
@@ -1001,7 +1003,7 @@ fn assert_replay_reproduces(
         &mut asm,
         Some("hh.submit"),
         "replay",
-        hh_control::replay::ReplayPorts::default(),
+        hharness_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     assert!(out.reproduced(), "replay diverged: {:?}", out.diverged);
@@ -1092,7 +1094,7 @@ fn ac_f2_02_budget_ceiling_replays_identically() {
 #[test]
 fn ac_f2_05_empty_call_ladder_replays_identically() {
     let script: Vec<ModelOutcome> = std::iter::repeat_with(|| ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         response_ref: "r".into(),
         text_empty: true,
         calls: vec![],
@@ -1133,7 +1135,7 @@ fn ac_f2_05_empty_call_ladder_replays_identically() {
 /// T-LCD-03 (AC-R-2.6.1-2) — the paired `react/minimal` runs over the same
 /// recorded `model_io` reproduce identical `control.decision` and
 /// `context.assembled` sequences (the equivalence substrate the eval
-/// plane's `equivalence_run` consumes — `hh-eval`'s S3.10 test does the
+/// plane's `equivalence_run` consumes — `hharness-eval`'s S3.10 test does the
 /// margins half).
 #[test]
 fn t_lcd_03_paired_replay_reproduces_identically() {
@@ -1173,7 +1175,7 @@ fn t_lcd_03_paired_replay_reproduces_identically() {
         &mut asm_a,
         Some("hh.submit"),
         "replay-a",
-        hh_control::replay::ReplayPorts::default(),
+        hharness_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     let mut asm_b = NullAssembler;
@@ -1188,7 +1190,7 @@ fn t_lcd_03_paired_replay_reproduces_identically() {
         &mut asm_b,
         Some("hh.submit"),
         "replay-b",
-        hh_control::replay::ReplayPorts::default(),
+        hharness_control::replay::ReplayPorts::default(),
     )
     .unwrap();
     assert!(
@@ -1214,11 +1216,11 @@ fn seed(sink: &mut MemSink, class: &str, payload: Json) {
         .last()
         .map(|e| e.event_id.clone())
         .unwrap_or_else(|| "root".to_string());
-    sink.append(vec![hh_control::events::kernel_event(
+    sink.append(vec![hharness_control::events::kernel_event(
         format!("seed-{}", sink.seq + 1),
         class,
         "2026-09-24T00:00:00.000Z".into(),
-        hh_ledger::event::Scope::default(),
+        hharness_ledger::event::Scope::default(),
         parent,
         vec![],
         payload,
@@ -1367,15 +1369,17 @@ fn followed_deterministic_rows_and_per_profile_share() {
             .iter()
             .filter_map(|e| e.payload.get("detector_ref").and_then(Json::as_str))
             .collect();
-        assert!(detector_refs.contains(&hh_verification::followed::detector::ARGS_CONFORM));
-        assert!(detector_refs.contains(&hh_verification::followed::detector::PROCEDURE_INVOKED));
+        assert!(detector_refs.contains(&hharness_verification::followed::detector::ARGS_CONFORM));
+        assert!(
+            detector_refs.contains(&hharness_verification::followed::detector::PROCEDURE_INVOKED)
+        );
 
         // The per-profile share: 2 of 3 deliveries followed
         // deterministically under this profile.
-        let rows: Vec<hh_verification::bind::RowView> = sink
+        let rows: Vec<hharness_verification::bind::RowView> = sink
             .prefix()
             .iter()
-            .map(|e| hh_verification::bind::RowView {
+            .map(|e| hharness_verification::bind::RowView {
                 seq: e.seq,
                 class: e.class.as_str(),
                 payload: &e.payload,
@@ -1383,17 +1387,17 @@ fn followed_deterministic_rows_and_per_profile_share() {
                     .provenance
                     .as_ref()
                     .map(|p| p.authority)
-                    .unwrap_or(hh_provenance::authority::AuthorityClass::Kernel),
+                    .unwrap_or(hharness_provenance::authority::AuthorityClass::Kernel),
                 scope_effect_id: e.scope.effect_id.as_deref(),
             })
             .collect();
-        let metrics = hh_verification::evalfold::compute(&rows);
+        let metrics = hharness_verification::evalfold::compute(&rows);
         let share = metrics
             .iter()
             .find(|m| m.name == "deterministic_detector_share")
             .expect("deterministic_detector_share emitted");
         match &share.value {
-            hh_verification::evalfold::MetricValue::Profile(p) => {
+            hharness_verification::evalfold::MetricValue::Profile(p) => {
                 assert_eq!(p.get(profile_ref).copied(), Some(666_666));
             }
             other => panic!("share is a Profile: {other:?}"),
@@ -1407,7 +1411,7 @@ fn followed_deterministic_rows_and_per_profile_share() {
 /// retryable transport class under `stage1_default`).
 fn err_call(error_class: &str, retry_after_ms: Option<u64>) -> ModelOutcome {
     ModelOutcome {
-        stop_reason: hh_gateway::vocab::StopReason::Error,
+        stop_reason: hharness_gateway::vocab::StopReason::Error,
         response_ref: "r-err".into(),
         text_empty: true,
         calls: vec![],
@@ -1440,11 +1444,11 @@ fn ac_f2_03_invariant_faults_stop_and_quarantine() {
                 // A commit landed after the barrier (a racing worker's
                 // durable row — the corruption the check flags).
                 let parent = sink.prefix().last().unwrap().event_id.clone();
-                sink.append(vec![hh_control::events::kernel_event(
+                sink.append(vec![hharness_control::events::kernel_event(
                     format!("seed-{}", sink.seq + 1),
                     "action.effect.committed",
                     "2026-09-24T00:00:01.000Z".into(),
-                    hh_ledger::event::Scope {
+                    hharness_ledger::event::Scope {
                         effect_id: Some("ef-bad".into()),
                         ..Default::default()
                     },
@@ -1458,11 +1462,11 @@ fn ac_f2_03_invariant_faults_stop_and_quarantine() {
                 // attempt reuse — two openers on one scope at attempt 1.
                 for ev_id in ["mc-r1", "mc-r2"] {
                     let parent = sink.prefix().last().unwrap().event_id.clone();
-                    sink.append(vec![hh_control::events::kernel_event(
+                    sink.append(vec![hharness_control::events::kernel_event(
                         ev_id.into(),
                         "model.call.requested",
                         "2026-09-24T00:00:01.000Z".into(),
-                        hh_ledger::event::Scope {
+                        hharness_ledger::event::Scope {
                             model_call_id: Some("mc-x".into()),
                             ..Default::default()
                         },
@@ -1767,7 +1771,7 @@ fn ac_f2_08_kill_at_kp8_resumes_identically() {
         },
     )
     .unwrap();
-    driver.inject_kill_point(hh_ledger::fault::KillPoint::Kp8);
+    driver.inject_kill_point(hharness_ledger::fault::KillPoint::Kp8);
     let mut model = ScriptedModel {
         script: script().into_iter().collect(),
         calls: 0,
@@ -1780,7 +1784,7 @@ fn ac_f2_08_kill_at_kp8_resumes_identically() {
         .expect_err("KP-8 injected");
     assert!(matches!(
         err,
-        hh_control::driver::DriverError::FaultInjected { .. }
+        hharness_control::driver::DriverError::FaultInjected { .. }
     ));
     // Resume — restore the checkpoint, fold the durable tail, re-arm the
     // envelope over the prefix (G-RESUME).
@@ -1864,7 +1868,7 @@ fn ac_f2_09_beta_independence_guard_verdicts_identical() {
         match strategy_name {
             "steerable" => {
                 let mut d = Driver::open(
-                    hh_control::react::ReactSteerable::new(),
+                    hharness_control::react::ReactSteerable::new(),
                     &ctx(),
                     policy,
                     &mut sink,
@@ -1908,11 +1912,13 @@ fn ac_f2_10_envelope_rebuild_equality() {
         None,
     );
     let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
-    let (env_a, state_a) = hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
-    let (_env_b, state_b) = hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
+    let (env_a, state_a) =
+        hharness_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
+    let (_env_b, state_b) =
+        hharness_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
     assert_eq!(state_a, state_b, "rebuild equality over the prefix");
     // Guard purity — two evaluations at the same seq, same verdict.
-    let ctx_g = hh_control::guards::GuardContext {
+    let ctx_g = hharness_control::guards::GuardContext {
         remaining: Default::default(),
         retries_ceiling: 10,
         now_ms: 0,
@@ -1926,14 +1932,14 @@ fn ac_f2_10_envelope_rebuild_equality() {
     };
     let v1 = env_a.guard(
         &prefix,
-        hh_control::vocab::GuardPoint::Resume,
-        &hh_control::guards::GuardInput::Resume,
+        hharness_control::vocab::GuardPoint::Resume,
+        &hharness_control::guards::GuardInput::Resume,
         &ctx_g,
     );
     let v2 = env_a.guard(
         &prefix,
-        hh_control::vocab::GuardPoint::Resume,
-        &hh_control::guards::GuardInput::Resume,
+        hharness_control::vocab::GuardPoint::Resume,
+        &hharness_control::guards::GuardInput::Resume,
         &ctx_g,
     );
     assert_eq!(format!("{v1:?}"), format!("{v2:?}"));
@@ -1948,8 +1954,8 @@ fn ac_f2_10_envelope_rebuild_equality() {
 /// the declaration emits the byte-identical C0 chain.
 #[test]
 fn bound_reconciler_emits_d7_and_kernel_notice() {
-    use hh_verification::reconciler::ReconcilerDeclaration;
-    use hh_verification::vocab::DivergenceClass;
+    use hharness_verification::reconciler::ReconcilerDeclaration;
+    use hharness_verification::vocab::DivergenceClass;
 
     let decl = ReconcilerDeclaration {
         reconciler_ref: "reconciler/exec-align.v1".into(),
@@ -1963,11 +1969,11 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
         ]
         .into_iter()
         .collect(),
-        detector_classes: [hh_verification::vocab::Detector::Deterministic]
+        detector_classes: [hharness_verification::vocab::Detector::Deterministic]
             .into_iter()
             .collect(),
         probe_capabilities: vec![],
-        requires_observability: [hh_ontology::participant::Observability::Events]
+        requires_observability: [hharness_ontology::participant::Observability::Events]
             .into_iter()
             .collect(),
         applies_to: Default::default(),
@@ -1980,7 +1986,7 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
         no_progress_k: 2,
         enabled: true,
     };
-    hh_verification::reconciler::declare_reconciler(&decl).unwrap();
+    hharness_verification::reconciler::declare_reconciler(&decl).unwrap();
 
     // The model reads a forbidden path (refused → `action.effect.refused`),
     // then submits `achieved` citing the refused effect — citing a refused
@@ -1995,7 +2001,7 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
     };
 
     let run_once =
-        |with_reconciler: bool, finish: Json| -> (MemSink, hh_control::driver::RunResult) {
+        |with_reconciler: bool, finish: Json| -> (MemSink, hharness_control::driver::RunResult) {
             let mut sink = MemSink::new();
             let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
             let mut driver = Driver::open_react(

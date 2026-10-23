@@ -24,7 +24,7 @@
 //! - `records[]` carry the full closed verdict set — `UNKNOWN` stays
 //!   `UNKNOWN` (§5b.3: never coerced).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CompileError;
 use crate::profile::{profile_coordinate, CapabilityState, ModelProfile};
@@ -163,7 +163,7 @@ pub fn probe_profile(
             Json::Arr(outcomes.iter().map(outcome_spelling).collect()),
         ),
     ]);
-    let probe_run_id = hh_identity::idp_id(
+    let probe_run_id = hharness_identity::idp_id(
         "profile.probe_run",
         run_preimage.to_canonical_string().as_bytes(),
     );
@@ -265,12 +265,12 @@ mod tests {
                 owner: "o".to_string(),
                 reach_via: vec![],
                 expiry_condition: ExpiryCondition {
-                    kind: hh_ontology::debt::ExpiryKind::Date,
+                    kind: hharness_ontology::debt::ExpiryKind::Date,
                     value: None,
                 },
                 removal_test_ref: "t/1".to_string(),
                 removal_test: None,
-                status: hh_ontology::debt::DebtStatus::Active,
+                status: hharness_ontology::debt::DebtStatus::Active,
                 debt_class: None,
                 hypothesis_typed: None,
                 scope: None,

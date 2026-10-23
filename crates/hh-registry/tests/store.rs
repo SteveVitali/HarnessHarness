@@ -1,4 +1,4 @@
-//! `hh-registry` store tests — every behavior has a fail-if-removed test (the
+//! `hharness-registry` store tests — every behavior has a fail-if-removed test (the
 //! ticket's test matrix; spec §6.2 R1–R10, ADR-0239). Determinism: every id is
 //! content-derived; `tempdir` paths are the only non-canonical input.
 
@@ -6,27 +6,27 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_identity::idp::address;
-use hh_identity::names::{NameStatus, ResolveMode};
-use hh_identity::supersede::SupersedeReason;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::kinds::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_identity::idp::address;
+use hharness_identity::names::{NameStatus, ResolveMode};
+use hharness_identity::supersede::SupersedeReason;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::kinds::{
     Admission, Cardinality, ConformanceVerdict, OracleClass, Placement, ProducedBy,
     RequireConformance, SubjectKind, TestDriver, TestKind,
 };
-use hh_registry::records::{
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, ForeignImport,
     Implementation, ParamDecl, RegistryPolicy, RegistryRecord, ReportHost, ReportResult, SuiteTest,
     VariantRecord,
 };
-use hh_registry::store::{
+use hharness_registry::store::{
     QueryClause, QueryOp, QueryPredicate, RegistryStore, ResolveInput, ResolveRequest,
     SlotConstraints,
 };
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-registry-test-{}-{}", std::process::id(), tag));
@@ -180,13 +180,13 @@ fn register_refuses_conditioned_rule_without_complete_debt() {
             rule_id: "r1".to_string(),
             hypothesis: text("", &kernel()),
             evidence_refs: vec![],
-            owner: hh_hir::OwnerRef::principal(""), // incomplete: empty owner
-            expiry_condition: hh_hir::ExpiryCondition {
-                kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+            owner: hharness_hir::OwnerRef::principal(""), // incomplete: empty owner
+            expiry_condition: hharness_hir::ExpiryCondition {
+                kind: hharness_hir::ExpiryKind::EvidenceRefreshDue,
                 value: None,
             },
             removal_test_ref: "t".to_string(),
-            status: hh_hir::records::DebtStatus::Active,
+            status: hharness_hir::records::DebtStatus::Active,
             debt_class: None,
             hypothesis_typed: None,
             scope: None,
@@ -495,7 +495,7 @@ fn revoke_refuses_execute_resolves_audit_and_marks_dependants_stale() {
         host: ReportHost {
             placement: Placement::SubprocessConfined,
             isolation: "x".to_string(),
-            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+            instrument: hharness_identity::repro::InstrumentRecord::new("1", "abc", false),
         },
         produced_by: ProducedBy::RegistryCi,
         results: vec![],
@@ -556,7 +556,7 @@ fn quarantined_records_never_execute() {
                 digest: Some("sha256:abc".to_string()),
                 label: None,
                 lifted_record: Json::obj([("name", Json::str("x"))]),
-                loss_report: hh_registry::records::LossReport::default(),
+                loss_report: hharness_registry::records::LossReport::default(),
             }),
             &kernel(),
             None,
@@ -830,7 +830,7 @@ fn foreign_import_registers_quarantined() {
         digest: Some("sha256:abc".to_string()),
         label: None,
         lifted_record: Json::obj([("name", Json::str("x"))]),
-        loss_report: hh_registry::records::LossReport {
+        loss_report: hharness_registry::records::LossReport {
             digest: vec!["digest".to_string()],
             ..Default::default()
         },
@@ -990,7 +990,7 @@ fn probed_floor_reads_only_admissible_non_stale_reports() {
         host: ReportHost {
             placement: Placement::SubprocessConfined,
             isolation: "x".to_string(),
-            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+            instrument: hharness_identity::repro::InstrumentRecord::new("1", "abc", false),
         },
         produced_by: by,
         results: vec![ReportResult {
@@ -1086,11 +1086,11 @@ fn every_refused_operation_appends_a_diagnostic_and_an_event() {
 fn the_suite_driver_produces_a_registerable_report() {
     let d = dir("driver");
     let mut s = RegistryStore::open(&d, &kernel()).unwrap();
-    let mut cls = hh_registry::suites::control_strategy_class();
+    let mut cls = hharness_registry::suites::control_strategy_class();
     let cv = s
         .register(RegistryRecord::Class(cls.clone()), &kernel(), None)
         .unwrap();
-    let mut suite = hh_registry::suites::control_strategy_suite(&cv.version_id);
+    let mut suite = hharness_registry::suites::control_strategy_suite(&cv.version_id);
     suite.class_ref = cv.version_id.clone();
     let sv = s
         .register(RegistryRecord::Suite(suite.clone()), &kernel(), None)
@@ -1102,9 +1102,15 @@ fn the_suite_driver_produces_a_registerable_report() {
     let vv = s
         .register(RegistryRecord::Variant(v.clone()), &kernel(), None)
         .unwrap();
-    let instrument = hh_identity::repro::InstrumentRecord::new("0.1", "dead", false);
-    let mut report =
-        hh_registry::suites::run_suite(&suite, &v, &vv.version_id, "1.0", &instrument, "run-1");
+    let instrument = hharness_identity::repro::InstrumentRecord::new("0.1", "dead", false);
+    let mut report = hharness_registry::suites::run_suite(
+        &suite,
+        &v,
+        &vv.version_id,
+        "1.0",
+        &instrument,
+        "run-1",
+    );
     report.suite_ref = sv.version_id.clone();
     assert!(report
         .results
@@ -1219,8 +1225,8 @@ fn environment_family_registers_and_a_family_scoped_metric_resolves() {
     // carries typed `EnvironmentFamily` values; a family-scoped metric
     // resolves against the registered `environment_family` record; the
     // canonical spellings are unchanged, so old name-spelling bodies decode.
-    use hh_ontology::compliance::MetricDeclaration;
-    use hh_ontology::lab::{
+    use hharness_ontology::compliance::MetricDeclaration;
+    use hharness_ontology::lab::{
         EnvironmentFamily, EnvironmentFamilyRecord, EpisodeModel, SubmissionKind, VerifierIsolation,
     };
 
@@ -1279,9 +1285,9 @@ fn environment_family_registers_and_a_family_scoped_metric_resolves() {
 
 // ── S3.4d — participant/adapter opaque kinds + hosted conformance (§6.6) ────
 
-use hh_registry::kinds::RecordKind;
-use hh_registry::records::{ConformanceRecord, ObservedIn};
-use hh_registry::schema::record_from_json;
+use hharness_registry::kinds::RecordKind;
+use hharness_registry::records::{ConformanceRecord, ObservedIn};
+use hharness_registry::schema::record_from_json;
 
 fn participant_body(id: &str) -> Json {
     Json::obj([
@@ -1309,7 +1315,7 @@ fn participant_body(id: &str) -> Json {
 #[test]
 fn participant_and_adapter_bodies_register_opaque() {
     // The structural gate: the body's `kind` tag must match the record kind;
-    // the body itself is opaque (hh-hosting owns the schema — CC7 layering).
+    // the body itself is opaque (hharness-hosting owns the schema — CC7 layering).
     let p = record_from_json(RecordKind::Participant, &participant_body("hh.reference"))
         .expect("participant body");
     assert!(matches!(p, RegistryRecord::Participant(_)));
@@ -1425,7 +1431,7 @@ fn hosted_conformance_entries_gate_on_participant_subject() {
         host: ReportHost {
             placement: Placement::SubprocessConfined,
             isolation: "x".to_string(),
-            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+            instrument: hharness_identity::repro::InstrumentRecord::new("1", "abc", false),
         },
         produced_by: ProducedBy::RegistryCi,
         results: vec![],

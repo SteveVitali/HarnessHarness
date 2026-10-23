@@ -13,9 +13,9 @@
 mod common;
 
 use common::*;
-use hh_web::gate::GateConfig;
-use hh_web::server::{serve_n, serve_request, Served};
-use hh_wire::json::Json;
+use hharness_web::gate::GateConfig;
+use hharness_web::server::{serve_n, serve_request, Served};
+use hharness_wire::json::Json;
 
 fn status_of(s: &Served) -> u16 {
     match s {
@@ -196,7 +196,7 @@ fn ac6g_canary_never_leaves() {
     let (gate, mut svc, det) = fixture(Some(addr));
     let det = {
         let mut d = det;
-        d.canaries.push(hh_secrets::Canary {
+        d.canaries.push(hharness_secrets::Canary {
             id: "lt-canary-1".into(),
             value: "lt01-secret-value-9f3e".into(),
         });
@@ -250,7 +250,7 @@ fn ac6h_framing_headers_present() {
         )
         .unwrap();
         let mut r = std::io::BufReader::new(c.try_clone().unwrap());
-        let (head, _b) = hh_wire::http::read_response(&mut r, 1 << 20).unwrap();
+        let (head, _b) = hharness_wire::http::read_response(&mut r, 1 << 20).unwrap();
         head.headers.clone()
     });
     let handled = serve_n(listener, gate, svc, det, 1).unwrap();

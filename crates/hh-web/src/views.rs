@@ -52,8 +52,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_embed_client_generated::ClientError;
-use hh_wire::json::Json;
+use hharness_embed_client_generated::ClientError;
+use hharness_wire::json::Json;
 
 use crate::session::Sessions;
 

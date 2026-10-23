@@ -11,8 +11,8 @@
 //! lifts `None` (absent, never fabricated — a foreign convention span is
 //! not a HarnessHarness event).
 
-use hh_ledger::manifest::EventRef;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_wire::json::Json;
 
 /// The extension attribute spellings the liftable lowerings stamp.
 pub mod hh_attr {

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 
@@ -391,7 +391,7 @@ impl AuditTreeHead {
     /// bundle.
     pub fn from_claim(
         checkpoint_ref: Json,
-        claim: &hh_ledger::tree::CheckpointClaim,
+        claim: &hharness_ledger::tree::CheckpointClaim,
     ) -> Option<AuditTreeHead> {
         Some(AuditTreeHead {
             checkpoint_ref,
@@ -442,7 +442,7 @@ impl LedgerExport {
     /// rule — R-ID-3).
     pub fn tree_address(pages: &[String]) -> String {
         let preimage = Json::Arr(pages.iter().map(|p| Json::str(p.clone())).collect());
-        hh_identity::idp_id(
+        hharness_identity::idp_id(
             LEDGER_TREE_DOMAIN,
             preimage.to_canonical_string().as_bytes(),
         )
@@ -890,7 +890,7 @@ impl BundleManifest {
     /// `H("bundle" ∥ canonical(manifest − version_id))` — the bundle id
     /// (the tree rule; archive bytes never enter).
     pub fn compute_id(&self) -> String {
-        hh_identity::idp_id(
+        hharness_identity::idp_id(
             BUNDLE_DOMAIN,
             self.preimage().to_canonical_string().as_bytes(),
         )

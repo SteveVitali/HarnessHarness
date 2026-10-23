@@ -9,16 +9,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_acp::a2a::{card, delegate_task, resume_task, sign_card, task_state, verify_card};
-use hh_acp::{
+use hharness_acp::a2a::{card, delegate_task, resume_task, sign_card, task_state, verify_card};
+use hharness_acp::{
     channel, negotiate_era, render_session, serve_session, AcpArtifact, AcpClient, AcpDialect,
     AcpEra, FixtureDriver, MemorySessionTransport, PermissionOutcome, StaticPi, TaskState,
     TurnDrive,
 };
-use hh_compiler::acp::{lower_event, ACP_ARTEFACT_SCHEMA, ACP_VERSION, HH_METHODS};
-use hh_ledger::audit::{FixedSigner, KeyTable};
-use hh_mcp::protocol::NegotiateError;
-use hh_wire::json::Json;
+use hharness_compiler::acp::{lower_event, ACP_ARTEFACT_SCHEMA, ACP_VERSION, HH_METHODS};
+use hharness_ledger::audit::{FixedSigner, KeyTable};
+use hharness_mcp::protocol::NegotiateError;
+use hharness_wire::json::Json;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ fn fixture_artefact_json() -> Json {
                         (
                             "_meta",
                             Json::obj([(
-                                "hh",
+                                "hharness",
                                 Json::obj([
                                     ("agent_semantic_id", Json::str("test:fixture-agent")),
                                     (
@@ -177,7 +177,7 @@ fn ac_r_2_5_4_5_full_turn_updates_trace_to_durable_events() {
         .expect("prompt");
     assert_eq!(outcome.stop_reason, "end_turn");
 
-    // Every update resolves through `trace_map`: `_meta.hh.source_seq`
+    // Every update resolves through `trace_map`: `_meta.hharness.source_seq`
     // names a durable event, and the kind is exactly that event's
     // `lower_event` projection.
     let durable: BTreeMap<u64, (String, Json)> = scripted
@@ -191,11 +191,11 @@ fn ac_r_2_5_4_5_full_turn_updates_trace_to_durable_events() {
         let seq = u
             .params
             .get("_meta")
-            .and_then(|m| m.get("hh"))
+            .and_then(|m| m.get("hharness"))
             .and_then(|h| h.get("source_seq"))
             .and_then(Json::as_int)
             .map(|i| i as u64)
-            .expect("update carries _meta.hh.source_seq");
+            .expect("update carries _meta.hharness.source_seq");
         let (class, payload) = durable.get(&seq).expect("seq resolves to a durable event");
         let (kind, _) = lower_event(class, payload).expect("lowers");
         assert_eq!(u.kind, kind, "update kind ≠ lowered kind");
@@ -764,7 +764,7 @@ fn session_resume_replays_durable_tail() {
         .filter_map(|u| {
             u.params
                 .get("_meta")
-                .and_then(|m| m.get("hh"))
+                .and_then(|m| m.get("hharness"))
                 .and_then(|h| h.get("source_seq"))
                 .and_then(Json::as_int)
         })

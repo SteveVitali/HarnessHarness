@@ -11,9 +11,9 @@
 //! narrow any cell; a move toward `allow` is `authority_delta = widening`
 //! ([`policy_delta`] enumerates the probe grid).
 
-use hh_hir::EffectDomain;
-use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::AuthorityClass;
+use hharness_hir::EffectDomain;
+use hharness_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::AuthorityClass;
 
 use crate::assess::{AssessmentInputs, MemoryScope, SecretTransport, Tri};
 
@@ -595,7 +595,7 @@ pub enum PolicyDelta {
 /// {external, principal} × taint, with the `Tri` inputs swept over
 /// {yes, no, unknown} on the members the rows read.
 fn probe_grid() -> Vec<PiContext> {
-    use hh_hir::EFFECT_DOMAINS;
+    use hharness_hir::EFFECT_DOMAINS;
     let revs = [
         RiskReversibility::ReadOnly,
         RiskReversibility::Reversible,
@@ -630,7 +630,8 @@ fn probe_grid() -> Vec<PiContext> {
                                 domain,
                                 risk: RiskClass {
                                     reversibility: rev,
-                                    repeat_safety: hh_ontology::risk::RepeatSafety::NonIdempotent,
+                                    repeat_safety:
+                                        hharness_ontology::risk::RepeatSafety::NonIdempotent,
                                     scope,
                                 },
                                 eff,

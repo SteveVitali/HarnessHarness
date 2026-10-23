@@ -22,9 +22,9 @@
 //! the earlier refusal gated out; the `*_sha256`/`version_id` members are
 //! `null` where their leg never ran.
 
-use hh_hir::HirError;
-use hh_wire::json::Json;
-use hh_wire::sha256_hex;
+use hharness_hir::HirError;
+use hharness_wire::json::Json;
+use hharness_wire::sha256_hex;
 
 /// The error-kind spelling: first-raised order, duplicates collapsed —
 /// `<K1>,<K2>` (the plugin arm's `refuse:<kind>` extended to the collected
@@ -42,7 +42,7 @@ fn kinds(errs: &[HirError]) -> String {
 
 /// Run the pipeline over `bytes` (the committed `<name>.input.json`) and
 /// return the case's answer object. `sealed_at` is the deterministic seal
-/// instant the corpus pins (`hh_hir::corpus::CORPUS_SEALED_AT`).
+/// instant the corpus pins (`hharness_hir::corpus::CORPUS_SEALED_AT`).
 pub fn replay(bytes: &[u8], sealed_at: u64) -> Json {
     let mut parse_v = Json::str("ok");
     let mut validate_v = Json::str("skipped");
@@ -51,7 +51,7 @@ pub fn replay(bytes: &[u8], sealed_at: u64) -> Json {
     let mut sealed_sha256 = Json::Null;
     let mut definition_version_id = Json::Null;
 
-    let doc = match hh_hir::parse_document(bytes) {
+    let doc = match hharness_hir::parse_document(bytes) {
         Ok(d) => d,
         Err(e) => {
             parse_v = Json::str(format!("refuse:{}", kinds(&[e])));
@@ -66,16 +66,16 @@ pub fn replay(bytes: &[u8], sealed_at: u64) -> Json {
         }
     };
 
-    let canonical = hh_hir::canonicalize(&doc);
+    let canonical = hharness_hir::canonicalize(&doc);
     canonical_sha256 = Json::str(sha256_hex(&canonical));
 
-    match hh_hir::validate_doc(&doc) {
+    match hharness_hir::validate_doc(&doc) {
         Err(errs) => {
             validate_v = Json::str(format!("invalid:{}", kinds(&errs)));
         }
         Ok(_) => {
             validate_v = Json::str("valid");
-            match hh_hir::seal(&doc, sealed_at) {
+            match hharness_hir::seal(&doc, sealed_at) {
                 Err(errs) => {
                     seal_v = Json::str(format!("refuse:{}", kinds(&errs)));
                 }

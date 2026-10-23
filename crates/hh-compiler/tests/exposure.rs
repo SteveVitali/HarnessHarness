@@ -4,7 +4,7 @@
 //! `direct_all`/`check_callable`/`SurfaceNotRevealed` kernel, I-DISCOVERY,
 //! I-NARROW `PolicyViolation`, and `hidden` exclusion.
 //!
-//! AC-R-2.5.2-12's declaration half lives in `hh-telemetry` (the
+//! AC-R-2.5.2-12's declaration half lives in `hharness-telemetry` (the
 //! `surface_rejection_rate` catalogue row).
 
 #[allow(dead_code)]
@@ -13,26 +13,26 @@ mod common;
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::exposure::{
+use hharness_compiler::compiler::compile;
+use hharness_compiler::exposure::{
     build_catalog, check_callable, direct_all, evict, index_query, reveal, select_surfaces,
     CallProposal, CallRefusal, CatalogIndex, DiscoveryForm, DiscoveryQuery, EvictCause,
     ExposurePolicy, ExposurePolicyParams, IndexGranularity, OmitReason, Retention, RevealCause,
     RevealedSet, SelectError, TurnState,
 };
-use hh_compiler::schema::{bundle_from_json, bundle_to_json};
-use hh_compiler::CompileInputs;
-use hh_hir::records::{KindRecord, SurfaceRecord};
-use hh_hir::tools::ExposureMode;
-use hh_wire::json::Json;
+use hharness_compiler::schema::{bundle_from_json, bundle_to_json};
+use hharness_compiler::CompileInputs;
+use hharness_hir::records::{KindRecord, SurfaceRecord};
+use hharness_hir::tools::ExposureMode;
+use hharness_wire::json::Json;
 
 fn compile_tool_doc(
     tag: &str,
     name: &str,
     exposure_mode: Json,
 ) -> (
-    hh_registry::store::RegistryStore,
-    hh_compiler::seal::CompiledBundle,
+    hharness_registry::store::RegistryStore,
+    hharness_compiler::seal::CompiledBundle,
 ) {
     compile_tool_doc_with(tag, name, exposure_mode, false)
 }
@@ -45,8 +45,8 @@ fn compile_tool_doc_with(
     exposure_mode: Json,
     with_discovery: bool,
 ) -> (
-    hh_registry::store::RegistryStore,
-    hh_compiler::seal::CompiledBundle,
+    hharness_registry::store::RegistryStore,
+    hharness_compiler::seal::CompiledBundle,
 ) {
     let mut doc = doc_with(&stage1_assembly());
     let mut t = surfaced_tool_node("test:tool", name, &["path"], 5);
@@ -64,11 +64,11 @@ fn compile_tool_doc_with(
     let (store, sealed, _vids) = sealed_doc_with(tag, doc, vec![], vec![]);
     let p = test_profile();
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed: sealed.clone(),
-            profile_refs: vec![hh_compiler::profile::profile_coordinate(&p)],
+            profile_refs: vec![hharness_compiler::profile::profile_coordinate(&p)],
             fallback_profile: None,
             targets: vec![mcp_target()],
             compile_for_expired: false,
@@ -116,7 +116,7 @@ fn ac_e2_2_every_surface_bound_and_rename_changes_no_refs() {
     assert!(!b.surface_id.is_empty());
     assert_eq!(
         b.exposure_mode,
-        hh_compiler::surface::CompileExposureMode::Primitive
+        hharness_compiler::surface::CompileExposureMode::Primitive
     );
     assert_eq!(
         b.capability_refs,
@@ -125,7 +125,7 @@ fn ac_e2_2_every_surface_bound_and_rename_changes_no_refs() {
     assert_eq!(b.hir_node_id, b.capability_ref.semantic_id);
     assert_eq!(
         b.mapping,
-        hh_compiler::surface::BindingMapping::SurfaceArgMap
+        hharness_compiler::surface::BindingMapping::SurfaceArgMap
     );
     assert!(b.rule_ids.is_empty());
     assert_eq!(b.family_id, None);
@@ -217,7 +217,7 @@ fn ac_e3_1_deferred_surface_is_not_callable() {
     impl ExposurePolicy for Defer {
         fn rank(
             &self,
-            entries: &[hh_compiler::exposure::CatalogEntry],
+            entries: &[hharness_compiler::exposure::CatalogEntry],
             _a: &BTreeMap<String, BTreeSet<ExposureMode>>,
             _t: &TurnState,
             _p: &ExposurePolicyParams,
@@ -268,7 +268,7 @@ fn ac_e3_1_deferred_surface_is_not_callable() {
     match refusal {
         CallRefusal::SurfaceNotRevealed { surface_id, hint } => {
             assert_eq!(surface_id.as_deref(), Some(entry.surface_id.as_str()));
-            assert_eq!(hint, hh_compiler::exposure::RevealHint::Search);
+            assert_eq!(hint, hharness_compiler::exposure::RevealHint::Search);
         }
         other => panic!("expected SurfaceNotRevealed, got {other:?}"),
     }
@@ -286,7 +286,7 @@ fn ac_e3_1_deferred_surface_is_not_callable() {
         refusal,
         CallRefusal::SurfaceNotRevealed {
             surface_id: None,
-            hint: hh_compiler::exposure::RevealHint::None
+            hint: hharness_compiler::exposure::RevealHint::None
         }
     ));
 }
@@ -306,8 +306,8 @@ fn ac_e3_2_deferred_without_discovery_fails() {
         )]);
     }
     doc.nodes.push(t);
-    let errs = hh_hir::validate::validate(&doc).expect_err("validate must refuse");
-    assert!(errs.contains(&hh_hir::errors::HirError::NoDiscoverySurface));
+    let errs = hharness_hir::validate::validate(&doc).expect_err("validate must refuse");
+    assert!(errs.contains(&hharness_hir::errors::HirError::NoDiscoverySurface));
 
     // The run half: a plan that defers with no `direct` discovery surface is
     // `NoDiscoverySurface`, never a silent demotion. The discovery capability
@@ -330,11 +330,11 @@ fn ac_e3_2_deferred_without_discovery_fails() {
     let (store, sealed, _vids) = sealed_doc_with("e3-2", doc, vec![], vec![]);
     let p = test_profile();
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed,
-            profile_refs: vec![hh_compiler::profile::profile_coordinate(&p)],
+            profile_refs: vec![hharness_compiler::profile::profile_coordinate(&p)],
             fallback_profile: None,
             targets: vec![mcp_target()],
             compile_for_expired: false,
@@ -351,7 +351,7 @@ fn ac_e3_2_deferred_without_discovery_fails() {
     impl ExposurePolicy for DeferAll {
         fn rank(
             &self,
-            entries: &[hh_compiler::exposure::CatalogEntry],
+            entries: &[hharness_compiler::exposure::CatalogEntry],
             _a: &BTreeMap<String, BTreeSet<ExposureMode>>,
             _t: &TurnState,
             _p: &ExposurePolicyParams,
@@ -385,7 +385,7 @@ fn ac_e3_3_policy_outside_admitted_is_policy_violation() {
     impl ExposurePolicy for BadPolicy {
         fn rank(
             &self,
-            entries: &[hh_compiler::exposure::CatalogEntry],
+            entries: &[hharness_compiler::exposure::CatalogEntry],
             _a: &BTreeMap<String, BTreeSet<ExposureMode>>,
             _t: &TurnState,
             _p: &ExposurePolicyParams,

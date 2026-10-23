@@ -17,8 +17,8 @@
 //!   (helper crash, malformed report — `transport` ⇒ `not_applied` only if
 //!   non-dispatch is proven, else `unknown` → probe).
 
-use hh_ontology::risk::{RepeatSafety, RiskClass};
-use hh_wire::json::Json;
+use hharness_ontology::risk::{RepeatSafety, RiskClass};
+use hharness_wire::json::Json;
 
 /// `CancelBy` — who cancelled (`cancelled{by}`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,7 +215,7 @@ pub fn retryable(class: &ErrorClass, origin: ErrorOrigin, risk: &RiskClass) -> b
     // by class — the probe path owns it.
     let safe_class = risk.repeat_safety == RepeatSafety::Idempotent
         || risk.is_read_only()
-        || risk.reversibility == hh_ontology::risk::RiskReversibility::Reversible;
+        || risk.reversibility == hharness_ontology::risk::RiskReversibility::Reversible;
     if !safe_class {
         return false;
     }
@@ -314,7 +314,7 @@ pub struct Observation {
     /// the capability declared a `flow_contract`: `admit` ran and the
     /// result's `L(r)` + kind are recorded here (never a class read from
     /// the payload).
-    pub admission: Option<hh_provenance::flow::Admission>,
+    pub admission: Option<hharness_provenance::flow::Admission>,
 }
 
 impl Observation {

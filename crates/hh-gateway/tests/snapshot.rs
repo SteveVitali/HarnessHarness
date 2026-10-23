@@ -3,9 +3,9 @@
 //! `SnapshotClaim` drift signal (AC-R-2.3.1 ADR-0120 d.4/d.7; ADR-0203 D5).
 //! Every test fails if the behaviour it names is removed.
 
-use hh_gateway::snapshot::*;
-use hh_provenance::origin::Origin;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_gateway::snapshot::*;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
 
 fn prov() -> ProvenanceRecord {
     // `provenance = reported` — the provider's claim lands as an imported
@@ -42,11 +42,11 @@ fn record_shape_round_trip() {
     assert_eq!(back, r);
     // Strict codec: an unknown member refuses, never coerces.
     let mut m = match j {
-        hh_wire::json::Json::Obj(m) => m,
+        hharness_wire::json::Json::Obj(m) => m,
         _ => unreachable!(),
     };
-    m.insert("surprise".into(), hh_wire::json::Json::Bool(true));
-    let err = ModelSnapshotRecord::from_json(&hh_wire::json::Json::Obj(m)).unwrap_err();
+    m.insert("surprise".into(), hharness_wire::json::Json::Bool(true));
+    let err = ModelSnapshotRecord::from_json(&hharness_wire::json::Json::Obj(m)).unwrap_err();
     assert!(matches!(err, GatewaySnapshotError::BadShape { .. }));
 }
 
@@ -173,7 +173,7 @@ fn observe_silent_when_consistent_or_unobserved() {
 
 #[test]
 fn compatibility_token_change_raises_claim() {
-    use hh_wire::json::Json;
+    use hharness_wire::json::Json;
     let pinned = Json::obj([("value", Json::str("tok-v1"))]);
     let descriptor = Json::obj([(
         "capabilities",
@@ -196,7 +196,7 @@ fn compatibility_token_change_raises_claim() {
 
 #[test]
 fn compatibility_token_unchanged_or_absent_is_silent() {
-    use hh_wire::json::Json;
+    use hharness_wire::json::Json;
     let pinned = Json::obj([("value", Json::str("tok-v1"))]);
     let same = Json::obj([(
         "capabilities",

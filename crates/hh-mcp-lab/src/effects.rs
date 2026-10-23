@@ -14,11 +14,11 @@
 //! never becomes a protocol fault and the durable record shows the
 //! decision.
 
-use hh_embed::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::event::{Event, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_wire::json::Json;
+use hharness_embed::service::EmbedService;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::event::{Event, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 use crate::exposure::EffectDecl;
@@ -61,9 +61,9 @@ impl EffectCtx {
     ) -> EffectCtx {
         let effect_id = svc.surface_alloc_id("ef");
         let args_hash =
-            hh_identity::idp_id("mcp.call_args", arguments.to_canonical_string().as_bytes());
+            hharness_identity::idp_id("mcp.call_args", arguments.to_canonical_string().as_bytes());
         let capability_version = format!("{tool_semantic_id}@{exposure_version_id}");
-        let idempotency_key = hh_ledger::effect::idempotency_key(
+        let idempotency_key = hharness_ledger::effect::idempotency_key(
             surface_run_id,
             &effect_id,
             &args_hash,
@@ -307,7 +307,7 @@ impl EffectCtx {
             // 512B).
             m.push((
                 "outcome_ref".to_string(),
-                Json::str(hh_identity::idp_id(
+                Json::str(hharness_identity::idp_id(
                     "mcp.call_result",
                     r.to_canonical_string().as_bytes(),
                 )),
@@ -349,7 +349,7 @@ impl EffectCtx {
         let error = if detail_str.len() <= 500 {
             detail_str
         } else {
-            hh_identity::idp_id("mcp.refusal_detail", detail_str.as_bytes())
+            hharness_identity::idp_id("mcp.refusal_detail", detail_str.as_bytes())
         };
         let ev = mint_event(
             svc,
@@ -381,6 +381,6 @@ pub fn append_batch(
     svc: &mut EmbedService,
     session: &SurfaceSession,
     events: Vec<Event>,
-) -> Result<hh_ledger::event::SeqRange, EmbedError> {
+) -> Result<hharness_ledger::event::SeqRange, EmbedError> {
     svc.surface_append(&session.run_id, &session.lease, events)
 }

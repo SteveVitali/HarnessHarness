@@ -12,16 +12,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_identity::rotation::RotationPlan;
-use hh_ledger::audit::{Auditor, CheckpointKind, FixedSigner, KeyTable};
-use hh_ledger::errors::LedgerError;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
-use hh_ledger::rotation::{self, rotate};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::tree;
-use hh_wire::json::Json;
+use hharness_identity::rotation::RotationPlan;
+use hharness_ledger::audit::{Auditor, CheckpointKind, FixedSigner, KeyTable};
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::rotation::{self, rotate};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::tree;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -92,7 +92,7 @@ fn fill(s: &mut Store, run: &str, lease: &Lease, tag: &str, n: usize) {
     s.append(run, lease, batch).unwrap();
 }
 
-fn claim_of(env: &hh_ledger::event::EventEnvelope) -> tree::CheckpointClaim {
+fn claim_of(env: &hharness_ledger::event::EventEnvelope) -> tree::CheckpointClaim {
     tree::parse_checkpoint(&env.payload).unwrap()
 }
 
@@ -126,7 +126,7 @@ fn rotation_checkpoint_carries_verified_rehash_and_post_rotation_claims_chain() 
         pre_claim.identity_profile.as_deref().unwrap_or("idp/1"),
         "idp/1"
     );
-    let p1 = hh_identity::idp::profile_for("idp/1").unwrap();
+    let p1 = hharness_identity::idp::profile_for("idp/1").unwrap();
     let pre_leaves: Vec<String> = s.events(&run).unwrap()[..pre.seq as usize]
         .iter()
         .map(|e| e.hash.clone())
@@ -181,7 +181,7 @@ fn rotation_checkpoint_carries_verified_rehash_and_post_rotation_claims_chain() 
         rot_claim.tree_head.as_deref()
     );
     // The post-rotation head verifies under idp/2 over rehashed leaves.
-    let p2 = hh_identity::idp::profile_for("idp/2").unwrap();
+    let p2 = hharness_identity::idp::profile_for("idp/2").unwrap();
     let covered_post: Vec<&_> = s.events(&run).unwrap()[..post.seq as usize]
         .iter()
         .collect();
@@ -244,12 +244,12 @@ fn hosted_events_only_view_renders_ledger_components_na_observability() {
 
     let manifest = s.manifest(&run).unwrap().clone();
     let events = s.events(&run).unwrap();
-    let view = hh_ledger::audit::audit_view(
+    let view = hharness_ledger::audit::audit_view(
         &run,
         events,
         &BTreeMap::new(),
         false,
-        |_| hh_ledger::audit::BlobStatus::Present,
+        |_| hharness_ledger::audit::BlobStatus::Present,
         None,
         &manifest,
         |_, _| None,
@@ -290,8 +290,8 @@ fn hosted_events_only_view_renders_ledger_components_na_observability() {
 
 // ── R-2.8.6¹: the lab-wide audit index (ADR-0067 D5) ───────────────────────
 
-use hh_ledger::audit::{AuditFault, AuditIndex, AuditIndexEntry};
-use hh_ledger::event::EventFrame;
+use hharness_ledger::audit::{AuditFault, AuditIndex, AuditIndexEntry};
+use hharness_ledger::event::EventFrame;
 
 #[test]
 fn audit_index_records_auditor_heads_and_surfaces_equivocation() {

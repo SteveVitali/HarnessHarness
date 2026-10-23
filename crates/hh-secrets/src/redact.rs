@@ -14,7 +14,7 @@
 //! audit row (`security.secret.redacted{sink, detector, fingerprint?}`) can name
 //! *what class* was masked without the bytes.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::mask::MaskSet;
 use crate::patterns::{SecretPattern, REGISTERED_PATTERNS};

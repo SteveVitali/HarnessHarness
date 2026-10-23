@@ -9,20 +9,20 @@
 
 use std::collections::HashSet;
 
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::compose::compose;
-use hh_assembly::diagnostics::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::compose::compose;
+use hharness_assembly::diagnostics::{
     detail_text, diagnostic_json, report_json, AssemblyDiagnostic, Code, ReportStatus, Severity,
     Stage, StageOutcome, ValidationReport,
 };
-use hh_assembly::resolve::{resolve, ResolveEnv};
-use hh_assembly::validate::{validate_assembly, Subject};
-use hh_hir::document::SealedDefinition;
-use hh_identity::names::ResolveMode;
-use hh_identity::sameness::SamenessLevel;
-use hh_provenance::{Origin, ProvenanceRecord};
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_assembly::resolve::{resolve, ResolveEnv};
+use hharness_assembly::validate::{validate_assembly, Subject};
+use hharness_hir::document::SealedDefinition;
+use hharness_identity::names::ResolveMode;
+use hharness_identity::sameness::SamenessLevel;
+use hharness_provenance::{Origin, ProvenanceRecord};
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 use crate::assembly::desugar::{apply_experiment, derivation_key, desugar, lab_ext, LAB_EXT_KEY};
 use crate::assembly::diff_view::{diff_json, project, AssemblyDiff};
@@ -72,7 +72,7 @@ impl AssemblyResult {
                 "sealed",
                 self.sealed
                     .as_ref()
-                    .map(hh_hir::wire::sealed_definition_json)
+                    .map(hharness_hir::wire::sealed_definition_json)
                     .unwrap_or(Json::Null),
             ),
             ("identity", self.identity.clone().unwrap_or(Json::Null)),
@@ -153,10 +153,10 @@ pub struct AssemblyService<'a> {
 /// `C-LINK-2`, `PlanError` `C-PLAN-2`, and anything else is a `C-PLAN-1`
 /// plan refusal — every failure is observable, none silently absorbed.
 fn stage6b_diags(
-    e: hh_compiler::errors::CompileError,
+    e: hharness_compiler::errors::CompileError,
     kernel: &ProvenanceRecord,
 ) -> Vec<AssemblyDiagnostic> {
-    use hh_compiler::errors::CompileError;
+    use hharness_compiler::errors::CompileError;
     match e {
         CompileError::UnexpressibleSurface {
             entity,
@@ -377,8 +377,8 @@ fn wdiag(
 /// `capability_drift`, `expired_without_intent`) report under `C-PLAN-1`
 /// with the typed kind spelled into the detail (the diagnostic stays
 /// typed-by-name; never a bare string).
-fn link_code_for(k: hh_compiler::errors::LinkErrorKind) -> Code {
-    use hh_compiler::errors::LinkErrorKind;
+fn link_code_for(k: hharness_compiler::errors::LinkErrorKind) -> Code {
+    use hharness_compiler::errors::LinkErrorKind;
     match k {
         LinkErrorKind::UnboundSlot => Code::LinkUnboundSlot,
         LinkErrorKind::VersionConflict => Code::LinkVersionConflict,
@@ -550,14 +550,19 @@ impl<'a> AssemblyService<'a> {
             if let Some(s) = &sealed {
                 let mut scratch = Vec::new();
                 let asm = s.document.assembly.as_ref().map(|j| {
-                    hh_assembly::grammar::Assembly::from_json(j, "/assembly", &kernel, &mut scratch)
+                    hharness_assembly::grammar::Assembly::from_json(
+                        j,
+                        "/assembly",
+                        &kernel,
+                        &mut scratch,
+                    )
                 });
-                let coords = hh_assembly::validate::bound_profile_coordinates(
+                let coords = hharness_assembly::validate::bound_profile_coordinates(
                     &s.document,
                     asm.as_ref().and_then(|o| o.as_ref()),
                 );
                 if !coords.is_empty() {
-                    let inputs = hh_compiler::compiler::CompileInputs {
+                    let inputs = hharness_compiler::compiler::CompileInputs {
                         sealed: s.clone(),
                         profile_refs: coords,
                         fallback_profile: None,
@@ -612,14 +617,15 @@ impl<'a> AssemblyService<'a> {
                     Some(snapshot_id.as_str()),
                     ResolveMode::Audit,
                 ) {
-                    let (ops, class) = hh_hir::diff::ops_between(&b.document, &sealed.document);
+                    let (ops, class) =
+                        hharness_hir::diff::ops_between(&b.document, &sealed.document);
                     let va = versioned_of(&b, &self.kernel);
                     let vb = versioned_of(sealed, &self.kernel);
-                    let same = hh_identity::sameness::sameness(
+                    let same = hharness_identity::sameness::sameness(
                         &va,
                         &vb,
                         true,
-                        Some(&hh_identity::sameness::DiffClassification {
+                        Some(&hharness_identity::sameness::DiffClassification {
                             semantic_ops_nonempty: class.semantic_ops > 0,
                             authority_delta: delta_from_authority(&class.authority_delta),
                             budget_delta: delta_from(&class.budget_delta),
@@ -661,7 +667,7 @@ impl<'a> AssemblyService<'a> {
     /// diffed by desugaring and resolving both sides under one snapshot;
     /// textual diffs of authored files are never produced).
     pub fn diff_sealed(&self, a: &SealedDefinition, b: &SealedDefinition) -> AssemblyDiff {
-        let (ops, class) = hh_hir::diff::ops_between(&a.document, &b.document);
+        let (ops, class) = hharness_hir::diff::ops_between(&a.document, &b.document);
         let sam = self.registry_sameness(a, b);
         project(ops, class, sam.map(|s| s.level))
     }
@@ -672,15 +678,15 @@ impl<'a> AssemblyService<'a> {
         &self,
         a: &SealedDefinition,
         b: &SealedDefinition,
-    ) -> Option<hh_identity::sameness::Sameness> {
+    ) -> Option<hharness_identity::sameness::Sameness> {
         let va = &a.definition_ref.version_id;
         let vb = &b.definition_ref.version_id;
         self.registry.sameness(va, vb).ok().or_else(|| {
             // Not registered — classify_pair reading (same_levelage unknown →
             // the semantic_id/lineage rungs decide what they can).
-            let class_a = hh_hir::diff::classify_pair(&a.document, &b.document);
-            let class_b = hh_hir::diff::classify_pair(&b.document, &a.document);
-            let class = hh_identity::sameness::DiffClassification {
+            let class_a = hharness_hir::diff::classify_pair(&a.document, &b.document);
+            let class_b = hharness_hir::diff::classify_pair(&b.document, &a.document);
+            let class = hharness_identity::sameness::DiffClassification {
                 semantic_ops_nonempty: class_a.semantic_ops > 0 || class_b.semantic_ops > 0,
                 authority_delta: worse(
                     delta_from_authority(&class_a.authority_delta),
@@ -692,7 +698,7 @@ impl<'a> AssemblyService<'a> {
                 ),
                 dialect_change: a.document.hir_version != b.document.hir_version,
             };
-            Some(hh_identity::sameness::sameness(
+            Some(hharness_identity::sameness::sameness(
                 &versioned_of(a, &self.kernel),
                 &versioned_of(b, &self.kernel),
                 false,
@@ -718,18 +724,18 @@ impl<'a> AssemblyService<'a> {
         diags.extend(new.report.diagnostics.iter().cloned());
         match (old.sealed, new.sealed) {
             (Some(a), Some(b)) => {
-                let (ops, class) = hh_hir::diff::ops_between(&a.document, &b.document);
+                let (ops, class) = hharness_hir::diff::ops_between(&a.document, &b.document);
                 let sam = self.registry_sameness(&a, &b).map(|s| s.level);
                 let d = project_drift(ops, class, sam);
                 if let Some(level) = sam {
                     let canon = Json::Arr(
                         crate::assembly::diff_view::flatten(&d)
                             .iter()
-                            .map(hh_hir::diff::op_json)
+                            .map(hharness_hir::diff::op_json)
                             .collect(),
                     )
                     .to_canonical_string();
-                    let diff_ref = hh_identity::idp::idp_id("drift", canon.as_bytes());
+                    let diff_ref = hharness_identity::idp::idp_id("drift", canon.as_bytes());
                     if let Some(dg) =
                         drift_diagnostic(level, &diff_ref, snap_old, snap_new, &kernel)
                     {
@@ -760,7 +766,7 @@ impl<'a> AssemblyService<'a> {
         snap_old: &str,
         snap_new: &str,
         caller: &ProvenanceRecord,
-    ) -> Result<hh_hir::diff::HirDiff, Vec<AssemblyDiagnostic>> {
+    ) -> Result<hharness_hir::diff::HirDiff, Vec<AssemblyDiagnostic>> {
         let kernel = self.kernel.clone();
         let old = self.assemble(source, Some(snap_old), AssembleMode::Seal);
         let new = self.assemble(source, Some(snap_new), AssembleMode::Seal);
@@ -784,12 +790,12 @@ impl<'a> AssemblyService<'a> {
                 )]);
             }
         }
-        hh_hir::diff::diff(
+        hharness_hir::diff::diff(
             &a.document,
             &b.document,
             caller.clone(),
-            hh_hir::diff::DiffDerivation {
-                hypothesis: Some(hh_hir::leaves::Text::new(
+            hharness_hir::diff::DiffDerivation {
+                hypothesis: Some(hharness_hir::leaves::Text::new(
                     crate::assembly::drift::ADOPT_HYPOTHESIS,
                     "en",
                     caller.clone(),
@@ -802,7 +808,7 @@ impl<'a> AssemblyService<'a> {
             errs.iter()
                 .map(|e| {
                     sdiag(
-                        hh_assembly::diagnostics::kern_code(e),
+                        hharness_assembly::diagnostics::kern_code(e),
                         Stage::Resolve,
                         "/snapshot",
                         snap_new,
@@ -999,26 +1005,39 @@ impl<'a> AssemblyService<'a> {
     /// `sealed` is the `assemble` output).
     pub fn compile(
         &self,
-        inputs: &hh_compiler::compiler::CompileInputs,
-        profiles: &dyn hh_compiler::profile::ProfileView,
-    ) -> Result<hh_compiler::seal::CompiledBundle, hh_compiler::errors::CompileError> {
-        hh_compiler::compiler::compile(inputs, profiles, self.registry, self.catalog, &self.kernel)
+        inputs: &hharness_compiler::compiler::CompileInputs,
+        profiles: &dyn hharness_compiler::profile::ProfileView,
+    ) -> Result<hharness_compiler::seal::CompiledBundle, hharness_compiler::errors::CompileError>
+    {
+        hharness_compiler::compiler::compile(
+            inputs,
+            profiles,
+            self.registry,
+            self.catalog,
+            &self.kernel,
+        )
     }
 }
 
-fn delta_from(d: &hh_hir::diff::Delta) -> hh_identity::sameness::Delta {
+fn delta_from(d: &hharness_hir::diff::Delta) -> hharness_identity::sameness::Delta {
     match d {
-        hh_hir::diff::Delta::Loosening => hh_identity::sameness::Delta::Loosening,
-        hh_hir::diff::Delta::Tightening => hh_identity::sameness::Delta::Tightening,
-        hh_hir::diff::Delta::None => hh_identity::sameness::Delta::None,
+        hharness_hir::diff::Delta::Loosening => hharness_identity::sameness::Delta::Loosening,
+        hharness_hir::diff::Delta::Tightening => hharness_identity::sameness::Delta::Tightening,
+        hharness_hir::diff::Delta::None => hharness_identity::sameness::Delta::None,
     }
 }
 
-fn delta_from_authority(d: &hh_hir::diff::AuthorityDelta) -> hh_identity::sameness::Delta {
+fn delta_from_authority(
+    d: &hharness_hir::diff::AuthorityDelta,
+) -> hharness_identity::sameness::Delta {
     match d {
-        hh_hir::diff::AuthorityDelta::Widening => hh_identity::sameness::Delta::Widening,
-        hh_hir::diff::AuthorityDelta::Narrowing => hh_identity::sameness::Delta::Tightening,
-        hh_hir::diff::AuthorityDelta::None => hh_identity::sameness::Delta::None,
+        hharness_hir::diff::AuthorityDelta::Widening => {
+            hharness_identity::sameness::Delta::Widening
+        }
+        hharness_hir::diff::AuthorityDelta::Narrowing => {
+            hharness_identity::sameness::Delta::Tightening
+        }
+        hharness_hir::diff::AuthorityDelta::None => hharness_identity::sameness::Delta::None,
     }
 }
 
@@ -1036,9 +1055,9 @@ pub fn point_refused(r: &AssemblyResult) -> bool {
 fn versioned_of(
     s: &SealedDefinition,
     kernel: &ProvenanceRecord,
-) -> hh_identity::refs::VersionedRef {
-    hh_identity::refs::VersionedRef::pinned(
-        hh_identity::kinds::RecordKind::SealedDefinition,
+) -> hharness_identity::refs::VersionedRef {
+    hharness_identity::refs::VersionedRef::pinned(
+        hharness_identity::kinds::RecordKind::SealedDefinition,
         s.definition_ref.version_id.clone(),
         kernel.clone(),
     )
@@ -1047,10 +1066,10 @@ fn versioned_of(
 
 /// The worse of two deltas (for the symmetric classify_pair reading).
 fn worse(
-    a: hh_identity::sameness::Delta,
-    b: hh_identity::sameness::Delta,
-) -> hh_identity::sameness::Delta {
-    use hh_identity::sameness::Delta;
+    a: hharness_identity::sameness::Delta,
+    b: hharness_identity::sameness::Delta,
+) -> hharness_identity::sameness::Delta {
+    use hharness_identity::sameness::Delta;
     let rank = |d: Delta| match d {
         Delta::Widening | Delta::Loosening => 2,
         Delta::Tightening | Delta::Narrowing => 1,
@@ -1069,7 +1088,7 @@ pub fn diagnostics_json(diags: &[AssemblyDiagnostic]) -> Json {
 }
 
 /// A `BTreeMap<String, Json>` of an `AssemblyDiff`'s wire form plus the
-/// flattened ops' canonical encodings (for `hh-embed` result shaping).
+/// flattened ops' canonical encodings (for `hharness-embed` result shaping).
 pub fn diff_wire(d: &AssemblyDiff) -> Json {
     diff_json(d)
 }

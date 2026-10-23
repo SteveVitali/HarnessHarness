@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::kinds::{
     ConformanceVerdict, OracleClass, Placement, ProducedBy, SubjectKind, TestDriver, TestKind,
@@ -18,7 +18,7 @@ use crate::records::{
     ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, ReportHost, ReportResult,
     SuiteTest, VariantRecord,
 };
-use hh_identity::repro::InstrumentRecord;
+use hharness_identity::repro::InstrumentRecord;
 
 /// `control_strategy` — the per-step control policy class (hot path).
 pub fn control_strategy_class() -> ClassRecord {
@@ -76,8 +76,8 @@ pub fn control_strategy_class() -> ClassRecord {
         slot_key: "control_strategy".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -136,8 +136,8 @@ pub fn context_policy_class() -> ClassRecord {
         slot_key: "context_policy".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -201,8 +201,8 @@ pub fn routing_policy_class() -> ClassRecord {
         slot_key: "router".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -251,8 +251,8 @@ pub fn model_port_class() -> ClassRecord {
         slot_key: "model_port".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -382,8 +382,8 @@ pub fn validator_class() -> ClassRecord {
         slot_key: "validator".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -459,8 +459,8 @@ pub fn execution_alignment_class() -> ClassRecord {
         slot_key: "execution_alignment".to_string(),
         tier: "C0".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -554,8 +554,8 @@ pub fn compaction_strategy_class() -> ClassRecord {
             ),
         ]),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
         conformance_suite_ref: None,
         decision_points: vec!["compact".to_string()],
@@ -955,9 +955,9 @@ pub fn compute_policy_class() -> ClassRecord {
         slot_key: "compute_policy".to_string(),
         tier: "C3".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
-            hh_plugin::ContractRef::class_contract("compute_estimator", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::class_contract("compute_estimator", "*"),
         ],
     }
 }
@@ -1017,8 +1017,8 @@ pub fn compute_estimator_class() -> ClassRecord {
         slot_key: "compute_estimator".to_string(),
         tier: "C3".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -1117,8 +1117,8 @@ pub fn work_source_adapter_class() -> ClassRecord {
         slot_key: "work_source_adapter".to_string(),
         tier: "C4".to_string(),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
     }
 }
@@ -1224,8 +1224,8 @@ pub fn evolution_proposer_class() -> ClassRecord {
             ),
         ]),
         depends_on: vec![
-            hh_plugin::ContractRef::dialect("hir/1", "*"),
-            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hharness_plugin::ContractRef::dialect("hir/1", "*"),
+            hharness_plugin::ContractRef::dialect("registry/1", "*"),
         ],
         conformance_suite_ref: None,
         decision_points: vec![],
@@ -1246,7 +1246,7 @@ pub fn evolution_proposer_class() -> ClassRecord {
 /// `uses_judge = false` variants make no judge call (DRIFT);
 /// *executable* — the golden corpus yields ≥ 1 S2-valid hypothesis or a
 /// `NoAddressableFailure` with a reason. The driver is
-/// `hh_evolution::proposer_conformance` over a `ProposerPort` — the
+/// `hharness_evolution::proposer_conformance` over a `ProposerPort` — the
 /// variant host supplies the out-of-process lane (§06 ADR-0152's
 /// `registry_ci`).
 pub fn evolution_proposer_suite(class_version_id: &str) -> ConformanceSuite {

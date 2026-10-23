@@ -4,13 +4,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::profile::{
+use hharness_compiler::profile::{
     self as prof, CapabilityState, DebtStatus, ExpiryCondition, ExpiryKind, ModelCoordinate,
     ModelProfile, ModelRole, ProfileCompatibility, ProfileDebtRecord, ProfileSelector,
     SelectorView, VersionPattern,
 };
-use hh_gateway::*;
-use hh_wire::json::Json;
+use hharness_gateway::*;
+use hharness_wire::json::Json;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures
@@ -104,7 +104,7 @@ fn debt(status: DebtStatus) -> ProfileDebtRecord {
     ProfileDebtRecord {
         rule_id: "r.profile".into(),
         hypothesis: "h".into(),
-        evidence_refs: vec![hh_compiler::profile::EvidenceRef::legacy("ev:1")],
+        evidence_refs: vec![hharness_compiler::profile::EvidenceRef::legacy("ev:1")],
         owner: "o".into(),
         reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
@@ -112,8 +112,8 @@ fn debt(status: DebtStatus) -> ProfileDebtRecord {
             value: None,
         },
         removal_test_ref: "t:1".into(),
-        removal_test: Some(hh_compiler::profile::RemovalTest::new(
-            hh_compiler::profile::RemovalTestKind::Documentation,
+        removal_test: Some(hharness_compiler::profile::RemovalTest::new(
+            hharness_compiler::profile::RemovalTestKind::Documentation,
         )),
         status,
         debt_class: None,
@@ -1234,7 +1234,7 @@ fn routing_is_deterministic() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AC-R-2.3.3 — the `ModelProfile/1` selector machinery (hh-compiler).
+// AC-R-2.3.3 — the `ModelProfile/1` selector machinery (hharness-compiler).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// AC-R-2.3.3-1 — the selector grammar is `exact | prefix | range | any`
@@ -1567,7 +1567,7 @@ fn expect_cache_state_projection() {
     assert_eq!(e.basis.cold_reason, Some(MissReason::ConcurrentSibling));
 }
 
-/// AC-R-2.3.1-6 — usage normalization is `hh-telemetry`'s one convention;
+/// AC-R-2.3.1-6 — usage normalization is `hharness-telemetry`'s one convention;
 /// a usage-less terminal yields `available = false`, never zeros.
 #[test]
 fn usage_normalization_inclusive() {
@@ -1801,7 +1801,7 @@ fn stub_runs_out_of_process() {
         .unwrap();
     let out = child.wait_with_output().expect("wait");
     let line = String::from_utf8(out.stdout).unwrap();
-    let resp = hh_wire::json::parse(line.trim()).expect("json out");
+    let resp = hharness_wire::json::parse(line.trim()).expect("json out");
     assert_eq!(
         resp.get("result").and_then(Json::as_str),
         Some("completed"),
@@ -2467,7 +2467,7 @@ fn lifted_preferences_attenuate_only() {
     let env = two_candidate_env();
     let mut req = routing_request();
     req.preferences = Some(LiftedPreferences {
-        authority: hh_provenance::authority::AuthorityClass::External,
+        authority: hharness_provenance::authority::AuthorityClass::External,
         cost_priority: None,
         speed_priority: None,
         intelligence_priority: None,
@@ -2493,7 +2493,7 @@ fn lifted_preferences_attenuate_only() {
     );
     // Authority above external on a lifted preference → PolicyInvalid.
     req.preferences = Some(LiftedPreferences {
-        authority: hh_provenance::authority::AuthorityClass::Principal,
+        authority: hharness_provenance::authority::AuthorityClass::Principal,
         cost_priority: None,
         speed_priority: None,
         intelligence_priority: None,
@@ -2913,7 +2913,7 @@ fn health_projection_counts_failures_and_cools() {
 fn lift_lower_round_trips_preferences() {
     let mut req = routing_request();
     req.preferences = Some(LiftedPreferences {
-        authority: hh_provenance::authority::AuthorityClass::External,
+        authority: hharness_provenance::authority::AuthorityClass::External,
         cost_priority: Some(200_000),
         speed_priority: Some(700_000),
         intelligence_priority: None,
@@ -2925,15 +2925,22 @@ fn lift_lower_round_trips_preferences() {
         loss.no_slot,
         vec!["required_capabilities", "budget_view", "role"]
     );
-    let (prefs, loss2) =
-        lift(&doc, hh_provenance::authority::AuthorityClass::External).expect("external lifts");
+    let (prefs, loss2) = lift(
+        &doc,
+        hharness_provenance::authority::AuthorityClass::External,
+    )
+    .expect("external lifts");
     assert_eq!(loss2.no_slot.len(), 3);
     assert_eq!(prefs.cost_priority, Some(200_000));
     assert_eq!(prefs.speed_priority, Some(700_000));
     assert_eq!(prefs.hints, vec!["cheap-model".to_string()]);
     assert_eq!(prefs.exclude, vec!["m-1".to_string()]);
     // Above-external authority refuses.
-    assert!(lift(&doc, hh_provenance::authority::AuthorityClass::Principal).is_err());
+    assert!(lift(
+        &doc,
+        hharness_provenance::authority::AuthorityClass::Principal
+    )
+    .is_err());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3305,7 +3312,7 @@ fn compatibility_token_change_gates_dispatch_until_relowered() {
         .expect("a changed token claims");
     assert_eq!(
         claim.claim_kind,
-        hh_gateway::snapshot::SnapshotClaimKind::CompatibilityTokenChanged
+        hharness_gateway::snapshot::SnapshotClaimKind::CompatibilityTokenChanged
     );
     assert!(g.pending_relower.contains("prof.test@1"));
 

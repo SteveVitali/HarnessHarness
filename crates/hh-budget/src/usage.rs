@@ -16,8 +16,8 @@
 //! `cache_write` keeps its `ttl_class` split (provider-conditioned; priced per class —
 //! ADR-0039 (d)); the `TokenVector` view sums it.
 
-use hh_ontology::dimensions::{DerivedDimension, DimensionId};
-use hh_wire::json::Json;
+use hharness_ontology::dimensions::{DerivedDimension, DimensionId};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::UsageError;

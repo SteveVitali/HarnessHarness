@@ -34,14 +34,14 @@
 //! plan re-binds from `ctx` at `open`/`restore`; the position is the
 //! state's own).
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{
     CancelledBy, ControlBoundary, DecisionPoint, InvariantId, Owner, StopReason,
 };
-use hh_ontology::dimensions::DimensionId;
-use hh_wire::json::Json;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_wire::json::Json;
 
-use hh_compiler::plan::{PlanNode, PlanNodePayload, StepAction, StepMode};
+use hharness_compiler::plan::{PlanNode, PlanNodePayload, StepAction, StepMode};
 
 use crate::state::{ControlState, PlanCursor};
 use crate::strategy::{
@@ -655,7 +655,7 @@ impl ControlStrategy for PlanWalker {
         ctx: &ControlContext,
     ) -> Result<ControlState, RestoreError> {
         let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
-        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let j = hharness_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
         let dialect = j
             .get("dialect")
             .and_then(Json::as_str)

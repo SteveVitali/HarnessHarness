@@ -35,33 +35,33 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_compiler::plan::{
+use hharness_compiler::plan::{
     BranchOnValidatorNode, DelegateNode, PinnedRef, PlanNode, PlanNodePayload, StepAction,
     StepMode, StepNode,
 };
-use hh_control::driver::{
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, DelegateOutcome, DelegatePort, Driver,
     DriverConfig, DriverError, EffectGate, GateOutcome, LedgerSink, ModelOutcome, ModelPort,
     StoreSeam,
 };
-use hh_control::output::{ParamKind, ParamSpec, SurfaceSpec};
-use hh_control::policy::EnvelopePolicy;
-use hh_control::react::{self, ReactSteerable};
-use hh_control::state::ControlState;
-use hh_control::strategy::{
+use hharness_control::output::{ParamKind, ParamSpec, SurfaceSpec};
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::react::{self, ReactSteerable};
+use hharness_control::state::ControlState;
+use hharness_control::strategy::{
     ConcurrentInput, ControlContext, ControlError, ControlStrategy, SteerMode, StrategyParams,
 };
-use hh_control::vocab::{
+use hharness_control::vocab::{
     ControlDecision, Cue, DecisionKind, DeliveryMode, EffectOutcome, EnvelopeSignal, HumanInput,
     SettledOutcome, WokenTrigger,
 };
-use hh_control::walk::{plan_walker_caps, PlanWalker};
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{Event, EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ParticipantClass, RunManifest};
-use hh_ledger::store::Store;
-use hh_ontology::control::{DecisionPoint, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_control::walk::{plan_walker_caps, PlanWalker};
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{Event, EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ParticipantClass, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_ontology::control::{DecisionPoint, Owner, StopReason};
+use hharness_wire::json::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ fn ev(seq: u64, class: &str, payload: Json) -> EventEnvelope {
         durability: Durability::Ledger,
         scope: Scope::default(),
         lease_generation: 1,
-        parent_event_id: hh_ledger::ids::ROOT_EVENT.into(),
+        parent_event_id: hharness_ledger::ids::ROOT_EVENT.into(),
         causes: vec![],
         refs: vec![],
         ir_refs: vec![],
@@ -290,7 +290,7 @@ impl LedgerSink for MemSink {
 struct StoreSink {
     store: Store,
     run_id: String,
-    lease: hh_ledger::store::Lease,
+    lease: hharness_ledger::store::Lease,
 }
 
 impl StoreSink {
@@ -298,7 +298,7 @@ impl StoreSink {
         let mut store = Store::open_test(dir(tag), 1_000).unwrap();
         let (run_id, lease) = store
             .open_run(
-                RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+                RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent),
                 "writer",
             )
             .unwrap();
@@ -322,7 +322,7 @@ impl LedgerSink for StoreSink {
     fn append(&mut self, mut events: Vec<Event>) -> Result<(), String> {
         for e in events.iter_mut() {
             if e.provenance.is_none() {
-                e.provenance = Some(hh_provenance::ProvenanceRecord::kernel(
+                e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
                     "hh-test/sink",
                     self.store.now_ms(),
                 ));
@@ -352,7 +352,7 @@ struct ScriptedModel {
 impl ModelPort for ScriptedModel {
     fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
         self.script.pop_front().unwrap_or(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-empty".into(),
             text_empty: true,
             calls: vec![],
@@ -420,7 +420,7 @@ impl ScriptedStrategy {
 }
 
 impl ControlStrategy for ScriptedStrategy {
-    fn capabilities(&self) -> &hh_control::strategy::ControlCapabilities {
+    fn capabilities(&self) -> &hharness_control::strategy::ControlCapabilities {
         self.inner.capabilities()
     }
     fn open(&mut self, ctx: &ControlContext) -> Result<ControlState, ControlError> {
@@ -443,7 +443,7 @@ impl ControlStrategy for ScriptedStrategy {
             if *t == tag && !self.fired.borrow()[i] {
                 self.fired.borrow_mut()[i] = true;
                 let d = ControlDecision {
-                    stamp: hh_control::strategy::stamp_for(
+                    stamp: hharness_control::strategy::stamp_for(
                         state,
                         match k {
                             DecisionKind::Delegate { .. } => DecisionPoint::Delegate,
@@ -464,14 +464,14 @@ impl ControlStrategy for ScriptedStrategy {
         &self,
         state: &ControlState,
         reason: &StopReason,
-    ) -> hh_control::strategy::FinalReport {
+    ) -> hharness_control::strategy::FinalReport {
         self.inner.terminate(state, reason)
     }
     fn restore(
         &mut self,
         bytes: &[u8],
         ctx: &ControlContext,
-    ) -> Result<ControlState, hh_control::strategy::RestoreError> {
+    ) -> Result<ControlState, hharness_control::strategy::RestoreError> {
         self.inner.restore(bytes, ctx)
     }
 }
@@ -486,7 +486,7 @@ impl DelegatePort for RecordingDelegatePort {
     fn delegate(
         &mut self,
         seam: StoreSeam<'_>,
-        decision_ref: &hh_ledger::manifest::EventRef,
+        decision_ref: &hharness_ledger::manifest::EventRef,
         _owner: Owner,
         _spec: &Json,
         _budget_slice: &Json,
@@ -505,7 +505,10 @@ impl DelegatePort for RecordingDelegatePort {
             refs: vec![],
             ir_refs: vec![],
             surface_ids: Default::default(),
-            provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 1)),
+            provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+                "kernel:test",
+                1,
+            )),
             content_kind: None,
             payload: Json::obj([("child_run_id", Json::str("sub-1"))]),
         };
@@ -525,7 +528,7 @@ impl DelegatePort for RefusingDelegatePort {
     fn delegate(
         &mut self,
         _seam: StoreSeam<'_>,
-        _decision_ref: &hh_ledger::manifest::EventRef,
+        _decision_ref: &hharness_ledger::manifest::EventRef,
         _owner: Owner,
         _spec: &Json,
         _budget_slice: &Json,
@@ -647,7 +650,7 @@ fn steerable_folds_delegate_proposed_into_the_delegate_decision() {
         &Cue::ModelCompleted {
             model_call_id: "mc-1".into(),
             response_ref: "r-1".into(),
-            stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+            stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         },
     );
     match &d.kind {
@@ -679,7 +682,7 @@ fn steerable_folds_delegate_proposed_into_the_delegate_decision() {
         &Cue::ModelCompleted {
             model_call_id: "mc-2".into(),
             response_ref: "r-2".into(),
-            stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+            stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
         },
     );
     assert!(
@@ -792,7 +795,7 @@ fn delegate_port_rows_land_durable_before_visibility() {
             "human_input",
             DecisionKind::Stop {
                 proposed_reason: StopReason::Cancelled {
-                    by: hh_ontology::control::CancelledBy::Principal,
+                    by: hharness_ontology::control::CancelledBy::Principal,
                 },
                 submission_ref: None,
             },
@@ -938,7 +941,7 @@ fn workflow_driver_run_walks_the_plan_to_completed() {
     .unwrap();
     let mut model = ScriptedModel {
         script: VecDeque::from([ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-1".into(),
             text_empty: false,
             calls: vec![],
@@ -1152,7 +1155,7 @@ fn workflow_checkpoint_restore_round_trips_the_position() {
     assert!(
         matches!(
             v3.restore(&bytes, &ctx),
-            Err(hh_control::strategy::RestoreError::VariantMismatch { .. })
+            Err(hharness_control::strategy::RestoreError::VariantMismatch { .. })
         ),
         "cross-variant restore refuses typed"
     );
@@ -1165,7 +1168,7 @@ fn workflow_model_emitted_plan_refuses_typed() {
         vec![instruction_node("n1")],
         (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
     );
-    ctx.parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
+    ctx.parameters.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
     let err = v.open(&ctx).unwrap_err();
     assert!(
         matches!(err, ControlError::UnsupportedPlanNode { .. }),

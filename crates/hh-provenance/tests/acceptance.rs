@@ -14,7 +14,7 @@
 //!   lattice laws are proven exhaustively over a label universe in `label::tests`
 //!   (stronger than sampling) and re-sampled here inside the sequences.
 
-use hh_provenance::*;
+use hharness_provenance::*;
 
 // ── A small deterministic PRNG (xorshift64*) — no external deps (hermetic) ─────────────
 

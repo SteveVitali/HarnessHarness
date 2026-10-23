@@ -13,7 +13,7 @@
 //! answer `unknown` — the claim is never inferred (OQ-387 defers which
 //! Π rows it narrows; the manifest records it verbatim).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::path::{Path, PathBuf};
 
 /// The closed claim sum (§7.1 §2.4 `workspace_trust` member).
@@ -47,7 +47,7 @@ pub fn workspace_trust(workspace_root: &Path) -> &'static str {
     let Ok(text) = String::from_utf8(bytes) else {
         return "unknown";
     };
-    let Ok(doc) = hh_wire::json::parse(&text) else {
+    let Ok(doc) = hharness_wire::json::parse(&text) else {
         return "unknown";
     };
     let key = workspace_root

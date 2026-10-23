@@ -19,18 +19,18 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use hh_provenance::origin::HumanRole;
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::corpus;
-use hh_registry::extension::foreign_plugin::{
+use hharness_provenance::origin::HumanRole;
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::corpus;
+use hharness_registry::extension::foreign_plugin::{
     export_foreign_plugin, import_foreign_plugin, ForeignPluginFormat,
 };
-use hh_registry::extension::plugin::manifest_from_json;
-use hh_registry::extension::{DeclaredSource, ExtensionKind, IsolationClass};
-use hh_registry::kinds::Admission;
-use hh_registry::records::{LossReport, RegistryRecord};
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::extension::plugin::manifest_from_json;
+use hharness_registry::extension::{DeclaredSource, ExtensionKind, IsolationClass};
+use hharness_registry::kinds::Admission;
+use hharness_registry::records::{LossReport, RegistryRecord};
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-registry-s4-14a-{}-{tag}", std::process::id()));
@@ -137,7 +137,7 @@ fn import(
     s: &mut RegistryStore,
     format: ForeignPluginFormat,
     doc: &Json,
-) -> hh_registry::extension::foreign_plugin::ForeignPluginImport {
+) -> hharness_registry::extension::foreign_plugin::ForeignPluginImport {
     import_foreign_plugin(
         s,
         format,
@@ -195,7 +195,7 @@ fn foreign_plugin_formats_import_quarantined_with_named_losses() {
         assert_eq!(e.trust.isolation, IsolationClass::SubprocessConfined);
         assert_eq!(
             e.trust.text_authority,
-            hh_provenance::AuthorityClass::Unverified,
+            hharness_provenance::AuthorityClass::Unverified,
             "{tag}: an import origin mints `unverified` (P7)"
         );
         // The verbatim document rides ext — nothing silently dropped.
@@ -225,8 +225,10 @@ fn claude_members_lift_to_contributions() {
     };
     let m = manifest_from_json(&e.manifest, "manifest").unwrap();
     let kinds: BTreeSet<_> = m.contributions.iter().map(|c| c.kind).collect();
-    assert!(kinds.contains(&hh_registry::extension::plugin::ContributionKind::McpServer));
-    assert!(kinds.contains(&hh_registry::extension::plugin::ContributionKind::ProcedureProfile));
+    assert!(kinds.contains(&hharness_registry::extension::plugin::ContributionKind::McpServer));
+    assert!(
+        kinds.contains(&hharness_registry::extension::plugin::ContributionKind::ProcedureProfile)
+    );
     // `license`/`homepage` are known members — not losses.
     let lines = loss_lines(&out.loss_report);
     assert!(!lines.iter().any(|l| l.contains("license")));
@@ -266,10 +268,12 @@ fn gemini_trust_members_become_claims_not_grants() {
     );
     // `contextFileName` lifts to an instruction_file contribution.
     let m = manifest_from_json(&e.manifest, "manifest").unwrap();
-    assert!(m
-        .contributions
-        .iter()
-        .any(|c| c.kind == hh_registry::extension::plugin::ContributionKind::InstructionFile));
+    assert!(
+        m.contributions
+            .iter()
+            .any(|c| c.kind
+                == hharness_registry::extension::plugin::ContributionKind::InstructionFile)
+    );
 }
 
 /// Unknown members are *named* (never silently kept, never silently dropped)
@@ -292,11 +296,10 @@ fn codex_unknown_members_named_and_mcp_servers_lifted() {
     assert!(m
         .contributions
         .iter()
-        .any(|c| c.kind == hh_registry::extension::plugin::ContributionKind::McpServer));
-    assert!(m
-        .contributions
-        .iter()
-        .any(|c| c.kind == hh_registry::extension::plugin::ContributionKind::ProcedureProfile));
+        .any(|c| c.kind == hharness_registry::extension::plugin::ContributionKind::McpServer));
+    assert!(m.contributions.iter().any(
+        |c| c.kind == hharness_registry::extension::plugin::ContributionKind::ProcedureProfile
+    ));
 }
 
 /// AC-R-2.12.2-11 (round-trip leg): export → re-import recovers every member
@@ -340,13 +343,13 @@ fn foreign_plugin_export_reimport_round_trip() {
     let servers1: BTreeSet<_> = m1
         .contributions
         .iter()
-        .filter(|c| c.kind == hh_registry::extension::plugin::ContributionKind::McpServer)
+        .filter(|c| c.kind == hharness_registry::extension::plugin::ContributionKind::McpServer)
         .map(|c| c.declaration.to_canonical_string())
         .collect();
     let servers2: BTreeSet<_> = m2
         .contributions
         .iter()
-        .filter(|c| c.kind == hh_registry::extension::plugin::ContributionKind::McpServer)
+        .filter(|c| c.kind == hharness_registry::extension::plugin::ContributionKind::McpServer)
         .map(|c| c.declaration.to_canonical_string())
         .collect();
     assert_eq!(servers1, servers2, "server declarations round-trip");
@@ -381,7 +384,7 @@ fn foreign_plugin_import_requires_name() {
     .unwrap_err();
     assert!(matches!(
         err,
-        hh_registry::errors::RegistryError::SchemaViolation { .. }
+        hharness_registry::errors::RegistryError::SchemaViolation { .. }
     ));
 }
 
@@ -390,16 +393,16 @@ fn foreign_plugin_import_requires_name() {
 // install, revocation propagation).
 // ─────────────────────────────────────────────────────────────────────────────
 
-use hh_identity::idp;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::record::{Attestation, AttestationAnchor, AttestationKind};
-use hh_provenance::TaintTag;
-use hh_registry::errors::RegistryError;
-use hh_registry::extension::lifecycle::{
+use hharness_identity::idp;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::record::{Attestation, AttestationAnchor, AttestationKind};
+use hharness_provenance::TaintTag;
+use hharness_registry::errors::RegistryError;
+use hharness_registry::extension::lifecycle::{
     self, ProposerContext, RunExtensionView, ScannerPolicy, SurfaceDriftPolicy, TrustView,
 };
-use hh_registry::extension::{Candidate, FetchOutcome, SourceLocator, TrustStatus};
-use hh_registry::records::ModelInstallRule;
+use hharness_registry::extension::{Candidate, FetchOutcome, SourceLocator, TrustStatus};
+use hharness_registry::records::ModelInstallRule;
 
 fn git_candidate(name: &str) -> Candidate {
     Candidate {
@@ -428,7 +431,7 @@ fn outcome(payload: &[u8], at: u64) -> FetchOutcome {
 }
 
 fn sig_attestation(
-    content: &hh_identity::idp::ContentAddress,
+    content: &hharness_identity::idp::ContentAddress,
     signer: &str,
     at: u64,
 ) -> Attestation {
@@ -441,12 +444,12 @@ fn sig_attestation(
     }
 }
 
-fn pin_attestation(content: &hh_identity::idp::ContentAddress, at: u64) -> Attestation {
+fn pin_attestation(content: &hharness_identity::idp::ContentAddress, at: u64) -> Attestation {
     pin_attestation_under(content, "pin-source", at)
 }
 
 fn pin_attestation_under(
-    content: &hh_identity::idp::ContentAddress,
+    content: &hharness_identity::idp::ContentAddress,
     signer: &str,
     at: u64,
 ) -> Attestation {
@@ -742,7 +745,7 @@ fn manifest(hook_paths: &[&str]) -> Json {
         ("conformance_claims", Json::Arr(vec![])),
         (
             "summary",
-            hh_hir::leaves::Text::new(
+            hharness_hir::leaves::Text::new(
                 "demo manifest",
                 "third/demo",
                 // The manifest's summary leaf never mints above `external` —

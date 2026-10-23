@@ -49,10 +49,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::idp::idp_id;
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, ReaderSet};
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, ReaderSet};
+use hharness_wire::json::Json;
 
 use crate::k5::{definition_dep_ref, profile_dep_ref, snapshot_dep_ref};
 use crate::memory::DependencyStamp;

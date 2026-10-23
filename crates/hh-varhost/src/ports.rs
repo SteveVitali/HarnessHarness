@@ -17,8 +17,8 @@
 //! the protocol layer (`SchemaViolation` on decode — the `HostCallback` sum
 //! is closed), never reaching here.
 
-use hh_embed_schema::plugin_abi::AbiError;
-use hh_wire::json::Json;
+use hharness_embed_schema::plugin_abi::AbiError;
+use hharness_wire::json::Json;
 
 /// The session context a callback is attributed to. `binding_id` is the
 /// in-flight invocation's binding when one is set — callbacks are

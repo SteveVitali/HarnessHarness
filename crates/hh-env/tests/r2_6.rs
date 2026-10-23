@@ -23,43 +23,49 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_compiler::surface::{BindingMapping, CompileExposureMode};
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, ExecPolicy, NetMode, ResourceLimits, WritableRoot};
-use hh_env::capture::{CaptureKind, OutputPolicy};
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::EnvDriver;
-use hh_env::events::{EventMinter, ScopeChain};
-use hh_env::executor::{ExecutionRequest, TerminalStatus, ToolExecutor};
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::helper::CommitEvidence;
-use hh_env::local::LocalExecutor;
-use hh_env::observe::ErrorClass;
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::kinds::{
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_compiler::surface::{BindingMapping, CompileExposureMode};
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{
+    kernel_default, ExecPolicy, NetMode, ResourceLimits, WritableRoot,
+};
+use hharness_env::capture::{CaptureKind, OutputPolicy};
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::EnvDriver;
+use hharness_env::events::{EventMinter, ScopeChain};
+use hharness_env::executor::{ExecutionRequest, TerminalStatus, ToolExecutor};
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::helper::CommitEvidence;
+use hharness_env::local::LocalExecutor;
+use hharness_env::observe::ErrorClass;
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_hir::tools::ExposureMode;
-use hh_identity::idp::address;
-use hh_ledger::event::Scope;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::DetectorSet;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_hir::tools::ExposureMode;
+use hharness_identity::idp::address;
+use hharness_ledger::event::Scope;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::DetectorSet;
+use hharness_wire::json::Json;
 
 // ── scaffold (the acceptance battery's shape, trimmed to the kill leg) ──
 
@@ -107,7 +113,7 @@ fn workspace(tag: &str) -> PathBuf {
     p
 }
 
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -306,7 +312,7 @@ fn root_handle() -> AuthorityHandle {
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -410,7 +416,7 @@ fn r2_6_local_executor_kills_the_hanging_tool() {
     }
     let mut exec = LocalExecutor::new(vec![]);
     let mut spawned_pid: Option<String> = None;
-    let mut sink = |sig: hh_env::executor::ExecutorSignal| {
+    let mut sink = |sig: hharness_env::executor::ExecutorSignal| {
         if let CaptureKind::Process { process_ref, .. } = &sig.kind {
             if let Some(pid) = process_ref.strip_prefix("pid:") {
                 spawned_pid = Some(pid.to_string());

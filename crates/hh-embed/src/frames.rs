@@ -10,7 +10,7 @@
 //! - `Sync{at_seq}` → `sync{from_seq, through_seq, head_hash}` — the
 //!   catch-up range just delivered plus the head it is valid at.
 //! - `Ephemeral` → `ephemeral{kind, scope, attempt, order, payload}` —
-//!   `kind` from [`hh_embed_schema::ephemeral_kind_of`].
+//!   `kind` from [`hharness_embed_schema::ephemeral_kind_of`].
 //! - `Lagged{missed_from_seq}` → `lagged{dropped:{ephemeral:n},
 //!   resume_from_seq}` — `n` counts the ephemeral frames this adapter
 //!   has emitted since the last lagged/durable boundary (best-effort
@@ -25,9 +25,9 @@
 //! request's seq); `model.call.failed` closes it with `item_aborted`
 //! (the response's durable row retires a successful item — no frame).
 
-use hh_embed_schema::frames::{ephemeral_kind_of, Frame};
-use hh_ledger::event::{CloseReason, EventFrame};
-use hh_wire::json::Json;
+use hharness_embed_schema::frames::{ephemeral_kind_of, Frame};
+use hharness_ledger::event::{CloseReason, EventFrame};
+use hharness_wire::json::Json;
 
 /// Per-subscription adapter state.
 #[derive(Debug, Default)]

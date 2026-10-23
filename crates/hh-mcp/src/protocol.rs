@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The pinned modern MCP revision (§5d.4 D2 — `spec_pin.version_label`).
 pub const PINNED_MODERN: &str = "2026-07-28";
@@ -307,7 +307,7 @@ pub fn schema_content_hash(protocol: &str, pinned: &[&str]) -> String {
             Json::Arr(pinned.iter().map(|v| Json::str(v.to_string())).collect()),
         ),
     ]);
-    hh_identity::idp_id("protocol.spec_pin", doc.to_canonical_string().as_bytes())
+    hharness_identity::idp_id("protocol.spec_pin", doc.to_canonical_string().as_bytes())
 }
 
 #[cfg(test)]

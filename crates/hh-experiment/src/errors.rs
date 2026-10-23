@@ -2,10 +2,10 @@
 //! column + the E-1 refusal set; S3.4a). A `Refusal(ExperimentRefusal)` carries
 //! the closed register set verbatim — the boundary renders it, never remaps it.
 
-use hh_budget::errors::BudgetError;
-use hh_lab::expand::ExpandError;
-use hh_lab::experiment::ExperimentRefusal;
-use hh_ledger::errors::LedgerError;
+use hharness_budget::errors::BudgetError;
+use hharness_lab::expand::ExpandError;
+use hharness_lab::experiment::ExperimentRefusal;
+use hharness_ledger::errors::LedgerError;
 
 /// The engine's failure sum.
 #[derive(Debug)]

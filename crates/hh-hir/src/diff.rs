@@ -18,8 +18,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::{AuthorityClass, Origin, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, Origin, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::document::{DefinitionVersionRef, HirDocument, Node};
 use crate::errors::HirError;
@@ -1260,7 +1260,7 @@ fn coordination_dir(path: &str, old: &Json, new: &Json) -> Delta {
     //    vocabulary's order: a weaker level is a lower rank). ──
     let level_rank = |s: &str| -> Option<u8> {
         Some(match s {
-            // One vocabulary with `hh_subagent`'s `ConsistencyLevel::
+            // One vocabulary with `hharness_subagent`'s `ConsistencyLevel::
             // strength` — `causal_cross_run`/`strong_eventual_union`
             // share rank 2 (incomparable in the classic hierarchy; a
             // swap between them is `none`, never a guessed direction).

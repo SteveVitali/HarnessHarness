@@ -17,7 +17,7 @@
 //! recomputes, so `unverified` is the honest status, never `ok` (the same
 //! discipline `audit_view` applies to checkpoints and cross-run anchors).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The export conventions `export_audit_view` lowers into (closed sum —
 /// a new convention is a schema-visible addition, never an open string).

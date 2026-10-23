@@ -14,11 +14,11 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::address;
-use hh_identity::names::{NameStatus, ResolveMode};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::address;
+use hharness_identity::names::{NameStatus, ResolveMode};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::kinds::{Cardinality, Placement};
@@ -38,8 +38,11 @@ pub fn kernel_registrar() -> ProvenanceRecord {
 /// The run's principal registrar (`local/` writes).
 pub fn principal_registrar() -> ProvenanceRecord {
     ProvenanceRecord::minted(
-        hh_provenance::Origin::human("principal.corpus", hh_provenance::HumanRole::Principal),
-        hh_provenance::PersistenceScope::Run,
+        hharness_provenance::Origin::human(
+            "principal.corpus",
+            hharness_provenance::HumanRole::Principal,
+        ),
+        hharness_provenance::PersistenceScope::Run,
         0,
     )
 }
@@ -219,7 +222,7 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
         crate::suites::compaction_strategy_class(),
         // S4.7 — the `compute_policy` scheduler class + its
         // `compute_estimator` (§5e.4 R-2.6.4; ADR-0188/0189). The packaged
-        // `static`/`uniform`/`rules` variants live in hh-control's
+        // `static`/`uniform`/`rules` variants live in hharness-control's
         // `policy_for`; the corpus registers both classes floors-only (no
         // suite, no variants — the C3 tier map's floor).
         crate::suites::compute_policy_class(),
@@ -308,7 +311,7 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
     )?;
     store.revoke(
         &variant_vids[8], // third export_sink variant
-        hh_identity::supersede::SupersedeReason::Revocation,
+        hharness_identity::supersede::SupersedeReason::Revocation,
         &kernel,
         None,
     )?;
@@ -440,7 +443,7 @@ pub fn naive_resolve(
         path: "log".to_string(),
         detail: format!("{e}"),
     })?;
-    let j = hh_wire::json::parse(text).map_err(|e| RegistryError::SchemaViolation {
+    let j = hharness_wire::json::parse(text).map_err(|e| RegistryError::SchemaViolation {
         path: "log".to_string(),
         detail: format!("{e:?}"),
     })?;

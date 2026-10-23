@@ -17,8 +17,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::idp_digest;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_digest;
+use hharness_wire::json::Json;
 
 use crate::export::{LossEntry, LOSS_REPORT_DOMAIN};
 

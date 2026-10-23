@@ -11,8 +11,8 @@
 //! and ubiquitous independent implementations (SHA-256 satisfies this; naming a cryptographic
 //! standard is not an ecosystem commitment — ADR-0036 D2 / RK-09 / CC4).
 
-use hh_wire::sha256::sha256_hex;
-use hh_wire::sha512::sha512_hex;
+use hharness_wire::sha256::sha256_hex;
+use hharness_wire::sha512::sha512_hex;
 
 use crate::kinds::RecordKind;
 

@@ -37,11 +37,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::{self, ContentAddress};
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::{Origin, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::{self, ContentAddress};
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::{Origin, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::kinds::Admission;

@@ -8,13 +8,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::participant::Observability;
-use hh_telemetry::views::metric_view;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::participant::Observability;
+use hharness_telemetry::views::metric_view;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -53,7 +53,10 @@ fn ev(id: &str, class: &str, scope: Scope, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -83,7 +86,7 @@ fn open_scopes(s: &mut Store, run: &str, lease: &Lease) {
 }
 
 /// A `proposed → completed` tool-call pair; `completed` carries the
-/// `execution_ms` M-point the dispatcher stamps (hh-env), plus the declared
+/// `execution_ms` M-point the dispatcher stamps (hharness-env), plus the declared
 /// `(executor_class, isolation_class)` stratifiers.
 fn tool_call(id: &str, tc: &str, exec_ms: i64, executor: &str, isolation: &str) -> Vec<Event> {
     let scope = Scope {
@@ -113,7 +116,7 @@ fn tool_call(id: &str, tc: &str, exec_ms: i64, executor: &str, isolation: &str) 
     ]
 }
 
-fn metric_cell<'a>(v: &'a hh_ledger::views::View, name: &str) -> &'a Json {
+fn metric_cell<'a>(v: &'a hharness_ledger::views::View, name: &str) -> &'a Json {
     v.payload
         .get("metrics")
         .and_then(|m| m.get(name))

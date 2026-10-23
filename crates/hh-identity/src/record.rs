@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::idp::{identify_bytes, idp_id};
 use crate::kinds::RecordKind;

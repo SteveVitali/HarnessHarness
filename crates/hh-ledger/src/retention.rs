@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::LedgerError;
 
@@ -118,9 +118,9 @@ impl RetentionPolicy {
     pub fn set_legal_hold(
         &mut self,
         held: bool,
-        authority: hh_provenance::AuthorityClass,
+        authority: hharness_provenance::AuthorityClass,
     ) -> Result<(), LedgerError> {
-        if authority < hh_provenance::AuthorityClass::Principal {
+        if authority < hharness_provenance::AuthorityClass::Principal {
             return Err(LedgerError::Refused {
                 op: "legal_hold",
                 reason: "authority_below_principal",

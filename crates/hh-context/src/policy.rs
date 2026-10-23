@@ -18,8 +18,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::records::AssumptionDebtRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_wire::json::Json;
 
 use crate::plan::{Candidate, Layout};
 use crate::vocab::{CandidateKind, CandidateState, PriorityClass, Retention};
@@ -48,7 +48,7 @@ pub struct ConditionedRule {
     pub rule_id: String,
     /// What the rule keys on.
     pub conditioned_on: RuleCondition,
-    /// The `AssumptionDebtRecord` (`hh-hir`'s — CC7); `None`/incomplete fails
+    /// The `AssumptionDebtRecord` (`hharness-hir`'s — CC7); `None`/incomplete fails
     /// registration.
     pub debt: Option<AssumptionDebtRecord>,
 }

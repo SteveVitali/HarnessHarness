@@ -3,19 +3,19 @@
 //! `$param`/`$entity` binding form, leaves `$secret:` channel names untouched, pins every
 //! entity `Ref`, records `{registry_snapshot_id, resolved_at}` in the `resolved` member,
 //! materialises `assembly.slots` onto the root `native` process, and hands the document
-//! to `hh_hir::seal`. The output is **closed** (no selector survives), **secret-free**
+//! to `hharness_hir::seal`. The output is **closed** (no selector survives), **secret-free**
 //! (channel names only), and **idempotent** — `resolve(sealed)` re-verifies the pins and
 //! returns byte-identical output. `execute` mode refuses revoked/stale pinned closures
 //! (`C-REF-4 StaleIndex`).
 
-use hh_hir::document::{HirDocument, SealedDefinition};
-use hh_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
-use hh_hir::refs::{ComponentVariantRef, Ref, RefVersion};
-use hh_identity::names::ResolveMode;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::store::{RegistryStore, ResolveInput, ResolveRequest, SlotConstraints};
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_hir::document::{HirDocument, SealedDefinition};
+use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
+use hharness_hir::refs::{ComponentVariantRef, Ref, RefVersion};
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::store::{RegistryStore, ResolveInput, ResolveRequest, SlotConstraints};
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 use crate::catalog::ClassCatalog;
 use crate::diagnostics::{detail_text, kern_code, AssemblyDiagnostic, Code, Severity, Stage};
@@ -162,8 +162,8 @@ pub fn resolve(
             .iter()
             .filter_map(|n| match &n.semantic {
                 KindRecord::ToolCapability(t) => match &t.effects {
-                    hh_hir::kinds::ToolEffects::Pure => Some(n.semantic_id()),
-                    hh_hir::kinds::ToolEffects::Declared(set)
+                    hharness_hir::kinds::ToolEffects::Pure => Some(n.semantic_id()),
+                    hharness_hir::kinds::ToolEffects::Declared(set)
                         if !set.is_empty() && set.iter().all(|e| e.is_closed_world()) =>
                     {
                         Some(n.semantic_id())
@@ -177,7 +177,7 @@ pub fn resolve(
             let root_node = out
                 .node(&out.root.semantic_id)
                 .expect("the root resolves — the document came in sealed");
-            hh_hir::document::DefinitionVersionRef {
+            hharness_hir::document::DefinitionVersionRef {
                 semantic_id: root_node.semantic_id(),
                 version_id: root_node.version_id(),
             }
@@ -191,7 +191,7 @@ pub fn resolve(
             closed_world_tools,
         });
     }
-    match hh_hir::ops::seal(&out, env.resolved_at) {
+    match hharness_hir::ops::seal(&out, env.resolved_at) {
         Ok(sealed) => {
             if let Some(n) = env.notices.as_deref_mut() {
                 n.append(&mut diags);
@@ -440,7 +440,7 @@ fn pin_entities(
     // `$entity:` markers in slot params → the pinned entity's JSON.
     let mut edits: Vec<(String, usize, String, Json)> = Vec::new();
     for (slot, bs) in &a.slots {
-        let bs_vec: Vec<&hh_hir::records::SlotBinding> = match bs {
+        let bs_vec: Vec<&hharness_hir::records::SlotBinding> = match bs {
             SlotBindings::One(b) => vec![b],
             SlotBindings::Many(v) => v.iter().collect(),
         };
@@ -736,7 +736,7 @@ fn resolve_range(
             .registry
             .get(&c.version_id)
             .and_then(|(_, r)| match r {
-                hh_registry::records::RegistryRecord::Variant(v) => v.version_label.clone(),
+                hharness_registry::records::RegistryRecord::Variant(v) => v.version_label.clone(),
                 _ => None,
             })
             .unwrap_or_default();
@@ -848,7 +848,7 @@ fn resolve_range_excluding(
             .registry
             .get(&c.version_id)
             .and_then(|(_, r)| match r {
-                hh_registry::records::RegistryRecord::Variant(v) => v.version_label.clone(),
+                hharness_registry::records::RegistryRecord::Variant(v) => v.version_label.clone(),
                 _ => None,
             })
             .unwrap_or_default();
@@ -916,7 +916,7 @@ fn resolve_extensions(
                         let Some((env_r, rec)) = env.registry.get(vid) else {
                             continue;
                         };
-                        let hh_registry::records::RegistryRecord::Extension(e) = rec else {
+                        let hharness_registry::records::RegistryRecord::Extension(e) = rec else {
                             continue;
                         };
                         if e.name != r.name || e.kind != r.kind {
@@ -969,7 +969,7 @@ fn resolve_extensions(
                 continue;
             }
         };
-        let hh_registry::records::RegistryRecord::Extension(rec) = &resolved.record else {
+        let hharness_registry::records::RegistryRecord::Extension(rec) = &resolved.record else {
             diags.push(rdiag(
                 Code::ExtUnresolved,
                 &path,
@@ -1138,7 +1138,7 @@ fn slot_class(catalog: &dyn ClassCatalog, slot: &str) -> Option<String> {
 /// value, or any object carrying `secret_value`/`secret` inline payload members, is
 /// `C-SEC-1` — secrets resolve to channel names, never values (§3.3.4).
 fn secret_scan(a: &Assembly, diags: &mut Vec<AssemblyDiagnostic>, kernel: &ProvenanceRecord) {
-    let slots_json = hh_hir::wire::slots_json(&a.slots, false);
+    let slots_json = hharness_hir::wire::slots_json(&a.slots, false);
     secret_scan_json(&slots_json, "/assembly/slots", diags, kernel);
     secret_scan_json(
         &Json::Obj(a.values.clone()),
@@ -1288,7 +1288,7 @@ pub fn link_precheck(sealed: &SealedDefinition) -> Result<(), Vec<AssemblyDiagno
         collect_selectors(a, "/assembly", &mut diags, &kernel);
     }
     for n in &sealed.document.nodes {
-        let j = hh_hir::wire::node_to_json(n);
+        let j = hharness_hir::wire::node_to_json(n);
         collect_selectors(
             &j,
             &format!("/nodes/{}", n.semantic_id()),

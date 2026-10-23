@@ -24,29 +24,29 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use hh_control::loops::{JudgePort, RecordedJudge};
-use hh_control::policy::JudgedSpec;
-use hh_embed::context_adapters::AdapterLane;
-use hh_embed::judge_adapters::{
+use hharness_control::loops::{JudgePort, RecordedJudge};
+use hharness_control::policy::JudgedSpec;
+use hharness_embed::context_adapters::AdapterLane;
+use hharness_embed::judge_adapters::{
     calibrate, judge_fingerprint, link_judge, link_judged_pair, CalibrationCase, JudgeBindSpec,
 };
-use hh_embed_schema::errors::EmbedError;
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane};
-use hh_ledger::manifest::ParticipantClass;
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::critic_rt::CalibrationContext;
-use hh_verification::critics::{CalibrationRecord, CriticDeclaration, IndependenceVector};
-use hh_verification::reconciler::ReconcilerDeclaration;
-use hh_verification::vocab::{
+use hharness_embed_schema::errors::EmbedError;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane};
+use hharness_ledger::manifest::ParticipantClass;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::critic_rt::CalibrationContext;
+use hharness_verification::critics::{CalibrationRecord, CriticDeclaration, IndependenceVector};
+use hharness_verification::reconciler::ReconcilerDeclaration;
+use hharness_verification::vocab::{
     AdmissionMode, CalibrationStatus, ChargedTo, CriticKind, CriticUse, Detector, DivergenceClass,
     EvidenceMode, OracleClass, Site, SnapshotIndependence, VerdictType,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── the loopback fake provider (r4_7b's shape) ─────────────────────────
 
@@ -246,8 +246,8 @@ fn active_calibration(
         judge_snapshot_fingerprint: judge_fingerprint(lane),
         labelled_set_ref: "labelled:stage3_v1".into(),
         n_per_verdict_class: 4,
-        reference_oracle: hh_verification::vocab::ReferenceOracle::Executable,
-        agreement: hh_verification::critics::CalibrationAgreement {
+        reference_oracle: hharness_verification::vocab::ReferenceOracle::Executable,
+        agreement: hharness_verification::critics::CalibrationAgreement {
             statistic: "cohen_kappa".into(),
             value_ppm: 900_000,
             interval: "point".into(),
@@ -294,7 +294,7 @@ fn envelope(seq: u64, class: &str, payload: Json, prov: ProvenanceRecord) -> Eve
         plane: EventPlane::of_class(class).unwrap_or(EventPlane::Control),
         class: class.to_string(),
         schema_version: 1,
-        producer: hh_ledger::event::Producer::kernel("hh-test"),
+        producer: hharness_ledger::event::Producer::kernel("hh-test"),
         participant_class: ParticipantClass::Native,
         observability_level: Default::default(),
         durability: Durability::Ledger,
@@ -475,17 +475,17 @@ fn uncalibrated_report_judge_binds_exploratory() {
     // (the driver's `JudgedWithoutCalibration` decline is the driver-half
     // test; here the consult itself reports the honest absence).
     let consults = judge.assess(
-        &hh_verification::claims::Claim {
+        &hharness_verification::claims::Claim {
             claim_id: "c1".into(),
             run_id: "run".into(),
             model_call_id: "mc".into(),
             at_seq: 0,
-            kind: hh_verification::vocab::ClaimKind::Achieved,
-            subject: hh_verification::vocab::SubjectRef::Run,
+            kind: hharness_verification::vocab::ClaimKind::Achieved,
+            subject: hharness_verification::vocab::SubjectRef::Run,
             predicate: "is_done".into(),
             asserted: Json::Null,
             evidence_refs: vec![],
-            extracted_by: hh_verification::vocab::ExtractedBy::Structured("finish".into()),
+            extracted_by: hharness_verification::vocab::ExtractedBy::Structured("finish".into()),
             extraction_confidence_ppm: 1_000_000,
             criteria_status: vec![],
             provenance: prov(),
@@ -585,7 +585,7 @@ fn decided_consult_mints_replayable_verdict_rows() {
     // The delegate-authority provenance the verdict contract mints.
     assert_eq!(
         prov.authority,
-        hh_provenance::authority::AuthorityClass::Delegate
+        hharness_provenance::authority::AuthorityClass::Delegate
     );
     // Usage — the spend accounting — lands verbatim per call.
     let usages = judge.usages();
@@ -699,17 +699,17 @@ fn assess_consult_feeds_reconcile_judged() {
         CriticUse::Report,
     );
     let judge = link_judge(spec).unwrap();
-    let claim = hh_verification::claims::Claim {
+    let claim = hharness_verification::claims::Claim {
         claim_id: "c1".into(),
         run_id: "run".into(),
         model_call_id: "mc".into(),
         at_seq: 7,
-        kind: hh_verification::vocab::ClaimKind::Achieved,
-        subject: hh_verification::vocab::SubjectRef::Run,
+        kind: hharness_verification::vocab::ClaimKind::Achieved,
+        subject: hharness_verification::vocab::SubjectRef::Run,
         predicate: "is_done".into(),
         asserted: Json::Null,
         evidence_refs: vec![],
-        extracted_by: hh_verification::vocab::ExtractedBy::Structured("finish".into()),
+        extracted_by: hharness_verification::vocab::ExtractedBy::Structured("finish".into()),
         extraction_confidence_ppm: 1_000_000,
         criteria_status: vec![],
         provenance: prov(),
@@ -763,7 +763,7 @@ fn assess_consult_feeds_reconcile_judged() {
         enabled: true,
     };
     decl.judge_ref = Some(c.judge_ref.clone());
-    let records = hh_verification::reconciler::reconcile_judged(
+    let records = hharness_verification::reconciler::reconcile_judged(
         &claim,
         &c.assessment,
         &decl,
@@ -855,7 +855,7 @@ fn calibrate_folds_measured_agreement() {
         recalibration_period_ms: 1_000_000_000,
     };
     assert_eq!(
-        hh_verification::critic_rt::calibration_status_at(r, &ctx),
+        hharness_verification::critic_rt::calibration_status_at(r, &ctx),
         CalibrationStatus::Active
     );
 }

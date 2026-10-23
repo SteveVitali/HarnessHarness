@@ -22,11 +22,11 @@
 //! - the adapter boundary: `expose` preserves `task_id` for every task in
 //!   every suite (the member the harness side keys runs on).
 
-use hh_bench::benchset::Benchset;
-use hh_bench::BenchmarkAdapter;
-use hh_lab::bench::{split_hash, SuiteManifest, TaskRecord};
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::Json;
+use hharness_bench::benchset::Benchset;
+use hharness_bench::BenchmarkAdapter;
+use hharness_lab::bench::{split_hash, SuiteManifest, TaskRecord};
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::Json;
 
 /// Every corpus task's `task_id` survives the versioned codec round-trip
 /// and equals the re-derived semantic-projection id (R-2.9.4's `task_id`
@@ -144,7 +144,7 @@ fn suite_records_round_trip_over_corpus() {
         assert_eq!(m.split_hash, split_hash(&m.split_map));
 
         let sa = &suite.split_assignment;
-        let decoded = hh_lab::bench::SplitAssignmentRecord::from_json(&sa.to_json()).unwrap();
+        let decoded = hharness_lab::bench::SplitAssignmentRecord::from_json(&sa.to_json()).unwrap();
         assert_eq!(decoded, *sa);
         assert_eq!(decoded.split_hash, split_hash(&decoded.splits));
     }

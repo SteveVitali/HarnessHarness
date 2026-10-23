@@ -26,10 +26,10 @@
 //!   declared metrics/tasks) or a `NoAddressableFailure` with a
 //!   non-empty reason.
 
-use hh_hir::diff;
-use hh_hir::document::HirDocument;
-use hh_registry::kinds::ConformanceVerdict;
-use hh_wire::json::Json;
+use hharness_hir::diff;
+use hharness_hir::document::HirDocument;
+use hharness_registry::kinds::ConformanceVerdict;
+use hharness_wire::json::Json;
 
 use crate::proposer::{
     outcome_from_json, EvidenceCorpus, EvolutionProposer, LineageEntry, ProposalConstraints,
@@ -114,7 +114,7 @@ impl ProposerPort for InProcessPort<'_> {
                     let gi = |k: &str| m.get(k).and_then(Json::as_int).unwrap_or(0) as u64;
                     Some(LineageEntry {
                         candidate_id: gv("candidate_id"),
-                        target_ref: hh_hir::document::DefinitionVersionRef {
+                        target_ref: hharness_hir::document::DefinitionVersionRef {
                             semantic_id: gv("semantic_id"),
                             version_id: gv("version_id"),
                         },
@@ -341,10 +341,10 @@ pub fn run_proposer_suite(
             };
             let d = &c.diff;
             let cl = &d.classification;
-            if cl.authority_delta == hh_hir::diff::AuthorityDelta::Widening
-                || cl.budget_delta == hh_hir::diff::Delta::Loosening
-                || cl.validity_delta == hh_hir::diff::Delta::Loosening
-                || cl.coordination_delta == hh_hir::diff::Delta::Loosening
+            if cl.authority_delta == hharness_hir::diff::AuthorityDelta::Widening
+                || cl.budget_delta == hharness_hir::diff::Delta::Loosening
+                || cl.validity_delta == hharness_hir::diff::Delta::Loosening
+                || cl.coordination_delta == hharness_hir::diff::Delta::Loosening
             {
                 rows.push(fail(
                     "contract.classify",

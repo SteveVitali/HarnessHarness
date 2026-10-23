@@ -6,14 +6,14 @@
 //! provisional derivation (ADR-0042; OQ-115): `trace_id = H(root_run_id)[0:16]`,
 //! `span_id = H(event_id)[0:8]`, `sampled = 1`, `tracestate` member
 //! `hh=run:<run_id>;ev:<event_id>`, optional `baggage{hh.configuration_id}`.
-//! `H` is the one canonical hash — `hh_identity::idp::idp_digest` under the
+//! `H` is the one canonical hash — `hharness_identity::idp::idp_digest` under the
 //! `telemetry.trace_id`/`telemetry.span_id` domains (CC1).
 //!
 //! The Stage-1 seam is the **subprocess environment**: `subprocess_env` renders
 //! the pairs the executor injects (S1.16 lowers them into the child env); the
 //! MCP/ACP `_meta` slots land at Stage 2 (§5h.1 §9).
 
-use hh_identity::idp::idp_digest;
+use hharness_identity::idp::idp_digest;
 
 use crate::errors::TelemetryError;
 
@@ -180,52 +180,55 @@ pub fn propagation_unsupported_loss(target: &str) -> String {
 // carrier preserved through lowering) ─────────────────────────────────────
 
 /// The `_meta` slot key the propagation carrier rides on the MCP surface —
-/// the same `dev.cognition/*` namespace the HIR block uses
-/// (`dev.cognition/hir` — CC7, one namespace per dialect).
-pub const MCP_PROPAGATION_KEY: &str = "dev.cognition/propagation";
+/// the same `hharness/*` namespace the HIR block uses
+/// (`hharness/hir` — CC7, one namespace per dialect).
+pub const MCP_PROPAGATION_KEY: &str = "hharness/propagation";
 
 /// The `_meta` carrier members (§5h.1 §2.3): `{traceparent, tracestate,
 /// baggage?}` — the outbound context rendered as preservation metadata.
 /// It is *context*, never authority — a receiver that lifts it resolves
 /// ledger coordinates only through the `hh` tracestate member
 /// ([`inbound_context`]'s rule).
-pub fn meta_carrier(ctx: &PropagationContext) -> hh_wire::json::Json {
+pub fn meta_carrier(ctx: &PropagationContext) -> hharness_wire::json::Json {
     let mut m = std::collections::BTreeMap::new();
     m.insert(
         "traceparent".to_string(),
-        hh_wire::json::Json::str(ctx.traceparent.clone()),
+        hharness_wire::json::Json::str(ctx.traceparent.clone()),
     );
     m.insert(
         "tracestate".to_string(),
-        hh_wire::json::Json::str(ctx.tracestate.clone()),
+        hharness_wire::json::Json::str(ctx.tracestate.clone()),
     );
     if let Some(b) = &ctx.baggage {
-        m.insert("baggage".to_string(), hh_wire::json::Json::str(b.clone()));
+        m.insert(
+            "baggage".to_string(),
+            hharness_wire::json::Json::str(b.clone()),
+        );
     }
-    hh_wire::json::Json::Obj(m)
+    hharness_wire::json::Json::Obj(m)
 }
 
-/// The ACP `_meta.hh` members a propagation context contributes —
+/// The ACP `_meta.hharness` members a propagation context contributes —
 /// `source_seq` already rides that slot (AC-R-2.5.4-5's convention);
 /// the carrier joins it as flat members (`traceparent`, `tracestate`,
 /// `configuration_id` — the baggage's `hh.configuration_id=` value
 /// under its own member name, the slot's one-namespace-flat rule).
-pub fn acp_hh_members(ctx: &PropagationContext) -> Vec<(String, hh_wire::json::Json)> {
+pub fn acp_hharness_members(ctx: &PropagationContext) -> Vec<(String, hharness_wire::json::Json)> {
     let mut v = vec![
         (
             "traceparent".to_string(),
-            hh_wire::json::Json::str(ctx.traceparent.clone()),
+            hharness_wire::json::Json::str(ctx.traceparent.clone()),
         ),
         (
             "tracestate".to_string(),
-            hh_wire::json::Json::str(ctx.tracestate.clone()),
+            hharness_wire::json::Json::str(ctx.tracestate.clone()),
         ),
     ];
     if let Some(b) = &ctx.baggage {
         if let Some(cid) = b.strip_prefix("hh.configuration_id=") {
             v.push((
                 "configuration_id".to_string(),
-                hh_wire::json::Json::str(cid.to_string()),
+                hharness_wire::json::Json::str(cid.to_string()),
             ));
         }
     }
@@ -241,26 +244,26 @@ pub fn acp_hh_members(ctx: &PropagationContext) -> Vec<(String, hh_wire::json::J
 /// malformed); `Err` on a malformed `traceparent` (the caller logs the
 /// refusal, never grafts a foreign context).
 pub fn inbound_carrier(
-    members: &hh_wire::json::Json,
+    members: &hharness_wire::json::Json,
 ) -> Result<Option<InboundLink>, TelemetryError> {
     let Some(tp) = members
         .get("traceparent")
-        .and_then(hh_wire::json::Json::as_str)
+        .and_then(hharness_wire::json::Json::as_str)
     else {
         return Ok(None);
     };
     let ts = members
         .get("tracestate")
-        .and_then(hh_wire::json::Json::as_str);
+        .and_then(hharness_wire::json::Json::as_str);
     let mut link = inbound_context(tp, ts)?;
     link.configuration_id = members
         .get("baggage")
-        .and_then(hh_wire::json::Json::as_str)
+        .and_then(hharness_wire::json::Json::as_str)
         .and_then(|b| b.strip_prefix("hh.configuration_id="))
         .or_else(|| {
             members
                 .get("configuration_id")
-                .and_then(hh_wire::json::Json::as_str)
+                .and_then(hharness_wire::json::Json::as_str)
         })
         .map(str::to_string);
     Ok(Some(link))

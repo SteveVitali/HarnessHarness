@@ -8,7 +8,7 @@
 //! dialect bump, never an open string. Nothing in this module names a provider
 //! or a model — it is kernel vocabulary (T-LCD-01).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `StopReason` (closed — ADR-0119 d.1). `pause_turn` ("resubmit the same
 /// call") is a control-strategy decision, never a gateway retry.
@@ -734,7 +734,7 @@ impl AttemptPolicy {
             .min(self.max_delay_ms);
         let span = self.jitter_max_ppm.saturating_sub(self.jitter_min_ppm);
         let material = format!("{model_call_id}\u{1f}{attempt_no}");
-        let digest = hh_wire::sha256::sha256_hex(material.as_bytes());
+        let digest = hharness_wire::sha256::sha256_hex(material.as_bytes());
         let raw = u64::from_str_radix(&digest[..16], 16).unwrap_or(0);
         let ppm = self.jitter_min_ppm + (raw % (span + 1));
         base.saturating_mul(ppm) / 1_000_000

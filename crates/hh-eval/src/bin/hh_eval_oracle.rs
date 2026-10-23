@@ -2,15 +2,15 @@
 //! (spec §5h.3.3; AC-R-2.9.2-11; S3.3).
 //!
 //! Reads one canonical-JSON `OracleRequest/1` on stdin, runs the same
-//! `hh_eval::run_oracle` dispatch in-process callers use, and writes the
+//! `hharness_eval::run_oracle` dispatch in-process callers use, and writes the
 //! `OracleVerdict/1` (or an `oracle_failure` envelope) to stdout. No opaque
 //! handles cross the boundary — the request is pure content, so the
 //! subprocess verdict is byte-identical to the in-process verdict.
 
 use std::io::Read;
 
-use hh_eval::oracle::{run_oracle, OracleRequest};
-use hh_wire::Json;
+use hharness_eval::oracle::{run_oracle, OracleRequest};
+use hharness_wire::Json;
 
 fn main() {
     let mut buf = String::new();
@@ -22,7 +22,7 @@ fn main() {
 }
 
 fn run(input: &str) -> i32 {
-    let parsed = match hh_wire::parse(input) {
+    let parsed = match hharness_wire::parse(input) {
         Ok(j) => j,
         Err(e) => return fail(&format!("request parse: {e}")),
     };

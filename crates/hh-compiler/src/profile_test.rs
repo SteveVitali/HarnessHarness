@@ -52,9 +52,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::idp_id;
-use hh_provenance::authority::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::equiv::{EquivalenceEvidence, EvidenceVerdict};
 use crate::profile::{
@@ -988,7 +988,7 @@ pub fn test_profile(
     }
 }
 
-/// The six kernel-reserved slot ids V9 checks (`hh_context` is not a compiler
+/// The six kernel-reserved slot ids V9 checks (`hharness_context` is not a compiler
 /// dependency — the ids are the spec's closed list, spelled once here; CC7's
 /// one-source rule is honoured by the D1 side emitting the same list).
 fn hh_context_slot_ids() -> &'static [&'static str] {

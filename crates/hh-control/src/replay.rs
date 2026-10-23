@@ -29,8 +29,8 @@
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
 
-use hh_ledger::event::{Event, EventEnvelope};
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, EventEnvelope};
+use hharness_wire::json::Json;
 
 use crate::driver::{
     AssemblerPort, Driver, DriverConfig, DriverError, EffectGate, GateOutcome, LedgerSink,
@@ -75,7 +75,7 @@ pub struct RecordedInputs {
     /// emitted row must land on the recorded seq or `last_cue_seq`
     /// (and every `checkpoint_ref` downstream of it) skews.
     pub driver_seqs: VecDeque<u64>,
-    /// The recorded non-driver envelopes in seq order (`hh-env`/`hh-ledger`
+    /// The recorded non-driver envelopes in seq order (`hharness-env`/`hharness-ledger`
     /// producers — artefact deliveries, lifecycle/env rows the re-drive
     /// never re-emits). The replayed sink flushes them into the prefix
     /// just ahead of the emitted row that passes their seq, so the
@@ -142,11 +142,11 @@ pub fn extract_recorded(
     let mark_for = |a: u64| -> u64 { prefix.iter().filter(|e| e.seq <= a).count() as u64 };
     let prefix: Vec<&EventEnvelope> = prefix.iter().filter(|e| in_window(e)).collect();
     let prefix: &[&EventEnvelope] = &prefix;
-    // R4.5b — the seq lattice + the non-driver rows: `hh-control`-produced
+    // R4.5b — the seq lattice + the non-driver rows: `hharness-control`-produced
     // envelopes are the rows the re-drive re-emits; everything else is an
     // external row the replayed prefix must carry at its recorded seq.
     for e in prefix.iter().copied() {
-        if e.producer.component_variant_ref == "hh-control" {
+        if e.producer.component_variant_ref == "hharness-control" {
             out.driver_seqs.push_back(e.seq);
         } else {
             out.external_events.push_back((*e).clone());
@@ -190,10 +190,10 @@ pub fn extract_recorded(
                         _ => Vec::new(),
                     };
                     ModelOutcome {
-                        stop_reason: hh_gateway::vocab::StopReason::parse(
+                        stop_reason: hharness_gateway::vocab::StopReason::parse(
                             sget(&e.payload, "stop_reason").unwrap_or("end_turn"),
                         )
-                        .unwrap_or(hh_gateway::vocab::StopReason::EndTurn),
+                        .unwrap_or(hharness_gateway::vocab::StopReason::EndTurn),
                         response_ref: sget(&e.payload, "response_ref").unwrap_or("").to_string(),
                         text_empty: matches!(e.payload.get("text_empty"), Some(Json::Bool(true))),
                         calls,
@@ -202,7 +202,7 @@ pub fn extract_recorded(
                     }
                 } else {
                     ModelOutcome {
-                        stop_reason: hh_gateway::vocab::StopReason::Error,
+                        stop_reason: hharness_gateway::vocab::StopReason::Error,
                         response_ref: String::new(),
                         text_empty: true,
                         calls: vec![],
@@ -498,7 +498,7 @@ impl ModelPort for ReplayModel {
                     got: format!("model_call {model_call_id}"),
                 });
                 ModelOutcome {
-                    stop_reason: hh_gateway::vocab::StopReason::Error,
+                    stop_reason: hharness_gateway::vocab::StopReason::Error,
                     response_ref: "replay-exhausted".into(),
                     text_empty: true,
                     calls: vec![],
@@ -630,7 +630,7 @@ impl EffectGate for ReplayGate {
 }
 
 /// The post-`prepared` effect classes whose `fencing_token` the live
-/// `KernelSink` stamps from the lease generation (hh-embed `runtime.rs`
+/// `KernelSink` stamps from the lease generation (hharness-embed `runtime.rs`
 /// `FENCED_EFFECT_CLASSES` — the replay sink stamps the generation it
 /// mints every envelope under: `1`).
 const REPLAY_FENCED_CLASSES: [&str; 7] = [
@@ -653,8 +653,8 @@ pub struct ReplaySink {
     pub events: Vec<EventEnvelope>,
     seq: u64,
     /// R4.5b — the recorded seqs the emitted rows take, in order. A
-    /// live ledger interleaves service-side rows (`hh-env` deliveries,
-    /// `hh-ledger` lifecycle) with the drive; the driver's `observe`
+    /// live ledger interleaves service-side rows (`hharness-env` deliveries,
+    /// `hharness-ledger` lifecycle) with the drive; the driver's `observe`
     /// watermark folds seqs, so an emitted row renumbered into a
     /// compressed replay-local space skews `last_cue_seq` — and every
     /// `checkpoint_ref` downstream — into a spurious divergence.
@@ -736,13 +736,16 @@ impl LedgerSink for ReplaySink {
             });
             self.seq = self.seq.max(seq);
             // The sink owns the kernel-provenance/`fencing_token` stamps
-            // the live `KernelSink` applies (hh-embed `runtime.rs`) — a
+            // the live `KernelSink` applies (hharness-embed `runtime.rs`) — a
             // bare emitted `Event` would otherwise land with
             // `provenance: None` where the record carries the kernel
             // record, skewing every `view_hash` the observation fold
             // hashes (authority/readers are view members).
             if e.provenance.is_none() {
-                e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("hh-embed", seq));
+                e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
+                    "hharness-embed",
+                    seq,
+                ));
             }
             if REPLAY_FENCED_CLASSES.contains(&e.class.as_str()) {
                 if let Json::Obj(m) = &mut e.payload {
@@ -755,14 +758,14 @@ impl LedgerSink for ReplaySink {
                 seq,
                 ts: e.ts,
                 hlc: e.hlc,
-                plane: hh_ledger::event::EventPlane::of_class(&e.class)
-                    .unwrap_or(hh_ledger::event::EventPlane::Control),
+                plane: hharness_ledger::event::EventPlane::of_class(&e.class)
+                    .unwrap_or(hharness_ledger::event::EventPlane::Control),
                 class: e.class,
                 schema_version: 1,
                 producer: e.producer,
-                participant_class: hh_ledger::manifest::ParticipantClass::Native,
+                participant_class: hharness_ledger::manifest::ParticipantClass::Native,
                 observability_level: Default::default(),
-                durability: hh_ledger::classes::Durability::Ledger,
+                durability: hharness_ledger::classes::Durability::Ledger,
                 scope: e.scope,
                 lease_generation: 1,
                 parent_event_id: e.parent_event_id,
@@ -1025,7 +1028,7 @@ mod tests {
     use crate::react::ReactMinimal;
     use crate::strategy::StrategyParams;
     use crate::strategy::{ConcurrentInput, SteerMode};
-    use hh_ledger::event::Event;
+    use hharness_ledger::event::Event;
 
     /// The recording sink — the live run's append target (the replay's
     /// record source). Mirrors `driver::tests::MemSink`.
@@ -1044,13 +1047,13 @@ mod tests {
                     seq: self.seq,
                     ts: e.ts,
                     hlc: e.hlc,
-                    plane: hh_ledger::event::EventPlane::Control,
+                    plane: hharness_ledger::event::EventPlane::Control,
                     class: e.class,
                     schema_version: 1,
                     producer: e.producer,
-                    participant_class: hh_ledger::manifest::ParticipantClass::Native,
+                    participant_class: hharness_ledger::manifest::ParticipantClass::Native,
                     observability_level: Default::default(),
-                    durability: hh_ledger::classes::Durability::Ledger,
+                    durability: hharness_ledger::classes::Durability::Ledger,
                     scope: e.scope,
                     lease_generation: 1,
                     parent_event_id: e.parent_event_id,
@@ -1077,7 +1080,7 @@ mod tests {
     impl ModelPort for ScriptedModel {
         fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
             self.script.pop_front().unwrap_or(ModelOutcome {
-                stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+                stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
                 response_ref: "r-empty".into(),
                 text_empty: true,
                 calls: vec![],
@@ -1171,7 +1174,7 @@ mod tests {
         }
     }
 
-    fn m_outcome(sr: hh_gateway::vocab::StopReason, calls: Vec<ParsedCall>) -> ModelOutcome {
+    fn m_outcome(sr: hharness_gateway::vocab::StopReason, calls: Vec<ParsedCall>) -> ModelOutcome {
         ModelOutcome {
             stop_reason: sr,
             response_ref: "r-1".into(),
@@ -1195,7 +1198,7 @@ mod tests {
         let mut model = ScriptedModel {
             script: [
                 m_outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-1".into(),
                         surface: "fs.read".into(),
@@ -1203,7 +1206,7 @@ mod tests {
                     }],
                 ),
                 m_outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-2".into(),
                         surface: "hh.submit".into(),

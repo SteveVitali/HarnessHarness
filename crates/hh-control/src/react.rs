@@ -35,11 +35,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{
     CancelledBy, ControlBoundary, DecisionPoint, InfraError, InfraErrorFamily, Owner, StopReason,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::state::{ControlState, PlanCursor};
 use crate::strategy::{
@@ -368,7 +368,7 @@ impl ControlStrategy for ReactMinimal {
                 model_call_id,
                 ..
             } => {
-                use hh_gateway::vocab::StopReason as Gw;
+                use hharness_gateway::vocab::StopReason as Gw;
                 match stop_reason {
                     Gw::ToolUse => {
                         let intents = Self::pending_intents(state);
@@ -503,8 +503,8 @@ impl ControlStrategy for ReactMinimal {
                         state,
                         StopReason::BudgetExhausted {
                             budget_id: state.cursor.bound_ref.clone(),
-                            dimension: hh_ontology::dimensions::DimensionId::parse(dim)
-                                .unwrap_or(hh_ontology::dimensions::DimensionId::Turns),
+                            dimension: hharness_ontology::dimensions::DimensionId::parse(dim)
+                                .unwrap_or(hharness_ontology::dimensions::DimensionId::Turns),
                         },
                     )
                 }
@@ -664,7 +664,7 @@ impl ControlStrategy for ReactMinimal {
         _ctx: &ControlContext,
     ) -> Result<ControlState, RestoreError> {
         let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
-        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let j = hharness_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
         let dialect = j
             .get("dialect")
             .and_then(Json::as_str)
@@ -1064,7 +1064,7 @@ impl ControlStrategy for ReactSteerable {
             // never a kernel guess). `open_effects` non-empty still
             // parks on `effects_settled` through the shared table (I4).
             Cue::ModelCompleted {
-                stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
                 ..
             } if state.open_effects.is_empty() && !Self::pending_delegates(state).is_empty() => {
                 let mut pending = Self::pending_delegates(state);
@@ -1105,7 +1105,7 @@ impl ControlStrategy for ReactSteerable {
         _ctx: &ControlContext,
     ) -> Result<ControlState, RestoreError> {
         let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
-        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let j = hharness_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
         let dialect = j
             .get("dialect")
             .and_then(Json::as_str)
@@ -1249,7 +1249,7 @@ impl ControlStrategy for StagedVariant {
         _ctx: &ControlContext,
     ) -> Result<ControlState, RestoreError> {
         let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
-        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let j = hharness_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
         let dialect = j
             .get("dialect")
             .and_then(Json::as_str)
@@ -1398,7 +1398,7 @@ mod tests {
             Cue::ModelCompleted {
                 model_call_id: "m-1".into(),
                 response_ref: "r".into(),
-                stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
             },
         );
         match d {
@@ -1416,7 +1416,7 @@ mod tests {
         let cue = Cue::ModelCompleted {
             model_call_id: "m".into(),
             response_ref: "r".into(),
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
         };
         // streak 1,2 → propose; 3 → stop{format_failure{3}}.
         for i in 1..=2u64 {
@@ -1478,7 +1478,7 @@ mod tests {
                 proposed_reason,
                 StopReason::BudgetExhausted {
                     budget_id: "budget-1".into(),
-                    dimension: hh_ontology::dimensions::DimensionId::Turns,
+                    dimension: hharness_ontology::dimensions::DimensionId::Turns,
                 }
             ),
             other => panic!("expected stop{{budget_exhausted}}, got {other:?}"),
@@ -1493,7 +1493,7 @@ mod tests {
             Cue::ModelCompleted {
                 model_call_id: "m-9".into(),
                 response_ref: "r".into(),
-                stop_reason: hh_gateway::vocab::StopReason::PauseTurn,
+                stop_reason: hharness_gateway::vocab::StopReason::PauseTurn,
             },
         );
         match d {
@@ -1589,7 +1589,7 @@ mod tests {
             Cue::ModelCompleted {
                 model_call_id: "m".into(),
                 response_ref: "r".into(),
-                stop_reason: hh_gateway::vocab::StopReason::Deferred,
+                stop_reason: hharness_gateway::vocab::StopReason::Deferred,
             },
         );
         match d {

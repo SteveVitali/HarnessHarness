@@ -5,7 +5,7 @@
 //! type level: what crosses the broker boundary is a reference, a keyed truncated
 //! fingerprint or an opaque placeholder, never materialising bytes.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 
@@ -272,7 +272,8 @@ impl Placeholder {
     /// stability); domain-framed under `idp/1` (the one hasher — CC1).
     pub fn mint(run_id: &str, binding: &crate::broker::CredentialBinding) -> Placeholder {
         let material = format!("{}\u{1f}{}", run_id, binding.binding_id);
-        let nonce = &hh_identity::idp::idp_digest("secret.placeholder", material.as_bytes())[..24];
+        let nonce =
+            &hharness_identity::idp::idp_digest("secret.placeholder", material.as_bytes())[..24];
         Placeholder {
             channel_id: binding.channel_id.clone(),
             revision: binding.channel_revision,

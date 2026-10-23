@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `SessionInfo` — `session/new`'s result.
 #[derive(Debug, Clone)]

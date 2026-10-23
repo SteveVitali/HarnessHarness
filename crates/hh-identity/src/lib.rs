@@ -1,4 +1,4 @@
-//! `hh-identity` — the C0/Stage-1 **identity, versioning & artifact-identity** model (spec §8.3,
+//! `hharness-identity` — the C0/Stage-1 **identity, versioning & artifact-identity** model (spec §8.3,
 //! scope item **R-2.12.1**; ADR-0036/0037/0038).
 //!
 //! This crate makes "version everything" one contract, and it is the place **CC1 (one scheme per

@@ -12,9 +12,9 @@
 //! **R-ACC-4:** out-of-process binding cost is attributed to the subject by default
 //! with `component_variant_ref` and `binding_locality` set (stratifiable).
 
-use hh_identity::IrRef;
-use hh_ledger::manifest::EventRef;
-use hh_wire::json::Json;
+use hharness_identity::IrRef;
+use hharness_ledger::manifest::EventRef;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// `charged_to ∈ {subject, instrument}` (R-ACC-3).

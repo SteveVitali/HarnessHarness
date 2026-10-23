@@ -2,12 +2,12 @@
 //! (`C-PROF-2`, R-2.1.4¹ᵇ) and `lab.assembly.compile` read through (S4.12;
 //! ADR-0304 D3). CF-046's snapshot-confined read model — the compiler never
 //! reaches a live registry; the view reads the *records* the one
-//! `RegistryStore` holds. Home moved from hh-embed at S5.1 so
+//! `RegistryStore` holds. Home moved from hharness-embed at S5.1 so
 //! `AssemblyService::plan`'s stage-6b pass-through shares the one resolver
 //! (CC1/CC7).
 
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 /// Resolve a model/profile coordinate through the registry — the
 /// spellings §3.2.2 admits (`content_hash`/`version_id`,
@@ -17,15 +17,15 @@ use hh_wire::json::Json;
 pub fn resolve_profile_coordinate(
     store: &RegistryStore,
     coordinate: &str,
-) -> Option<(String, hh_compiler::profile::ModelProfile)> {
-    use hh_registry::kinds::Admission;
-    use hh_registry::records::RegistryRecord;
+) -> Option<(String, hharness_compiler::profile::ModelProfile)> {
+    use hharness_registry::kinds::Admission;
+    use hharness_registry::records::RegistryRecord;
     // The stored body is the registry envelope `{kind:"model_profile",
     // profile:<ModelProfile/1 view>}` — the compiler decodes the payload
     // member, never the envelope (opaque layering, CC3).
     let decode = |body: &Json| {
         body.get("profile")
-            .and_then(|v| hh_compiler::schema::profile_from_json(v, "profile").ok())
+            .and_then(|v| hharness_compiler::schema::profile_from_json(v, "profile").ok())
     };
     let from_record = |rec: &RegistryRecord, revoked: bool, vid: &str| {
         if revoked {
@@ -39,9 +39,9 @@ pub fn resolve_profile_coordinate(
     // `version_id`/`content_hash` spelling — resolve derives the
     // effective admission (`revoked` coordinates nothing live).
     if let Ok(r) = store.resolve(
-        &hh_registry::store::ResolveInput::Version(coordinate.to_string()),
-        hh_identity::names::ResolveMode::Execute,
-        &hh_registry::store::ResolveRequest::default(),
+        &hharness_registry::store::ResolveInput::Version(coordinate.to_string()),
+        hharness_identity::names::ResolveMode::Execute,
+        &hharness_registry::store::ResolveRequest::default(),
     ) {
         if !matches!(r.admission, Admission::Revoked) {
             if let Some(hit) = from_record(&r.record, false, &r.envelope.version_id) {
@@ -56,7 +56,7 @@ pub fn resolve_profile_coordinate(
             Some((n, l)) => (n, Some(l.to_string())),
             None => (rest, None),
         };
-        let input = hh_registry::store::ResolveInput::Selector {
+        let input = hharness_registry::store::ResolveInput::Selector {
             namespace: ns.to_string(),
             name: name.to_string(),
             label,
@@ -64,8 +64,8 @@ pub fn resolve_profile_coordinate(
         };
         if let Ok(r) = store.resolve(
             &input,
-            hh_identity::names::ResolveMode::Execute,
-            &hh_registry::store::ResolveRequest::default(),
+            hharness_identity::names::ResolveMode::Execute,
+            &hharness_registry::store::ResolveRequest::default(),
         ) {
             if !matches!(r.admission, Admission::Revoked) {
                 if let Some(hit) = from_record(&r.record, false, &r.envelope.version_id) {
@@ -77,10 +77,10 @@ pub fn resolve_profile_coordinate(
     // `profile_id@version` — the canonical coordinate spelling; scan
     // the kind's catalog (revocation is the derived `revoked` flag —
     // a revoked profile coordinates nothing live).
-    let pred = hh_registry::store::QueryPredicate {
-        clauses: vec![hh_registry::store::QueryClause {
+    let pred = hharness_registry::store::QueryPredicate {
+        clauses: vec![hharness_registry::store::QueryClause {
             field: "kind".to_string(),
-            op: hh_registry::store::QueryOp::Eq,
+            op: hharness_registry::store::QueryOp::Eq,
             value: "model_profile".to_string(),
         }],
         snapshot_id: None,
@@ -90,7 +90,7 @@ pub fn resolve_profile_coordinate(
             continue;
         }
         if let Some((vid, p)) = from_record(&entry.record, false, &entry.envelope.version_id) {
-            if hh_compiler::profile::profile_coordinate(&p) == coordinate
+            if hharness_compiler::profile::profile_coordinate(&p) == coordinate
                 || p.content_hash == coordinate
             {
                 return Some((vid, p));
@@ -106,12 +106,12 @@ pub fn resolve_profile_coordinate(
 pub fn resolve_test_report(
     store: &RegistryStore,
     coordinate: &str,
-) -> Option<hh_compiler::profile_test::ProfileTestReport> {
-    use hh_registry::records::RegistryRecord;
-    let pred = hh_registry::store::QueryPredicate {
-        clauses: vec![hh_registry::store::QueryClause {
+) -> Option<hharness_compiler::profile_test::ProfileTestReport> {
+    use hharness_registry::records::RegistryRecord;
+    let pred = hharness_registry::store::QueryPredicate {
+        clauses: vec![hharness_registry::store::QueryClause {
             field: "kind".to_string(),
-            op: hh_registry::store::QueryOp::Eq,
+            op: hharness_registry::store::QueryOp::Eq,
             value: "profile_test_report".to_string(),
         }],
         snapshot_id: None,
@@ -124,7 +124,7 @@ pub fn resolve_test_report(
             // `{kind:"profile_test_report", target:{…}, report:<report>}`
             // — the payload member, never the envelope.
             let payload = body.get("report").cloned().unwrap_or(Json::Null);
-            if let Some(r) = hh_compiler::profile_test::test_report_from_json(&payload) {
+            if let Some(r) = hharness_compiler::profile_test::test_report_from_json(&payload) {
                 if r.profile_ref == coordinate || r.profile_hash == coordinate {
                     return Some(r);
                 }
@@ -140,14 +140,14 @@ pub fn resolve_test_report(
 /// records are.
 pub struct RegistryProfiles<'a>(pub &'a RegistryStore);
 
-impl hh_compiler::profile::ProfileView for RegistryProfiles<'_> {
-    fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
+impl hharness_compiler::profile::ProfileView for RegistryProfiles<'_> {
+    fn profile(&self, coordinate: &str) -> Option<hharness_compiler::profile::ModelProfile> {
         resolve_profile_coordinate(self.0, coordinate).map(|(_, p)| p)
     }
     fn test_report(
         &self,
         coordinate: &str,
-    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+    ) -> Option<hharness_compiler::profile_test::ProfileTestReport> {
         resolve_test_report(self.0, coordinate)
     }
 }
@@ -157,18 +157,18 @@ impl hh_compiler::profile::ProfileView for RegistryProfiles<'_> {
 /// catalog (revoked records coordinate nothing live — the same admission the
 /// point-lookup applies; deterministic `version_id` order under the catalog
 /// fold, never a hash-map order).
-impl hh_compiler::profile::SelectorView for RegistryProfiles<'_> {
-    fn registered(&self) -> Vec<hh_compiler::profile::ModelProfile> {
-        use hh_registry::records::RegistryRecord;
-        let pred = hh_registry::store::QueryPredicate {
-            clauses: vec![hh_registry::store::QueryClause {
+impl hharness_compiler::profile::SelectorView for RegistryProfiles<'_> {
+    fn registered(&self) -> Vec<hharness_compiler::profile::ModelProfile> {
+        use hharness_registry::records::RegistryRecord;
+        let pred = hharness_registry::store::QueryPredicate {
+            clauses: vec![hharness_registry::store::QueryClause {
                 field: "kind".to_string(),
-                op: hh_registry::store::QueryOp::Eq,
+                op: hharness_registry::store::QueryOp::Eq,
                 value: "model_profile".to_string(),
             }],
             snapshot_id: None,
         };
-        let mut out: Vec<(String, hh_compiler::profile::ModelProfile)> = self
+        let mut out: Vec<(String, hharness_compiler::profile::ModelProfile)> = self
             .0
             .catalog(Some(&pred))
             .unwrap_or_default()
@@ -177,7 +177,9 @@ impl hh_compiler::profile::SelectorView for RegistryProfiles<'_> {
             .filter_map(|entry| {
                 if let RegistryRecord::ModelProfile(body) = &entry.record {
                     body.get("profile")
-                        .and_then(|v| hh_compiler::schema::profile_from_json(v, "profile").ok())
+                        .and_then(|v| {
+                            hharness_compiler::schema::profile_from_json(v, "profile").ok()
+                        })
                         .map(|p| (entry.envelope.version_id.clone(), p))
                 } else {
                     None

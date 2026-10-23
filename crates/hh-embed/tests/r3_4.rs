@@ -30,29 +30,29 @@
 //! Fixture-only (the ticket's offline ceiling): `EmbedModel` is the
 //! scripted model, `local_host` the env, the loopback `StoreChannel` the
 //! remote half — the packaged `hh-memory-store` subprocess leg is
-//! `hh-varhost`'s conformance battery over the same contract. No live
+//! `hharness-varhost`'s conformance battery over the same contract. No live
 //! verification claims.
 
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_context::consolidate::{ConsolidationCadence, ConsolidationRule};
-use hh_control::driver::{AssembleInputs, AssemblerPort, MemoryPort};
-use hh_embed::runtime::{KernelAssembler, KernelContext, KernelMemory};
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_context::consolidate::{ConsolidationCadence, ConsolidationRule};
+use hharness_control::driver::{AssembleInputs, AssemblerPort, MemoryPort};
+use hharness_embed::runtime::{KernelAssembler, KernelContext, KernelMemory};
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: the conformance hir/1 document (r2_5's shape) ──────────────────
 
@@ -349,8 +349,8 @@ fn windowed_profile(
     id: &str,
     version: &str,
     context_window: u64,
-) -> hh_compiler::profile::ModelProfile {
-    use hh_compiler::profile::{
+) -> hharness_compiler::profile::ModelProfile {
+    use hharness_compiler::profile::{
         ExpiryCondition, ExpiryKind, ModelProfile, ModelRole, ProfileCompatibility,
         ProfileDebtRecord, ProfileSelector, VersionPattern,
     };
@@ -368,7 +368,7 @@ fn windowed_profile(
             roles_admitted: vec![ModelRole::Primary],
         },
         extends: None,
-        capabilities: hh_compiler::profile::ProfileCapabilities {
+        capabilities: hharness_compiler::profile::ProfileCapabilities {
             context_window: Some(context_window),
             ..Default::default()
         },
@@ -377,7 +377,7 @@ fn windowed_profile(
         expiry: ProfileDebtRecord {
             rule_id: format!("{id}.expiry"),
             hypothesis: "the model honours the declared contract".to_string(),
-            evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+            evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
             owner: "test:owner".to_string(),
             reach_via: Vec::new(),
             expiry_condition: ExpiryCondition {
@@ -385,10 +385,10 @@ fn windowed_profile(
                 value: Some("2099-01-01".to_string()),
             },
             removal_test_ref: "sha256:test".to_string(),
-            removal_test: Some(hh_hir::RemovalTest::new(
-                hh_hir::RemovalTestKind::Inspection,
+            removal_test: Some(hharness_hir::RemovalTest::new(
+                hharness_hir::RemovalTestKind::Inspection,
             )),
-            status: hh_compiler::profile::DebtStatus::Active,
+            status: hharness_compiler::profile::DebtStatus::Active,
             debt_class: None,
             hypothesis_typed: None,
             scope: None,
@@ -404,13 +404,16 @@ fn windowed_profile(
         },
         tests: Json::obj([]),
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
 /// Register a `model_profile` through the boundary — returns the
 /// record's `version_id` (a resolvable `profile_binding` coordinate).
-fn register_profile(svc: &mut EmbedService, p: &hh_compiler::profile::ModelProfile) -> String {
+fn register_profile(
+    svc: &mut EmbedService,
+    p: &hharness_compiler::profile::ModelProfile,
+) -> String {
     let r = call(
         svc,
         "lab.registry.register",
@@ -420,12 +423,12 @@ fn register_profile(svc: &mut EmbedService, p: &hh_compiler::profile::ModelProfi
                 "body",
                 Json::obj([
                     ("kind", Json::str("model_profile")),
-                    ("profile", hh_compiler::schema::profile_to_json(p)),
+                    ("profile", hharness_compiler::schema::profile_to_json(p)),
                 ]),
             ),
             (
                 "registrar",
-                hh_provenance::ProvenanceRecord::kernel("hh-embed", 0).to_json(),
+                hharness_provenance::ProvenanceRecord::kernel("hharness-embed", 0).to_json(),
             ),
         ]),
     );
@@ -459,7 +462,7 @@ fn policy_slot_binds_nondefault_variant() {
         .unwrap_or_else(|| panic!("no context.assembled: {evs:?}"));
     assert_eq!(
         assembled.2.get("policy_ref").and_then(Json::as_str),
-        Some(hh_context::policy_family::PRIORITY_EVICTION_REF),
+        Some(hharness_context::policy_family::PRIORITY_EVICTION_REF),
         "the assembled row names the bound variant: {:?}",
         assembled.2
     );
@@ -611,32 +614,31 @@ fn consolidation_idle_fires_at_finish() {
 #[test]
 fn consolidate_rebinds_stale_names() {
     let mut ctx = KernelContext::new("run-p");
-    let wctx = |seq: u64, lease: u64| hh_context::WriteContext {
-        context_label: hh_provenance::label::Label::at(AuthorityClass::Principal),
+    let wctx = |seq: u64, lease: u64| hharness_context::WriteContext {
+        context_label: hharness_provenance::label::Label::at(AuthorityClass::Principal),
         lease_generation: lease,
         at_seq: seq,
         run_id: "run-p".to_string(),
     };
     let lease_gen = ctx.store.mirror().lease(PersistenceScope::Run);
     // v1 then v2 on the same semantic line — v1 is stale{superseded}.
-    let draft = |body: &str, semantic: &str| hh_context::MemoryDraft {
-        kind: hh_context::MemoryKind::Fact,
-        subject_key: None,
-        content: hh_context::MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
-            body,
-            "test",
-            ProvenanceRecord::kernel("test", 0),
-        ))),
-        contract: None,
-        scope: PersistenceScope::Run,
-        declared_inputs: vec![],
-        justifications: vec![],
-        supersedes: None,
-        validity: None,
-        provenance: Some(ProvenanceRecord::kernel("test", 0)),
-        semantic_id: Some(semantic.to_string()),
-        validator_endorsed: false,
-    };
+    let draft =
+        |body: &str, semantic: &str| hharness_context::MemoryDraft {
+            kind: hharness_context::MemoryKind::Fact,
+            subject_key: None,
+            content: hharness_context::MemoryContent::Text(Box::new(
+                hharness_hir::leaves::Text::new(body, "test", ProvenanceRecord::kernel("test", 0)),
+            )),
+            contract: None,
+            scope: PersistenceScope::Run,
+            declared_inputs: vec![],
+            justifications: vec![],
+            supersedes: None,
+            validity: None,
+            provenance: Some(ProvenanceRecord::kernel("test", 0)),
+            semantic_id: Some(semantic.to_string()),
+            validator_endorsed: false,
+        };
     let v1 = ctx
         .store
         .port()
@@ -645,9 +647,9 @@ fn consolidate_rebinds_stale_names() {
         .version
         .version_id;
     let mut d2 = draft("new fact", "facts/a");
-    d2.supersedes = Some(hh_context::memory::SupersedeClaim {
+    d2.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: v1.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     let v2 = ctx
         .store
@@ -664,8 +666,8 @@ fn consolidate_rebinds_stale_names() {
         rule_id: "rule/dedupe".into(),
         scope: PersistenceScope::Run,
         cadence: ConsolidationCadence::SessionStart,
-        guards: hh_context::consolidate::ConsolidationGuards::default(),
-        consolidator: hh_context::consolidate::ConsolidatorKind::Dedupe,
+        guards: hharness_context::consolidate::ConsolidationGuards::default(),
+        consolidator: hharness_context::consolidate::ConsolidatorKind::Dedupe,
         retention: None,
     };
     let mem = std::rc::Rc::new(std::cell::RefCell::new(ctx));
@@ -736,7 +738,7 @@ fn retention_leg_runs_evaluate_retention() {
             "facts/live",
             "application/json",
             br#"{"v":"live"}"#,
-            hh_context::MemoryKind::Fact,
+            hharness_context::MemoryKind::Fact,
             PersistenceScope::Session,
         )
         .unwrap();
@@ -747,41 +749,41 @@ fn retention_leg_runs_evaluate_retention() {
             "facts/stale",
             "application/json",
             br#"{"v":"stale"}"#,
-            hh_context::MemoryKind::Fact,
+            hharness_context::MemoryKind::Fact,
             PersistenceScope::Session,
         )
         .unwrap();
     // Supersede the stale body — same semantic line, a correction.
-    let wctx = hh_context::WriteContext {
-        context_label: hh_provenance::label::Label::at(AuthorityClass::Principal),
+    let wctx = hharness_context::WriteContext {
+        context_label: hharness_provenance::label::Label::at(AuthorityClass::Principal),
         lease_generation: ctx.store.mirror().lease(PersistenceScope::Session),
         at_seq: 90,
         run_id: run.clone(),
     };
-    let mut d = hh_context::MemoryDraft {
-        kind: hh_context::MemoryKind::Fact,
+    let mut d = hharness_context::MemoryDraft {
+        kind: hharness_context::MemoryKind::Fact,
         subject_key: None,
-        content: hh_context::MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: hharness_context::MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             "replacement",
             "test",
             ProvenanceRecord::kernel("test", 0),
         ))),
-        contract: Some(hh_context::InvalidationContract {
+        contract: Some(hharness_context::InvalidationContract {
             dependencies: vec![],
-            cache_hint: hh_context::CacheHint::Cacheable,
+            cache_hint: hharness_context::CacheHint::Cacheable,
             validator_ref: None,
             freshness: None,
-            invalidation_condition: Some(hh_context::InvalidationCondition::ScopeEnded(
+            invalidation_condition: Some(hharness_context::InvalidationCondition::ScopeEnded(
                 PersistenceScope::Session,
             )),
-            revalidation: hh_context::Revalidation::Never,
+            revalidation: hharness_context::Revalidation::Never,
         }),
         scope: PersistenceScope::Session,
         declared_inputs: vec![],
         justifications: vec![],
-        supersedes: Some(hh_context::memory::SupersedeClaim {
+        supersedes: Some(hharness_context::memory::SupersedeClaim {
             version_id: stale.clone(),
-            reason: hh_context::memory::SupersedeClaimReason::Correction,
+            reason: hharness_context::memory::SupersedeClaimReason::Correction,
         }),
         validity: None,
         provenance: Some(ProvenanceRecord::kernel("test", 0)),
@@ -796,9 +798,9 @@ fn retention_leg_runs_evaluate_retention() {
         rule_id: "rule/reclaim".into(),
         scope: PersistenceScope::Session,
         cadence: ConsolidationCadence::Idle,
-        guards: hh_context::consolidate::ConsolidationGuards::default(),
-        consolidator: hh_context::consolidate::ConsolidatorKind::Dedupe,
-        retention: Some(hh_ledger::retention::RetentionPolicy {
+        guards: hharness_context::consolidate::ConsolidationGuards::default(),
+        consolidator: hharness_context::consolidate::ConsolidatorKind::Dedupe,
+        retention: Some(hharness_ledger::retention::RetentionPolicy {
             policy_ref: "policy:r34-test".into(),
             blob_residency_ms: 0,
             bundle_retention_ms: 0,
@@ -808,12 +810,12 @@ fn retention_leg_runs_evaluate_retention() {
     };
     let mem = std::rc::Rc::new(std::cell::RefCell::new(ctx));
     let mut port = KernelMemory::new(mem);
-    use hh_control::driver::MemoryPort;
+    use hharness_control::driver::MemoryPort;
     let evs = port
         .consolidate(
             &[rule],
             "finish",
-            Some(hh_control::driver::StoreSeam {
+            Some(hharness_control::driver::StoreSeam {
                 store: &mut store,
                 lease: &lease,
             }),
@@ -860,7 +862,7 @@ fn retention_leg_runs_evaluate_retention() {
 /// agrees with the client's).
 #[test]
 fn remote_store_round_trip() {
-    use hh_context::memory_abi::{ChannelFault, StoreChannel};
+    use hharness_context::memory_abi::{ChannelFault, StoreChannel};
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -868,7 +870,7 @@ fn remote_store_round_trip() {
     /// packaged `hh-memory-store` subprocess runs the same `dispatch`;
     /// the loopback exercises the codec + mirror discipline without a
     /// subprocess).
-    struct Loop(Rc<RefCell<hh_context::MemoryStore>>);
+    struct Loop(Rc<RefCell<hharness_context::MemoryStore>>);
     impl StoreChannel for Loop {
         fn invoke(
             &mut self,
@@ -876,12 +878,14 @@ fn remote_store_round_trip() {
             inputs: Vec<Json>,
         ) -> Result<Vec<Json>, ChannelFault> {
             let mut far = self.0.borrow_mut();
-            hh_context::memory_abi::dispatch(&mut *far, operation, &inputs)
+            hharness_context::memory_abi::dispatch(&mut *far, operation, &inputs)
                 .map_err(ChannelFault::Decode)
         }
     }
 
-    let far = Rc::new(RefCell::new(hh_context::MemoryStore::new("memory_store")));
+    let far = Rc::new(RefCell::new(hharness_context::MemoryStore::new(
+        "memory_store",
+    )));
     let ctx =
         KernelContext::new_remote("run-r", "hh/full_window", Box::new(Loop(far.clone()))).unwrap();
     let mem = Rc::new(RefCell::new(ctx));
@@ -890,8 +894,8 @@ fn remote_store_round_trip() {
     // A write routes remote-first — the mirror and the far side agree.
     {
         let mut c = mem.borrow_mut();
-        let wctx = hh_context::WriteContext {
-            context_label: hh_provenance::label::Label::at(AuthorityClass::Principal),
+        let wctx = hharness_context::WriteContext {
+            context_label: hharness_provenance::label::Label::at(AuthorityClass::Principal),
             lease_generation: 0,
             at_seq: 1,
             run_id: "run-r".to_string(),
@@ -900,25 +904,27 @@ fn remote_store_round_trip() {
             .store
             .port()
             .put(
-                hh_context::MemoryDraft {
-                    kind: hh_context::MemoryKind::Fact,
+                hharness_context::MemoryDraft {
+                    kind: hharness_context::MemoryKind::Fact,
                     subject_key: None,
-                    content: hh_context::MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
-                        "remote fact",
-                        "test",
-                        ProvenanceRecord::kernel("test", 0),
-                    ))),
-                    contract: Some(hh_context::InvalidationContract {
+                    content: hharness_context::MemoryContent::Text(Box::new(
+                        hharness_hir::leaves::Text::new(
+                            "remote fact",
+                            "test",
+                            ProvenanceRecord::kernel("test", 0),
+                        ),
+                    )),
+                    contract: Some(hharness_context::InvalidationContract {
                         dependencies: vec![],
-                        cache_hint: hh_context::CacheHint::Cacheable,
+                        cache_hint: hharness_context::CacheHint::Cacheable,
                         validator_ref: None,
                         freshness: None,
                         invalidation_condition: Some(
-                            hh_context::InvalidationCondition::ScopeEnded(
+                            hharness_context::InvalidationCondition::ScopeEnded(
                                 PersistenceScope::Session,
                             ),
                         ),
-                        revalidation: hh_context::Revalidation::Never,
+                        revalidation: hharness_context::Revalidation::Never,
                     }),
                     scope: PersistenceScope::Session,
                     declared_inputs: vec![],
@@ -1012,7 +1018,7 @@ fn by_run_query_hits_artifact_projection() {
         "facts/byrun",
         "application/json",
         br#"{"body":"by_run projection"}"#,
-        hh_context::MemoryKind::Fact,
+        hharness_context::MemoryKind::Fact,
         PersistenceScope::Session,
     )
     .unwrap();
@@ -1082,7 +1088,7 @@ fn resume_fold_rehydrates_body_and_watermark() {
             "facts/fold",
             "application/json",
             br#"{"body":"fold rehydrate marker"}"#,
-            hh_context::MemoryKind::Fact,
+            hharness_context::MemoryKind::Fact,
             PersistenceScope::Session,
         )
         .unwrap();
@@ -1090,8 +1096,8 @@ fn resume_fold_rehydrates_body_and_watermark() {
             rule_id: "rule/wm".into(),
             scope: PersistenceScope::Session,
             cadence: ConsolidationCadence::SessionStart,
-            guards: hh_context::consolidate::ConsolidationGuards::default(),
-            consolidator: hh_context::consolidate::ConsolidatorKind::Dedupe,
+            guards: hharness_context::consolidate::ConsolidationGuards::default(),
+            consolidator: hharness_context::consolidate::ConsolidatorKind::Dedupe,
             retention: None,
         };
         let mem = std::rc::Rc::new(std::cell::RefCell::new(ctx));
@@ -1106,12 +1112,12 @@ fn resume_fold_rehydrates_body_and_watermark() {
                 .ok()
                 .and_then(|es| es.last())
                 .map(|e| e.event_id.clone())
-                .unwrap_or_else(|| hh_ledger::ids::ROOT_EVENT.to_string());
-            let mut ev = hh_control::events::kernel_event(
+                .unwrap_or_else(|| hharness_ledger::ids::ROOT_EVENT.to_string());
+            let mut ev = hharness_control::events::kernel_event(
                 store.alloc_id("evt"),
                 &class,
                 ts,
-                hh_ledger::event::Scope::default(),
+                hharness_ledger::event::Scope::default(),
                 parent,
                 vec![],
                 payload,
@@ -1151,8 +1157,8 @@ fn resume_fold_rehydrates_body_and_watermark() {
         rule_id: "rule/wm".into(),
         scope: PersistenceScope::Session,
         cadence: ConsolidationCadence::SessionStart,
-        guards: hh_context::consolidate::ConsolidationGuards::default(),
-        consolidator: hh_context::consolidate::ConsolidatorKind::Dedupe,
+        guards: hharness_context::consolidate::ConsolidationGuards::default(),
+        consolidator: hharness_context::consolidate::ConsolidatorKind::Dedupe,
         retention: None,
     };
     let mem = std::rc::Rc::new(std::cell::RefCell::new(folded));
@@ -1164,7 +1170,7 @@ fn resume_fold_rehydrates_body_and_watermark() {
     );
     // And the lexical index folds the rehydrated body — `lexical` finds
     // the marker across the restart (the indexed pipeline's input).
-    let lex = hh_context::retrieve::lexical_index(mem.borrow().store.mirror(), applied);
+    let lex = hharness_context::retrieve::lexical_index(mem.borrow().store.mirror(), applied);
     assert!(
         lex.postings
             .get("rehydrate")
@@ -1284,7 +1290,7 @@ fn context_window_exceeded_stops_the_run() {
 fn seed_observations(
     store: &mut Store,
     run: &str,
-    lease: &hh_ledger::store::Lease,
+    lease: &hharness_ledger::store::Lease,
     n: usize,
     pad: usize,
 ) {
@@ -1294,12 +1300,12 @@ fn seed_observations(
             .ok()
             .and_then(|es| es.last())
             .map(|e| e.event_id.clone())
-            .unwrap_or_else(|| hh_ledger::ids::ROOT_EVENT.to_string());
-        let mut ev = hh_control::events::kernel_event(
+            .unwrap_or_else(|| hharness_ledger::ids::ROOT_EVENT.to_string());
+        let mut ev = hharness_control::events::kernel_event(
             store.alloc_id("evt"),
             "context.observation.recorded",
             store.ts_now(),
-            hh_ledger::event::Scope::default(),
+            hharness_ledger::event::Scope::default(),
             parent,
             vec![],
             Json::obj([
@@ -1312,7 +1318,7 @@ fn seed_observations(
     }
 }
 
-fn obs_run(tag: &str, n: usize, pad: usize) -> (Store, String, hh_ledger::store::Lease) {
+fn obs_run(tag: &str, n: usize, pad: usize) -> (Store, String, hharness_ledger::store::Lease) {
     let dir = test_dir(tag).join("ledger");
     let mut store = Store::open_with(
         dir,
@@ -1546,7 +1552,7 @@ fn per_slot_occupancy_projects_from_the_durable_row() {
     );
     assert_eq!(
         payload.get("reserved").and_then(Json::as_int),
-        Some(hh_context::OMISSION_ITEM_TOKENS as i64),
+        Some(hharness_context::OMISSION_ITEM_TOKENS as i64),
         "the kernel's omission reserve is named on the row: {payload:?}"
     );
 }

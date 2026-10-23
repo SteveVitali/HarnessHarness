@@ -18,28 +18,28 @@
 
 use std::collections::BTreeMap;
 
-use hh_analysis::{analyze_and_record, AnalysisInput};
-use hh_budget::errors::EnforcementLevel;
-use hh_budget::matchspec::{ArmSpec as MatchArmSpec, BudgetEnforcement};
-use hh_budget::spec::BudgetSpec;
-use hh_eval::facts::LedgerFacts;
-use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_lab::analysis::AnalysisSpec;
-use hh_lab::experiment::ExperimentSpec;
-use hh_ledger::manifest::RunManifest;
-use hh_results::row::ResultsRow;
-use hh_results::store::ResultsStore;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::json::Json;
+use hharness_analysis::{analyze_and_record, AnalysisInput};
+use hharness_budget::errors::EnforcementLevel;
+use hharness_budget::matchspec::{ArmSpec as MatchArmSpec, BudgetEnforcement};
+use hharness_budget::spec::BudgetSpec;
+use hharness_eval::facts::LedgerFacts;
+use hharness_experiment::docs::{kind as doc_kind, LabDocs};
+use hharness_lab::analysis::AnalysisSpec;
+use hharness_lab::experiment::ExperimentSpec;
+use hharness_ledger::manifest::RunManifest;
+use hharness_results::row::ResultsRow;
+use hharness_results::store::ResultsStore;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::json::Json;
 
 use crate::eval_ops::{bad, decls_for, decode_suites, decode_tasks, req};
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 /// `AnalysisError` → the boundary's typed surface — refusals render
 /// verbatim, spec-member problems render `SchemaViolation`.
-fn xerr(e: hh_analysis::AnalysisError) -> EmbedError {
-    use hh_analysis::AnalysisError as A;
+fn xerr(e: hharness_analysis::AnalysisError) -> EmbedError {
+    use hharness_analysis::AnalysisError as A;
     match e {
         A::BadSpec { member, detail } => EmbedError::SchemaViolation {
             path: format!("/{member}"),
@@ -101,10 +101,10 @@ fn stamped_arm_enforcement(
         let Some(Json::Obj(be)) = m.extra.get("budget_enforcement") else {
             continue;
         };
-        let pairs: Vec<(hh_ontology::dimensions::DimensionId, EnforcementLevel)> = be
+        let pairs: Vec<(hharness_ontology::dimensions::DimensionId, EnforcementLevel)> = be
             .iter()
             .filter_map(|(d, l)| {
-                let dim = hh_ontology::dimensions::DimensionId::parse(d)?;
+                let dim = hharness_ontology::dimensions::DimensionId::parse(d)?;
                 let lvl = match l.as_str()? {
                     "enforced" => EnforcementLevel::Enforced,
                     "advisory" => EnforcementLevel::Advisory,
@@ -125,7 +125,7 @@ fn stamped_arm_enforcement(
 /// bound subject manifest carries it (DF-CAP.2-2; ADR-0165 D3); otherwise
 /// `limits_enforced = full` maps to `native()` and `partial`/`none` to
 /// `hosted(&[])` — the ADR-0046 (d) mapping; research-grade match specs
-/// stay refused inside `hh-eval` (CC9).
+/// stay refused inside `hharness-eval` (CC9).
 fn resolve_arms(
     docs: &LabDocs,
     espec: &ExperimentSpec,
@@ -306,7 +306,7 @@ impl EmbedService {
                         // bound id that is not a ledger run (ad-hoc rows, a
                         // foreign store) is never an amended experiment, and
                         // the analysis is never refused for it.
-                        Ok(evs) => !hh_experiment::view::ExperimentView::fold(evs)
+                        Ok(evs) => !hharness_experiment::view::ExperimentView::fold(evs)
                             .amendments
                             .is_empty(),
                         Err(_) => false,

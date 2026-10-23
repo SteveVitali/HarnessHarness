@@ -10,36 +10,36 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_context::compact::{
+use hharness_context::compact::{
     self, CompactError, CompactInput, CompactionOp, CompactionStatus, CompactionStrategy,
     CompactionTrigger, FoldOnReturn, InputReduction, RelowerSummarize, SummarizeInput, Summarizer,
     SummarizerError, SummarizerFailure, SummarizerOutput, FOLD_ON_RETURN_REF,
     RELOWER_SUMMARIZE_REF,
 };
-use hh_context::consolidate::{
+use hharness_context::consolidate::{
     consolidate, ConsolidateError, ConsolidationCadence, ConsolidationGuards, ConsolidationRule,
     ConsolidatorKind,
 };
-use hh_context::events::CollectSink;
-use hh_context::lifecycle::{self, FilterItem};
-use hh_context::memory::{
+use hharness_context::events::CollectSink;
+use hharness_context::lifecycle::{self, FilterItem};
+use hharness_context::memory::{
     DependencyStamp, InvalidationContract, Justification, JustificationKind, MemoryDraft,
     MemoryError, MemoryStore, WriteContext,
 };
-use hh_context::plan::{
+use hharness_context::plan::{
     Candidate, ContextPlan, CutPoint, DerivedFrom, Estimate, PlannedItem, SlotFill, ValidityPolicy,
 };
-use hh_context::vocab::{
+use hharness_context::vocab::{
     CandidateKind, CandidateState, ConflictPolicy, DependencyKind, Granularity, LifecycleStateKind,
     MemoryContent, MemoryKind, PriorityClass, Retention,
 };
-use hh_hir::records::Validity;
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope, ReaderSet};
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::Validity;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope, ReaderSet};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -220,11 +220,11 @@ impl Summarizer for StubSummarizer {
 fn empty_contract() -> InvalidationContract {
     InvalidationContract {
         dependencies: vec![],
-        cache_hint: hh_context::vocab::CacheHint::Cacheable,
+        cache_hint: hharness_context::vocab::CacheHint::Cacheable,
         validator_ref: None,
         freshness: None,
         invalidation_condition: None,
-        revalidation: hh_context::vocab::Revalidation::Never,
+        revalidation: hharness_context::vocab::Revalidation::Never,
     }
 }
 
@@ -232,7 +232,7 @@ fn draft(content: &str) -> MemoryDraft {
     MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             content,
             "owner",
             model_prov(),
@@ -777,7 +777,7 @@ fn relower_summarize_and_fold_on_return_variants() {
 
 // ── MemoryStorePort conformance (§5c.3; out-of-process binding surface) ─────
 
-/// The conformance battery lives in `hh_context::memory_abi::conformance` —
+/// The conformance battery lives in `hharness_context::memory_abi::conformance` —
 /// the same suite runs on every placement (`MemoryStore` in-process here,
 /// `RemoteStore` over the dispatch loopback, and the spawned `hh-memory-store`
 /// plugin over `plugin_abi/1` in the package test — T-LCD-12).
@@ -785,7 +785,7 @@ fn relower_summarize_and_fold_on_return_variants() {
 #[test]
 fn memory_store_port_conformance_in_process() {
     let mut store = MemoryStore::new("ms");
-    hh_context::memory_abi::conformance::run(&mut store);
+    hharness_context::memory_abi::conformance::run(&mut store);
 }
 
 #[test]
@@ -793,7 +793,7 @@ fn memory_store_port_conformance_remote_loopback() {
     // The remote binding's mirror/channel/divergence path: `RemoteStore`
     // over `dispatch` on a second store — identical records on both sides
     // (deterministic fold), and no latched fault after the battery.
-    hh_context::memory_abi::conformance::run_remote();
+    hharness_context::memory_abi::conformance::run_remote();
 }
 
 // ── consolidate (§5c.3; ADR-0080 d4–d7) ──────────────────────────────────────
@@ -818,9 +818,9 @@ fn consolidate_dedupe_rebinds_names_to_live_replacement() {
     let v1 = store.put(draft("old fact"), &ctx).unwrap().version;
     let mut d2 = draft("new fact");
     d2.semantic_id = Some(v1.semantic_id.clone());
-    d2.supersedes = Some(hh_context::memory::SupersedeClaim {
+    d2.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: v1.version_id.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     let ctx2 = ctx_at(&mut store, 2);
     let v2 = store.put(d2, &ctx2).unwrap().version;
@@ -920,9 +920,9 @@ fn consolidate_conflict_guard_and_max_versions() {
     let v1 = store.put(draft("a"), &ctx).unwrap().version;
     let mut d1b = draft("a2");
     d1b.semantic_id = Some(v1.semantic_id.clone());
-    d1b.supersedes = Some(hh_context::memory::SupersedeClaim {
+    d1b.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: v1.version_id.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     let ctx = next_ctx(&mut store);
     let v1b = store.put(d1b, &ctx).unwrap().version;
@@ -930,9 +930,9 @@ fn consolidate_conflict_guard_and_max_versions() {
     let v2 = store.put(draft("b"), &ctx).unwrap().version;
     let mut d2b = draft("b2");
     d2b.semantic_id = Some(v2.semantic_id.clone());
-    d2b.supersedes = Some(hh_context::memory::SupersedeClaim {
+    d2b.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: v2.version_id.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     let ctx = next_ctx(&mut store);
     let v2b = store.put(d2b, &ctx).unwrap().version;
@@ -941,7 +941,7 @@ fn consolidate_conflict_guard_and_max_versions() {
     // conflict_set_ref — two same-subject *Structured* writes with
     // different canonical values build the deterministic set.
     let mut ca = draft("conflict a");
-    ca.subject_key = Some(hh_context::vocab::SubjectKey {
+    ca.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/test".into(),
         key: "k1".into(),
     });
@@ -949,7 +949,7 @@ fn consolidate_conflict_guard_and_max_versions() {
     let cva = store.put(ca, &ctx).unwrap().version;
     let ctx = next_ctx(&mut store);
     let mut cb = draft("conflict b");
-    cb.subject_key = Some(hh_context::vocab::SubjectKey {
+    cb.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/test".into(),
         key: "k1".into(),
     });
@@ -966,9 +966,9 @@ fn consolidate_conflict_guard_and_max_versions() {
     // `external` — a text write could never supersede a structured one).
     cac.content = MemoryContent::Structured(Json::obj([("v", Json::Int(3))]));
     cac.semantic_id = Some(cva.semantic_id.clone());
-    cac.supersedes = Some(hh_context::memory::SupersedeClaim {
+    cac.supersedes = Some(hharness_context::memory::SupersedeClaim {
         version_id: cva.version_id.clone(),
-        reason: hh_context::memory::SupersedeClaimReason::Correction,
+        reason: hharness_context::memory::SupersedeClaimReason::Correction,
     });
     let ctx = next_ctx(&mut store);
     let cvac = store.put(cac, &ctx).unwrap().version;
@@ -1083,7 +1083,7 @@ fn external_resource_dep_gates_on_declared_validator_verdict() {
     assert_eq!(st.kind(), LifecycleStateKind::Expired);
     assert!(matches!(
         st,
-        hh_context::vocab::LifecycleState::Expired { ref reason } if reason.contains("svc://api")
+        hharness_context::vocab::LifecycleState::Expired { ref reason } if reason.contains("svc://api")
     ));
 }
 
@@ -1096,20 +1096,20 @@ fn subject_overlap_narrows_stale_propagation() {
     let ctx = ctx_at(&mut store, 1);
     // The stale input (revoked).
     let mut a = draft("stale same subject");
-    a.subject_key = Some(hh_context::vocab::SubjectKey {
+    a.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "same".into(),
     });
     let va = store.put(a, &ctx).unwrap().version;
     let mut b = draft("stale other subject");
-    b.subject_key = Some(hh_context::vocab::SubjectKey {
+    b.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "other".into(),
     });
     let vb = store.put(b, &ctx).unwrap().version;
     // The dependent carries both justifications + subject "same".
     let mut dep = draft("dependent");
-    dep.subject_key = Some(hh_context::vocab::SubjectKey {
+    dep.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "same".into(),
     });
@@ -1125,24 +1125,24 @@ fn subject_overlap_narrows_stale_propagation() {
     dep.justifications = vec![
         Justification {
             kind: JustificationKind::DeliveredMemory,
-            ref_: hh_identity::refs::VersionedRef::pinned(
-                hh_identity::kinds::RecordKind::Memory,
+            ref_: hharness_identity::refs::VersionedRef::pinned(
+                hharness_identity::kinds::RecordKind::Memory,
                 va.version_id.clone(),
                 model_prov(),
             ),
-            at: hh_ledger::manifest::EventRef {
+            at: hharness_ledger::manifest::EventRef {
                 run_id: "run1".into(),
                 event_id: "e-va".into(),
             },
         },
         Justification {
             kind: JustificationKind::DeliveredMemory,
-            ref_: hh_identity::refs::VersionedRef::pinned(
-                hh_identity::kinds::RecordKind::Memory,
+            ref_: hharness_identity::refs::VersionedRef::pinned(
+                hharness_identity::kinds::RecordKind::Memory,
                 vb.version_id.clone(),
                 model_prov(),
             ),
-            at: hh_ledger::manifest::EventRef {
+            at: hharness_ledger::manifest::EventRef {
                 run_id: "run1".into(),
                 event_id: "e-vb".into(),
             },
@@ -1152,14 +1152,14 @@ fn subject_overlap_narrows_stale_propagation() {
     store.set_stamp("cap/x", "v1");
     // Revoke both inputs.
     let revoker = ProvenanceRecord::minted(
-        Origin::human("alice", hh_provenance::origin::HumanRole::Principal),
+        Origin::human("alice", hharness_provenance::origin::HumanRole::Principal),
         PersistenceScope::User,
         3,
     );
     lifecycle::revoke(
         &mut store,
         &va.version_id,
-        hh_context::vocab::RevocationReason::Contradicted,
+        hharness_context::vocab::RevocationReason::Contradicted,
         &revoker,
         None,
         4,
@@ -1168,7 +1168,7 @@ fn subject_overlap_narrows_stale_propagation() {
     lifecycle::revoke(
         &mut store,
         &vb.version_id,
-        hh_context::vocab::RevocationReason::Contradicted,
+        hharness_context::vocab::RevocationReason::Contradicted,
         &revoker,
         None,
         4,
@@ -1177,7 +1177,7 @@ fn subject_overlap_narrows_stale_propagation() {
     // Default policy (delivered): the dependent is stale on *both*.
     let st = lifecycle::lifecycle_state(&store, &vd.version_id, 8);
     match &st {
-        hh_context::vocab::LifecycleState::StaleByDependency { revoked_inputs } => {
+        hharness_context::vocab::LifecycleState::StaleByDependency { revoked_inputs } => {
             assert_eq!(revoked_inputs.len(), 2, "both revoked inputs propagate");
         }
         other => panic!("expected StaleByDependency, got {other:?}"),
@@ -1185,22 +1185,22 @@ fn subject_overlap_narrows_stale_propagation() {
     // The subject_overlap narrowing: only the same-subject revoked input
     // propagates.
     let mut store2 = MemoryStore::new("ms");
-    store2.policy.justification_scope = hh_context::JustificationScope::SubjectOverlap;
+    store2.policy.justification_scope = hharness_context::JustificationScope::SubjectOverlap;
     let ctx2 = ctx_at(&mut store2, 1);
     let mut a2 = draft("stale same subject");
-    a2.subject_key = Some(hh_context::vocab::SubjectKey {
+    a2.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "same".into(),
     });
     let va2 = store2.put(a2, &ctx2).unwrap().version;
     let mut b2 = draft("stale other subject");
-    b2.subject_key = Some(hh_context::vocab::SubjectKey {
+    b2.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "other".into(),
     });
     let vb2 = store2.put(b2, &ctx2).unwrap().version;
     let mut dep2 = draft("dependent");
-    dep2.subject_key = Some(hh_context::vocab::SubjectKey {
+    dep2.subject_key = Some(hharness_context::vocab::SubjectKey {
         schema_ref: "s/subj".into(),
         key: "same".into(),
     });
@@ -1216,24 +1216,24 @@ fn subject_overlap_narrows_stale_propagation() {
     dep2.justifications = vec![
         Justification {
             kind: JustificationKind::DeliveredMemory,
-            ref_: hh_identity::refs::VersionedRef::pinned(
-                hh_identity::kinds::RecordKind::Memory,
+            ref_: hharness_identity::refs::VersionedRef::pinned(
+                hharness_identity::kinds::RecordKind::Memory,
                 va2.version_id.clone(),
                 model_prov(),
             ),
-            at: hh_ledger::manifest::EventRef {
+            at: hharness_ledger::manifest::EventRef {
                 run_id: "run1".into(),
                 event_id: "e-va2".into(),
             },
         },
         Justification {
             kind: JustificationKind::DeliveredMemory,
-            ref_: hh_identity::refs::VersionedRef::pinned(
-                hh_identity::kinds::RecordKind::Memory,
+            ref_: hharness_identity::refs::VersionedRef::pinned(
+                hharness_identity::kinds::RecordKind::Memory,
                 vb2.version_id.clone(),
                 model_prov(),
             ),
-            at: hh_ledger::manifest::EventRef {
+            at: hharness_ledger::manifest::EventRef {
                 run_id: "run1".into(),
                 event_id: "e-vb2".into(),
             },
@@ -1244,7 +1244,7 @@ fn subject_overlap_narrows_stale_propagation() {
     lifecycle::revoke(
         &mut store2,
         &va2.version_id,
-        hh_context::vocab::RevocationReason::Contradicted,
+        hharness_context::vocab::RevocationReason::Contradicted,
         &revoker,
         None,
         4,
@@ -1253,7 +1253,7 @@ fn subject_overlap_narrows_stale_propagation() {
     lifecycle::revoke(
         &mut store2,
         &vb2.version_id,
-        hh_context::vocab::RevocationReason::Contradicted,
+        hharness_context::vocab::RevocationReason::Contradicted,
         &revoker,
         None,
         4,
@@ -1261,7 +1261,7 @@ fn subject_overlap_narrows_stale_propagation() {
     .unwrap();
     let st2 = lifecycle::lifecycle_state(&store2, &vd2.version_id, 8);
     match &st2 {
-        hh_context::vocab::LifecycleState::StaleByDependency { revoked_inputs } => {
+        hharness_context::vocab::LifecycleState::StaleByDependency { revoked_inputs } => {
             assert_eq!(
                 revoked_inputs.as_slice(),
                 std::slice::from_ref(&va2.version_id),

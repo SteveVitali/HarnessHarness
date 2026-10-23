@@ -27,32 +27,32 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use hh_context::compact::{
+use hharness_context::compact::{
     SummarizeInput, SummarizeItem, Summarizer, SummarizerError, SummarizerFailure,
 };
-use hh_context::compact_family::{ProviderCompactInput, ProviderCompaction};
-use hh_context::events::CollectSink;
-use hh_context::memory::{MemoryDraft, MemoryStore, WriteContext};
-use hh_context::plan::ValidityPolicy;
-use hh_context::retrieve::{
+use hharness_context::compact_family::{ProviderCompactInput, ProviderCompaction};
+use hharness_context::events::CollectSink;
+use hharness_context::memory::{MemoryDraft, MemoryStore, WriteContext};
+use hharness_context::plan::ValidityPolicy;
+use hharness_context::retrieve::{
     Embedder, RetrievalBudget, RetrievalIndexes, RetrievalRequest, SlotConstraints,
     SIMILARITY_RERANK,
 };
-use hh_context::vocab::{
+use hharness_context::vocab::{
     ConflictPolicy, Layer, LifecycleStateKind, MemoryContent, MemoryKind, RetrievalQuery,
 };
-use hh_embed::context_adapters::{
+use hharness_embed::context_adapters::{
     AdapterLane, LaneEmbedder, LaneProviderCompaction, LaneSummarizer,
 };
-use hh_embed_schema::errors::EmbedError;
-use hh_hir::leaves::Text;
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_hir::leaves::Text;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::PersistenceScope;
+use hharness_wire::json::Json;
 
 // ── the loopback fake provider (r4_5d's shape — head + body captured) ──
 
@@ -126,7 +126,8 @@ impl FakeProvider {
             if let Some(buf) = self.got.lock().unwrap().as_ref() {
                 let p = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
                 let head = String::from_utf8_lossy(&buf[..p]).to_string();
-                let body = hh_wire::json::parse(&String::from_utf8_lossy(&buf[p + 4..])).unwrap();
+                let body =
+                    hharness_wire::json::parse(&String::from_utf8_lossy(&buf[p + 4..])).unwrap();
                 return (head, body);
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
@@ -805,7 +806,7 @@ impl Embedder for RecordedEmbedder {
 fn load_cache() -> (Json, BTreeMap<String, Vec<i64>>) {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/r4_7b/embedding_cache.json");
-    let doc = hh_wire::json::parse(&std::fs::read_to_string(&path).expect("cache fixture"))
+    let doc = hharness_wire::json::parse(&std::fs::read_to_string(&path).expect("cache fixture"))
         .expect("cache parses");
     let mut vectors = BTreeMap::new();
     let entries = match doc.get("entries") {
@@ -839,7 +840,7 @@ fn benchset_texts() -> Vec<String> {
     files
         .iter()
         .map(|f| {
-            let d = hh_wire::json::parse(
+            let d = hharness_wire::json::parse(
                 &std::fs::read_to_string(root.join(f)).expect("benchset task"),
             )
             .unwrap();
@@ -870,7 +871,7 @@ fn mem_store(texts: &[String]) -> MemoryStore {
                         t,
                         "owner",
                         ProvenanceRecord::minted(
-                            Origin::human("test:author", hh_provenance::HumanRole::Author),
+                            Origin::human("test:author", hharness_provenance::HumanRole::Author),
                             PersistenceScope::Run,
                             i as u64,
                         ),
@@ -914,7 +915,7 @@ fn benchset_retrieval_rerank_over_the_recorded_cache() {
             .unwrap_or_else(|| panic!("cache covers every corpus text: {t}"));
         assert_eq!(v.len(), dim, "uniform dimension");
         // Self-similarity is exact under integer ppm math (I-DET).
-        assert_eq!(hh_context::retrieve::cosine_ppm(v, v), 1_000_000);
+        assert_eq!(hharness_context::retrieve::cosine_ppm(v, v), 1_000_000);
     }
     let embedder = RecordedEmbedder {
         embedder_ref: "profile/embedder-recorded".to_string(),
@@ -924,7 +925,7 @@ fn benchset_retrieval_rerank_over_the_recorded_cache() {
     // The probe is the first corpus instruction verbatim — its own doc
     // must be served among the hits with a perfect self-score.
     let mut sink = CollectSink::default();
-    let (items, report) = hh_context::retrieve::retrieve_indexed(
+    let (items, report) = hharness_context::retrieve::retrieve_indexed(
         &mut store,
         &RetrievalRequest {
             model_call_id: "mc1".to_string(),
@@ -998,13 +999,13 @@ fn armed_lane_serves_similarity_retrieval_through_kernel_memory() {
         json_response(embeddings_doc("m", &[vec!["0.9"]], Json::Null)),
         2,
     );
-    let mut ctx = hh_embed::runtime::KernelContext::for_policy(
+    let mut ctx = hharness_embed::runtime::KernelContext::for_policy(
         "run1",
-        hh_context::policy_family::DEFAULT_POLICY_REF,
+        hharness_context::policy_family::DEFAULT_POLICY_REF,
     )
     .unwrap();
     ctx.adapter_lane = Some(lane("openai-compatible@1", &provider.endpoint, "m", None));
-    if let hh_embed::runtime::KernelStore::Local(store) = &mut ctx.store {
+    if let hharness_embed::runtime::KernelStore::Local(store) = &mut ctx.store {
         let g = store.lease(PersistenceScope::Run);
         let wc = WriteContext {
             context_label: Label::top(),
@@ -1043,8 +1044,8 @@ fn armed_lane_serves_similarity_retrieval_through_kernel_memory() {
         panic!("local store");
     }
     let mut mem =
-        hh_embed::runtime::KernelMemory::new(std::rc::Rc::new(std::cell::RefCell::new(ctx)));
-    use hh_control::driver::MemoryPort;
+        hharness_embed::runtime::KernelMemory::new(std::rc::Rc::new(std::cell::RefCell::new(ctx)));
+    use hharness_control::driver::MemoryPort;
     let evs = mem
         .retrieve(
             &Json::obj([

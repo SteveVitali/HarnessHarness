@@ -1,10 +1,10 @@
 //! R2.6 — the `control_strategy` out-of-process conformance lane:
-//! `hh-plugin-fixture --mode control` hosts the registered `hh-control`
+//! `hh-plugin-fixture --mode control` hosts the registered `hharness-control`
 //! variant impls for real through `hh-helper` (`direct` plumbing — no
 //! sandbox claims) and serves the contract's method set over
 //! `plugin_abi/1` `invoke` ops (`open`/`observe`/`decide`/`terminate`/
 //! `checkpoint`/`restore`), each taking and returning canonical
-//! `hh_control::wire` documents. The suite asserts on the canonical
+//! `hharness_control::wire` documents. The suite asserts on the canonical
 //! records themselves — AC-1's document leg, driven over a real process
 //! boundary:
 //!
@@ -27,18 +27,18 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use hh_control::react;
-use hh_control::strategy::{ConcurrentInput, ControlContext, SteerMode, StrategyParams};
-use hh_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
-use hh_control::wire;
-use hh_embed_schema::plugin_abi::BindParams;
-use hh_ontology::control::{CancelledBy, StopReason};
-use hh_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
-use hh_varhost::{
+use hharness_control::react;
+use hharness_control::strategy::{ConcurrentInput, ControlContext, SteerMode, StrategyParams};
+use hharness_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
+use hharness_control::wire;
+use hharness_embed_schema::plugin_abi::BindParams;
+use hharness_ontology::control::{CancelledBy, StopReason};
+use hharness_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
+use hharness_varhost::{
     spawn, HostError, InvokeOutcome, RecordingPorts, SpawnSpec, VariantHost, VariantPackage,
     VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -51,7 +51,7 @@ fn fixture_bin() -> Option<PathBuf> {
 }
 
 fn helper_present() -> bool {
-    hh_env::helper::helper_binary().is_some()
+    hharness_env::helper::helper_binary().is_some()
 }
 
 fn manifest() -> PluginManifest {
@@ -113,14 +113,14 @@ fn spec(pkg: VariantPackage, exec_args: Vec<String>, tag: &str) -> SpawnSpec {
         package: pkg,
         session_id: format!("control-{tag}-{}", std::process::id()),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: dir,
         exec_args: pinned_args,
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -175,7 +175,7 @@ fn woken_steer(payload_ref: &str) -> Cue {
 /// shape — a `Failed` is a typed answer, not an output).
 fn one_output(
     host: &mut VariantHost<RecordingPorts, VecEvents>,
-    s: &mut hh_varhost::VariantSession,
+    s: &mut hharness_varhost::VariantSession,
     binding: &str,
     op: &str,
     input: Json,
@@ -231,7 +231,7 @@ fn oop_control_steerable_queue_serves_the_contract() {
     let decision = out.get("decision").cloned().unwrap_or(Json::Null);
     let d = wire::decision_from_json(&decision).expect("decide: decision doc decodes");
     match &d.kind {
-        hh_control::vocab::DecisionKind::Propose {
+        hharness_control::vocab::DecisionKind::Propose {
             context_request, ..
         } => {
             assert_eq!(
@@ -355,7 +355,7 @@ fn oop_control_minimal_never_invents_a_steer_interpretation() {
     let decision = out.get("decision").cloned().unwrap_or(Json::Null);
     let d = wire::decision_from_json(&decision).expect("decision decodes");
     match &d.kind {
-        hh_control::vocab::DecisionKind::Propose {
+        hharness_control::vocab::DecisionKind::Propose {
             context_request, ..
         } => {
             assert!(
@@ -416,7 +416,7 @@ fn oop_control_interrupt_is_stop_cancelled() {
     assert!(
         matches!(
             &d.kind,
-            hh_control::vocab::DecisionKind::Stop {
+            hharness_control::vocab::DecisionKind::Stop {
                 proposed_reason: StopReason::Cancelled {
                     by: CancelledBy::Principal
                 },
@@ -466,7 +466,10 @@ fn oop_control_typed_refusals() {
     let InvokeOutcome::Failed(e) = out else {
         panic!("malformed decide: {out:?}")
     };
-    assert_eq!(e, hh_embed_schema::plugin_abi::AbiError::SchemaViolation);
+    assert_eq!(
+        e,
+        hharness_embed_schema::plugin_abi::AbiError::SchemaViolation
+    );
 
     // An op outside the contract's method set — `unhandled_operation`.
     let out = host
@@ -482,7 +485,10 @@ fn oop_control_typed_refusals() {
     let InvokeOutcome::Failed(e) = out else {
         panic!("unknown op: {out:?}")
     };
-    assert_eq!(e, hh_embed_schema::plugin_abi::AbiError::UnhandledOperation);
+    assert_eq!(
+        e,
+        hharness_embed_schema::plugin_abi::AbiError::UnhandledOperation
+    );
 
     // An unregistered variant name — `not_installed` at bind, never a
     // silent substitute.
@@ -492,7 +498,7 @@ fn oop_control_typed_refusals() {
     assert!(
         matches!(
             err,
-            HostError::BindFailed(hh_embed_schema::plugin_abi::BindFailure::NotInstalled)
+            HostError::BindFailed(hharness_embed_schema::plugin_abi::BindFailure::NotInstalled)
         ),
         "unknown variant: {err:?}"
     );

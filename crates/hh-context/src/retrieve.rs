@@ -17,12 +17,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::names::ResolveMode;
-use hh_ledger::views::View;
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_identity::names::ResolveMode;
+use hharness_ledger::views::View;
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::vocab::MemoryContent;
 
@@ -311,7 +311,7 @@ pub struct RetrievalRequest {
     pub budget: RetrievalBudget,
     /// `ranker: RankerRef` — `"deterministic_default"` at C0.
     pub ranker: String,
-    /// `mode` — `Execute | Audit | Reproduce` (`hh-identity`'s — CC7).
+    /// `mode` — `Execute | Audit | Reproduce` (`hharness-identity`'s — CC7).
     pub mode: ResolveMode,
 }
 
@@ -352,7 +352,7 @@ pub struct RetrievedItem {
     /// `provenance` — the item's record.
     pub provenance: ProvenanceRecord,
     /// `label`.
-    pub label: hh_provenance::label::Label,
+    pub label: hharness_provenance::label::Label,
     /// `validity{state, check_ref}` — the lifecycle state + the check's
     /// pointer (`check_ref` = the contract-hash / index member).
     pub validity_state: LifecycleStateKind,
@@ -369,7 +369,7 @@ pub struct RetrievedItem {
     /// The memory kind (`None` for artifacts).
     pub memory_kind: Option<MemoryKind>,
     /// `scope`.
-    pub scope: hh_provenance::PersistenceScope,
+    pub scope: hharness_provenance::PersistenceScope,
 }
 
 /// `rank_evidence{ranker_ref, score, features[]}` (§5c.3).
@@ -557,7 +557,7 @@ impl std::error::Error for RetrievalError {}
 /// `LexicalIndex` — the C0 inverted index (§5c.3; the simplest executable
 /// `lexical` answer: `term → sorted [version_id]` postings + per-version
 /// token counts over the store at `until_seq`). Derived, never authored —
-/// stamped through `hh-ledger`'s `View` (`ViewKind::LexicalIndex`; one view
+/// stamped through `hharness-ledger`'s `View` (`ViewKind::LexicalIndex`; one view
 /// shape, CC7). Rebuild-equal under the same fold order.
 #[derive(Debug, Clone)]
 pub struct LexicalIndex {
@@ -641,7 +641,7 @@ pub fn lexical_index(store: &MemoryStore, until_seq: u64) -> LexicalIndex {
     )]);
     let view = View::stamped(
         &store.store_id,
-        hh_ledger::views::ViewKind::LexicalIndex,
+        hharness_ledger::views::ViewKind::LexicalIndex,
         Some(until_seq),
         payload,
     );
@@ -796,7 +796,7 @@ pub fn structural_index(store: &MemoryStore, until_seq: u64) -> StructuralIndex 
     ]);
     let view = View::stamped(
         &store.store_id,
-        hh_ledger::views::ViewKind::StructuralIndex,
+        hharness_ledger::views::ViewKind::StructuralIndex,
         Some(until_seq),
         payload,
     );
@@ -973,7 +973,7 @@ pub fn retrieve_indexed(
         }
     }
     let request_hash =
-        hh_identity::idp::idp_id(REQUEST_IDP, req_json(req).to_canonical_string().as_bytes());
+        hharness_identity::idp::idp_id(REQUEST_IDP, req_json(req).to_canonical_string().as_bytes());
     // (1) enumerate — the raw hit set per layer.
     let mut raw: Vec<(String, Layer)> = Vec::new();
     for layer in &req.layers {
@@ -1008,8 +1008,8 @@ pub fn retrieve_indexed(
                 version_id: id.clone(),
                 authority: a.label.authority,
                 readers: a.label.readers.clone(),
-                scope: hh_provenance::PersistenceScope::Run, // layer-A artifacts are run-scoped
-                state: LifecycleStateKind::Valid,            // artifacts carry no contract at C0
+                scope: hharness_provenance::PersistenceScope::Run, // layer-A artifacts are run-scoped
+                state: LifecycleStateKind::Valid, // artifacts carry no contract at C0
                 stale_since: None,
                 conflict_set_ref: None,
             });
@@ -1154,7 +1154,7 @@ pub fn retrieve_indexed(
                 handle: None,
                 conflict_set_ref: None,
                 memory_kind: None,
-                scope: hh_provenance::PersistenceScope::Run,
+                scope: hharness_provenance::PersistenceScope::Run,
             });
         }
     }
@@ -1571,7 +1571,7 @@ fn layer_of(v: &MemoryVersion) -> Layer {
     match v.kind {
         MemoryKind::ProcedurePointer => Layer::Procedural,
         MemoryKind::Decision | MemoryKind::ToolResult => Layer::Session,
-        _ if v.scope == hh_provenance::PersistenceScope::Session => Layer::Session,
+        _ if v.scope == hharness_provenance::PersistenceScope::Session => Layer::Session,
         _ => Layer::Episodic,
     }
 }
@@ -1799,7 +1799,7 @@ pub fn as_candidate(
         source_seq,
         label: item.label.clone(),
         provenance: item.provenance.clone(),
-        validity: hh_hir::records::Validity {
+        validity: hharness_hir::records::Validity {
             from: 0,
             until: None,
             condition: None,
@@ -2190,7 +2190,7 @@ pub fn artifact_candidate(
         source_seq,
         label: a.label.clone(),
         provenance,
-        validity: hh_hir::records::Validity {
+        validity: hharness_hir::records::Validity {
             from: 0,
             until: None,
             condition: None,

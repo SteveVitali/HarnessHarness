@@ -27,8 +27,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::compliance::{Detector, NaReason};
 use crate::config::{Configuration, Ref};
@@ -42,7 +42,7 @@ use crate::participant::{Granularity, Observability};
 
 /// `charged_to ∈ {subject, instrument}` (CF-109) — who a measurement/verdict's
 /// spend is billed against. Moved here from `hh-hir::kinds` (the canonical
-/// definition); `hh-hir` and `hh-verification` re-export it.
+/// definition); `hharness-hir` and `hharness-verification` re-export it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChargedTo {
     /// Charged to the subject under test.
@@ -1063,7 +1063,7 @@ impl MediationRequirement {
 /// `ModelRole` — the closed role vocabulary a `model_snapshot` factor binds
 /// (§3.2.3 per-role binding; ADR-0121 D2/CF-468: `role? ∈ ModelRole` on the
 /// experimental-factor record). Moved here from `hh-compiler::profile` (the
-/// canonical definition); `hh-compiler` re-exports it — one spelling (CC7).
+/// canonical definition); `hharness-compiler` re-exports it — one spelling (CC7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ModelRole {
     /// The main loop model.
@@ -1093,7 +1093,7 @@ impl ModelRole {
         }
     }
 
-    /// `name` alias — the `hh-compiler` spelling of the same accessor.
+    /// `name` alias — the `hharness-compiler` spelling of the same accessor.
     pub fn name(self) -> &'static str {
         self.as_str()
     }
@@ -1116,7 +1116,7 @@ impl ModelRole {
 /// `Pattern` grammar: `exact(id) | prefix(id) | range(family, lo?, hi?) | any`.
 /// Never a regex or a substring test outside this grammar (AC-R-2.3.3-2).
 /// The canonical definition moved here at R2.18 (the document-side
-/// `ProfileConstraint` narrowing spells the same grammar — `hh-compiler`
+/// `ProfileConstraint` narrowing spells the same grammar — `hharness-compiler`
 /// re-exports it; one spelling, CC7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VersionPattern {
@@ -1853,7 +1853,7 @@ pub struct PreRegistration {
     /// `expired_used` run may headline a `ComparisonReport` only when the
     /// design declares the purpose; ADR-0126; R2.17 — additive, defaults
     /// `false`). Admissibility under the operative `DebtPolicy` is the
-    /// manager's gate (`dead_weight_designs_allowed` — `hh-debt`).
+    /// manager's gate (`dead_weight_designs_allowed` — `hharness-debt`).
     pub dead_weight_purpose: bool,
 }
 
@@ -2134,7 +2134,7 @@ pub enum ArmError {
 
 /// Whether `version_id` is a pinned content address (`<algorithm>:<hex>` —
 /// the idp/N form). A selector or display name is unsealed. (CC1 — the one
-/// spelling of the §5h.2 §2 pin check; `hh-debt` reuses it for the
+/// spelling of the §5h.2 §2 pin check; `hharness-debt` reuses it for the
 /// `artifact_sealed` context member, R2.17.)
 pub fn is_pinned_version_id(version_id: &str) -> bool {
     match version_id.split_once(':') {
@@ -3214,7 +3214,7 @@ pub(crate) fn str_vec_at(
 mod tests {
     use super::*;
     use crate::control::StopReason;
-    use hh_provenance::authority::AuthorityClass;
+    use hharness_provenance::authority::AuthorityClass;
 
     fn prov() -> ProvenanceRecord {
         ProvenanceRecord::kernel("eval:test", 1)

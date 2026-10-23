@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::policy::IsolationClass;
 
@@ -84,8 +84,8 @@ impl EnforcementEvidence {
 
 /// `LoweringLoss.kind ∈ {no_slot, hint_only, untyped_slot, narrowed,
 /// truncated}` — the §3.2.5 `LossClass` closed set, spelled locally
-/// (ADR-0341 D1: the dependency order forbids `hh-containment →
-/// hh-compiler`; the vocabulary is the spec's, the codec is each layer's).
+/// (ADR-0341 D1: the dependency order forbids `hharness-containment →
+/// hharness-compiler`; the vocabulary is the spec's, the codec is each layer's).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LossKind {
     /// The member exists; the backend has no enforcement slot for it.

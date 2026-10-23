@@ -1,4 +1,4 @@
-//! `hh-mcp` — the Stage-3 fixture MCP plane (spec §7.3; R-2.11.3⁰;
+//! `hharness-mcp` — the Stage-3 fixture MCP plane (spec §7.3; R-2.11.3⁰;
 //! ticket S3.1; ADR-0097 D7/ADR-0173/ADR-0174) plus the R-2.5.4⁰
 //! protocol-edge slice (§5d.4; ticket S3.9; ADR-0097 D2/ADR-0099).
 //!

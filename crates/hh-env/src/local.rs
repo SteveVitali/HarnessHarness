@@ -11,9 +11,9 @@ use std::collections::BTreeSet;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use hh_containment::policy::IsolationClass;
-use hh_hir::kinds::EffectDomain;
-use hh_wire::json::Json;
+use hharness_containment::policy::IsolationClass;
+use hharness_hir::kinds::EffectDomain;
+use hharness_wire::json::Json;
 
 use crate::capture::CaptureKind;
 use crate::errors::EnvError;

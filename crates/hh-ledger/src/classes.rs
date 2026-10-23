@@ -2,7 +2,7 @@
 //! never producer-local code, stating per class `durability`, the inline offload
 //! threshold, the minimum `observability_level`, the audit-grade flag (ADR-0066 Rule P),
 //! the kernel-origin rule (§5a.1 §5 "origin = kernel on lifecycle/environment rows"),
-//! provenance mandatory-ness (ADR-0035 §4 via [`hh_provenance::required_provenance`]
+//! provenance mandatory-ness (ADR-0035 §4 via [`hharness_provenance::required_provenance`]
 //! where the spellings coincide, plus the class-declared flag), ephemeral payload
 //! members, and the scope open/close rules (§5a.1 §3 "scope ids refer to opened
 //! scopes").
@@ -23,10 +23,10 @@
 //! bookkeeping that never leaves the native presentation — declared `no_slot`
 //! in the mechanism's `LoweringLossReport`). The table is **data**: naming a
 //! hosted kind here creates no dependency edge to the hosting tier (CC6 —
-//! `hh-hosting` consumes this column; nothing in the base consumes `hh-hosting`).
+//! `hharness-hosting` consumes this column; nothing in the base consumes `hharness-hosting`).
 
 #[cfg(test)]
-use hh_provenance::ProvenanceEventKind;
+use hharness_provenance::ProvenanceEventKind;
 
 /// Whether the §8.1 #7 mandatory-provenance table covers this class spelling
 /// (`security.permission.granted`, `security.label.*` — exact or `*` suffix match).
@@ -448,7 +448,7 @@ const DECIDED_FIELDS: &[AuditField] = &[
     af("wait_ms"),
     af("attempt_no"),
     afb("taint", AUDIT_FIELD_LIST_BYTES),
-    // The budget-path and baseline emitters' coordinates (hh-budget's
+    // The budget-path and baseline emitters' coordinates (hharness-budget's
     // approvals-exhaustion `deny`; hh-baseline's headless `allow`).
     af("budget_id"),
     af("value"),
@@ -2418,7 +2418,7 @@ pub fn registered_classes() -> impl Iterator<Item = &'static ClassSpec> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ontology::planes::EventFamily;
+    use hharness_ontology::planes::EventFamily;
     use std::collections::BTreeSet;
 
     #[test]
@@ -2657,7 +2657,7 @@ mod tests {
             // The disposition vocabulary is closed: `"none"`/`"hint"`/
             // `"passthrough"` or a typed `hh-hosting/1` kind spelling
             // (a kind may share a native class's spelling — e.g.
-            // `model.call.completed` is both — the `hh-hosting` crate owns
+            // `model.call.completed` is both — the `hharness-hosting` crate owns
             // the closed kind list).
             let _ = hosted_lowering(spec.class);
         }

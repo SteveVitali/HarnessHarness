@@ -4,7 +4,7 @@
 //! `ChildProcess::Hosted(Ref<OpaqueProcess>)` names an *opaque* participant:
 //! the kernel never resolves the record itself — resolution, session
 //! mechanics and verb dispatch live behind [`HostedPlane`], the JSON verb
-//! seam the hosting side (hh-hosting's `HostingService`, or a test double)
+//! seam the hosting side (hharness-hosting's `HostingService`, or a test double)
 //! implements. The kernel's view is exactly three verbs — `open_child` at
 //! spawn, `send_verb` while the child runs, `cancel` at the boundary.
 //!
@@ -16,7 +16,7 @@
 //! and never granted (ADR-0053 D-4). The kernel forwards typed refusals; it
 //! never upgrades them.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// What `open_child` returns when the plane admits the hosted child.
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +24,7 @@ pub struct HostedOpen {
     /// The plane-side session ref — opaque to the kernel, the boundary
     /// handle every later `send_verb`/`cancel` names.
     pub session_ref: String,
-    /// The resolved hosting mechanism (hh-ontology's spelling —
+    /// The resolved hosting mechanism (hharness-ontology's spelling —
     /// `session_abi`/`model_boundary_intercept`/`container_installed`).
     /// Lands on the child manifest's `hosting_mechanism`.
     pub hosting_mechanism: String,

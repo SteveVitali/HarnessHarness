@@ -6,9 +6,9 @@
 //! primary dims plus the derived bound names (a `tokens.blended` ceiling evaluates
 //! over its components; ADR-0236 D-2).
 
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::BudgetError;
@@ -295,7 +295,7 @@ impl BudgetSpec {
     pub fn validate(&self) -> Result<(), BudgetError> {
         for (key, rule) in &self.dimensions {
             if DimensionId::parse(key.as_str()).is_none()
-                && hh_ontology::dimensions::DerivedDimension::parse(key.as_str()).is_none()
+                && hharness_ontology::dimensions::DerivedDimension::parse(key.as_str()).is_none()
             {
                 return Err(BudgetError::DimensionUnknown {
                     dimension: key.as_str().to_string(),
@@ -533,7 +533,7 @@ impl Reservation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ontology::dimensions::DerivedDimension;
+    use hharness_ontology::dimensions::DerivedDimension;
 
     fn spec(caps: &[(DimensionKey, i64)]) -> BudgetSpec {
         BudgetSpec::hard_caps(BudgetMode::Pool, caps)
@@ -578,7 +578,7 @@ mod tests {
             Err(BudgetError::SoftAboveHard { .. })
         ));
         // Unknown names can't even enter via from_json.
-        let j = hh_wire::json::parse(
+        let j = hharness_wire::json::parse(
             r#"{"dimensions":{"gpu_hours":{"hard":{"limit":1,"unit":"h"}}},"mode":"pool"}"#,
         )
         .unwrap();

@@ -1,4 +1,4 @@
-//! Shared fixtures for the `hh-compiler` suite (spec §3.2; ticket S1.10; R-2.1.3).
+//! Shared fixtures for the `hharness-compiler` suite (spec §3.2; ticket S1.10; R-2.1.3).
 //!
 //! The fixtures reuse the S1.9 shapes: a minimal valid document
 //! (`{rule, budget, perm, agent}` + the Stage-1 assembly), a seeded registry (the two
@@ -10,24 +10,24 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::grammar::Assembly;
-use hh_hir::document::{HirDocument, Node, SealedDefinition};
-use hh_hir::kinds::{EntityKind, ToolEffects, ValidatorKind};
-use hh_hir::leaves::Text;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::names::ResolveMode;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::kinds::{Cardinality, Placement};
-use hh_registry::records::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::grammar::Assembly;
+use hharness_hir::document::{HirDocument, Node, SealedDefinition};
+use hharness_hir::kinds::{EntityKind, ToolEffects, ValidatorKind};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::kinds::{Cardinality, Placement};
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ContractOperation, Implementation, RegistryRecord, VariantRecord,
 };
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
-use hh_compiler::link::{TargetSpec, VariantView};
-use hh_compiler::profile::{
+use hharness_compiler::link::{TargetSpec, VariantView};
+use hharness_compiler::profile::{
     DebtStatus, ExpiryCondition, ExpiryKind, ModelProfile, ModelRole, ProfileCompatibility,
     ProfileDebtRecord, ProfileRule, ProfileRuleKind, ProfileSelector, ProfileView, VersionPattern,
 };
@@ -113,14 +113,18 @@ pub fn conditioned_rule_node(
 
 /// A complete §3.1 `AssumptionDebtRecord`.
 #[allow(dead_code)]
-pub fn complete_debt(rule_id: &str, status: hh_hir::DebtStatus, seq: u64) -> AssumptionDebtRecord {
+pub fn complete_debt(
+    rule_id: &str,
+    status: hharness_hir::DebtStatus,
+    seq: u64,
+) -> AssumptionDebtRecord {
     AssumptionDebtRecord {
         rule_id: rule_id.to_string(),
         hypothesis: text("the assumption holds while the model family does", seq),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
-        owner: hh_hir::OwnerRef::principal("test:owner"),
-        expiry_condition: hh_hir::ExpiryCondition {
-            kind: hh_hir::ExpiryKind::Date,
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hharness_hir::OwnerRef::principal("test:owner"),
+        expiry_condition: hharness_hir::ExpiryCondition {
+            kind: hharness_hir::ExpiryKind::Date,
             value: Some("2099-01-01".to_string()),
         },
         removal_test_ref: "sha256:test".to_string(),
@@ -129,10 +133,10 @@ pub fn complete_debt(rule_id: &str, status: hh_hir::DebtStatus, seq: u64) -> Ass
         // home (DebtHomes/1 id 1: `debt_class` + `scope.model_selectors` —
         // `needs_model_scope` — are required fields there; the seal-time
         // `validate_for_home` battery enforces them).
-        debt_class: Some(hh_hir::DebtClass::Hypothesized),
+        debt_class: Some(hharness_hir::DebtClass::Hypothesized),
         hypothesis_typed: None,
-        scope: Some(hh_hir::DebtScope {
-            model_selectors: vec![hh_hir::ModelSelector::Exact {
+        scope: Some(hharness_hir::DebtScope {
+            model_selectors: vec![hharness_hir::ModelSelector::Exact {
                 model_id: "test:model".to_string(),
             }],
             ..Default::default()
@@ -140,10 +144,10 @@ pub fn complete_debt(rule_id: &str, status: hh_hir::DebtStatus, seq: u64) -> Ass
         expiry: None,
         runway_ms: None,
         revalidation: None,
-        removal_test: Some(hh_hir::RemovalTest {
-            kind: hh_hir::RemovalTestKind::Inspection,
+        removal_test: Some(hharness_hir::RemovalTest {
+            kind: hharness_hir::RemovalTestKind::Inspection,
             criteria: Some("human inspection".into()),
-            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+            ..hharness_hir::RemovalTest::new(hharness_hir::RemovalTestKind::Inspection)
         }),
         created_by: None,
         created_at: None,
@@ -462,7 +466,7 @@ pub fn variant_record(
         version_label: Some("1.0.0".to_string()),
         param_schema: BTreeMap::new(),
         implementation: Implementation {
-            content: hh_identity::idp::address(
+            content: hharness_identity::idp::address(
                 format!("impl-{variant_id}").as_bytes(),
                 "application/octet-stream",
             ),
@@ -545,8 +549,8 @@ pub fn resolve_env<'a>(
     store: &'a mut RegistryStore,
     catalog: &'a dyn ClassCatalog,
     mode: ResolveMode,
-) -> hh_assembly::resolve::ResolveEnv<'a> {
-    hh_assembly::resolve::ResolveEnv {
+) -> hharness_assembly::resolve::ResolveEnv<'a> {
+    hharness_assembly::resolve::ResolveEnv {
         registry: store,
         catalog,
         snapshot_id: None,
@@ -573,10 +577,10 @@ pub fn sealed_doc_with(
     extra: Vec<(RegistryRecord, &str, &str)>,
 ) -> (RegistryStore, SealedDefinition, BTreeMap<String, String>) {
     let (mut store, vids) = seeded_store_with(tag, conditioned, extra);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     (store, sealed, vids)
 }
@@ -588,7 +592,7 @@ pub fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
     ProfileDebtRecord {
         rule_id: rule_id.to_string(),
         hypothesis: "the model honours the declared contract".to_string(),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
         owner: "test:owner".to_string(),
         reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
@@ -596,10 +600,10 @@ pub fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
             value: Some("2099-01-01".to_string()),
         },
         removal_test_ref: "sha256:test".to_string(),
-        removal_test: Some(hh_hir::RemovalTest {
-            kind: hh_hir::RemovalTestKind::Inspection,
+        removal_test: Some(hharness_hir::RemovalTest {
+            kind: hharness_hir::RemovalTestKind::Inspection,
             criteria: Some("human inspection".into()),
-            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+            ..hharness_hir::RemovalTest::new(hharness_hir::RemovalTestKind::Inspection)
         }),
         status,
         debt_class: None,
@@ -648,7 +652,7 @@ pub fn profile_with(id: &str, version: &str, rules: Vec<ProfileRule>) -> ModelPr
         },
         tests: Json::obj([]),
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
@@ -669,8 +673,8 @@ pub fn rule(
         debt: profile_debt(rule_id, status),
         scope: None,
         supersedes: None,
-        compliance: hh_compiler::profile::Compliance {
-            detector_class: hh_compiler::profile::ComplianceDetector::None,
+        compliance: hharness_compiler::profile::Compliance {
+            detector_class: hharness_compiler::profile::ComplianceDetector::None,
             followed_predicate_ref: None,
         },
     }
@@ -679,7 +683,7 @@ pub fn rule(
 /// A `ProfileView` over a map (coordinate or content-hash lookup — the bound view).
 pub struct MapProfileView {
     profiles: BTreeMap<String, ModelProfile>,
-    reports: BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+    reports: BTreeMap<String, hharness_compiler::profile_test::ProfileTestReport>,
 }
 
 impl MapProfileView {
@@ -693,9 +697,11 @@ impl MapProfileView {
         let mut m = BTreeMap::new();
         let mut reports = BTreeMap::new();
         for p in profiles {
-            let coord = hh_compiler::profile::profile_coordinate(&p);
-            let report =
-                hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+            let coord = hharness_compiler::profile::profile_coordinate(&p);
+            let report = hharness_compiler::profile_test::ProfileTestReport::passing_for(
+                &coord,
+                &p.content_hash,
+            );
             reports.insert(coord.clone(), report.clone());
             reports.insert(p.content_hash.clone(), report);
             m.insert(coord, p.clone());
@@ -713,7 +719,10 @@ impl MapProfileView {
     pub fn untested(profiles: Vec<ModelProfile>) -> MapProfileView {
         let mut m = BTreeMap::new();
         for p in profiles {
-            m.insert(hh_compiler::profile::profile_coordinate(&p), p.clone());
+            m.insert(
+                hharness_compiler::profile::profile_coordinate(&p),
+                p.clone(),
+            );
             m.insert(p.content_hash.clone(), p);
         }
         MapProfileView {
@@ -728,11 +737,11 @@ impl MapProfileView {
     #[allow(dead_code)] // exercised by `profile_test.rs` only
     pub fn with_report(
         mut self,
-        report: hh_compiler::profile_test::ProfileTestReport,
+        report: hharness_compiler::profile_test::ProfileTestReport,
         profile: &ModelProfile,
     ) -> MapProfileView {
         self.reports.insert(
-            hh_compiler::profile::profile_coordinate(profile),
+            hharness_compiler::profile::profile_coordinate(profile),
             report.clone(),
         );
         self.reports.insert(profile.content_hash.clone(), report);
@@ -748,7 +757,7 @@ impl ProfileView for MapProfileView {
     fn test_report(
         &self,
         coordinate: &str,
-    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+    ) -> Option<hharness_compiler::profile_test::ProfileTestReport> {
         self.reports.get(coordinate).cloned()
     }
 }

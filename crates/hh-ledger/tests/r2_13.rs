@@ -17,22 +17,22 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_identity::rotation::RotationPlan;
-use hh_ledger::audit::{
+use hharness_identity::rotation::RotationPlan;
+use hharness_ledger::audit::{
     check_witness_cosignatures, Auditor, CheckpointKind, FixedSigner, KeyTable, NamedSigner,
     WitnessSigner,
 };
-use hh_ledger::errors::{LedgerError, MissingReason, TamperedKind};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest, WitnessDecl, WitnessPolicy};
-use hh_ledger::receipt::{Receipt, RECEIPT_STATUS_UNVERIFIED};
-use hh_ledger::rotation::rotate_witnessed;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::tree;
-use hh_ledger::views::ViewKind;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::errors::{LedgerError, MissingReason, TamperedKind};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest, WitnessDecl, WitnessPolicy};
+use hharness_ledger::receipt::{Receipt, RECEIPT_STATUS_UNVERIFIED};
+use hharness_ledger::rotation::rotate_witnessed;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::tree;
+use hharness_ledger::views::ViewKind;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -347,8 +347,8 @@ fn witnessed_checkpoint_cosigns_the_same_note_and_verifies() {
     for c in &claim.witness_cosignatures {
         let kid = c.get("key_id").and_then(Json::as_str).unwrap();
         let ts = c.get("timestamp").and_then(Json::as_int).unwrap() as u64;
-        let sig =
-            hh_ledger::audit::parse_sig(c.get("sig").and_then(Json::as_str).unwrap()).unwrap();
+        let sig = hharness_ledger::audit::parse_sig(c.get("sig").and_then(Json::as_str).unwrap())
+            .unwrap();
         let key = match kid {
             "wit-key-1" => b"witness-key-1".to_vec(),
             "wit-key-2" => b"witness-key-2".to_vec(),
@@ -356,7 +356,7 @@ fn witnessed_checkpoint_cosigns_the_same_note_and_verifies() {
         };
         let preimage = tree::witness_sig_preimage(ts, &env.payload);
         assert_eq!(
-            hh_wire::sha256::hmac_sha256(&key, &preimage).to_vec(),
+            hharness_wire::sha256::hmac_sha256(&key, &preimage).to_vec(),
             sig,
             "cosignature must cover timestamp ‖ unsigned note"
         );
@@ -623,7 +623,7 @@ fn cosignature_check_defects_map_honestly() {
     let forged = tree::parse_checkpoint(&forged.payload).unwrap();
     assert!(matches!(
         check_witness_cosignatures(&forged, Some(&policy), Some(&ktab)),
-        Err(hh_ledger::audit::WitnessDefect::Undeclared(_))
+        Err(hharness_ledger::audit::WitnessDefect::Undeclared(_))
     ));
 
     // Quorum unmet — drop one cosignature.
@@ -637,7 +637,7 @@ fn cosignature_check_defects_map_honestly() {
     let short = tree::parse_checkpoint(&short.payload).unwrap();
     assert!(matches!(
         check_witness_cosignatures(&short, Some(&policy), Some(&ktab)),
-        Err(hh_ledger::audit::WitnessDefect::QuorumUnmet {
+        Err(hharness_ledger::audit::WitnessDefect::QuorumUnmet {
             required: 2,
             satisfied: 1
         })
@@ -654,7 +654,7 @@ fn cosignature_check_defects_map_honestly() {
     let malformed = tree::parse_checkpoint(&malformed.payload).unwrap();
     assert!(matches!(
         check_witness_cosignatures(&malformed, Some(&policy), Some(&ktab)),
-        Err(hh_ledger::audit::WitnessDefect::Malformed(_))
+        Err(hharness_ledger::audit::WitnessDefect::Malformed(_))
     ));
 }
 
@@ -684,7 +684,7 @@ fn receipt_lifts_durable_unverified_and_binds_the_effect() {
     );
     assert_eq!(
         env.provenance.as_ref().map(|p| p.authority),
-        Some(hh_provenance::AuthorityClass::Kernel)
+        Some(hharness_provenance::AuthorityClass::Kernel)
     );
 
     // Idempotence — the same receipt_id + identical members returns the
@@ -824,15 +824,18 @@ fn gc_and_redact_stay_durable_before_delete_alongside_new_rows() {
     // Redact a second blob — the durable `lifecycle.ledger.redacted` row.
     let secret = s.put_blob(b"secret", "text/plain").unwrap();
     let endorser = ProvenanceRecord::minted(
-        hh_provenance::Origin::human("human:alice", hh_provenance::HumanRole::Principal),
-        hh_provenance::PersistenceScope::Run,
+        hharness_provenance::Origin::human(
+            "human:alice",
+            hharness_provenance::HumanRole::Principal,
+        ),
+        hharness_provenance::PersistenceScope::Run,
         0,
     );
     let red_env = s
         .redact(
             &run,
             &lease,
-            vec![hh_ledger::store::RedactTarget::Address(secret.id())],
+            vec![hharness_ledger::store::RedactTarget::Address(secret.id())],
             "subject_request",
             &endorser,
             "approval",
@@ -860,8 +863,8 @@ fn gc_and_redact_stay_durable_before_delete_alongside_new_rows() {
     );
 }
 
-fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
-    hh_ledger::retention::RetentionPolicy {
+fn gc_policy(policy_ref: &str) -> hharness_ledger::retention::RetentionPolicy {
+    hharness_ledger::retention::RetentionPolicy {
         policy_ref: policy_ref.to_string(),
         blob_residency_ms: 0,
         bundle_retention_ms: 0,

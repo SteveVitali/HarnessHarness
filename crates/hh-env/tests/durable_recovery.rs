@@ -17,20 +17,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::events::EventMinter;
-use hh_env::handle::{HandleState, OnLoss, Roots};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_env::recovery::{EnvironmentVerdict, HealOutcome, HealingPolicy, LostCause, OnLost};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_wire::json::Json;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::events::EventMinter;
+use hharness_env::handle::{HandleState, OnLoss, Roots};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_env::recovery::{EnvironmentVerdict, HealOutcome, HealingPolicy, LostCause, OnLost};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -63,7 +63,7 @@ fn workspace(tag: &str) -> PathBuf {
     p
 }
 
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -71,7 +71,7 @@ fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolic
         read_only_subpaths: vec![],
         protected_metadata_names: vec![],
     });
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
     p.net.mode = NetMode::None;
     p.compute_ids();
     p
@@ -94,8 +94,8 @@ fn test_record(class: EnvironmentClass, image: ImageRef) -> EnvironmentRecord {
     }
 }
 
-fn test_ca() -> hh_identity::idp::ContentAddress {
-    hh_identity::idp::address(b"test-image-bytes", "application/octet-stream")
+fn test_ca() -> hharness_identity::idp::ContentAddress {
+    hharness_identity::idp::address(b"test-image-bytes", "application/octet-stream")
 }
 
 /// `provision + attach(Ep2Model, fail-closed)` → a `ready` handle, with the
@@ -178,7 +178,10 @@ fn eff(id: &str, class: &str, effect_id: &str, payload: Json, fencing: u64) -> E
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -378,7 +381,7 @@ fn ac_2_2_3_9_heal_reprovision_mints_successor_and_lost_items_ref() {
             assert!(lost_items_ref.starts_with("sha256:"));
             // The lost-items blob resolves — `authority = environment`
             // content the driver's next context carries.
-            let ca = hh_identity::idp::ContentAddress {
+            let ca = hharness_identity::idp::ContentAddress {
                 idp: "idp/1",
                 algorithm: "sha256",
                 digest: lost_items_ref.trim_start_matches("sha256:").to_string(),
@@ -568,7 +571,8 @@ fn ac_2_2_4_9_restore_after_gc_is_snapshot_missing() {
     let (_rec, snap) = driver.fs_tree_snapshot(&mut store, &lease, &env).unwrap();
     // GC the file's blob — the restore must refuse `SnapshotMissing` with
     // the verifiable hash, never materialise a partial tree.
-    let digest = hh_identity::idp::address(b"persistent-bytes", "application/octet-stream").digest;
+    let digest =
+        hharness_identity::idp::address(b"persistent-bytes", "application/octet-stream").digest;
     std::fs::remove_file(store.root().join("blobs").join(&digest)).unwrap();
     let err = driver.fs_tree_restore(&store, &env, &snap).unwrap_err();
     match err {
@@ -626,9 +630,9 @@ fn ac_2_2_3_14_preserve_until_exceeds_writer_ttl_plus_grace() {
     let m = store.manifest(&run).unwrap();
     let need = m.lease_ttl.writer_ms + m.grace_ms;
     assert!(
-        hh_env::driver::PRESERVE_UNTIL_TTL_MS >= need,
+        hharness_env::driver::PRESERVE_UNTIL_TTL_MS >= need,
         "preserve_until {} < writer_ttl {} + grace {}",
-        hh_env::driver::PRESERVE_UNTIL_TTL_MS,
+        hharness_env::driver::PRESERVE_UNTIL_TTL_MS,
         m.lease_ttl.writer_ms,
         m.grace_ms
     );

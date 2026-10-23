@@ -30,9 +30,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::records::Grant;
-use hh_hir::refs::{Ref, RefVersion};
-use hh_wire::json::Json;
+use hharness_hir::records::Grant;
+use hharness_hir::refs::{Ref, RefVersion};
+use hharness_wire::json::Json;
 
 use crate::admit::{unreachable_permissions, UnreachableGrant};
 use crate::backend::ContainmentBackend;

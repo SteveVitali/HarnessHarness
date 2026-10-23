@@ -1,4 +1,4 @@
-//! `hh-compiler` R3.5 acceptance — the tool-exposure residual (ticket R3.5;
+//! `hharness-compiler` R3.5 acceptance — the tool-exposure residual (ticket R3.5;
 //! BL-16 / DF-S1.17-1; ADR-0272 revisit legs; AC-R-2.5.2-12's profile half):
 //!
 //! * `provider_tool_api` deferral flags — `deferred_tools`/`tool_search` are
@@ -22,20 +22,20 @@ mod common;
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::exposure::{
+use hharness_compiler::compiler::compile;
+use hharness_compiler::exposure::{
     build_catalog, sync_source, AdoptOutcome, Catalog, CatalogSource, DriftPolicy, SourceState,
     SyncTrigger,
 };
-use hh_compiler::link::TargetSpec;
-use hh_compiler::profile::{
+use hharness_compiler::link::TargetSpec;
+use hharness_compiler::profile::{
     minimal_profiles, profile_coordinate, profile_identity, CapabilityState, ModelProfile,
 };
-use hh_compiler::target::PROVIDER_ARTEFACT_DIALECT;
-use hh_compiler::CompileInputs;
-use hh_hir::records::{AgentProcessBody, KindRecord, ProcedureStep};
-use hh_hir::refs::ProfileRef;
-use hh_wire::json::Json;
+use hharness_compiler::target::PROVIDER_ARTEFACT_DIALECT;
+use hharness_compiler::CompileInputs;
+use hharness_hir::records::{AgentProcessBody, KindRecord, ProcedureStep};
+use hharness_hir::refs::ProfileRef;
+use hharness_wire::json::Json;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ fn with_suite(profile: &ModelProfile, suite: Json) -> ModelProfile {
 
 /// `edit_file` ({path, edits}) — the capability the two minimal profiles
 /// shape differently (the s3_9 fixture shape).
-fn edit_doc() -> hh_hir::document::HirDocument {
+fn edit_doc() -> hharness_hir::document::HirDocument {
     let mut doc = doc_with(&stage1_assembly());
     for n in doc.nodes.iter_mut() {
         if let KindRecord::AgentProcess(ap) = &mut n.semantic {
@@ -149,10 +149,10 @@ fn edit_doc() -> hh_hir::document::HirDocument {
 
 /// The doc with `edit_file` admitting `{direct, deferred}` (a deferred-
 /// admitting surface needs a discovery capability at seal — I-DISCOVERY).
-fn edit_doc_deferrable() -> hh_hir::document::HirDocument {
+fn edit_doc_deferrable() -> hharness_hir::document::HirDocument {
     let mut doc = edit_doc();
     for n in doc.nodes.iter_mut() {
-        if let Some(hh_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
+        if let Some(hharness_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
             if n.version.semantic_id.as_deref() == Some("test:edit_file") {
                 ts.exposure_mode = Json::obj([(
                     "admitted_modes",
@@ -170,12 +170,12 @@ fn edit_doc_deferrable() -> hh_hir::document::HirDocument {
 }
 
 fn compile_provider(
-    sealed: &hh_hir::SealedDefinition,
-    store: &hh_registry::RegistryStore,
+    sealed: &hharness_hir::SealedDefinition,
+    store: &hharness_registry::RegistryStore,
     profile: &ModelProfile,
-) -> hh_compiler::seal::CompiledBundle {
+) -> hharness_compiler::seal::CompiledBundle {
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     compile(
         &CompileInputs {
             sealed: sealed.clone(),
@@ -193,7 +193,7 @@ fn compile_provider(
     .expect("compile")
 }
 
-fn provider_artefact(bundle: &hh_compiler::seal::CompiledBundle) -> &Json {
+fn provider_artefact(bundle: &hharness_compiler::seal::CompiledBundle) -> &Json {
     &bundle.target_artefacts["provider_tool_api"]
 }
 
@@ -307,8 +307,11 @@ fn r3_5_deferrable_under_unknown_declares_no_slot_loss() {
         .iter()
         .find(|e| e.field == "deferral.patch__edit_file")
         .expect("the deferral leg declares its loss");
-    assert_eq!(loss.class, hh_compiler::lcd::LossKind::NoSlot);
-    assert_eq!(loss.severity, hh_compiler::lcd::LossSeverity::Narrowed);
+    assert_eq!(loss.class, hharness_compiler::lcd::LossKind::NoSlot);
+    assert_eq!(
+        loss.severity,
+        hharness_compiler::lcd::LossSeverity::Narrowed
+    );
     assert!(
         loss.detail.contains("deferred_tools"),
         "the loss names the unestablished capability"
@@ -361,7 +364,7 @@ fn r3_5_deferrable_under_declared_capability_carries_flag_clean() {
 
 #[test]
 fn r3_5_minimal_profile_flags_round_trip_the_codec() {
-    use hh_compiler::schema::{profile_from_json, profile_to_json};
+    use hharness_compiler::schema::{profile_from_json, profile_to_json};
     for profile in [minimal_profiles().0, minimal_profiles().1] {
         let wire = profile_to_json(&profile);
         let caps = wire
@@ -395,7 +398,7 @@ fn listing_from(
     catalog: &Catalog,
     source_ref: &str,
     drop: &BTreeSet<&str>,
-) -> Vec<hh_compiler::exposure::CatalogEntry> {
+) -> Vec<hharness_compiler::exposure::CatalogEntry> {
     catalog
         .entries
         .iter()
@@ -430,7 +433,7 @@ fn r3_5_sync_source_adopts_catalog_delta() {
     let (store, sealed, _v) = sealed_doc_with("r35-sync", edit_doc(), vec![], vec![]);
     let profile = with_suite(&minimal_profiles().0, patch_suite());
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed,

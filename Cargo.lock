@@ -69,747 +69,747 @@ dependencies = [
 ]
 
 [[package]]
-name = "hh-acp"
+name = "hharness-acp"
 version = "0.0.1"
 dependencies = [
- "hh-compiler",
- "hh-identity",
- "hh-ledger",
- "hh-mcp",
- "hh-telemetry",
- "hh-wire",
+ "hharness-compiler",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-mcp",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-analysis"
+name = "hharness-analysis"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-eval",
- "hh-experiment",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-results",
- "hh-wire",
+ "hharness-budget",
+ "hharness-eval",
+ "hharness-experiment",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-results",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-assembly"
+name = "hharness-assembly"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-plugin",
- "hh-provenance",
- "hh-registry",
- "hh-wire",
+ "hharness-budget",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-plugin",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-bench"
+name = "hharness-bench"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-context",
- "hh-control",
- "hh-eval",
- "hh-gateway",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-context",
+ "hharness-control",
+ "hharness-eval",
+ "hharness-gateway",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-budget"
+name = "hharness-budget"
 version = "0.0.1"
 dependencies = [
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-bundle"
+name = "hharness-bundle"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-secrets",
- "hh-telemetry",
- "hh-wire",
+ "hharness-budget",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-secrets",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-cli"
+name = "hharness-cli"
 version = "0.0.1"
 dependencies = [
- "hh-acp",
- "hh-assembly",
- "hh-bundle",
- "hh-compiler",
- "hh-embed",
- "hh-embed-client-generated",
- "hh-embed-schema",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-mcp",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-acp",
+ "hharness-assembly",
+ "hharness-bundle",
+ "hharness-compiler",
+ "hharness-embed",
+ "hharness-embed-client-generated",
+ "hharness-embed-schema",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-mcp",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-codegen"
+name = "hharness-codegen"
 version = "0.0.1"
 dependencies = [
- "hh-embed-schema",
- "hh-wire",
+ "hharness-embed-schema",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-compact-evict-oldest"
+name = "hharness-compact-evict-oldest"
 version = "0.0.1"
 dependencies = [
- "hh-bench",
- "hh-context",
- "hh-embed-schema",
- "hh-hir",
- "hh-plugin-fixture",
- "hh-provenance",
- "hh-varhost",
- "hh-wire",
+ "hharness-bench",
+ "hharness-context",
+ "hharness-embed-schema",
+ "hharness-hir",
+ "hharness-plugin-fixture",
+ "hharness-provenance",
+ "hharness-varhost",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-compiler"
+name = "hharness-compiler"
 version = "0.0.1"
 dependencies = [
- "hh-assembly",
- "hh-hir",
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-registry",
- "hh-wire",
+ "hharness-assembly",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-containment"
+name = "hharness-containment"
 version = "0.0.1"
 dependencies = [
- "hh-compiler",
- "hh-hir",
- "hh-identity",
- "hh-monitor",
- "hh-provenance",
- "hh-wire",
+ "hharness-compiler",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-monitor",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-context"
+name = "hharness-context"
 version = "0.0.1"
 dependencies = [
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-telemetry",
- "hh-wire",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-control"
+name = "hharness-control"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-context",
- "hh-env",
- "hh-gateway",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-verification",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-context",
+ "hharness-env",
+ "hharness-gateway",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-debt"
+name = "hharness-debt"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-embed"
+name = "hharness-embed"
 version = "0.0.1"
 dependencies = [
- "hh-analysis",
- "hh-assembly",
- "hh-budget",
- "hh-bundle",
- "hh-compiler",
- "hh-containment",
- "hh-context",
- "hh-control",
- "hh-debt",
- "hh-embed-schema",
- "hh-env",
- "hh-eval",
- "hh-evolution",
- "hh-experiment",
- "hh-fleet",
- "hh-fleet-adapter",
- "hh-gateway",
- "hh-hir",
- "hh-hosting",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-mcp",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-registry",
- "hh-results",
- "hh-secrets",
- "hh-telemetry",
- "hh-tls",
- "hh-varhost",
- "hh-verification",
- "hh-wire",
+ "hharness-analysis",
+ "hharness-assembly",
+ "hharness-budget",
+ "hharness-bundle",
+ "hharness-compiler",
+ "hharness-containment",
+ "hharness-context",
+ "hharness-control",
+ "hharness-debt",
+ "hharness-embed-schema",
+ "hharness-env",
+ "hharness-eval",
+ "hharness-evolution",
+ "hharness-experiment",
+ "hharness-fleet",
+ "hharness-fleet-adapter",
+ "hharness-gateway",
+ "hharness-hir",
+ "hharness-hosting",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-mcp",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-results",
+ "hharness-secrets",
+ "hharness-telemetry",
+ "hharness-tls",
+ "hharness-varhost",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-embed-client-generated"
+name = "hharness-embed-client-generated"
 version = "0.0.1"
 dependencies = [
- "hh-embed-schema",
- "hh-wire",
+ "hharness-embed-schema",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-embed-schema"
+name = "hharness-embed-schema"
 version = "0.0.1"
 dependencies = [
- "hh-identity",
- "hh-wire",
+ "hharness-identity",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-env"
+name = "hharness-env"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-containment",
- "hh-context",
- "hh-helper",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-registry",
- "hh-secrets",
- "hh-tls",
- "hh-verification",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-containment",
+ "hharness-context",
+ "hharness-helper",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-secrets",
+ "hharness-tls",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-eval"
+name = "hharness-eval"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-identity",
- "hh-lab",
- "hh-ontology",
- "hh-provenance",
- "hh-telemetry",
- "hh-verification",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-telemetry",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-evolution"
+name = "hharness-evolution"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-context",
- "hh-control",
- "hh-experiment",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-registry",
- "hh-wire",
+ "hharness-budget",
+ "hharness-context",
+ "hharness-control",
+ "hharness-experiment",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-experiment"
+name = "hharness-experiment"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-eval",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-eval",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-fleet"
+name = "hharness-fleet"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-embed-schema",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-embed-schema",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-fleet-adapter"
+name = "hharness-fleet-adapter"
 version = "0.0.1"
 dependencies = [
- "hh-fleet",
- "hh-wire",
+ "hharness-fleet",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-gateway"
+name = "hharness-gateway"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-containment",
- "hh-identity",
- "hh-ledger",
- "hh-provenance",
- "hh-registry",
- "hh-secrets",
- "hh-telemetry",
- "hh-tls",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-containment",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-secrets",
+ "hharness-telemetry",
+ "hharness-tls",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-github-issues"
+name = "hharness-github-issues"
 version = "0.0.1"
 dependencies = [
- "hh-embed-schema",
- "hh-fleet-adapter",
- "hh-plugin-fixture",
- "hh-varhost",
- "hh-wire",
+ "hharness-embed-schema",
+ "hharness-fleet-adapter",
+ "hharness-plugin-fixture",
+ "hharness-varhost",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-helper"
+name = "hharness-helper"
 version = "0.0.1"
 dependencies = [
- "hh-containment",
- "hh-identity",
- "hh-wire",
+ "hharness-containment",
+ "hharness-identity",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-hir"
+name = "hharness-hir"
 version = "0.0.1"
 dependencies = [
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-hosting"
+name = "hharness-hosting"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-telemetry",
- "hh-wire",
+ "hharness-budget",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-identity"
+name = "hharness-identity"
 version = "0.0.1"
 dependencies = [
- "hh-provenance",
- "hh-wire",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-kernel"
+name = "hharness-kernel"
 version = "0.0.1"
 dependencies = [
- "hh-embed",
- "hh-embed-client-generated",
- "hh-embed-schema",
- "hh-wire",
+ "hharness-embed",
+ "hharness-embed-client-generated",
+ "hharness-embed-schema",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-lab"
+name = "hharness-lab"
 version = "0.0.1"
 dependencies = [
- "hh-assembly",
- "hh-budget",
- "hh-compiler",
- "hh-hir",
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-registry",
- "hh-wire",
+ "hharness-assembly",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-ledger"
+name = "hharness-ledger"
 version = "0.0.1"
 dependencies = [
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-mcp"
+name = "hharness-mcp"
 version = "0.0.1"
 dependencies = [
- "hh-bundle",
- "hh-compiler",
- "hh-containment",
- "hh-context",
- "hh-env",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-secrets",
- "hh-telemetry",
- "hh-wire",
+ "hharness-bundle",
+ "hharness-compiler",
+ "hharness-containment",
+ "hharness-context",
+ "hharness-env",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-secrets",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-mcp-lab"
+name = "hharness-mcp-lab"
 version = "0.0.1"
 dependencies = [
- "hh-assembly",
- "hh-budget",
- "hh-embed",
- "hh-embed-schema",
- "hh-env",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-mcp",
- "hh-ontology",
- "hh-provenance",
- "hh-telemetry",
- "hh-wire",
+ "hharness-assembly",
+ "hharness-budget",
+ "hharness-embed",
+ "hharness-embed-schema",
+ "hharness-env",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-mcp",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-memory-store"
+name = "hharness-memory-store"
 version = "0.0.1"
 dependencies = [
- "hh-context",
- "hh-embed-schema",
- "hh-plugin-fixture",
- "hh-varhost",
- "hh-wire",
+ "hharness-context",
+ "hharness-embed-schema",
+ "hharness-plugin-fixture",
+ "hharness-varhost",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-monitor"
+name = "hharness-monitor"
 version = "0.0.1"
 dependencies = [
- "hh-assembly",
- "hh-budget",
- "hh-compiler",
- "hh-eval",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-assembly",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-eval",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-ontology"
+name = "hharness-ontology"
 version = "0.0.1"
 dependencies = [
- "hh-identity",
- "hh-provenance",
- "hh-wire",
+ "hharness-identity",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-orchestrator"
+name = "hharness-orchestrator"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-control",
- "hh-env",
- "hh-experiment",
- "hh-gateway",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-subagent",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-control",
+ "hharness-env",
+ "hharness-experiment",
+ "hharness-gateway",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-subagent",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-plugin"
+name = "hharness-plugin"
 version = "0.0.1"
 dependencies = [
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-plugin-fixture"
+name = "hharness-plugin-fixture"
 version = "0.0.1"
 dependencies = [
- "hh-control",
- "hh-embed-schema",
- "hh-hir",
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-varhost",
- "hh-verification",
- "hh-wire",
+ "hharness-control",
+ "hharness-embed-schema",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-varhost",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-provenance"
+name = "hharness-provenance"
 version = "0.0.1"
 dependencies = [
- "hh-wire",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-registry"
+name = "hharness-registry"
 version = "0.0.1"
 dependencies = [
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-plugin",
- "hh-provenance",
- "hh-wire",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-plugin",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-results"
+name = "hharness-results"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-bundle",
- "hh-eval",
- "hh-experiment",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-bundle",
+ "hharness-eval",
+ "hharness-experiment",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-secrets"
+name = "hharness-secrets"
 version = "0.0.1"
 dependencies = [
- "hh-containment",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-containment",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
  "ring",
 ]
 
 [[package]]
-name = "hh-subagent"
+name = "hharness-subagent"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-compiler",
- "hh-control",
- "hh-env",
- "hh-hir",
- "hh-identity",
- "hh-lab",
- "hh-ledger",
- "hh-monitor",
- "hh-ontology",
- "hh-provenance",
- "hh-wire",
+ "hharness-budget",
+ "hharness-compiler",
+ "hharness-control",
+ "hharness-env",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-monitor",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-telemetry"
+name = "hharness-telemetry"
 version = "0.0.1"
 dependencies = [
- "hh-budget",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-provenance",
- "hh-verification",
- "hh-wire",
+ "hharness-budget",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-verification",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-tls"
+name = "hharness-tls"
 version = "0.0.1"
 dependencies = [
- "hh-wire",
+ "hharness-wire",
  "rustls",
  "rustls-webpki",
  "webpki-roots",
 ]
 
 [[package]]
-name = "hh-tracker-fixture"
+name = "hharness-tracker-fixture"
 version = "0.0.1"
 dependencies = [
- "hh-embed-schema",
- "hh-fleet-adapter",
- "hh-plugin-fixture",
- "hh-varhost",
- "hh-wire",
+ "hharness-embed-schema",
+ "hharness-fleet-adapter",
+ "hharness-plugin-fixture",
+ "hharness-varhost",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-varhost"
+name = "hharness-varhost"
 version = "0.0.1"
 dependencies = [
- "hh-containment",
- "hh-context",
- "hh-control",
- "hh-embed-schema",
- "hh-env",
- "hh-fleet",
- "hh-fleet-adapter",
- "hh-helper",
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-ontology",
- "hh-plugin",
- "hh-plugin-fixture",
- "hh-provenance",
- "hh-registry",
- "hh-wire",
+ "hharness-containment",
+ "hharness-context",
+ "hharness-control",
+ "hharness-embed-schema",
+ "hharness-env",
+ "hharness-fleet",
+ "hharness-fleet-adapter",
+ "hharness-helper",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-plugin",
+ "hharness-plugin-fixture",
+ "hharness-provenance",
+ "hharness-registry",
+ "hharness-wire",
  "tempfile",
 ]
 
 [[package]]
-name = "hh-verification"
+name = "hharness-verification"
 version = "0.0.1"
 dependencies = [
- "hh-compiler",
- "hh-hir",
- "hh-identity",
- "hh-ontology",
- "hh-provenance",
- "hh-telemetry",
- "hh-wire",
+ "hharness-compiler",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-web"
+name = "hharness-web"
 version = "0.0.1"
 dependencies = [
- "hh-embed",
- "hh-embed-client-generated",
- "hh-embed-schema",
- "hh-identity",
- "hh-ledger",
- "hh-secrets",
- "hh-telemetry",
- "hh-wire",
+ "hharness-embed",
+ "hharness-embed-client-generated",
+ "hharness-embed-schema",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-secrets",
+ "hharness-telemetry",
+ "hharness-wire",
 ]
 
 [[package]]
-name = "hh-wire"
+name = "hharness-wire"
 version = "0.0.1"
 
 [[package]]
-name = "hh-xcheck"
+name = "hharness-xcheck"
 version = "0.0.1"
 dependencies = [
- "hh-hir",
- "hh-identity",
- "hh-ledger",
- "hh-plugin",
- "hh-registry",
- "hh-wire",
+ "hharness-hir",
+ "hharness-identity",
+ "hharness-ledger",
+ "hharness-plugin",
+ "hharness-registry",
+ "hharness-wire",
 ]
 
 [[package]]

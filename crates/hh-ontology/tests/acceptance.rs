@@ -7,19 +7,21 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::compliance::{
+use hharness_ontology::compliance::{
     validity, ChainEvent, Detector, MetricDeclaration, NaReason, Validity, ValidityCheck,
 };
-use hh_ontology::config::{Configuration, Ref};
-use hh_ontology::control::{ControlBoundary, DecisionPoint, Owner};
-use hh_ontology::dag::spec_dag_check;
-use hh_ontology::formal::{resolve, Symbol};
-use hh_ontology::glossary::glossary_check;
-use hh_ontology::participant::{
+use hharness_ontology::config::{Configuration, Ref};
+use hharness_ontology::control::{ControlBoundary, DecisionPoint, Owner};
+use hharness_ontology::dag::spec_dag_check;
+use hharness_ontology::formal::{resolve, Symbol};
+use hharness_ontology::glossary::glossary_check;
+use hharness_ontology::participant::{
     admissible_granularities, describe, CapabilityVerdict, Granularity, HostingMechanism,
     Observability, ParticipantClass, RawDescriptor,
 };
-use hh_ontology::planes::{classify_home_identifier, registered_kinds, Boundary, Home, Plane};
+use hharness_ontology::planes::{
+    classify_home_identifier, registered_kinds, Boundary, Home, Plane,
+};
 
 /// AC-A2-1 — §2 contains the two-level statement, the seven planes with core questions, the two
 /// boundaries, the three cross-cutting attributes, and a total `home` for every registered kind.

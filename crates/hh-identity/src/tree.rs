@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::idp::{address, idp_id, ContentAddress, IDP_1};
 

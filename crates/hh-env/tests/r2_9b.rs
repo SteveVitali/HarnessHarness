@@ -18,29 +18,29 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_containment::egress::{ApprovalCache, EgressReason, EgressRequest};
-use hh_containment::policy::{
+use hharness_containment::egress::{ApprovalCache, EgressReason, EgressRequest};
+use hharness_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressProtocol,
     EgressRule, HostPattern, NetMode, NonPublic, ResidualChannel, ResidualKind, RuleDecision,
 };
-use hh_env::egress::{
+use hharness_env::egress::{
     EgressMediator, EgressTransport, InspectHook, InspectVerdict, InspectView, MediatedOutcome,
     StaticResolver, WireResponse,
 };
-use hh_env::events::{EventMinter, ScopeChain};
-use hh_env::tokens::TokenMinter;
-use hh_hir::leaves::Text;
-use hh_ledger::event::Scope;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::risk::{
+use hharness_env::events::{EventMinter, ScopeChain};
+use hharness_env::tokens::TokenMinter;
+use hharness_hir::leaves::Text;
+use hharness_ledger::event::Scope;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::risk::{
     RepeatSafety as RiskRepeatSafety, RiskClass, RiskReversibility, RiskScope,
 };
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
-use hh_secrets::{CredentialBroker, StaticVault};
-use hh_wire::json::Json;
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_secrets::{CredentialBroker, StaticVault};
+use hharness_wire::json::Json;
 
 // ── scaffold ────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ fn open_scopes(store: &mut Store, run: &str, lease: &Lease, n_effects: usize) ->
         evs.push(
             m.mint_effect(
                 "action.effect.intended",
-                hh_env::events::intended_payload(&risk, Some(&risk), "v-cap", "h", i as u64),
+                hharness_env::events::intended_payload(&risk, Some(&risk), "v-cap", "h", i as u64),
                 &eid,
                 &chain(),
             )
@@ -231,7 +231,7 @@ fn mediated<'a>(
     run: &str,
     lease: &'a Lease,
     broker: &'a mut CredentialBroker,
-    tokens: hh_env::tokens::TokenResolver,
+    tokens: hharness_env::tokens::TokenResolver,
     policy: ContainmentPolicy,
     transport: CaptureTransport,
     hooks: BTreeMap<String, Box<dyn InspectHook>>,

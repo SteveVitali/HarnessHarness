@@ -1,4 +1,4 @@
-//! `hh-bench` — the benchmark-adapter contract (R-2.9.4⁰ᵇ; ADR-0142/0143/
+//! `hharness-bench` — the benchmark-adapter contract (R-2.9.4⁰ᵇ; ADR-0142/0143/
 //! 0144; spec §5h.4). Integrates external suites, never authors them
 //! ("integrate, never author").
 

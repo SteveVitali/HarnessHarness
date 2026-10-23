@@ -3,7 +3,7 @@
 //! `FixtureAdapter` (the Stage-4 in-process proxy — deterministic and
 //! replayable; the HUMAN-H2 proxy at S5.6), `WebhookAdapter` (the signed
 //! ingress lane, [`crate::ingress`]), and the L5 plugin adapter
-//! (`hh-fleet-adapter` — the real-tracker lane, out of process).
+//! (`hharness-fleet-adapter` — the real-tracker lane, out of process).
 //!
 //! The trait's contract is the real one: `occurrences(since) →
 //! [SourceOccurrence]` is the observation feed (poll for pull adapters,
@@ -17,7 +17,7 @@
 //! drain are stateful seams (S5.6 — the Stage-4 `&self` signature could
 //! not serve an out-of-process adapter).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeSet;
 
 use crate::capabilities::AdapterCapabilities;

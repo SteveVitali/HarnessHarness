@@ -18,7 +18,7 @@
 //! (read/write/canonicalize/metadata/read_dir/remove), `snapshot`, `diff`,
 //! `probe_boundary`, `shutdown`.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The protocol version tag (`v` member).
 pub const HELPER_PROTOCOL: &str = "hh-helper/1";
@@ -944,7 +944,7 @@ pub fn mint_commit_proof(
         ("fencing_token", Json::Int(fencing_token as i64)),
         ("nonce", Json::str(session_nonce)),
     ]);
-    hh_identity::idp::idp_id("commit_token", body.to_canonical_string().as_bytes())
+    hharness_identity::idp::idp_id("commit_token", body.to_canonical_string().as_bytes())
 }
 
 /// The helper-side check: the carried members recompute under the session

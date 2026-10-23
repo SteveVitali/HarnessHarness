@@ -25,11 +25,11 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
-use hh_mcp_lab::exposure;
-use hh_mcp_lab::server::LabServer;
-use hh_wire::json::Json;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
+use hharness_mcp_lab::exposure;
+use hharness_mcp_lab::server::LabServer;
+use hharness_wire::json::Json;
 
 // ── store/service fixtures ──────────────────────────────────────────
 
@@ -128,14 +128,17 @@ fn supply_artifact() -> Json {
             (
                 "_meta",
                 Json::obj([(
-                    hh_mcp::artifact::HH_META_KEY,
+                    hharness_mcp::artifact::HH_META_KEY,
                     Json::obj([("semantic_id", Json::str(sid))]),
                 )]),
             ),
         ])
     };
     Json::obj([
-        ("schema", Json::str(hh_mcp::artifact::MCP_TARGET_SCHEMA)),
+        (
+            "schema",
+            Json::str(hharness_mcp::artifact::MCP_TARGET_SCHEMA),
+        ),
         ("target", Json::str("mcp")),
         (
             "tools",

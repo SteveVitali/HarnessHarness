@@ -1,5 +1,5 @@
 //! R2.5 — the §5c context/memory producer legs at the service boundary
-//! (DF-S2.8-1; R-2.4.1/2.4.3/2.4.4/2.4.5). The hh-control battery proves
+//! (DF-S2.8-1; R-2.4.1/2.4.3/2.4.4/2.4.5). The hharness-control battery proves
 //! the driver's sequencing over its port seams; this battery proves the
 //! *wired* kernel halves emit through the real `EmbedService` drive —
 //! rows minted by the driver over `KernelSink`, never test scaffolding:
@@ -25,16 +25,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: the conformance hir/1 document (r2_4's shape) ──────────────────
 
@@ -352,7 +352,7 @@ fn seq_of(evs: &[(u64, String, Json)], class: &str) -> Option<u64> {
     evs.iter().find(|(_, c, _)| c == class).map(|(s, _, _)| *s)
 }
 
-/// `payload.<member>[]` as string refs — `hh_wire::Json` keeps the
+/// `payload.<member>[]` as string refs — `hharness_wire::Json` keeps the
 /// closed-variant accessors minimal (`as_str`/`as_int`/`get`).
 fn arr_strs<'a>(payload: &'a Json, member: &str) -> Vec<&'a str> {
     match payload.get(member) {

@@ -1,11 +1,11 @@
 //! `identity` (§3.3.4): `identity(sealed) → {semantic_id, version_id}` — the sealed
 //! definition's root coordinates — plus the **configuration-id** composition through
-//! `hh-identity` (CC1 — the one `idp/1` scheme; §8.3 #3). `configuration_id` excludes
+//! `hharness-identity` (CC1 — the one `idp/1` scheme; §8.3 #3). `configuration_id` excludes
 //! surfaces, `layers` and `seed`; `configuration_version_id` carries the exact
 //! `version_id`s plus `seed` (the manifest's exact-bytes key).
 
-use hh_hir::document::{DefinitionVersionRef, SealedDefinition};
-use hh_wire::json::Json;
+use hharness_hir::document::{DefinitionVersionRef, SealedDefinition};
+use hharness_wire::json::Json;
 
 /// `identity(sealed)` — the definition's `{semantic_id, version_id}` (the root's — the
 /// provenance-recorded coordinates, §3.3.6).
@@ -41,18 +41,18 @@ pub struct ConfigurationIds {
     pub configuration_version_id: String,
 }
 
-/// `configuration(sealed, inputs)` — the composition through `hh-identity` (CC1).
+/// `configuration(sealed, inputs)` — the composition through `hharness-identity` (CC1).
 pub fn configuration(sealed: &SealedDefinition, inputs: &CompositionInputs) -> ConfigurationIds {
     let def = identity(sealed);
     ConfigurationIds {
-        configuration_id: hh_identity::config::configuration_id(
+        configuration_id: hharness_identity::config::configuration_id(
             &inputs.model_ref,
             &def.semantic_id,
             &inputs.profile,
             &inputs.environment_ref,
             &inputs.budget,
         ),
-        configuration_version_id: hh_identity::config::configuration_version_id(
+        configuration_version_id: hharness_identity::config::configuration_version_id(
             &inputs.model_ref,
             &def.version_id,
             &inputs.profile,
@@ -69,7 +69,7 @@ pub fn configuration(sealed: &SealedDefinition, inputs: &CompositionInputs) -> C
 pub fn assembly_identity_view(a: &crate::grammar::Assembly) -> Json {
     Json::obj([
         ("dialect", Json::str(&a.dialect)),
-        ("slots", hh_hir::wire::slots_json(&a.slots, false)),
+        ("slots", hharness_hir::wire::slots_json(&a.slots, false)),
         ("values", Json::Obj(a.values.clone())),
     ])
 }

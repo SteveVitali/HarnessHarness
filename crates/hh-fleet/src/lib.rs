@@ -1,4 +1,4 @@
-//! `hh-fleet` — the C4 human-agent organizational layer (canonical
+//! `hharness-fleet` — the C4 human-agent organizational layer (canonical
 //! §5i.1): `run_kind = fleet`, `WorkItem` + `control.work_item.*`, the
 //! durable wakeup trigger rules, the ownership graph, the RC-1…8
 //! reconciler over the fixture adapter, the Π state map, ownership and

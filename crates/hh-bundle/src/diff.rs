@@ -9,10 +9,10 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_identity::sameness;
-use hh_wire::json::Json;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_identity::sameness;
+use hharness_wire::json::Json;
 
 use crate::codec::Decoded;
 use crate::levels::roles;
@@ -161,7 +161,7 @@ fn member_doc(decoded: &Decoded, addr: &str) -> Option<Json> {
         .members
         .get(addr)
         .and_then(|b| std::str::from_utf8(b).ok())
-        .and_then(|t| hh_wire::json::parse(t).ok())
+        .and_then(|t| hharness_wire::json::parse(t).ok())
 }
 
 /// The arm's `level_assignment` — off the decoded `results.arm` member
@@ -269,7 +269,7 @@ pub fn bundle_diff(a: &Decoded, b: &Decoded) -> BundleDiff {
     };
     // The diff's refs are `definition` coordinates — provenance is the
     // bundle boundary's own marker (never read from content).
-    let prov = || hh_provenance::ProvenanceRecord::kernel("hh-bundle:diff", 0);
+    let prov = || hharness_provenance::ProvenanceRecord::kernel("hh-bundle:diff", 0);
     let vref = |vid: &str, sem: &str| {
         let mut r = VersionedRef::pinned(RecordKind::SealedDefinition, vid, prov());
         if !sem.is_empty() {

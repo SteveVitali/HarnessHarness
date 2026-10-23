@@ -5,14 +5,14 @@
 //! capability declaration, and the record-level half of the V-E1 invariant
 //! battery (the document-level half lives in [`mod@crate::validate`]).
 //!
-//! One schema source (CC7): `hh_monitor::args` re-exports [`ScopeKind`],
+//! One schema source (CC7): `hharness_monitor::args` re-exports [`ScopeKind`],
 //! [`ScopeBinding`] and [`scope_bindings`] from here — no second reader of the
 //! `scope_bindings` member exists.
 
 use std::collections::BTreeSet;
 
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::errors::HirError;
 use crate::kinds::{EffectDomain, ToolEffects, World};
@@ -456,13 +456,13 @@ pub fn validate_capability(rec: &ToolCapabilityRecord, authority: AuthorityClass
     }
 
     // R-2.8.2 (§5g.2 §3): a declared `flow_contract` must be a well-formed
-    // `FlowContract` — `hh_provenance::flow` owns the shape (CC7), so a
+    // `FlowContract` — `hharness_provenance::flow` owns the shape (CC7), so a
     // malformed member is `SchemaViolation` here; and every parameter the
     // contract names (`recipient_params`, `content_params`, rule-selector
     // `params`, `forall_param` bounds) must resolve in `input_schema`
     // (`UnmappedParameter` — the same V-E1-4 refusal).
     if let Some(f) = &rec.flow_contract {
-        match hh_provenance::flow::FlowContract::from_json(f) {
+        match hharness_provenance::flow::FlowContract::from_json(f) {
             Err(e) => errs.push(HirError::SchemaViolation {
                 detail: format!("flow_contract: {}", e.detail),
             }),
@@ -640,9 +640,12 @@ mod tests {
         Text::new(
             "does a thing",
             "test:owner",
-            hh_provenance::ProvenanceRecord::minted(
-                hh_provenance::Origin::human("test:author", hh_provenance::HumanRole::Author),
-                hh_provenance::PersistenceScope::Definition,
+            hharness_provenance::ProvenanceRecord::minted(
+                hharness_provenance::Origin::human(
+                    "test:author",
+                    hharness_provenance::HumanRole::Author,
+                ),
+                hharness_provenance::PersistenceScope::Definition,
                 0,
             ),
         )

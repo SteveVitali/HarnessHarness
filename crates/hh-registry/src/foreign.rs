@@ -38,11 +38,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_identity::names::ResolveMode;
-use hh_plugin::ContractRef;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_identity::names::ResolveMode;
+use hharness_plugin::ContractRef;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::extension::plugin::{

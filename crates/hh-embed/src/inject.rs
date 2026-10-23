@@ -9,7 +9,7 @@
 //!    hostile reach around the boundary — `SchemaViolation{code:
 //!    "runtime_handle_injection"}`.
 //! 2. **Secrets never travel the payload plane** (I9/SV-1) — every
-//!    canonical payload string is scanned by `hh-secrets`'s registered
+//!    canonical payload string is scanned by `hharness-secrets`'s registered
 //!    detectors; a hit is `SecretInPayload` (the secret is never echoed —
 //!    the error names no bytes).
 //! 3. **Override widening is an authority violation** — an `overrides[]`
@@ -18,11 +18,11 @@
 //!    `AuthorityViolation{layer: "override"}` (ADR-0024 D6: the boundary
 //!    refuses what the client's layer cannot widen).
 
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::Override;
-use hh_secrets::mask::MaskSet;
-use hh_secrets::redact::{leak_scan, DetectorSet, ScanTarget};
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::Override;
+use hharness_secrets::mask::MaskSet;
+use hharness_secrets::redact::{leak_scan, DetectorSet, ScanTarget};
+use hharness_wire::json::Json;
 
 /// Payload member names that spell runtime-handle / credential reaches.
 /// Contract fields are *ids of records* (`permission_id`, `effect_id`,

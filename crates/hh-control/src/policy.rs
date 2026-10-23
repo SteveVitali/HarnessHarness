@@ -21,10 +21,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::idp::idp_id;
-use hh_ontology::control::{InvariantId, LoopDetectorKind, StopReason};
-use hh_ontology::dimensions::DimensionId;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_ontology::control::{InvariantId, LoopDetectorKind, StopReason};
+use hharness_ontology::dimensions::DimensionId;
+use hharness_wire::json::Json;
 
 use crate::vocab::{DeltaKind, ScopeKind};
 
@@ -718,7 +718,7 @@ impl RetrySpec {
         if self.backoff.jitter_ppm == 0 || base == 0 {
             return base;
         }
-        let h = hh_wire::sha256::sha256_hex(jitter_key.as_bytes());
+        let h = hharness_wire::sha256::sha256_hex(jitter_key.as_bytes());
         let jitter_unit = u64::from_str_radix(&h[..8], 16).unwrap_or(0) % PPM;
         base.saturating_add(base.saturating_mul(self.backoff.jitter_ppm) / PPM * jitter_unit / PPM)
     }

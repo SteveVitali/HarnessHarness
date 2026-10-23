@@ -10,14 +10,14 @@
 mod common;
 
 use common::*;
-use hh_web::server::serve_request;
-use hh_web::server::Served;
-use hh_web::session::Sessions;
-use hh_wire::json::Json;
+use hharness_web::server::serve_request;
+use hharness_web::server::Served;
+use hharness_web::session::Sessions;
+use hharness_wire::json::Json;
 
 fn served_json(s: Served) -> (u16, Json) {
     match s {
-        Served::Json(c, t) => (c, hh_wire::json::parse(&t).unwrap_or(Json::Null)),
+        Served::Json(c, t) => (c, hharness_wire::json::parse(&t).unwrap_or(Json::Null)),
         _ => panic!("expected a JSON response"),
     }
 }

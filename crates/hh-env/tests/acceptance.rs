@@ -10,51 +10,55 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{
     kernel_default, IsolationClass, NetMode, ResourceLimits, WritableRoot,
 };
-use hh_env::capture::{CaptureKind, OutputPolicy};
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::events::{EventMinter, ScopeChain};
-use hh_env::executor::{
+use hharness_env::capture::{CaptureKind, OutputPolicy};
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::events::{EventMinter, ScopeChain};
+use hharness_env::executor::{
     bind, DedupSupport, ExecutionRequest, ExecutionRequirement, ExecutorDeclaration,
     ExecutorSignal, InterruptSupport, ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus,
     ToolExecutor,
 };
-use hh_env::handle::{HandleState, OnLoss, Roots};
-use hh_env::observe::{retryable, EffectOutcome, ErrorClass, ErrorOrigin, ObservedStatus};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::kinds::{
+use hharness_env::handle::{HandleState, OnLoss, Roots};
+use hharness_env::observe::{retryable, EffectOutcome, ErrorClass, ErrorOrigin, ObservedStatus};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_identity::idp::address;
-use hh_ledger::event::{Cursor, Direction, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_ontology::risk::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_identity::idp::address;
+use hharness_ledger::event::{Cursor, Direction, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::risk::{
     RepeatSafety as RiskRepeatSafety, RiskClass, RiskReversibility, RiskScope,
 };
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::mask::{MaskEntry, MaskSet};
-use hh_secrets::redact::DetectorSet;
-use hh_secrets::types::SecretFingerprint;
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::mask::{MaskEntry, MaskSet};
+use hharness_secrets::redact::DetectorSet;
+use hharness_secrets::types::SecretFingerprint;
+use hharness_wire::json::Json;
 
 // ── scaffold ─────────────────────────────────────────────────────────────────
 
@@ -105,7 +109,7 @@ fn workspace(tag: &str) -> PathBuf {
 
 /// The test policy — kernel default plus the workspace as readable/writable,
 /// `net = none` (a mediated claim would need the Stage-2 egress mediator).
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -115,7 +119,7 @@ fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolic
     });
     // `local_host` honestly permits a `/bin` spawn (the process-boundary
     // executor execs `/bin/echo`); the exec allow-set is explicit, not `Any`.
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
     p.net.mode = NetMode::None;
     p.compute_ids();
     p
@@ -139,7 +143,7 @@ fn test_record(class: EnvironmentClass, image: ImageRef) -> EnvironmentRecord {
     }
 }
 
-fn test_ca() -> hh_identity::idp::ContentAddress {
+fn test_ca() -> hharness_identity::idp::ContentAddress {
     address(b"test-image-bytes", "application/octet-stream")
 }
 
@@ -294,16 +298,18 @@ fn binding() -> SurfaceBinding {
             .collect(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:write_file".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     }
@@ -367,7 +373,7 @@ fn root_handle() -> AuthorityHandle {
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -571,7 +577,7 @@ impl ToolExecutor for MockExecutor {
 }
 
 /// Read back every event in the run (the fold the static ACs check).
-fn read_all(store: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     store
         .read(run, Cursor::Seq(0), None, Direction::Fwd, usize::MAX)
         .unwrap()
@@ -823,7 +829,7 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
     // helper's read view).
     assert!(matches!(
         disp.resolver().resolve("sha256:forged"),
-        hh_env::tokens::ResolveOutcome::Unknown
+        hharness_env::tokens::ResolveOutcome::Unknown
     ));
 
     // A `committed` for an effect with no `decided{allow}` is refused by the
@@ -852,11 +858,11 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
             model_call_id: "mc-2".into(),
             tool_call_id: "tc-2".into(),
         };
-        let risk = hh_hir::risk::project_risk(Some(&attrs(Reversibility::Compensable)));
+        let risk = hharness_hir::risk::project_risk(Some(&attrs(Reversibility::Compensable)));
         let intended = m
             .mint_effect(
                 "action.effect.intended",
-                hh_env::events::intended_payload(&risk, Some(&risk), "v-cap", "h", 0),
+                hharness_env::events::intended_payload(&risk, Some(&risk), "v-cap", "h", 0),
                 &eid,
                 &chain2,
             )
@@ -865,7 +871,7 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
         let authorized = m
             .mint_effect(
                 "action.effect.authorized",
-                hh_env::events::authorized_payload(&risk, None),
+                hharness_env::events::authorized_payload(&risk, None),
                 &eid,
                 &chain2,
             )
@@ -873,8 +879,8 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
         let prepared = m
             .mint_effect(
                 "action.effect.prepared",
-                hh_env::events::prepared_payload(
-                    &hh_ledger::effect::idempotency_key(&run, &eid, "h", "v-cap"),
+                hharness_env::events::prepared_payload(
+                    &hharness_ledger::effect::idempotency_key(&run, &eid, "h", "v-cap"),
                     None,
                     Some("plan-1"),
                     "sha256:token",
@@ -888,7 +894,7 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
         let bad = m
             .mint_effect(
                 "action.effect.committed",
-                hh_env::events::committed_payload(1, lease.generation, 0),
+                hharness_env::events::committed_payload(1, lease.generation, 0),
                 &eid,
                 &chain2,
             )
@@ -904,7 +910,10 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
         .unwrap();
     let r = disp.store_mut().append(&run, &lease, vec![bad]);
     assert!(
-        matches!(r, Err(hh_ledger::errors::LedgerError::Undecided { .. })),
+        matches!(
+            r,
+            Err(hharness_ledger::errors::LedgerError::Undecided { .. })
+        ),
         "{r:?}"
     );
 }
@@ -924,11 +933,12 @@ fn ac_r_2_5_5_3_every_executor_failure_maps_to_one_class_and_origin() {
         },
         ErrorClass::InvalidArguments,
     ] {
-        let (cc, o) = hh_env::dispatch::classify_report(&report_error(c.clone()), &cap, &decl);
+        let (cc, o) =
+            hharness_env::dispatch::classify_report(&report_error(c.clone()), &cap, &decl);
         assert_eq!(cc, c);
         assert_eq!(o, ErrorOrigin::Tool);
     }
-    let (cc, o) = hh_env::dispatch::classify_report(
+    let (cc, o) = hharness_env::dispatch::classify_report(
         &report_error(ErrorClass::ContainmentDenied { kind: "fs".into() }),
         &cap,
         &decl,
@@ -948,14 +958,14 @@ fn ac_r_2_5_5_3_every_executor_failure_maps_to_one_class_and_origin() {
         ErrorOrigin::Tool,
         &non_idem
     ));
-    assert!(!hh_env::observe::apply_hint(false, Some(true)));
+    assert!(!hharness_env::observe::apply_hint(false, Some(true)));
     let idem = RiskClass {
         repeat_safety: RiskRepeatSafety::Idempotent,
         ..non_idem
     };
     assert!(retryable(&ErrorClass::Timeout, ErrorOrigin::Tool, &idem));
     // `hint = false` lowers.
-    assert!(!hh_env::observe::apply_hint(true, Some(false)));
+    assert!(!hharness_env::observe::apply_hint(true, Some(false)));
 }
 
 // ── AC-R-2.5.5-4 — timeout/cancel per class ─────────────────────────────────
@@ -1236,7 +1246,7 @@ fn ac_r_2_5_5_12_bind_refuses_insufficient_declarations() {
     };
     assert!(matches!(
         bind(&decl, EffectDomain::FsWrite, &req),
-        Err(hh_env::executor::BindError::InsufficientDedup { .. })
+        Err(hharness_env::executor::BindError::InsufficientDedup { .. })
     ));
     // `isolation_min > isolation_support` → InsufficientIsolation.
     let req2 = ExecutionRequirement {
@@ -1246,7 +1256,7 @@ fn ac_r_2_5_5_12_bind_refuses_insufficient_declarations() {
     };
     assert!(matches!(
         bind(&decl, EffectDomain::FsWrite, &req2),
-        Err(hh_env::executor::BindError::InsufficientIsolation { .. })
+        Err(hharness_env::executor::BindError::InsufficientIsolation { .. })
     ));
     // `interrupt = unknown` ⇒ `unsupported` behaviourally, `unknown` in the
     // catalog (honest reporting, never coerced up).
@@ -1278,7 +1288,7 @@ fn ac_r_2_5_5_14_one_call_through_the_process_boundary() {
     let sb = ScopeBindings::Unknown;
     let mon = test_monitor(&cap);
     let mut disp = Dispatcher::new(&mut store, &mon, &run, [11u8; 32], DetectorSet::default());
-    let mut exec = hh_env::local::LocalExecutor::new(vec![]);
+    let mut exec = hharness_env::local::LocalExecutor::new(vec![]);
     let inp = input(
         &cap,
         &bind,
@@ -1513,7 +1523,7 @@ fn ac_r_2_7_1_diff_sanity_ablation_removes_check_d() {
         .and_then(Json::as_str)
         .is_some_and(|id| id.starts_with("verdict:patch_application:")));
     // The over-bound/outside-scope failure path is a pure fold — covered by
-    // `hh-verification`'s `check_d_*` unit tests (the path baseline only
+    // `hharness-verification`'s `check_d_*` unit tests (the path baseline only
     // scans workspace roots, so an out-of-scope write is invisible to the
     // diff by construction; containment owns the prevention boundary).
 }
@@ -1532,7 +1542,7 @@ fn ac_e1_state_precondition_violated_refuses_at_prepare() {
     let mut driver = EnvDriver::new(&run);
     let env = ready_env(&mut store, &lease, &mut driver, &ws);
     let mut cap = capability(EffectDomain::FsRead, read_only_attrs(), scope_bindings());
-    cap.preconditions = vec![hh_hir::kinds::PreconditionDomain::Network];
+    cap.preconditions = vec![hharness_hir::kinds::PreconditionDomain::Network];
     let bind = binding();
     let sb = scope_bindings();
     let mon = test_monitor(&cap);
@@ -1586,9 +1596,9 @@ fn ac_e1_state_precondition_satisfied_proceeds() {
     let env = ready_env(&mut store, &lease, &mut driver, &ws);
     let mut cap = capability(EffectDomain::FsRead, read_only_attrs(), scope_bindings());
     cap.preconditions = vec![
-        hh_hir::kinds::PreconditionDomain::Filesystem,
-        hh_hir::kinds::PreconditionDomain::Temporal,
-        hh_hir::kinds::PreconditionDomain::Environment,
+        hharness_hir::kinds::PreconditionDomain::Filesystem,
+        hharness_hir::kinds::PreconditionDomain::Temporal,
+        hharness_hir::kinds::PreconditionDomain::Environment,
     ];
     let bind = binding();
     let sb = scope_bindings();
@@ -1786,7 +1796,7 @@ fn ac_r_2_8_7_ask_emits_pending_then_suspends() {
     let saw_requested = frames.iter().any(|f| {
         matches!(
             f,
-            hh_ledger::event::EventFrame::Ephemeral { event }
+            hharness_ledger::event::EventFrame::Ephemeral { event }
                 if event.class == "security.permission.requested"
                     && event.payload.get("permission_id").and_then(Json::as_str) == Some(pid)
         )
@@ -1854,7 +1864,10 @@ fn ac_r_2_6_2_permission_timeout_expires_to_refusal() {
     // Not yet elapsed ⇒ `NotElapsed` with the remaining window.
     let out = disp.expire_permission(&permission_id, &lease).unwrap();
     assert!(
-        matches!(out, hh_env::dispatch::PermissionExpiry::NotElapsed { .. }),
+        matches!(
+            out,
+            hharness_env::dispatch::PermissionExpiry::NotElapsed { .. }
+        ),
         "{out:?}"
     );
     // Elapsed ⇒ `Expired`: `decided{timed_out, decider: policy}` + `refused`.
@@ -1862,7 +1875,7 @@ fn ac_r_2_6_2_permission_timeout_expires_to_refusal() {
     let out = disp.expire_permission(&permission_id, &lease).unwrap();
     assert_eq!(
         out,
-        hh_env::dispatch::PermissionExpiry::Expired {
+        hharness_env::dispatch::PermissionExpiry::Expired {
             permission_id: permission_id.clone()
         }
     );
@@ -1888,7 +1901,7 @@ fn ac_r_2_6_2_permission_timeout_expires_to_refusal() {
     let out = disp.expire_permission(&permission_id, &lease).unwrap();
     assert!(matches!(
         out,
-        hh_env::dispatch::PermissionExpiry::AlreadyDecided { .. }
+        hharness_env::dispatch::PermissionExpiry::AlreadyDecided { .. }
     ));
     // An unattended-attendance pending with `deadline none` reports
     // `NoDeadline`, never silently expires.
@@ -1937,7 +1950,7 @@ fn ac_r_2_6_2_permission_timeout_expires_to_refusal() {
     let out = disp2.expire_permission(&pid2, &lease2).unwrap();
     assert!(matches!(
         out,
-        hh_env::dispatch::PermissionExpiry::NoDeadline { .. }
+        hharness_env::dispatch::PermissionExpiry::NoDeadline { .. }
     ));
 }
 
@@ -2018,12 +2031,12 @@ fn ac_r_2_8_7_respond_allow_resumes_and_executes() {
 
     // The resumed dispatch re-enters at `authorize` — the recorded decision
     // serves; no second `decided` row, no re-ask, no scope re-open.
-    let mut st = hh_monitor::approval::ApprovalState::default();
+    let mut st = hharness_monitor::approval::ApprovalState::default();
     st.decisions.insert(
         pid.clone(),
-        hh_monitor::approval::RecordedDecision {
-            decision: hh_monitor::decision::Decision::Allow,
-            decided_by: hh_monitor::approval::EndorserRef::Human {
+        hharness_monitor::approval::RecordedDecision {
+            decision: hharness_monitor::decision::Decision::Allow,
+            decided_by: hharness_monitor::approval::EndorserRef::Human {
                 subject_ref: "human:op".into(),
                 authority: AuthorityClass::Principal,
             },
@@ -2449,7 +2462,7 @@ fn df_s3_9_1_paused_call_records_ask_and_resume_echoes_state() {
     // `f(run, mc, "{tc}.elicitation.{attempt}", 0)`.
     assert_eq!(
         elicitation_id,
-        hh_ledger::store::Store::effect_id(&run, "mc-1", "tc-pause.elicitation.1", 0)
+        hharness_ledger::store::Store::effect_id(&run, "mc-1", "tc-pause.elicitation.1", 0)
     );
     assert_eq!(
         request_state.get("opaque"),
@@ -2779,12 +2792,12 @@ fn cap2_dispatch_net_egress_asks_no_egress_rows() {
     // proposals are floor-decided (ADR-0031) and never see `dom_net_egress`.
     inp.context_label = Label {
         authority: AuthorityClass::External,
-        taint: [hh_provenance::TaintTag::Participant {
+        taint: [hharness_provenance::TaintTag::Participant {
             participant: "participant:hosted".to_string(),
         }]
         .into_iter()
         .collect(),
-        readers: hh_provenance::ReaderSet::Public,
+        readers: hharness_provenance::ReaderSet::Public,
     };
     let out = disp
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)

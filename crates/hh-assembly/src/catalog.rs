@@ -1,5 +1,5 @@
 //! The class catalog (§3.3.3; ADR-0023): the `ClassRecord`/`VariantRecord` view the
-//! assembly ops consult. Two sources — the Stage-1 built-ins (`hh_registry::suites`'s
+//! assembly ops consult. Two sources — the Stage-1 built-ins (`hharness_registry::suites`'s
 //! `control_strategy`/`context_policy` records, the mandatory `exactly-one` classes) and
 //! a registry snapshot (`RegistryCatalog` — the snapshot-confined view §6.2 lands). The
 //! catalog is a **view**: records live in the registry; this crate never keeps a second
@@ -7,9 +7,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_registry::records::{ClassRecord, VariantRecord};
-use hh_registry::store::{QueryClause, QueryOp, QueryPredicate, RegistryStore, ResolvedRecord};
-use hh_registry::RegistryError;
+use hharness_registry::records::{ClassRecord, VariantRecord};
+use hharness_registry::store::{
+    QueryClause, QueryOp, QueryPredicate, RegistryStore, ResolvedRecord,
+};
+use hharness_registry::RegistryError;
 
 /// The two Stage-1 mandatory class ids (`exactly-one` — §3.3.3).
 pub const STAGE1_CLASSES: &[&str] = &["control_strategy", "context_policy"];
@@ -26,7 +28,7 @@ pub trait ClassCatalog {
 }
 
 /// The Stage-1 built-in catalog — the two mandatory classes from
-/// `hh_registry::suites` (§3.3.3: `control_strategy` and `context_policy` are
+/// `hharness_registry::suites` (§3.3.3: `control_strategy` and `context_policy` are
 /// `exactly-one` at Stage 1).
 pub struct Stage1Catalog {
     classes: BTreeMap<String, ClassRecord>,
@@ -40,17 +42,17 @@ impl Stage1Catalog {
     pub fn stage1() -> Stage1Catalog {
         let mut classes = BTreeMap::new();
         for c in [
-            hh_registry::suites::control_strategy_class(),
-            hh_registry::suites::context_policy_class(),
-            hh_registry::suites::validator_class(),
-            hh_registry::suites::execution_alignment_class(),
-            hh_registry::suites::compaction_strategy_class(),
+            hharness_registry::suites::control_strategy_class(),
+            hharness_registry::suites::context_policy_class(),
+            hharness_registry::suites::validator_class(),
+            hharness_registry::suites::execution_alignment_class(),
+            hharness_registry::suites::compaction_strategy_class(),
             // R-2.7 — the `router` slot's `routing_policy` class
             // (DF-S1.18-1; optional, never required).
-            hh_registry::suites::routing_policy_class(),
+            hharness_registry::suites::routing_policy_class(),
             // R4.5b — the `model_port` slot's class (DF-S1.18-1's live
             // leg; ADR-0364 D4; optional — absent ⇒ scripted lane).
-            hh_registry::suites::model_port_class(),
+            hharness_registry::suites::model_port_class(),
         ] {
             classes.insert(c.class_id.clone(), c);
         }
@@ -107,7 +109,7 @@ impl ClassCatalog for RegistryCatalog<'_> {
             .class_records()
             .into_iter()
             .filter_map(|r| match r.record {
-                hh_registry::records::RegistryRecord::Class(c) if c.class_id == class_id => {
+                hharness_registry::records::RegistryRecord::Class(c) if c.class_id == class_id => {
                     Some((r.versioned_ref.version_id.clone(), c))
                 }
                 _ => None,
@@ -122,7 +124,7 @@ impl ClassCatalog for RegistryCatalog<'_> {
             .class_records()
             .into_iter()
             .filter_map(|r| match r.record {
-                hh_registry::records::RegistryRecord::Class(c) => Some(c.class_id),
+                hharness_registry::records::RegistryRecord::Class(c) => Some(c.class_id),
                 _ => None,
             })
             .collect();
@@ -143,7 +145,7 @@ pub fn variant_at(
     version_id: &str,
 ) -> Result<Option<VariantRecord>, RegistryError> {
     Ok(match store.get(version_id) {
-        Some((_, hh_registry::records::RegistryRecord::Variant(v))) => Some(v.clone()),
+        Some((_, hharness_registry::records::RegistryRecord::Variant(v))) => Some(v.clone()),
         _ => None,
     })
 }

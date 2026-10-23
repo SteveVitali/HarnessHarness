@@ -10,10 +10,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::records::Grant;
-use hh_hir::EffectDomain;
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_hir::records::Grant;
+use hharness_hir::EffectDomain;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 
 use crate::events;
 use crate::handle::{AuthorityHandle, HandleId};

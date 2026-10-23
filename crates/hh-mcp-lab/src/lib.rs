@@ -1,4 +1,4 @@
-//! `hh-mcp-lab` — the C1 Stage-4 `hh-lab/1` MCP instrument
+//! `hharness-mcp-lab` — the C1 Stage-4 `hh-lab/1` MCP instrument
 //! (S4.11; R-2.11.3¹; ADR-0303).
 //!
 //! The instrument serves the Lab read/launch/experiment/results

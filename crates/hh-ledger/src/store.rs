@@ -27,9 +27,9 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hh_identity::idp::ContentAddress;
-use hh_provenance::{ContentKind, Origin, ProvenanceRecord};
-use hh_wire::json::{self, Json};
+use hharness_identity::idp::ContentAddress;
+use hharness_provenance::{ContentKind, Origin, ProvenanceRecord};
+use hharness_wire::json::{self, Json};
 
 use crate::audit::{
     AuditFault, AuditKeyResolver, AuditSigner, Auditor, BlobStatus, CheckpointKind,
@@ -518,7 +518,7 @@ impl Store {
     }
 
     /// Allocate a fresh id of `kind` through the store's `IdSource` — the seam
-    /// ledger-bound consumers (the `hh-budget` account) use so event/budget/
+    /// ledger-bound consumers (the `hharness-budget` account) use so event/budget/
     /// reservation ids come from the one injected source (golden-corpus
     /// determinism is preserved for `SeqIds`-backed stores).
     pub fn alloc_id(&self, kind: &str) -> String {
@@ -1608,7 +1608,7 @@ impl Store {
                 // Rule P, second half (§5g.6 §2): an audit-grade row carries
                 // `provenance.authority = kernel` — anything less claims a kernel
                 // fact it is not.
-                if spec.audit_grade && p.authority != hh_provenance::AuthorityClass::Kernel {
+                if spec.audit_grade && p.authority != hharness_provenance::AuthorityClass::Kernel {
                     return Err(LedgerError::AuditProducerInvalid {
                         class: ev.class.clone(),
                         producer: ev.producer.component_class.clone(),
@@ -1616,7 +1616,7 @@ impl Store {
                     });
                 }
                 if ev.content_kind == Some(ContentKind::FreeText)
-                    && p.authority > hh_provenance::AuthorityClass::External
+                    && p.authority > hharness_provenance::AuthorityClass::External
                 {
                     return Err(LedgerError::TextAboveExternal {
                         authority: p.authority,
@@ -1627,7 +1627,7 @@ impl Store {
             // Monitor check 5 — endorsement legitimacy at append (ADR-0035 §1).
             if ev.class == "security.label.endorsed" {
                 let endorsed =
-                    hh_provenance::LabelEndorsed::from_json(&ev.payload).map_err(|e| {
+                    hharness_provenance::LabelEndorsed::from_json(&ev.payload).map_err(|e| {
                         LedgerError::SchemaViolation {
                             detail: format!("label.endorsed payload: {}", e.detail),
                         }
@@ -1641,7 +1641,7 @@ impl Store {
                         event_id: endorsed.subject_ref.clone(),
                     })?;
                 let kind = ev.content_kind.unwrap_or(ContentKind::Other);
-                hh_provenance::check_endorsement(&endorsed, subject, kind)?;
+                hharness_provenance::check_endorsement(&endorsed, subject, kind)?;
             }
             if spec.durability == Durability::Ephemeral {
                 staged.push(Staged::Eph(stamp_ephemeral(state, &ev, rec.generation)));
@@ -1961,7 +1961,7 @@ impl Store {
                 max: self.blob_max_bytes,
             });
         }
-        let addr = hh_identity::idp::address(bytes, media_type);
+        let addr = hharness_identity::idp::address(bytes, media_type);
         let path = self.root.join("blobs").join(&addr.digest);
         if !path.exists() {
             let stored = match self.blob_cipher.as_deref() {
@@ -1983,7 +1983,7 @@ impl Store {
     /// corruption is surfaced, never silently served).
     pub fn get_blob(&self, address: &ContentAddress) -> Result<Vec<u8>, LedgerError> {
         let id = format!("{}:{}", address.algorithm, address.digest);
-        hh_identity::idp::parse_id(&id).map_err(|_| LedgerError::SchemaViolation {
+        hharness_identity::idp::parse_id(&id).map_err(|_| LedgerError::SchemaViolation {
             detail: format!("blob address {id} is not an idp/1 id"),
         })?;
         let path = self.root.join("blobs").join(&address.digest);
@@ -2034,7 +2034,7 @@ impl Store {
         } else {
             bytes
         };
-        if hh_identity::idp::idp_digest("blob", &raw) != address.digest {
+        if hharness_identity::idp::idp_digest("blob", &raw) != address.digest {
             return Err(LedgerError::BlobCorrupt { address: id });
         }
         Ok(raw)
@@ -2150,7 +2150,7 @@ impl Store {
                     let authority_ok = env
                         .provenance
                         .as_ref()
-                        .map(|p| p.authority == hh_provenance::AuthorityClass::Kernel)
+                        .map(|p| p.authority == hharness_provenance::AuthorityClass::Kernel)
                         .unwrap_or(false);
                     if !producer_ok || !authority_ok {
                         return Err(tampered(env.seq, TamperedKind::Producer));
@@ -2206,7 +2206,7 @@ impl Store {
                 .identity_profile
                 .clone()
                 .unwrap_or_else(|| manifest.idp.clone());
-            let claim_profile = hh_identity::idp::profile_for(&claim_profile_name)
+            let claim_profile = hharness_identity::idp::profile_for(&claim_profile_name)
                 .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
             let covered_leaves = crate::rotation::rehashed_leaves(
                 claim_profile,
@@ -2625,7 +2625,7 @@ impl Store {
             .clone()
             .unwrap_or_else(|| prev_profile_name.clone());
         let claim_profile =
-            hh_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
+            hharness_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
                 LedgerError::SchemaViolation {
                     detail: format!(
                         "unknown_idp: `{claim_profile_name}` is not a registered identity profile"
@@ -2648,86 +2648,85 @@ impl Store {
         // construction: at the rotation boundary the prefix check still
         // runs (under the old profile) but the proof arm is skipped — the
         // claim's `rehash` is the cross-profile binding (ADR-0307).
-        let (since_seq, prev_link) =
-            match prev_checkpoint_ev {
-                Some(prev_ev) => {
-                    let prev_claim =
-                        prev_claim_parsed
-                            .clone()
-                            .ok_or_else(|| LedgerError::InconsistentHead {
-                                run_id: run_id.to_string(),
-                                detail: "the previous checkpoint row does not parse".into(),
-                            })?;
-                    let prev_size =
-                        prev_claim
-                            .tree_size
-                            .ok_or_else(|| LedgerError::InconsistentHead {
-                                run_id: run_id.to_string(),
-                                detail: "the previous checkpoint lacks tree_size".into(),
-                            })? as usize;
-                    let prev_profile = hh_identity::idp::profile_for(&prev_profile_name)
+        let (since_seq, prev_link) = match prev_checkpoint_ev {
+            Some(prev_ev) => {
+                let prev_claim =
+                    prev_claim_parsed
+                        .clone()
                         .ok_or_else(|| LedgerError::InconsistentHead {
                             run_id: run_id.to_string(),
-                            detail: format!(
-                                "the previous checkpoint names unknown profile {prev_profile_name}"
-                            ),
+                            detail: "the previous checkpoint row does not parse".into(),
                         })?;
-                    let prev_leaves =
-                        crate::rotation::rehashed_leaves(prev_profile, state.events.iter());
-                    let prev_head_now =
-                        crate::tree::mth_prefix_in(prev_profile, &prev_leaves, prev_size);
-                    if Some(prev_head_now.as_str()) != prev_claim.tree_head.as_deref() {
+                let prev_size =
+                    prev_claim
+                        .tree_size
+                        .ok_or_else(|| LedgerError::InconsistentHead {
+                            run_id: run_id.to_string(),
+                            detail: "the previous checkpoint lacks tree_size".into(),
+                        })? as usize;
+                let prev_profile = hharness_identity::idp::profile_for(&prev_profile_name)
+                    .ok_or_else(|| LedgerError::InconsistentHead {
+                        run_id: run_id.to_string(),
+                        detail: format!(
+                            "the previous checkpoint names unknown profile {prev_profile_name}"
+                        ),
+                    })?;
+                let prev_leaves =
+                    crate::rotation::rehashed_leaves(prev_profile, state.events.iter());
+                let prev_head_now =
+                    crate::tree::mth_prefix_in(prev_profile, &prev_leaves, prev_size);
+                if Some(prev_head_now.as_str()) != prev_claim.tree_head.as_deref() {
+                    return Err(LedgerError::InconsistentHead {
+                        run_id: run_id.to_string(),
+                        detail: format!(
+                            "the prefix under the last signed head changed \
+                             (signed {}, recomputed {prev_head_now})",
+                            prev_claim.tree_head.as_deref().unwrap_or("?")
+                        ),
+                    });
+                }
+                if prev_profile_name == claim_profile_name {
+                    let proof = crate::tree::prove_consistency_in(
+                        claim_profile,
+                        &leaf_hashes,
+                        prev_size,
+                        leaf_hashes.len(),
+                    )
+                    .ok_or_else(|| LedgerError::InconsistentHead {
+                        run_id: run_id.to_string(),
+                        detail: "no consistency proof exists from the held head".into(),
+                    })?;
+                    if !crate::tree::verify_consistency_in(
+                        claim_profile,
+                        &proof,
+                        prev_claim.tree_head.as_deref().unwrap_or_default(),
+                        &tree_head,
+                    ) {
                         return Err(LedgerError::InconsistentHead {
                             run_id: run_id.to_string(),
-                            detail: format!(
-                                "the prefix under the last signed head changed \
-                             (signed {}, recomputed {prev_head_now})",
-                                prev_claim.tree_head.as_deref().unwrap_or("?")
-                            ),
+                            detail: "the new head is not a consistent extension".into(),
                         });
                     }
-                    if prev_profile_name == claim_profile_name {
-                        let proof = crate::tree::prove_consistency_in(
-                            claim_profile,
-                            &leaf_hashes,
-                            prev_size,
-                            leaf_hashes.len(),
-                        )
-                        .ok_or_else(|| LedgerError::InconsistentHead {
-                            run_id: run_id.to_string(),
-                            detail: "no consistency proof exists from the held head".into(),
-                        })?;
-                        if !crate::tree::verify_consistency_in(
-                            claim_profile,
-                            &proof,
-                            prev_claim.tree_head.as_deref().unwrap_or_default(),
-                            &tree_head,
-                        ) {
-                            return Err(LedgerError::InconsistentHead {
-                                run_id: run_id.to_string(),
-                                detail: "the new head is not a consistent extension".into(),
-                            });
-                        }
-                    }
-                    let link = Json::obj([
-                        ("event_id", Json::str(&prev_ev.event_id)),
-                        (
-                            "tree_size",
-                            Json::Int(prev_claim.tree_size.unwrap_or(0) as i64),
-                        ),
-                        (
-                            "tree_head",
-                            prev_claim
-                                .tree_head
-                                .clone()
-                                .map(Json::str)
-                                .unwrap_or(Json::Null),
-                        ),
-                    ]);
-                    (prev_ev.seq + 1, link)
                 }
-                None => (0, Json::Null),
-            };
+                let link = Json::obj([
+                    ("event_id", Json::str(&prev_ev.event_id)),
+                    (
+                        "tree_size",
+                        Json::Int(prev_claim.tree_size.unwrap_or(0) as i64),
+                    ),
+                    (
+                        "tree_head",
+                        prev_claim
+                            .tree_head
+                            .clone()
+                            .map(Json::str)
+                            .unwrap_or(Json::Null),
+                    ),
+                ]);
+                (prev_ev.seq + 1, link)
+            }
+            None => (0, Json::Null),
+        };
         // Cross-run anchors observed in range — manifest lineage links (first
         // checkpoint only) plus `lifecycle.run.forked`/`control.subagent.
         // spawned` rows carrying `scope.child_run_id` since the last claim.
@@ -3001,7 +3000,7 @@ impl Store {
         run_id: &str,
         lease: &Lease,
         signer: &mut dyn AuditSigner,
-        plan: &hh_identity::rotation::RotationPlan,
+        plan: &hharness_identity::rotation::RotationPlan,
         bridge_record_ref: Option<&str>,
     ) -> Result<EventEnvelope, LedgerError> {
         let (from, to) = plan.validate().map_err(|e| LedgerError::SchemaViolation {
@@ -3066,7 +3065,7 @@ impl Store {
         run_id: &str,
         lease: &Lease,
         signer: &mut dyn AuditSigner,
-        plan: &hh_identity::rotation::RotationPlan,
+        plan: &hharness_identity::rotation::RotationPlan,
         bridge_record_ref: Option<&str>,
         witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
     ) -> Result<EventEnvelope, LedgerError> {
@@ -3350,7 +3349,7 @@ impl Store {
     /// S3.4b: the results store's `verify_citation` resolves blob evidence
     /// through it (`Missing{redacted}` after a tombstone — §6.5 AC-12).
     pub fn blob_status(&self, address: &str) -> BlobStatus {
-        let Ok(addr) = hh_identity::idp::parse_id(address) else {
+        let Ok(addr) = hharness_identity::idp::parse_id(address) else {
             return BlobStatus::Missing;
         };
         let path = self.root.join("blobs").join(&addr.digest_hex);
@@ -3556,7 +3555,7 @@ impl Store {
         )?;
         // Only now delete bytes — the audit fact is durable.
         for a in &addresses {
-            if let Ok(addr) = hh_identity::idp::parse_id(a) {
+            if let Ok(addr) = hharness_identity::idp::parse_id(a) {
                 let path = self.root.join("blobs").join(&addr.digest_hex);
                 if path.exists() {
                     fs::remove_file(&path).map_err(|e| LedgerError::Io {
@@ -3605,8 +3604,8 @@ impl Store {
                     continue;
                 }
                 let name = e.file_name().to_string_lossy().to_string();
-                let id = format!("{}:{}", hh_identity::idp::IDP_1.hash_algorithm, name);
-                if hh_identity::idp::parse_id(&id).is_ok() {
+                let id = format!("{}:{}", hharness_identity::idp::IDP_1.hash_algorithm, name);
+                if hharness_identity::idp::parse_id(&id).is_ok() {
                     addrs.insert(id);
                 }
             }
@@ -3622,7 +3621,7 @@ impl Store {
             if self.tombstones.contains_key(id) {
                 continue;
             }
-            let Ok(parsed) = hh_identity::idp::parse_id(id) else {
+            let Ok(parsed) = hharness_identity::idp::parse_id(id) else {
                 continue;
             };
             if !blob_dir.join(&parsed.digest_hex).exists() {
@@ -3744,7 +3743,7 @@ impl Store {
     /// tmp-write + rename + dir sync, same durability rule as
     /// `put_blob`). Idempotent: returns `true` only when bytes moved.
     fn set_blob_compressed(&self, address: &str, compress: bool) -> Result<bool, LedgerError> {
-        let Ok(parsed) = hh_identity::idp::parse_id(address) else {
+        let Ok(parsed) = hharness_identity::idp::parse_id(address) else {
             return Ok(false);
         };
         let path = self.root.join("blobs").join(&parsed.digest_hex);
@@ -3798,7 +3797,7 @@ impl Store {
         let rec = self.active_lease(run_id, lease)?;
         match basis {
             "approval" => {
-                if endorser.authority < hh_provenance::AuthorityClass::Principal {
+                if endorser.authority < hharness_provenance::AuthorityClass::Principal {
                     return Err(LedgerError::IllegitimateEndorsement {
                         detail: format!(
                             "redaction basis approval requires principal-or-above \
@@ -3809,7 +3808,7 @@ impl Store {
                 }
             }
             "policy_rule" => {
-                if endorser.authority != hh_provenance::AuthorityClass::Kernel {
+                if endorser.authority != hharness_provenance::AuthorityClass::Kernel {
                     return Err(LedgerError::IllegitimateEndorsement {
                         detail: format!(
                             "redaction basis policy_rule is the kernel scanner's \
@@ -3938,7 +3937,7 @@ impl Store {
             self.clock.now_ms(),
         )?;
         for a in &resolved {
-            if let Ok(addr) = hh_identity::idp::parse_id(a) {
+            if let Ok(addr) = hharness_identity::idp::parse_id(a) {
                 let path = self.root.join("blobs").join(&addr.digest_hex);
                 if path.exists() {
                     fs::remove_file(&path).map_err(|e| LedgerError::Io {
@@ -3997,10 +3996,10 @@ impl Store {
                 until,
             ),
             // `trace_view`/`cost_view`/`metric_view` fold in the owning crate
-            // (`hh-telemetry`) over `read` output — the ledger cannot depend
+            // (`hharness-telemetry`) over `read` output — the ledger cannot depend
             // on its consumer (ADR-0042 D2).
             // `lexical_index`/`memory_stale_index`/`memory_usage` fold in
-            // `hh-context` over the `MemoryStore` (§5c.3 — the store, not
+            // `hharness-context` over the `MemoryStore` (§5c.3 — the store, not
             // the run log, is their input; same owner-projection rule).
             // `branch_tree` — the ledger folds it (the branch index lives in
             // `lifecycle.*` rows on the runs' own WALs — no second store).
@@ -4199,7 +4198,7 @@ impl Store {
     /// presence accounting (a missing blob is `missing`, never `tampered` —
     /// ADR-0068 R3).
     pub fn blob_present(&self, address: &str) -> bool {
-        hh_identity::idp::parse_id(address)
+        hharness_identity::idp::parse_id(address)
             .map(|p| self.root.join("blobs").join(&p.digest_hex).exists())
             .unwrap_or(false)
     }
@@ -4806,13 +4805,13 @@ fn check_scopes(
 /// to `delegate` is the memory-promotion (`check_persist`) concern, which lands with
 /// the context/memory slices — interim ruling recorded in ADR-0234.
 fn check_scope_ceiling(p: &ProvenanceRecord) -> Result<(), LedgerError> {
-    use hh_provenance::{AttestationKind, AuthorityClass};
+    use hharness_provenance::{AttestationKind, AuthorityClass};
     let err = |scope| LedgerError::ScopeCeilingExceeded {
         scope,
         authority: p.authority,
     };
     match p.scope {
-        hh_provenance::PersistenceScope::Definition => {
+        hharness_provenance::PersistenceScope::Definition => {
             let sealed = p
                 .attestation
                 .as_ref()
@@ -4821,22 +4820,23 @@ fn check_scope_ceiling(p: &ProvenanceRecord) -> Result<(), LedgerError> {
                 return Err(err(p.scope));
             }
         }
-        hh_provenance::PersistenceScope::User => {
+        hharness_provenance::PersistenceScope::User => {
             if p.authority < AuthorityClass::Principal || p.attestation.is_none() {
                 return Err(err(p.scope));
             }
         }
-        hh_provenance::PersistenceScope::Project => {
+        hharness_provenance::PersistenceScope::Project => {
             if p.authority < AuthorityClass::Principal {
                 return Err(err(p.scope));
             }
         }
-        hh_provenance::PersistenceScope::Session => {
+        hharness_provenance::PersistenceScope::Session => {
             if p.authority < AuthorityClass::Delegate {
                 return Err(err(p.scope));
             }
         }
-        hh_provenance::PersistenceScope::Run | hh_provenance::PersistenceScope::Turn => {}
+        hharness_provenance::PersistenceScope::Run
+        | hharness_provenance::PersistenceScope::Turn => {}
     }
     Ok(())
 }

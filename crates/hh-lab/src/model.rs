@@ -7,7 +7,7 @@
 //!   the C0 schema slice.
 //! - [`CompatibilityRecord`] — the `conformance_report{subject_kind:
 //!   snapshot_pair}` record (`SubjectKind::SnapshotPair` exists in
-//!   `hh-registry`; S1.24 lands the record shape).
+//!   `hharness-registry`; S1.24 lands the record shape).
 //! - [`TrainedUnderRef`] / [`TrainingCutoffClaim`] / [`TrainingLineage`] —
 //!   the claim members.
 //!
@@ -16,9 +16,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::debt::ExpiryCondition;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_ontology::debt::ExpiryCondition;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 
@@ -820,7 +820,7 @@ pub fn snapshot_span(first: &str, last: &str, drift: bool) -> Json {
 
 /// `drifted ⇒ expiring` — the debt bridge (§5h.8 §4; ADR-0203): a
 /// `drifted{rules[]}` verdict projects onto
-/// [`hh_compiler::expiry::ExpiryObservables::regression_drifted_rules`]; the
+/// [`hharness_compiler::expiry::ExpiryObservables::regression_drifted_rules`]; the
 /// `model_version_change`-conditioned debts whose `rule_id` is named
 /// transition `expiring` under [`crate::debt::evaluate_debt`]. Other
 /// statuses project empty — `verified`/`broken`/`unknown` are not

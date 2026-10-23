@@ -6,8 +6,8 @@
 //! severity, detail, debt_ref}]` and the `granularity_ceiling` is preserved;
 //! nothing is summarised away (CC3 — nothing silently lost).
 
-use hh_compiler::lcd::LoweringLossReport;
-use hh_wire::Json;
+use hharness_compiler::lcd::LoweringLossReport;
+use hharness_wire::Json;
 
 /// `loss_report_export/1` — one exported lowering-loss report plus its
 /// content address (`loss_report_ref` — the member `CompiledBundle` names).
@@ -42,7 +42,8 @@ pub fn export_loss_report(report: &LoweringLossReport) -> Json {
             Json::str(report.granularity_ceiling.name()),
         ),
     ]);
-    let loss_ref = hh_identity::idp_id("eval.loss_report", body.to_canonical_string().as_bytes());
+    let loss_ref =
+        hharness_identity::idp_id("eval.loss_report", body.to_canonical_string().as_bytes());
     let mut m = match body {
         Json::Obj(m) => m,
         _ => unreachable!(),
@@ -66,7 +67,7 @@ pub fn export_bundle_losses(reports: &[LoweringLossReport]) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_compiler::lcd::{
+    use hharness_compiler::lcd::{
         GranularityCeiling, LossEntry, LossKind, LossSeverity, LoweringLossReport,
     };
 

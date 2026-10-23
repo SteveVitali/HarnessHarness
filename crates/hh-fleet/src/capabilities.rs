@@ -19,7 +19,7 @@
 //! `capabilities` verb, and the FleetView `source.capabilities` member.
 //! One spelling, one codec (CC1/CC7).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// One capability member's state — `{state, supported}`; `unknown`
 /// carries no `supported` member (unanswerable is a third value, never

@@ -3,7 +3,7 @@
 //! ADR-0365). Every leg names the invariant it pins; each fails if the
 //! behaviour is removed:
 //!
-//! - a real TLS session carries the `hh_wire::http` codec (the ADR-0364
+//! - a real TLS session carries the `hharness_wire::http` codec (the ADR-0364
 //!   mount: one codec, TLS beneath);
 //! - the local-CA hook admits an explicitly named roots file — never an
 //!   implicit one;
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use hh_tls::{ClientTls, PeerIdentity, ServerTls, ServerTlsStream, TlsError, TlsStream};
+use hharness_tls::{ClientTls, PeerIdentity, ServerTls, ServerTlsStream, TlsError, TlsStream};
 
 fn pki(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("fixtures/pki/{name}"))
@@ -39,8 +39,8 @@ fn client() -> ClientTls {
 /// the fixture drains before it answers), write the response.
 fn respond_ok(s: &mut ServerTlsStream) {
     let mut r = BufReader::new(&mut *s);
-    let _ = hh_wire::http::read_request(&mut r, 64 * 1024);
-    hh_wire::http::write_response(&mut *s, 200, &[], b"ok").unwrap();
+    let _ = hharness_wire::http::read_request(&mut r, 64 * 1024);
+    hharness_wire::http::write_response(&mut *s, 200, &[], b"ok").unwrap();
 }
 
 /// Serve one TLS-terminated request: `f` receives the established
@@ -89,9 +89,9 @@ fn expect_refusal(r: Result<TlsStream, TlsError>) -> TlsError {
 }
 
 fn get(stream: &mut TlsStream, path: &str) -> (u16, Vec<u8>) {
-    hh_wire::http::write_request(stream, "GET", path, &[("Host", "localhost")], &[]).unwrap();
+    hharness_wire::http::write_request(stream, "GET", path, &[("Host", "localhost")], &[]).unwrap();
     let mut r = BufReader::new(stream);
-    let (head, body) = hh_wire::http::read_response_full(&mut r, 64 * 1024).unwrap();
+    let (head, body) = hharness_wire::http::read_response_full(&mut r, 64 * 1024).unwrap();
     (head.status, body)
 }
 
@@ -102,11 +102,11 @@ fn tls_get_roundtrip_over_one_codec() {
     let tls = ServerTls::new(&pem("server.pem"), &pem("server-key.pem")).unwrap();
     let (port, join) = serve(tls, |s| {
         let mut r = BufReader::new(&mut *s);
-        let (head, _body) = hh_wire::http::read_request(&mut r, 64 * 1024)
+        let (head, _body) = hharness_wire::http::read_request(&mut r, 64 * 1024)
             .unwrap()
             .unwrap();
         assert_eq!(head.method, "GET");
-        hh_wire::http::write_response(&mut *s, 200, &[("X-Test", "tls")], b"ok").unwrap();
+        hharness_wire::http::write_response(&mut *s, 200, &[("X-Test", "tls")], b"ok").unwrap();
     });
 
     let mut stream = expect_stream(client().connect(dial(port), "localhost"));
@@ -209,10 +209,10 @@ fn missing_client_cert_refused() {
         Err(TlsError::Handshake(_)) | Err(TlsError::Io(_)) => {}
         Err(other) => panic!("unexpected refusal class: {other:?}"),
         Ok(mut stream) => {
-            let r = hh_wire::http::write_request(&mut stream, "GET", "/", &[], &[]);
+            let r = hharness_wire::http::write_request(&mut stream, "GET", "/", &[], &[]);
             let refused = r.is_err() || {
                 let mut r = BufReader::new(&mut stream);
-                hh_wire::http::read_response_full(&mut r, 1024).is_err()
+                hharness_wire::http::read_response_full(&mut r, 1024).is_err()
             };
             assert!(refused, "an unauthenticated peer got a usable session");
         }

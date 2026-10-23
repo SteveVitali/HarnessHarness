@@ -1,4 +1,4 @@
-//! `hh-secrets` — the C0/Stage-1 **credential broker** slice (spec §5g.3,
+//! `hharness-secrets` — the C0/Stage-1 **credential broker** slice (spec §5g.3,
 //! R-2.8.3; ticket S1.13; ADR-0057/0058/0059).
 //!
 //! # What this crate is
@@ -7,7 +7,7 @@
 //! exists only as the value-free `SecretRef{name, description}`; below it the
 //! broker holds the channel table, the binding table, the resolver SPI (the
 //! vault boundary) and the mask set. The PDP/CDP split is the spec's own:
-//! **the reference monitor decides** (`hh-monitor`'s `security.permission.*`
+//! **the reference monitor decides** (`hharness-monitor`'s `security.permission.*`
 //! records — the `DecisionView` fold reads them), **the broker delivers** —
 //! and never decides policy, never falls back to an environment value, and
 //! fails closed when the vault or the audit writer is unavailable.
@@ -68,7 +68,7 @@
 //!   real signatures generated at test time, never live-attested.
 //! - **`aead`** — R3.8's `RingBlobCipher`: the workspace's one blob-pool
 //!   AEAD (`ring::aead::AES_256_GCM` + `ring::rand` — ADR-0359's reserved
-//!   scope consumed; ADR-0361). `hh-ledger` installs it through the
+//!   scope consumed; ADR-0361). `hharness-ledger` installs it through the
 //!   `BlobCipher` custody seam; key material resolves through the broker,
 //!   never enters ledger state (`n/a{custody}` — OQ-170).
 //! - **`deliver_wrapped` / `probe_wrapped`** — the `wrapped_long_lived`

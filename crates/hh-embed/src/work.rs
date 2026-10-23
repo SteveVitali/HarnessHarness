@@ -8,17 +8,17 @@ use crate::frames::FrameAdapter;
 use crate::inject;
 use crate::open::{attendance_async, realized_settings, sess_manifest_ref, session_json};
 use crate::service::{ledger_err, EmbedService, PendingAsk, SubState};
-use hh_control::vocab::{Cue, HumanInput};
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::strict::StrictObj;
-use hh_embed_schema::types::*;
-use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
-use hh_ledger::event::{Cursor, Direction as ReadDir};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::views::ViewKind;
-use hh_ledger::wakeup::{Coalesce, SubscriptionState, Trigger, WakeupPolicy};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_control::vocab::{Cue, HumanInput};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::strict::StrictObj;
+use hharness_embed_schema::types::*;
+use hharness_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
+use hharness_ledger::event::{Cursor, Direction as ReadDir};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::views::ViewKind;
+use hharness_ledger::wakeup::{Coalesce, SubscriptionState, Trigger, WakeupPolicy};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// The read page bound when `limit = 0` (server default).
@@ -46,7 +46,9 @@ impl EmbedService {
             if s.finished {
                 return Err(EmbedError::Draining);
             }
-            if s.turn_active && s.steering.1 == hh_control::strategy::ConcurrentInput::QueueOnly {
+            if s.turn_active
+                && s.steering.1 == hharness_control::strategy::ConcurrentInput::QueueOnly
+            {
                 return Err(EmbedError::TurnActive);
             }
             s.turn_active
@@ -229,10 +231,10 @@ impl EmbedService {
             s.steering.0
         };
         match mode {
-            hh_control::strategy::SteerMode::Unsupported => Err(EmbedError::Unsupported {
+            hharness_control::strategy::SteerMode::Unsupported => Err(EmbedError::Unsupported {
                 by: "control_strategy".to_string(),
             }),
-            hh_control::strategy::SteerMode::InterruptAtDecisionPoint => {
+            hharness_control::strategy::SteerMode::InterruptAtDecisionPoint => {
                 let payload_ref = self.stage_input(&p.session_id, &p.input)?;
                 {
                     let s = self.session_mut(&p.session_id)?;
@@ -251,7 +253,7 @@ impl EmbedService {
                 }
                 Ok(out)
             }
-            hh_control::strategy::SteerMode::QueueNextTurn => {
+            hharness_control::strategy::SteerMode::QueueNextTurn => {
                 let payload_ref = self.stage_input(&p.session_id, &p.input)?;
                 self.queue_steer(&p.session_id, &payload_ref)?;
                 let turn = self.session(&p.session_id)?.active_turn.clone();
@@ -297,7 +299,7 @@ impl EmbedService {
             subs.iter()
                 .find(|w| {
                     w.state == SubscriptionState::Active
-                        && w.policy.delivery_mode == hh_ledger::wakeup::DeliveryMode::Steer
+                        && w.policy.delivery_mode == hharness_ledger::wakeup::DeliveryMode::Steer
                         && matches!(
                             &w.trigger,
                             Trigger::Manual { principal } if principal == &lease.holder
@@ -323,7 +325,7 @@ impl EmbedService {
                             principal: lease.holder.clone(),
                         },
                         WakeupPolicy {
-                            delivery_mode: hh_ledger::wakeup::DeliveryMode::Steer,
+                            delivery_mode: hharness_ledger::wakeup::DeliveryMode::Steer,
                             coalesce: Coalesce::None,
                             max_pending: 16,
                             expires_at_ms: None,
@@ -417,7 +419,7 @@ impl EmbedService {
                     coordinate: coord.clone(),
                 },
             )?;
-        let new_ref = hh_compiler::profile::profile_coordinate(&profile);
+        let new_ref = hharness_compiler::profile::profile_coordinate(&profile);
 
         let sealed = self.persisted_definition(&manifest_ref)?;
         let kernel_prov = ProvenanceRecord::kernel("kernel:relower", self.store.now_ms());
@@ -425,8 +427,8 @@ impl EmbedService {
         // The old bundle — the same compile inputs the run compiled
         // under (relower re-checks `runtime_plan` identity itself; a
         // divergence is `PlanError`, never a silent plan change).
-        let old = hh_compiler::compile(
-            &hh_compiler::CompileInputs {
+        let old = hharness_compiler::compile(
+            &hharness_compiler::CompileInputs {
                 sealed: sealed.clone(),
                 profile_refs: old_refs,
                 fallback_profile: None,
@@ -442,9 +444,9 @@ impl EmbedService {
         .map_err(|e| EmbedError::Refused {
             reason: format!("relower_baseline: {e:?}"),
         })?;
-        let (new_bundle, migration) = hh_compiler::relower(
+        let (new_bundle, migration) = hharness_compiler::relower(
             &old,
-            &hh_compiler::CompileInputs {
+            &hharness_compiler::CompileInputs {
                 sealed,
                 profile_refs: vec![new_ref.clone()],
                 fallback_profile: None,
@@ -468,11 +470,11 @@ impl EmbedService {
             &run_id,
             &lease,
             "model.surface.relowered",
-            hh_compiler::relowered_event(&migration),
+            hharness_compiler::relowered_event(&migration),
         )?;
         // The new bundle member joins the content-addressed pool — the
         // `new_bundle_id` the event cites is resolvable.
-        let doc = hh_compiler::schema::bundle_to_json(&new_bundle);
+        let doc = hharness_compiler::schema::bundle_to_json(&new_bundle);
         let bytes = doc.to_canonical_string().into_bytes();
         self.store
             .put_blob(&bytes, "application/json")
@@ -503,12 +505,12 @@ impl EmbedService {
     /// effect (`approval` cue). `more_info`/`escalate` leave the pending
     /// open — they are not decisions. `Recorded`.
     pub(crate) fn respond_permission(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        use hh_monitor::approval::{
+        use hharness_monitor::approval::{
             ApprovalResponse, ApprovalState, EndorserRef, LeaseSpec, RespondCtx, ResponseChoice,
         };
-        use hh_monitor::decision::{Decision, DecisionScope};
-        use hh_provenance::authority::AuthorityClass;
-        use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+        use hharness_monitor::decision::{Decision, DecisionScope};
+        use hharness_provenance::authority::AuthorityClass;
+        use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
 
         inject::refuse_secrets(params)?;
         let p = RespondPermissionParams::from_json(params)?;
@@ -589,9 +591,9 @@ impl EmbedService {
                     && e.payload.get("decision").and_then(Json::as_str) == Some("ask")
             })
             .and_then(|e| e.payload.get("effective_risk_class"))
-            .and_then(hh_ontology::risk::RiskClass::from_json);
+            .and_then(hharness_ontology::risk::RiskClass::from_json);
         let irreversible = asked_risk
-            .map(hh_monitor::approval::never_auto)
+            .map(hharness_monitor::approval::never_auto)
             .unwrap_or(false);
         // The remedy-*ingress* echo (R-2.11; ADR-0343 D4): the offered
         // `remedies` the durable `pending` folded in ride the `decided`
@@ -607,12 +609,11 @@ impl EmbedService {
         // discipline `selected`/`modified` answer over `options`.
         let remedy_taken = match &p.outcome {
             PermissionOutcome::Remedy { remedy } => {
-                let r = hh_provenance::flow::Remedy::from_json(remedy, "outcome.remedy").map_err(
-                    |e| EmbedError::SchemaViolation {
+                let r = hharness_provenance::flow::Remedy::from_json(remedy, "outcome.remedy")
+                    .map_err(|e| EmbedError::SchemaViolation {
                         path: "respond_permission/outcome.remedy".to_string(),
                         code: format!("malformed_remedy:{}", e.detail),
-                    },
-                )?;
+                    })?;
                 if !pending_remedies.iter().any(|o| o == &r) {
                     return Err(EmbedError::OptionNotOffered {
                         option_id: format!("remedy:{}", r.kind()),
@@ -636,7 +637,7 @@ impl EmbedService {
                 "allow_lease" => (
                     ResponseChoice::AllowLease(LeaseSpec {
                         pattern: None,
-                        scope: hh_monitor::approval::LeaseScope::Run,
+                        scope: hharness_monitor::approval::LeaseScope::Run,
                         max_uses: None,
                     }),
                     DecisionScope::Session,
@@ -674,13 +675,13 @@ impl EmbedService {
         }
         let now = self.store.now_ms();
         let ctx = RespondCtx {
-            policy_fingerprint: hh_monitor::approval::policy_fingerprint(
+            policy_fingerprint: hharness_monitor::approval::policy_fingerprint(
                 &manifest_ref,
                 &policy_mode,
                 &narrowing_leaf_ids,
             ),
             scope_ref: run_id.clone(),
-            risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            risk_ceiling: asked_risk.unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN),
             grant_authority: AuthorityClass::Principal,
             // S4.14a (§5g.7 §4): the live `ApproverGrant` set folds from the
             // ledger (`grant_issued`/`grant_revoked` rows) — the respond
@@ -834,15 +835,15 @@ impl EmbedService {
         }
         // `decided` + `lease.granted` commit in one batch — the lease is the
         // decision's artifact; a torn pair would read as an allow-once.
-        let mut batch = vec![hh_env::events::EventMinter::new(&self.store, &run_id)
+        let mut batch = vec![hharness_env::events::EventMinter::new(&self.store, &run_id)
             .mint("security.permission.decided", Json::obj(members))
             .map_err(ledger_err)?];
         if let Some(l) = &outcome.lease {
             batch.push(
-                hh_env::events::EventMinter::new(&self.store, &run_id)
+                hharness_env::events::EventMinter::new(&self.store, &run_id)
                     .mint(
                         "security.permission.lease.granted",
-                        hh_monitor::approval::lease_granted_payload(l),
+                        hharness_monitor::approval::lease_granted_payload(l),
                     )
                     .map_err(ledger_err)?,
             );
@@ -862,11 +863,11 @@ impl EmbedService {
         if allow && pending.subject_ref.is_some() && pending.capability_ref.is_some() {
             let handle_id = self.store.alloc_id("hnd");
             let granted_event_id = self.store.alloc_id("evt");
-            let mint_in = hh_monitor::mint::ApprovalMint {
+            let mint_in = hharness_monitor::mint::ApprovalMint {
                 permission_id: p.permission_id.clone(),
-                holder: hh_hir::refs::Ref {
+                holder: hharness_hir::refs::Ref {
                     semantic_id: pending.subject_ref.clone().unwrap_or_default(),
-                    version: hh_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
+                    version: hharness_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
                 },
                 issuer: ProvenanceRecord::minted(
                     Origin::human("human:principal", HumanRole::Principal),
@@ -909,16 +910,16 @@ impl EmbedService {
                     "evt" => granted_event_id.clone(),
                     other => store.alloc_id(other),
                 };
-                hh_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
+                hharness_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
             };
             let (handle, evt_id) = minted.map_err(|e| EmbedError::Refused {
                 reason: format!("approval_mint: {e:?}"),
             })?;
             batch.push(
-                hh_env::events::EventMinter::new(&self.store, &run_id)
+                hharness_env::events::EventMinter::new(&self.store, &run_id)
                     .mint_with_id(
                         "security.permission.granted",
-                        hh_monitor::events::granted_payload(&handle),
+                        hharness_monitor::events::granted_payload(&handle),
                         evt_id,
                     )
                     .map_err(ledger_err)?,
@@ -993,19 +994,19 @@ impl EmbedService {
     pub fn surface_respond_permission(
         &mut self,
         run_id: &str,
-        lease: &hh_ledger::store::Lease,
+        lease: &hharness_ledger::store::Lease,
         permission_id: &str,
         outcome: &PermissionOutcome,
         responder_subject: &str,
         surface_session_ref: Option<&str>,
         request_id: &str,
     ) -> Result<Json, EmbedError> {
-        use hh_monitor::approval::{
+        use hharness_monitor::approval::{
             ApprovalResponse, ApprovalState, EndorserRef, LeaseSpec, RespondCtx, ResponseChoice,
         };
-        use hh_monitor::decision::{Decision, DecisionScope};
-        use hh_provenance::authority::AuthorityClass;
-        use hh_provenance::{HumanRole, Origin, PersistenceScope};
+        use hharness_monitor::decision::{Decision, DecisionScope};
+        use hharness_provenance::authority::AuthorityClass;
+        use hharness_provenance::{HumanRole, Origin, PersistenceScope};
 
         let events = self.store.events(run_id).map_err(ledger_err)?.to_vec();
         // Replay: a decided row already stamped with this `request_id`
@@ -1067,9 +1068,9 @@ impl EmbedService {
                     && e.payload.get("decision").and_then(Json::as_str) == Some("ask")
             })
             .and_then(|e| e.payload.get("effective_risk_class"))
-            .and_then(hh_ontology::risk::RiskClass::from_json);
+            .and_then(hharness_ontology::risk::RiskClass::from_json);
         let irreversible = asked_risk
-            .map(hh_monitor::approval::never_auto)
+            .map(hharness_monitor::approval::never_auto)
             .unwrap_or(false);
         // The remedy consume gate (R2.12; DF-S2.7-1b) — identical to the
         // session path's: the response's `remedy` must decode the closed
@@ -1081,12 +1082,11 @@ impl EmbedService {
             .unwrap_or_default();
         let remedy_taken = match outcome {
             PermissionOutcome::Remedy { remedy } => {
-                let r = hh_provenance::flow::Remedy::from_json(remedy, "outcome.remedy").map_err(
-                    |e| EmbedError::SchemaViolation {
+                let r = hharness_provenance::flow::Remedy::from_json(remedy, "outcome.remedy")
+                    .map_err(|e| EmbedError::SchemaViolation {
                         path: "respond_permission/outcome.remedy".to_string(),
                         code: format!("malformed_remedy:{}", e.detail),
-                    },
-                )?;
+                    })?;
                 if !pending_remedies.iter().any(|o| o == &r) {
                     return Err(EmbedError::OptionNotOffered {
                         option_id: format!("remedy:{}", r.kind()),
@@ -1108,7 +1108,7 @@ impl EmbedService {
                 "allow_lease" => (
                     ResponseChoice::AllowLease(LeaseSpec {
                         pattern: None,
-                        scope: hh_monitor::approval::LeaseScope::Run,
+                        scope: hharness_monitor::approval::LeaseScope::Run,
                         max_uses: None,
                     }),
                     DecisionScope::Session,
@@ -1160,13 +1160,13 @@ impl EmbedService {
             .unwrap_or("")
             .to_string();
         let ctx = RespondCtx {
-            policy_fingerprint: hh_monitor::approval::policy_fingerprint(
+            policy_fingerprint: hharness_monitor::approval::policy_fingerprint(
                 &exposure_version_id,
                 &catalogue_hash,
                 &[],
             ),
             scope_ref: run_id.to_string(),
-            risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            risk_ceiling: asked_risk.unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN),
             grant_authority: AuthorityClass::Principal,
             grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
@@ -1293,15 +1293,15 @@ impl EmbedService {
         }
         // `decided` + `lease.granted` in one batch — the same atomicity
         // the session path guarantees.
-        let mut batch = vec![hh_env::events::EventMinter::new(&self.store, run_id)
+        let mut batch = vec![hharness_env::events::EventMinter::new(&self.store, run_id)
             .mint("security.permission.decided", Json::obj(members))
             .map_err(ledger_err)?];
         if let Some(l) = &outcome_res.lease {
             batch.push(
-                hh_env::events::EventMinter::new(&self.store, run_id)
+                hharness_env::events::EventMinter::new(&self.store, run_id)
                     .mint(
                         "security.permission.lease.granted",
-                        hh_monitor::approval::lease_granted_payload(l),
+                        hharness_monitor::approval::lease_granted_payload(l),
                     )
                     .map_err(ledger_err)?,
             );
@@ -1345,11 +1345,11 @@ impl EmbedService {
             };
             let handle_id = self.store.alloc_id("hnd");
             let granted_event_id = self.store.alloc_id("evt");
-            let mint_in = hh_monitor::mint::ApprovalMint {
+            let mint_in = hharness_monitor::mint::ApprovalMint {
                 permission_id: permission_id.to_string(),
-                holder: hh_hir::refs::Ref {
+                holder: hharness_hir::refs::Ref {
                     semantic_id: pending.subject_ref.clone().unwrap_or_default(),
-                    version: hh_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
+                    version: hharness_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
                 },
                 issuer: ProvenanceRecord::minted(
                     Origin::human(responder_subject, HumanRole::Principal),
@@ -1377,16 +1377,16 @@ impl EmbedService {
                     "evt" => granted_event_id.clone(),
                     other => store.alloc_id(other),
                 };
-                hh_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
+                hharness_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
             };
             let (handle, evt_id) = minted.map_err(|e| EmbedError::Refused {
                 reason: format!("approval_mint: {e:?}"),
             })?;
             batch.push(
-                hh_env::events::EventMinter::new(&self.store, run_id)
+                hharness_env::events::EventMinter::new(&self.store, run_id)
                     .mint_with_id(
                         "security.permission.granted",
-                        hh_monitor::events::granted_payload(&handle),
+                        hharness_monitor::events::granted_payload(&handle),
                         evt_id,
                     )
                     .map_err(ledger_err)?,
@@ -1594,7 +1594,7 @@ impl EmbedService {
     /// `containment.enforcement_evidence` — a bypass amendment into a
     /// binding without it is `Refused{bypass_without_containment}`.
     fn amend_policy(&mut self, p: &AmendParams) -> Result<Json, EmbedError> {
-        use hh_monitor::approval::ApprovalState;
+        use hharness_monitor::approval::ApprovalState;
         let (run_id, lease, manifest, old_attendance, old_mode) = {
             let s = self.session(&p.session_id)?;
             (
@@ -1734,7 +1734,7 @@ impl EmbedService {
             let s = self.session_mut(&p.session_id)?;
             match p.target.as_str() {
                 "attendance" => {
-                    s.realized.attendance = hh_embed_schema::types::AttendanceDeclaration {
+                    s.realized.attendance = hharness_embed_schema::types::AttendanceDeclaration {
                         value: new_v.clone(),
                         source: "declared".to_string(),
                     };
@@ -1847,8 +1847,8 @@ impl EmbedService {
             .map_err(ledger_err)?
             .clone();
         let obs = &parent.observability_level;
-        let has = |l: hh_ledger::manifest::ObservabilityLevel| obs.contains(&l);
-        use hh_ledger::manifest::ObservabilityLevel as OL;
+        let has = |l: hharness_ledger::manifest::ObservabilityLevel| obs.contains(&l);
+        use hharness_ledger::manifest::ObservabilityLevel as OL;
         let (effective_replay, downgrade_reason) = match replay_mode {
             ReplayMode::Exact if !has(OL::Ledger) => (
                 ReplayMode::Observational,
@@ -1956,7 +1956,7 @@ impl EmbedService {
             let cdrv = self
                 .env_drivers
                 .entry(child_run.clone())
-                .or_insert_with(|| hh_env::driver::EnvDriver::new(&child_run));
+                .or_insert_with(|| hharness_env::driver::EnvDriver::new(&child_run));
             let ch = cdrv
                 .derive_from_snapshot(&mut self.store, &lease, &parent_handle, tree)
                 .map_err(crate::open::env_err)?;
@@ -2012,8 +2012,8 @@ impl EmbedService {
             driver: None,
             mem_ctx: None,
             steering: (
-                hh_control::strategy::SteerMode::Unsupported,
-                hh_control::strategy::ConcurrentInput::QueueOnly,
+                hharness_control::strategy::SteerMode::Unsupported,
+                hharness_control::strategy::ConcurrentInput::QueueOnly,
             ),
             env_json: Json::Null,
             env_handle_id: child_env_handle,
@@ -2028,7 +2028,7 @@ impl EmbedService {
                     Vec::new()
                 } else {
                     self.persisted_definition(&r)
-                        .map(|d| hh_monitor::mint::cap_rows(&d.document))
+                        .map(|d| hharness_monitor::mint::cap_rows(&d.document))
                         .unwrap_or_default()
                 }
             },
@@ -2396,7 +2396,7 @@ impl EmbedService {
         // P8 — the served page's content-class shape: observation/model-
         // plane rows carry content bytes; everything else is structural
         // (the delivered row lists the union served).
-        let served: Vec<&hh_ledger::event::EventEnvelope> = page
+        let served: Vec<&hharness_ledger::event::EventEnvelope> = page
             .events
             .iter()
             .filter(|e| {
@@ -2409,7 +2409,8 @@ impl EmbedService {
         let has_content = served.iter().any(|e| {
             matches!(
                 e.plane,
-                hh_ledger::event::EventPlane::Observation | hh_ledger::event::EventPlane::Model
+                hharness_ledger::event::EventPlane::Observation
+                    | hharness_ledger::event::EventPlane::Model
             )
         });
         let first = served.first().map(|e| e.seq);
@@ -2450,8 +2451,8 @@ impl EmbedService {
     /// `project` — the canonical view fold (§7.4 §2.4; S4.10): ledger-
     /// owned kinds fold in `Store::project`; `trace_view`/`cost_view`/
     /// `metric_view` are owner projections the boundary delegates to
-    /// `hh-telemetry` (ADR-0042 D2 — the kernel performs the owning fold,
-    /// the surface never recomputes); hh-context kinds stay
+    /// `hharness-telemetry` (ADR-0042 D2 — the kernel performs the owning fold,
+    /// the surface never recomputes); hharness-context kinds stay
     /// `OwnerProjected` → `Refused` until their boundary lands. Unknown
     /// spellings are `SchemaViolation`, never a silent fallback.
     pub(crate) fn project(&mut self, params: &Json) -> Result<Json, EmbedError> {
@@ -2474,27 +2475,27 @@ impl EmbedService {
                     .and_then(|c| c.first().map(|e| e.run_id.clone()))
                     .unwrap_or_else(|| run_id.clone());
                 match kind {
-                    ViewKind::TraceView => hh_telemetry::views::trace_view(
+                    ViewKind::TraceView => hharness_telemetry::views::trace_view(
                         &run_id,
                         &root_run_id,
                         &events,
                         until,
-                        hh_telemetry::clocks::clock_tolerance(&manifest),
+                        hharness_telemetry::clocks::clock_tolerance(&manifest),
                     ),
                     ViewKind::CostView => {
-                        hh_telemetry::views::cost_view(&run_id, &root_run_id, &events, until)
+                        hharness_telemetry::views::cost_view(&run_id, &root_run_id, &events, until)
                     }
                     _ => {
                         let declared: std::collections::BTreeSet<
-                            hh_ontology::participant::Observability,
+                            hharness_ontology::participant::Observability,
                         > = manifest
                             .observability_level
                             .iter()
                             .filter_map(|l| {
-                                hh_ontology::participant::Observability::parse(l.as_str())
+                                hharness_ontology::participant::Observability::parse(l.as_str())
                             })
                             .collect();
-                        hh_telemetry::views::metric_view(
+                        hharness_telemetry::views::metric_view(
                             &run_id,
                             &root_run_id,
                             &declared,
@@ -2640,14 +2641,15 @@ impl EmbedService {
     pub(crate) fn get_artifact(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let p = GetArtifactParams::from_json(params)?;
         self.live_session(&p.session_id)?;
-        let parsed =
-            hh_identity::idp::parse_id(&p.address).map_err(|_| EmbedError::SchemaViolation {
+        let parsed = hharness_identity::idp::parse_id(&p.address).map_err(|_| {
+            EmbedError::SchemaViolation {
                 path: "get_artifact/address".to_string(),
                 code: "malformed_id".to_string(),
-            })?;
+            }
+        })?;
         // `get_blob` keys on the rendered id — a ContentAddress whose
         // media_type/size are unknown is still the same blob.
-        let addr = hh_identity::idp::ContentAddress {
+        let addr = hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex.clone(),
@@ -2660,7 +2662,7 @@ impl EmbedService {
         // requested address).
         let bytes = match self.store.get_blob(&addr) {
             Ok(b) => b,
-            Err(hh_ledger::errors::LedgerError::Missing { .. }) => {
+            Err(hharness_ledger::errors::LedgerError::Missing { .. }) => {
                 match self.sealed_defs.get(&p.address).cloned() {
                     Some(b) => b,
                     None => {
@@ -2673,10 +2675,12 @@ impl EmbedService {
                         match self.artifact_bytes(&p.address) {
                             Ok(b) => b,
                             Err(_) => {
-                                return Err(ledger_err(hh_ledger::errors::LedgerError::Missing {
-                                    address: p.address.clone(),
-                                    reason: hh_ledger::errors::MissingReason::Gc,
-                                }))
+                                return Err(ledger_err(
+                                    hharness_ledger::errors::LedgerError::Missing {
+                                        address: p.address.clone(),
+                                        reason: hharness_ledger::errors::MissingReason::Gc,
+                                    },
+                                ))
                             }
                         }
                     }
@@ -2714,7 +2718,7 @@ impl EmbedService {
         let p = RunIndexParams::from_json(params)?;
         let filter = p
             .filters
-            .map(|f| hh_ledger::store::RunIndexFilter {
+            .map(|f| hharness_ledger::store::RunIndexFilter {
                 run_kind: f.run_kind,
                 participant_class: f.participant_class,
                 status: f.status,
@@ -2848,9 +2852,9 @@ fn cursor_from(c: &ReadCursor) -> i64 {
 }
 
 /// The store-side `RunIndexEntry` → the wire `RunIndexEntry` JSON
-/// (ADR-0301 D5 — the boundary converts; hh-ledger never imports the
+/// (ADR-0301 D5 — the boundary converts; hharness-ledger never imports the
 /// schema crate).
-fn schema_run_index_entry(e: &hh_ledger::store::RunIndexEntry) -> Json {
+fn schema_run_index_entry(e: &hharness_ledger::store::RunIndexEntry) -> Json {
     let mut m = BTreeMap::new();
     m.insert("run_id".to_string(), Json::str(e.run_id.clone()));
     m.insert("run_kind".to_string(), Json::str(e.run_kind.clone()));
@@ -2933,7 +2937,7 @@ impl EmbedService {
             self.store.audit_key_resolver(),
         ) {
             Ok(()) => Ok(Json::obj([("verdict", Json::str("ok"))])),
-            Err(hh_ledger::errors::LedgerError::Tampered(t)) => Ok(Json::obj([
+            Err(hharness_ledger::errors::LedgerError::Tampered(t)) => Ok(Json::obj([
                 ("verdict", Json::str("tampered")),
                 ("at_seq", Json::Int(t.at_seq as i64)),
                 ("kind", Json::str(t.kind.as_str())),
@@ -2985,7 +2989,7 @@ impl EmbedService {
 /// §5g.7 `PermissionRequest` record; the supply surface's mint spells
 /// `capability_ref` as a bare semantic id and `requested_at` as the
 /// timestamp string — both spellings decode.
-fn pending_ask_from_row(e: &hh_ledger::event::EventEnvelope) -> PendingAsk {
+fn pending_ask_from_row(e: &hharness_ledger::event::EventEnvelope) -> PendingAsk {
     let req = e.payload.get("request").cloned().unwrap_or(Json::Null);
     let capability_ref = match req.get("capability_ref") {
         Some(Json::Obj(c)) => match (
@@ -3070,13 +3074,13 @@ fn pending_ask_from_row(e: &hh_ledger::event::EventEnvelope) -> PendingAsk {
 /// illegitimate endorsement is a typed refusal, never a silently dropped
 /// row. One helper, both respond paths (CC1).
 fn approval_endorsement(
-    store: &hh_ledger::store::Store,
+    store: &hharness_ledger::store::Store,
     run_id: &str,
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
     permission_id: &str,
     endorser: &ProvenanceRecord,
-    to_authority: hh_provenance::AuthorityClass,
-) -> Result<Option<hh_ledger::event::Event>, EmbedError> {
+    to_authority: hharness_provenance::AuthorityClass,
+) -> Result<Option<hharness_ledger::event::Event>, EmbedError> {
     let Some(anchor) = events.iter().rev().find(|e| {
         e.class == "action.intent.anchored"
             && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
@@ -3088,17 +3092,17 @@ fn approval_endorsement(
     };
     let mut to = subject.label();
     to.authority = to_authority;
-    let endorsed = match hh_provenance::endorse(
+    let endorsed = match hharness_provenance::endorse(
         subject,
         anchor.event_id.clone(),
         &to,
         endorser,
-        hh_provenance::EndorsementBasis::Approval,
+        hharness_provenance::EndorsementBasis::Approval,
         Some(permission_id.to_string()),
-        hh_provenance::ContentKind::EffectIntent,
+        hharness_provenance::ContentKind::EffectIntent,
     ) {
         Ok(e) => e,
-        Err(hh_provenance::EndorsementError::NoLabelIncrease) => return Ok(None),
+        Err(hharness_provenance::EndorsementError::NoLabelIncrease) => return Ok(None),
         Err(e) => {
             return Err(EmbedError::Refused {
                 reason: format!("approval_endorsement: {e:?}"),
@@ -3114,11 +3118,11 @@ fn approval_endorsement(
             m.insert("basis_ref".to_string(), Json::str(b.clone()));
         }
     }
-    let mut ev = hh_env::events::EventMinter::new(store, run_id)
+    let mut ev = hharness_env::events::EventMinter::new(store, run_id)
         .mint("security.label.endorsed", payload)
         .map_err(ledger_err)?;
     // `approval` applies only to effect intents — the append-time check
     // re-reads the stamp off the envelope, never a payload claim.
-    ev.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+    ev.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
     Ok(Some(ev))
 }

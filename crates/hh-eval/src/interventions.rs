@@ -33,12 +33,12 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::ArmSpec;
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::eval::Design;
+use hharness_budget::matchspec::ArmSpec;
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::eval::Design;
 
-use hh_lab::analysis::{BenefitKind, ComparisonReport};
+use hharness_lab::analysis::{BenefitKind, ComparisonReport};
 
 use crate::compare::{
     compare, contrast, CompareError, CompareInput, CompareOutcome, ContrastEstimate,
@@ -252,7 +252,7 @@ fn run_tier(
         held_out: input.held_out,
         family_size: Some(INTERVENTIONS_METRICS.len() as u32),
         // Native component-level comparison — `search_budget` mandatory.
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     })?)
 }
 

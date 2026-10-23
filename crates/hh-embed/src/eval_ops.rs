@@ -1,5 +1,5 @@
 //! Group L — `lab.eval.*` dispatch (S3.3; R-2.9.2/R-2.9.4⁰ᵇ). Records-in,
-//! records-out over the `hh-eval` kernel: the ops carry canonical-JSON
+//! records-out over the `hharness-eval` kernel: the ops carry canonical-JSON
 //! `eval_run/1` rows, `task_context` rows, `Design`/`PreRegistration`
 //! records, and catalogue metric names — the service never invents a second
 //! schema (CC7: `EvalRun::from_json`, `Design::from_json`,
@@ -15,23 +15,23 @@
 //!
 //! `arm_specs` params decode `{match_spec, caps{dim→int}, native}` — the
 //! `ArmSpec` wiring the match check consumes (budgets are hard caps at the
-//! eval boundary; richer budget forms stay records in `hh-budget`).
+//! eval boundary; richer budget forms stay records in `hharness-budget`).
 
-use hh_budget::matchspec::{ArmSpec, BudgetEnforcement, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::benefits;
-use hh_eval::catalogue;
-use hh_eval::compare::{compare, CompareInput};
-use hh_eval::runs::{EvalRun, SuiteContext, TaskContext};
-use hh_eval::scorecard::{render_scorecard, ScorecardInput};
-use hh_ontology::dimensions::DimensionKey;
-use hh_ontology::eval::{Design, MetricValueKind, PreRegistration};
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::Granularity;
-use hh_wire::json::Json;
+use hharness_budget::matchspec::{ArmSpec, BudgetEnforcement, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::benefits;
+use hharness_eval::catalogue;
+use hharness_eval::compare::{compare, CompareInput};
+use hharness_eval::runs::{EvalRun, SuiteContext, TaskContext};
+use hharness_eval::scorecard::{render_scorecard, ScorecardInput};
+use hharness_ontology::dimensions::DimensionKey;
+use hharness_ontology::eval::{Design, MetricValueKind, PreRegistration};
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::Granularity;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 pub(crate) fn bad(path: &str, code: &str) -> EmbedError {
     EmbedError::SchemaViolation {
@@ -181,7 +181,7 @@ fn compare_input<'a>(
     tasks: &'a [TaskContext],
     design: &'a Design,
     arms: &'a [ArmSpec],
-    decls: &'a [hh_ontology::compliance::MetricDeclaration],
+    decls: &'a [hharness_ontology::compliance::MetricDeclaration],
     metrics: &'a [String],
 ) -> Result<CompareInput<'a>, EmbedError> {
     Ok(CompareInput {
@@ -201,8 +201,8 @@ fn compare_input<'a>(
             .and_then(Json::as_int)
             .unwrap_or(950_000),
         benefit_kind: opt_str(params, "benefit_kind")
-            .and_then(|s| hh_lab::analysis::BenefitKind::parse(&s))
-            .unwrap_or(hh_lab::analysis::BenefitKind::ArtifactBenefit),
+            .and_then(|s| hharness_lab::analysis::BenefitKind::parse(&s))
+            .unwrap_or(hharness_lab::analysis::BenefitKind::ArtifactBenefit),
         held_out: matches!(params.get("held_out"), Some(Json::Bool(true))),
         family_size: params
             .get("family_size")
@@ -226,7 +226,7 @@ fn compare_input<'a>(
 /// refusal, never a silent skip).
 pub(crate) fn decls_for(
     metrics: &[String],
-) -> Result<Vec<hh_ontology::compliance::MetricDeclaration>, EmbedError> {
+) -> Result<Vec<hharness_ontology::compliance::MetricDeclaration>, EmbedError> {
     metrics
         .iter()
         .map(|m| {
@@ -373,16 +373,16 @@ impl EmbedService {
         let reports: Vec<Json> = arr(params, "reports")?.clone();
         let mut out = Vec::new();
         for r in &reports {
-            let entries: Vec<hh_compiler::lcd::LossEntry> = match r.get("entries") {
+            let entries: Vec<hharness_compiler::lcd::LossEntry> = match r.get("entries") {
                 Some(Json::Arr(es)) => es
                     .iter()
                     .map(|e| {
-                        Ok(hh_compiler::lcd::LossEntry {
+                        Ok(hharness_compiler::lcd::LossEntry {
                             hir_node_id: req_str(e, "hir_node_id")?.to_string(),
                             field: req_str(e, "field")?.to_string(),
-                            class: hh_compiler::lcd::LossKind::parse(req_str(e, "class")?)
+                            class: hharness_compiler::lcd::LossKind::parse(req_str(e, "class")?)
                                 .ok_or_else(|| bad("/entries/class", "unknown"))?,
-                            severity: hh_compiler::lcd::LossSeverity::parse(req_str(
+                            severity: hharness_compiler::lcd::LossSeverity::parse(req_str(
                                 e, "severity",
                             )?)
                             .ok_or_else(|| bad("/entries/severity", "unknown"))?,
@@ -393,17 +393,17 @@ impl EmbedService {
                     .collect::<Result<_, EmbedError>>()?,
                 _ => vec![],
             };
-            let rep = hh_compiler::lcd::LoweringLossReport {
+            let rep = hharness_compiler::lcd::LoweringLossReport {
                 target: req_str(r, "target")?.to_string(),
                 target_version: req_str(r, "target_version")?.to_string(),
                 entries,
-                granularity_ceiling: hh_compiler::lcd::GranularityCeiling::parse(req_str(
+                granularity_ceiling: hharness_compiler::lcd::GranularityCeiling::parse(req_str(
                     r,
                     "granularity_ceiling",
                 )?)
                 .ok_or_else(|| bad("/granularity_ceiling", "unknown"))?,
             };
-            out.push(hh_eval::loss::export_loss_report(&rep));
+            out.push(hharness_eval::loss::export_loss_report(&rep));
         }
         Ok(Json::Arr(out))
     }
@@ -412,6 +412,6 @@ impl EmbedService {
 /// The `MetricValueKind::Na` convenience — embed responses render the typed
 /// n/a directly through `MetricValueKind::to_json`.
 #[allow(dead_code)]
-fn na_json(r: hh_ontology::compliance::NaReason) -> Json {
+fn na_json(r: hharness_ontology::compliance::NaReason) -> Json {
     MetricValueKind::Na(r).to_json()
 }

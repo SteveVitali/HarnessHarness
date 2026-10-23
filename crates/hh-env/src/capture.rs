@@ -6,15 +6,15 @@
 //! dropped).
 //!
 //! Redaction is on the **capture path**, not the executor — the kernel masks
-//! every captured payload through `hh-secrets` before it enters the manifest
+//! every captured payload through `hharness-secrets` before it enters the manifest
 //! or the raw-output blob (ADR-0101 D5; a hostile executor's output is masked
 //! before any visibility). See [`crate::dispatch::Dispatcher`].
 
 use std::collections::BTreeSet;
 
-use hh_hir::kinds::EffectDomain;
-use hh_identity::idp::idp_id;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_identity::idp::idp_id;
+use hharness_wire::json::Json;
 
 use crate::errors::EnvError;
 

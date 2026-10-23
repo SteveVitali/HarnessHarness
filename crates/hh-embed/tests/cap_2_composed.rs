@@ -9,7 +9,7 @@
 //!
 //! 1. **Turn loop → context.assembled (R-2.4.1).** A real `submit` turn
 //!    appends `context.assembled` — the `AssemblerPort` is invoked on the
-//!    live path and (CAP.3, DF-S2.8-1) it IS the real `hh_context::assemble`
+//!    live path and (CAP.3, DF-S2.8-1) it IS the real `hharness_context::assemble`
 //!    builder over the run's durable prefix: the payload carries the
 //!    builder record (`plan_id`/`layout_ref`/`policy_ref`/`derived_from`/
 //!    `occupancy_estimate`/`assembly_ms`/`compaction_state`), and the
@@ -44,7 +44,7 @@
 //!    members (`utilization`, `budget_match`) fit their declared
 //!    record/list bound. Both legs are un-ignored green.
 //! 4. **Hosted participant spine (R-2.10.6 ± R-2.10.3/R-2.10.4).** A REAL
-//!    `hh_hosting` `HostingService` (dev-dep — the removable tier is
+//!    `hharness_hosting` `HostingService` (dev-dep — the removable tier is
 //!    test-only here; no production edge) over `AdapterA` +
 //!    `FixtureParticipant`: attach → open → submit → close →
 //!    `stream_events` → `proj::lift`. The lifted `{class, payload}` rows
@@ -66,18 +66,18 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::store::Lease;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::store::Lease;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixtures (the conformance.rs shapes, minimal) ───────────────────────────
 
@@ -361,7 +361,7 @@ fn rows(svc: &EmbedService, run_id: &str) -> Vec<(String, Json)> {
 // ── 1. context assembly — the pass-through pin + the builder xfail ──────────
 
 /// S2 leg — a real turn appends `context.assembled` produced by the
-/// real `hh_context::assemble` builder (DF-S2.8-1 closed): every row
+/// real `hharness_context::assemble` builder (DF-S2.8-1 closed): every row
 /// carries the builder record (`plan_id`, `model_call_id`, `derived_from`,
 /// `layout_ref`, `policy_ref`, `occupancy_estimate`, `assembly_ms`,
 /// `compaction_state`) and none carries the retired pass-through stamp.
@@ -418,8 +418,8 @@ fn cap2_turn_loop_assembler_is_invoked_as_passthrough() {
 }
 
 /// DF-S2.8-1 (+ DF-S1.19-1): the composed leg — a live turn driven
-/// through the real `hh_context::assemble` builder. CAP.3 landed the
-/// producer wiring (`KernelAssembler` runs `hh_context::assemble` over
+/// through the real `hharness_context::assemble` builder. CAP.3 landed the
+/// producer wiring (`KernelAssembler` runs `hharness_context::assemble` over
 /// the durable prefix); the assertion set is the deferral's
 /// done-condition verbatim.
 #[test]
@@ -761,23 +761,23 @@ fn cap2_suspend_is_environment_bound_honest_refusal() {
 // append through `surface_append` under the `subject_writer` lease the
 // boundary's `launch` returns (the same gate the surface path uses).
 
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey};
-use hh_lab::experiment::{
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey};
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_ontology::eval::{
+use hharness_ontology::eval::{
     Design, DesignKind, MetricValue, MetricValueKind, Pairing, PreRegistration, RoutingPolicy,
     SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::{Granularity, ParticipantClass};
-use hh_ontology::FactorKind;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::{Granularity, ParticipantClass};
+use hharness_ontology::FactorKind;
 
 fn pinned(tag: &str) -> String {
-    hh_identity::idp::idp_id(&format!("cap2.{tag}"), tag.as_bytes())
+    hharness_identity::idp::idp_id(&format!("cap2.{tag}"), tag.as_bytes())
 }
 
 /// The resolver budget bodies `register{budgets{}}` deposits (hard caps,
@@ -852,10 +852,10 @@ fn exp_arm(id: &str, level: &str, eval: &str, limits_enforced: &str) -> ArmSpec 
         level_assignment: BTreeMap::from([("participant".to_string(), level.to_string())]),
         eval_budget: eval.into(),
         search_budget: Some("search:a".into()),
-        match_spec: Some(hh_budget::MatchSpec::matched_cap(&[
+        match_spec: Some(hharness_budget::MatchSpec::matched_cap(&[
             DimensionId::ModelCalls,
         ])),
-        artifact_ref: hh_ontology::config::Ref::new("artifact:x", pinned("artifact.x")),
+        artifact_ref: hharness_ontology::config::Ref::new("artifact:x", pinned("artifact.x")),
         limits_enforced: limits_enforced.into(),
         model_role_table_ref: None,
         response_cache: None,
@@ -1111,7 +1111,7 @@ fn finish_subject(
     task_success: bool,
 ) {
     let lease = lease_of(writer, run_id);
-    let stop = hh_ontology::control::StopReason::Completed;
+    let stop = hharness_ontology::control::StopReason::Completed;
     let mut batch = Vec::new();
     for (d, a) in consumed {
         batch.push(mint(
@@ -1133,7 +1133,7 @@ fn finish_subject(
             value: MetricValueKind::Bool(task_success),
             applies_to: run_id.into(),
             oracle_ref: "oracle/stub.cap2".into(),
-            detector: hh_ontology::compliance::Detector::Deterministic,
+            detector: hharness_ontology::compliance::Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
             calibration_ref: None,
@@ -1346,7 +1346,7 @@ fn cap2_experiment_boundary_lifecycle_closes_green() {
 fn cap2_experiment_exemplar_close_lands() {
     let mut svc = service("exp-exemplar");
     hello(&mut svc);
-    let pins = hh_lab::exemplars::ExemplarPins {
+    let pins = hharness_lab::exemplars::ExemplarPins {
         suite_ref: pinned("suite.tb2"),
         held_out_split_ref: pinned("split.held_out"),
         split_assignment_ref: pinned("split.assign"),
@@ -1358,16 +1358,22 @@ fn cap2_experiment_exemplar_close_lands() {
         analysis_plan_ref: pinned("analysis"),
         task_split_hash: pinned("split.hash"),
     };
-    let spec = hh_lab::exemplars::compaction_family_v1(
+    let spec = hharness_lab::exemplars::compaction_family_v1(
         &pins,
-        &hh_lab::exemplars::CompactionFamilyPins {
+        &hharness_lab::exemplars::CompactionFamilyPins {
             evict_oldest_ref: pinned("variant.evict_oldest"),
             clear_tool_results_ref: pinned("variant.clear_tool_results"),
             model_level_ref: pinned("model.fixed"),
             environment_level_ref: pinned("env.tb2"),
             artifacts: (
-                hh_ontology::config::Ref::new("definition:compaction", pinned("artifact.evict")),
-                hh_ontology::config::Ref::new("definition:compaction", pinned("artifact.clear")),
+                hharness_ontology::config::Ref::new(
+                    "definition:compaction",
+                    pinned("artifact.evict"),
+                ),
+                hharness_ontology::config::Ref::new(
+                    "definition:compaction",
+                    pinned("artifact.clear"),
+                ),
             ),
         },
         1,
@@ -1416,7 +1422,7 @@ fn cap2_experiment_exemplar_close_lands() {
 fn cap2_experiment_exemplar_close_completes() {
     let mut svc = service("exp-exemplar-done");
     hello(&mut svc);
-    let pins = hh_lab::exemplars::ExemplarPins {
+    let pins = hharness_lab::exemplars::ExemplarPins {
         suite_ref: pinned("suite.tb2"),
         held_out_split_ref: pinned("split.held_out"),
         split_assignment_ref: pinned("split.assign"),
@@ -1428,16 +1434,22 @@ fn cap2_experiment_exemplar_close_completes() {
         analysis_plan_ref: pinned("analysis"),
         task_split_hash: pinned("split.hash"),
     };
-    let spec = hh_lab::exemplars::compaction_family_v1(
+    let spec = hharness_lab::exemplars::compaction_family_v1(
         &pins,
-        &hh_lab::exemplars::CompactionFamilyPins {
+        &hharness_lab::exemplars::CompactionFamilyPins {
             evict_oldest_ref: pinned("variant.evict_oldest"),
             clear_tool_results_ref: pinned("variant.clear_tool_results"),
             model_level_ref: pinned("model.fixed"),
             environment_level_ref: pinned("env.tb2"),
             artifacts: (
-                hh_ontology::config::Ref::new("definition:compaction", pinned("artifact.evict")),
-                hh_ontology::config::Ref::new("definition:compaction", pinned("artifact.clear")),
+                hharness_ontology::config::Ref::new(
+                    "definition:compaction",
+                    pinned("artifact.evict"),
+                ),
+                hharness_ontology::config::Ref::new(
+                    "definition:compaction",
+                    pinned("artifact.clear"),
+                ),
             ),
         },
         1,
@@ -1465,7 +1477,7 @@ fn cap2_experiment_exemplar_close_completes() {
 
 // ── 4. the hosted participant spine — a REAL HostingService ────────────────
 //
-// `hh-embed` never depends on `hh-hosting` in production code (the seam is
+// `hharness-embed` never depends on `hharness-hosting` in production code (the seam is
 // records-in/records-out); this test adds it as a *dev-dependency* so the
 // composed leg drives a genuine `HostingService` (Adapter A over the
 // deterministic `FixtureParticipant`) next to the boundary — open → submit
@@ -1475,25 +1487,27 @@ fn cap2_experiment_exemplar_close_completes() {
 // through `ResultsStore::project_and_record` and `lab.analysis.analyze`
 // produces the comparison over `arm:native` vs `arm:hosted`.
 
-use hh_hir::leaves::Text;
-use hh_hir::records::{EvidenceRef, ExpiryCondition, OwnerRef};
-use hh_hosting::abi::HostedRunSpec;
-use hh_hosting::adapter_a::{adapter_a_record, allow_all_decider, AdapterA};
-use hh_hosting::fixture::FixtureParticipant;
-use hh_hosting::records::{HostingExt, ModelIoIntercept, ParticipantRecord, ProcessPlacement};
-use hh_hosting::service::HostingService;
-use hh_ontology::debt::{DebtStatus, ExpiryKind};
-use hh_ontology::eval::{EstimatorSelection, IntervalMethod};
-use hh_ontology::participant::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{EvidenceRef, ExpiryCondition, OwnerRef};
+use hharness_hosting::abi::HostedRunSpec;
+use hharness_hosting::adapter_a::{adapter_a_record, allow_all_decider, AdapterA};
+use hharness_hosting::fixture::FixtureParticipant;
+use hharness_hosting::records::{
+    HostingExt, ModelIoIntercept, ParticipantRecord, ProcessPlacement,
+};
+use hharness_hosting::service::HostingService;
+use hharness_ontology::debt::{DebtStatus, ExpiryKind};
+use hharness_ontology::eval::{EstimatorSelection, IntervalMethod};
+use hharness_ontology::participant::{
     CapabilityVerdict, HostingMechanism, Observability, ParticipantDescriptor,
 };
 
 /// The claim-complete adapter debt record (AC-R-2.10.6-8 — attach refuses
 /// a record without a hash-addressed hypothesis, evidence, and a removal
 /// test).
-fn adapter_debt() -> hh_hir::records::AssumptionDebtRecord {
+fn adapter_debt() -> hharness_hir::records::AssumptionDebtRecord {
     let prov = ProvenanceRecord::kernel("hh-embed/cap2", 0);
-    hh_hir::records::AssumptionDebtRecord {
+    hharness_hir::records::AssumptionDebtRecord {
         rule_id: "hh.hosting.adapter_a".into(),
         hypothesis: Text::new(
             "participants matching participant_selector behave per declaration_defaults",
@@ -1572,7 +1586,7 @@ fn hosted_service(fixture: FixtureParticipant) -> (HostingService, ParticipantRe
 fn ungated_fixture() -> FixtureParticipant {
     let mut f = FixtureParticipant::default();
     f.request_permissions = false;
-    f.scripted_tools = vec![hh_hosting::fixture::ScriptedTool {
+    f.scripted_tools = vec![hharness_hosting::fixture::ScriptedTool {
         kind_hint: "read".into(),
         permission_gated: false,
         lab_supplied: false,
@@ -1664,7 +1678,7 @@ fn drive_hosted_stamped(
         .stream_events(&opened.session_ref)
         .expect("stream_events")
         .to_vec();
-    let lifted = hh_hosting::proj::lift(&events);
+    let lifted = hharness_hosting::proj::lift(&events);
     HostedLeg {
         launch_outcome: Json::obj([
             ("session_ref", Json::str(&opened.session_ref)),
@@ -1821,8 +1835,8 @@ fn cap2_hosted_spine_attach_project_analyze() {
     // same `project_and_record` the S3.4b seam serves — then compare the
     // arms through `lab.analysis.analyze`.
     let results =
-        hh_results::store::ResultsStore::open(svc.store().root().join("results")).unwrap();
-    let docs = hh_experiment::docs::LabDocs::open(svc.store().root()).unwrap();
+        hharness_results::store::ResultsStore::open(svc.store().root().join("results")).unwrap();
+    let docs = hharness_experiment::docs::LabDocs::open(svc.store().root()).unwrap();
     let mut keys = Vec::new();
     for (_, subject, _) in &settled {
         let (row, _v) = results
@@ -1832,7 +1846,7 @@ fn cap2_hosted_spine_attach_project_analyze() {
                 subject,
                 None,
                 None,
-                hh_results::version::DerivedReason::Initial,
+                hharness_results::version::DerivedReason::Initial,
             )
             .unwrap_or_else(|e| panic!("project_and_record {subject}: {e:?}"));
         keys.push(row.key.key_id());
@@ -1841,7 +1855,7 @@ fn cap2_hosted_spine_attach_project_analyze() {
     // The analysis boundary over the projected rows — `summarize` (A1)
     // first: the composed spine's durable report. The task/suite contexts
     // name the driven cell.
-    let analysis_params = |aspec: &hh_lab::analysis::AnalysisSpec| {
+    let analysis_params = |aspec: &hharness_lab::analysis::AnalysisSpec| {
         Json::obj([
             ("spec", aspec.to_json()),
             (
@@ -1869,10 +1883,10 @@ fn cap2_hosted_spine_attach_project_analyze() {
             ("seed", Json::Int(11)),
         ])
     };
-    let mut sspec = hh_lab::analysis::AnalysisSpec {
+    let mut sspec = hharness_lab::analysis::AnalysisSpec {
         spec_id: String::new(),
         kind: "summarize".into(),
-        query: hh_lab::analysis::QuerySpec {
+        query: hharness_lab::analysis::QuerySpec {
             metrics: vec!["task_success".into()],
             filters: None,
             grain: None,
@@ -1926,10 +1940,10 @@ fn cap2_hosted_spine_attach_project_analyze() {
     // participant, never a fabricated parity claim. (DF-CAP.2-2 closed
     // at CAP.3 — the stamp *is* consulted; see
     // `cap2_hosted_arm_stamped_enforcement_compares` for the proven leg.)
-    let mut cspec = hh_lab::analysis::AnalysisSpec {
+    let mut cspec = hharness_lab::analysis::AnalysisSpec {
         spec_id: String::new(),
         kind: "compare".into(),
-        query: hh_lab::analysis::QuerySpec {
+        query: hharness_lab::analysis::QuerySpec {
             metrics: vec!["task_success".into()],
             filters: Some(Json::obj([
                 ("arm_a", Json::str("arm:native")),
@@ -2043,8 +2057,8 @@ fn cap2_hosted_arm_stamped_enforcement_compares() {
     ));
 
     let results =
-        hh_results::store::ResultsStore::open(svc.store().root().join("results")).unwrap();
-    let docs = hh_experiment::docs::LabDocs::open(svc.store().root()).unwrap();
+        hharness_results::store::ResultsStore::open(svc.store().root().join("results")).unwrap();
+    let docs = hharness_experiment::docs::LabDocs::open(svc.store().root()).unwrap();
     let mut keys = Vec::new();
     for (_, subject, _) in &settled {
         let (row, _v) = results
@@ -2054,16 +2068,16 @@ fn cap2_hosted_arm_stamped_enforcement_compares() {
                 subject,
                 None,
                 None,
-                hh_results::version::DerivedReason::Initial,
+                hharness_results::version::DerivedReason::Initial,
             )
             .unwrap_or_else(|e| panic!("project_and_record {subject}: {e:?}"));
         keys.push(row.key.key_id());
     }
 
-    let mut cspec = hh_lab::analysis::AnalysisSpec {
+    let mut cspec = hharness_lab::analysis::AnalysisSpec {
         spec_id: String::new(),
         kind: "compare".into(),
-        query: hh_lab::analysis::QuerySpec {
+        query: hharness_lab::analysis::QuerySpec {
             metrics: vec!["task_success".into()],
             filters: Some(Json::obj([
                 ("arm_a", Json::str("arm:native")),

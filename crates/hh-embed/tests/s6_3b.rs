@@ -1,5 +1,5 @@
 //! S6.3b boundary tests — the `lab.attribution.*` surface over
-//! `hh-embed` (§5h.7; R-2.9.7 6c): capability gating, the design
+//! `hharness-embed` (§5h.7; R-2.9.7 6c): capability gating, the design
 //! validator + `estimate_rollouts`, the `attribute` fold over
 //! caller-supplied `ArmOutcome` records, `locus`/`quality`
 //! projections, and the typed refusal surface. The real-arm execution
@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);

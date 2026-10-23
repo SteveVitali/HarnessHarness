@@ -1,10 +1,10 @@
-//! The closed `hh-debt` error table (S6.1b; §5h.6 §5 — every refusal is
+//! The closed `hharness-debt` error table (S6.1b; §5h.6 §5 — every refusal is
 //! typed, never a warning). `DebtManagerError::{Store, Schema}` carry the
 //! substrate/schema halves; [`Refusal`] is the closed debt-manager refusal
 //! set — every member maps onto a snake_case `code` the boundary surfaces
 //! as `Refused{reason}`.
 
-use hh_ledger::errors::LedgerError;
+use hharness_ledger::errors::LedgerError;
 
 /// One manager-level refusal (the codes the `lifecycle.debt.*` rows and the
 /// `lab.debt.*` boundary surface).
@@ -24,7 +24,7 @@ pub enum Refusal {
         detail: String,
     },
     /// The record's removal test does not instantiate (`UnexecutableRemovalTest`
-    /// at schedule time — the member-level half `hh_hir::debt` already ran).
+    /// at schedule time — the member-level half `hharness_hir::debt` already ran).
     NotExecutable {
         /// The debt whose test cannot instantiate.
         debt_ref: String,

@@ -35,10 +35,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::errors::EnforcementLevel;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::participant::HostingMechanism;
-use hh_wire::Json;
+use hharness_budget::errors::EnforcementLevel;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::participant::HostingMechanism;
+use hharness_wire::Json;
 
 use crate::abi::HostingError;
 use crate::records::{EnforcementClaim, ModelIoIntercept, ProcessPlacement};
@@ -215,13 +215,13 @@ pub fn enforcement_json(m: &BTreeMap<String, EnforcementClaim>) -> Json {
     )
 }
 
-/// The derived map → the engine-side `BudgetEnforcement` (`hh_budget`
+/// The derived map → the engine-side `BudgetEnforcement` (`hharness_budget`
 /// records-in — unknown dimensions are dropped from the *map* with the map
 /// itself carried verbatim in `extra_dims` for honesty).
 pub fn to_budget_enforcement(
     m: &BTreeMap<String, EnforcementClaim>,
 ) -> (
-    hh_budget::matchspec::BudgetEnforcement,
+    hharness_budget::matchspec::BudgetEnforcement,
     Vec<(String, EnforcementClaim)>,
 ) {
     let mut levels = BTreeMap::new();
@@ -235,7 +235,9 @@ pub fn to_budget_enforcement(
         }
     }
     (
-        hh_budget::matchspec::BudgetEnforcement::hosted(&levels.into_iter().collect::<Vec<_>>()),
+        hharness_budget::matchspec::BudgetEnforcement::hosted(
+            &levels.into_iter().collect::<Vec<_>>(),
+        ),
         extra,
     )
 }
@@ -245,7 +247,7 @@ mod tests {
     use super::*;
     use crate::records::ModelIoIntercept as I;
     use crate::records::ProcessPlacement as P;
-    use hh_ontology::participant::HostingMechanism as M;
+    use hharness_ontology::participant::HostingMechanism as M;
 
     fn derive(
         mech: M,

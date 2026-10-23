@@ -1,4 +1,4 @@
-//! `hh-debt` — the C4 §5h.6 assumption-debt manager service (R-2.9.6;
+//! `hharness-debt` — the C4 §5h.6 assumption-debt manager service (R-2.9.6;
 //! ticket S6.1b; ADR-0197/0198, ADR-0209 D2).
 //!
 //! The manager guarantees that no conditioned rule exists without a stated
@@ -7,7 +7,7 @@
 //! over time *by a service*: a standing monitor (the sweep) folds the
 //! durable `lifecycle.debt.*` prefix of the service's registry run, opens
 //! ledgered probation entries for `hypothesized` records, evaluates the
-//! all-home triggers through `hh_lab::debt::evaluate_debt`, schedules
+//! all-home triggers through `hharness_lab::debt::evaluate_debt`, schedules
 //! removal tests under `DebtPolicy` (priority, `max_open_removal_tests`,
 //! instrument-budget reservation), settles verdicts, proposes retirements,
 //! and runs its own reflexive `no_dead_weight_found` test — if no scheduled

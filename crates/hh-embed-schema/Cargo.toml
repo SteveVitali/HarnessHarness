@@ -1,5 +1,5 @@
 [package]
-name = "hh-embed-schema"
+name = "hharness-embed-schema"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ description = "The single schema source (CC7) for the hh-embed/1 Stage-0 message
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 # The idp/1 identity model (S1.2). `schema_hash` is a ContentAddress over the canonical schema
 # export in idp/1 form (§7.4; ADR-0036) — the one content-addressing scheme (CC1); closes DF-S0.1-2.
-hh-identity = { path = "../hh-identity" }
+hharness-identity = { path = "../hh-identity" }

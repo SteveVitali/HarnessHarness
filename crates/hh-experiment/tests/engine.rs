@@ -1,4 +1,4 @@
-//! `hh-experiment` engine tests — the S3.4a lifecycle over a real `Store` +
+//! `hharness-experiment` engine tests — the S3.4a lifecycle over a real `Store` +
 //! `LabDocs` (spec §6.3; AC-R-2.10.3-{1,2,4,5,6,7,8} + KP-E1…E5 + E-1…E-4).
 //! Every test uses unique `HH_*` temp roots; the store clock is a shared
 //! `ManualClock` handle so claim-expiry/backoff tests advance wall time
@@ -7,35 +7,37 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_budget::{DimensionId, DimensionKey, MatchSpec};
-use hh_experiment::docs::LabDocs;
-use hh_experiment::engine::{
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_budget::{DimensionId, DimensionKey, MatchSpec};
+use hharness_experiment::docs::LabDocs;
+use hharness_experiment::engine::{
     ClaimTicket, EngineContext, ExperimentEngine, LaunchOutcome, NextVerdict,
 };
-use hh_experiment::errors::{refusal_code, ExperimentError};
-use hh_experiment::events::PauseReason;
-use hh_experiment::view::ExperimentView;
-use hh_identity::idp::idp_id;
-use hh_lab::expand::{ArmConfiguration, ExpandTask};
-use hh_lab::experiment::{
+use hharness_experiment::errors::{refusal_code, ExperimentError};
+use hharness_experiment::events::PauseReason;
+use hharness_experiment::view::ExperimentView;
+use hharness_identity::idp::idp_id;
+use hharness_lab::expand::{ArmConfiguration, ExpandTask};
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentKind, ExperimentSpec, FactorSpec,
     LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy, SuiteBinding, ValidationStrategy,
 };
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::config::Ref;
-use hh_ontology::control::{CancelledBy, InfraError, InfraErrorFamily, OutcomeClass, StopReason};
-use hh_ontology::eval::{
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::config::Ref;
+use hharness_ontology::control::{
+    CancelledBy, InfraError, InfraErrorFamily, OutcomeClass, StopReason,
+};
+use hharness_ontology::eval::{
     Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, RoutingPolicy,
     SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
-use hh_ontology::FactorKind;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_ontology::FactorKind;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 // ── fixture plumbing ────────────────────────────────────────────────────────
 
@@ -173,7 +175,7 @@ fn spec(kind: ExperimentKind) -> ExperimentSpec {
         factors: vec![FactorSpec {
             name: "compaction_strategy".to_string(),
             kind: FactorKind::Harness,
-            granularity: Some(hh_ontology::participant::Granularity::ComponentLevel),
+            granularity: Some(hharness_ontology::participant::Granularity::ComponentLevel),
             role: None,
             levels: vec![
                 LevelSpec {
@@ -230,7 +232,7 @@ fn spec(kind: ExperimentKind) -> ExperimentSpec {
             error_classes_included: None,
             on_cancel: CancelPolicy::Replan,
         },
-        budgets: hh_lab::experiment::ExperimentBudgets {
+        budgets: hharness_lab::experiment::ExperimentBudgets {
             experiment: "pool".to_string(),
             instrument: "instr".to_string(),
         },
@@ -346,7 +348,7 @@ fn run_to_close(
     rig: &mut Rig,
     eid: &str,
     consumed: i64,
-) -> hh_experiment::events::ExperimentReport {
+) -> hharness_experiment::events::ExperimentReport {
     loop {
         let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
         eng.attach(eid).unwrap();
@@ -467,7 +469,7 @@ fn register_refusal_corpus() {
     // ResolutionInsufficient — generators/resolution on a non-fractional kind.
     let mut s = base.clone();
     s.design.generators = Some(vec!["a=b".to_string()]);
-    s.design.resolution = Some(hh_ontology::eval::FractionalResolution::III);
+    s.design.resolution = Some(hharness_ontology::eval::FractionalResolution::III);
     s.experiment_id = s.experiment_id();
     assert_eq!(register_err(&mut r, &s, ctx()), "ResolutionInsufficient");
 
@@ -510,35 +512,37 @@ fn refusal_codes_cover_the_closed_set() {
     // Every ExperimentRefusal member renders a stable code (T-LCD-14 — the
     // boundary renders the code, never a warning).
     for r in [
-        hh_lab::experiment::ExperimentRefusal::MissingMatchSpec { arm: "a".into() },
-        hh_lab::experiment::ExperimentRefusal::UnbudgetedArm { arm: "a".into() },
-        hh_lab::experiment::ExperimentRefusal::UnmatchedBudget { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::IncommensurableMatch { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::MissingPricingTable { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::InadmissibleFactor {
+        hharness_lab::experiment::ExperimentRefusal::MissingMatchSpec { arm: "a".into() },
+        hharness_lab::experiment::ExperimentRefusal::UnbudgetedArm { arm: "a".into() },
+        hharness_lab::experiment::ExperimentRefusal::UnmatchedBudget { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::IncommensurableMatch { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::MissingPricingTable { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::InadmissibleFactor {
             factor: "f".into(),
             reason: "r".into(),
         },
-        hh_lab::experiment::ExperimentRefusal::MissingPreRegistration,
-        hh_lab::experiment::ExperimentRefusal::SplitUnassigned {
+        hharness_lab::experiment::ExperimentRefusal::MissingPreRegistration,
+        hharness_lab::experiment::ExperimentRefusal::SplitUnassigned {
             suite_ref: "s".into(),
         },
-        hh_lab::experiment::ExperimentRefusal::LeakedSplit { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::UnsealedArtifact {
+        hharness_lab::experiment::ExperimentRefusal::LeakedSplit { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::UnsealedArtifact {
             artifact_ref: "a".into(),
         },
-        hh_lab::experiment::ExperimentRefusal::InsufficientReplicates {
+        hharness_lab::experiment::ExperimentRefusal::InsufficientReplicates {
             detail: "d".into(),
             have: 1,
             need: 5,
         },
-        hh_lab::experiment::ExperimentRefusal::ResolutionInsufficient { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::ProfilePinnedAcrossProfiles { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::DependsOnDriftedCapability {
+        hharness_lab::experiment::ExperimentRefusal::ResolutionInsufficient { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::ProfilePinnedAcrossProfiles {
+            detail: "d".into(),
+        },
+        hharness_lab::experiment::ExperimentRefusal::DependsOnDriftedCapability {
             capability: "c".into(),
         },
-        hh_lab::experiment::ExperimentRefusal::NotARetirementDiff { detail: "d".into() },
-        hh_lab::experiment::ExperimentRefusal::AdaptiveOutsideSearch { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::NotARetirementDiff { detail: "d".into() },
+        hharness_lab::experiment::ExperimentRefusal::AdaptiveOutsideSearch { detail: "d".into() },
     ] {
         assert_ne!(refusal_code(&r), "");
     }
@@ -578,7 +582,7 @@ fn expand_marks_ineligible_cells_na() {
         r.docs.clone(),
         EngineContext {
             level_ineligible: Some(Box::new(move |r: &str| {
-                (r == ineligible).then_some(hh_ontology::compliance::NaReason::Capability)
+                (r == ineligible).then_some(hharness_ontology::compliance::NaReason::Capability)
             })),
             ..ctx()
         },
@@ -667,7 +671,10 @@ fn lifecycle_next_claim_launch_settle_close() {
     let s = spec(ExperimentKind::Comparative);
     let (eid, _run_id) = open(&mut r, &s);
     let report = run_to_close(&mut r, &eid, 40);
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
     assert_eq!(
         report.coverage.get("runs_accepted").and_then(Json::as_int),
         Some(4)
@@ -968,7 +975,10 @@ fn close_blocks_while_plans_are_open() {
     ));
     // `partial = true` closes with the honest coverage row.
     let report = eng.close(true).unwrap();
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Partial);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Partial
+    );
     // Post-close gates (S-4): no next/claim/launch/settle.
     assert!(matches!(
         eng.next().unwrap_err(),
@@ -1031,7 +1041,10 @@ fn kill_point_recovery_kp_e1_through_e5() {
     drop_store(&mut r);
     // KP-E5: kill just before close — close after restore.
     let report = run_to_close(&mut r, &eid, 30);
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
     // Rebuild equality at the end: the view is a pure function of the stream.
     let v1 = ExperimentView::fold(r.store.events(&run_id).unwrap());
     let v2 = ExperimentView::fold(r.store.events(&run_id).unwrap());
@@ -1205,8 +1218,8 @@ fn cancelled_replans_and_final_cancels() {
 // ── Exemplars — the two ADR-0156 documents at Stage-3 size (AC-R-2.10.3-8;
 //    AC-R-2.10.3-9 executed under ADR-0213's OQ-363 interim rule) ────────────
 
-fn exemplar_pins() -> hh_lab::exemplars::ExemplarPins {
-    hh_lab::exemplars::ExemplarPins {
+fn exemplar_pins() -> hharness_lab::exemplars::ExemplarPins {
+    hharness_lab::exemplars::ExemplarPins {
         suite_ref: pinned("suite.tb2"),
         held_out_split_ref: pinned("split.held_out"),
         split_assignment_ref: pinned("split.assign"),
@@ -1245,7 +1258,7 @@ fn ctx_exemplar(tag: &str, n_tasks: usize) -> EngineContext<'static> {
                 budget_ref: None,
             })
         })),
-        min_replicates: hh_lab::exemplars::EXEMPLAR_REPLICATES,
+        min_replicates: hharness_lab::exemplars::EXEMPLAR_REPLICATES,
         ..Default::default()
     }
 }
@@ -1267,7 +1280,7 @@ fn run_to_close_ctx(
     consumed: i64,
     tag: &str,
     n_tasks: usize,
-) -> hh_experiment::events::ExperimentReport {
+) -> hharness_experiment::events::ExperimentReport {
     loop {
         let mut eng =
             ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx_exemplar(tag, n_tasks));
@@ -1306,9 +1319,9 @@ fn run_to_close_ctx(
 #[test]
 fn exemplar_compaction_family_executes_at_stage3_size() {
     let mut r = rig("exemplar-compaction", 0);
-    let spec = hh_lab::exemplars::compaction_family_v1(
+    let spec = hharness_lab::exemplars::compaction_family_v1(
         &exemplar_pins(),
-        &hh_lab::exemplars::CompactionFamilyPins {
+        &hharness_lab::exemplars::CompactionFamilyPins {
             evict_oldest_ref: pinned("variant.evict_oldest"),
             clear_tool_results_ref: pinned("variant.clear_tool_results"),
             model_level_ref: pinned("model.fixed"),
@@ -1327,20 +1340,23 @@ fn exemplar_compaction_family_executes_at_stage3_size() {
         assert_eq!(eng_view.plans.len(), 30);
     }
     let report = run_to_close_ctx(&mut r, &eid, 5, "exc", 3);
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
 }
 
 #[test]
 fn exemplar_control_strategy_executes_with_iso_companion() {
     let mut r = rig("exemplar-control", 0);
-    let pricing = hh_budget::pricing::PricingTableRef {
+    let pricing = hharness_budget::pricing::PricingTableRef {
         table_id: "pricing:test".to_string(),
         version: "1".to_string(),
         pin: Some(pinned("pricing.table")),
     };
-    let spec = hh_lab::exemplars::control_strategy_family_v1(
+    let spec = hharness_lab::exemplars::control_strategy_family_v1(
         &exemplar_pins(),
-        &hh_lab::exemplars::ControlStrategyFamilyPins {
+        &hharness_lab::exemplars::ControlStrategyFamilyPins {
             react_minimal_ref: pinned("variant.react_minimal"),
             react_steerable_ref: pinned("variant.react_steerable"),
             model_family_a_ref: pinned("model.family_a"),
@@ -1364,7 +1380,10 @@ fn exemplar_control_strategy_executes_with_iso_companion() {
         assert_eq!(view.plans.len(), 50);
     }
     let report = run_to_close_ctx(&mut r, &eid, 5, "exctl", 2);
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
     // Rebuild equality — the whole sweep re-folds from the ledger stream.
     let v1 = ExperimentView::fold(r.store.events(&run_id).unwrap());
     let v2 = ExperimentView::fold(r.store.events(&run_id).unwrap());
@@ -1633,7 +1652,10 @@ fn under_utilised_and_budget_match_recheck_at_close() {
     let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
     eng.attach(&eid).unwrap();
     let report = eng.close(false).unwrap();
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Completed
+    );
     drop(eng);
     // arm:b medians at 10% of cap → under the 50% floor; arm:a at the cap.
     assert_eq!(report.under_utilised, vec!["arm:b".to_string()]);
@@ -1679,7 +1701,10 @@ fn partial_close_reports_not_run_cells() {
     let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
     eng.attach(&eid).unwrap();
     let report = eng.close(true).unwrap();
-    assert_eq!(report.status, hh_experiment::events::CloseStatus::Partial);
+    assert_eq!(
+        report.status,
+        hharness_experiment::events::CloseStatus::Partial
+    );
     assert!(!report.na_cells.is_empty());
     assert!(report
         .na_cells
@@ -1735,13 +1760,13 @@ fn analysis_record(
     pre_reg: bool,
     registered_ref: Option<&str>,
     post_amendment: bool,
-) -> hh_lab::analysis::AnalysisRecord {
-    let mut rec = hh_lab::analysis::AnalysisRecord::from_json(&Json::obj([
+) -> hharness_lab::analysis::AnalysisRecord {
+    let mut rec = hharness_lab::analysis::AnalysisRecord::from_json(&Json::obj([
         ("analysis_id", Json::str("pending")),
         ("spec_ref", Json::str("spec:analysis.test")),
         (
             "generated_from",
-            hh_lab::analysis::WatermarkSet::default().to_json(),
+            hharness_lab::analysis::WatermarkSet::default().to_json(),
         ),
         ("outputs", Json::Arr(vec![])),
         ("status", Json::str("final")),
@@ -1768,7 +1793,7 @@ fn refusal_of(err: &ExperimentError) -> String {
 
 #[test]
 fn producer_contract_refusals_and_chain_verify() {
-    use hh_lab::experiment::ExperimentRefusal;
+    use hharness_lab::experiment::ExperimentRefusal;
     let mut r = rig("producer", 42_000);
     let s = spec(ExperimentKind::Comparative);
     let (eid, exp_run) = open(&mut r, &s);
@@ -1941,8 +1966,8 @@ fn producer_contract_refusals_and_chain_verify() {
 // a silent native downgrade); a hosted level on a component-level factor
 // is `InadmissibleFactor` at register (§6.3 §2.1).
 
-use hh_experiment::engine::{HostedLaunchOutcome, HostedLaunchRequest};
-use hh_ontology::participant::Granularity;
+use hharness_experiment::engine::{HostedLaunchOutcome, HostedLaunchRequest};
+use hharness_ontology::participant::Granularity;
 
 /// Both levels `Hosted` at configuration-level granularity — every
 /// launched plan routes through the launcher (no scheduling-order

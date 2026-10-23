@@ -1,7 +1,7 @@
 # HarnessHarness CI — the Stage-0 output that persists (ADR-0050 (e)).
 # Builds/tests the E1 workspace and enforces the schema-drift check (CC7: schema drift is a
 # build failure). The toolchain is pinned by rust-toolchain.toml; the only fetched crates are
-# ADR-0359's `ring` graph (lockfile-pinned — `cargo fetch --locked` below) plus `hh-varhost`'s
+# ADR-0359's `ring` graph (lockfile-pinned — `cargo fetch --locked` below) plus `hharness-varhost`'s
 # `tempfile` dev-dep; everything else is pure standard library.
 #
 # R4.2a / ADR-0362 step-mode convention: the `id: path` decision step classifies

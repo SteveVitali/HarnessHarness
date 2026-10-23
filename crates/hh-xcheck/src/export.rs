@@ -8,18 +8,18 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hh_hir::corpus::{document_corpus, missing_provenance_bytes, CORPUS_SEALED_AT};
-use hh_identity::corpus::{golden_record_fixtures, golden_tree_fixtures, GoldenRecordInput};
-use hh_identity::idp::address;
-use hh_identity::rowkeys::IrRef;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_registry::corpus as registry_corpus;
-use hh_registry::extension::plugin::{resolve_plugin_candidate, AdmissionContext, Requests};
-use hh_wire::json::{parse, Json};
-use hh_wire::sha256_hex;
+use hharness_hir::corpus::{document_corpus, missing_provenance_bytes, CORPUS_SEALED_AT};
+use hharness_identity::corpus::{golden_record_fixtures, golden_tree_fixtures, GoldenRecordInput};
+use hharness_identity::idp::address;
+use hharness_identity::rowkeys::IrRef;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_registry::corpus as registry_corpus;
+use hharness_registry::extension::plugin::{resolve_plugin_candidate, AdmissionContext, Requests};
+use hharness_wire::json::{parse, Json};
+use hharness_wire::sha256_hex;
 
 use crate::trees::tree_manifest;
 use crate::{XcheckError, ARMS, BUNDLE_FORMAT, PENDING_CELLS};
@@ -32,7 +32,7 @@ fn err(msg: impl Into<String>) -> XcheckError {
 /// carries the same committed copy (one source, at the crate root).
 const CHECKER_MD: &str = include_str!("../CHECKER.md");
 
-/// The hh-registry plugin-manifest corpus (committed fixtures — the input
+/// The hharness-registry plugin-manifest corpus (committed fixtures — the input
 /// `DF-S1.27-1`'s foreign checker re-runs).
 const PLUGIN_CORPUS_SRC: &str = "../hh-registry/tests/fixtures/plugin-manifests";
 
@@ -111,11 +111,11 @@ fn export_identity_records(dir: &Path) -> Result<(), XcheckError> {
                 ]),
                 Json::obj([(
                     "version_id",
-                    Json::str(hh_identity::idp::identify_text(bytes)),
+                    Json::str(hharness_identity::idp::identify_text(bytes)),
                 )]),
             ),
             GoldenRecordInput::Record(record) => {
-                let id = hh_identity::record::identify(&record)
+                let id = hharness_identity::record::identify(&record)
                     .map_err(|e| err(format!("corpus record {name} fails identify: {e:?}")))?;
                 let semantic = if record.kind.has_semantic_projection() {
                     record.canonical_semantic()
@@ -264,9 +264,11 @@ fn export_registry_snapshot(dir: &Path) -> Result<(), XcheckError> {
     type RegistryProducts = (Vec<u8>, String, Vec<String>, Vec<u8>);
     let out = (|| -> Result<RegistryProducts, XcheckError> {
         let (snap, vids) = registry_corpus::build(&tmp).map_err(|e| err(format!("{e:?}")))?;
-        let store =
-            hh_registry::store::RegistryStore::open(&tmp, &registry_corpus::kernel_registrar())
-                .map_err(|e| err(format!("{e:?}")))?;
+        let store = hharness_registry::store::RegistryStore::open(
+            &tmp,
+            &registry_corpus::kernel_registrar(),
+        )
+        .map_err(|e| err(format!("{e:?}")))?;
         let outputs =
             registry_corpus::outputs(&store, &snap, &vids).map_err(|e| err(format!("{e:?}")))?;
         let log = fs::read(tmp.join("registry.json"))?;
@@ -308,14 +310,15 @@ fn export_plugin_manifests(dir: &Path) -> Result<(), XcheckError> {
     let _ = fs::remove_dir_all(&tmp);
     fs::create_dir_all(&tmp)?;
     registry_corpus::build(&tmp).map_err(|e| err(format!("corpus store: {e:?}")))?;
-    let store = hh_registry::store::RegistryStore::open(&tmp, &registry_corpus::kernel_registrar())
-        .map_err(|e| err(format!("{e:?}")))?;
+    let store =
+        hharness_registry::store::RegistryStore::open(&tmp, &registry_corpus::kernel_registrar())
+            .map_err(|e| err(format!("{e:?}")))?;
     // The corpus-driver context: deny-everything requests cap (the same
     // admission posture `hh-registry/tests/plugin.rs::golden_manifest_corpus`
     // pins — a fixture with non-empty requests must fail RequestsExceedCap).
     let ctx = AdmissionContext {
         first_party: true,
-        now: hh_plugin::EvalPoint::kernel(),
+        now: hharness_plugin::EvalPoint::kernel(),
         requests_cap: Some(Requests::default()),
     };
     let mut expected = BTreeMap::new();
@@ -435,7 +438,7 @@ fn export_canonical_parse(dir: &Path) -> Result<(), XcheckError> {
 // ── hir-documents ───────────────────────────────────────────────────────────
 
 /// The `hir-documents` arm (R4.3 — DF-S1.2-2's "extend to the HIR/ledger
-/// corpus" leg): each `hh_hir::corpus` case serializes as
+/// corpus" leg): each `hharness_hir::corpus` case serializes as
 /// `<name>.input.json`; the expected answer is the recorded replay
 /// (`parse → validate → canonicalize → seal` at `CORPUS_SEALED_AT`). A
 /// semantic drift in the pipeline changes `expected.json` and trips the

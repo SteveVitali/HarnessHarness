@@ -1,5 +1,5 @@
 [package]
-name = "hh-secrets"
+name = "hharness-secrets"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,20 +10,20 @@ description = "The C0/Stage-1 credential broker — SecretRef/SecretChannel, the
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ledger = { path = "../hh-ledger" }
 # The spec's own edge direction (R-2.8.3 consumes the R-2.8.1 records): `bind`
 # reads the `security.permission.{decided,granted,revoked}` projections the
 # monitor's schema owns — the PDP/CDP split is the monitor decides, the broker
 # delivers (ADR-0058).
-hh-monitor = { path = "../hh-monitor" }
+hharness-monitor = { path = "../hh-monitor" }
 # The `wrapped_long_lived` isolation floor reuses the containment vocabulary's
 # `IsolationClass` (CC7 — `process_sandbox` is its spelling).
-hh-containment = { path = "../hh-containment" }
+hharness-containment = { path = "../hh-containment" }
 # The ADR-0359 dep admission — the workspace's one external runtime crate:
 # `ring =0.17.14`, scoped to `src/dpop.rs`'s verification construction
 # (`signature::{UnparsedPublicKey, ED25519, ECDSA_P256_SHA256_ASN1}` plus the

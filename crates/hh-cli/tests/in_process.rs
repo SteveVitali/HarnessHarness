@@ -1,4 +1,4 @@
-//! `hh-cli` acceptance over binding (a) — the in-process `EmbedService`
+//! `hharness-cli` acceptance over binding (a) — the in-process `EmbedService`
 //! driving the same `Boundary` trait the spawned `hh-kernel serve` child
 //! drives (AC-K4-2: the behaviour cannot differ by transport, so the
 //! suite runs once in-process and the bindings' own conformance suite
@@ -16,23 +16,23 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_assembly::grammar::Assembly;
-use hh_cli::boundary::{cli_hello, Boundary, CliError, ProcessBoundary};
-use hh_cli::cli::{run_with, Io};
-use hh_cli::exit_class::ExitClass;
-use hh_cli::invocation::Tty;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_client_generated::{EmbedError, HelloResult, StreamNotification};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_cli::boundary::{cli_hello, Boundary, CliError, ProcessBoundary};
+use hharness_cli::cli::{run_with, Io};
+use hharness_cli::exit_class::ExitClass;
+use hharness_cli::invocation::Tty;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_client_generated::{EmbedError, HelloResult, StreamNotification};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: a minimal conforming hir/1 document ────────────────────────────
-// The same shape the hh-embed conformance suite resolves.
+// The same shape the hharness-embed conformance suite resolves.
 
 fn prov(seq: u64) -> ProvenanceRecord {
     ProvenanceRecord::minted(
@@ -222,8 +222,8 @@ impl ServiceBoundary {
                 workspace_root: PathBuf::from(ws),
                 holder: "conformance".into(),
             },
-            Box::new(hh_ledger::ids::ManualClock::at(1_700_000_000_000)),
-            Some(Box::new(hh_ledger::ids::SeqIds::new())),
+            Box::new(hharness_ledger::ids::ManualClock::at(1_700_000_000_000)),
+            Some(Box::new(hharness_ledger::ids::SeqIds::new())),
         )
         .unwrap();
         Self::with_svc(root, svc)
@@ -366,7 +366,7 @@ fn hh(
 fn result_run_id(stdout: &str) -> String {
     let line = stdout.trim().lines().last().unwrap_or("");
     let line = line.strip_prefix("result: ").unwrap_or(line);
-    let j = hh_wire::json::parse(line).unwrap_or(Json::Null);
+    let j = hharness_wire::json::parse(line).unwrap_or(Json::Null);
     j.get("payload")
         .and_then(|p| p.get("run_id"))
         .and_then(Json::as_str)
@@ -379,7 +379,7 @@ fn events_json(b: &mut dyn Boundary, run_id: &str) -> Vec<Json> {
     let (class, out, _) = hh(b, &["run", "events", run_id], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::Ok, "run events failed: {out}");
     out.lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .filter(|j| j.get("class").is_some())
         .collect()
 }
@@ -390,7 +390,7 @@ fn event_classes(b: &mut dyn Boundary, run_id: &str) -> Vec<String> {
     assert_eq!(class, ExitClass::Ok, "run events failed: {out}");
     out.lines()
         .filter_map(|l| {
-            let j = hh_wire::json::parse(l).ok()?;
+            let j = hharness_wire::json::parse(l).ok()?;
             j.get("class").and_then(Json::as_str).map(String::from)
         })
         .collect()
@@ -431,7 +431,7 @@ fn run_start_json_result_record_shape() {
         &[],
     );
     assert_eq!(class, ExitClass::Ok);
-    let j = hh_wire::json::parse(out.trim()).unwrap();
+    let j = hharness_wire::json::parse(out.trim()).unwrap();
     assert_eq!(j.get("kind"), Some(&Json::str("result")));
     assert_eq!(j.get("exit_class"), Some(&Json::str("ok")));
     let payload = j.get("payload").unwrap();
@@ -771,7 +771,7 @@ fn run_events_exports_the_durable_prefix() {
     assert_eq!(class, ExitClass::Ok);
     let lines: Vec<Json> = out
         .lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .collect();
     // Every line is a canonical durable envelope or the terminal result.
     let envelope = lines.iter().find(|j| j.get("class").is_some());
@@ -877,7 +877,7 @@ fn approval_respond_decides_the_ask() {
     let run_id = result_run_id(&out);
     let (class, out, _) = hh(&mut b, &["approval", "list", &run_id], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::Ok);
-    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let j = hharness_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
     let pid = match j.get("payload").and_then(|p| p.get("open")) {
         Some(Json::Arr(a)) => a.first().and_then(Json::as_str).unwrap_or("").to_string(),
         _ => String::new(),
@@ -943,7 +943,7 @@ fn invocation_record_mints_with_attendance_and_idem_key() {
     );
     let invoked = ev_out
         .lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .find(|j| j.get("class").and_then(Json::as_str) == Some("lifecycle.surface.invoked"));
     let invoked = invoked.unwrap_or_else(|| panic!("no surface.invoked: {ev_out}"));
     let payload = invoked.get("payload").unwrap();
@@ -1021,7 +1021,7 @@ fn piped_stdin_is_external_import_never_principal() {
     // pins what was read, never the bytes.
     let invoked = ev_out
         .lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .find(|j| j.get("class").and_then(Json::as_str) == Some("lifecycle.surface.invoked"))
         .unwrap_or_else(|| panic!("no invoked: {ev_out}"));
     let digest = invoked
@@ -1033,7 +1033,7 @@ fn piped_stdin_is_external_import_never_principal() {
     // The context item entered as external/import.
     let adopted = ev_out
         .lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .find(|j| {
             let c = j.get("class").and_then(Json::as_str).unwrap_or("");
             c == "context.item.adopted" || c == "context.artefact.delivered"
@@ -1124,7 +1124,7 @@ fn resume_verifies_a_re_presented_definition() {
     let mut added = document_json();
     if let Json::Obj(m) = &mut added {
         if let Some(Json::Arr(nodes)) = m.get_mut("nodes") {
-            nodes.push(hh_hir::wire::node_to_json(&sid(
+            nodes.push(hharness_hir::wire::node_to_json(&sid(
                 node(
                     EntityKind::HarnessRule,
                     KindRecord::HarnessRule(HarnessRuleRecord {
@@ -1228,7 +1228,7 @@ fn durable_resume_survives_a_service_restart() {
             store_root: root.join("store"),
             kernel_version_id: "hh-kernel/0.1.0".into(),
             workspace_root: root.join("ws"),
-            holder: hh_ledger::leases::holder_spelling("conformance", 99_999_999),
+            holder: hharness_ledger::leases::holder_spelling("conformance", 99_999_999),
         })
         .unwrap();
         let mut b = ServiceBoundary::with_svc(root.clone(), svc);
@@ -1260,7 +1260,8 @@ fn durable_resume_survives_a_service_restart() {
         .join("runs")
         .join(&run_id)
         .join("lease.json");
-    let mut lj = hh_wire::json::parse(&std::fs::read_to_string(&lease_file).unwrap()).unwrap();
+    let mut lj =
+        hharness_wire::json::parse(&std::fs::read_to_string(&lease_file).unwrap()).unwrap();
     if let Json::Obj(m) = &mut lj {
         m.insert("expires_at_ms".to_string(), Json::Int(0));
     }
@@ -1354,7 +1355,7 @@ fn parked_run_takeover_resume_fork_amend_submit() {
     assert_eq!(class, ExitClass::Ok, "{out}");
     let line = out.trim().lines().last().unwrap_or("");
     let line = line.strip_prefix("result: ").unwrap_or(line);
-    let rec = hh_wire::json::parse(line).unwrap_or(Json::Null);
+    let rec = hharness_wire::json::parse(line).unwrap_or(Json::Null);
     assert_eq!(
         rec.get("exit_class").and_then(Json::as_str),
         Some("ok"),
@@ -1395,7 +1396,7 @@ fn parked_run_takeover_resume_fork_amend_submit() {
     let child = {
         let line = out.trim().lines().last().unwrap_or("");
         let line = line.strip_prefix("result: ").unwrap_or(line);
-        hh_wire::json::parse(line)
+        hharness_wire::json::parse(line)
             .ok()
             .and_then(|j| {
                 j.get("payload")
@@ -1478,7 +1479,7 @@ fn approval_show_reads_the_open_ask() {
             .unwrap_or("")
             .to_string();
         let line = line.strip_prefix("result: ").unwrap_or(&line).to_string();
-        hh_wire::json::parse(&line)
+        hharness_wire::json::parse(&line)
             .ok()
             .and_then(|j| {
                 j.get("payload")
@@ -1537,13 +1538,13 @@ fn version_and_doctor_answer_hello_facts() {
 fn ac1_commands_run_over_the_spawned_process_binding() {
     let kernel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/hh-kernel");
     if !kernel.exists() {
-        // `cargo test -p hh-cli` alone does not build the kernel bin.
+        // `cargo test -p hharness-cli` alone does not build the kernel bin.
         let st = std::process::Command::new("cargo")
             .args(["build", "-p", "hh-kernel"])
             .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
             .status()
             .unwrap();
-        assert!(st.success(), "cargo build -p hh-kernel failed");
+        assert!(st.success(), "cargo build -p hharness-kernel failed");
     }
     let root = test_dir("ac1-kernel");
     let env = vec![
@@ -1635,7 +1636,7 @@ fn durable_events(b: &mut dyn Boundary, run_id: &str) -> Vec<Json> {
 #[test]
 fn ac2_cli_ledger_range_byte_identical_to_the_boundary_sequence() {
     let def = write_definition("ac2");
-    let doc = hh_wire::json::parse(&std::fs::read_to_string(&def).unwrap()).unwrap();
+    let doc = hharness_wire::json::parse(&std::fs::read_to_string(&def).unwrap()).unwrap();
 
     // The CLI-driven invocation (deterministic store: frozen clock +
     // sequential ids, so the two services produce identical bytes for an
@@ -1850,7 +1851,7 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     assert_eq!(cu, ExitClass::Ok, "{ou} {eu}");
     let cfg = |o: &str| -> String {
         let line = o.trim().lines().last().unwrap_or("");
-        let j = hh_wire::json::parse(line).unwrap_or(Json::Null);
+        let j = hharness_wire::json::parse(line).unwrap_or(Json::Null);
         j.get("payload")
             .and_then(|p| p.get("configuration_version_id"))
             .and_then(Json::as_str)
@@ -1935,7 +1936,7 @@ fn ac5_attended_and_unattended_share_one_configuration() {
 /// §5a.4 floor wherever it lands: `defer_irreversible = false` is
 /// `AuthorityViolation` — refused before the run opens — and the
 /// `allow_classes` widening leg refuses the same way. (Narrowing is
-/// admitted at the `check_override` seam — hh-hir's unit tests; a
+/// admitted at the `check_override` seam — hharness-hir's unit tests; a
 /// schema-invisible member is *also* refused downstream by the
 /// coordinate-space rule, which the floor precedes.)
 #[test]
@@ -2102,7 +2103,7 @@ fn ac3_jsonl_stream_minus_result_equals_run_events() {
 fn result_payload(stdout: &str) -> Json {
     let line = stdout.trim().lines().last().unwrap_or("");
     let line = line.strip_prefix("result: ").unwrap_or(line);
-    hh_wire::json::parse(line)
+    hharness_wire::json::parse(line)
         .unwrap_or(Json::Null)
         .get("payload")
         .cloned()
@@ -2153,7 +2154,7 @@ fn created_payload(b: &mut dyn Boundary, run_id: &str) -> Json {
     let (class, out, _) = hh(b, &["run", "events", run_id], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::Ok, "{out}");
     out.lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .find(|e| e.get("class").and_then(Json::as_str) == Some("lifecycle.run.created"))
         .and_then(|e| e.get("payload").cloned())
         .unwrap_or(Json::Null)
@@ -3096,7 +3097,7 @@ fn s31_bundle_create_reports_contract_identity() {
         &[],
     );
     assert_eq!(class, ExitClass::Ok, "{out}");
-    let j = hh_wire::json::parse(out.trim()).unwrap();
+    let j = hharness_wire::json::parse(out.trim()).unwrap();
     let manifest = j
         .get("payload")
         .and_then(|p| p.get("manifest"))
@@ -3247,7 +3248,7 @@ fn s31_lab_serve_returns_stdio_launch_binding() {
     let dir = test_dir("s31-serve-bundle");
     let member =
         br#"{"schema":"hh-mcp-target/1","target":"mcp","tools":[{"name":"echo"}]}"#.to_vec();
-    let addr = hh_identity::idp_id("member", &member);
+    let addr = hharness_identity::idp_id("member", &member);
     let doc = Json::obj([
         ("schema", Json::str("hh-bundle/1")),
         ("idp", Json::str("idp/1")),
@@ -3270,11 +3271,11 @@ fn s31_lab_serve_returns_stdio_launch_binding() {
         ),
         ("version_id", Json::str("pending")),
     ]);
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
     manifest.version_id = manifest.compute_id();
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     members.insert(addr, member);
-    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
 
     let (class, out, _) = hh(
         &mut b,
@@ -3299,7 +3300,7 @@ fn s31_lab_ops_run_over_the_spawned_process() {
     let kernel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/hh-kernel");
     assert!(
         kernel.exists(),
-        "build hh-kernel first (`cargo build -p hh-kernel`)"
+        "build hh-kernel first (`cargo build -p hharness-kernel`)"
     );
     let root = test_dir("s31-proc-kernel");
     let env = vec![
@@ -3382,8 +3383,11 @@ fn s31_lab_ops_run_over_the_spawned_process() {
 
 /// The `ModelProfile` the fixture registers — the record view so a
 /// `ProfileTestReport` can carry its `content_hash` (`profile_hash`).
-fn model_profile_record(profile_id: &str, version: &str) -> hh_compiler::profile::ModelProfile {
-    use hh_compiler::profile::*;
+fn model_profile_record(
+    profile_id: &str,
+    version: &str,
+) -> hharness_compiler::profile::ModelProfile {
+    use hharness_compiler::profile::*;
     let mut p = ModelProfile {
         profile_id: profile_id.into(),
         version: version.into(),
@@ -3429,7 +3433,7 @@ fn model_profile_record(profile_id: &str, version: &str) -> hh_compiler::profile
         },
         tests: Json::obj([]),
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
@@ -3441,7 +3445,7 @@ fn model_profile_json(profile_id: &str, version: &str) -> Json {
     // the compiler's view, the kind tag the registry's admission gate.
     Json::obj([
         ("kind", Json::str("model_profile")),
-        ("profile", hh_compiler::schema::profile_to_json(&p)),
+        ("profile", hharness_compiler::schema::profile_to_json(&p)),
     ])
 }
 
@@ -3453,11 +3457,15 @@ fn model_profile_json(profile_id: &str, version: &str) -> Json {
 fn profile_test_report_json(profile_id: &str, version: &str) -> Json {
     let p = model_profile_record(profile_id, version);
     let coord = format!("{profile_id}@{version}");
-    let r = hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+    let r =
+        hharness_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
     Json::obj([
         ("kind", Json::str("profile_test_report")),
         ("schema", Json::str("hh-profile-test-report/1")),
-        ("report", hh_compiler::profile_test::test_report_json(&r)),
+        (
+            "report",
+            hharness_compiler::profile_test::test_report_json(&r),
+        ),
     ])
 }
 
@@ -3568,7 +3576,7 @@ fn s412_participant_noun_gates_on_the_hosting_plane() {
         &[],
     );
     assert_eq!(class, ExitClass::Ok, "{out}");
-    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let j = hharness_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
     let vid = j
         .get("payload")
         .and_then(|p| p.get("version_id"))
@@ -3697,7 +3705,7 @@ fn s412_acp_sessions_drive_over_the_embed_boundary() {
     // One JSON-RPC response per request, then the session-end record.
     let frames: Vec<Json> = out
         .lines()
-        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter_map(|l| hharness_wire::json::parse(l).ok())
         .collect();
     let init = frames
         .iter()
@@ -3888,7 +3896,7 @@ fn s412_leaderboard_verbs_forward_group_l() {
     let (class, out, _) = hh(&mut b, &["leaderboard", "define", &pf], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::Ok, "{out}");
     assert!(out.contains("leaderboard_define"), "{out}");
-    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let j = hharness_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
     let def_id = j
         .get("payload")
         .and_then(|p| p.get("definition_id"))
@@ -3932,7 +3940,7 @@ fn s412_profile_verbs_over_registry() {
         &[],
     );
     assert_eq!(class, ExitClass::Ok, "{out}");
-    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let j = hharness_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
     let vid = j
         .get("payload")
         .and_then(|p| p.get("version_id"))

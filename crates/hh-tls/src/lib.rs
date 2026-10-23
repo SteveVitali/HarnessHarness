@@ -1,7 +1,7 @@
-//! `hh-tls` — the workspace's one TLS home (R4.5c; ADR-0365).
+//! `hharness-tls` — the workspace's one TLS home (R4.5c; ADR-0365).
 //!
-//! Scope: TLS client sessions for the model boundary (`hh-gateway`'s
-//! `HttpModelTransport`) and the egress mediator (`hh-env`'s
+//! Scope: TLS client sessions for the model boundary (`hharness-gateway`'s
+//! `HttpModelTransport`) and the egress mediator (`hharness-env`'s
 //! `LocalTlsTransport`), TLS server configs for the committed test
 //! fixtures and the R4.7a credential mediator, mTLS client-certificate
 //! presentation, and verified peer-identity (subject/SAN) extraction —

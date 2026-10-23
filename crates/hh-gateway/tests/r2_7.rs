@@ -18,12 +18,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::profile::{
+use hharness_compiler::profile::{
     self as prof, DebtStatus, EvidenceRef, ModelCoordinate, ModelProfile, SelectorView,
     VersionPattern,
 };
-use hh_gateway::*;
-use hh_wire::json::Json;
+use hharness_gateway::*;
+use hharness_wire::json::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 

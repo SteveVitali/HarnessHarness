@@ -25,11 +25,11 @@
 //!   surface as `LedgerError::SchemaViolation` with the refusal name in
 //!   `detail` (ADR-0307 — the spec's refusal column is a string
 //!   vocabulary; typed variants exist in
-//!   `hh_identity::rotation::RotationError`).
+//!   `hharness_identity::rotation::RotationError`).
 
-use hh_identity::idp::{profile_for, IdentityProfile};
-use hh_identity::rotation::{BridgeRecord, IdMigration, MigrationMethod, RotationPlan};
-use hh_wire::json::Json;
+use hharness_identity::idp::{profile_for, IdentityProfile};
+use hharness_identity::rotation::{BridgeRecord, IdMigration, MigrationMethod, RotationPlan};
+use hharness_wire::json::Json;
 
 use crate::audit::AuditSigner;
 use crate::errors::LedgerError;
@@ -177,7 +177,7 @@ fn rotate_impl(
 
 /// Map an identity-layer [`RotationError`] to the ledger refusal — the
 /// spec's refusal names are preserved verbatim in `detail`.
-fn rot_err(e: hh_identity::rotation::RotationError) -> LedgerError {
+fn rot_err(e: hharness_identity::rotation::RotationError) -> LedgerError {
     LedgerError::SchemaViolation {
         detail: e.to_string(),
     }

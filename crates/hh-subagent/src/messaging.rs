@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::LedgerError;
+use hharness_wire::json::Json;
 
 use crate::spawn::{fold_children, kernel_ev_pub};
 use crate::types::SpawnError;
@@ -41,7 +41,7 @@ pub struct SendCtx<'a> {
     pub body: &'a [u8],
     /// `follow_up` at this slice (`steer` is the later wakeup arm and is a
     /// typed `ModeUnsupported` refusal, never a silent downgrade).
-    pub delivery_mode: hh_ledger::wakeup::DeliveryMode,
+    pub delivery_mode: hharness_ledger::wakeup::DeliveryMode,
     /// The caller's idempotency key — a retry names the same
     /// `(sender, key)` and returns the existing `message_id`; a different
     /// argument under one key is a kernel-side conflict, never a second
@@ -62,12 +62,12 @@ pub struct SendCtx<'a> {
 
 /// `send_message` — refusal-first (typed, ledgered), then the `sent` row.
 pub fn send_message(ctx: &mut SendCtx) -> Result<Receipt, SpawnError> {
-    if ctx.delivery_mode == hh_ledger::wakeup::DeliveryMode::Steer {
+    if ctx.delivery_mode == hharness_ledger::wakeup::DeliveryMode::Steer {
         return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
             detail: "delivery_mode = steer is the later wakeup arm".into(),
         }));
     }
-    let body_addr = hh_identity::idp::address(ctx.body, "text/plain");
+    let body_addr = hharness_identity::idp::address(ctx.body, "text/plain");
     let body_ref = body_addr.id();
     // Idempotent retry — `(sender, idempotency_key)` returns the durable
     // send it already made. A key replayed with different arguments is a
@@ -217,7 +217,7 @@ fn refuse(ctx: &mut SendCtx, r: MessageRefused) -> Result<Receipt, SpawnError> {
             ("idempotency_key", Json::str(ctx.idempotency_key)),
             (
                 "body_ref",
-                Json::str(hh_identity::idp::address(ctx.body, "text/plain").id()),
+                Json::str(hharness_identity::idp::address(ctx.body, "text/plain").id()),
             ),
             (
                 "bytes",
@@ -349,8 +349,8 @@ pub fn inbox_scan(
                         .wakeup_subscribe(
                             receiver_run_id,
                             receiver_lease,
-                            hh_ledger::wakeup::Trigger::PeerMessage { from: from.clone() },
-                            hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                            hharness_ledger::wakeup::Trigger::PeerMessage { from: from.clone() },
+                            hharness_ledger::wakeup::WakeupPolicy::default_policy(),
                             &EventRef {
                                 // The creating fact is the sender-side
                                 // `control.message.sent` row, not a row on
@@ -375,7 +375,7 @@ pub fn inbox_scan(
                 .as_deref(),
                 store.now_ms(),
             ) {
-                Ok(hh_ledger::wakeup::OccurOutcome::Occurred(_)) => {
+                Ok(hharness_ledger::wakeup::OccurOutcome::Occurred(_)) => {
                     // M-4 — every delivered peer message is a delivered
                     // artefact on the *receiver's* ledger (T-LCD-13:
                     // `activated`/`followed` are then measurable; the
@@ -391,7 +391,7 @@ pub fn inbox_scan(
                     )?;
                     delivered.push(message_id);
                 }
-                Ok(hh_ledger::wakeup::OccurOutcome::Skipped(_)) => {
+                Ok(hharness_ledger::wakeup::OccurOutcome::Skipped(_)) => {
                     // `duplicate_occurrence` — already delivered; the
                     // audited skip row stands, the id is not re-reported.
                 }
@@ -435,10 +435,10 @@ pub fn declare_peer_inbox(
         .wakeup_subscribe(
             run_id,
             lease,
-            hh_ledger::wakeup::Trigger::PeerMessage {
+            hharness_ledger::wakeup::Trigger::PeerMessage {
                 from: from.to_string(),
             },
-            hh_ledger::wakeup::WakeupPolicy::default_policy(),
+            hharness_ledger::wakeup::WakeupPolicy::default_policy(),
             created_by,
         )
         .map_err(|e| SpawnError::Kernel(e.to_string()))

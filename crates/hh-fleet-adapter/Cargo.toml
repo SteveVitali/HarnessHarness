@@ -1,5 +1,5 @@
 [package]
-name = "hh-fleet-adapter"
+name = "hharness-fleet-adapter"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,5 +10,5 @@ description = "The C4/Stage-5 work-source adapter boundary (spec §5i.1, R-2.12.
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-fleet = { path = "../hh-fleet" }
+hharness-wire = { path = "../hh-wire" }
+hharness-fleet = { path = "../hh-fleet" }

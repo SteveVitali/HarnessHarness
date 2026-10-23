@@ -34,7 +34,7 @@
 //! produce a signature) — the constraint binds deliveries to
 //! destinations, never the kernel's own read.
 
-use hh_wire::sha256::sha256_hex;
+use hharness_wire::sha256::sha256_hex;
 
 /// The closed proof-algorithm sum — the two `ring` verification
 /// algorithms ADR-0359 D2 admits (`ED25519` and

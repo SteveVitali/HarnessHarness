@@ -24,10 +24,10 @@ L4.5 tickets' scope.
   the ADR-0365 rustls graph) — `hh-embed/1` typed boundary over three
   bindings (in-process, stdio JSON-RPC 2.0, loopback HTTP), the `hh`
   CLI, `hh-kernel`, `hh-helper`, `hh-web`, `hh-mcp-serve`.
-- Kernel spine: canonical JSON/SHA-2 (`hh-wire`), the formal model +
-  canonicalizer (`hh-ontology`/`hh-identity`), the provenance label
-  lattice (`hh-provenance`), HIR/1 (`hh-hir`), the append-only
-  hash-chained event store with blob-pool AEAD (`hh-ledger`), budget /
+- Kernel spine: canonical JSON/SHA-2 (`hharness-wire`), the formal model +
+  canonicalizer (`hharness-ontology`/`hharness-identity`), the provenance label
+  lattice (`hharness-provenance`), HIR/1 (`hharness-hir`), the append-only
+  hash-chained event store with blob-pool AEAD (`hharness-ledger`), budget /
   registry / secrets / telemetry / monitor (Π) / containment / env /
   gateway / context / control / verification slices.
 - Lab tier: experiment engine, results store, estimator, eval, the

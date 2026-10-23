@@ -1,15 +1,15 @@
 //! The stdio JSON-RPC 2.0 server — binding (b) of `hh-embed/1`.
 //!
-//! `hh-kernel serve` is a thin shell over [`hh_embed`]: the service
+//! `hh-kernel serve` is a thin shell over [`hharness_embed`]: the service
 //! config comes from the process environment (`HH_STORE_ROOT` — the
 //! ledger root; `HH_WORKSPACE_ROOT` — the `local_host` workspace
 //! binding; both default under the current directory), and the framed
-//! loop is `hh_embed::stdio::serve` verbatim so the wire is the
+//! loop is `hharness_embed::stdio::serve` verbatim so the wire is the
 //! contract's, not the binary's (ADR-0179 D1(b)).
 
 use std::io::{BufReader, Read, Write};
 
-use hh_embed::{EmbedService, ServiceConfig};
+use hharness_embed::{EmbedService, ServiceConfig};
 
 use crate::KERNEL_VERSION_ID;
 
@@ -41,7 +41,7 @@ pub fn run<R: Read, W: Write>(reader: R, mut writer: W) -> std::io::Result<()> {
     let mut svc = EmbedService::open(service_config())
         .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
     let mut buf = BufReader::new(reader);
-    hh_embed::stdio::serve(&mut svc, &mut buf, &mut writer)
+    hharness_embed::stdio::serve(&mut svc, &mut buf, &mut writer)
 }
 
 fn service_config() -> ServiceConfig {
@@ -73,7 +73,7 @@ pub fn run_http(
 ) -> std::io::Result<()> {
     let token = match token {
         Some(t) => t,
-        None => hh_embed::net::mint_token()?,
+        None => hharness_embed::net::mint_token()?,
     };
     let listener = std::net::TcpListener::bind(addr)
         .map_err(|e| std::io::Error::new(e.kind(), format!("bind {addr}: {e}")))?;
@@ -94,7 +94,7 @@ pub fn run_http(
     }
     let mut svc = EmbedService::open(service_config())
         .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
-    hh_embed::net::serve_net(listener, &mut svc, &token)
+    hharness_embed::net::serve_net(listener, &mut svc, &token)
 }
 
 /// Write the token file mode-0600 (Unix; the token is a capability —

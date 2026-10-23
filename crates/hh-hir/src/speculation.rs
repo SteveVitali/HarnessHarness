@@ -10,7 +10,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::HirError;
 

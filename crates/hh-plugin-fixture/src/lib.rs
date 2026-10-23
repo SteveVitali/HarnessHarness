@@ -12,13 +12,13 @@
 //! deadlines). Modes compose through CLI flags so one binary plays every
 //! role the suites need.
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     plugin_abi_schema_hash, AbiError, AbiPayload, BindFailure, BindParams, BindResult,
     CallbackCall, CallbackResult, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, InvokeResult, StreamParams, PLUGIN_ABI_MAJOR,
 };
-use hh_varhost::channel::{AbiChannel, ChannelError, FrameIo};
-use hh_wire::json::Json;
+use hharness_varhost::channel::{AbiChannel, ChannelError, FrameIo};
+use hharness_wire::json::Json;
 
 pub mod fixture;
 
@@ -53,7 +53,7 @@ impl PluginCtx<'_> {
     /// world effect.
     pub fn propose_effect(&mut self, proposal: Json) -> Result<String, AbiError> {
         match self.callback(CallbackCall {
-            callback: hh_embed_schema::plugin_abi::HostCallback::ProposeEffect,
+            callback: hharness_embed_schema::plugin_abi::HostCallback::ProposeEffect,
             args: proposal,
         })? {
             CallbackResult::EffectRef(r) => Ok(r),
@@ -65,7 +65,7 @@ impl PluginCtx<'_> {
     /// `read_view(view_kind, until_seq)`.
     pub fn read_view(&mut self, view_kind: &str, until_seq: i64) -> Result<Json, AbiError> {
         match self.callback(CallbackCall {
-            callback: hh_embed_schema::plugin_abi::HostCallback::ReadView,
+            callback: hharness_embed_schema::plugin_abi::HostCallback::ReadView,
             args: Json::obj([
                 ("view_kind", Json::str(view_kind.to_string())),
                 ("until_seq", Json::Int(until_seq)),
@@ -80,7 +80,7 @@ impl PluginCtx<'_> {
     /// `request_budget(extent)`.
     pub fn request_budget(&mut self, extent: Json) -> Result<String, AbiError> {
         match self.callback(CallbackCall {
-            callback: hh_embed_schema::plugin_abi::HostCallback::RequestBudget,
+            callback: hharness_embed_schema::plugin_abi::HostCallback::RequestBudget,
             args: extent,
         })? {
             CallbackResult::Reservation(r) => Ok(r),
@@ -92,7 +92,7 @@ impl PluginCtx<'_> {
     /// `emit_diagnostic(record)`.
     pub fn emit_diagnostic(&mut self, record: Json) {
         let _ = self.callback(CallbackCall {
-            callback: hh_embed_schema::plugin_abi::HostCallback::EmitDiagnostic,
+            callback: hharness_embed_schema::plugin_abi::HostCallback::EmitDiagnostic,
             args: record,
         });
     }
@@ -277,7 +277,7 @@ impl<L: VariantLogic> PluginRuntime<L> {
 trait AckJson {
     fn to_json_ack(&self) -> Json;
 }
-impl AckJson for hh_embed_schema::plugin_abi::HelloResult {
+impl AckJson for hharness_embed_schema::plugin_abi::HelloResult {
     fn to_json_ack(&self) -> Json {
         Json::obj([
             ("host_id", Json::str(self.host_id.clone())),

@@ -1,4 +1,4 @@
-//! `hh-lab` S6.4 coverage — R-2.9.8 (§5h.8; ADR-0325;
+//! `hharness-lab` S6.4 coverage — R-2.9.8 (§5h.8; ADR-0325;
 //! AC-R-2.9.8-{1–4,6–9,11–13}): the co-evolution interface's pure
 //! folds — `project_training_export` (determinism, held-out refusal,
 //! reward admissibility, typed loss), `import_snapshot` (the unpinned
@@ -16,25 +16,25 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_lab::coevolution::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_lab::coevolution::{
     self as coe, ArmOrigin, BindGuard, BrokenPolicy, CoEvolutionError, ConsolidationInput,
     ConsolidationPolicy, ConsolidationVerdict, CyclePhase, CyclePolicy, CycleStopReason,
     ImportOutcome, LessonFact, NeverConsolidate, NullTrainer, PhasePlan, RouteStatus, SampleUnit,
     SealedDefinition, SwitchRule, TrainingExportCtx, TrainingExportPolicy,
 };
-use hh_lab::model::{
+use hharness_lab::model::{
     CompatibilityRecord, CompatibilityStatus, ForeignRef, PolicyVersionExposed, SnapshotClaim,
     TrainedUnderRef,
 };
-use hh_ontology::debt::{
+use hharness_ontology::debt::{
     DebtClass, DebtExpiry, DebtScope, DebtStatus, EvidenceKind, EvidenceRef, ExpiryCondition,
     ExpiryKind, ExpiryParams, HypothesisSubject, HypothesisTyped, ModelSelector, OwnerRef,
     PredictedEffect, RemovalTest, RemovalTestKind,
 };
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::Json;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ fn conditioned_debt(rule_id: &str, selector: ModelSelector) -> AssumptionDebtRec
         debt_class: Some(DebtClass::ModelConditioned),
         hypothesis_typed: Some(HypothesisTyped {
             subject: HypothesisSubject::Deficiency,
-            deficiency_class: hh_ontology::debt::DeficiencyClass::PrematureStop,
+            deficiency_class: hharness_ontology::debt::DeficiencyClass::PrematureStop,
             predicted_effect: PredictedEffect::Increase,
             metric_ref: Some("metric:task_success".into()),
         }),
@@ -681,8 +681,8 @@ fn post_import_sweep_partitions_scoped_debts() {
 /// when the scope or the expiry leg is absent (AC-R-2.9.8-12).
 #[test]
 fn conditioned_debt_needs_scope_and_version_expiry() {
-    use hh_hir::debt::{validate_removal_test, RemovalTestContext};
-    use hh_ontology::debt::debt_home;
+    use hharness_hir::debt::{validate_removal_test, RemovalTestContext};
+    use hharness_ontology::debt::debt_home;
 
     let home = debt_home("harness_rule", "assumption_debt").unwrap();
     let ctx = RemovalTestContext::member_level();
@@ -831,7 +831,7 @@ fn consolidation_candidates_apply_the_closed_legs() {
 #[test]
 fn consolidation_verdict_and_retirement_proof() {
     use coe::ConsolidationEvidence as Ev;
-    use hh_hir::debt::RetirementRecord;
+    use hharness_hir::debt::RetirementRecord;
 
     // V1 — the target report is mandatory.
     let err =
@@ -1195,15 +1195,15 @@ fn null_trainer_round_trips_through_import() {
 /// construction).
 #[test]
 fn regression_suite_binds_snapshot_out_unbound() {
-    use hh_lab::experiment::{
+    use hharness_lab::experiment::{
         Backoff, CancelPolicy, ExperimentBudgets, ExperimentKind, OrderKind, ReattemptPolicy,
         SchedulingPolicy,
     };
-    use hh_ontology::eval::{DesignKind, SeedPolicy};
+    use hharness_ontology::eval::{DesignKind, SeedPolicy};
 
     let pins = coe::RegressionSuitePins {
         suite_ref: "suite:conformance".into(),
-        split_labels_used: vec![hh_ontology::lab::SplitLabel::Dev],
+        split_labels_used: vec![hharness_ontology::lab::SplitLabel::Dev],
         split_assignment_ref: "split:a".into(),
         eval_budget_ref: "budget:e".into(),
         search_budget_ref: "budget:s".into(),
@@ -1214,7 +1214,7 @@ fn regression_suite_binds_snapshot_out_unbound() {
         registry_snapshot_id: "reg:1".into(),
         analysis_plan_ref: "plan:1".into(),
         task_split_hash: "sha256:ts".into(),
-        pricing_table_ref: Some(hh_budget::pricing::PricingTableRef {
+        pricing_table_ref: Some(hharness_budget::pricing::PricingTableRef {
             table_id: "pricing:t".into(),
             version: "v1".into(),
             pin: None,
@@ -1292,8 +1292,11 @@ fn regression_suite_binds_snapshot_out_unbound() {
     // matched_cap + cross_model — the pair crosses models by
     // construction.
     let m = out.spec.arms[0].match_spec.as_ref().unwrap();
-    assert_eq!(m.mode, hh_budget::MatchMode::MatchedCap);
-    assert_eq!(m.model_scope, hh_budget::matchspec::ModelScope::CrossModel);
+    assert_eq!(m.mode, hharness_budget::MatchMode::MatchedCap);
+    assert_eq!(
+        m.model_scope,
+        hharness_budget::matchspec::ModelScope::CrossModel
+    );
     // The record stamps the preview/maturity contract.
     let j = out.to_json();
     assert_eq!(j.get("label").and_then(Json::as_str), Some("preview"));
@@ -1357,10 +1360,10 @@ fn compatibility_tags_project_status_and_rule_tags() {
 /// dimension inventory includes `message_human` — the §5i.1 6d leg).
 #[test]
 fn org_policy_recipe_carries_matched_cap() {
-    use hh_budget::matchspec::MatchMode;
-    use hh_budget::pricing::PricingTableRef;
-    use hh_lab::exemplars;
-    use hh_ontology::dimensions::DimensionId;
+    use hharness_budget::matchspec::MatchMode;
+    use hharness_budget::pricing::PricingTableRef;
+    use hharness_lab::exemplars;
+    use hharness_ontology::dimensions::DimensionId;
 
     let pricing = PricingTableRef {
         table_id: "pricing:test".into(),
@@ -1409,7 +1412,7 @@ fn org_policy_recipe_carries_matched_cap() {
             arm_id: "arm:default".into(),
             hypothesis: "the default holds".into(),
             levels: vec![("unattended_policy".into(), "deny".into())],
-            artifact: hh_ontology::config::Ref::new("fleet:default", "sha256:ff"),
+            artifact: hharness_ontology::config::Ref::new("fleet:default", "sha256:ff"),
             simulated_responder_calibration_ref: None,
         }],
         pricing_table_ref: pricing.clone(),
@@ -1458,15 +1461,15 @@ fn interface_debt_record_is_model_conditioned_and_sweep_covered() {
     // `validate_removal_test` passes member-level: model-conditioned ⇒
     // scope.model_selectors + the `model_version_change` expiry (the
     // AC-R-2.9.8-12 leg the record satisfies).
-    let home = hh_ontology::debt::debt_home("coevolution_interface", "assumption_debt")
+    let home = hharness_ontology::debt::debt_home("coevolution_interface", "assumption_debt")
         .unwrap_or_else(|| {
-            hh_ontology::debt::debt_home("harness_rule", "assumption_debt")
+            hharness_ontology::debt::debt_home("harness_rule", "assumption_debt")
                 .expect("the harness_rule home exists")
         });
-    hh_hir::debt::validate_removal_test(
+    hharness_hir::debt::validate_removal_test(
         &rec,
         home,
-        &hh_hir::debt::RemovalTestContext::member_level(),
+        &hharness_hir::debt::RemovalTestContext::member_level(),
     )
     .expect("the interface record validates member-level");
     // The sweep covers the record on import of an in-family snapshot

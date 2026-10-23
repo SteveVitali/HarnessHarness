@@ -1,5 +1,5 @@
 [package]
-name = "hh-ontology"
+name = "hharness-ontology"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,11 +10,11 @@ description = "The C0/Stage-1 ontology and formal model (spec §2, R-2.1.1): the
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 # The idp/1 identity model (S1.2): κ's two configuration ids are computed through the one idp/1
 # content-addressing scheme (CC1 — no second canonicalization/hash scheme). ADR-0227 D2 flagged
 # this migration; it lands with S1.2.
-hh-identity = { path = "../hh-identity" }
+hharness-identity = { path = "../hh-identity" }
 # The provenance record (ADR-0033/0035) — declarations (OracleDeclaration, Arm) carry it
 # (S1.22, R-2.9.2).
-hh-provenance = { path = "../hh-provenance" }
+hharness-provenance = { path = "../hh-provenance" }

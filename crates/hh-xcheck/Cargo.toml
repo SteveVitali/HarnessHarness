@@ -1,5 +1,5 @@
 [package]
-name = "hh-xcheck"
+name = "hharness-xcheck"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,9 +14,9 @@ name = "hh-xcheck"
 path = "src/bin/xcheck.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-hir = { path = "../hh-hir" }
-hh-identity = { path = "../hh-identity" }
-hh-ledger = { path = "../hh-ledger" }
-hh-plugin = { path = "../hh-plugin" }
-hh-registry = { path = "../hh-registry" }
+hharness-wire = { path = "../hh-wire" }
+hharness-hir = { path = "../hh-hir" }
+hharness-identity = { path = "../hh-identity" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-plugin = { path = "../hh-plugin" }
+hharness-registry = { path = "../hh-registry" }

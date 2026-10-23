@@ -41,19 +41,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_context::policy::{self, ContextPolicy, PolicyRequest};
-use hh_context::vocab::{ConflictPolicy, LifecycleStateKind};
-use hh_context::*;
-use hh_hir::records::{AssumptionDebtRecord, DebtStatus, Validity};
-use hh_identity::kinds::RecordKind;
-use hh_identity::names::ResolveMode;
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::label::Label;
-use hh_provenance::origin::{HumanRole, Origin};
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::{AuthorityClass, PersistenceScope};
-use hh_wire::json::Json;
+use hharness_context::policy::{self, ContextPolicy, PolicyRequest};
+use hharness_context::vocab::{ConflictPolicy, LifecycleStateKind};
+use hharness_context::*;
+use hharness_hir::records::{AssumptionDebtRecord, DebtStatus, Validity};
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::names::ResolveMode;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::{AuthorityClass, PersistenceScope};
+use hharness_wire::json::Json;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ fn draft_text(text: &str, scope: PersistenceScope) -> MemoryDraft {
     MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             text,
             "owner",
             ProvenanceRecord::kernel("kernel:mem", 0),
@@ -720,11 +720,11 @@ fn ac_r_2_4_1_11_and_2_4_2_6_registration_contract() {
     // A conditioned rule with a complete debt record passes.
     let debt = AssumptionDebtRecord {
         rule_id: "r1".into(),
-        hypothesis: hh_hir::leaves::Text::new("h", "alice", kernel_prov()),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
-        owner: hh_hir::OwnerRef::principal("alice"),
-        expiry_condition: hh_hir::ExpiryCondition {
-            kind: hh_hir::ExpiryKind::ModelVersionChange,
+        hypothesis: hharness_hir::leaves::Text::new("h", "alice", kernel_prov()),
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hharness_hir::OwnerRef::principal("alice"),
+        expiry_condition: hharness_hir::ExpiryCondition {
+            kind: hharness_hir::ExpiryKind::ModelVersionChange,
             value: None,
         },
         removal_test_ref: "sha256:test".into(),
@@ -735,10 +735,10 @@ fn ac_r_2_4_1_11_and_2_4_2_6_registration_contract() {
         expiry: None,
         runway_ms: None,
         revalidation: None,
-        removal_test: Some(hh_hir::RemovalTest {
-            kind: hh_hir::RemovalTestKind::Inspection,
+        removal_test: Some(hharness_hir::RemovalTest {
+            kind: hharness_hir::RemovalTestKind::Inspection,
             criteria: Some("human inspection".into()),
-            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+            ..hharness_hir::RemovalTest::new(hharness_hir::RemovalTestKind::Inspection)
         }),
         created_by: None,
         created_at: None,
@@ -1121,7 +1121,7 @@ fn ac_r_2_4_3_5_stale_by_dependency_propagates_transitively() {
     d2.justifications = vec![Justification {
         kind: JustificationKind::DeliveredMemory,
         ref_: VersionedRef::pinned(RecordKind::Memory, &base.version_id, kernel_prov()),
-        at: hh_ledger::manifest::EventRef {
+        at: hharness_ledger::manifest::EventRef {
             run_id: "run1".into(),
             event_id: "e1".into(),
         },
@@ -1131,7 +1131,7 @@ fn ac_r_2_4_3_5_stale_by_dependency_propagates_transitively() {
     d3.justifications = vec![Justification {
         kind: JustificationKind::ExpandedHandle,
         ref_: VersionedRef::pinned(RecordKind::Memory, &mid.version_id, kernel_prov()),
-        at: hh_ledger::manifest::EventRef {
+        at: hharness_ledger::manifest::EventRef {
             run_id: "run1".into(),
             event_id: "e2".into(),
         },
@@ -1447,7 +1447,7 @@ fn filter_for_slot_is_the_attested_order() {
         version_id: "v1".into(),
         authority: AuthorityClass::Unverified, // below floor
         readers: ReaderSet::Restricted(BTreeSet::new()), // admits nobody
-        scope: hh_provenance::PersistenceScope::Run,
+        scope: hharness_provenance::PersistenceScope::Run,
         state: LifecycleStateKind::Revoked, // not admitted
         stale_since: None,
         conflict_set_ref: None,

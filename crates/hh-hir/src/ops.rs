@@ -3,7 +3,7 @@
 //! out-of-process use (AC-IR-10; the `hh-ir-op` binary drives it).
 //!
 //! `seal` (§3.1.6) is where definition authority is *conferred*: every member gets a
-//! `seal`-basis endorsement ([`hh_provenance::endorse::seal`]) raising it to `definition`
+//! `seal`-basis endorsement ([`hharness_provenance::endorse::seal`]) raising it to `definition`
 //! with a `Seal` attestation bound to the pre-seal identity basis — the record carries its
 //! own evidence so `validate` accepts the raised class without a ledger (§8.1 #3). Members
 //! whose origin is `import`/`migration` may not rise on the seal basis — they need a `pin`
@@ -14,8 +14,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::planes::Plane;
-use hh_provenance::{
+use hharness_ontology::planes::Plane;
+use hharness_provenance::{
     Attestation, AttestationAnchor, AttestationKind, AuthorityClass, PersistenceScope,
     ProvenanceRecord,
 };
@@ -69,7 +69,7 @@ fn endorse_member(
         });
     }
     let kernel = sealing_component(sealed_at);
-    match hh_provenance::seal(prov, subject_hash, &kernel, None) {
+    match hharness_provenance::seal(prov, subject_hash, &kernel, None) {
         Ok(_) => {
             prov.authority = AuthorityClass::Definition;
             prov.attestation = Some(Attestation {
@@ -81,7 +81,7 @@ fn endorse_member(
             });
             Ok(())
         }
-        Err(hh_provenance::EndorsementError::BasisNotAllowed { .. }) => {
+        Err(hharness_provenance::EndorsementError::BasisNotAllowed { .. }) => {
             // import/migration content may not seal on the seal basis — it needs a `pin`
             // attestation already on the record (§8.1 #3).
             let pinned = prov
@@ -567,7 +567,7 @@ pub fn closed_world_tools(
 pub struct HirOpacity {
     /// Per-authority-class leaf counts (`Text` + `CompiledPayload` leaves, semantic and
     /// surface records alike).
-    pub by_class: hh_provenance::OpacityReport,
+    pub by_class: hharness_provenance::OpacityReport,
     /// Leaves whose body the compiler cannot inspect — `CompiledPayload` leaves carrying
     /// no `declared_interface` (`Opaque` steps included: their payload is inline).
     pub opaque_without_interface: usize,
@@ -591,7 +591,7 @@ pub fn opacity(doc: &HirDocument, profile: Option<&str>) -> HirOpacity {
         collect_leaf_authorities(&j, &mut classes, &mut without_interface);
     }
     HirOpacity {
-        by_class: hh_provenance::OpacityReport::over(classes),
+        by_class: hharness_provenance::OpacityReport::over(classes),
         opaque_without_interface: without_interface,
         profile: profile.map(str::to_string),
     }
@@ -602,11 +602,11 @@ pub fn opacity(doc: &HirDocument, profile: Option<&str>) -> HirOpacity {
 /// (whose `authority` is the leaf's class) and is *opaque without interface* when no
 /// `declared_interface` member is present. Objects matching neither shape are walked.
 fn collect_leaf_authorities(
-    j: &hh_wire::json::Json,
+    j: &hharness_wire::json::Json,
     out: &mut Vec<AuthorityClass>,
     without_interface: &mut usize,
 ) {
-    use hh_wire::json::Json;
+    use hharness_wire::json::Json;
     match j {
         Json::Obj(m) => {
             if m.contains_key("content_hash") {
@@ -673,7 +673,11 @@ pub fn ablate(
         doc.nodes.retain(|n| n.semantic_id() != target);
         doc.edges.retain(|e| e.from != target && e.to != target);
         let root = doc.root.semantic_id.clone();
-        let hypothesis = Text::new(format!("ablation:{target}"), "hh-hir", kernel_prov.clone());
+        let hypothesis = Text::new(
+            format!("ablation:{target}"),
+            "hharness-hir",
+            kernel_prov.clone(),
+        );
         doc.edges.push(Edge::new(
             crate::kinds::EdgeKind::DerivedFrom,
             root.clone(),
@@ -718,8 +722,8 @@ pub fn ablate(
 /// The grammar-neutral "is this assembly section resolved?" walk (§3.1.3): any object
 /// carrying a `version_selector` member, or any string in the `$param:`/`$entity:` binding
 /// forms, is unresolved. Returns the first offending path.
-fn unresolved_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String> {
-    use hh_wire::json::Json;
+fn unresolved_in_assembly(j: &hharness_wire::json::Json, path: &str) -> Option<String> {
+    use hharness_wire::json::Json;
     match j {
         Json::Obj(m) => {
             if m.contains_key("version_selector") {
@@ -746,8 +750,8 @@ fn unresolved_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String>
 /// The §5g.5 L4 walk over `assembly.extensions.refs[]`: a ref is pinned when
 /// its locator carries `resolved` + `fetched_at` with no surviving `selector`
 /// and `content` is present (S1.23). Returns the first offending path/member.
-fn unpinned_extension_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String> {
-    use hh_wire::json::Json;
+fn unpinned_extension_in_assembly(j: &hharness_wire::json::Json, path: &str) -> Option<String> {
+    use hharness_wire::json::Json;
     let refs = match j {
         Json::Obj(m) => m.get("extensions")?.get("refs")?,
         _ => return None,
@@ -923,7 +927,7 @@ pub fn diff_bytes(
 /// `apply_bytes(base, diff_bytes) → document bytes | [error]`.
 pub fn apply_bytes(base: &[u8], diff: &[u8]) -> Result<Vec<u8>, Vec<HirError>> {
     let b = crate::document::parse_document(base).map_err(|e| vec![e])?;
-    let dj = hh_wire::canonical::parse_canonical(diff).map_err(|e| {
+    let dj = hharness_wire::canonical::parse_canonical(diff).map_err(|e| {
         vec![HirError::NonCanonicalInput {
             detail: format!("diff: {e}"),
         }]
@@ -944,21 +948,21 @@ pub fn project_bytes(bytes: &[u8], selector: &str) -> Result<Vec<u8>, Vec<HirErr
     let d = crate::document::parse_document(bytes).map_err(|e| vec![e])?;
     let sel = parse_selector(selector)?;
     let g = project(&d, sel);
-    let out = hh_wire::json::Json::obj([
+    let out = hharness_wire::json::Json::obj([
         (
             "nodes",
-            hh_wire::json::Json::Arr(g.nodes.iter().map(|n| n.to_json()).collect()),
+            hharness_wire::json::Json::Arr(g.nodes.iter().map(|n| n.to_json()).collect()),
         ),
         (
             "edges",
-            hh_wire::json::Json::Arr(g.edges.iter().map(|e| e.to_json()).collect()),
+            hharness_wire::json::Json::Arr(g.edges.iter().map(|e| e.to_json()).collect()),
         ),
     ]);
     Ok(out.to_canonical_string().into_bytes())
 }
 
 fn parse_selector(s: &str) -> Result<ProjectSelector, Vec<HirError>> {
-    use hh_ontology::planes::Plane::*;
+    use hharness_ontology::planes::Plane::*;
     let plane = match s {
         "P1" => Some(Observation),
         "P2" => Some(Action),

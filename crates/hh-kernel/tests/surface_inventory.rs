@@ -17,10 +17,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use hh_embed_schema::ops;
+use hharness_embed_schema::ops;
 
-/// Surface crate → the binding it crosses on (ADR-0179 D2; recorded by the
-/// inventory report).
+/// Surface crate *directory* → the binding it crosses on (ADR-0179 D2;
+/// recorded by the inventory report). Directories keep `crates/hh-*`
+/// (ADR-0379 D4) even though the package names are `hharness-*`.
 const SURFACES: &[(&str, &str)] = &[
     (
         "hh-cli",

@@ -22,8 +22,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::manifest::RunManifest;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::RunManifest;
+use hharness_wire::json::Json;
 
 /// The flat `{dotted.field → ref}` projection of `rm`'s reference
 /// members. Nested members index under dotted keys

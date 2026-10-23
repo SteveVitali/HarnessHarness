@@ -19,26 +19,26 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use hh_containment::egress::ApprovalCache;
-use hh_containment::policy::{
+use hharness_containment::egress::ApprovalCache;
+use hharness_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressRule, HostPattern,
     NetMode, NonPublic, RuleDecision,
 };
-use hh_embed::subscriber::{
+use hharness_embed::subscriber::{
     ExportSubscriber, PollOutcome, SinkDestination, SinkWire, SubscriberEgress,
 };
-use hh_env::egress::{EgressMediator, LocalHttpTransport, StaticResolver};
-use hh_env::events::{intended_payload, EventMinter, ScopeChain};
-use hh_env::tokens::{TokenMinter, TokenResolver};
-use hh_ledger::event::Scope;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::PersistenceScope;
-use hh_secrets::{CredentialBroker, DenyAllResolver};
-use hh_telemetry::propagation::{span_id, trace_id};
-use hh_telemetry::sinks::SinkPolicy;
-use hh_wire::json::Json;
+use hharness_env::egress::{EgressMediator, LocalHttpTransport, StaticResolver};
+use hharness_env::events::{intended_payload, EventMinter, ScopeChain};
+use hharness_env::tokens::{TokenMinter, TokenResolver};
+use hharness_ledger::event::Scope;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::PersistenceScope;
+use hharness_secrets::{CredentialBroker, DenyAllResolver};
+use hharness_telemetry::propagation::{span_id, trace_id};
+use hharness_telemetry::sinks::SinkPolicy;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -352,7 +352,7 @@ fn otlp_acknowledged_delivery_lands_delivered_and_a_valid_request() {
     assert_eq!(got.len(), 1, "exactly one POST crossed the wire");
     assert!(got[0].starts_with("POST /v1/traces"), "the OTLP path");
     let body = got[0].split("\r\n\r\n").nth(1).expect("request body");
-    let doc = hh_wire::json::parse(body).expect("the OTLP body parses");
+    let doc = hharness_wire::json::parse(body).expect("the OTLP body parses");
     let Json::Arr(rs) = doc.get("resourceSpans").unwrap() else {
         panic!("resourceSpans[]")
     };

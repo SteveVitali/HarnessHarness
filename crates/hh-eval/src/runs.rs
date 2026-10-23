@@ -11,17 +11,17 @@
 //!
 //! Codec members are strict (unknown members refuse — CC3/CC8). The record is
 //! language-neutral canonical JSON (CC4); `configuration_id` is computed by
-//! `hh-identity`, never trusted from input.
+//! `hharness-identity`, never trusted from input.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::NaReason;
-use hh_ontology::eval::{MediationChannel, MetricValue, MetricValueKind};
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
-use hh_ontology::DimensionId;
-use hh_wire::Json;
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::eval::{MediationChannel, MetricValue, MetricValueKind};
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
+use hharness_ontology::DimensionId;
+use hharness_wire::Json;
 
 use crate::facts::LedgerFacts;
 use crate::json_util::*;
@@ -70,7 +70,7 @@ pub struct EvalRun {
     /// The cell id, when bound (`experiment.cell_id`).
     pub cell_id: Option<String>,
     /// The seedless aggregate coordinate (`configuration_id` — computed at
-    /// ingest by `hh_identity::configuration_id`, carried here as the bound
+    /// ingest by `hharness_identity::configuration_id`, carried here as the bound
     /// value).
     pub configuration_id: String,
     /// `native | hosted`.
@@ -105,7 +105,7 @@ pub struct EvalRun {
     pub comparable: bool,
     /// The derived outcome class (`eval::derive_outcome_class` / the settled
     /// `StopReason` projection — never a metric value).
-    pub outcome_class: hh_ontology::control::OutcomeClass,
+    pub outcome_class: hharness_ontology::control::OutcomeClass,
     /// Per-dimension consumed quantities (`control.budget.consumed` settled).
     pub budget_consumed: BTreeMap<DimensionId, i64>,
     /// The veto ids this run tripped (`vetoes::evaluate_vetoes` output —
@@ -412,7 +412,7 @@ impl EvalRun {
             cache_state: CacheState::parse(str_at(m, "cache_state", REC)?)
                 .ok_or_else(|| SchemaError::v("cache_state", "unknown state"))?,
             comparable: bool_at(m, "comparable", REC)?,
-            outcome_class: hh_ontology::control::OutcomeClass::parse(str_at(
+            outcome_class: hharness_ontology::control::OutcomeClass::parse(str_at(
                 m,
                 "outcome_class",
                 REC,
@@ -447,7 +447,7 @@ impl EvalRun {
 }
 
 /// `task_context/1` — the per-task context the scorecard/compare needs from
-/// the suite plane (a projection of `hh_lab::bench::TaskRecord` +
+/// the suite plane (a projection of `hharness_lab::bench::TaskRecord` +
 /// `SplitAssignmentRecord` — records-in, never re-derived here).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskContext {

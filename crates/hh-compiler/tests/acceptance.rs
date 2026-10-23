@@ -1,4 +1,4 @@
-//! `hh-compiler` acceptance suite (spec §3.2.12; ticket S1.10; R-2.1.3).
+//! `hharness-compiler` acceptance suite (spec §3.2.12; ticket S1.10; R-2.1.3).
 //! The deterministic AC-CP-* halves: byte-identity in-process and out-of-process
 //! (AC-CP-01/11), trace totality (AC-CP-03), `UnexpressibleSurface` (AC-CP-05), the
 //! debt-record gate + expired-rule warnings (AC-CP-06 stage-1 half), per-surface
@@ -14,22 +14,22 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::equiv::EvidenceVerdict;
-use hh_compiler::errors::CompileError;
-use hh_compiler::link::NoVariants;
-use hh_compiler::profile::profile_coordinate;
-use hh_compiler::schema::{bundle_to_json, compile_inputs_json, WireCompileInputs};
-use hh_compiler::trace::trace;
-use hh_compiler::CompileInputs;
-use hh_hir::records::*;
-use hh_hir::ToolEffects;
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_compiler::compiler::compile;
+use hharness_compiler::equiv::EvidenceVerdict;
+use hharness_compiler::errors::CompileError;
+use hharness_compiler::link::NoVariants;
+use hharness_compiler::profile::profile_coordinate;
+use hharness_compiler::schema::{bundle_to_json, compile_inputs_json, WireCompileInputs};
+use hharness_compiler::trace::trace;
+use hharness_compiler::CompileInputs;
+use hharness_hir::records::*;
+use hharness_hir::ToolEffects;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
 fn inputs_for(
-    sealed: &hh_hir::SealedDefinition,
-    profile: &hh_compiler::profile::ModelProfile,
+    sealed: &hharness_hir::SealedDefinition,
+    profile: &hharness_compiler::profile::ModelProfile,
 ) -> CompileInputs {
     CompileInputs {
         sealed: sealed.clone(),
@@ -42,12 +42,12 @@ fn inputs_for(
 }
 
 fn compile_ok(
-    sealed: &hh_hir::SealedDefinition,
-    store: &hh_registry::store::RegistryStore,
-    profile: &hh_compiler::profile::ModelProfile,
-) -> hh_compiler::seal::CompiledBundle {
+    sealed: &hharness_hir::SealedDefinition,
+    store: &hharness_registry::store::RegistryStore,
+    profile: &hharness_compiler::profile::ModelProfile,
+) -> hharness_compiler::seal::CompiledBundle {
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     compile(
         &inputs_for(sealed, profile),
         &profiles,
@@ -82,20 +82,20 @@ fn ac_cp_01_inputs_change_the_derivation_key() {
     let a = compile_ok(&sealed, &store, &p);
     // A different bound target changes the derivation key and the bundle id.
     let mut inputs = inputs_for(&sealed, &p);
-    inputs.targets = vec![hh_compiler::link::TargetSpec {
+    inputs.targets = vec![hharness_compiler::link::TargetSpec {
         target_id: "provider_tool_api".to_string(),
         spec_version: "1.0".to_string(),
         content_hash: "sha256:target-provider".to_string(),
     }];
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let b = compile(&inputs, &profiles, &store, &cat, &kernel()).expect("compile");
     assert_ne!(a.derivation_key, b.derivation_key, "inputs are in the key");
     assert_ne!(a.bundle_id, b.bundle_id);
     // A different profile content changes it too.
     let mut p2 = test_profile();
-    p2.capabilities.tool_search = hh_compiler::profile::CapabilityState::Declared;
-    p2.content_hash = hh_compiler::profile::profile_identity(&p2);
+    p2.capabilities.tool_search = hharness_compiler::profile::CapabilityState::Declared;
+    p2.content_hash = hharness_compiler::profile::profile_identity(&p2);
     let profiles2 = MapProfileView::of(vec![p2.clone()]);
     let c = compile(
         &inputs_for(&sealed, &p2),
@@ -122,8 +122,8 @@ fn ac_cp_01_no_clock_or_env_nondeterminism() {
     // A second kernel record with a different component name produces the same
     // bundle — the provenance context mints diagnostics, never bundle content.
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
-    let other_kernel = hh_provenance::ProvenanceRecord::kernel("other-component", 0);
+    let cat = hharness_assembly::Stage1Catalog::stage1();
+    let other_kernel = hharness_provenance::ProvenanceRecord::kernel("other-component", 0);
     let b = compile(
         &inputs_for(&sealed, &p),
         &profiles,
@@ -191,14 +191,14 @@ fn ac_cp_05_inexpressible_surface_is_a_compile_error() {
     let (store, sealed, _vids) = sealed_doc("cp05");
     let r = rule(
         "r-mode",
-        hh_compiler::profile::ProfileRuleKind::InteractionMode,
+        hharness_compiler::profile::ProfileRuleKind::InteractionMode,
         &[],
         Json::obj([("mode", Json::str("freeform"))]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     );
     let p = profile_with("sha256:profile", "1.0", vec![r]);
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     match compile(&inputs_for(&sealed, &p), &profiles, &store, &cat, &kernel()) {
         Err(CompileError::UnexpressibleSurface { reason, .. }) => {
             assert!(reason.contains("native_fc"), "{reason}");
@@ -215,28 +215,28 @@ fn ac_cp_06_incomplete_debt_refuses_expired_lands_in_lcd_report() {
     let (store, sealed, _vids) = sealed_doc("cp06a");
     let mut r = rule(
         "r-gap",
-        hh_compiler::profile::ProfileRuleKind::SamplingDefaults,
+        hharness_compiler::profile::ProfileRuleKind::SamplingDefaults,
         &[],
         Json::Null,
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     );
     r.debt.removal_test_ref = String::new();
     let p = profile_with("sha256:profile", "1.0", vec![r]);
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     match compile(&inputs_for(&sealed, &p), &profiles, &store, &cat, &kernel()) {
         Err(CompileError::LinkError { kind, .. }) => {
-            assert_eq!(kind, hh_compiler::LinkErrorKind::MissingDebtRecord);
+            assert_eq!(kind, hharness_compiler::LinkErrorKind::MissingDebtRecord);
         }
         other => panic!("expected missing_debt_record, got {other:?}"),
     }
     // (ii) expired rule under recorded intent → warning diagnostic + conditioned_rules.
     let r = rule(
         "r-exp",
-        hh_compiler::profile::ProfileRuleKind::SamplingDefaults,
+        hharness_compiler::profile::ProfileRuleKind::SamplingDefaults,
         &[],
         Json::Null,
-        hh_compiler::profile::DebtStatus::Expired,
+        hharness_compiler::profile::DebtStatus::Expired,
     );
     let p = profile_with("sha256:profile", "1.0", vec![r]);
     let mut inputs = inputs_for(&sealed, &p);
@@ -250,34 +250,37 @@ fn ac_cp_06_incomplete_debt_refuses_expired_lands_in_lcd_report() {
         &kernel(),
     ) {
         Err(CompileError::LinkError { kind, .. }) => {
-            assert_eq!(kind, hh_compiler::LinkErrorKind::ExpiredWithoutIntent);
+            assert_eq!(kind, hharness_compiler::LinkErrorKind::ExpiredWithoutIntent);
         }
         other => panic!("expected expired_without_intent, got {other:?}"),
     }
     inputs.intent_ref = Some("design/expired-intent".to_string());
     let profiles = MapProfileView::of(vec![p.clone()]);
     let bundle = compile(&inputs, &profiles, &store, &cat, &kernel()).expect("compile");
-    assert!(bundle
-        .diagnostics
-        .iter()
-        .any(|d| d.code.code() == "C-LINK-6" && d.severity == hh_assembly::Severity::Warning));
+    assert!(
+        bundle
+            .diagnostics
+            .iter()
+            .any(|d| d.code.code() == "C-LINK-6"
+                && d.severity == hharness_assembly::Severity::Warning)
+    );
     assert!(bundle
         .lcd_report
         .conditioned_rules
         .iter()
         .any(|c| c.rule_id == "r-exp"
-            && c.home == hh_compiler::link::ConditionedRuleHome::Profile
+            && c.home == hharness_compiler::link::ConditionedRuleHome::Profile
             && c.status == "expired"));
     // §5b.3 — `model.profile.expired_used{profile_ref, intent_ref}` rows ride
     // the bundle for the opening run to append.
-    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let coord = hharness_compiler::profile::profile_coordinate(&p);
     assert!(bundle.expired_used.iter().any(|row| {
         row.get("profile_ref").and_then(Json::as_str) == Some(coord.as_str())
             && row.get("intent_ref").and_then(Json::as_str) == Some("design/expired-intent")
     }));
     // The member round-trips the canonical codec (and only exists for an
     // expired compile — a clean bundle emits no `expired_used` member).
-    let j = hh_compiler::schema::bundle_to_json(&bundle);
+    let j = hharness_compiler::schema::bundle_to_json(&bundle);
     assert!(j.get("expired_used").is_some());
     let mut clean_inputs = inputs_for(&sealed, &profile_with("sha256:profile", "1.0", vec![]));
     clean_inputs.compile_for_expired = false;
@@ -289,7 +292,7 @@ fn ac_cp_06_incomplete_debt_refuses_expired_lands_in_lcd_report() {
         &cat,
         &kernel(),
     ) {
-        assert!(hh_compiler::schema::bundle_to_json(&clean)
+        assert!(hharness_compiler::schema::bundle_to_json(&clean)
             .get("expired_used")
             .is_none());
     }
@@ -338,8 +341,8 @@ fn ac_cp_10_open_world_capability_records_e4_na_open_world() {
     let mut t = surfaced_tool_node("test:tool", "tool_a", &["path"], 5);
     if let KindRecord::ToolCapability(tc) = &mut t.semantic {
         tc.effects = ToolEffects::Declared(
-            vec![hh_hir::EffectClass::domain_only(
-                hh_hir::EffectDomain::NetEgress,
+            vec![hharness_hir::EffectClass::domain_only(
+                hharness_hir::EffectDomain::NetEgress,
             )]
             .into_iter()
             .collect(),
@@ -401,7 +404,7 @@ fn lcd_report_composes_stage0_derived_results_never_recomputes() {
     // Stage 3 lands at S3.2 — the surface is produced.
     assert!(matches!(
         bundle.model_surface,
-        hh_compiler::seal::ModelSurfaceState::Lowered(_)
+        hharness_compiler::seal::ModelSurfaceState::Lowered(_)
     ));
     assert!(bundle.target_artefacts.contains_key("mcp"));
     assert_eq!(bundle.loss_reports.len(), 1);
@@ -416,7 +419,7 @@ fn ac_cp_11_hh_compile_produces_identical_bytes() {
     let bundle = compile_ok(&sealed, &store, &p);
 
     // Carry the bound views as data (the binary has no registry).
-    let variants: Vec<(String, hh_registry::records::VariantRecord)> = vids
+    let variants: Vec<(String, hharness_registry::records::VariantRecord)> = vids
         .values()
         .map(|vid| {
             let (_, rec) = store.get(vid).expect("registered");
@@ -437,10 +440,12 @@ fn ac_cp_11_hh_compile_produces_identical_bytes() {
         intent_ref: None,
         // The registry's report for the bound profile travels with the inputs
         // (the binary has no registry — AC-CP-11 carries the bound views).
-        test_reports: vec![hh_compiler::profile_test::ProfileTestReport::passing_for(
-            &profile_coordinate(&p),
-            &p.content_hash,
-        )],
+        test_reports: vec![
+            hharness_compiler::profile_test::ProfileTestReport::passing_for(
+                &profile_coordinate(&p),
+                &p.content_hash,
+            ),
+        ],
     };
     let stdin_bytes = compile_inputs_json(&wire).to_canonical_string();
 
@@ -472,12 +477,12 @@ fn ac_cp_11_hh_compile_refuses_canonically() {
     // A refusal on the out-of-process path is the same typed error envelope.
     let (store, sealed, vids) = sealed_doc("cp11-err");
     let mut bad = test_profile();
-    bad.expiry.expiry_condition = hh_compiler::profile::ExpiryCondition {
-        kind: hh_compiler::profile::ExpiryKind::ProbeFailure,
+    bad.expiry.expiry_condition = hharness_compiler::profile::ExpiryCondition {
+        kind: hharness_compiler::profile::ExpiryKind::ProbeFailure,
         value: None,
     };
-    bad.content_hash = hh_compiler::profile::profile_identity(&bad);
-    let variants: Vec<(String, hh_registry::records::VariantRecord)> = vids
+    bad.content_hash = hharness_compiler::profile::profile_identity(&bad);
+    let variants: Vec<(String, hharness_registry::records::VariantRecord)> = vids
         .values()
         .map(|vid| {
             let (_, rec) = store.get(vid).expect("registered");
@@ -529,7 +534,7 @@ fn compile_runs_without_a_registry_store() {
     let (_store, sealed, _vids) = sealed_doc("noreg");
     let p = test_profile();
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let err = compile(
         &inputs_for(&sealed, &p),
         &profiles,
@@ -541,7 +546,7 @@ fn compile_runs_without_a_registry_store() {
     assert!(matches!(
         err,
         CompileError::LinkError {
-            kind: hh_compiler::LinkErrorKind::VersionConflict,
+            kind: hharness_compiler::LinkErrorKind::VersionConflict,
             ..
         }
     ));

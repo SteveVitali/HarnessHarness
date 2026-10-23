@@ -2,7 +2,7 @@
 //! **out-of-process over canonical bytes** (AC-R-2.8.1-16; T-LCD-12's §2.1
 //! operation seam). It reads one `hh-monitor/authorize-input/1` document —
 //! every recorded input `authorize` consumes — on stdin (`-`) or from a file,
-//! replays [`hh_monitor::monitor::Monitor::authorize`], and writes the
+//! replays [`hharness_monitor::monitor::Monitor::authorize`], and writes the
 //! canonical `KernelDecision` JSON on stdout. A malformed input prints the
 //! typed refusal on stderr and exits `2`.
 //!
@@ -18,8 +18,8 @@
 
 use std::io::Read;
 
-use hh_monitor::monitor::Monitor;
-use hh_monitor::wire::AuthorizeInput;
+use hharness_monitor::monitor::Monitor;
+use hharness_monitor::wire::AuthorizeInput;
 
 fn read(path: &str) -> Vec<u8> {
     if path == "-" {
@@ -46,7 +46,7 @@ fn main() {
     let bytes = read(path);
     // The input must be canonical bytes — the codec refuses lenient JSON so a
     // re-encoded document can never alias a different recorded input (CC1).
-    let j = hh_wire::canonical::parse_canonical(&bytes)
+    let j = hharness_wire::canonical::parse_canonical(&bytes)
         .unwrap_or_else(|e| fail(&format!("input not canonical: {e}")));
     let input = AuthorizeInput::from_json(&j).unwrap_or_else(|e| fail(&e));
     let monitor: Monitor = input.monitor();
@@ -54,7 +54,7 @@ fn main() {
     // are the process boundary's refusal set — the closed tag on stderr +
     // exit 2, never a fabricated decision row.
     let decision = monitor.authorize(&input.proposal).unwrap_or_else(|e| {
-        use hh_monitor::monitor::MonitorError::*;
+        use hharness_monitor::monitor::MonitorError::*;
         match e {
             CapabilityUnresolvable { capability } => {
                 fail(&format!("capability_unresolvable: {capability}"))

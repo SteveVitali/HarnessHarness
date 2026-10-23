@@ -4,11 +4,11 @@
 //! content-free fields only (CC3; the refusal text is profile-rendered from the
 //! closed `DenyReason`, never monitor-authored prose).
 
-use hh_compiler::plan::PinnedRef;
-use hh_hir::refs::{Ref, RefVersion};
-use hh_ledger::event::EventEnvelope;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::refs::{Ref, RefVersion};
+use hharness_ledger::event::EventEnvelope;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::decision::KernelDecision;
 use crate::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
@@ -39,7 +39,7 @@ pub fn granted_payload(h: &AuthorityHandle) -> Json {
             Json::Arr(
                 h.grants
                     .iter()
-                    .map(|g| hh_hir::grant_json(g, false))
+                    .map(|g| hharness_hir::grant_json(g, false))
                     .collect(),
             ),
         ),
@@ -137,7 +137,7 @@ pub fn handle_from_granted_payload(p: &Json, granted_event_id: &str) -> Option<A
         Json::Arr(rows) => rows
             .iter()
             .enumerate()
-            .map(|(i, g)| hh_hir::grant_from_json(g, &format!("grants[{i}]")).ok())
+            .map(|(i, g)| hharness_hir::grant_from_json(g, &format!("grants[{i}]")).ok())
             .collect::<Option<Vec<_>>>()?,
         _ => return None,
     };

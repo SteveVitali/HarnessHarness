@@ -3,7 +3,7 @@
 //! to the crate; the *policy* (which members are registered) lives in each
 //! record's own `from_json`.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 

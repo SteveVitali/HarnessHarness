@@ -1,7 +1,7 @@
 //! `AcpArtifact` — the parsed `hh-acp-target/1` session artefact the
 //! compiler lowers (§5d.4 D2). `render_session` projects the durable
 //! event stream to `session/update` notifications through the
-//! single-source lowering table (`hh_compiler::acp`) — the renderer
+//! single-source lowering table (`hharness_compiler::acp`) — the renderer
 //! is the consumer, never a second table.
 //!
 //! Unknown `_`-prefixed members, `_meta` subtrees, and extension ids
@@ -10,8 +10,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::acp::{lower_event, AcpDialect, ACP_ARTEFACT_SCHEMA};
-use hh_wire::json::Json;
+use hharness_compiler::acp::{lower_event, AcpDialect, ACP_ARTEFACT_SCHEMA};
+use hharness_wire::json::Json;
 
 /// `SessionUpdate` — one rendered `session/update` notification.
 /// `source_seq` is the *durable* ledger seq the update renders from
@@ -40,14 +40,14 @@ impl SessionUpdate {
     /// `to_notification_propagated(session_id, ctx)` — the R2.14
     /// carrier leg (§5h.1 §2.3): the propagation context's
     /// `{traceparent, tracestate, configuration_id?}` members join
-    /// `_meta.hh` flat (the slot's one-namespace rule — the carrier
-    /// shape is `hh_telemetry::propagation`'s single definition, CC1).
+    /// `_meta.hharness` flat (the slot's one-namespace rule — the carrier
+    /// shape is `hharness_telemetry::propagation`'s single definition, CC1).
     /// Preservation metadata, never authority: a receiver lifts the
     /// ledger coordinates only through the `hh` tracestate member.
     pub fn to_notification_propagated(
         &self,
         session_id: &str,
-        ctx: &hh_telemetry::propagation::PropagationContext,
+        ctx: &hharness_telemetry::propagation::PropagationContext,
     ) -> Json {
         self.notification(session_id, Some(ctx))
     }
@@ -57,7 +57,7 @@ impl SessionUpdate {
     fn notification(
         &self,
         session_id: &str,
-        ctx: Option<&hh_telemetry::propagation::PropagationContext>,
+        ctx: Option<&hharness_telemetry::propagation::PropagationContext>,
     ) -> Json {
         let mut update = BTreeMap::new();
         update.insert("sessionUpdate".to_string(), Json::str(self.kind.clone()));
@@ -67,14 +67,14 @@ impl SessionUpdate {
             }
         }
         // `trace_map` hook (AC-R-2.5.4-5): the durable source seq rides
-        // `_meta.hh.source_seq` — an extension member, never authority,
+        // `_meta.hharness.source_seq` — an extension member, never authority,
         // byte-preserved through dialects. R2.14: the propagation
         // carrier joins the same slot when supplied.
         {
             let mut hh = BTreeMap::new();
             hh.insert("source_seq".to_string(), Json::Int(self.source_seq as i64));
             if let Some(ctx) = ctx {
-                for (k, v) in hh_telemetry::propagation::acp_hh_members(ctx) {
+                for (k, v) in hharness_telemetry::propagation::acp_hharness_members(ctx) {
                     hh.insert(k, v);
                 }
             }
@@ -82,7 +82,7 @@ impl SessionUpdate {
                 Some(Json::Obj(m)) => m.clone(),
                 _ => BTreeMap::new(),
             };
-            meta.insert("hh".to_string(), Json::Obj(hh));
+            meta.insert("hharness".to_string(), Json::Obj(hh));
             update.insert("_meta".to_string(), Json::Obj(meta));
         }
         Json::obj([
@@ -141,7 +141,7 @@ pub struct AcpArtifact {
     pub config_options: Json,
     /// The artefact's `binding` member.
     pub binding: Json,
-    /// The `agent_semantic_id` (`agentCapabilities._meta.hh`).
+    /// The `agent_semantic_id` (`agentCapabilities._meta.hharness`).
     pub agent_semantic_id: String,
     /// The advertised `_hh/*` method set.
     pub hh_methods: Vec<String>,
@@ -186,7 +186,7 @@ impl AcpArtifact {
         let hh_meta = initialize_response
             .get("agentCapabilities")
             .and_then(|c| c.get("_meta"))
-            .and_then(|m| m.get("hh"))
+            .and_then(|m| m.get("hharness"))
             .cloned()
             .unwrap_or(Json::obj([]));
         let str_arr = |v: Option<&Json>| -> Vec<String> {
@@ -247,7 +247,7 @@ impl AcpArtifact {
                     if let Some(Json::Obj(caps)) = resp_m.get_mut("agentCapabilities") {
                         caps.remove("sessionCapabilities");
                         if let Some(Json::Obj(meta)) = caps.get_mut("_meta") {
-                            if let Some(Json::Obj(hh)) = meta.get_mut("hh") {
+                            if let Some(Json::Obj(hh)) = meta.get_mut("hharness") {
                                 hh.insert(
                                     "update_kinds".to_string(),
                                     Json::Arr(

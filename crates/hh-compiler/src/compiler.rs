@@ -4,9 +4,9 @@
 //! stage 4 `lower_target` (per bound target), stage 5 `seal_outputs`. No clock, no
 //! env, no I/O — identical inputs produce byte-identical bundles (AC-CP-01).
 
-use hh_assembly::{ClassCatalog, Severity, Subject, ValidationReport};
-use hh_hir::{refs::RefVersion, SealedDefinition};
-use hh_provenance::ProvenanceRecord;
+use hharness_assembly::{ClassCatalog, Severity, Subject, ValidationReport};
+use hharness_hir::{refs::RefVersion, SealedDefinition};
+use hharness_provenance::ProvenanceRecord;
 
 use crate::errors::CompileError;
 use crate::link::{link, LinkedGraph, TargetSpec, VariantView};
@@ -76,7 +76,7 @@ pub fn accept(
     // Canonical-form hash re-assertion: the recorded `definition_ref` must equal the
     // recomputed document identity (§3.2.2 — "re-asserts that the canonical-form hash
     // matches the recorded definition identity").
-    let recomputed = hh_hir::document_identity(&sealed.document).ok_or_else(|| {
+    let recomputed = hharness_hir::document_identity(&sealed.document).ok_or_else(|| {
         CompileError::NonCanonicalInput {
             detail: "document root is not a node in the document".to_string(),
         }
@@ -90,7 +90,8 @@ pub fn accept(
         });
     }
     // `validate_assembly` over the sealed subject (complete report, never fail-fast).
-    let report = hh_assembly::validate_assembly(Subject::Sealed(sealed), catalog, None, kernel);
+    let report =
+        hharness_assembly::validate_assembly(Subject::Sealed(sealed), catalog, None, kernel);
     if report
         .diagnostics
         .iter()
@@ -112,7 +113,7 @@ pub fn accept_bytes(
     catalog: &dyn ClassCatalog,
     kernel: &ProvenanceRecord,
 ) -> Result<(SealedDefinition, AcceptOutcome), CompileError> {
-    let doc = hh_hir::parse_document(bytes).map_err(|e| CompileError::NonCanonicalInput {
+    let doc = hharness_hir::parse_document(bytes).map_err(|e| CompileError::NonCanonicalInput {
         detail: format!("{e}"),
     })?;
     // Sealed markers — a document that parses but isn't marked sealed was never through
@@ -126,11 +127,11 @@ pub fn accept_bytes(
         }
     }
     let definition_ref =
-        hh_hir::document_identity(&doc).ok_or_else(|| CompileError::NonCanonicalInput {
+        hharness_hir::document_identity(&doc).ok_or_else(|| CompileError::NonCanonicalInput {
             detail: "document root is not a node in the document".to_string(),
         })?;
     let sealed = SealedDefinition {
-        closed_world_tools: hh_hir::closed_world_tools(&doc),
+        closed_world_tools: hharness_hir::closed_world_tools(&doc),
         document: doc,
         definition_ref,
     };
@@ -193,13 +194,13 @@ pub fn compile(
 pub fn has_unpinned_refs(sealed: &SealedDefinition) -> bool {
     sealed.document.nodes.iter().any(|n| {
         let mut found = false;
-        collect_selector_refs(&hh_hir::wire::node_to_json(n), &mut found);
+        collect_selector_refs(&hharness_hir::wire::node_to_json(n), &mut found);
         found
     })
 }
 
-fn collect_selector_refs(j: &hh_wire::json::Json, found: &mut bool) {
-    use hh_wire::json::Json;
+fn collect_selector_refs(j: &hharness_wire::json::Json, found: &mut bool) {
+    use hharness_wire::json::Json;
     match j {
         Json::Obj(m) => {
             for (k, v) in m {
@@ -215,6 +216,6 @@ fn collect_selector_refs(j: &hh_wire::json::Json, found: &mut bool) {
 }
 
 /// Helper: does a `Ref` carry a pinned version? (Used by plan lowering paths.)
-pub fn ref_is_pinned(r: &hh_hir::Ref) -> bool {
+pub fn ref_is_pinned(r: &hharness_hir::Ref) -> bool {
     matches!(r.version, RefVersion::Pinned(_))
 }

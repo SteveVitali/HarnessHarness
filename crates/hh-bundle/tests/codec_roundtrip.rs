@@ -6,11 +6,11 @@
 
 use std::path::{Path, PathBuf};
 
-use hh_bundle::codec::{decode_container, decode_dir, encode_container, encode_dir};
-use hh_bundle::export::MemberBytes;
-use hh_bundle::manifest::BundleManifest;
-use hh_bundle::validate::check_completeness;
-use hh_wire::json::Json;
+use hharness_bundle::codec::{decode_container, decode_dir, encode_container, encode_dir};
+use hharness_bundle::export::MemberBytes;
+use hharness_bundle::manifest::BundleManifest;
+use hharness_bundle::validate::check_completeness;
+use hharness_wire::json::Json;
 
 fn tmpdir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,7 +29,7 @@ fn tmpdir(tag: &str) -> PathBuf {
 /// present as a member, one empty ledger export, `version_id`
 /// recomputed over the preimage.
 fn fixture(_dir: &Path) -> (BundleManifest, MemberBytes) {
-    let member = |bytes: &[u8]| hh_identity::idp_id("blob", bytes);
+    let member = |bytes: &[u8]| hharness_identity::idp_id("blob", bytes);
     let doc = |v: Json| v.to_canonical_string().into_bytes();
     let mut members = MemberBytes::new();
     let mut refs = Vec::new();
@@ -78,7 +78,7 @@ fn fixture(_dir: &Path) -> (BundleManifest, MemberBytes) {
         ("pages", Json::Arr(vec![Json::str(page_addr.clone())])),
     ]);
     let ledger_tree =
-        hh_bundle::manifest::LedgerExport::tree_address(std::slice::from_ref(&page_addr));
+        hharness_bundle::manifest::LedgerExport::tree_address(std::slice::from_ref(&page_addr));
     let tree_bytes = doc(tree_doc);
     let tree_addr = member(&tree_bytes);
     members.insert(tree_addr.clone(), tree_bytes);
@@ -254,13 +254,15 @@ fn fetch_member_is_unmaterialized_not_failed_and_missing_is_incomplete() {
 
     // Flip the `subject` member to fetch-only and drop its bytes.
     let victim_addr = d.manifest.members[0].address.clone();
-    d.manifest.members[0].status = hh_bundle::manifest::MemberStatus::Fetch;
-    d.manifest.fetch.push(hh_bundle::manifest::FetchEntry {
-        address: victim_addr.clone(),
-        size: Some(d.manifest.members[0].size),
-        locations: vec!["https://example.invalid/member".into()],
-        expires: None,
-    });
+    d.manifest.members[0].status = hharness_bundle::manifest::MemberStatus::Fetch;
+    d.manifest
+        .fetch
+        .push(hharness_bundle::manifest::FetchEntry {
+            address: victim_addr.clone(),
+            size: Some(d.manifest.members[0].size),
+            locations: vec!["https://example.invalid/member".into()],
+            expires: None,
+        });
     d.members.remove(&victim_addr);
     d.manifest.version_id = d.manifest.compute_id();
     let report = check_completeness(&d.manifest, &d.members);
@@ -278,7 +280,7 @@ fn fetch_member_is_unmaterialized_not_failed_and_missing_is_incomplete() {
     assert!(has_unmaterialized, "fetch member must be reported");
 
     // A `present` claim without bytes is a hard `missing_member`.
-    d.manifest.members[0].status = hh_bundle::manifest::MemberStatus::Present;
+    d.manifest.members[0].status = hharness_bundle::manifest::MemberStatus::Present;
     d.manifest.fetch.clear();
     d.manifest.version_id = d.manifest.compute_id();
     let report = check_completeness(&d.manifest, &d.members);
@@ -303,19 +305,19 @@ fn secret_material_and_credentialed_locators_are_invalid() {
     let (manifest, mut members) = fixture(&dir);
     // Inject a credential-shaped payload as an extra member.
     let leaked = br#"{"token":"AKIAIOSFODNN7EXAMPLE"}"#.to_vec();
-    let addr = hh_identity::idp_id("blob", &leaked);
+    let addr = hharness_identity::idp_id("blob", &leaked);
     members.insert(addr.clone(), leaked.clone());
     let mut m = manifest.clone();
-    m.members.push(hh_bundle::manifest::MemberRef {
+    m.members.push(hharness_bundle::manifest::MemberRef {
         role: "results".into(),
         address: addr,
         media_type: "application/json".into(),
         size: leaked.len() as u64,
-        status: hh_bundle::manifest::MemberStatus::Present,
+        status: hharness_bundle::manifest::MemberStatus::Present,
         foreign: None,
     });
     m.version_id = m.compute_id();
-    let report = hh_bundle::validate::validate(&m, &members);
+    let report = hharness_bundle::validate::validate(&m, &members);
     let doc = report.to_json().to_canonical_string();
     assert!(
         doc.contains("secret_or_credentialed_locator"),
@@ -325,15 +327,15 @@ fn secret_material_and_credentialed_locators_are_invalid() {
     // A credentialed fetch locator is invalid the same way.
     let (manifest2, members2) = fixture(&dir);
     let mut m2 = manifest2.clone();
-    m2.members[0].status = hh_bundle::manifest::MemberStatus::Fetch;
-    m2.fetch.push(hh_bundle::manifest::FetchEntry {
+    m2.members[0].status = hharness_bundle::manifest::MemberStatus::Fetch;
+    m2.fetch.push(hharness_bundle::manifest::FetchEntry {
         address: m2.members[0].address.clone(),
         size: None,
         locations: vec!["https://user:hunter2@example.invalid/blob".into()],
         expires: None,
     });
     m2.version_id = m2.compute_id();
-    let report2 = hh_bundle::validate::validate(&m2, &members2);
+    let report2 = hharness_bundle::validate::validate(&m2, &members2);
     let doc2 = report2.to_json().to_canonical_string();
     assert!(
         doc2.contains("credentialed") || doc2.contains("secret_or_credentialed_locator"),

@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::document::{HirDocument, Node};
 use crate::kinds::{EffectClass, EffectDomain, EntityKind, ToolEffects};
@@ -41,7 +41,7 @@ pub fn document_corpus() -> Vec<(&'static str, HirDocument)> {
 /// The bytes stay a canonical encoding — the refusal is semantic.
 pub fn missing_provenance_bytes() -> Vec<u8> {
     let bytes = base_doc().canonical_bytes();
-    let mut doc = match hh_wire::canonical::parse_canonical(&bytes) {
+    let mut doc = match hharness_wire::canonical::parse_canonical(&bytes) {
         Ok(j) => j,
         Err(e) => unreachable!("corpus doc must re-parse: {e}"),
     };
@@ -238,7 +238,7 @@ fn hosted_agent() -> HirDocument {
             observability_levels: Default::default(),
             participant_version: "sha256:pv".into(),
             version_identity: None,
-            hosting_mechanism: hh_ontology::participant::HostingMechanism::SessionAbi,
+            hosting_mechanism: hharness_ontology::participant::HostingMechanism::SessionAbi,
             supplies: Supplies::default(),
             budget: sel("corpus:budget"),
             permissions: sel("corpus:perm"),

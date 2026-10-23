@@ -23,7 +23,7 @@ PHASE="${1:-auto}"
 export HH_OAUTH_STATE="$STATE" HH_OAUTH_CODE_FILE="$CODE"
 
 run_cell() { # $1 = test filter
-  (cd "$REPO" && cargo test -p hh-mcp-lab --test r4_7a_live "$1" -- --ignored --nocapture) 2>&1
+  (cd "$REPO" && cargo test -p hharness-mcp-lab --test r4_7a_live "$1" -- --ignored --nocapture) 2>&1
 }
 
 show_code() { # operator-facing channel — /dev/tty when attached, else the file path only

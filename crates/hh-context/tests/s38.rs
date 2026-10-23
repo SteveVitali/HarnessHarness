@@ -16,30 +16,30 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_context::compact::{
+use hharness_context::compact::{
     self, ClearToolResults, CompactInput, CompactionStatus, CompactionStrategy, CompactionTrigger,
     CLEAR_TOOL_RESULTS_REF,
 };
-use hh_context::events::CollectSink;
-use hh_context::memory::{MemoryDraft, MemoryStore, WriteContext};
-use hh_context::plan::{
+use hharness_context::events::CollectSink;
+use hharness_context::memory::{MemoryDraft, MemoryStore, WriteContext};
+use hharness_context::plan::{
     Candidate, ContextPlan, CutPoint, DerivedFrom, Estimate, PlannedItem, SlotFill, ValidityPolicy,
 };
-use hh_context::retrieve::{
+use hharness_context::retrieve::{
     self, structural_index, RetrievalBudget, RetrievalIndexes, RetrievalRequest, SlotConstraints,
     DETERMINISTIC_DEFAULT, STRUCTURAL_PAGERANK,
 };
-use hh_context::vocab::{
+use hharness_context::vocab::{
     CandidateKind, CandidateState, ConflictPolicy, Layer, LifecycleStateKind, MatchMode,
     MemoryContent, MemoryKind, PriorityClass, Retention, RetrievalQuery,
 };
-use hh_hir::records::Validity;
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::records::Validity;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 // ── compaction helpers (mirror acceptance_s28) ───────────────────────────────
 
@@ -311,7 +311,7 @@ fn draft_text(text: &str) -> MemoryDraft {
     MemoryDraft {
         kind: MemoryKind::Fact,
         subject_key: None,
-        content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+        content: MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
             text,
             "owner",
             ProvenanceRecord::kernel("kernel:mem", 0),
@@ -407,7 +407,10 @@ fn structural_index_extracts_anchors_and_idents() {
         idx.idents.keys().collect::<Vec<_>>()
     );
     // The stamped view is a `structural_index` view.
-    assert_eq!(idx.view.kind, hh_ledger::views::ViewKind::StructuralIndex);
+    assert_eq!(
+        idx.view.kind,
+        hharness_ledger::views::ViewKind::StructuralIndex
+    );
     // Rebuild-equal.
     let idx2 = structural_index(&store, 2);
     assert_eq!(idx.anchors, idx2.anchors);
@@ -536,11 +539,11 @@ fn structural_pagerank_is_deterministic_integer_math() {
 // `unverified` slots (never kernel/definition/principal); the join keeps
 // `context_label.authority = external`.
 
-use hh_context::assemble::{assemble, AssemblyError, AssemblyRequest};
-use hh_context::plan::default_layout;
-use hh_context::plan::ContextBudget;
-use hh_context::policy::Selection;
-use hh_context::policy::{ContextPolicy, DefaultPolicy, PolicyRequest};
+use hharness_context::assemble::{assemble, AssemblyError, AssemblyRequest};
+use hharness_context::plan::default_layout;
+use hharness_context::plan::ContextBudget;
+use hharness_context::policy::Selection;
+use hharness_context::policy::{ContextPolicy, DefaultPolicy, PolicyRequest};
 
 fn asm_req(candidates: Vec<Candidate>, cap: u64) -> AssemblyRequest {
     AssemblyRequest {
@@ -656,7 +659,7 @@ fn ac_r_2_4_1_1_mcpe_fixture_never_reaches_privileged_slots() {
     // policy trying to seat one in `kernel` is a PolicyViolation.
     struct InjectTop;
     impl ContextPolicy for InjectTop {
-        fn declare(&self) -> hh_context::policy::PolicyDeclaration {
+        fn declare(&self) -> hharness_context::policy::PolicyDeclaration {
             DefaultPolicy::default().declare()
         }
         fn priority(&self, _c: &Candidate) -> PriorityClass {
@@ -665,7 +668,7 @@ fn ac_r_2_4_1_1_mcpe_fixture_never_reaches_privileged_slots() {
         fn select(
             &self,
             req: &PolicyRequest<'_>,
-        ) -> Result<Selection, hh_context::policy::PolicyViolation> {
+        ) -> Result<Selection, hharness_context::policy::PolicyViolation> {
             let v = req.candidates.first().unwrap();
             Ok(Selection {
                 chosen: vec![(v.candidate.candidate_id.clone(), "kernel".to_string())],
@@ -720,7 +723,7 @@ fn ac_r_2_4_1_2_xcpe_external_memory_never_enters_principal_slot() {
         "xcpe:msg",
         CandidateKind::PrincipalMessage,
         ProvenanceRecord::minted(
-            Origin::human("alice", hh_provenance::origin::HumanRole::Principal),
+            Origin::human("alice", hharness_provenance::origin::HumanRole::Principal),
             PersistenceScope::User,
             0,
         ),
@@ -779,7 +782,7 @@ fn draft_structured(j: Json) -> MemoryDraft {
 /// cannot read or set them).
 #[test]
 fn ranker_family_declarations_are_closed_and_valid() {
-    use hh_context::retrieve::{
+    use hharness_context::retrieve::{
         check_ranker_deterministic, ranker_declaration_valid, ranker_declared, RankerDeclaration,
         RANKER_DECLARATIONS,
     };
@@ -822,12 +825,12 @@ fn ranker_family_declarations_are_closed_and_valid() {
         check_ranker_deterministic(d.variant_id, "slot").unwrap();
     }
     assert!(matches!(
-        check_ranker_deterministic(hh_context::retrieve::SIMILARITY_RERANK, "slot"),
-        Err(hh_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
+        check_ranker_deterministic(hharness_context::retrieve::SIMILARITY_RERANK, "slot"),
+        Err(hharness_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
     ));
     assert!(matches!(
         check_ranker_deterministic("unregistered_ranker", "slot"),
-        Err(hh_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
+        Err(hharness_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
     ));
     let _ = ranker_declared; // used below
 }
@@ -836,7 +839,7 @@ fn ranker_family_declarations_are_closed_and_valid() {
 /// undeclared refs refuse typed — never a silent default.
 #[test]
 fn ac_r_2_4_3_c1_ranker_family_serves_and_refuses_typed() {
-    use hh_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE, SIMILARITY_RERANK};
+    use hharness_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE, SIMILARITY_RERANK};
     let (mut store, a, _b) = populated();
     let q = RetrievalQuery::Lexical {
         terms: vec!["function".to_string()],
@@ -879,7 +882,7 @@ fn ac_r_2_4_3_c1_ranker_family_serves_and_refuses_typed() {
             None,
             || 1
         ),
-        Err(hh_context::retrieve::RetrievalError::EmbedderUnpinned)
+        Err(hharness_context::retrieve::RetrievalError::EmbedderUnpinned)
     ));
     // Undeclared refs — UnknownRanker, never a silent default.
     let mut sink = CollectSink::default();
@@ -891,7 +894,7 @@ fn ac_r_2_4_3_c1_ranker_family_serves_and_refuses_typed() {
             None,
             || 1
         ),
-        Err(hh_context::retrieve::RetrievalError::UnknownRanker { .. })
+        Err(hharness_context::retrieve::RetrievalError::UnknownRanker { .. })
     ));
 }
 
@@ -900,7 +903,7 @@ fn ac_r_2_4_3_c1_ranker_family_serves_and_refuses_typed() {
 /// deterministic and the naive implementation agrees.
 #[test]
 fn ac_r_2_4_3_lexical_weighted_orders_by_idf() {
-    use hh_context::retrieve::LEXICAL_WEIGHTED;
+    use hharness_context::retrieve::LEXICAL_WEIGHTED;
     // (1) "zebra reads" consecutive (rare term + exact phrase), (2) both
     // terms scattered (no phrase), (3) the common term alone.
     let make = || {
@@ -970,7 +973,7 @@ fn ac_r_2_4_3_lexical_weighted_orders_by_idf() {
 /// the writer declared (never authority-derived).
 #[test]
 fn ac_r_2_4_3_recency_importance_orders_hint_then_recency() {
-    use hh_context::retrieve::RECENCY_IMPORTANCE;
+    use hharness_context::retrieve::RECENCY_IMPORTANCE;
     let make = || {
         let mut store = MemoryStore::new("ms");
         let ctx = write_ctx(&mut store, 1);
@@ -1042,7 +1045,7 @@ fn ac_r_2_4_3_recency_importance_orders_hint_then_recency() {
 /// independent implementation on every query kind the fixture drives.
 #[test]
 fn ac_r_2_4_3_two_implementations_agree_full_ranker_family() {
-    use hh_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE};
+    use hharness_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE};
     let q = RetrievalQuery::Lexical {
         terms: vec!["function".to_string()],
         match_mode: MatchMode::Any,

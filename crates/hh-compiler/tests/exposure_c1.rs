@@ -46,7 +46,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod common;
 
-use hh_compiler::exposure::{
+use hharness_compiler::exposure::{
     adopt, adopt_with, catalog_delta, catalog_id_of, check_callable, discover, discover_with,
     evict, expire_reveals, index_forms_at, index_query, index_query_decl, index_ref, reveal,
     select_surfaces_with, AdoptOutcome, Availability, CallProposal, CallRefusal, Catalog,
@@ -56,8 +56,8 @@ use hh_compiler::exposure::{
     PermissionCoverage, PermissionGate, Retention, RevealBoundary, RevealCause, RevealedSet,
     SearchTextField, SelectError, SelectionGates, StructuredQuery, SyncTrigger, TurnState,
 };
-use hh_compiler::retrieval::{retrieval_eval, LabelledQuery};
-use hh_hir::tools::ExposureMode;
+use hharness_compiler::retrieval::{retrieval_eval, LabelledQuery};
+use hharness_hir::tools::ExposureMode;
 
 // ── Fixture ─────────────────────────────────────────────────────────────────
 
@@ -400,14 +400,14 @@ fn discover_hits_only_indexed_or_deferred_plan_members() {
     }
     entries.retain(|(s, _)| s != "surf:kernel.pinned_tool");
     entries.push(("surf:kernel.pinned_tool".to_string(), ExposureMode::Direct));
-    let plan = hh_compiler::exposure::ExposurePlan {
+    let plan = hharness_compiler::exposure::ExposurePlan {
         plan_id: "plan:test".into(),
         model_call_id: "mc:1".into(),
         catalog_id: cat.catalog_id.clone(),
         entries,
         discovery_surface_ids: vec![],
         order: vec![],
-        budget_estimate: hh_compiler::exposure::BudgetEstimate {
+        budget_estimate: hharness_compiler::exposure::BudgetEstimate {
             tokens: 0,
             estimator_ref: "bytes_div_4".into(),
         },
@@ -434,7 +434,7 @@ fn discover_hits_only_indexed_or_deferred_plan_members() {
         .any(|h| h.surface_id == "surf:fs.read_workspace_file"));
 
     // Bound: max_reveal_per_search.
-    let params = hh_compiler::exposure::ExposurePolicyParams {
+    let params = hharness_compiler::exposure::ExposurePolicyParams {
         max_reveal_per_search: 3,
         ..Default::default()
     };
@@ -504,14 +504,14 @@ fn ac_e3_8_freeze_marks_removed_and_keeps_ids() {
         removed.availability,
         Availability::Unavailable("removed".to_string())
     );
-    let plan = hh_compiler::exposure::ExposurePlan {
+    let plan = hharness_compiler::exposure::ExposurePlan {
         plan_id: "p".into(),
         model_call_id: "mc".into(),
         catalog_id: catalog.catalog_id.clone(),
         entries: vec![("surf:mcp.old_tool".to_string(), ExposureMode::Direct)],
         discovery_surface_ids: vec![],
         order: vec![],
-        budget_estimate: hh_compiler::exposure::BudgetEstimate {
+        budget_estimate: hharness_compiler::exposure::BudgetEstimate {
             tokens: 0,
             estimator_ref: "x".into(),
         },
@@ -559,7 +559,7 @@ fn ac_e3_8_adopt_new_epoch_and_unverified_authority() {
     // bundle_delta carries the new surfaces' compiled identities with
     // `authority = unverified`.
     let added = match epoch.bundle_delta.get("added") {
-        Some(hh_wire::json::Json::Arr(a)) => a.clone(),
+        Some(hharness_wire::json::Json::Arr(a)) => a.clone(),
         other => panic!("bundle_delta.added is an array, got {other:?}"),
     };
     assert_eq!(added.len(), 2);
@@ -602,7 +602,7 @@ fn revealed_with(entries: &[(&str, Retention)]) -> RevealedSet {
         entries: entries
             .iter()
             .enumerate()
-            .map(|(i, (sid, r))| hh_compiler::exposure::RevealedEntry {
+            .map(|(i, (sid, r))| hharness_compiler::exposure::RevealedEntry {
                 surface_id: sid.to_string(),
                 mode: ExposureMode::Direct,
                 revealed_at: i as u64,
@@ -854,24 +854,24 @@ fn adopt_with_carries_loss_report_and_recomputes_coverage() {
     let listing = vec![mcp_listing_entry("surf:mcp.new_tool", "new_tool")];
     let delta = catalog_delta(&cat, "mcp:src", SyncTrigger::ListChanged, &listing);
 
-    let loss = hh_compiler::lcd::LoweringLossReport {
+    let loss = hharness_compiler::lcd::LoweringLossReport {
         target: "catalog".into(),
         target_version: "1.0".into(),
-        entries: vec![hh_compiler::lcd::LossEntry {
+        entries: vec![hharness_compiler::lcd::LossEntry {
             hir_node_id: "cap:new_tool".into(),
             field: "timeout_hint".into(),
-            class: hh_compiler::lcd::LossKind::NoSlot,
-            severity: hh_compiler::lcd::LossSeverity::Info,
+            class: hharness_compiler::lcd::LossKind::NoSlot,
+            severity: hharness_compiler::lcd::LossSeverity::Info,
             detail: "catalog entries carry no timeout field".into(),
             debt_ref: None,
         }],
-        granularity_ceiling: hh_compiler::lcd::GranularityCeiling::Component,
+        granularity_ceiling: hharness_compiler::lcd::GranularityCeiling::Component,
     };
     // The coverage oracle is the only permission_coverage authority — the
     // compiler never resolves grants (I-CLOSED); ADR-0095 D2's typical
     // verdict is `uncovered` until a grant exists.
     let oracle = |_: &CatalogEntry| PermissionCoverage::Uncovered;
-    let inputs = hh_compiler::exposure::AdoptInputs {
+    let inputs = hharness_compiler::exposure::AdoptInputs {
         loss_report: Some(loss),
         coverage: Some(&oracle),
     };
@@ -884,7 +884,7 @@ fn adopt_with_carries_loss_report_and_recomputes_coverage() {
     let lr = epoch.loss_report.expect("the declared loss report lands");
     assert_eq!(lr.get("target").and_then(|t| t.as_str()), Some("catalog"));
     let entries = match lr.get("entries") {
-        Some(hh_wire::json::Json::Arr(a)) => a,
+        Some(hharness_wire::json::Json::Arr(a)) => a,
         other => panic!("loss_report.entries is an array, got {other:?}"),
     };
     assert_eq!(entries.len(), 1);
@@ -1286,7 +1286,10 @@ fn r2_8_executor_legs_and_s386_provider_round_trip() {
     assert_eq!(res.hits[0].surface_id, "surf:fs.read_workspace_file");
     // The below-threshold hit and the score-less member were dropped — a
     // provider answer never fabricates rank.
-    assert_eq!(res.hits[0].score, Some(hh_wire::json::Json::Int(900_000)));
+    assert_eq!(
+        res.hits[0].score,
+        Some(hharness_wire::json::Json::Int(900_000))
+    );
 
     // Executor legs absent are `ExecutorUnavailable`, never a fake ranking.
     for index in [
@@ -1374,7 +1377,7 @@ fn r2_8_executor_legs_and_s386_provider_round_trip() {
         entries,
         discovery_surface_ids: vec![],
         order: vec![],
-        budget_estimate: hh_compiler::exposure::BudgetEstimate {
+        budget_estimate: hharness_compiler::exposure::BudgetEstimate {
             tokens: 0,
             estimator_ref: "bytes_div_4".into(),
         },
@@ -1391,7 +1394,7 @@ fn r2_8_executor_legs_and_s386_provider_round_trip() {
         check_callable(&plan, &cat, &proposal),
         Err(CallRefusal::SurfaceNotRevealed {
             surface_id: Some("surf:fs.read_workspace_file".to_string()),
-            hint: hh_compiler::exposure::RevealHint::Search,
+            hint: hharness_compiler::exposure::RevealHint::Search,
         })
     );
     // The provider-executed search over plan members reveals the hit.
@@ -1428,13 +1431,13 @@ fn r2_8_executor_legs_and_s386_provider_round_trip() {
 
 #[test]
 fn r2_8_form_fixture_non_native_fc_family() {
-    use hh_compiler::equiv::SurfaceBinding;
-    use hh_compiler::family::{
+    use hharness_compiler::equiv::SurfaceBinding;
+    use hharness_compiler::family::{
         bind_variant, check_family, select_variant, EnvironmentDeclaration, SurfaceFamily,
         SurfaceVariant, TaskClassDeclaration, VariantSelector,
     };
-    use hh_compiler::plan::PinnedRef;
-    use hh_compiler::surface::{BindingMapping, CompileExposureMode};
+    use hharness_compiler::plan::PinnedRef;
+    use hharness_compiler::surface::{BindingMapping, CompileExposureMode};
 
     // The non-`native_fc` rendering: a `shim` variant beside the `native_fc`
     // reference (ADR-0286 D7 — the form fixture needs a family C0 couldn't
@@ -1458,20 +1461,20 @@ fn r2_8_form_fixture_non_native_fc_family() {
             effects_bound: Vec::new(),
             family_id: None,
             variant_id: None,
-            dialect: hh_compiler::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
+            dialect: hharness_compiler::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
             admitted_modes: [ExposureMode::Indexed, ExposureMode::Deferred]
                 .into_iter()
                 .collect(),
             pinned: false,
             hidden: false,
         };
-        b.surface_id = hh_compiler::surface::surface_id(&b);
+        b.surface_id = hharness_compiler::surface::surface_id(&b);
         b
     }
     fn prim_binding(name: &str, cap: &str) -> SurfaceBinding {
         let mut b = shim_binding(name, cap);
         b.exposure_mode = CompileExposureMode::Primitive;
-        b.surface_id = hh_compiler::surface::surface_id(&b);
+        b.surface_id = hharness_compiler::surface::surface_id(&b);
         b
     }
 
@@ -1514,7 +1517,7 @@ fn r2_8_form_fixture_non_native_fc_family() {
             &family,
             &task,
             &env,
-            &hh_wire::json::Json::Null,
+            &hharness_wire::json::Json::Null,
             &BTreeSet::new()
         )
         .variant_id,
@@ -1524,7 +1527,7 @@ fn r2_8_form_fixture_non_native_fc_family() {
         &family,
         &task,
         &env,
-        &hh_wire::json::Json::Null,
+        &hharness_wire::json::Json::Null,
         &BTreeSet::new(),
     );
 
@@ -1621,16 +1624,16 @@ fn r2_8_form_fixture_non_native_fc_family() {
 
 #[test]
 fn r2_8_bind_producers_code_mode_callable_and_render_specs() {
-    use hh_compiler::family::{
+    use hharness_compiler::family::{
         bind_code_mode, bind_composite, bind_freeform, bind_shim, FreeformSpec, PlanMap, PlanStep,
         ShimSpec,
     };
-    use hh_compiler::surface::{
+    use hharness_compiler::surface::{
         BindingMapping, CompileExposureMode, RenderMode, RenderSpecParseError,
     };
-    use hh_compiler::CompileError;
-    use hh_hir::records::SurfaceRecord;
-    use hh_wire::json::Json;
+    use hharness_compiler::CompileError;
+    use hharness_hir::records::SurfaceRecord;
+    use hharness_wire::json::Json;
 
     let node = common::surfaced_tool_node("test:proc", "apply_patch", &["patch"], 1);
     let surface = match node.surface.as_ref().expect("tool surface") {
@@ -1688,8 +1691,8 @@ fn r2_8_bind_producers_code_mode_callable_and_render_specs() {
     // `mapping.kind = plan_map` + the pinned `plan_ref` survive
     // (`surface_binding_json`/`surface_binding_from_json`, AC-R-2.5.2-3's
     // composite half).
-    let decoded = hh_compiler::schema::surface_binding_from_json(
-        &hh_compiler::schema::surface_binding_json(&bound),
+    let decoded = hharness_compiler::schema::surface_binding_from_json(
+        &hharness_compiler::schema::surface_binding_json(&bound),
         "t.composite",
     )
     .expect("composite binding round-trips");
@@ -1773,7 +1776,7 @@ fn r2_8_bind_producers_code_mode_callable_and_render_specs() {
         entries: vec![(cm.surface_id.clone(), ExposureMode::CodeMode)],
         discovery_surface_ids: vec![],
         order: vec![],
-        budget_estimate: hh_compiler::exposure::BudgetEstimate {
+        budget_estimate: hharness_compiler::exposure::BudgetEstimate {
             tokens: 0,
             estimator_ref: "bytes_div_4".into(),
         },

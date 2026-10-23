@@ -10,10 +10,10 @@ use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::process::{Child, Command, Stdio};
 
-use hh_embed_client_generated::{
+use hharness_embed_client_generated::{
     Client, ClientError, EmbedError, HelloParams, HelloResult, HostCapabilities, StreamNotification,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::invocation::InvocationError;
 
@@ -100,14 +100,14 @@ fn cli_capabilities() -> HostCapabilities {
 /// The `HelloParams` every CLI connection opens with.
 pub fn cli_hello() -> HelloParams {
     HelloParams {
-        contract_major: hh_embed_client_generated::CONTRACT_MAJOR,
-        client: hh_embed_client_generated::ClientDescriptor {
-            name: "hh-cli".into(),
+        contract_major: hharness_embed_client_generated::CONTRACT_MAJOR,
+        client: hharness_embed_client_generated::ClientDescriptor {
+            name: "hharness-cli".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            kind: hh_embed_client_generated::ClientKind::Cli,
+            kind: hharness_embed_client_generated::ClientKind::Cli,
         },
         capabilities: cli_capabilities(),
-        schema_hash: Some(hh_embed_client_generated::EXPECTED_SCHEMA_HASH.to_string()),
+        schema_hash: Some(hharness_embed_client_generated::EXPECTED_SCHEMA_HASH.to_string()),
         kernel_floor: None,
     }
 }
@@ -183,7 +183,7 @@ impl Drop for ProcessBoundary {
     }
 }
 
-/// `BoundaryEmbedCall` — the `hh-acp` `EmbedCall` seam over the CLI's
+/// `BoundaryEmbedCall` — the `hharness-acp` `EmbedCall` seam over the CLI's
 /// one `Boundary` (S4.12; §7.4): the ACP `EmbedDriver` rides the same
 /// binding every other verb does — `op`/`params` in, `result` out;
 /// a typed kernel refusal (`CliError::Kernel`) maps back to the
@@ -203,7 +203,7 @@ impl<'a> BoundaryEmbedCall<'a> {
     }
 }
 
-impl hh_acp::EmbedCall for BoundaryEmbedCall<'_> {
+impl hharness_acp::EmbedCall for BoundaryEmbedCall<'_> {
     fn call(&mut self, op: &str, params: Json) -> Result<Json, Json> {
         self.b.call(op, &params).map_err(|e| match e {
             CliError::Kernel(k) => Json::obj([

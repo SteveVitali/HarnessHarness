@@ -1,8 +1,8 @@
 //! The ownership ledger's monitor half — check 8 (`check_write`) of the
 //! prepare-time checks (§5e.5; ADR-0191 O-1…O-6; ADR-0343 D3). The
 //! machinery lives in the Π crate so the seven-stage dispatcher
-//! (`hh-env`, a lower tier than `hh-subagent`) can run it at `prepare`
-//! without a dependency cycle — `hh-subagent` re-exports these items and
+//! (`hharness-env`, a lower tier than `hharness-subagent`) can run it at `prepare`
+//! without a dependency cycle — `hharness-subagent` re-exports these items and
 //! keeps the verb half (`transfer_ownership`/`return_ownership`/
 //! `record_write_refusal`/`release_resource_locks`) that emits the rows
 //! this module folds.
@@ -16,9 +16,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::errors::LedgerError;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 /// `OwnedObject` — a coordination object an ownership record names. The closed
 /// sum at this slice: `{fs_path_prefix | resource_key}` — environment writes
@@ -235,7 +235,7 @@ pub fn check_write(
         None => {}
     }
     if let OwnedObject::ResourceKey(key) = object {
-        let scope = hh_ledger::leases::LeaseScope::Resource(key.clone());
+        let scope = hharness_ledger::leases::LeaseScope::Resource(key.clone());
         // The writer's own record — a superseded generation fences the
         // write (the fence's whole point: a stale writer may not act).
         if let Some(rec) = store.scoped_lease(writer_run_id, &scope)? {

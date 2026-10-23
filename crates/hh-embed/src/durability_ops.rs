@@ -18,17 +18,17 @@
 //!   `TriggerUnsupported`, `SpeculationViolation` all surface verbatim
 //!   through `ledger_err`.
 
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::branch_ops::{OpenBranchSpec, ReleaseMap};
-use hh_ledger::effect::EffectPhase;
-use hh_ledger::goal::ContinueCarried;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::Lease;
-use hh_ledger::suspend::SuspendReason;
-use hh_ledger::wakeup::{
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::branch_ops::{OpenBranchSpec, ReleaseMap};
+use hharness_ledger::effect::EffectPhase;
+use hharness_ledger::goal::ContinueCarried;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::Lease;
+use hharness_ledger::suspend::SuspendReason;
+use hharness_ledger::wakeup::{
     SubscriptionState, Trigger, WakeupPolicy, WakeupSubscription, WokenDelivery,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
 
@@ -70,7 +70,7 @@ impl EmbedService {
             path: format!("lab.receipt.record/{path}"),
             code: "missing".to_string(),
         };
-        let receipt = hh_ledger::receipt::Receipt {
+        let receipt = hharness_ledger::receipt::Receipt {
             effect_id: params
                 .get("effect_id")
                 .and_then(Json::as_str)
@@ -114,7 +114,7 @@ impl EmbedService {
             ("seq", Json::Int(env.seq as i64)),
             (
                 "status",
-                Json::str(hh_ledger::receipt::RECEIPT_STATUS_UNVERIFIED),
+                Json::str(hharness_ledger::receipt::RECEIPT_STATUS_UNVERIFIED),
             ),
         ]))
     }
@@ -417,8 +417,8 @@ impl EmbedService {
             (
                 "outcome",
                 Json::str(match outcome {
-                    hh_ledger::wakeup::OccurOutcome::Occurred(_) => "occurred",
-                    hh_ledger::wakeup::OccurOutcome::Skipped(_) => "skipped",
+                    hharness_ledger::wakeup::OccurOutcome::Occurred(_) => "occurred",
+                    hharness_ledger::wakeup::OccurOutcome::Skipped(_) => "skipped",
                 }),
             ),
         ]))
@@ -465,7 +465,7 @@ impl EmbedService {
             // durable queue — they enter `decide` through `drive`, never a
             // surface poll (the caller-side `delivered_wokens` set is
             // shared, so draining one here would swallow the cue).
-            if w.delivery_mode == hh_ledger::wakeup::DeliveryMode::Steer {
+            if w.delivery_mode == hharness_ledger::wakeup::DeliveryMode::Steer {
                 continue;
             }
             let key = format!("{}\u{0}{}", w.subscription_id, w.occurrence_key);
@@ -624,7 +624,7 @@ impl EmbedService {
             .collect();
         if !open.is_empty() {
             return Err(ledger_err(
-                hh_ledger::errors::LedgerError::OpenCommittedEffects { effect_ids: open },
+                hharness_ledger::errors::LedgerError::OpenCommittedEffects { effect_ids: open },
             ));
         }
         let fold_ids: std::collections::BTreeSet<String> =
@@ -839,13 +839,14 @@ impl EmbedService {
                 code: "type_mismatch".into(),
             });
         }
-        let mut dispatch = |intent: &hh_ledger::saga::CompensationIntent| -> Result<Json, String> {
-            match outcomes.get(&intent.original_effect_id) {
-                Some(Ok(payload)) => Ok(payload.clone()),
-                Some(Err(reason)) => Err(reason.clone()),
-                None => Err("compensator_missing".to_string()),
-            }
-        };
+        let mut dispatch =
+            |intent: &hharness_ledger::saga::CompensationIntent| -> Result<Json, String> {
+                match outcomes.get(&intent.original_effect_id) {
+                    Some(Ok(payload)) => Ok(payload.clone()),
+                    Some(Err(reason)) => Err(reason.clone()),
+                    None => Err("compensator_missing".to_string()),
+                }
+            };
         let report = match after_seq {
             Some(at) => self
                 .store
@@ -888,19 +889,23 @@ impl EmbedService {
             .verify_environment_verdict(&mut self.store, &lease, &env_handle_id)
             .map_err(crate::open::env_err)?;
         let cause = match &verdict {
-            hh_env::recovery::EnvironmentVerdict::Attached { .. } => {
+            hharness_env::recovery::EnvironmentVerdict::Attached { .. } => {
                 return Err(EmbedError::Refused {
                     reason: "environment_attached".to_string(),
                 })
             }
-            hh_env::recovery::EnvironmentVerdict::Reattachable { .. } => "unreachable".to_string(),
-            hh_env::recovery::EnvironmentVerdict::Lost { cause } => cause.as_str().to_string(),
+            hharness_env::recovery::EnvironmentVerdict::Reattachable { .. } => {
+                "unreachable".to_string()
+            }
+            hharness_env::recovery::EnvironmentVerdict::Lost { cause } => {
+                cause.as_str().to_string()
+            }
         };
         // `mark_unreachable` rides a `ready` handle only — an already
         // `unreachable` handle goes straight to the ladder; `detached`
         // carries its own reconciliation path (R-2.2.3⁰ᵇ) and a heal is
         // the typed `InvalidState` refusal.
-        if driver.handle_state(&env_handle_id) == Some(hh_env::handle::HandleState::Ready) {
+        if driver.handle_state(&env_handle_id) == Some(hharness_env::handle::HandleState::Ready) {
             driver
                 .mark_unreachable(&mut self.store, &lease, &env_handle_id)
                 .map_err(crate::open::env_err)?;
@@ -909,7 +914,7 @@ impl EmbedService {
             .heal_with_policy(&mut self.store, &lease, &env_handle_id, &policy, &cause)
             .map_err(crate::open::env_err)?;
         Ok(match outcome {
-            hh_env::recovery::HealOutcome::Healed {
+            hharness_env::recovery::HealOutcome::Healed {
                 new_handle,
                 restored,
                 lost_items_ref,
@@ -931,11 +936,11 @@ impl EmbedService {
                     ("heal_no", Json::Int(heal_no as i64)),
                 ])
             }
-            hh_env::recovery::HealOutcome::Ask { permission_id } => Json::obj([
+            hharness_env::recovery::HealOutcome::Ask { permission_id } => Json::obj([
                 ("outcome", Json::str("ask")),
                 ("permission_id", Json::str(permission_id)),
             ]),
-            hh_env::recovery::HealOutcome::Refused { reason } => Json::obj([
+            hharness_env::recovery::HealOutcome::Refused { reason } => Json::obj([
                 ("outcome", Json::str("refused")),
                 ("reason", Json::str(reason)),
             ]),
@@ -954,9 +959,9 @@ impl EmbedService {
         &self,
         run_id: &str,
         params: &Json,
-    ) -> Result<hh_env::recovery::HealingPolicy, EmbedError> {
+    ) -> Result<hharness_env::recovery::HealingPolicy, EmbedError> {
         if let Some(j) = params.get("policy") {
-            return hh_env::recovery::HealingPolicy::from_json(j).ok_or_else(|| {
+            return hharness_env::recovery::HealingPolicy::from_json(j).ok_or_else(|| {
                 EmbedError::SchemaViolation {
                     path: "heal/policy".into(),
                     code: "invalid_policy".into(),
@@ -979,7 +984,7 @@ impl EmbedService {
                     reason: format!("healing_policy_ref_unresolvable:{version_id}"),
                 });
             };
-            let body = hh_registry::schema::body_json(record, true);
+            let body = hharness_registry::schema::body_json(record, true);
             let member = body
                 .get("healing_policy")
                 .or_else(|| body.get("semantic").and_then(|s| s.get("healing_policy")));
@@ -988,7 +993,7 @@ impl EmbedService {
                     reason: format!("healing_policy_ref_no_policy:{version_id}"),
                 });
             };
-            return hh_env::recovery::HealingPolicy::from_json(j).ok_or_else(|| {
+            return hharness_env::recovery::HealingPolicy::from_json(j).ok_or_else(|| {
                 EmbedError::Refused {
                     reason: format!("healing_policy_ref_malformed:{version_id}"),
                 }
@@ -997,13 +1002,13 @@ impl EmbedService {
         let interactive = self
             .store
             .manifest(run_id)
-            .map(|m| m.attendance.0 == hh_ledger::manifest::AttendanceValue::Interactive)
+            .map(|m| m.attendance.0 == hharness_ledger::manifest::AttendanceValue::Interactive)
             .unwrap_or(false);
-        Ok(hh_env::recovery::HealingPolicy {
+        Ok(hharness_env::recovery::HealingPolicy {
             on_lost: if interactive {
-                hh_env::recovery::OnLost::Ask
+                hharness_env::recovery::OnLost::Ask
             } else {
-                hh_env::recovery::OnLost::Reprovision
+                hharness_env::recovery::OnLost::Reprovision
             },
             max_heals: 3,
             verify_after: None,
@@ -1021,9 +1026,9 @@ impl EmbedService {
 mod r2_3_tests {
     use super::*;
     use crate::service::ServiceConfig;
-    use hh_ledger::event::{Event, Producer, Scope};
-    use hh_ledger::ids::ROOT_EVENT;
-    use hh_wire::jsonrpc::Request;
+    use hharness_ledger::event::{Event, Producer, Scope};
+    use hharness_ledger::ids::ROOT_EVENT;
+    use hharness_wire::jsonrpc::Request;
 
     const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -1103,13 +1108,15 @@ mod r2_3_tests {
     fn writer(s: &mut EmbedService) -> (String, String) {
         writer_manifest(
             s,
-            hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+            hharness_ledger::manifest::RunManifest::minimal(
+                hharness_ledger::manifest::RunKind::Agent,
+            ),
         )
     }
 
     fn writer_manifest(
         s: &mut EmbedService,
-        manifest: hh_ledger::manifest::RunManifest,
+        manifest: hharness_ledger::manifest::RunManifest,
     ) -> (String, String) {
         let (run_id, lease) = s.store.open_run(manifest, "r23-test").unwrap();
         let session_id = format!("sess-{run_id}-{}", uuidish());
@@ -1121,7 +1128,7 @@ mod r2_3_tests {
                 attach: false,
                 lease: Some(lease),
                 manifest_ref: "manifest:test".into(),
-                realized: hh_embed_schema::types::RealizedSettings {
+                realized: hharness_embed_schema::types::RealizedSettings {
                     model_role_table_realized: Json::Null,
                     cwd: String::new(),
                     containment_effective: Json::Null,
@@ -1129,7 +1136,7 @@ mod r2_3_tests {
                     profile_bindings: Json::Null,
                     protocol_bindings: vec![],
                     secrets_declared: vec![],
-                    attendance: hh_embed_schema::types::AttendanceDeclaration {
+                    attendance: hharness_embed_schema::types::AttendanceDeclaration {
                         value: "async".into(),
                         source: "declared".into(),
                     },
@@ -1137,8 +1144,8 @@ mod r2_3_tests {
                 driver: None,
                 mem_ctx: None,
                 steering: (
-                    hh_control::strategy::SteerMode::QueueNextTurn,
-                    hh_control::strategy::ConcurrentInput::QueueOnly,
+                    hharness_control::strategy::SteerMode::QueueNextTurn,
+                    hharness_control::strategy::ConcurrentInput::QueueOnly,
                 ),
                 env_json: Json::Null,
                 env_handle_id: None,
@@ -1193,7 +1200,10 @@ mod r2_3_tests {
             refs: Vec::new(),
             ir_refs: Vec::new(),
             surface_ids: Default::default(),
-            provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+            provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+                "kernel:test",
+                0,
+            )),
             content_kind: None,
             payload,
         }
@@ -1487,7 +1497,9 @@ mod r2_3_tests {
     fn r2_3_deliver_after_blocked_fire_produces_effect_terminal_sub() {
         let mut s = svc();
         // R3.2 (R-2.12.6): `external` needs a declared ingress adapter.
-        let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        let mut m = hharness_ledger::manifest::RunManifest::minimal(
+            hharness_ledger::manifest::RunKind::Agent,
+        );
         m.extra.insert(
             "ingress_adapters".to_string(),
             Json::Arr(vec![Json::obj([
@@ -1500,7 +1512,7 @@ mod r2_3_tests {
         apply_effect(&mut s, &run, &lease, "eff-1", false, false);
         // A `follow_up` subscription whose fire withholds on the
         // committed effect (W-3).
-        let created_by = hh_ledger::manifest::EventRef {
+        let created_by = hharness_ledger::manifest::EventRef {
             run_id: run.clone(),
             event_id: s.store.head(&run).unwrap().event_id,
         };
@@ -1557,7 +1569,7 @@ mod r2_3_tests {
         let mut s = svc();
         let (sid, run) = writer(&mut s);
         arm_lost_env(&mut s, &run, &sid);
-        let prov = hh_provenance::ProvenanceRecord::kernel("r23-test", 0);
+        let prov = hharness_provenance::ProvenanceRecord::kernel("r23-test", 0);
         let env_body = Json::obj([
             ("kind", Json::str("environment")),
             (
@@ -1579,7 +1591,7 @@ mod r2_3_tests {
         let vref = s
             .registry
             .register(
-                hh_registry::records::RegistryRecord::EnvironmentRecord(env_body),
+                hharness_registry::records::RegistryRecord::EnvironmentRecord(env_body),
                 &prov,
                 None,
             )
@@ -1620,7 +1632,7 @@ mod r2_3_tests {
         let v2 = s
             .registry
             .register(
-                hh_registry::records::RegistryRecord::EnvironmentRecord(empty_body),
+                hharness_registry::records::RegistryRecord::EnvironmentRecord(empty_body),
                 &prov,
                 None,
             )
@@ -1652,8 +1664,9 @@ mod r2_3_tests {
         // declares it at open: a run minted with the ref in its
         // manifest resolves the same record when params carry nothing.
         let (sid2, run2) = {
-            let mut m =
-                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+            let mut m = hharness_ledger::manifest::RunManifest::minimal(
+                hharness_ledger::manifest::RunKind::Agent,
+            );
             m.healing_policy_ref = Some(vid.clone());
             writer_manifest(&mut s, m)
         };
@@ -1675,12 +1688,14 @@ mod r2_3_tests {
     /// `lost{workspace_missing}` (the same verdict a dead workspace
     /// produces on the real open path).
     fn arm_lost_env(s: &mut EmbedService, run: &str, sid: &str) {
-        use hh_env::handle::{OnLoss, Roots};
-        use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+        use hharness_env::handle::{OnLoss, Roots};
+        use hharness_env::record::{
+            EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe,
+        };
         let ws = s.store.root().join("missing-ws").display().to_string();
         let record = EnvironmentRecord {
             class: EnvironmentClass::LocalHost,
-            image: ImageRef::ContentAddress(hh_identity::address(
+            image: ImageRef::ContentAddress(hharness_identity::address(
                 b"hh-embed/local_host:test",
                 "application/vnd.hh.env",
             )),
@@ -1704,15 +1719,15 @@ mod r2_3_tests {
         let driver = s
             .env_drivers
             .entry(run.to_string())
-            .or_insert_with(|| hh_env::driver::EnvDriver::new(run));
+            .or_insert_with(|| hharness_env::driver::EnvDriver::new(run));
         let handle = driver
             .provision(
                 &mut s.store,
                 &lease,
                 &record,
                 roots,
-                hh_containment::attach::PolicySlot::Inline(Box::new(
-                    hh_containment::policy::kernel_default(0),
+                hharness_containment::attach::PolicySlot::Inline(Box::new(
+                    hharness_containment::policy::kernel_default(0),
                 )),
                 OnLoss::FailRun,
                 Some(&mut s.credential_broker),
@@ -1749,7 +1764,9 @@ mod r2_3_tests {
     /// A finished goal-scoped writer run with `writes` appended under its
     /// writer lease.
     fn goal_run(s: &mut EmbedService, goal: &str, writes: Vec<Event>) -> (String, String) {
-        let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        let mut m = hharness_ledger::manifest::RunManifest::minimal(
+            hharness_ledger::manifest::RunKind::Agent,
+        );
         m.goal_ref = Some(goal.to_string());
         let (sid, run) = writer_manifest(s, m);
         let lease = lease_of(s, &sid);

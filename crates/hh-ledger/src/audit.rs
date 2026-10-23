@@ -18,8 +18,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256;
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256;
 
 use crate::classes::{self, ScopeKind};
 use crate::effect::{EffectFold, EffectPhase};
@@ -304,7 +304,7 @@ impl CheckpointKind {
 }
 
 /// A checkpoint signer — the run's registered kernel key, resolved outside the
-/// ledger. Custody never crosses into `hh-ledger`: the embed layer resolves
+/// ledger. Custody never crosses into `hharness-ledger`: the embed layer resolves
 /// the key through `CredentialBroker::kernel_use` (`KernelPurpose::Ledger
 /// Signing`, R-2.8.3) and wraps the bytes in an `AuditSigner`; the ledger sees
 /// `key_id` + `sign(preimage)` only, and the row carries `key_id`/`sig` —
@@ -926,9 +926,9 @@ impl Auditor {
         let claim_profile_name = claim
             .identity_profile
             .clone()
-            .unwrap_or_else(|| hh_identity::idp::IDP_1.idp_id.to_string());
+            .unwrap_or_else(|| hharness_identity::idp::IDP_1.idp_id.to_string());
         let claim_profile =
-            hh_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
+            hharness_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
                 inconsistent(format!(
                     "unknown_idp: `{claim_profile_name}` is not a registered identity profile"
                 ))
@@ -1303,7 +1303,7 @@ fn eval_obligation(
             for e in events.iter().copied().filter(|e| e.class == ob.class) {
                 let ok = str_member(e, "basis")
                     .map(|b| {
-                        hh_provenance::EndorsementBasis::ALL
+                        hharness_provenance::EndorsementBasis::ALL
                             .iter()
                             .any(|k| k.as_str() == b)
                     })
@@ -1531,7 +1531,7 @@ fn eval_obligation(
                 e.class == "lifecycle.definition.changed"
                     && e.provenance
                         .as_ref()
-                        .map(|p| matches!(p.origin, hh_provenance::Origin::Human { .. }))
+                        .map(|p| matches!(p.origin, hharness_provenance::Origin::Human { .. }))
                         .unwrap_or(false)
             });
             for e in events.iter().copied().filter(|e| e.class == ob.class) {
@@ -1625,7 +1625,7 @@ pub fn audit_view(
             let authority_ok = e
                 .provenance
                 .as_ref()
-                .map(|p| p.authority == hh_provenance::AuthorityClass::Kernel)
+                .map(|p| p.authority == hharness_provenance::AuthorityClass::Kernel)
                 .unwrap_or(false);
             if !producer_ok || !authority_ok {
                 producer_violations.push(Json::obj([
@@ -1811,7 +1811,7 @@ pub fn audit_view(
             .identity_profile
             .clone()
             .unwrap_or_else(|| manifest.idp.clone());
-        let claim_profile = hh_identity::idp::profile_for(&claim_profile_name);
+        let claim_profile = hharness_identity::idp::profile_for(&claim_profile_name);
         let covered_leaves: Vec<String> = claim_profile
             .map(|p| {
                 crate::rotation::rehashed_leaves(p, events.iter().take(e.seq as usize).copied())
@@ -2449,32 +2449,35 @@ pub struct AuditIndexEntry {
     pub run_id: String,
     /// The `security.audit.checkpoint` event coordinate the row cites
     /// (`{run_id, event_id, seq}`).
-    pub checkpoint_ref: hh_wire::json::Json,
+    pub checkpoint_ref: hharness_wire::json::Json,
     /// The claim's covered tree size.
     pub tree_size: u64,
     /// The claim's tree head at `tree_size`.
     pub tree_head: String,
     /// The claim's signature list (`[{key_id, alg_ref, sig}]`), verbatim.
-    pub signatures: Vec<hh_wire::json::Json>,
+    pub signatures: Vec<hharness_wire::json::Json>,
 }
 
 impl AuditIndexEntry {
     /// Canonical JSON (the index row's wire form).
-    pub fn to_json(&self) -> hh_wire::json::Json {
-        hh_wire::json::Json::obj([
-            ("run_id", hh_wire::json::Json::str(self.run_id.clone())),
+    pub fn to_json(&self) -> hharness_wire::json::Json {
+        hharness_wire::json::Json::obj([
+            (
+                "run_id",
+                hharness_wire::json::Json::str(self.run_id.clone()),
+            ),
             ("checkpoint_ref", self.checkpoint_ref.clone()),
             (
                 "tree_size",
-                hh_wire::json::Json::Int(self.tree_size.min(i64::MAX as u64) as i64),
+                hharness_wire::json::Json::Int(self.tree_size.min(i64::MAX as u64) as i64),
             ),
             (
                 "tree_head",
-                hh_wire::json::Json::str(self.tree_head.clone()),
+                hharness_wire::json::Json::str(self.tree_head.clone()),
             ),
             (
                 "signatures",
-                hh_wire::json::Json::Arr(self.signatures.clone()),
+                hharness_wire::json::Json::Arr(self.signatures.clone()),
             ),
         ])
     }

@@ -1,5 +1,5 @@
 //! R4.15e acceptance coverage — the ledger's alg-aware checkpoint seam
-//! (OQ-170; ADR-0376). The real Ed25519 signing lives in `hh-secrets`
+//! (OQ-170; ADR-0376). The real Ed25519 signing lives in `hharness-secrets`
 //! (the only `ring`-admitted crate — its battery covers the crypto); the
 //! ledger side is the *seam*: `alg_ref` plumbing, the `<alg>:<hex>` codec,
 //! the effective signer-key set (`signer_key_ids` extended by verified
@@ -8,7 +8,7 @@
 //! The `EdSigner`/`EdTable` fixtures stand in for the Ed25519 pair with a
 //! deterministic 64-byte construction — they exercise the algorithm's
 //! declared `alg_ref`, signature length and resolver dispatch, not the
-//! crypto itself (hh-ledger holds no ring dep by contract).
+//! crypto itself (hharness-ledger holds no ring dep by contract).
 //!
 //! Each test fails if the behaviour it covers is removed.
 
@@ -18,16 +18,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::audit::{
+use hharness_ledger::audit::{
     check_checkpoint_signatures, key_rotation_members, parse_sig_alg, render_sig_alg,
     AuditKeyResolver, AuditSigner, CheckpointKind, SignatureDefect, CHECKPOINT_ALG, ED25519_ALG,
 };
-use hh_ledger::errors::{LedgerError, TamperedKind};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::tree::{checkpoint_sig_preimage, parse_checkpoint};
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256;
+use hharness_ledger::errors::{LedgerError, TamperedKind};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::tree::{checkpoint_sig_preimage, parse_checkpoint};
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);

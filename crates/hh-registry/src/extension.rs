@@ -11,7 +11,7 @@
 //! - the trust-root/signature install machinery (`trust_root_policy` exists; ADR-0210
 //!   OQ-162 is open, C1 — Stage 1 works with hash pins);
 //! - install procedures / UX / revocation propagation — S4.14a;
-//! - the MCP discover/lift-and-pin driver and the `hh-mcp` bridge — S1.24/S2.5;
+//! - the MCP discover/lift-and-pin driver and the `hharness-mcp` bridge — S1.24/S2.5;
 //! - the `security.extension.*` emitters append through the caller's fenced
 //!   writer — the lifecycle layer mints the payloads (S4.14a + R2.20: the
 //!   `resolved`/`quarantined`/`sealed`/`loaded` producers land in
@@ -19,14 +19,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::{self, ContentAddress};
-use hh_identity::kinds::RecordKind as IdentityRecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::{Attestation, AttestationAnchor, AttestationKind, ProvenanceRecord};
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_identity::idp::{self, ContentAddress};
+use hharness_identity::kinds::RecordKind as IdentityRecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::{
+    Attestation, AttestationAnchor, AttestationKind, ProvenanceRecord,
+};
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::RegistryError;
 
@@ -825,7 +827,7 @@ impl ExtensionTrustRecord {
 /// - `attestation_status = failed` → `unverified` (a failed verification lowers,
 ///   never launders).
 ///
-/// `R_text` is `hh_provenance::origin::default_text_authority` — **the same**
+/// `R_text` is `hharness_provenance::origin::default_text_authority` — **the same**
 /// minting table every other text-bearing pipeline runs (CC1 — this function
 /// composes it, it never re-tables it). The function is **total** over
 /// `(kind, origin, attestation_status)` and reads nothing else — the L1
@@ -839,7 +841,7 @@ pub fn default_text_authority(
     // The same R_text minting table the rest of the system runs (CC1) — origin
     // facts only, no attestation self-claim (`None`: our verified-fact status
     // already encodes the kernel-side verification outcome).
-    let r_text = hh_provenance::origin::default_text_authority(origin, None);
+    let r_text = hharness_provenance::origin::default_text_authority(origin, None);
     match attestation_status {
         AttestationStatus::Failed => AuthorityClass::Unverified,
         AttestationStatus::Verified(AttestationKind::Signature) => {
@@ -1312,10 +1314,10 @@ fn ref_from_json(j: &Json, path: &str) -> Result<VersionedRef, RegistryError> {
 
 fn attestation_json2(a: &Attestation) -> Json {
     let anchor = match &a.anchor {
-        hh_provenance::record::AttestationAnchor::Signer(s) => {
+        hharness_provenance::record::AttestationAnchor::Signer(s) => {
             Json::obj([("signer", Json::str(s.clone()))])
         }
-        hh_provenance::record::AttestationAnchor::Chain(c) => {
+        hharness_provenance::record::AttestationAnchor::Chain(c) => {
             Json::obj([("chain", Json::str(c.clone()))])
         }
     };

@@ -15,17 +15,17 @@
 #[cfg(feature = "tier-c4")]
 use std::collections::BTreeMap;
 
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 #[cfg(feature = "tier-c4")]
-use hh_embed_schema::types::NarrowingLeaf;
+use hharness_embed_schema::types::NarrowingLeaf;
 #[cfg(feature = "tier-c4")]
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
 
 #[cfg(feature = "tier-c4")]
-use hh_fleet::{
+use hharness_fleet::{
     engine::FleetEngine,
     errors::FleetError,
     source::{FixtureAdapter, WorkSourceAdapter},
@@ -140,12 +140,12 @@ pub enum BoundaryAdapter {
     /// The push lane — signed-webhook ingress plus the shared
     /// suspended/activate_run/records members. Boxed — the adapter is
     /// far larger than the fixture lane (clippy::large_enum_variant).
-    Webhook(Box<hh_fleet::ingress::WebhookAdapter>),
+    Webhook(Box<hharness_fleet::ingress::WebhookAdapter>),
 }
 
 #[cfg(feature = "tier-c4")]
-impl hh_fleet::source::WorkSourceAdapter for BoundaryAdapter {
-    fn occurrences(&mut self, since: Option<u64>) -> Vec<hh_fleet::source::SourceOccurrence> {
+impl hharness_fleet::source::WorkSourceAdapter for BoundaryAdapter {
+    fn occurrences(&mut self, since: Option<u64>) -> Vec<hharness_fleet::source::SourceOccurrence> {
         match self {
             BoundaryAdapter::Fixture(a) => a.occurrences(since),
             BoundaryAdapter::Webhook(a) => a.occurrences(since),
@@ -175,7 +175,7 @@ impl hh_fleet::source::WorkSourceAdapter for BoundaryAdapter {
             BoundaryAdapter::Webhook(a) => a.get(native_ids),
         }
     }
-    fn capabilities(&self) -> hh_fleet::capabilities::AdapterCapabilities {
+    fn capabilities(&self) -> hharness_fleet::capabilities::AdapterCapabilities {
         match self {
             BoundaryAdapter::Fixture(a) => a.capabilities(),
             BoundaryAdapter::Webhook(a) => a.capabilities(),
@@ -199,7 +199,7 @@ fn adapter(params: &Json, fleet_run: &str) -> Result<BoundaryAdapter, EmbedError
         .cloned()
         .unwrap_or_else(|| Json::obj([("schema_version", Json::str("hh.fleet.fixture/1"))]));
     if doc.get("webhook").is_some() {
-        hh_fleet::ingress::WebhookAdapter::from_doc(&doc, fleet_run)
+        hharness_fleet::ingress::WebhookAdapter::from_doc(&doc, fleet_run)
             .map(Box::new)
             .map(BoundaryAdapter::Webhook)
             .map_err(fleet_err)
@@ -216,10 +216,10 @@ fn adapter(params: &Json, fleet_run: &str) -> Result<BoundaryAdapter, EmbedError
 #[cfg(feature = "tier-c4")]
 fn fleet_err(e: FleetError) -> EmbedError {
     match e {
-        FleetError::Store(hh_ledger::errors::LedgerError::UnknownRun { run_id }) => {
+        FleetError::Store(hharness_ledger::errors::LedgerError::UnknownRun { run_id }) => {
             EmbedError::UnknownRun { run_id }
         }
-        FleetError::Store(hh_ledger::errors::LedgerError::WouldBlock { active_holder }) => {
+        FleetError::Store(hharness_ledger::errors::LedgerError::WouldBlock { active_holder }) => {
             EmbedError::WouldBlock { active_holder }
         }
         FleetError::SchemaViolation { detail } => EmbedError::SchemaViolation {
@@ -227,7 +227,7 @@ fn fleet_err(e: FleetError) -> EmbedError {
             code: detail,
         },
         FleetError::MissingBudgetRef => EmbedError::UnbudgetedArm,
-        FleetError::Account(hh_budget::errors::BudgetError::InsufficientBudget {
+        FleetError::Account(hharness_budget::errors::BudgetError::InsufficientBudget {
             dimension,
             ..
         }) => EmbedError::InsufficientBudget {
@@ -331,14 +331,14 @@ impl EmbedService {
                     .admit(&mut self.store, init)
                     .map_err(fleet_err)?
                 {
-                    hh_fleet::engine::AdmitOutcome::Admitted { item_id, event_id } => {
+                    hharness_fleet::engine::AdmitOutcome::Admitted { item_id, event_id } => {
                         Ok(Json::obj([
                             ("status", Json::str("admitted")),
                             ("item_id", Json::str(&item_id)),
                             ("event_id", Json::str(&event_id)),
                         ]))
                     }
-                    hh_fleet::engine::AdmitOutcome::Known { item_id } => Ok(Json::obj([
+                    hharness_fleet::engine::AdmitOutcome::Known { item_id } => Ok(Json::obj([
                         ("status", Json::str("known")),
                         ("item_id", Json::str(&item_id)),
                     ])),
@@ -365,7 +365,7 @@ impl EmbedService {
                 let item = req_str(params, "item")?.to_string();
                 let mut ad = adapter(params, &run)?;
                 let now = now_ms(params, self.store.now_ms());
-                let mut report = hh_fleet::engine::ReconcileReport::default();
+                let mut report = hharness_fleet::engine::ReconcileReport::default();
                 fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .dispatch(&mut self.store, &mut ad, &item, now, &mut report)
                     .map_err(fleet_err)?;
@@ -574,7 +574,7 @@ impl EmbedService {
                     m.insert(
                         "metrics".into(),
                         Json::Arr(
-                            hh_telemetry::catalogue::FLEET_METRICS
+                            hharness_telemetry::catalogue::FLEET_METRICS
                                 .iter()
                                 .map(|fm| fm.declaration().to_json())
                                 .collect(),
@@ -669,12 +669,12 @@ impl EmbedService {
                                 .observe(&mut self.store, &mut ad, now)
                                 .map_err(fleet_err)?;
                         let (status, occurrence_id) = match outcome {
-                            hh_fleet::ingress::IngressOutcome::Received { occurrence_id } => {
+                            hharness_fleet::ingress::IngressOutcome::Received { occurrence_id } => {
                                 ("received", occurrence_id)
                             }
-                            hh_fleet::ingress::IngressOutcome::Duplicate { occurrence_id } => {
-                                ("duplicate", occurrence_id)
-                            }
+                            hharness_fleet::ingress::IngressOutcome::Duplicate {
+                                occurrence_id,
+                            } => ("duplicate", occurrence_id),
                         };
                         Ok(Json::obj([
                             ("status", Json::str(status)),
@@ -757,7 +757,7 @@ impl EmbedService {
 
 /// `ReconcileReport` as a record — the pass's durable-evidence summary.
 #[cfg(feature = "tier-c4")]
-fn report_json(r: &hh_fleet::engine::ReconcileReport) -> Json {
+fn report_json(r: &hharness_fleet::engine::ReconcileReport) -> Json {
     Json::obj([
         ("schema", Json::str("hh.fleet.report/1")),
         (

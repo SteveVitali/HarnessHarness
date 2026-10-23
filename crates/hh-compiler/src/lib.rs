@@ -1,4 +1,4 @@
-//! `hh-compiler` — the **compilation model** (spec §3.2; ticket S1.10; R-2.1.3).
+//! `hharness-compiler` — the **compilation model** (spec §3.2; ticket S1.10; R-2.1.3).
 //!
 //! A compiler is a pure, staged function: *canonical input → typed documents* (ADR-0019).
 //! It emits runtime-interpreted data — never host-language code — so the compiled artifact
@@ -6,9 +6,9 @@
 //!
 //! Stages (§3.2.2):
 //! - **stage 0 `accept`** — sealed definitions only; re-asserts the canonical-form hash
-//!   against the recorded `version_id`; calls `hh_assembly::validate_assembly` (never
+//!   against the recorded `version_id`; calls `hharness_assembly::validate_assembly` (never
 //!   re-implements `validate` — ADR-0025 D2).
-//! - **stage 1 `link`** — `hh_assembly::link_precheck` first (a surviving selector is
+//! - **stage 1 `link`** — `hharness_assembly::link_precheck` first (a surviving selector is
 //!   `C-LINK-1` `LinkError{unbound_slot}` — the compiler never re-resolves; DF-S1.9-3's
 //!   consumer half); binds the profile chain and target specs; checks
 //!   `capability_requires` (ADR-0087), conditioned-rule debt completeness (T-LCD-05), and

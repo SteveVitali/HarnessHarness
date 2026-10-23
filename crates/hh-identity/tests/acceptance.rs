@@ -1,9 +1,9 @@
 //! The gating acceptance criteria for R-2.12.1 made executable end-to-end:
 //! **AC-R-2.12.1-{1,2,3,4,5,12}** (§8.3 #7 / §9.2). AC-5 has its own file (`golden_corpus.rs`).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
-use hh_identity::{
+use hharness_identity::{
     address, configuration_id, configuration_version_id, identify, identify_text, parse_id,
     pools_by_configuration_id, sameness, verify_blob, IdError, IdentifyError, NameIndex,
     NameSelector, NameStatus, Namespace, ProvenanceRecord, Record, RecordKind, Reference,
@@ -61,7 +61,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
     assert_ne!(before.version_id, after.version_id);
 
     let mut idx = NameIndex::new();
-    let r_before = hh_identity::VersionedRef::pinned(
+    let r_before = hharness_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         &before.version_id,
         ProvenanceRecord::kernel("kernel:test", 0),
@@ -80,7 +80,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
             None,
         )
         .unwrap();
-    let r_after = hh_identity::VersionedRef::pinned(
+    let r_after = hharness_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         &after.version_id,
         ProvenanceRecord::kernel("kernel:test", 0),
@@ -172,7 +172,7 @@ fn ac_r_2_12_1_12_two_configuration_ids() {
 #[test]
 fn resolve_is_deterministic_and_execute_hides_yanked() {
     let mut idx = NameIndex::new();
-    let v1 = hh_identity::VersionedRef::pinned(
+    let v1 = hharness_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         format!("sha256:{}", "1".repeat(64)),
         ProvenanceRecord::kernel("kernel:test", 0),
@@ -190,7 +190,7 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
             None,
         )
         .unwrap();
-    let v2 = hh_identity::VersionedRef::pinned(
+    let v2 = hharness_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         format!("sha256:{}", "2".repeat(64)),
         ProvenanceRecord::kernel("kernel:test", 0),

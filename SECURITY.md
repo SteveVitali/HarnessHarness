@@ -32,7 +32,7 @@ no acknowledgement within **14 days**, reply on the advisory thread.
 ## Scope notes
 
 The build is offline/hermetic by contract: the only admitted network +
-TLS surface is `hh-tls`'s closed rustls scope (ADR-0365) and the
+TLS surface is `hharness-tls`'s closed rustls scope (ADR-0365) and the
 out-of-process `hh-github-issues` tracker variant; the `ring` pin
 (ADR-0359) is signature-verification + AEAD only. Secrets never enter
 ledgers or logs by contract — a path that leaks one is a defect worth

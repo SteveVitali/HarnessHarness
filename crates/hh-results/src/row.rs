@@ -9,10 +9,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::idp_id;
-use hh_ontology::compliance::NaReason;
-use hh_ontology::eval::MetricValueKind;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::eval::MetricValueKind;
+use hharness_wire::json::Json;
 
 use crate::audit::AuditRef;
 use crate::error::ResultsError;
@@ -440,7 +440,7 @@ impl Cell {
 /// `consumption{dimensions{dimension → amount}, utilization?, spend?,
 /// instrument_spend?}` — the `control.budget.consumed` fold plus the
 /// settle-time utilization record (§6.5 row 1; `ResultsRowFields`' owner is
-/// `hh-budget` — the section carries its members verbatim).
+/// `hharness-budget` — the section carries its members verbatim).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConsumptionSection {
     /// Per-dimension consumed totals.

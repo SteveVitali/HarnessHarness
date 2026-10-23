@@ -54,7 +54,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::facts::LedgerFacts;
 

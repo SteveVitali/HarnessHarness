@@ -8,10 +8,10 @@
 //! operator are **set and recorded** here and implemented nowhere else
 //! (ADR-0168). None of this touches kernel semantics.
 
-use hh_embed_client_generated::{
+use hharness_embed_client_generated::{
     AttendanceDeclaration, AttendanceSource, AttendanceValue, InvocationRecord, OutputFormat,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// A pre-ledger invocation failure — `invocation_error`, emitted before
 /// any boundary operation runs and never opening a run (§7.1 derivation
@@ -200,7 +200,7 @@ pub fn build_invocation(
     };
     rec.idempotency_key = supplied_key.unwrap_or_else(|| {
         let canonical = rec.to_json().to_canonical_string();
-        hh_identity::address(format!("cli{canonical}").as_bytes(), "application/json").id()
+        hharness_identity::address(format!("cli{canonical}").as_bytes(), "application/json").id()
     });
     rec
 }
@@ -210,7 +210,7 @@ pub fn build_invocation(
 pub fn stdin_digest(bytes: &[u8]) -> String {
     format!(
         "sha256:{}",
-        hh_wire::sha256::sha256_hex(&[b"stdin".as_slice(), bytes].concat())
+        hharness_wire::sha256::sha256_hex(&[b"stdin".as_slice(), bytes].concat())
     )
 }
 

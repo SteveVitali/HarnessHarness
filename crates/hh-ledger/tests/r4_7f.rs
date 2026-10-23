@@ -16,15 +16,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::audit::eval_obligations;
-use hh_ledger::event::{Event, EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{EventRef, ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::views::ViewKind;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::audit::eval_obligations;
+use hharness_ledger::event::{Event, EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{
+    EventRef, ObservabilityLevel, ParticipantClass, RunKind, RunManifest,
+};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::views::ViewKind;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -560,7 +562,7 @@ fn ev(id: &str, class: &str, producer: Producer, payload: Json) -> EventEnvelope
         producer,
         participant_class: ParticipantClass::Native,
         observability_level: BTreeSet::from([ObservabilityLevel::Events]),
-        durability: hh_ledger::classes::Durability::Ledger,
+        durability: hharness_ledger::classes::Durability::Ledger,
         scope: Scope::default(),
         lease_generation: 1,
         parent_event_id: ROOT_EVENT.into(),

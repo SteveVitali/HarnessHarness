@@ -6,7 +6,7 @@
 //!   - a mismatched returned identity lowers to `ClientError::IdentityMismatch` — never a
 //!     silent fallback (ADR-0178 D2).
 
-use hh_embed_client_generated::{
+use hharness_embed_client_generated::{
     Client, ClientDescriptor, ClientError, ClientKind, ContractIdentity, HelloParams,
     HostCapabilities, CONTRACT_MAJOR, EXPECTED_SCHEMA_HASH,
 };
@@ -53,8 +53,8 @@ fn hello_result_line(schema_hash: &str, contract_major: i64) -> String {
 
 #[test]
 fn generated_constants_match_the_live_schema_source() {
-    assert_eq!(EXPECTED_SCHEMA_HASH, hh_embed_schema::schema_hash());
-    assert_eq!(CONTRACT_MAJOR, hh_embed_schema::CONTRACT_MAJOR);
+    assert_eq!(EXPECTED_SCHEMA_HASH, hharness_embed_schema::schema_hash());
+    assert_eq!(CONTRACT_MAJOR, hharness_embed_schema::CONTRACT_MAJOR);
 }
 
 #[test]

@@ -8,23 +8,23 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::catalogue;
-use hh_eval::interventions::{
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::catalogue;
+use hharness_eval::interventions::{
     interventions_experiment, InterventionsError, InterventionsExperimentInput, InterventionsTier,
     ARM_OFF, ARM_ON, H_G2_1_INTERACTION, INTERVENTIONS_METRICS, INTERVENTION_MATCH_DIMS,
 };
-use hh_eval::runs::{CacheState, EvalRun, TaskContext};
-use hh_ontology::compliance::{Detector, MetricDeclaration};
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_eval::runs::{CacheState, EvalRun, TaskContext};
+use hharness_ontology::compliance::{Detector, MetricDeclaration};
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, MetricValue, MetricValueKind, Pairing, PreRegistration, RoutingPolicy,
     SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Observability, ParticipantClass};
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{Observability, ParticipantClass};
 
 fn metric(name: &str) -> MetricDeclaration {
     catalogue::metric(name).expect("catalogue metric")
@@ -194,7 +194,7 @@ fn interventions_experiment_reports_four_deltas() {
         tasks: &ts,
         declarations: &decls(),
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         removal_subject: "gamma:table:1",
         higher_tier: None,
@@ -208,7 +208,7 @@ fn interventions_experiment_reports_four_deltas() {
         .paired_effect
         .point
         .as_ref()
-        .and_then(hh_wire::Json::as_int)
+        .and_then(hharness_wire::Json::as_int)
         .unwrap();
     assert_eq!(fcr, -200_000);
     // The removal-test handle names the bound Γ/probe subject —
@@ -241,7 +241,7 @@ fn under_scoped_match_is_refused() {
         tasks: &ts,
         declarations: &decls(),
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         removal_subject: "gamma:table:1",
         higher_tier: None,
@@ -275,7 +275,7 @@ fn h_g2_1_interaction_reads_the_did() {
         tasks: &ts,
         declarations: &decls(),
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         removal_subject: "gamma:table:1",
         higher_tier: Some(InterventionsTier {

@@ -13,15 +13,15 @@
 //! scripted ports (determinism: the logical clock and id allocator are
 //! `u64` counters the driver owns, never `Instant`/`random`).
 
-use hh_compiler::exposure as tool_exposure;
-use hh_ledger::effect::{fold_event, EffectFold, EffectPhase};
-use hh_ledger::event::{Event, EventEnvelope, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::{HumanRole, Origin};
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_compiler::exposure as tool_exposure;
+use hharness_ledger::effect::{fold_event, EffectFold, EffectPhase};
+use hharness_ledger::event::{Event, EventEnvelope, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::envelope::{CheckVerdict, Envelope, EnvelopeState};
 use crate::guards::{GuardContext, GuardInput, GuardVerdict};
@@ -43,7 +43,7 @@ use crate::vocab::{
 /// The model boundary — `call` issues one model call and returns its parsed
 /// outcome (the gateway's record: the closed gateway `StopReason`, the
 /// response ref, the parsed calls). At Stage 1 the port is scripted in
-/// tests; in production it is the `hh-gateway` boundary.
+/// tests; in production it is the `hharness-gateway` boundary.
 pub trait ModelPort {
     /// Issue the call (`model_call_id` is the scope the driver allocated).
     fn call(&mut self, model_call_id: &str, request: &Json) -> ModelOutcome;
@@ -88,7 +88,7 @@ pub trait ModelPort {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelOutcome {
     /// The gateway stop reason (R-2.3.1's sum — never the control-plane's).
-    pub stop_reason: hh_gateway::vocab::StopReason,
+    pub stop_reason: hharness_gateway::vocab::StopReason,
     /// The response blob ref (`model_completed.response_ref`).
     pub response_ref: String,
     /// Whether the response carried no text.
@@ -135,10 +135,10 @@ pub struct RoutingLane {
     /// `intent_ref?` — the recorded intent an `expired` bind needs (G-1).
     pub intent_ref: Option<String>,
     /// The bound `RoutingPolicy` document.
-    pub policy: hh_gateway::router::RoutingPolicy,
+    pub policy: hharness_gateway::router::RoutingPolicy,
     /// The realized `ModelRoleTable` (the manifest's `profile_binding`
     /// projection — same table the boundary realized at open).
-    pub table: hh_gateway::router::ModelRoleTable,
+    pub table: hharness_gateway::router::ModelRoleTable,
 }
 
 /// The router port (R-2.7) — the boundary's half of §5b.2: the profile
@@ -157,27 +157,27 @@ pub trait RoutingPort {
     /// rebuilt; `prefix` is the driver's durable tail.
     fn select(
         &mut self,
-        request: &hh_gateway::router::RoutingRequest,
+        request: &hharness_gateway::router::RoutingRequest,
         decision_id: &str,
         now_ms: u64,
         attempted: &std::collections::BTreeSet<String>,
         prefix: &[EventEnvelope],
-    ) -> Result<hh_gateway::router::RoutingDecision, hh_gateway::router::RoutingRefusal>;
+    ) -> Result<hharness_gateway::router::RoutingDecision, hharness_gateway::router::RoutingRefusal>;
     /// The ADR-0122 consult — `on_attempt_failed` over the port's views;
     /// `state` is the driver-rebuilt `AttemptState` cursor.
     #[allow(clippy::too_many_arguments)] // the consult arity is the contract's.
     fn attempt_failed(
         &mut self,
-        request: &hh_gateway::router::RoutingRequest,
-        prior: &hh_gateway::router::RoutingDecision,
-        error: &hh_gateway::vocab::ModelErrorClass,
+        request: &hharness_gateway::router::RoutingRequest,
+        prior: &hharness_gateway::router::RoutingDecision,
+        error: &hharness_gateway::vocab::ModelErrorClass,
         attempts_on_target: u32,
         retry_after_ms: Option<u64>,
-        state: &mut hh_gateway::router::AttemptState,
+        state: &mut hharness_gateway::router::AttemptState,
         decision_id: &str,
         now_ms: u64,
         prefix: &[EventEnvelope],
-    ) -> hh_gateway::router::AttemptDisposition;
+    ) -> hharness_gateway::router::AttemptDisposition;
     /// The `model.surface.relowered` payload a cross-profile reroute mints
     /// (`old_profile_ref`/`new_profile_ref`/`dropped_items[]`/
     /// `rewritten_items[]`/`reason`/`model_call_id` members — the
@@ -275,7 +275,7 @@ pub trait EffectGate {
 
     /// The component id the `emitted` rows carry as
     /// `producer.component_variant_ref` (INV-7: `security.permission.
-    /// decided{allow}` minted under `hh-control` is an envelope grant —
+    /// decided{allow}` minted under `hharness-control` is an envelope grant —
     /// refused as a violation; the gate is the effect boundary, its
     /// records carry its own identity). Defaulted for Stage-1 scripted
     /// gates; real boundaries override with their own ref.
@@ -321,7 +321,7 @@ pub struct AssembleInputs<'a> {
 
 /// The context assembler — `assemble` turns a `propose.context_request`
 /// into the request record the `ModelPort` consumes plus the canonical
-/// `context.assembled` payload the `hh-context` builder produced (the
+/// `context.assembled` payload the `hharness-context` builder produced (the
 /// driver owns the `append` — DF-S1.19-1's Stage-1 half: the emitter call
 /// site is the turn loop's). The strategy never sees the bytes — I2.
 pub trait AssemblerPort {
@@ -354,10 +354,10 @@ pub struct AssembledRequest {
     /// clause; R3.4 / DF-S1.19-2). The driver appends the recorded rows
     /// then stops `context_exhausted` — the model call never fires on a
     /// request the window cannot hold (never a silent proceed).
-    pub overflow: Option<hh_context::CompactionRequired>,
+    pub overflow: Option<hharness_context::CompactionRequired>,
 }
 
-/// Durability — the sink the driver appends through (the `hh-ledger`
+/// Durability — the sink the driver appends through (the `hharness-ledger`
 /// `Store::append` in production; a vec in tests). `prefix()` is the
 /// durable prefix every pure fold reads — the driver never keeps a second
 /// copy of ledger state (the ledger is the sole durable source of truth).
@@ -394,9 +394,9 @@ pub trait LedgerSink {
 /// lease every spawned row commits under.
 pub struct StoreSeam<'a> {
     /// The run's store.
-    pub store: &'a mut hh_ledger::store::Store,
+    pub store: &'a mut hharness_ledger::store::Store,
     /// The parent's writer lease.
-    pub lease: &'a hh_ledger::store::Lease,
+    pub lease: &'a hharness_ledger::store::Lease,
 }
 
 /// The compaction boundary (R-2.4.2's `compact` driver — §5c.2; the S2.11
@@ -487,7 +487,7 @@ pub trait MemoryPort {
     /// fails the boundary, never writes around the lease.
     fn consolidate(
         &mut self,
-        rules: &[hh_context::consolidate::ConsolidationRule],
+        rules: &[hharness_context::consolidate::ConsolidationRule],
         boundary: &str,
         seam: Option<StoreSeam<'_>>,
     ) -> Result<Vec<(String, Json)>, String>;
@@ -517,12 +517,12 @@ pub trait VerifyPort {
         &mut self,
         validator_refs: &[String],
         subject: &Json,
-    ) -> Vec<hh_verification::validators::Verdict>;
+    ) -> Vec<hharness_verification::validators::Verdict>;
 }
 
 /// The decision-point delegation boundary (R-2.6.3; R3.3) — the admitted
 /// `delegate` decision's execution seam. The port binds the child-lease
-/// substrate (`hh-subagent`'s `spawn` through the holder's `ParentBinding`)
+/// substrate (`hharness-subagent`'s `spawn` through the holder's `ParentBinding`)
 /// — it owns no model/env handles itself; everything it confers is
 /// attenuated from the parent's live authority (CC2: the decision *asks*,
 /// the lease *confers*). The driver hands the port the `control.decision`
@@ -676,7 +676,7 @@ enum CompletionFlow {
 /// on holds-cap exhaustion).
 struct CompletionGateDecision {
     /// The emitted decision record.
-    decision: hh_verification::gate::CompletionDecision,
+    decision: hharness_verification::gate::CompletionDecision,
     /// The finish-path stop reason override (holds exhaustion).
     stop_reason: Option<StopReason>,
 }
@@ -722,7 +722,7 @@ pub struct ExposureRuntime {
     /// member is the epoch-0 opening, never mutated).
     pub catalog: tool_exposure::Catalog,
     /// The profile's admitted `definition_modes` (the meet's profile leg).
-    pub profile_modes: std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+    pub profile_modes: std::collections::BTreeSet<hharness_hir::tools::ExposureMode>,
     /// The MUST-data `ExposurePolicyParams` (ADR-0093 D3).
     pub params: tool_exposure::ExposurePolicyParams,
     /// The bound `tool_exposure_policy` rank leg — `None` ⇒ `direct_all`
@@ -797,9 +797,9 @@ pub struct DriverConfig {
     /// projected at `seal`/`open` and stamped `manifest.task_contract_id`.
     /// `None` ⇒ the gate reads open effects + the claim's own divergences
     /// only (no contract criteria — the T-LCD-03 anchor shape).
-    pub task_contract: Option<hh_verification::gate::TaskContract>,
+    pub task_contract: Option<hharness_verification::gate::TaskContract>,
     /// The `reconciliation.holds` cap (F4; ADR-0113 D4 — default
-    /// [`hh_verification::gate::DEFAULT_HOLDS_CAP`]; per-suite override
+    /// [`hharness_verification::gate::DEFAULT_HOLDS_CAP`]; per-suite override
     /// OQ-279).
     pub holds_cap: u64,
     /// The model-emitted-plan surface (`plan_execute`'s `hh.plan` — S3.10):
@@ -851,7 +851,7 @@ pub struct DriverConfig {
     /// runs `reconcile_c2` over the projected `ReconcileContext` (D1/D4/
     /// D7–D10 on top of the C0 classes). `None` (the default) keeps the
     /// byte-identical C0 `ledger_only` fold.
-    pub reconciler: Option<hh_verification::reconciler::ReconcilerDeclaration>,
+    pub reconciler: Option<hharness_verification::reconciler::ReconcilerDeclaration>,
     /// The §5a.3 `carried.resume_set_heads` this activation inherited —
     /// projected at `open`/`resume` from the manifest's durable `carried`
     /// member (CC3 — the manifest is the record; the driver consumes,
@@ -875,7 +875,7 @@ pub struct DriverConfig {
     /// ran, so a resumed arm never re-fires it. Non-empty with no memory
     /// boundary is `UnbackedPort{kind: "consolidate"}` at the boundary —
     /// a declared rule never silently skips.
-    pub consolidation_rules: Vec<hh_context::consolidate::ConsolidationRule>,
+    pub consolidation_rules: Vec<hharness_context::consolidate::ConsolidationRule>,
 }
 
 impl Default for DriverConfig {
@@ -895,7 +895,7 @@ impl Default for DriverConfig {
             profile_max_output_bound: 8_192,
             window_cap_tokens: 0,
             task_contract: None,
-            holds_cap: hh_verification::gate::DEFAULT_HOLDS_CAP,
+            holds_cap: hharness_verification::gate::DEFAULT_HOLDS_CAP,
             plan_surface_id: None,
             plan_schema_ref: crate::plan_exec::PLAN_SCHEMA_REF.to_string(),
             delegate_surface_id: None,
@@ -1035,14 +1035,14 @@ pub struct Driver<S: ControlStrategy> {
     /// fires when the loop next pops the `effects_settled` cue — runtime
     /// death after the observation is visible, before the decision it
     /// would drive. Armed once, fires once; production never arms it.
-    kill_point: Option<hh_ledger::fault::KillPoint>,
+    kill_point: Option<hharness_ledger::fault::KillPoint>,
     /// The `control.random.read` draw ordinal — seeded from the durable
     /// prefix at resume/replay (a recorded draw reproduces; a fresh draw
     /// never collides with a pre-crash one).
     random_draws: u64,
     /// The completion claims `emit_completion_claims` recorded on this
     /// `stop{completed}` (the gate reconciles them — S3.10).
-    completion_claims: Vec<hh_verification::claims::Claim>,
+    completion_claims: Vec<hharness_verification::claims::Claim>,
     /// The decoded `belief_probe` `ProfileRule`s off the sealed profile
     /// projection (R2.15/ADR-0316 — the rule *is* the emitter: each
     /// `model.call.completed` fires the deterministic rules over the
@@ -1050,7 +1050,7 @@ pub struct Driver<S: ControlStrategy> {
     /// declared-only here — the judged stratum needs the critic leg,
     /// DF-S1.21-3). A malformed rule refuses `open` typed, never a
     /// silent drop.
-    belief_probe_rules: Vec<hh_verification::belief_probe::ProbeRule>,
+    belief_probe_rules: Vec<hharness_verification::belief_probe::ProbeRule>,
     /// The exposure run state (R2.8) — `Some` only when
     /// `config.exposure` is armed; minted lazily at the first `propose`
     /// by folding the durable prefix (`fold_exposure_state` — open,
@@ -1074,15 +1074,13 @@ impl<S: ControlStrategy> Driver<S> {
         // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
         // a malformed rule refuses the constructor typed (a conditioned
         // rule is never silently dropped).
-        let belief_probe_rules =
-            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
-                DriverError::MalformedProfileRule {
-                    rule_id: match e {
-                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
-                            rule_id
-                        }
-                    },
-                }
+        let belief_probe_rules = hharness_verification::belief_probe::probe_rules(&ctx.profile)
+            .map_err(|e| DriverError::MalformedProfileRule {
+                rule_id: match e {
+                    hharness_verification::belief_probe::ProbeRuleError::DebtMissing {
+                        rule_id,
+                    } => rule_id,
+                },
             })?;
         let mut inbox = std::collections::VecDeque::new();
         inbox.push_back(Cue::RunOpened {
@@ -1097,7 +1095,7 @@ impl<S: ControlStrategy> Driver<S> {
                 turn_id: Some("turn-1".into()),
                 ..scope_empty()
             },
-            hh_ledger::ids::ROOT_EVENT.to_string(),
+            hharness_ledger::ids::ROOT_EVENT.to_string(),
             vec![],
             Json::obj([
                 ("turn_id", Json::str("turn-1")),
@@ -1181,15 +1179,13 @@ impl<S: ControlStrategy> Driver<S> {
         // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
         // a malformed rule refuses the constructor typed (a conditioned
         // rule is never silently dropped).
-        let belief_probe_rules =
-            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
-                DriverError::MalformedProfileRule {
-                    rule_id: match e {
-                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
-                            rule_id
-                        }
-                    },
-                }
+        let belief_probe_rules = hharness_verification::belief_probe::probe_rules(&ctx.profile)
+            .map_err(|e| DriverError::MalformedProfileRule {
+                rule_id: match e {
+                    hharness_verification::belief_probe::ProbeRuleError::DebtMissing {
+                        rule_id,
+                    } => rule_id,
+                },
             })?;
 
         let (envelope, envelope_state) = Envelope::arm(policy.clone(), sink.prefix())
@@ -1367,15 +1363,13 @@ impl<S: ControlStrategy> Driver<S> {
         // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
         // a malformed rule refuses the constructor typed (a conditioned
         // rule is never silently dropped).
-        let belief_probe_rules =
-            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
-                DriverError::MalformedProfileRule {
-                    rule_id: match e {
-                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
-                            rule_id
-                        }
-                    },
-                }
+        let belief_probe_rules = hharness_verification::belief_probe::probe_rules(&ctx.profile)
+            .map_err(|e| DriverError::MalformedProfileRule {
+                rule_id: match e {
+                    hharness_verification::belief_probe::ProbeRuleError::DebtMissing {
+                        rule_id,
+                    } => rule_id,
+                },
             })?;
         Ok(Driver {
             envelope,
@@ -1676,9 +1670,9 @@ impl<S: ControlStrategy> Driver<S> {
         // member — the closed `DimensionId` set is what `ResourceVector`
         // stores).
         let gctx = self.guard_ctx(events);
-        let mut remaining = hh_budget::quantity::ResourceVector::zero();
+        let mut remaining = hharness_budget::quantity::ResourceVector::zero();
         for (dim, amt) in &gctx.remaining {
-            if let Some(d) = hh_ontology::dimensions::DimensionId::parse(dim) {
+            if let Some(d) = hharness_ontology::dimensions::DimensionId::parse(dim) {
                 remaining.add(d, *amt);
             }
         }
@@ -1819,7 +1813,7 @@ impl<S: ControlStrategy> Driver<S> {
         crate::compute::ComputeContext {
             budget: crate::compute::BudgetView {
                 remaining,
-                reserved: hh_budget::quantity::ResourceVector::zero(),
+                reserved: hharness_budget::quantity::ResourceVector::zero(),
                 live_fan_out: spawned.saturating_sub(settled).max(0) as u32,
                 fan_out_cap: self.config.gauge_caps.fan_out,
                 delegation_depth: facts.delegation_depth,
@@ -1949,7 +1943,7 @@ impl<S: ControlStrategy> Driver<S> {
         self.random_draws += 1;
         let value = format!(
             "sha256:{}",
-            hh_wire::sha256::sha256_hex(
+            hharness_wire::sha256::sha256_hex(
                 format!("control.random.read:{}:{}", self.run_id, ordinal).as_bytes()
             )
         );
@@ -1971,7 +1965,7 @@ impl<S: ControlStrategy> Driver<S> {
     /// next `effects_settled` pop returns `FaultInjected` instead of a
     /// decision: runtime death after the observation is visible, before
     /// the `control.decision` it would drive.
-    pub fn inject_kill_point(&mut self, at: hh_ledger::fault::KillPoint) {
+    pub fn inject_kill_point(&mut self, at: hharness_ledger::fault::KillPoint) {
         self.kill_point = Some(at);
     }
 
@@ -2005,7 +1999,7 @@ impl<S: ControlStrategy> Driver<S> {
         let bytes = self.strategy.checkpoint(&self.state);
         format!(
             "sha256:{}",
-            hh_wire::sha256::sha256_hex(
+            hharness_wire::sha256::sha256_hex(
                 [b"control.checkpoint".as_slice(), bytes.as_slice()]
                     .concat()
                     .as_slice()
@@ -2138,7 +2132,7 @@ impl<S: ControlStrategy> Driver<S> {
             // KP-8 — runtime death after the settled cue is visible,
             // before the `control.decision` it would drive.
             if let Some(kp) = self.kill_point {
-                if kp == hh_ledger::fault::KillPoint::Kp8
+                if kp == hharness_ledger::fault::KillPoint::Kp8
                     && matches!(cue, Cue::EffectsSettled { .. })
                 {
                     self.kill_point = None;
@@ -2540,7 +2534,7 @@ impl<S: ControlStrategy> Driver<S> {
                             self.append(
                                 sink,
                                 "model.rerouted",
-                                hh_gateway::events::rerouted(
+                                hharness_gateway::events::rerouted(
                                     &model_call_id,
                                     &prior.selected.provider_model_id,
                                     &fresh.selected.provider_model_id,
@@ -2830,7 +2824,7 @@ impl<S: ControlStrategy> Driver<S> {
                     self.append(
                         sink,
                         "model.call.attempt.started",
-                        hh_gateway::events::attempt_started(&mc, attempt as u32, 0),
+                        hharness_gateway::events::attempt_started(&mc, attempt as u32, 0),
                         Some(&mc),
                     )?;
                 }
@@ -2923,7 +2917,9 @@ impl<S: ControlStrategy> Driver<S> {
                     {
                         let plan_ref = format!(
                             "sha256:{}",
-                            hh_wire::sha256::sha256_hex(c.args.to_canonical_string().as_bytes())
+                            hharness_wire::sha256::sha256_hex(
+                                c.args.to_canonical_string().as_bytes()
+                            )
                         );
                         let (valid, steps, reason) = match crate::plan_exec::plan_validate(
                             &c.args.to_canonical_string(),
@@ -3022,7 +3018,8 @@ impl<S: ControlStrategy> Driver<S> {
         self.exposure_expire(sink, tool_exposure::RevealBoundary::CallEnd, &mc)?;
         // The completed/failed row then the cue.
         match outcome.stop_reason {
-            hh_gateway::vocab::StopReason::Error | hh_gateway::vocab::StopReason::Unknown => {
+            hharness_gateway::vocab::StopReason::Error
+            | hharness_gateway::vocab::StopReason::Unknown => {
                 let class = outcome
                     .error_class
                     .clone()
@@ -3147,7 +3144,7 @@ impl<S: ControlStrategy> Driver<S> {
                 // entry's timing re-read as the serve's).
                 if let Some(entry) = &served {
                     if let Json::Obj(stamp) =
-                        hh_context::k5::K5Cache::served_terminal_stamp(&entry.entry_ref)
+                        hharness_context::k5::K5Cache::served_terminal_stamp(&entry.entry_ref)
                     {
                         for (k, v) in stamp {
                             // The stamp's declared member set is closed
@@ -3170,7 +3167,7 @@ impl<S: ControlStrategy> Driver<S> {
                     self.append(
                         sink,
                         "model.call.attempt.completed",
-                        hh_gateway::events::attempt_completed(&mc, attempt as u32, 0, None),
+                        hharness_gateway::events::attempt_completed(&mc, attempt as u32, 0, None),
                         Some(&mc),
                     )?;
                 }
@@ -3236,7 +3233,7 @@ impl<S: ControlStrategy> Driver<S> {
         mc: &str,
         outcome: &ModelOutcome,
     ) -> Result<(), DriverError> {
-        use hh_verification::belief_probe as probes;
+        use hharness_verification::belief_probe as probes;
         if self
             .belief_probe_rules
             .iter()
@@ -3253,7 +3250,7 @@ impl<S: ControlStrategy> Driver<S> {
             .collect();
         let mut index = 0usize;
         for call in &outcome.calls {
-            let Ok(args) = hh_wire::json::parse(&call.args_raw) else {
+            let Ok(args) = hharness_wire::json::parse(&call.args_raw) else {
                 continue;
             };
             for rule in &rules {
@@ -3350,9 +3347,9 @@ impl<S: ControlStrategy> Driver<S> {
         class: &str,
         extra_terminal: Vec<(&'static str, Json)>,
     ) -> Result<(), DriverError> {
-        let err_class = hh_gateway::vocab::ModelErrorClass::parse(class)
-            .unwrap_or(hh_gateway::vocab::ModelErrorClass::Unknown);
-        let err = hh_gateway::vocab::ModelError::new(
+        let err_class = hharness_gateway::vocab::ModelErrorClass::parse(class)
+            .unwrap_or(hharness_gateway::vocab::ModelErrorClass::Unknown);
+        let err = hharness_gateway::vocab::ModelError::new(
             err_class,
             format!("model call {mc} attempt {attempt} failed: {class}"),
         );
@@ -3373,7 +3370,7 @@ impl<S: ControlStrategy> Driver<S> {
                 self.append(
                     sink,
                     "model.call.attempt.failed",
-                    hh_gateway::events::attempt_failed(mc, attempt as u32, &err, false, None),
+                    hharness_gateway::events::attempt_failed(mc, attempt as u32, &err, false, None),
                     Some(mc),
                 )?;
                 let mut failed_members = vec![
@@ -3418,16 +3415,22 @@ impl<S: ControlStrategy> Driver<S> {
             )
         };
         let (will_retry, next_delay_ms) = match &disposition {
-            hh_gateway::router::AttemptDisposition::Continue { not_before_ms, .. } => {
+            hharness_gateway::router::AttemptDisposition::Continue { not_before_ms, .. } => {
                 (true, Some(*not_before_ms))
             }
-            hh_gateway::router::AttemptDisposition::Reroute(_) => (true, None),
-            hh_gateway::router::AttemptDisposition::GiveUp(_) => (false, None),
+            hharness_gateway::router::AttemptDisposition::Reroute(_) => (true, None),
+            hharness_gateway::router::AttemptDisposition::GiveUp(_) => (false, None),
         };
         self.append(
             sink,
             "model.call.attempt.failed",
-            hh_gateway::events::attempt_failed(mc, attempt as u32, &err, will_retry, next_delay_ms),
+            hharness_gateway::events::attempt_failed(
+                mc,
+                attempt as u32,
+                &err,
+                will_retry,
+                next_delay_ms,
+            ),
             Some(mc),
         )?;
         let mut failed_members = vec![
@@ -3454,24 +3457,24 @@ impl<S: ControlStrategy> Driver<S> {
             self.append(sink, &class, payload, None)?;
         }
         match disposition {
-            hh_gateway::router::AttemptDisposition::Continue { compact_first, .. } => {
+            hharness_gateway::router::AttemptDisposition::Continue { compact_first, .. } => {
                 // `compact_then_retry` — the compaction runs under the old
                 // profile before the retry (ADR-0122 d.3 ordering).
                 if compact_first {
                     self.compact_round(sink, "model_retry", Some(mc))?;
                 }
             }
-            hh_gateway::router::AttemptDisposition::Reroute(d) => {
+            hharness_gateway::router::AttemptDisposition::Reroute(d) => {
                 // The fresh decision is durable before the reroute
                 // consumes it — the Retry arm folds `pending_reroute`.
                 self.append(
                     sink,
                     "model.route.decided",
-                    hh_gateway::events::route_decided(&d),
+                    hharness_gateway::events::route_decided(&d),
                     None,
                 )?;
             }
-            hh_gateway::router::AttemptDisposition::GiveUp(reason) => {
+            hharness_gateway::router::AttemptDisposition::GiveUp(reason) => {
                 let mut fired =
                     match crate::events::guard_fired_payload(DecisionPoint::Retry, "route_attempt")
                     {
@@ -3603,7 +3606,9 @@ impl<S: ControlStrategy> Driver<S> {
                             })
                             .and_then(|s| s.risk_class.as_ref())
                             .map(|rc| rc.to_json())
-                            .unwrap_or_else(|| hh_ontology::risk::RiskClass::UNKNOWN.to_json()),
+                            .unwrap_or_else(|| {
+                                hharness_ontology::risk::RiskClass::UNKNOWN.to_json()
+                            }),
                     ),
                 ]),
             );
@@ -3852,8 +3857,8 @@ impl<S: ControlStrategy> Driver<S> {
         lane: &RoutingLane,
         mc: &str,
         source_profile_ref: Option<String>,
-    ) -> hh_gateway::router::RoutingRequest {
-        hh_gateway::router::RoutingRequest {
+    ) -> hharness_gateway::router::RoutingRequest {
+        hharness_gateway::router::RoutingRequest {
             role: lane.role.clone(),
             required_capabilities: lane.required_capabilities.clone(),
             budget_id: lane.budget_id.clone(),
@@ -3899,7 +3904,7 @@ impl<S: ControlStrategy> Driver<S> {
                 self.append(
                     sink,
                     "model.route.decided",
-                    hh_gateway::events::route_decided(&d),
+                    hharness_gateway::events::route_decided(&d),
                     None,
                 )?;
                 Ok(true)
@@ -3943,7 +3948,7 @@ impl<S: ControlStrategy> Driver<S> {
         let Some(port) = self.cache_port.as_mut() else {
             return Ok(None);
         };
-        let plan_hash = hh_identity::idp_id(
+        let plan_hash = hharness_identity::idp_id(
             &port.binding().plan_domain,
             request.to_canonical_string().as_bytes(),
         );
@@ -3971,7 +3976,9 @@ impl<S: ControlStrategy> Driver<S> {
             }
         }
         Some(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::parse(doc.get("stop_reason")?.as_str()?)?,
+            stop_reason: hharness_gateway::vocab::StopReason::parse(
+                doc.get("stop_reason")?.as_str()?,
+            )?,
             response_ref: doc
                 .get("response_ref")
                 .and_then(Json::as_str)
@@ -4179,9 +4186,9 @@ impl<S: ControlStrategy> Driver<S> {
             self.append_prov(
                 sink,
                 "verification.validator.invoked",
-                hh_verification::events::validator_invoked(
+                hharness_verification::events::validator_invoked(
                     v,
-                    &hh_verification::vocab::Isolation::Kernel,
+                    &hharness_verification::vocab::Isolation::Kernel,
                 ),
                 None,
                 prov.clone(),
@@ -4189,7 +4196,7 @@ impl<S: ControlStrategy> Driver<S> {
             self.append_prov(
                 sink,
                 "verification.validator.verdict",
-                hh_verification::events::validator_verdict(v),
+                hharness_verification::events::validator_verdict(v),
                 None,
                 prov,
             )?;
@@ -4221,12 +4228,14 @@ impl<S: ControlStrategy> Driver<S> {
                     .unwrap_or("judged");
                 if self.delivered_artefact(sink.prefix(), artefact_id, delivery_id) {
                     for v in &verdicts {
-                        if !matches!(v.status, hh_verification::vocab::VerdictStatus::Decided)
-                            || !v.value.is_affirmative()
+                        if !matches!(
+                            v.status,
+                            hharness_verification::vocab::VerdictStatus::Decided
+                        ) || !v.value.is_affirmative()
                         {
                             continue;
                         }
-                        let mut payload = match hh_context::events::artefact_activated_payload(
+                        let mut payload = match hharness_context::events::artefact_activated_payload(
                             artefact_id,
                             delivery_id,
                             v.detector.as_str(),
@@ -4270,13 +4279,16 @@ impl<S: ControlStrategy> Driver<S> {
                     .unwrap_or("procedure");
                 if self.delivered_artefact(sink.prefix(), artefact_id, delivery_id) {
                     for v in &verdicts {
-                        if !matches!(v.status, hh_verification::vocab::VerdictStatus::Decided) {
+                        if !matches!(
+                            v.status,
+                            hharness_verification::vocab::VerdictStatus::Decided
+                        ) {
                             continue;
                         }
                         self.append(
                             sink,
                             "verification.artefact.followed",
-                            hh_verification::followed::followed_payload_det(
+                            hharness_verification::followed::followed_payload_det(
                                 artefact_id,
                                 delivery_id,
                                 v.detector.as_str(),
@@ -4341,7 +4353,7 @@ impl<S: ControlStrategy> Driver<S> {
         self.append_prov(
             sink,
             "context.artefact.activated",
-            hh_context::events::artefact_activated_payload(
+            hharness_context::events::artefact_activated_payload(
                 artefact_id,
                 delivery_id,
                 "human",
@@ -4371,29 +4383,32 @@ impl<S: ControlStrategy> Driver<S> {
         );
         // The nudge text is a `Text` leaf the rule's `insert_context_item`
         // action names — content-addressed (R-TEXT), never free bytes.
-        let text = hh_hir::leaves::Text::new(nudge_text(kind), "hh-control/nudge", prov.clone());
-        let text_ref =
-            hh_hir::refs::Ref::pinned(format!("hh/nudge-text/{kind}"), text.content_hash.clone());
-        let debt = hh_hir::records::AssumptionDebtRecord {
+        let text =
+            hharness_hir::leaves::Text::new(nudge_text(kind), "hh-control/nudge", prov.clone());
+        let text_ref = hharness_hir::refs::Ref::pinned(
+            format!("hh/nudge-text/{kind}"),
+            text.content_hash.clone(),
+        );
+        let debt = hharness_hir::records::AssumptionDebtRecord {
             rule_id: rule_id.clone(),
-            hypothesis: hh_hir::leaves::Text::new(
+            hypothesis: hharness_hir::leaves::Text::new(
                 nudge_hypothesis(kind),
                 "hh-control/nudge",
                 prov.clone(),
             ),
-            evidence_refs: vec![hh_hir::EvidenceRef::legacy(format!(
+            evidence_refs: vec![hharness_hir::EvidenceRef::legacy(format!(
                 "control.guard.fired{{{trigger_kind}}}"
             ))],
-            owner: hh_hir::OwnerRef::principal("kernel"),
-            expiry_condition: hh_hir::ExpiryCondition {
-                kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+            owner: hharness_hir::OwnerRef::principal("kernel"),
+            expiry_condition: hharness_hir::ExpiryCondition {
+                kind: hharness_hir::ExpiryKind::EvidenceRefreshDue,
                 value: None,
             },
             removal_test_ref: format!("{rule_id}/removal_test"),
-            status: hh_hir::DebtStatus::Active,
-            debt_class: Some(hh_hir::DebtClass::ModelConditioned),
+            status: hharness_hir::DebtStatus::Active,
+            debt_class: Some(hharness_hir::DebtClass::ModelConditioned),
             hypothesis_typed: None,
-            scope: Some(hh_hir::DebtScope {
+            scope: Some(hharness_hir::DebtScope {
                 model_selectors: vec![],
                 task_classes: vec![],
                 roles: vec![],
@@ -4430,11 +4445,11 @@ impl<S: ControlStrategy> Driver<S> {
                     ("pinned", Json::Bool(false)),
                 ]),
             ),
-            ("assumption_debt", hh_hir::debt_json(&debt, false)),
+            ("assumption_debt", hharness_hir::debt_json(&debt, false)),
         ]);
         // `delivered` — the rule artefact enters the next context assembly
         // (by_reference: the assembled context expands the handle).
-        let mut delivered = match hh_context::events::artefact_delivered_payload(
+        let mut delivered = match hharness_context::events::artefact_delivered_payload(
             &rule_id,
             &delivery_id,
             "harness_rule",
@@ -4458,7 +4473,7 @@ impl<S: ControlStrategy> Driver<S> {
         self.append_prov(
             sink,
             "context.artefact.activated",
-            hh_context::events::artefact_activated_payload(
+            hharness_context::events::artefact_activated_payload(
                 &rule_id,
                 &delivery_id,
                 "deterministic",
@@ -4481,7 +4496,7 @@ impl<S: ControlStrategy> Driver<S> {
     /// in the procedure's `allowed_capabilities` (carried on the
     /// `activated` row) and the index `delivery_id` rode the call's
     /// context — `context.assembled{model_call_id}.items[]` is the call's
-    /// cause set (hh-context `detect_followed`'s rule, adapted to the
+    /// cause set (hharness-context `detect_followed`'s rule, adapted to the
     /// driver plane: the assembled context *is* what caused the call).
     /// Prose kinds carry no deterministic detector — the run emits no row
     /// and the eval plane renders `n/a{no_detector}` (never a proxy).
@@ -4588,7 +4603,7 @@ impl<S: ControlStrategy> Driver<S> {
             this.append_prov(
                 sink,
                 "verification.artefact.followed",
-                hh_verification::followed::followed_payload(
+                hharness_verification::followed::followed_payload(
                     artefact_id,
                     delivery_id,
                     detector_ref,
@@ -4624,7 +4639,7 @@ impl<S: ControlStrategy> Driver<S> {
                     v.into_iter()
                         .collect::<std::collections::BTreeSet<String>>()
                 });
-            let mut payload = match hh_context::events::artefact_activated_payload(
+            let mut payload = match hharness_context::events::artefact_activated_payload(
                 &d.artefact_id,
                 &d.delivery_id,
                 "deterministic",
@@ -4653,7 +4668,7 @@ impl<S: ControlStrategy> Driver<S> {
                     sink,
                     &d.artefact_id,
                     &d.delivery_id,
-                    hh_verification::followed::detector::ARGS_CONFORM,
+                    hharness_verification::followed::detector::ARGS_CONFORM,
                     tool_call_id,
                     "tool_surface",
                 )?;
@@ -4670,9 +4685,12 @@ impl<S: ControlStrategy> Driver<S> {
                 .find(|(delivery_id, _)| *delivery_id == d.delivery_id)
                 .and_then(|(_, caps)| caps.clone());
             let Some(caps) = caps else { continue };
-            if let Some(ev) =
-                hh_context::procedure::detect_followed(&d.delivery_id, surface_id, &caps, &causes)
-            {
+            if let Some(ev) = hharness_context::procedure::detect_followed(
+                &d.delivery_id,
+                surface_id,
+                &caps,
+                &causes,
+            ) {
                 if delivered_is_followed(sink.prefix(), &d.delivery_id) {
                     continue;
                 }
@@ -4681,7 +4699,7 @@ impl<S: ControlStrategy> Driver<S> {
                     sink,
                     &d.artefact_id,
                     &d.delivery_id,
-                    hh_verification::followed::detector::PROCEDURE_INVOKED,
+                    hharness_verification::followed::detector::PROCEDURE_INVOKED,
                     &ev,
                     "procedure",
                 )?;
@@ -4746,8 +4764,8 @@ impl<S: ControlStrategy> Driver<S> {
         sink: &mut dyn LedgerSink,
         boundary: &str,
     ) -> Result<(), DriverError> {
-        use hh_context::consolidate::ConsolidationCadence as C;
-        let eligible: Vec<hh_context::consolidate::ConsolidationRule> = self
+        use hharness_context::consolidate::ConsolidationCadence as C;
+        let eligible: Vec<hharness_context::consolidate::ConsolidationRule> = self
             .config
             .consolidation_rules
             .iter()
@@ -4898,7 +4916,7 @@ impl<S: ControlStrategy> Driver<S> {
         let report = self.strategy.terminate(&self.state, &final_reason);
         let drain_ref = format!(
             "sha256:{}",
-            hh_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
+            hharness_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
         );
         // §5c.4 scope floors (DF-S2.8-1): the turn is ending —
         // `turn`-scoped memories expire; the run is ending — `run`-scoped
@@ -5014,21 +5032,21 @@ impl<S: ControlStrategy> Driver<S> {
     }
 
     /// R2.15 (DF-S1.21-2) — the live-run computed-metric emission: fold the
-    /// durable prefix through `hh_verification::evalfold::compute` and append
+    /// durable prefix through `hharness_verification::evalfold::compute` and append
     /// one `measurement.metric.emitted` per registered metric (the typed
-    /// `hh_ontology::eval::MetricValue` — `n/a{reason}` is a recorded value,
+    /// `hharness_ontology::eval::MetricValue` — `n/a{reason}` is a recorded value,
     /// not an omission). `Profile` folds render as `vector` values; the
     /// evalfold's free-form NA reasons map onto the closed `NaReason` sum
     /// (`observability`/`no_evidence` → `observability` — the evidence
     /// observability the metric required was absent on this run).
     fn emit_computed_metrics(&mut self, sink: &mut dyn LedgerSink) -> Result<(), DriverError> {
-        use hh_ontology::compliance::NaReason;
-        use hh_ontology::eval::{MetricValue, MetricValueKind};
-        use hh_verification::evalfold;
-        let rows: Vec<hh_verification::bind::RowView> = sink
+        use hharness_ontology::compliance::NaReason;
+        use hharness_ontology::eval::{MetricValue, MetricValueKind};
+        use hharness_verification::evalfold;
+        let rows: Vec<hharness_verification::bind::RowView> = sink
             .prefix()
             .iter()
-            .map(|e| hh_verification::bind::RowView {
+            .map(|e| hharness_verification::bind::RowView {
                 seq: e.seq,
                 class: e.class.as_str(),
                 payload: &e.payload,
@@ -5037,10 +5055,10 @@ impl<S: ControlStrategy> Driver<S> {
                     .as_ref()
                     .map(|p| p.authority)
                     .unwrap_or_else(|| {
-                        if e.producer.component_class == hh_ledger::event::KERNEL_COMPONENT {
-                            hh_provenance::authority::AuthorityClass::Kernel
+                        if e.producer.component_class == hharness_ledger::event::KERNEL_COMPONENT {
+                            hharness_provenance::authority::AuthorityClass::Kernel
                         } else {
-                            hh_provenance::authority::AuthorityClass::Unverified
+                            hharness_provenance::authority::AuthorityClass::Unverified
                         }
                     }),
                 scope_effect_id: e.scope.effect_id.as_deref(),
@@ -5067,7 +5085,7 @@ impl<S: ControlStrategy> Driver<S> {
                 value,
                 applies_to: run_ref.clone(),
                 oracle_ref: "oracle/evalfold".to_string(),
-                detector: hh_ontology::compliance::Detector::Deterministic,
+                detector: hharness_ontology::compliance::Detector::Deterministic,
                 confidence: None,
                 evidence_ref: None,
                 calibration_ref: None,
@@ -5091,30 +5109,30 @@ impl<S: ControlStrategy> Driver<S> {
         &mut self,
         sink: &mut dyn LedgerSink,
     ) -> Result<CompletionFlow, DriverError> {
-        use hh_verification::bind::{bind_claim, fold_effect_states, fold_verdicts};
-        use hh_verification::claims::reconcile_ledger_only;
-        use hh_verification::claims::CriterionState;
-        use hh_verification::gate::{
+        use hharness_verification::bind::{bind_claim, fold_effect_states, fold_verdicts};
+        use hharness_verification::claims::reconcile_ledger_only;
+        use hharness_verification::claims::CriterionState;
+        use hharness_verification::gate::{
             decision_stratum, evaluate_gate, GateCriterion, GateFacts, OpenEffect,
         };
-        use hh_verification::vocab::{Agreement, ClaimKind, CompletionPolicy, GateVerdict};
+        use hharness_verification::vocab::{Agreement, ClaimKind, CompletionPolicy, GateVerdict};
 
         // Phase 1 — the pure fold over the durable prefix (the immutable
         // borrow ends before the first append; every fact is owned).
         let kernel_prov = ProvenanceRecord::kernel("hh-control/reconcile", self.now_ms);
         let claims = std::mem::take(&mut self.completion_claims);
         let (records, completion_claim_ref, facts): (
-            Vec<hh_verification::claims::ReconciliationRecord>,
+            Vec<hharness_verification::claims::ReconciliationRecord>,
             String,
             GateFacts,
         ) = {
             // The row projection — authority from the row's provenance (CC2:
             // conferred, never read from content); a row without provenance
             // binds nothing (Unverified).
-            let rows: Vec<hh_verification::bind::RowView> =
+            let rows: Vec<hharness_verification::bind::RowView> =
                 sink.prefix()
                     .iter()
-                    .map(|e| hh_verification::bind::RowView {
+                    .map(|e| hharness_verification::bind::RowView {
                         seq: e.seq,
                         class: e.class.as_str(),
                         payload: &e.payload,
@@ -5126,11 +5144,12 @@ impl<S: ControlStrategy> Driver<S> {
                         // `Unverified` and binds nothing in the C2 context.
                         authority: e.provenance.as_ref().map(|p| p.authority).unwrap_or_else(
                             || {
-                                if e.producer.component_class == hh_ledger::event::KERNEL_COMPONENT
+                                if e.producer.component_class
+                                    == hharness_ledger::event::KERNEL_COMPONENT
                                 {
-                                    hh_provenance::authority::AuthorityClass::Kernel
+                                    hharness_provenance::authority::AuthorityClass::Kernel
                                 } else {
-                                    hh_provenance::authority::AuthorityClass::Unverified
+                                    hharness_provenance::authority::AuthorityClass::Unverified
                                 }
                             },
                         ),
@@ -5149,7 +5168,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .config
                 .reconciler
                 .as_ref()
-                .map(|_| hh_verification::bind::fold_reconcile_context(&rows));
+                .map(|_| hharness_verification::bind::fold_reconcile_context(&rows));
             let mut records = Vec::new();
             let mut completion_idx: Option<usize> = None;
             let mut completion_claim_ref = String::new();
@@ -5157,9 +5176,9 @@ impl<S: ControlStrategy> Driver<S> {
             let mut completion_evidence: Vec<String> = vec![];
             for claim in &claims {
                 let handles = bind_claim(&rows, claim, self.config.task_contract.as_ref());
-                let mut recs: Vec<hh_verification::claims::ReconciliationRecord> =
+                let mut recs: Vec<hharness_verification::claims::ReconciliationRecord> =
                     match (&self.config.reconciler, &recon_ctx) {
-                        (Some(decl), Some(ctx)) => hh_verification::reconciler::reconcile_c2(
+                        (Some(decl), Some(ctx)) => hharness_verification::reconciler::reconcile_c2(
                             claim,
                             &handles,
                             ctx,
@@ -5190,7 +5209,7 @@ impl<S: ControlStrategy> Driver<S> {
                 if let Some(decl) = &self.config.reconciler {
                     if decl
                         .detector_classes
-                        .contains(&hh_verification::vocab::Detector::Judged)
+                        .contains(&hharness_verification::vocab::Detector::Judged)
                     {
                         if let Some(judge) = &self.config.judge {
                             let evidence: Vec<Json> = handles
@@ -5219,7 +5238,7 @@ impl<S: ControlStrategy> Driver<S> {
                                 judged_decl.independence_summary =
                                     Some(consult.independence_summary.clone());
                                 let mut judged_recs =
-                                    hh_verification::reconciler::reconcile_judged(
+                                    hharness_verification::reconciler::reconcile_judged(
                                         claim,
                                         &consult.assessment,
                                         &judged_decl,
@@ -5314,7 +5333,7 @@ impl<S: ControlStrategy> Driver<S> {
             // per claim (the D7+D10 pair); the gate reads every
             // hold-admissible divergence (deterministic only — F7; judged
             // records never reach `claim_evidence_divergences`).
-            let completion_records: Vec<&hh_verification::claims::ReconciliationRecord> =
+            let completion_records: Vec<&hharness_verification::claims::ReconciliationRecord> =
                 completion_idx
                     .map(|_| {
                         records
@@ -5332,7 +5351,7 @@ impl<S: ControlStrategy> Driver<S> {
                         // `unverifiable_reason` awareness; re-adding the
                         // reconciler's class would hold a criterion the
                         // contract declared unverifiable (S3.10).
-                        if class != hh_verification::vocab::DivergenceClass::ContractGap {
+                        if class != hharness_verification::vocab::DivergenceClass::ContractGap {
                             evidence_divergences.push(class);
                         }
                     }
@@ -5375,7 +5394,7 @@ impl<S: ControlStrategy> Driver<S> {
             self.append_prov(
                 sink,
                 "verification.claim.reconciled",
-                hh_verification::events::claim_reconciled(rec),
+                hharness_verification::events::claim_reconciled(rec),
                 None,
                 kernel_prov.clone(),
             )?;
@@ -5389,10 +5408,10 @@ impl<S: ControlStrategy> Driver<S> {
         // byte-identical.
         if self.config.reconciler.is_some() {
             let mut delivered: std::collections::BTreeSet<(
-                hh_verification::vocab::DivergenceClass,
+                hharness_verification::vocab::DivergenceClass,
                 String,
             )> = Default::default();
-            for notice in hh_verification::reconciler::feed_back_notices(
+            for notice in hharness_verification::reconciler::feed_back_notices(
                 &records,
                 claims.iter(),
                 &mut delivered,
@@ -5400,7 +5419,7 @@ impl<S: ControlStrategy> Driver<S> {
                 self.append_prov(
                     sink,
                     "context.artefact.delivered",
-                    hh_verification::events::kernel_notice(&notice),
+                    hharness_verification::events::kernel_notice(&notice),
                     None,
                     kernel_prov.clone(),
                 )?;
@@ -5418,7 +5437,7 @@ impl<S: ControlStrategy> Driver<S> {
                 let decided = self.emit_completion_decided(
                     sink,
                     "budget_exhausted",
-                    Some(hh_verification::vocab::STRATUM_UNRECONCILED_CLAIMS),
+                    Some(hharness_verification::vocab::STRATUM_UNRECONCILED_CLAIMS),
                     &facts,
                     "gate:exhausted",
                 )?;
@@ -5434,7 +5453,7 @@ impl<S: ControlStrategy> Driver<S> {
                             .as_ref()
                             .map(|c| c.budget_ref.clone())
                             .unwrap_or_else(|| self.state.cursor.bound_ref.clone()),
-                        dimension: hh_ontology::dimensions::DimensionId::ReconciliationHolds,
+                        dimension: hharness_ontology::dimensions::DimensionId::ReconciliationHolds,
                     }),
                 ))
             }
@@ -5448,7 +5467,7 @@ impl<S: ControlStrategy> Driver<S> {
                 self.append(
                     sink,
                     "verification.gate.evaluated",
-                    hh_verification::events::gate_evaluated(
+                    hharness_verification::events::gate_evaluated(
                         &result,
                         &completion_claim_ref,
                         self.config
@@ -5487,7 +5506,7 @@ impl<S: ControlStrategy> Driver<S> {
                     sink,
                     &gate_ev,
                     "verification.gate.evaluated",
-                    hh_verification::events::gate_evaluated(
+                    hharness_verification::events::gate_evaluated(
                         &result,
                         &completion_claim_ref,
                         self.config
@@ -5538,11 +5557,11 @@ impl<S: ControlStrategy> Driver<S> {
         sink: &mut dyn LedgerSink,
         status: &str,
         stratum: Option<&str>,
-        facts: &hh_verification::gate::GateFacts,
+        facts: &hharness_verification::gate::GateFacts,
         gate_ref: &str,
     ) -> Result<CompletionGateDecision, DriverError> {
-        use hh_verification::claims::CriterionState;
-        use hh_verification::gate::{summarize, TaskContract};
+        use hharness_verification::claims::CriterionState;
+        use hharness_verification::gate::{summarize, TaskContract};
 
         let empty_contract;
         let contract = match &self.config.task_contract {
@@ -5553,7 +5572,7 @@ impl<S: ControlStrategy> Driver<S> {
                     goal_ref: String::new(),
                     criteria: vec![],
                     invariants: vec![],
-                    completion_policy: hh_verification::vocab::CompletionPolicy::AllRequired,
+                    completion_policy: hharness_verification::vocab::CompletionPolicy::AllRequired,
                     evidence_kinds_required: vec![],
                     budget_ref: "budget".into(),
                     sealed: true,
@@ -5573,7 +5592,7 @@ impl<S: ControlStrategy> Driver<S> {
             vec![],
             sink.prefix().last().map(|e| e.seq).unwrap_or(0),
         );
-        let decision = hh_verification::gate::CompletionDecision {
+        let decision = hharness_verification::gate::CompletionDecision {
             run_id: self.run_id.clone(),
             status: status.to_string(),
             stratum: stratum.map(str::to_string),
@@ -5585,7 +5604,7 @@ impl<S: ControlStrategy> Driver<S> {
             sink,
             &ev,
             "verification.completion.decided",
-            hh_verification::events::completion_decided(&decision),
+            hharness_verification::events::completion_decided(&decision),
             None,
         )?;
         Ok(CompletionGateDecision {
@@ -5609,8 +5628,8 @@ impl<S: ControlStrategy> Driver<S> {
         sink: &mut dyn LedgerSink,
         gate: &mut dyn EffectGate,
     ) -> Result<(), DriverError> {
-        use hh_verification::claims::{self, Claim};
-        use hh_verification::vocab::{ClaimKind, ExtractedBy, SubjectRef};
+        use hharness_verification::claims::{self, Claim};
+        use hharness_verification::vocab::{ClaimKind, ExtractedBy, SubjectRef};
 
         let mc = self
             .last_model_call_id
@@ -5627,7 +5646,7 @@ impl<S: ControlStrategy> Driver<S> {
         self.append_prov(
             sink,
             "verification.completion.proposed",
-            hh_verification::events::completion_proposed(&mc, "stop"),
+            hharness_verification::events::completion_proposed(&mc, "stop"),
             None,
             prov.clone(),
         )?;
@@ -5685,7 +5704,7 @@ impl<S: ControlStrategy> Driver<S> {
             self.append_prov(
                 sink,
                 "verification.claim.recorded",
-                hh_verification::events::claim_recorded(claim),
+                hharness_verification::events::claim_recorded(claim),
                 None,
                 claim.provenance.clone(),
             )?;
@@ -5803,7 +5822,7 @@ impl<S: ControlStrategy> Driver<S> {
     /// `append` with an explicit producer component — the effect gate's
     /// `emitted` rows are the *boundary's* records (the §5a.2 chain's
     /// `decided`/`authorized`/`prepared`/`committed`), not the envelope's;
-    /// minting them under `hh-control` reads as the envelope granting
+    /// minting them under `hharness-control` reads as the envelope granting
     /// itself a permission (INV-7).
     fn append_producer(
         &mut self,
@@ -6023,7 +6042,7 @@ impl<S: ControlStrategy> Driver<S> {
         sink.prefix()
             .last()
             .map(|e| e.event_id.clone())
-            .unwrap_or_else(|| hh_ledger::ids::ROOT_EVENT.to_string())
+            .unwrap_or_else(|| hharness_ledger::ids::ROOT_EVENT.to_string())
     }
 }
 
@@ -6143,7 +6162,7 @@ impl<S: ControlStrategy> Driver<S> {
         let direct: std::collections::BTreeSet<&str> = plan
             .entries
             .iter()
-            .filter(|(_, m)| *m == hh_hir::tools::ExposureMode::Direct)
+            .filter(|(_, m)| *m == hharness_hir::tools::ExposureMode::Direct)
             .map(|(sid, _)| sid.as_str())
             .collect();
         let delivered_specs: Vec<SurfaceSpec> = st
@@ -6171,7 +6190,7 @@ impl<S: ControlStrategy> Driver<S> {
         self.append(sink, "action.tool.exposure.planned", payload, Some(mc))?;
         for (name, catalog_sid) in new_deliveries {
             let delivery_id = self.alloc("del");
-            let mut payload = match hh_context::events::artefact_delivered_payload(
+            let mut payload = match hharness_context::events::artefact_delivered_payload(
                 &name,
                 &delivery_id,
                 "tool_surface",
@@ -6273,7 +6292,7 @@ impl<S: ControlStrategy> Driver<S> {
         let Some(delivery_id) = delivery_id else {
             return Ok(());
         };
-        let mut payload = match hh_context::events::artefact_activated_payload(
+        let mut payload = match hharness_context::events::artefact_activated_payload(
             surface_id,
             &delivery_id,
             "deterministic",
@@ -6469,7 +6488,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .iter()
                 .find(|(s, _)| *s == e.surface_id)
                 .map(|(_, m)| *m)
-                .unwrap_or(hh_hir::tools::ExposureMode::Deferred);
+                .unwrap_or(hharness_hir::tools::ExposureMode::Deferred);
             self.append(
                 sink,
                 "action.tool.surface.revealed",
@@ -6667,8 +6686,8 @@ fn fold_exposure_state(prefix: &[EventEnvelope], run_id: &str) -> Option<Exposur
                             mode: p
                                 .get("mode_to")
                                 .and_then(Json::as_str)
-                                .and_then(hh_hir::tools::ExposureMode::parse)
-                                .unwrap_or(hh_hir::tools::ExposureMode::Direct),
+                                .and_then(hharness_hir::tools::ExposureMode::parse)
+                                .unwrap_or(hharness_hir::tools::ExposureMode::Direct),
                             revealed_at: e.seq,
                             cause: p
                                 .get("cause")
@@ -6732,7 +6751,7 @@ impl Driver<ReactMinimal> {
     }
 
     /// `resume_from` for the `ReactMinimal` strategy — the boundary's
-    /// durable-resume entry (hh-embed `open_session{resume}` past a service
+    /// durable-resume entry (hharness-embed `open_session{resume}` past a service
     /// restart; DF-S1.25-2 closed at S2.3).
     pub fn resume_react(
         ctx: &ControlContext,
@@ -6754,7 +6773,7 @@ impl Driver<ReactMinimal> {
 fn route_decisions(
     prefix: &[EventEnvelope],
     mc: &str,
-) -> Vec<(u64, hh_gateway::router::RoutingDecision)> {
+) -> Vec<(u64, hharness_gateway::router::RoutingDecision)> {
     prefix
         .iter()
         .filter(|e| {
@@ -6762,7 +6781,7 @@ fn route_decisions(
                 && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
         })
         .filter_map(|e| {
-            hh_gateway::router::RoutingDecision::from_json(&e.payload).map(|d| (e.seq, d))
+            hharness_gateway::router::RoutingDecision::from_json(&e.payload).map(|d| (e.seq, d))
         })
         .collect()
 }
@@ -6791,11 +6810,11 @@ fn attempts_on_target(prefix: &[EventEnvelope], mc: &str) -> u32 {
 /// forward-only chain never re-selects a tried target), `reroutes_used`
 /// = the call's `model.rerouted` count, `compact_tried` = a
 /// `context.compaction.completed` row stamped `model_call_id = mc`.
-fn attempt_state(prefix: &[EventEnvelope], mc: &str) -> hh_gateway::router::AttemptState {
-    let mut st = hh_gateway::router::AttemptState::default();
+fn attempt_state(prefix: &[EventEnvelope], mc: &str) -> hharness_gateway::router::AttemptState {
+    let mut st = hharness_gateway::router::AttemptState::default();
     for (_, d) in route_decisions(prefix, mc) {
         st.attempted
-            .insert(hh_gateway::router::model_ref_spelling(&d.selected));
+            .insert(hharness_gateway::router::model_ref_spelling(&d.selected));
         st.attempted.insert(d.selected.provider_model_id.clone());
     }
     st.reroutes_used = prefix
@@ -6819,8 +6838,8 @@ fn pending_reroute(
     prefix: &[EventEnvelope],
     mc: &str,
 ) -> Option<(
-    hh_gateway::router::RoutingDecision,
-    hh_gateway::router::RoutingDecision,
+    hharness_gateway::router::RoutingDecision,
+    hharness_gateway::router::RoutingDecision,
 )> {
     let ds = route_decisions(prefix, mc);
     if ds.len() < 2 {
@@ -6844,8 +6863,8 @@ fn pending_reroute(
 fn reroute_reason(
     prefix: &[EventEnvelope],
     mc: &str,
-    policy: &hh_gateway::router::RoutingPolicy,
-) -> hh_gateway::vocab::RerouteReason {
+    policy: &hharness_gateway::router::RoutingPolicy,
+) -> hharness_gateway::vocab::RerouteReason {
     let class = prefix
         .iter()
         .rev()
@@ -6859,15 +6878,15 @@ fn reroute_reason(
                 .and_then(|er| er.get("class"))
                 .and_then(Json::as_str)
         })
-        .and_then(hh_gateway::vocab::ModelErrorClass::parse);
+        .and_then(hharness_gateway::vocab::ModelErrorClass::parse);
     match class {
-        Some(c) => match hh_gateway::router::error_action(policy, &c) {
-            hh_gateway::router::ErrorAction::Reroute => {
-                hh_gateway::vocab::RerouteReason::Permanent(c)
+        Some(c) => match hharness_gateway::router::error_action(policy, &c) {
+            hharness_gateway::router::ErrorAction::Reroute => {
+                hharness_gateway::vocab::RerouteReason::Permanent(c)
             }
-            _ => hh_gateway::vocab::RerouteReason::TransientExhausted,
+            _ => hharness_gateway::vocab::RerouteReason::TransientExhausted,
         },
-        None => hh_gateway::vocab::RerouteReason::TransientExhausted,
+        None => hharness_gateway::vocab::RerouteReason::TransientExhausted,
     }
 }
 
@@ -6913,7 +6932,7 @@ fn resolve_intents(prefix: &[EventEnvelope], intents: &[Json]) -> Vec<Json> {
                             c.get("tool_call_id").and_then(Json::as_str),
                             c.get("args_raw").and_then(Json::as_str),
                         ) {
-                            if let Ok(a) = hh_wire::json::parse(raw) {
+                            if let Ok(a) = hharness_wire::json::parse(raw) {
                                 args.insert(tc.to_string(), a);
                             }
                         }
@@ -6956,12 +6975,12 @@ fn resolve_intents(prefix: &[EventEnvelope], intents: &[Json]) -> Vec<Json> {
 /// own graded confidence when it declares one, else the parsed/judged
 /// ceiling. Never `1_000_000` — judged evidence keeps its grade (ADR-0110;
 /// the same cap `ExtractedBy::Judged` carries on the claim surface).
-fn judged_confidence_ppm(v: &hh_verification::validators::Verdict) -> u64 {
+fn judged_confidence_ppm(v: &hharness_verification::validators::Verdict) -> u64 {
     match v.value {
-        hh_verification::vocab::VerdictValue::Graded(ppm) => {
-            ppm.min(hh_verification::vocab::PARSED_CONFIDENCE_CAP_PPM)
+        hharness_verification::vocab::VerdictValue::Graded(ppm) => {
+            ppm.min(hharness_verification::vocab::PARSED_CONFIDENCE_CAP_PPM)
         }
-        _ => hh_verification::vocab::PARSED_CONFIDENCE_CAP_PPM,
+        _ => hharness_verification::vocab::PARSED_CONFIDENCE_CAP_PPM,
     }
 }
 
@@ -7015,7 +7034,7 @@ fn nudge_hypothesis(kind: &str) -> &'static str {
 }
 
 fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
-    if let Ok(j) = hh_wire::json::parse(kind) {
+    if let Ok(j) = hharness_wire::json::parse(kind) {
         if let Some(r) = StopReason::from_json(&j) {
             return r;
         }
@@ -7025,14 +7044,14 @@ fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
         "format_failure" => StopReason::FormatFailure { count: 0 },
         "budget_exhausted" => StopReason::BudgetExhausted {
             budget_id: policy.budget_ref.clone(),
-            dimension: hh_ontology::dimensions::DimensionId::Turns,
+            dimension: hharness_ontology::dimensions::DimensionId::Turns,
         },
         "cancelled" => StopReason::Cancelled {
             by: CancelledBy::Principal,
         },
         other => StopReason::InfrastructureFailure {
-            error_class: hh_ontology::control::InfraError {
-                family: hh_ontology::control::InfraErrorFamily::Kernel,
+            error_class: hharness_ontology::control::InfraError {
+                family: hharness_ontology::control::InfraErrorFamily::Kernel,
                 class: other.to_string(),
             },
         },
@@ -7072,13 +7091,13 @@ mod tests {
                     seq: self.seq,
                     ts: e.ts,
                     hlc: None,
-                    plane: hh_ledger::event::EventPlane::Control,
+                    plane: hharness_ledger::event::EventPlane::Control,
                     class: e.class,
                     schema_version: 1,
                     producer: e.producer,
-                    participant_class: hh_ledger::manifest::ParticipantClass::Native,
+                    participant_class: hharness_ledger::manifest::ParticipantClass::Native,
                     observability_level: Default::default(),
-                    durability: hh_ledger::classes::Durability::Ledger,
+                    durability: hharness_ledger::classes::Durability::Ledger,
                     scope: e.scope,
                     lease_generation: 1,
                     parent_event_id: e.parent_event_id,
@@ -7107,7 +7126,7 @@ mod tests {
     impl ModelPort for ScriptedModel {
         fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
             self.script.pop_front().unwrap_or(ModelOutcome {
-                stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+                stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
                 response_ref: "r-empty".into(),
                 text_empty: true,
                 calls: vec![],
@@ -7162,7 +7181,7 @@ mod tests {
         }
     }
 
-    fn outcome(sr: hh_gateway::vocab::StopReason, calls: Vec<ParsedCall>) -> ModelOutcome {
+    fn outcome(sr: hharness_gateway::vocab::StopReason, calls: Vec<ParsedCall>) -> ModelOutcome {
         ModelOutcome {
             stop_reason: sr,
             response_ref: "r-1".into(),
@@ -7209,7 +7228,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -7303,7 +7322,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -7392,7 +7411,7 @@ mod tests {
             let p = e.provenance.as_ref().expect("provenance mandatory");
             assert_eq!(
                 p.authority,
-                hh_provenance::authority::AuthorityClass::Delegate
+                hharness_provenance::authority::AuthorityClass::Delegate
             );
         }
         // The per-artifact claim is `effected` on `artifact{…}`.
@@ -7417,7 +7436,7 @@ mod tests {
         let mut model = ScriptedModel {
             script: std::iter::repeat_n(
                 ModelOutcome {
-                    stop_reason: hh_gateway::vocab::StopReason::Error,
+                    stop_reason: hharness_gateway::vocab::StopReason::Error,
                     response_ref: "r".into(),
                     text_empty: true,
                     calls: vec![],
@@ -7472,7 +7491,7 @@ mod tests {
         // as the *second* cue after the first propose completes.
         let mut model = ScriptedModel {
             script: [ModelOutcome {
-                stop_reason: hh_gateway::vocab::StopReason::Cancelled,
+                stop_reason: hharness_gateway::vocab::StopReason::Cancelled,
                 response_ref: "r".into(),
                 text_empty: true,
                 calls: vec![],
@@ -7546,7 +7565,7 @@ mod tests {
 
     fn tool_call_outcome(path: &str) -> ModelOutcome {
         outcome(
-            hh_gateway::vocab::StopReason::ToolUse,
+            hharness_gateway::vocab::StopReason::ToolUse,
             vec![ParsedCall {
                 tool_call_id: format!("tc-{path}"),
                 surface: "fs.read".into(),
@@ -7680,14 +7699,14 @@ mod tests {
         let mut model = ScriptedModel {
             script: [
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-bad".into(),
                         surface: "fs.read".into(),
                         args_raw: "{not json".into(),
                     }],
                 ),
-                outcome(hh_gateway::vocab::StopReason::EndTurn, vec![]),
+                outcome(hharness_gateway::vocab::StopReason::EndTurn, vec![]),
             ]
             .into_iter()
             .collect(),
@@ -7789,7 +7808,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: std::iter::repeat_n(
-                outcome(hh_gateway::vocab::StopReason::MaxOutput, vec![]),
+                outcome(hharness_gateway::vocab::StopReason::MaxOutput, vec![]),
                 10,
             )
             .collect(),
@@ -7826,7 +7845,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -7897,7 +7916,7 @@ mod tests {
             let mut model = ScriptedModel {
                 script: [
                     tool_call_outcome("/a"),
-                    outcome(hh_gateway::vocab::StopReason::EndTurn, vec![]),
+                    outcome(hharness_gateway::vocab::StopReason::EndTurn, vec![]),
                     tool_call_outcome("/b"),
                 ]
                 .into_iter()
@@ -7964,7 +7983,7 @@ mod tests {
     /// A scripted verify port (R-2.7.1's decision-point seam).
     struct ScriptedVerify {
         seen: Vec<String>,
-        verdicts: Vec<hh_verification::validators::Verdict>,
+        verdicts: Vec<hharness_verification::validators::Verdict>,
     }
 
     impl VerifyPort for ScriptedVerify {
@@ -7972,7 +7991,7 @@ mod tests {
             &mut self,
             validator_refs: &[String],
             _subject: &Json,
-        ) -> Vec<hh_verification::validators::Verdict> {
+        ) -> Vec<hharness_verification::validators::Verdict> {
             self.seen.extend(validator_refs.iter().cloned());
             self.verdicts.clone()
         }
@@ -8094,12 +8113,12 @@ mod tests {
         }
     }
 
-    fn test_verdict() -> hh_verification::validators::Verdict {
-        use hh_verification::vocab as vv;
-        hh_verification::validators::Verdict {
+    fn test_verdict() -> hharness_verification::validators::Verdict {
+        use hharness_verification::vocab as vv;
+        hharness_verification::validators::Verdict {
             verdict_id: "verdict:test:1".into(),
-            validator_ref: hh_identity::VersionedRef::pinned(
-                hh_identity::RecordKind::Validator,
+            validator_ref: hharness_identity::VersionedRef::pinned(
+                hharness_identity::RecordKind::Validator,
                 "sha256:test-validator",
                 ProvenanceRecord::minted(
                     Origin::kernel("hir/kernel/check"),
@@ -8155,9 +8174,12 @@ mod tests {
         };
         let mut driver = Driver::open_react(&ctx(), policy, &mut sink, cfg).unwrap();
         let mut model = ScriptedModel {
-            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
-                .into_iter()
-                .collect(),
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::EndTurn,
+                vec![],
+            )]
+            .into_iter()
+            .collect(),
         };
         let mut gate = observed_gate();
         // 950/1000 ⇒ 950_000 ppm ≥ the 900_000 cap.
@@ -8236,9 +8258,12 @@ mod tests {
         };
         driver.set_compaction_port(Box::new(port));
         let mut model = ScriptedModel {
-            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
-                .into_iter()
-                .collect(),
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::EndTurn,
+                vec![],
+            )]
+            .into_iter()
+            .collect(),
         };
         let mut gate = observed_gate();
         let mut asm = OccupiedAssembler { occupancy: 950 };
@@ -8415,7 +8440,7 @@ mod tests {
         let mut model = ScriptedModel {
             script: [
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-1".into(),
                         surface: "fs.read".into(),
@@ -8423,14 +8448,14 @@ mod tests {
                     }],
                 ),
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-2".into(),
                         surface: "fs.read".into(),
                         args_raw: late.into(),
                     }],
                 ),
-                outcome(hh_gateway::vocab::StopReason::EndTurn, vec![]),
+                outcome(hharness_gateway::vocab::StopReason::EndTurn, vec![]),
             ]
             .into_iter()
             .collect(),
@@ -8553,7 +8578,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::EndTurn,
+                hharness_gateway::vocab::StopReason::EndTurn,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -8601,9 +8626,12 @@ mod tests {
         let mut driver =
             Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
         let mut model = ScriptedModel {
-            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
-                .into_iter()
-                .collect(),
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::EndTurn,
+                vec![],
+            )]
+            .into_iter()
+            .collect(),
         };
         let mut gate = observed_gate();
         let mut asm = NullAssembler;
@@ -8810,9 +8838,12 @@ mod tests {
         // Park the loop: `deferred` → `wait{until: model_completed}` → the
         // inbox drains and `run` returns parked, then steer.
         let mut model = ScriptedModel {
-            script: [outcome(hh_gateway::vocab::StopReason::Deferred, vec![])]
-                .into_iter()
-                .collect(),
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::Deferred,
+                vec![],
+            )]
+            .into_iter()
+            .collect(),
         };
         let mut gate = observed_gate();
         let mut asm = NullAssembler;
@@ -8876,7 +8907,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -8957,7 +8988,7 @@ mod tests {
             Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -8995,14 +9026,14 @@ mod tests {
             seq: 1,
             ts: "t".into(),
             hlc: None,
-            plane: hh_ledger::event::EventPlane::Control,
+            plane: hharness_ledger::event::EventPlane::Control,
             class: "model.rerouted".into(),
             schema_version: 1,
-            producer: hh_ledger::event::Producer::kernel("t"),
-            participant_class: hh_ledger::manifest::ParticipantClass::Native,
+            producer: hharness_ledger::event::Producer::kernel("t"),
+            participant_class: hharness_ledger::manifest::ParticipantClass::Native,
             observability_level: Default::default(),
-            durability: hh_ledger::classes::Durability::Ledger,
-            scope: hh_ledger::event::Scope {
+            durability: hharness_ledger::classes::Durability::Ledger,
+            scope: hharness_ledger::event::Scope {
                 turn_id: None,
                 model_call_id: None,
                 tool_call_id: None,
@@ -9053,7 +9084,7 @@ mod tests {
         .unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
-                hh_gateway::vocab::StopReason::ToolUse,
+                hharness_gateway::vocab::StopReason::ToolUse,
                 vec![ParsedCall {
                     tool_call_id: "tc-1".into(),
                     surface: "fs.read".into(),
@@ -9143,7 +9174,7 @@ mod tests {
     fn exposure_entry(
         sid: &str,
         name: &str,
-        modes: &[hh_hir::tools::ExposureMode],
+        modes: &[hharness_hir::tools::ExposureMode],
     ) -> tool_exposure::CatalogEntry {
         tool_exposure::CatalogEntry {
             surface_id: sid.into(),
@@ -9191,11 +9222,11 @@ mod tests {
             entries: &[tool_exposure::CatalogEntry],
             _admitted: &std::collections::BTreeMap<
                 String,
-                std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+                std::collections::BTreeSet<hharness_hir::tools::ExposureMode>,
             >,
             turn_state: &tool_exposure::TurnState,
             _params: &tool_exposure::ExposurePolicyParams,
-        ) -> Vec<(String, hh_hir::tools::ExposureMode)> {
+        ) -> Vec<(String, hharness_hir::tools::ExposureMode)> {
             entries
                 .iter()
                 .map(|e| {
@@ -9207,9 +9238,9 @@ mod tests {
                     (
                         e.surface_id.clone(),
                         if e.surface_id == "surf:deep.search" && !revealed {
-                            hh_hir::tools::ExposureMode::Deferred
+                            hharness_hir::tools::ExposureMode::Deferred
                         } else {
-                            hh_hir::tools::ExposureMode::Direct
+                            hharness_hir::tools::ExposureMode::Direct
                         },
                     )
                 })
@@ -9226,9 +9257,9 @@ mod tests {
             "surf:deep.search",
             "deep.search",
             &[
-                hh_hir::tools::ExposureMode::Direct,
-                hh_hir::tools::ExposureMode::Indexed,
-                hh_hir::tools::ExposureMode::Deferred,
+                hharness_hir::tools::ExposureMode::Direct,
+                hharness_hir::tools::ExposureMode::Indexed,
+                hharness_hir::tools::ExposureMode::Deferred,
             ],
         );
         deep.index_form.search_text.insert(
@@ -9238,19 +9269,19 @@ mod tests {
         let mut hidden = exposure_entry(
             "surf:secret.probe",
             "secret_probe",
-            &[hh_hir::tools::ExposureMode::Deferred],
+            &[hharness_hir::tools::ExposureMode::Deferred],
         );
         hidden.hidden = true;
         let mut pinned = exposure_entry(
             "surf:pinned.tool",
             "pinned_tool",
-            &[hh_hir::tools::ExposureMode::Direct],
+            &[hharness_hir::tools::ExposureMode::Direct],
         );
         pinned.pinned = true;
         let mut discover = exposure_entry(
             "surf:kernel.discover",
             "discover_surfaces",
-            &[hh_hir::tools::ExposureMode::Direct],
+            &[hharness_hir::tools::ExposureMode::Direct],
         );
         discover.source = tool_exposure::CatalogSource::Kernel;
         discover.is_discovery = true;
@@ -9258,7 +9289,7 @@ mod tests {
             exposure_entry(
                 "surf:fs.read",
                 "fs.read",
-                &[hh_hir::tools::ExposureMode::Direct],
+                &[hharness_hir::tools::ExposureMode::Direct],
             ),
             deep,
             hidden,
@@ -9340,9 +9371,9 @@ mod tests {
             exposure: Some(ExposureRuntime {
                 catalog,
                 profile_modes: [
-                    hh_hir::tools::ExposureMode::Direct,
-                    hh_hir::tools::ExposureMode::Indexed,
-                    hh_hir::tools::ExposureMode::Deferred,
+                    hharness_hir::tools::ExposureMode::Direct,
+                    hharness_hir::tools::ExposureMode::Indexed,
+                    hharness_hir::tools::ExposureMode::Deferred,
                 ]
                 .into_iter()
                 .collect(),
@@ -9426,7 +9457,7 @@ mod tests {
                 // hint: none}`) and G-INTERPRET reads it `unknown_surface`
                 // off the delivered set — both rows, never a dispatch.
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-1".into(),
                         surface: "nope.tool".into(),
@@ -9436,7 +9467,7 @@ mod tests {
                 // mc-2 — the kernel `discover_surfaces` capability:
                 // `exposure_dispatch` runs `discover` in-kernel.
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-2".into(),
                         surface: "discover_surfaces".into(),
@@ -9448,7 +9479,7 @@ mod tests {
                 // pending intent's `act`): `surface_not_revealed{
                 // hint: search}` beside the `unknown_surface` rejection.
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-3".into(),
                         surface: "deep.search".into(),
@@ -9461,7 +9492,7 @@ mod tests {
                 // further `propose` a queued cue drives — every dispatch
                 // carries `sub-1`, so unspent entries are inert.
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-4".into(),
                         surface: "deep.search".into(),
@@ -9469,7 +9500,7 @@ mod tests {
                     }],
                 ),
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-5".into(),
                         surface: "fs.read".into(),
@@ -9477,7 +9508,7 @@ mod tests {
                     }],
                 ),
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-6".into(),
                         surface: "fs.read".into(),
@@ -9663,7 +9694,7 @@ mod tests {
         let mut model = ScriptedModel {
             script: [
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-1".into(),
                         surface: "discover_surfaces".into(),
@@ -9673,7 +9704,7 @@ mod tests {
                 // mc-2 — a delivered `fs.read` dispatch; its `sub-1`
                 // settle completes the run.
                 outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-2".into(),
                         surface: "fs.read".into(),
@@ -9733,7 +9764,7 @@ mod tests {
             let mut driver = Driver::open_react(&ctx(), policy, &mut sink, cfg).unwrap();
             let mut model = ScriptedModel {
                 script: [outcome(
-                    hh_gateway::vocab::StopReason::ToolUse,
+                    hharness_gateway::vocab::StopReason::ToolUse,
                     vec![ParsedCall {
                         tool_call_id: "tc-1".into(),
                         surface: "fs.read".into(),
@@ -9757,26 +9788,26 @@ mod tests {
             let mut fresh = exposure_entry(
                 "surf:fresh.tool",
                 "fresh_tool",
-                &[hh_hir::tools::ExposureMode::Deferred],
+                &[hharness_hir::tools::ExposureMode::Deferred],
             );
             fresh.source = tool_exposure::CatalogSource::Harness(Some("test".into()));
             let mut relisted_hidden = exposure_entry(
                 "surf:secret.probe",
                 "secret_probe",
-                &[hh_hir::tools::ExposureMode::Deferred],
+                &[hharness_hir::tools::ExposureMode::Deferred],
             );
             relisted_hidden.hidden = true;
             let mut relisted_pinned = exposure_entry(
                 "surf:pinned.tool",
                 "pinned_tool",
-                &[hh_hir::tools::ExposureMode::Direct],
+                &[hharness_hir::tools::ExposureMode::Direct],
             );
             relisted_pinned.pinned = true;
             let listing = vec![
                 exposure_entry(
                     "surf:fs.read",
                     "fs.read",
-                    &[hh_hir::tools::ExposureMode::Direct],
+                    &[hharness_hir::tools::ExposureMode::Direct],
                 ),
                 relisted_hidden,
                 relisted_pinned,

@@ -2,7 +2,7 @@
 //! `snapshot(kind)` row; ADR-0137; S2.1). One `tree/1` `ContentAddress` covers
 //! every covered root: regular files by blob address + the executable bit,
 //! symlinks by target, empty directories legal, deterministic order — the one
-//! tree rule (`hh_identity::tree`; CC1/CC7 reuse, never reimplemented).
+//! tree rule (`hharness_identity::tree`; CC1/CC7 reuse, never reimplemented).
 //!
 //! Equal covered state ⇒ equal `snapshot_ref` (AC-R-2.2.5-4): the snapshot
 //! ref *is* the tree address. The manifest is the materialisation map —
@@ -13,15 +13,15 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use hh_identity::tree::Tree;
-use hh_wire::json::Json;
+use hharness_identity::tree::Tree;
+use hharness_wire::json::Json;
 
 /// One manifest entry — the materialisable form of a tree member.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FsNode {
     /// A regular file — `ca` is the blob-pool content address.
     File {
-        /// The blob address (`sha256:…` — `hh_identity::address` bytes).
+        /// The blob address (`sha256:…` — `hharness_identity::address` bytes).
         ca: String,
         /// The executable bit (part of tree identity).
         exec: bool,
@@ -263,7 +263,7 @@ fn walk_dir(
             let content = std::fs::read(&p).unwrap_or_default();
             *total = total.saturating_add(content.len() as u64);
             let exec = is_executable(&md);
-            let ca = hh_identity::idp::address(&content, "application/octet-stream").id();
+            let ca = hharness_identity::idp::address(&content, "application/octet-stream").id();
             entries.insert(
                 rel,
                 FsNode::File {
@@ -474,7 +474,7 @@ pub fn restore_in_place(
 
 /// The content-addressed blob helper — `address(bytes)` (the blob pool id).
 pub fn content_address(bytes: &[u8]) -> String {
-    hh_identity::idp::address(bytes, "application/octet-stream").id()
+    hharness_identity::idp::address(bytes, "application/octet-stream").id()
 }
 
 #[cfg(test)]

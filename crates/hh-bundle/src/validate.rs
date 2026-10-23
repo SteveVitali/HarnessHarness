@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 use crate::export::{decode_page, MemberBytes};
@@ -200,7 +200,7 @@ impl BundleValidationReport {
             _ => unreachable!(),
         };
         doc.remove("digest");
-        self.digest = hh_identity::idp_id(
+        self.digest = hharness_identity::idp_id(
             "bundle.validation",
             Json::Obj(doc).to_canonical_string().as_bytes(),
         );
@@ -212,7 +212,7 @@ impl BundleValidationReport {
 /// The `signed_url` exception (R4.15d; the GATE-G7-adopted §trust-fields
 /// set): a credential-ish parameter whose value is an `mh_secret:`
 /// placeholder is the *safe* form — the URI stays `credential_free_uri`
-/// while the signature rides `hh-secrets` at the fetch site under
+/// while the signature rides `hharness-secrets` at the fetch site under
 /// mediated egress (the same `placeholder_passthrough` shape `has_secret`
 /// already treats as safe). A literal value after the key is still a
 /// credential in the locator.
@@ -236,7 +236,7 @@ fn credentialed(locator: &str) -> bool {
         while let Some(at) = lower[from..].find(key).map(|i| i + from) {
             let value = &lower[at + key.len()..];
             let value = value.split('&').next().unwrap_or("");
-            if !hh_secrets::Placeholder::is_placeholder(value) {
+            if !hharness_secrets::Placeholder::is_placeholder(value) {
                 return true;
             }
             from = at + key.len();
@@ -249,8 +249,8 @@ fn credentialed(locator: &str) -> bool {
 /// `placeholder_passthrough` mark is the safe form).
 fn has_secret(bytes: &[u8]) -> Option<String> {
     let text = std::str::from_utf8(bytes).ok()?;
-    let detectors = hh_secrets::DetectorSet::standard(hh_secrets::MaskSet::default());
-    hh_secrets::detect(text, &detectors)
+    let detectors = hharness_secrets::DetectorSet::standard(hharness_secrets::MaskSet::default());
+    hharness_secrets::detect(text, &detectors)
         .iter()
         .find(|h| h.tombstone.is_some())
         .map(|h| h.detector.as_str().to_string())
@@ -278,8 +278,11 @@ fn decode_traces(
     manifest: &BundleManifest,
     members: &MemberBytes,
     checks: &mut Vec<CheckRow>,
-) -> (BTreeMap<String, Vec<hh_ledger::event::EventEnvelope>>, bool) {
-    let mut out: BTreeMap<String, Vec<hh_ledger::event::EventEnvelope>> = BTreeMap::new();
+) -> (
+    BTreeMap<String, Vec<hharness_ledger::event::EventEnvelope>>,
+    bool,
+) {
+    let mut out: BTreeMap<String, Vec<hharness_ledger::event::EventEnvelope>> = BTreeMap::new();
     let mut replay = false;
     for (run, export) in &manifest.traces {
         let mut events = Vec::new();
@@ -310,7 +313,7 @@ fn decode_traces(
 /// Recompute a `LedgerExport`'s internal anchors (S2).
 fn verify_export(
     export: &LedgerExport,
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
     members: &MemberBytes,
     checks: &mut Vec<CheckRow>,
 ) {
@@ -328,7 +331,7 @@ fn verify_export(
     }
     // Envelope hash + chain integrity, in materialized order.
     let mut prev_ok = true;
-    let mut last: Option<&hh_ledger::event::EventEnvelope> = None;
+    let mut last: Option<&hharness_ledger::event::EventEnvelope> = None;
     for (i, ev) in events.iter().enumerate() {
         if ev.recompute_hash() != ev.hash {
             checks.push(CheckRow::fail(
@@ -464,7 +467,7 @@ fn validate_stages(
             .get(run)
             .and_then(|evs| evs.iter().find(|e| e.class == "lifecycle.run.created"));
         match created {
-            Some(env) => match hh_ledger::manifest::RunManifest::from_json(&env.payload) {
+            Some(env) => match hharness_ledger::manifest::RunManifest::from_json(&env.payload) {
                 Ok(rm) => {
                     let expected = crate::runrefs::manifest_refs(&rm);
                     let declared =
@@ -540,9 +543,9 @@ fn validate_stages(
             continue; // unmaterialized — S1 reported it.
         };
         // Member bytes are minted under the `blob` idp domain
-        // (`hh_identity::address` — the media type is a member field,
+        // (`hharness_identity::address` — the media type is a member field,
         // never part of the digest).
-        let recomputed = hh_identity::idp_id("blob", bytes);
+        let recomputed = hharness_identity::idp_id("blob", bytes);
         if recomputed != m.address {
             s2.push(CheckRow::fail(
                 format!("member:{}", m.address),
@@ -1029,7 +1032,7 @@ fn stage9(manifest: &BundleManifest, members: &MemberBytes) -> Vec<CheckRow> {
             let child: Option<BundleManifest> = members
                 .get(member_addr)
                 .and_then(|b| std::str::from_utf8(b).ok())
-                .and_then(|t| hh_wire::json::parse(t).ok())
+                .and_then(|t| hharness_wire::json::parse(t).ok())
                 .and_then(|j| BundleManifest::from_json(&j).ok());
             let Some(child) = child else {
                 s9.push(CheckRow::unmaterialized(

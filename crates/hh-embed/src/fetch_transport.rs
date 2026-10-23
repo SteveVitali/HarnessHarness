@@ -3,13 +3,13 @@
 //! GATE-G7-adopted §trust-fields set).
 //!
 //! The adopted field set is explicit: "the fetch itself is a
-//! `net_egress` effect under Π mediation (`hh-env` egress rules; an
+//! `net_egress` effect under Π mediation (`hharness-env` egress rules; an
 //! unmediated fetch refuses typed)". Every remote GET therefore rides
 //! the one [`EgressMediator`] — `security.egress.requested` →
 //! attribution → `decide_egress` → `security.egress.decided` → wire →
 //! charge — never a side-channel dial. The wire itself is the R4.5c
 //! home: [`LocalTlsTransport`] (resolved-address dial +
-//! `hh_tls::ClientTls` handshake + the one `hh_wire::http` codec —
+//! `hharness_tls::ClientTls` handshake + the one `hharness_wire::http` codec —
 //! ADR-0364 D1, ADR-0365).
 //!
 //! The containment half is *derived*, never invented: the declared
@@ -34,18 +34,18 @@
 //! `fetch` fold records on the `bundle.member.fetched` row — never a
 //! fabricated body.
 
-use hh_containment::egress::{ApprovalCache, EgressRequest};
-use hh_containment::policy::{
+use hharness_containment::egress::{ApprovalCache, EgressRequest};
+use hharness_containment::policy::{
     kernel_default, ContainmentPolicy, DefaultUnmatched, EgressProtocol, EgressRule, HostPattern,
     NetMode, NonPublic, RuleDecision,
 };
-use hh_env::egress::{
+use hharness_env::egress::{
     EgressMediator, EgressResolver, LocalTlsTransport, MediatedOutcome, SystemResolver,
 };
-use hh_env::events::ScopeChain;
-use hh_env::tokens::TokenMinter;
-use hh_ledger::store::{Lease, Store};
-use hh_secrets::CredentialBroker;
+use hharness_env::events::ScopeChain;
+use hharness_env::tokens::TokenMinter;
+use hharness_ledger::store::{Lease, Store};
+use hharness_secrets::CredentialBroker;
 
 /// The producer component the fetch leg's audit attributes to.
 const COMPONENT: &str = "hh-embed.fetch";
@@ -57,7 +57,7 @@ pub struct FetchTransport {
     /// The client TLS (webpki roots plus any declared extra roots —
     /// verification is always on; a private issuer needs the explicit
     /// PEM file, never an insecure skip).
-    tls: hh_tls::ClientTls,
+    tls: hharness_tls::ClientTls,
     /// The resolver the mediator installs (`SystemResolver` for the
     /// live leg; a pinned table for hermetic fixtures).
     resolver: Box<dyn EgressResolver>,
@@ -77,7 +77,7 @@ impl FetchTransport {
     /// DNS, the mediator's defaults).
     pub fn new() -> FetchTransport {
         FetchTransport {
-            tls: hh_tls::ClientTls::webpki_roots(),
+            tls: hharness_tls::ClientTls::webpki_roots(),
             resolver: Box::new(SystemResolver),
             // A per-service seed — the token is an opaque run-local
             // spelling; determinism here is a property of the seed +
@@ -88,7 +88,7 @@ impl FetchTransport {
 
     /// `with_tls(tls)` — a configured client TLS (the fetch site's
     /// `tls_extra_roots_file` hook).
-    pub fn with_tls(tls: hh_tls::ClientTls) -> FetchTransport {
+    pub fn with_tls(tls: hharness_tls::ClientTls) -> FetchTransport {
         FetchTransport {
             tls,
             ..FetchTransport::new()
@@ -99,7 +99,7 @@ impl FetchTransport {
     /// `host → addrs` table (loopback fixtures) under the configured
     /// TLS.
     pub fn with_resolver(
-        tls: hh_tls::ClientTls,
+        tls: hharness_tls::ClientTls,
         resolver: Box<dyn EgressResolver>,
     ) -> FetchTransport {
         FetchTransport {
@@ -117,7 +117,7 @@ impl FetchTransport {
     /// `default_unmatched = deny`, `non_public_destinations =
     /// allow_listed` (SSRF pivots bound to the declared rules), TLS
     /// termination left to the transport (always-on verification).
-    fn egress_policy(trust: &hh_bundle::FetchTrustPolicy, at: u64) -> ContainmentPolicy {
+    fn egress_policy(trust: &hharness_bundle::FetchTrustPolicy, at: u64) -> ContainmentPolicy {
         let mut p = kernel_default(at);
         p.net.mode = NetMode::Mediated;
         p.net.default_unmatched = DefaultUnmatched::Deny;
@@ -155,7 +155,7 @@ impl FetchTransport {
                 })
             })
             .collect();
-        if trust.admits(hh_bundle::AdmissionClass::SignedUrl) {
+        if trust.admits(hharness_bundle::AdmissionClass::SignedUrl) {
             p.net.rules.push(EgressRule {
                 host: HostPattern::Global,
                 ports: vec![443],
@@ -183,7 +183,7 @@ impl FetchTransport {
         run_id: &str,
         lease: &'a Lease,
         broker: &'a mut CredentialBroker,
-        trust: &hh_bundle::FetchTrustPolicy,
+        trust: &hharness_bundle::FetchTrustPolicy,
         at: u64,
     ) -> FetchLeg<'a> {
         // The token binds the derived effect scope id — `intended`'s
@@ -245,8 +245,9 @@ impl FetchLeg<'_> {
     /// `admit` never passes one through); a deny/ask/credential
     /// refusal is typed; a non-2xx answer is `http_<status>`.
     pub fn get(&mut self, url: &str) -> Result<Vec<u8>, String> {
-        let parsed = hh_wire::http::parse_http_url(url).map_err(|e| format!("bad_url:{e}"))?;
-        if parsed.scheme != hh_wire::http::Scheme::Https {
+        let parsed =
+            hharness_wire::http::parse_http_url(url).map_err(|e| format!("bad_url:{e}"))?;
+        if parsed.scheme != hharness_wire::http::Scheme::Https {
             return Err("scheme_refused:fetch_transport_is_https_only".to_string());
         }
         let req = EgressRequest {

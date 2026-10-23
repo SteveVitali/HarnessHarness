@@ -13,9 +13,9 @@
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-use hh_embed_schema as embed;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc;
+use hharness_embed_schema as embed;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc;
 
 mod serve;
 
@@ -133,7 +133,7 @@ fn doctor() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let resp_line = String::from_utf8_lossy(&out);
-    let resp = match hh_wire::parse(resp_line.trim()) {
+    let resp = match hharness_wire::parse(resp_line.trim()) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("doctor: bad response: {e}");

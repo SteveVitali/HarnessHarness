@@ -6,10 +6,10 @@
 
 use std::collections::BTreeSet;
 
-use hh_ontology::risk::RiskClass;
-use hh_provenance::flow::{EnforcementClass, Remedy};
-use hh_provenance::{AuthorityClass, TaintTag};
-use hh_wire::json::Json;
+use hharness_ontology::risk::RiskClass;
+use hharness_provenance::flow::{EnforcementClass, Remedy};
+use hharness_provenance::{AuthorityClass, TaintTag};
+use hharness_wire::json::Json;
 
 /// `decision ∈ {allow, ask{options, remedies[]}, deny{reason, remedies[]}}`
 /// (ADR-0052 D1). `remedies` carries the closed `Remedy` sum (§5g.2 §3;

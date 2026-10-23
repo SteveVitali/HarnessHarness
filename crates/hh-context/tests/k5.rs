@@ -4,12 +4,12 @@
 //! IR-2/IR-4 withholding rules (`stale_withheld` under `execute`, annotated
 //! under `audit`, explicit request under `reproduce`).
 
-use hh_context::{
+use hharness_context::{
     admit_k5, definition_dep_ref, k5_dependencies, profile_dep_ref, snapshot_dep_ref, K5Cache,
     K5Context, K5Key, K5Resolution, PreRegistrationInvalid,
 };
-use hh_identity::names::ResolveMode;
-use hh_wire::json::Json;
+use hharness_identity::names::ResolveMode;
+use hharness_wire::json::Json;
 
 fn key(replicate: u64) -> K5Key {
     K5Key {
@@ -22,7 +22,7 @@ fn key(replicate: u64) -> K5Key {
     }
 }
 
-fn deps() -> Vec<hh_context::DependencyStamp> {
+fn deps() -> Vec<hharness_context::DependencyStamp> {
     k5_dependencies("snap-1", "snaprec-1", "prof@1", "pv-1", "def-v1")
 }
 

@@ -3,12 +3,12 @@
 //! ADR-0106 D7/D8). One builder + one decoder per class — the single schema source
 //! (CC7); `Account` emits through these and `BudgetTree::project` decodes with them.
 //!
-//! Class registration lives in `hh_ledger::classes` (the one persistence-policy
+//! Class registration lives in `hharness_ledger::classes` (the one persistence-policy
 //! table); this module owns the *payload contract*.
 
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::attribution::Attribution;
@@ -17,7 +17,7 @@ use crate::pricing::SpendRow;
 use crate::quantity::ResourceVector;
 use crate::spec::{BudgetMode, BudgetScope, BudgetSpec};
 
-// ── class spellings (registered in hh_ledger::classes::CLASS_TABLE) ────────────
+// ── class spellings (registered in hharness_ledger::classes::CLASS_TABLE) ────────────
 
 /// `control.budget.allocated` — `allocate` (allocated or refused; AC-4).
 pub const CLASS_ALLOCATED: &str = "control.budget.allocated";

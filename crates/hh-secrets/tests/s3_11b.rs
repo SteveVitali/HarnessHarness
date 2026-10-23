@@ -16,13 +16,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_secrets::*;
+use hharness_secrets::*;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -176,8 +176,8 @@ fn github_spec() -> SecretChannelSpec {
         }],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
         delivery_modes: [
-            hh_monitor::assess::SecretTransport::ProxyInjected,
-            hh_monitor::assess::SecretTransport::WrappedLongLived,
+            hharness_monitor::assess::SecretTransport::ProxyInjected,
+            hharness_monitor::assess::SecretTransport::WrappedLongLived,
         ]
         .into_iter()
         .collect(),
@@ -224,8 +224,8 @@ fn bound_binding(
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: dref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -392,8 +392,8 @@ fn lt03_canary_presented_lands_leak_detected() {
             channel_id: "tripwire".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt-x".into(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },

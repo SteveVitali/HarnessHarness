@@ -26,13 +26,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_eval::stats::{self, Interval, XorShift64, PPM};
-use hh_identity::idp_id;
-use hh_lab::json_util::{
+use hharness_eval::stats::{self, Interval, XorShift64, PPM};
+use hharness_identity::idp_id;
+use hharness_lab::json_util::{
     bool_at, expect_obj, int_at, member_at, opt_bool_at, opt_int_at, opt_str_at, reject_unknown,
     str_at, SchemaError,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `hh-attribution-design/1` — the design document spelling (M1's S5.4
 /// producer uses the same schema tag; the M2–M5 members are additive).
@@ -425,7 +425,7 @@ pub struct AttributionDesign {
     /// `run_start`, degrading the design to M1-equivalent semantics).
     pub coupling_assumption: String,
     /// The one `MatchSpec` (V3) — canonical JSON (the boundary decodes
-    /// it into `hh_budget`'s record; the kernel only requires presence
+    /// it into `hharness_budget`'s record; the kernel only requires presence
     /// + the `mode` member's spelling when declared).
     pub match_spec: Json,
     /// The `MetricDeclaration` ref the effects report against (V5 —
@@ -915,7 +915,7 @@ pub fn branch_seed(d: &AttributionDesign, fork_point: i64, role: &str, replicate
     };
     format!(
         "sha256:{}",
-        hh_wire::sha256::sha256_hex(material.as_bytes())
+        hharness_wire::sha256::sha256_hex(material.as_bytes())
     )
 }
 

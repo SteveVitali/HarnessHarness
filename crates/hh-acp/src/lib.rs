@@ -1,4 +1,4 @@
-//! `hh-acp` — the ACP session boundary crate (§5d.4 C1; S4.5b).
+//! `hharness-acp` — the ACP session boundary crate (§5d.4 C1; S4.5b).
 //!
 //! Modules:
 //! - [`protocol`] — the ACP pin set, the v2/v1 era negotiation, the
@@ -34,7 +34,7 @@ pub use artifact::{render_session, AcpArtifact, SessionUpdate};
 pub use client::{AcpClient, ClientError};
 pub use driver::{FixtureDriver, SessionDriver, SessionInfo, TurnDrive};
 pub use embed::{EmbedCall, EmbedDriver, FnEmbedCall};
-pub use hh_compiler::acp::{AcpDialect, TaskState};
+pub use hharness_compiler::acp::{AcpDialect, TaskState};
 pub use permission::{PermissionOutcome, PermissionRequest, PiGate, StaticPi};
 pub use protocol::{acp_binding, acp_pin_set, negotiate_era, AcpEra, ACP_VERSION};
 pub use serve::{serve_session, ServeError};

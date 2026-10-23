@@ -8,14 +8,14 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs, ExtensionInput};
-use hh_bundle::error::BundleError;
-use hh_bundle::levels::section_member_refs;
-use hh_bundle::manifest::{BundlePolicy, MemberStatus, Unpinned};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs, ExtensionInput};
+use hharness_bundle::error::BundleError;
+use hharness_bundle::levels::section_member_refs;
+use hharness_bundle::manifest::{BundlePolicy, MemberStatus, Unpinned};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-bundle-s311b-{}-{tag}", std::process::id()));
@@ -51,7 +51,7 @@ fn fixture(tag: &str) -> Fixture {
     let mut store = Store::open(dir(tag)).unwrap();
     let def = Json::obj([("sealed", Json::str("definition"))]);
     let def_bytes = def.to_canonical_string().into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut manifest = RunManifest::minimal(RunKind::Agent);
     manifest.harness_def_ref = Some(def_addr.clone());
     let (run_id, _lease) = store.open_run(manifest, "s311b.test").unwrap();
@@ -68,7 +68,7 @@ fn fixture(tag: &str) -> Fixture {
 /// A `section_member_refs` entry is closed when it resolves to member
 /// bytes, or is a trace tree coordinate whose pages all do (R-ID-3: the
 /// tree coordinate's preimage is the page-address list, never a member).
-fn ref_closed(a: &hh_bundle::assemble::Assembled, r: &str) -> bool {
+fn ref_closed(a: &hharness_bundle::assemble::Assembled, r: &str) -> bool {
     if a.members.contains_key(r) {
         return true;
     }
@@ -117,7 +117,7 @@ fn inputs<'a>(
 fn ac_r_2_8_5_10_extensions_propagate_and_deposit() {
     let mut f = fixture("ext-ok");
     let payload = b"extension payload bytes".to_vec();
-    let content_pin = hh_identity::address(&payload, "application/octet-stream").id();
+    let content_pin = hharness_identity::address(&payload, "application/octet-stream").id();
     f.blobs.insert(content_pin.clone(), payload.clone());
 
     let entry = ext_entry("ext-a", &content_pin, None);
@@ -177,7 +177,7 @@ fn ac_r_2_8_5_10_digest_mismatch_refuses_member_mismatch() {
     let f = fixture("ext-mismatch");
     // The declared pin is for *other* bytes — the deposit is the
     // verification, never a trust-the-caller copy.
-    let declared = hh_identity::address(b"the real payload", "application/octet-stream").id();
+    let declared = hharness_identity::address(b"the real payload", "application/octet-stream").id();
     let entry = ext_entry("ext-b", &declared, None);
     let get = |a: &str| f.blobs.get(a).cloned();
     let inputs = inputs(
@@ -198,8 +198,8 @@ fn ac_r_2_8_5_10_digest_mismatch_refuses_member_mismatch() {
 fn ac_r_2_8_5_10_uncaptured_payload_lands_not_captured_not_a_ref() {
     let f = fixture("ext-unpinned");
     // A declared pin whose bytes the caller could not capture.
-    let content_pin = hh_identity::address(b"uncaptured", "application/octet-stream").id();
-    let surface_pin = hh_identity::address(b"surface", "application/octet-stream").id();
+    let content_pin = hharness_identity::address(b"uncaptured", "application/octet-stream").id();
+    let surface_pin = hharness_identity::address(b"surface", "application/octet-stream").id();
     let entry = ext_entry("ext-c", &content_pin, Some(&surface_pin));
     let get = |a: &str| f.blobs.get(a).cloned();
     let inputs = inputs(&f, vec![ExtensionInput { entry, bytes: None }], &get);
@@ -265,9 +265,9 @@ fn ac_r_2_8_5_10_captured_and_uncaptured_mix_closes() {
     // still resolves.
     let mut f = fixture("ext-mix");
     let captured = b"captured payload".to_vec();
-    let captured_pin = hh_identity::address(&captured, "application/octet-stream").id();
+    let captured_pin = hharness_identity::address(&captured, "application/octet-stream").id();
     f.blobs.insert(captured_pin.clone(), captured);
-    let uncaptured_pin = hh_identity::address(b"uncaptured", "application/octet-stream").id();
+    let uncaptured_pin = hharness_identity::address(b"uncaptured", "application/octet-stream").id();
 
     let get = |a: &str| f.blobs.get(a).cloned();
     let inputs = inputs(

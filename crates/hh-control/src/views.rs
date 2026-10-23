@@ -5,8 +5,8 @@
 //! checkpoint reads; nothing the envelope knows lives only in process
 //! memory.
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 
 use crate::loops::LoopState;
 use crate::output::ValidationState;
@@ -161,7 +161,7 @@ pub fn envelope_view_json(v: &EnvelopeView) -> Json {
 
 /// `view_hash` — the INV-9 term (`H("envelope_view" ∥ canonical(view))`).
 pub fn envelope_view_hash(v: &EnvelopeView) -> String {
-    hh_wire::sha256::sha256_hex(
+    hharness_wire::sha256::sha256_hex(
         format!(
             "envelope_view\u{0}{}",
             envelope_view_json(v).to_canonical_string()
@@ -173,9 +173,9 @@ pub fn envelope_view_hash(v: &EnvelopeView) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_ledger::classes::Durability;
-    use hh_ledger::event::{EventPlane, Producer, Scope};
-    use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+    use hharness_ledger::classes::Durability;
+    use hharness_ledger::event::{EventPlane, Producer, Scope};
+    use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
 
     fn ev(seq: u64, class: &str, effect: Option<&str>) -> EventEnvelope {
         EventEnvelope {

@@ -4,32 +4,34 @@
 //! (subject-charged usage, lost-write/conflict/absent counters from
 //! durable merge rows), and the conditional-report gate.
 
-use hh_budget::matchspec::{CachePolicy, MatchMode, MatchSpec, ModelScope};
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::plan::PinnedRef;
-use hh_env::handle::OnParentEnd;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_orchestrator::coordination::{
+use hharness_budget::matchspec::{CachePolicy, MatchMode, MatchSpec, ModelScope};
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::plan::PinnedRef;
+use hharness_env::handle::OnParentEnd;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_orchestrator::coordination::{
     coordination_arm, coordination_match_report, CoordinationFactors, CoordinationTopology,
 };
-use hh_orchestrator::lab::{execute_arm, LabRefusal};
-use hh_orchestrator::{ParentBinding, TopologyPreset, WaitPolicy};
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::ownership::OwnershipTable;
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_orchestrator::lab::{execute_arm, LabRefusal};
+use hharness_orchestrator::{ParentBinding, TopologyPreset, WaitPolicy};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_subagent::ownership::OwnershipTable;
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

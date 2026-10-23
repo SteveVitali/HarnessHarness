@@ -1,4 +1,4 @@
-//! Acceptance + unit tests for `hh-monitor` (ticket S1.11; R-2.8.1 / §5g.1).
+//! Acceptance + unit tests for `hharness-monitor` (ticket S1.11; R-2.8.1 / §5g.1).
 //!
 //! Coverage:
 //! - **AC-R-2.8.1-2** — a `hnd-*` spelling, a forged `decided` payload and
@@ -13,38 +13,42 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::equiv::{bind_surface, ArgMapEntry, ArgTransform};
-use hh_compiler::plan::PinnedRef;
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node, SealedDefinition};
-use hh_hir::kinds::{
+use hharness_compiler::equiv::{bind_surface, ArgMapEntry, ArgTransform};
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node, SealedDefinition};
+use hharness_hir::kinds::{
     EffectAttributes, EffectDomain, Mutability, RepeatSafety, Reversibility, ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
     Grant, GrantConstraints, Issuer, KindRecord, PermissionRecord, Resources, ScopeBindings,
     SurfaceRecord, ToolCapabilityRecord, ToolSurface, Validity,
 };
-use hh_hir::refs::Ref;
-use hh_hir::EffectClass;
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-use hh_monitor::args::{self, ScopeKind};
-use hh_monitor::assess::{AssessmentInputs, ParseOutcome, SecretTransport, Tri};
-use hh_monitor::decision::{Decision, DenyReason};
-use hh_monitor::delegate::{self, ChildSpec, DelegateError, LiveCoords};
-use hh_monitor::events as mev;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::mint::{self, MintError};
-use hh_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
-use hh_monitor::policy::{default_table, Cond, Mode, PiContext, PiVerdict, PolicyRow, PolicyTable};
-use hh_monitor::table::HandleTable;
-use hh_monitor::{guard, leak, tcb};
-use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::{
+use hharness_hir::refs::Ref;
+use hharness_hir::EffectClass;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+use hharness_monitor::args::{self, ScopeKind};
+use hharness_monitor::assess::{AssessmentInputs, ParseOutcome, SecretTransport, Tri};
+use hharness_monitor::decision::{Decision, DenyReason};
+use hharness_monitor::delegate::{self, ChildSpec, DelegateError, LiveCoords};
+use hharness_monitor::events as mev;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::mint::{self, MintError};
+use hharness_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
+use hharness_monitor::policy::{
+    default_table, Cond, Mode, PiContext, PiVerdict, PolicyRow, PolicyTable,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_monitor::{guard, leak, tcb};
+use hharness_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::{
     AuthorityClass, HumanRole, Label, Origin, PersistenceScope, ProvenanceRecord, TaintTag,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +91,7 @@ fn tainted_args() -> ProvenanceRecord {
     p
 }
 
-fn node(kind: hh_hir::kinds::EntityKind, rec: KindRecord, id: &str, seq: u64) -> Node {
+fn node(kind: hharness_hir::kinds::EntityKind, rec: KindRecord, id: &str, seq: u64) -> Node {
     let mut n = Node::new(kind, rec, prov(seq));
     n.version.semantic_id = Some(id.into());
     n
@@ -137,7 +141,7 @@ fn tool_node_scoped(
     seq: u64,
 ) -> Node {
     let mut n = node(
-        hh_hir::kinds::EntityKind::ToolCapability,
+        hharness_hir::kinds::EntityKind::ToolCapability,
         KindRecord::ToolCapability(ToolCapabilityRecord {
             purpose: Text::new("a test tool", "test:owner", prov(seq)),
             input_schema: Json::obj([(
@@ -199,7 +203,7 @@ fn bound_paths(paths: &[&str]) -> ScopeBindings {
 
 fn perm_node(id: &str, holder: &str, grants: Vec<Grant>, seq: u64) -> Node {
     node(
-        hh_hir::kinds::EntityKind::Permission,
+        hharness_hir::kinds::EntityKind::Permission,
         KindRecord::Permission(PermissionRecord {
             holder: Ref::selected(holder, "latest"),
             grants,
@@ -297,7 +301,7 @@ fn root_handle(id: &str, grants: Vec<Grant>, ceiling: AuthorityClass) -> Authori
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -1046,7 +1050,7 @@ fn pi_floor_rows_attended() {
         version_id: "v".into(),
         mode: Mode::Attended,
         rows: vec![],
-        unattended_policy: hh_monitor::policy::UnattendedPolicy::Deny,
+        unattended_policy: hharness_monitor::policy::UnattendedPolicy::Deny,
     };
     let (v, _) = narrow.evaluate(&PiContext {
         domain: EffectDomain::FsRead,
@@ -1203,9 +1207,9 @@ fn pi_domain_rows() {
     // memory_write at project scope ⇒ deny (no row allows above session).
     let mut c = mk(AssessmentInputs::default());
     c.domain = EffectDomain::MemoryWrite;
-    c.inputs.memory_scope = Some(hh_monitor::assess::MemoryScope::Project);
+    c.inputs.memory_scope = Some(hharness_monitor::assess::MemoryScope::Project);
     assert_eq!(t.evaluate(&c).0, PiVerdict::Deny);
-    c.inputs.memory_scope = Some(hh_monitor::assess::MemoryScope::Run);
+    c.inputs.memory_scope = Some(hharness_monitor::assess::MemoryScope::Run);
     assert_eq!(t.evaluate(&c).0, PiVerdict::Allow);
 }
 
@@ -1219,8 +1223,8 @@ fn policy_delta_flags_a_widening_row() {
         conditions: vec![Cond::DomainIs(EffectDomain::Spend)],
         verdict: PiVerdict::Allow,
     });
-    match hh_monitor::policy::policy_delta(&base, &widened) {
-        hh_monitor::policy::PolicyDelta::Widening { cells } => {
+    match hharness_monitor::policy::policy_delta(&base, &widened) {
+        hharness_monitor::policy::PolicyDelta::Widening { cells } => {
             assert!(cells.iter().any(|c| c.contains("spend")), "{cells:?}")
         }
         other => panic!("expected Widening, got {other:?}"),
@@ -1233,8 +1237,8 @@ fn policy_delta_flags_a_widening_row() {
         verdict: PiVerdict::Deny,
     });
     assert_eq!(
-        hh_monitor::policy::policy_delta(&base, &narrowed),
-        hh_monitor::policy::PolicyDelta::Narrowing
+        hharness_monitor::policy::policy_delta(&base, &narrowed),
+        hharness_monitor::policy::PolicyDelta::Narrowing
     );
 }
 
@@ -1711,7 +1715,7 @@ fn mail_proposal(to: &str, param_labels: BTreeMap<String, Label>) -> Proposal {
             reversibility: Reversibility::Compensable,
         }),
     };
-    p.flow = hh_monitor::monitor::FlowInputs {
+    p.flow = hharness_monitor::monitor::FlowInputs {
         param_labels,
         shape_endorsed: BTreeSet::new(),
         committed: vec![],
@@ -1722,7 +1726,8 @@ fn mail_proposal(to: &str, param_labels: BTreeMap<String, Label>) -> Proposal {
 
 fn restricted(l: AuthorityClass, rs: &[&str]) -> Label {
     let mut l = Label::at(l);
-    l.readers = hh_provenance::ReaderSet::Restricted(rs.iter().map(|s| s.to_string()).collect());
+    l.readers =
+        hharness_provenance::ReaderSet::Restricted(rs.iter().map(|s| s.to_string()).collect());
     l
 }
 
@@ -1743,7 +1748,7 @@ fn ac3_injected_recipient_denies_before_any_ask() {
     if let Decision::Deny { remedies, .. } = &d.decision {
         assert!(remedies.iter().any(|r| matches!(
             r,
-            hh_provenance::flow::Remedy::Substitute { param, .. } if param == "to"
+            hharness_provenance::flow::Remedy::Substitute { param, .. } if param == "to"
         )));
     }
     // A tainted recipient param fails identically.
@@ -1795,13 +1800,13 @@ fn ac3_uncovered_principal_recipient_asks_with_remedies() {
             assert!(
                 remedies
                     .iter()
-                    .any(|r| matches!(r, hh_provenance::flow::Remedy::Approval { .. })),
+                    .any(|r| matches!(r, hharness_provenance::flow::Remedy::Approval { .. })),
                 "approval remedy offered: {remedies:?}"
             );
             assert!(
                 remedies.iter().any(|r| matches!(
                     r,
-                    hh_provenance::flow::Remedy::Sanitize { param, .. } if param == "body"
+                    hharness_provenance::flow::Remedy::Sanitize { param, .. } if param == "body"
                 )),
                 "sanitize remedy offered: {remedies:?}"
             );

@@ -22,21 +22,21 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, ResourceLimits, WritableRoot};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::handle::{HandleState, OnLoss, Roots};
-use hh_env::provider::{ProviderAdapter, ProviderHandle, ProviderMeter, ProvisionRequest};
-use hh_env::record::{
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{kernel_default, ResourceLimits, WritableRoot};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::handle::{HandleState, OnLoss, Roots};
+use hharness_env::provider::{ProviderAdapter, ProviderHandle, ProviderMeter, ProvisionRequest};
+use hharness_env::record::{
     CanaryChannel, EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe,
 };
-use hh_env::recovery::{HandleHealOutcome, HealOutcome, HealingPolicy, OnLost};
-use hh_identity::idp::address;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_env::recovery::{HandleHealOutcome, HealOutcome, HealingPolicy, OnLost};
+use hharness_identity::idp::address;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -74,7 +74,7 @@ fn roots_for(ws: &std::path::Path) -> Roots {
     }
 }
 
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -82,8 +82,8 @@ fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolic
         read_only_subpaths: vec![],
         protected_metadata_names: vec![],
     });
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
-    p.net.mode = hh_containment::policy::NetMode::None;
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.net.mode = hharness_containment::policy::NetMode::None;
     p.compute_ids();
     p
 }
@@ -196,9 +196,9 @@ impl ProviderAdapter for MockProvider {
 fn test_canary(channel_id: &str) -> CanaryChannel {
     CanaryChannel {
         channel_id: channel_id.to_string(),
-        spec: hh_secrets::SecretChannelSpec {
-            kind: hh_secrets::CredentialKind::ApiKey,
-            source: hh_secrets::SecretSource::OperatorVault {
+        spec: hharness_secrets::SecretChannelSpec {
+            kind: hharness_secrets::CredentialKind::ApiKey,
+            source: hharness_secrets::SecretSource::OperatorVault {
                 vault_ref: format!("canary:{channel_id}"),
             },
             destinations: vec![],
@@ -206,19 +206,19 @@ fn test_canary(channel_id: &str) -> CanaryChannel {
             max_lifetime_ms: None,
             rotation_policy: None,
             allowed_env_names: None,
-            sender_constraint: hh_secrets::SenderConstraint::None,
+            sender_constraint: hharness_secrets::SenderConstraint::None,
             constraints: Default::default(),
             bindable: false,
-            access_class: hh_secrets::AccessClass::KernelOnly,
+            access_class: hharness_secrets::AccessClass::KernelOnly,
             canary: true,
             description: "image-manifest tripwire".into(),
         },
     }
 }
 
-fn test_broker() -> hh_secrets::CredentialBroker {
-    hh_secrets::CredentialBroker::new(
-        Box::new(hh_secrets::StaticVault::default()),
+fn test_broker() -> hharness_secrets::CredentialBroker {
+    hharness_secrets::CredentialBroker::new(
+        Box::new(hharness_secrets::StaticVault::default()),
         "canary-test-key",
     )
 }

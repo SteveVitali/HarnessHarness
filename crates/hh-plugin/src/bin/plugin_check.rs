@@ -6,7 +6,7 @@
 //!   X2 (tier monotonicity + acyclicity), print
 //!   `nodes=N edges=M tier_violations=[…] cycles=[…]` — the readiness gate's
 //!   "no tier violation, no cycle" (AC-8). Class/plugin `depends_on` extension
-//!   of the same graph is exercised by the `hh-registry` acceptance test
+//!   of the same graph is exercised by the `hharness-registry` acceptance test
 //!   (`plugin_architecture.rs`) — the binary's job is the canonical §4.4 data
 //!   plane (a row edit that breaks a rule fails the next run).
 //! - `hh-plugin-check module-lint [ROOT]` — lint every first-party in-process
@@ -19,7 +19,7 @@ use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use hh_plugin::{lint_workspace, spec_dag_check};
+use hharness_plugin::{lint_workspace, spec_dag_check};
 
 fn repo_root() -> PathBuf {
     // The binary runs from the workspace; CARGO_MANIFEST_DIR is the crate dir.

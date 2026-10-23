@@ -5,7 +5,7 @@
 //! the offline realization of "two independent implementations agree" (the cross-candidate E2/E3
 //! re-run on this extended tree corpus is tracked by DEFERRALS DF-S1.2-2, golden table as proxy).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::idp::{address, identify_text};
 use crate::kinds::RecordKind;

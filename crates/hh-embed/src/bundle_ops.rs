@@ -23,24 +23,24 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use hh_bundle::assemble::{assemble, AssembleInputs, CompileOutcome, ExtensionInput};
-use hh_bundle::codec::{decode_container, decode_dir, encode_dir, Decoded};
-use hh_bundle::error::BundleError;
-use hh_bundle::export::decode_page;
-use hh_bundle::import::{lift, NATIVE_FORMAT};
-use hh_bundle::levels;
-use hh_bundle::manifest::{BundlePolicy, ReproLevel};
-use hh_bundle::repro::{
+use hharness_bundle::assemble::{assemble, AssembleInputs, CompileOutcome, ExtensionInput};
+use hharness_bundle::codec::{decode_container, decode_dir, encode_dir, Decoded};
+use hharness_bundle::error::BundleError;
+use hharness_bundle::export::decode_page;
+use hharness_bundle::import::{lift, NATIVE_FORMAT};
+use hharness_bundle::levels;
+use hharness_bundle::manifest::{BundlePolicy, ReproLevel};
+use hharness_bundle::repro::{
     budget_limits_equal, compute_independence, fingerprint_drift, snapshot_fingerprint,
     ReproOutcome, ReproReport,
 };
-use hh_bundle::validate::check_completeness;
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::event::{Event, EventEnvelope, Producer, Scope};
-use hh_ledger::manifest::RunManifest;
-use hh_ontology::eval::{EvalError, MetricValue};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::validate::check_completeness;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::event::{Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::manifest::RunManifest;
+use hharness_ontology::eval::{EvalError, MetricValue};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
 
@@ -124,11 +124,11 @@ fn arr_at<'a>(j: &'a Json, k: &str) -> Option<&'a Vec<Json>> {
 }
 
 /// Mint one kernel-origin `Event` for `run_id` — the same envelope shape
-/// `hh_env::events::EventMinter` produces, stamped `kernel(hh-embed)`
+/// `hharness_env::events::EventMinter` produces, stamped `kernel(hharness-embed)`
 /// (the boundary component — a Lab write is minted by the kernel, the
 /// same as every client's; AC-R-2.11.4-10).
 fn mint_embed_event(
-    store: &hh_ledger::Store,
+    store: &hharness_ledger::Store,
     run_id: &str,
     class: &str,
     payload: Json,
@@ -138,14 +138,14 @@ fn mint_embed_event(
         class: class.to_string(),
         ts: store.ts_now(),
         hlc: None,
-        producer: Producer::kernel("hh-embed"),
+        producer: Producer::kernel("hharness-embed"),
         scope: Scope::default(),
         parent_event_id: store.head_event_id(run_id).map_err(ledger_err)?,
         causes: vec![],
         refs: vec![],
         ir_refs: vec![],
         surface_ids: BTreeMap::new(),
-        provenance: Some(ProvenanceRecord::kernel("hh-embed", store.now_ms())),
+        provenance: Some(ProvenanceRecord::kernel("hharness-embed", store.now_ms())),
         content_kind: None,
         payload,
     })
@@ -158,7 +158,7 @@ fn mint_embed_event(
 /// nothing), `native.profile` (the `primary` role), `judge.profile`,
 /// and `conditioned_on` refs. Only *pinned* refs are bound coordinates;
 /// an authored selector or the `unbound` sentinel is not.
-pub(crate) fn pinned_profile_refs(sealed: &hh_hir::HirDocument) -> Vec<String> {
+pub(crate) fn pinned_profile_refs(sealed: &hharness_hir::HirDocument) -> Vec<String> {
     fn walk(j: &Json, out: &mut Vec<String>) {
         if let Some(coord) = j.get("profile_ref").and_then(Json::as_str) {
             if matches!(j.get("pinned"), Some(Json::Bool(true))) && coord != "unbound" {
@@ -174,7 +174,7 @@ pub(crate) fn pinned_profile_refs(sealed: &hh_hir::HirDocument) -> Vec<String> {
     let mut refs = Vec::new();
     if let Some(doc) = std::str::from_utf8(&sealed.canonical_bytes())
         .ok()
-        .and_then(|t| hh_wire::json::parse(t).ok())
+        .and_then(|t| hharness_wire::json::parse(t).ok())
     {
         walk(&doc, &mut refs);
     }
@@ -188,7 +188,7 @@ pub(crate) fn pinned_profile_refs(sealed: &hh_hir::HirDocument) -> Vec<String> {
 /// version_id}` — the bundle's `environment` member shape). A run with
 /// no environment carries `{}` (the member is absent → the R1/R2 basis
 /// reports `Missing`, never a fabricated record).
-fn environment_doc(store: &hh_ledger::Store, run_id: &str) -> Json {
+fn environment_doc(store: &hharness_ledger::Store, run_id: &str) -> Json {
     let events = match store.envelopes(run_id) {
         Ok(e) => e,
         Err(_) => return Json::obj([]),
@@ -218,7 +218,10 @@ impl EmbedService {
     fn contract_identity(&self) -> Json {
         Json::obj([
             ("contract_major", Json::str("hh-embed/1")),
-            ("schema_hash", Json::str(hh_embed_schema::schema_hash())),
+            (
+                "schema_hash",
+                Json::str(hharness_embed_schema::schema_hash()),
+            ),
             ("kernel_version_id", Json::str(self.kernel_version.clone())),
         ])
     }
@@ -237,7 +240,7 @@ impl EmbedService {
             return Ok(vec![]);
         };
         let def_doc = match self.artifact_bytes(def_ref) {
-            Ok(bytes) => hh_wire::json::parse(std::str::from_utf8(&bytes).map_err(|_| {
+            Ok(bytes) => hharness_wire::json::parse(std::str::from_utf8(&bytes).map_err(|_| {
                 EmbedError::Refused {
                     reason: "extension_entries: sealed definition is not utf-8".into(),
                 }
@@ -271,18 +274,17 @@ impl EmbedService {
                         .into(),
             });
         };
-        let Some((_, hh_registry::records::RegistryRecord::Snapshot(snap))) =
+        let Some((_, hharness_registry::records::RegistryRecord::Snapshot(snap))) =
             self.registry.get(&snap_id)
         else {
             return Err(EmbedError::Refused {
                 reason: format!("extension_entries: registry snapshot {snap_id} is not held"),
             });
         };
-        let ts = hh_registry::extension::trust_snapshot(&self.registry, &def_doc, snap).map_err(
-            |e| EmbedError::Refused {
+        let ts = hharness_registry::extension::trust_snapshot(&self.registry, &def_doc, snap)
+            .map_err(|e| EmbedError::Refused {
                 reason: format!("extension_entries: trust_snapshot: {}", e.reason()),
-            },
-        )?;
+            })?;
         Ok(ts
             .extensions
             .iter()
@@ -456,7 +458,7 @@ impl EmbedService {
             store: &self.store,
             run_id: &run_id,
             policy: &policy,
-            created_at: hh_ledger::store::rfc3339_ms(self.store.now_ms()),
+            created_at: hharness_ledger::store::rfc3339_ms(self.store.now_ms()),
             producer: kernel_prov.to_json(),
             contract_identity: self.contract_identity(),
             kernel_version_id: self.kernel_version.clone(),
@@ -606,9 +608,9 @@ impl EmbedService {
     fn kernel_bundle_scoped(&mut self, params: &Json, kind: &str) -> Result<Json, EmbedError> {
         if !matches!(
             kind,
-            hh_bundle::scoped::KIND_ARM
-                | hh_bundle::scoped::KIND_EXPERIMENT
-                | hh_bundle::scoped::KIND_LINEAGE
+            hharness_bundle::scoped::KIND_ARM
+                | hharness_bundle::scoped::KIND_EXPERIMENT
+                | hharness_bundle::scoped::KIND_LINEAGE
         ) {
             return Err(EmbedError::Refused {
                 reason: format!("kind_pending:{kind}"),
@@ -622,7 +624,7 @@ impl EmbedService {
         if let Some(Json::Arr(cs)) = params.get("contains") {
             for c in cs {
                 let decoded = decode_bundle_arg(c, "kernel.bundle/contains")?;
-                children.push(hh_bundle::scoped::ChildBundle {
+                children.push(hharness_bundle::scoped::ChildBundle {
                     bundle_id: decoded.manifest.version_id.clone(),
                     kind: decoded.manifest.bundle_kind.clone(),
                     manifest_bytes: decoded
@@ -657,9 +659,9 @@ impl EmbedService {
             }
         }
 
-        let created_at = hh_ledger::store::rfc3339_ms(self.store.now_ms());
+        let created_at = hharness_ledger::store::rfc3339_ms(self.store.now_ms());
         let producer = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms()).to_json();
-        let inputs = hh_bundle::scoped::ScopedInputs {
+        let inputs = hharness_bundle::scoped::ScopedInputs {
             store: &self.store,
             policy: &policy,
             created_at,
@@ -701,7 +703,7 @@ impl EmbedService {
                 .and_then(Json::as_str)
                 .map(String::from),
         };
-        let assembled = hh_bundle::scoped::assemble_scoped(&inputs).map_err(bundle_err)?;
+        let assembled = hharness_bundle::scoped::assemble_scoped(&inputs).map_err(bundle_err)?;
 
         // Deposit every present member + the manifest — same pool rule
         // as the `run` path.
@@ -774,9 +776,9 @@ impl EmbedService {
         let decoded = decode_bundle_arg(params, "kernel.validate")?;
         let publication = matches!(params.get("publication"), Some(Json::Bool(true)));
         let report = if publication {
-            hh_bundle::validate::validate_publication(&decoded.manifest, &decoded.members)
+            hharness_bundle::validate::validate_publication(&decoded.manifest, &decoded.members)
         } else {
-            hh_bundle::validate::validate(&decoded.manifest, &decoded.members)
+            hharness_bundle::validate::validate(&decoded.manifest, &decoded.members)
         };
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-validation-result/1")),
@@ -798,7 +800,7 @@ impl EmbedService {
             .ok_or_else(|| missing("kernel.diff/right"))?;
         let a = decode_bundle_arg(left, "kernel.diff/left")?;
         let b = decode_bundle_arg(right, "kernel.diff/right")?;
-        let diff = hh_bundle::diff::bundle_diff(&a, &b);
+        let diff = hharness_bundle::diff::bundle_diff(&a, &b);
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-diff/1")),
             ("diff", diff.to_json()),
@@ -815,10 +817,10 @@ impl EmbedService {
     /// the declared `trust` MUST-data (a `FetchTrustPolicy` document —
     /// the fetch site's declared admission classes, origin allowlist,
     /// signers and `require_ledgered_arrival`), each attempt riding the
-    /// `hh_env` `EgressMediator` (the fetch is a `net_egress` effect
+    /// `hharness_env` `EgressMediator` (the fetch is a `net_egress` effect
     /// under Π mediation — `security.egress.{requested,decided}` rows
     /// land durable-before-wire on the kernel's fetch run, the
-    /// `https:` GET terminates TLS at the R4.5c `hh-tls` home). Every
+    /// `https:` GET terminates TLS at the R4.5c `hharness-tls` home). Every
     /// remote attempt — admitted or refused — produces a
     /// `bundle.member.fetched` row appended before the member's bytes
     /// deposit (durable-before-visible, `require_ledgered_arrival`);
@@ -843,7 +845,7 @@ impl EmbedService {
                     .manifest
                     .members
                     .iter()
-                    .filter(|m| m.status == hh_bundle::manifest::MemberStatus::Fetch)
+                    .filter(|m| m.status == hharness_bundle::manifest::MemberStatus::Fetch)
                     .map(|m| m.address.clone())
                     .collect()
             });
@@ -853,18 +855,18 @@ impl EmbedService {
         // remote location answers `policy_absent`, pool legs unaffected).
         let trust = params
             .get("trust")
-            .map(hh_bundle::FetchTrustPolicy::from_json)
+            .map(hharness_bundle::FetchTrustPolicy::from_json)
             .transpose()
             .map_err(bundle_err)?;
         // The TLS half: webpki roots, plus the explicitly named extra
         // anchors file — never an insecure-skip flag.
         let tls = match params.get("tls_extra_roots_file").and_then(Json::as_str) {
-            Some(p) => hh_tls::ClientTls::webpki_roots()
+            Some(p) => hharness_tls::ClientTls::webpki_roots()
                 .extra_roots_file(Path::new(p))
                 .map_err(|e| EmbedError::Refused {
                     reason: format!("tls_extra_roots: {e}"),
                 })?,
-            None => hh_tls::ClientTls::webpki_roots(),
+            None => hharness_tls::ClientTls::webpki_roots(),
         };
         let now_ms = self.store.now_ms();
         // A remote leg exists whenever a requested entry names a
@@ -878,7 +880,7 @@ impl EmbedService {
             addresses.contains(&e.address)
                 && e.locations.iter().any(|l| {
                     !matches!(
-                        hh_bundle::location_scheme(l).as_deref(),
+                        hharness_bundle::location_scheme(l).as_deref(),
                         None | Some("pool") | Some("mem") | Some("bundle")
                     )
                 })
@@ -887,9 +889,9 @@ impl EmbedService {
         // mediated leg writes it — when a leg exists both closures drive
         // a `RefCell<FetchLeg>` (sequentially inside `fetch`; the pool
         // read goes through `mediator.store`, never a second borrow).
-        let blob_addr = |entry: &hh_bundle::manifest::FetchEntry| {
-            hh_identity::idp::parse_id(&entry.address)
-                .map(|p| hh_identity::idp::ContentAddress {
+        let blob_addr = |entry: &hharness_bundle::manifest::FetchEntry| {
+            hharness_identity::idp::parse_id(&entry.address)
+                .map(|p| hharness_identity::idp::ContentAddress {
                     idp: "idp/1",
                     algorithm: "sha256",
                     digest: p.digest_hex,
@@ -914,7 +916,7 @@ impl EmbedService {
                     ))
                 };
                 let outcome = {
-                    let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
+                    let pool_f = |entry: &hharness_bundle::manifest::FetchEntry| {
                         cell.borrow()
                             .mediator
                             .store
@@ -922,7 +924,7 @@ impl EmbedService {
                             .map_err(|_| "no_transport:pool_miss".to_string())
                     };
                     let mut remote_f = |url: &str| cell.borrow_mut().get(url);
-                    hh_bundle::fetch::fetch(
+                    hharness_bundle::fetch::fetch(
                         &decoded,
                         &addresses,
                         Some(&pool_f),
@@ -937,20 +939,27 @@ impl EmbedService {
                 // No declared policy: remote legs refuse `policy_absent`
                 // (their rows still land on the fetch run); pool legs
                 // resolve straight from the blob pool.
-                let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
+                let pool_f = |entry: &hharness_bundle::manifest::FetchEntry| {
                     self.store
                         .get_blob(&blob_addr(entry)?)
                         .map_err(|_| "no_transport:pool_miss".to_string())
                 };
-                hh_bundle::fetch::fetch(&decoded, &addresses, Some(&pool_f), None, None, now_ms)
+                hharness_bundle::fetch::fetch(
+                    &decoded,
+                    &addresses,
+                    Some(&pool_f),
+                    None,
+                    None,
+                    now_ms,
+                )
             }
         } else {
-            let pool_f = |entry: &hh_bundle::manifest::FetchEntry| {
+            let pool_f = |entry: &hharness_bundle::manifest::FetchEntry| {
                 self.store
                     .get_blob(&blob_addr(entry)?)
                     .map_err(|_| "no_transport:pool_miss".to_string())
             };
-            hh_bundle::fetch::fetch(
+            hharness_bundle::fetch::fetch(
                 &decoded,
                 &addresses,
                 Some(&pool_f),
@@ -1028,10 +1037,10 @@ impl EmbedService {
     pub(crate) fn kernel_export(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let decoded = decode_bundle_arg(params, "kernel.export")?;
         let target = str_at(params, "kernel.export", "target")?;
-        let policy = hh_bundle::export::PublicationPolicy::from_json(params.get("policy"))
+        let policy = hharness_bundle::export::PublicationPolicy::from_json(params.get("policy"))
             .map_err(bundle_err)?;
-        let out =
-            hh_bundle::export::export_target(&decoded, target, &policy).map_err(bundle_err)?;
+        let out = hharness_bundle::export::export_target(&decoded, target, &policy)
+            .map_err(bundle_err)?;
         if let Some(dir) = params.get("dir").and_then(Json::as_str) {
             let root = Path::new(dir);
             std::fs::create_dir_all(root).map_err(|e| EmbedError::Refused {
@@ -1081,7 +1090,7 @@ impl EmbedService {
     /// is a cache of this fold).
     pub(crate) fn kernel_status(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bundle_id = str_at(params, "kernel.status", "bundle_id")?;
-        let book = hh_results::status::fold(&self.store);
+        let book = hharness_results::status::fold(&self.store);
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-status/1")),
             ("bundle_id", Json::str(bundle_id)),
@@ -1106,11 +1115,12 @@ impl EmbedService {
         let run_id = str_at(params, "kernel.set_status", "run_id")?.to_string();
         let bundle_id = str_at(params, "kernel.set_status", "bundle_id")?.to_string();
         let to_s = str_at(params, "kernel.set_status", "to")?;
-        let to =
-            hh_results::BundleStatus::parse(to_s).ok_or_else(|| EmbedError::SchemaViolation {
+        let to = hharness_results::BundleStatus::parse(to_s).ok_or_else(|| {
+            EmbedError::SchemaViolation {
                 path: "kernel.set_status/to".to_string(),
                 code: format!("unknown_status:{to_s}"),
-            })?;
+            }
+        })?;
         let reason = params
             .get("reason")
             .and_then(Json::as_str)
@@ -1125,9 +1135,10 @@ impl EmbedService {
             .unwrap_or_default();
         let authority = params.get("authority").cloned().unwrap_or(Json::Null);
         let evidence = params.get("evidence").cloned().unwrap_or(Json::Null);
-        let results = hh_results::store::ResultsStore::open(self.store.root().join("results"))
-            .map_err(refused)?;
-        let record = hh_results::status::set_status(
+        let results =
+            hharness_results::store::ResultsStore::open(self.store.root().join("results"))
+                .map_err(refused)?;
+        let record = hharness_results::status::set_status(
             &mut self.store,
             &results,
             &run_id,
@@ -1155,18 +1166,18 @@ impl EmbedService {
         let att_j = params
             .get("attestation")
             .ok_or_else(|| missing("kernel.attest/attestation"))?;
-        let attestation =
-            hh_bundle::attestation::BundleAttestation::from_json(att_j).map_err(bundle_err)?;
-        let empty = hh_ledger::audit::KeyTable::default();
-        let resolver: &dyn hh_ledger::audit::AuditKeyResolver =
+        let attestation = hharness_bundle::attestation::BundleAttestation::from_json(att_j)
+            .map_err(bundle_err)?;
+        let empty = hharness_ledger::audit::KeyTable::default();
+        let resolver: &dyn hharness_ledger::audit::AuditKeyResolver =
             self.store.audit_key_resolver().unwrap_or(&empty);
         if attestation.sig.is_some() && self.store.audit_key_resolver().is_none() {
             return Err(EmbedError::Refused {
                 reason: "attest_no_key_resolver".to_string(),
             });
         }
-        let doc =
-            hh_bundle::attestation::attest(&decoded, &attestation, resolver).map_err(bundle_err)?;
+        let doc = hharness_bundle::attestation::attest(&decoded, &attestation, resolver)
+            .map_err(bundle_err)?;
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-attestation/1")),
             ("attestation", doc),
@@ -1185,7 +1196,7 @@ impl EmbedService {
                     .collect()
             })
             .unwrap_or_default();
-        let report = hh_bundle::audit::audit_bundle(&decoded, &known);
+        let report = hharness_bundle::audit::audit_bundle(&decoded, &known);
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-audit/1")),
             ("bundle_id", Json::str(report.bundle_id)),
@@ -1210,7 +1221,7 @@ impl EmbedService {
         let reason = str_at(params, "kernel.supersede", "reason")?;
         let mut new = decode_bundle_arg(new_p, "kernel.supersede/new")?;
         let old = decode_bundle_arg(old_p, "kernel.supersede/old")?;
-        hh_bundle::lifecycle::supersede_bundle(&mut new.manifest, &old.manifest, reason)
+        hharness_bundle::lifecycle::supersede_bundle(&mut new.manifest, &old.manifest, reason)
             .map_err(bundle_err)?;
         let manifest_bytes = new.manifest.to_json().to_canonical_string().into_bytes();
         self.store
@@ -1229,11 +1240,11 @@ impl EmbedService {
         let decoded = decode_bundle_arg(params, "kernel.migrate")?;
         let to_schema = str_at(params, "kernel.migrate", "to_schema")?;
         let producer = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms()).to_json();
-        let migrated = hh_bundle::lifecycle::migrate_bundle(
+        let migrated = hharness_bundle::lifecycle::migrate_bundle(
             &decoded,
             to_schema,
             producer,
-            hh_ledger::store::rfc3339_ms(self.store.now_ms()),
+            hharness_ledger::store::rfc3339_ms(self.store.now_ms()),
         )
         .map_err(bundle_err)?;
         let manifest_bytes = migrated
@@ -1260,7 +1271,7 @@ impl EmbedService {
                 manifests.push(decode_bundle_arg(b, "kernel.lineage")?.manifest);
             }
         }
-        let edges = hh_bundle::lifecycle::lineage_edges(&manifests);
+        let edges = hharness_bundle::lifecycle::lineage_edges(&manifests);
         Ok(Json::obj([
             ("schema", Json::str("hh-bundle-lineage/1")),
             ("edges", Json::Arr(edges)),
@@ -1280,14 +1291,16 @@ impl EmbedService {
         };
         let bytes = self.artifact_bytes(def_ref)?;
         let kernel_prov = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms());
-        let (sealed, _accept) = hh_compiler::accept_bytes(&bytes, &self.catalog, &kernel_prov)
-            .map_err(|e| EmbedError::Refused {
-                reason: format!("compile_accept: {e:?}"),
+        let (sealed, _accept) =
+            hharness_compiler::accept_bytes(&bytes, &self.catalog, &kernel_prov).map_err(|e| {
+                EmbedError::Refused {
+                    reason: format!("compile_accept: {e:?}"),
+                }
             })?;
         let profile_refs = pinned_profile_refs(&sealed.document);
         let profile_refs_out = profile_refs.clone();
-        let bundle = hh_compiler::compile(
-            &hh_compiler::CompileInputs {
+        let bundle = hharness_compiler::compile(
+            &hharness_compiler::CompileInputs {
                 sealed,
                 profile_refs,
                 fallback_profile: None,
@@ -1295,7 +1308,7 @@ impl EmbedService {
                 compile_for_expired: false,
                 intent_ref: None,
             },
-            &hh_compiler::profile::NoProfiles,
+            &hharness_compiler::profile::NoProfiles,
             &self.registry,
             &self.catalog,
             &kernel_prov,
@@ -1303,7 +1316,7 @@ impl EmbedService {
         .map_err(|e| EmbedError::Refused {
             reason: format!("compile: {e:?}"),
         })?;
-        let doc = hh_compiler::schema::bundle_to_json(&bundle);
+        let doc = hharness_compiler::schema::bundle_to_json(&bundle);
         // The validator set the plan binds — `resolved_dependencies
         // .validators[]` names it so an R2 verdict reports the set it
         // re-derived under (AC-R-2.12.1-13; S3.12).
@@ -1595,11 +1608,11 @@ impl EmbedService {
                     let kernel_prov =
                         ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms());
                     let repro =
-                        hh_compiler::accept_bytes(sealed_bytes, &self.catalog, &kernel_prov)
+                        hharness_compiler::accept_bytes(sealed_bytes, &self.catalog, &kernel_prov)
                             .and_then(|(sealed, _)| {
                                 let profile_refs = pinned_profile_refs(&sealed.document);
-                                hh_compiler::compile(
-                                    &hh_compiler::CompileInputs {
+                                hharness_compiler::compile(
+                                    &hharness_compiler::CompileInputs {
                                         sealed,
                                         profile_refs,
                                         fallback_profile: None,
@@ -1607,7 +1620,7 @@ impl EmbedService {
                                         compile_for_expired: false,
                                         intent_ref: None,
                                     },
-                                    &hh_compiler::profile::NoProfiles,
+                                    &hharness_compiler::profile::NoProfiles,
                                     &self.registry,
                                     &self.catalog,
                                     &kernel_prov,
@@ -1617,7 +1630,7 @@ impl EmbedService {
                         Ok(recompiled) => {
                             let declared_id = std::str::from_utf8(compiled_bytes)
                                 .ok()
-                                .and_then(|t| hh_wire::json::parse(t).ok())
+                                .and_then(|t| hharness_wire::json::parse(t).ok())
                                 .and_then(|j| {
                                     j.get("bundle_id").and_then(Json::as_str).map(String::from)
                                 })
@@ -1676,7 +1689,7 @@ impl EmbedService {
                     if let Some(bytes) = decoded.members.get(&mm.address) {
                         if let Some(j) = std::str::from_utf8(bytes)
                             .ok()
-                            .and_then(|t| hh_wire::json::parse(t).ok())
+                            .and_then(|t| hharness_wire::json::parse(t).ok())
                         {
                             if let Some(fp) = snapshot_fingerprint(&j) {
                                 let model_ref = j
@@ -1824,7 +1837,7 @@ impl EmbedService {
         let holder = params
             .get("holder")
             .and_then(Json::as_str)
-            .unwrap_or("hh-cli")
+            .unwrap_or("hharness-cli")
             .to_string();
         let format = params
             .get("format")
@@ -1884,15 +1897,15 @@ impl EmbedService {
                 .refs
                 .iter()
                 .filter_map(|r| {
-                    hh_identity::idp::parse_id(r)
-                        .ok()
-                        .map(|p| hh_identity::idp::ContentAddress {
+                    hharness_identity::idp::parse_id(r).ok().map(|p| {
+                        hharness_identity::idp::ContentAddress {
                             idp: "idp/1",
                             algorithm: "sha256",
                             digest: p.digest_hex,
                             media_type: String::new(),
                             size: 0,
-                        })
+                        }
+                    })
                 })
                 .collect::<Vec<_>>();
             let mut refs_all = refs;
@@ -1935,7 +1948,7 @@ impl EmbedService {
         // The closed `ForeignFormat` sum is the one grammar (CC1): a
         // spelling outside it is `FormatUnknown`, a known format asked
         // the wrong direction is `ForeignDirectionRefused` (R4.9).
-        let ftype = match hh_bundle::ForeignFormat::parse(format) {
+        let ftype = match hharness_bundle::ForeignFormat::parse(format) {
             Some(f) if f.lifts() => f,
             Some(_) => {
                 return Err(bundle_err(BundleError::ForeignDirectionRefused {
@@ -1948,7 +1961,7 @@ impl EmbedService {
                     detail: format!(
                         "{format} — supported: {} + {:?}",
                         NATIVE_FORMAT,
-                        hh_bundle::ForeignFormat::liftable_spellings()
+                        hharness_bundle::ForeignFormat::liftable_spellings()
                     ),
                 }))
             }
@@ -1990,17 +2003,19 @@ impl EmbedService {
         let (run_id, _lease) = self
             .store
             .open_run(
-                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+                hharness_ledger::manifest::RunManifest::minimal(
+                    hharness_ledger::manifest::RunKind::Agent,
+                ),
                 holder,
             )
             .map_err(ledger_err)?;
-        let lift = hh_bundle::import::lift_foreign(
+        let lift = hharness_bundle::import::lift_foreign(
             &self.store,
             &run_id,
             &files,
             ftype,
             ProvenanceRecord::kernel(IMPORT_COMPONENT, self.store.now_ms()).to_json(),
-            hh_ledger::store::rfc3339_ms(self.store.now_ms()),
+            hharness_ledger::store::rfc3339_ms(self.store.now_ms()),
             &self.kernel_version,
             self.store.now_ms(),
         )
@@ -2106,7 +2121,7 @@ impl EmbedService {
             })?;
         let (artifact_json, program) = match target.as_str() {
             "mcp" => (
-                hh_mcp::artifact::lower_mcp_target(
+                hharness_mcp::artifact::lower_mcp_target(
                     bytes,
                     &decoded.manifest.version_id,
                     &decoded.manifest.version_id,
@@ -2124,18 +2139,18 @@ impl EmbedService {
             "acp" => {
                 let doc = std::str::from_utf8(bytes)
                     .ok()
-                    .and_then(|t| hh_wire::json::parse(t).ok())
+                    .and_then(|t| hharness_wire::json::parse(t).ok())
                     .ok_or_else(|| EmbedError::Refused {
                         reason: "acp_member_decode".to_string(),
                     })?;
                 if doc.get("schema").and_then(Json::as_str)
-                    != Some(hh_compiler::acp::ACP_ARTEFACT_SCHEMA)
+                    != Some(hharness_compiler::acp::ACP_ARTEFACT_SCHEMA)
                 {
                     return Err(EmbedError::Refused {
                         reason: format!(
                             "target:acp member is `{}`, not `{}`",
                             doc.get("schema").and_then(Json::as_str).unwrap_or("<none>"),
-                            hh_compiler::acp::ACP_ARTEFACT_SCHEMA
+                            hharness_compiler::acp::ACP_ARTEFACT_SCHEMA
                         ),
                     });
                 }
@@ -2159,7 +2174,7 @@ impl EmbedService {
         Ok(Json::obj([
             ("schema", Json::str("hh-lab-serve/1")),
             ("artifact", artifact_json),
-            ("binding", hh_mcp::stdio_launch_binding()),
+            ("binding", hharness_mcp::stdio_launch_binding()),
             (
                 "launch",
                 Json::obj([
@@ -2222,7 +2237,7 @@ impl EmbedService {
         Ok(Json::obj([
             ("schema", Json::str("hh-lab-serve/1")),
             ("artifact", artifact),
-            ("binding", hh_mcp::stdio_launch_binding()),
+            ("binding", hharness_mcp::stdio_launch_binding()),
             (
                 "launch",
                 Json::obj([
@@ -2247,18 +2262,20 @@ impl EmbedService {
 }
 
 // ── S4.12: the registry `ProfileView` — the one resolver lives in
-// hh-lab (S5.1 — `AssemblyService::plan`'s stage-6b pass-through shares
+// hharness-lab (S5.1 — `AssemblyService::plan`'s stage-6b pass-through shares
 // it; CC1/CC7). ─────────────────────────────────────────────────────────
 
-pub(crate) use hh_lab::assembly::profiles::{resolve_profile_coordinate, RegistryProfiles};
+pub(crate) use hharness_lab::assembly::profiles::{resolve_profile_coordinate, RegistryProfiles};
 
 /// The pinned `TargetSpec` for a registered target id (§3.2.5's spec
 /// table — the version pins are derivation-key inputs; `content_hash`
 /// is `idp/1` over the pair so a bump is a new address).
-pub(crate) fn target_spec(target_id: &str) -> Result<hh_compiler::link::TargetSpec, EmbedError> {
+pub(crate) fn target_spec(
+    target_id: &str,
+) -> Result<hharness_compiler::link::TargetSpec, EmbedError> {
     let spec_version = match target_id {
-        "acp" => hh_compiler::acp::ACP_VERSION.to_string(),
-        "mcp" => hh_mcp::protocol::PINNED_MODERN.to_string(),
+        "acp" => hharness_compiler::acp::ACP_VERSION.to_string(),
+        "mcp" => hharness_mcp::protocol::PINNED_MODERN.to_string(),
         "provider_tool_api" | "a2a" | "agent_spec" => "1.0".to_string(),
         other => {
             return Err(EmbedError::SchemaViolation {
@@ -2267,7 +2284,7 @@ pub(crate) fn target_spec(target_id: &str) -> Result<hh_compiler::link::TargetSp
             })
         }
     };
-    let content_hash = hh_identity::idp_id(
+    let content_hash = hharness_identity::idp_id(
         "target_spec.1",
         Json::obj([
             ("spec_version", Json::str(spec_version.clone())),
@@ -2276,7 +2293,7 @@ pub(crate) fn target_spec(target_id: &str) -> Result<hh_compiler::link::TargetSp
         .to_canonical_string()
         .as_bytes(),
     );
-    Ok(hh_compiler::link::TargetSpec {
+    Ok(hharness_compiler::link::TargetSpec {
         target_id: target_id.to_string(),
         spec_version,
         content_hash,

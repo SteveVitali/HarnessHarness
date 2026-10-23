@@ -14,9 +14,9 @@
 //! | `decide` | before β's `decide` and on any `stop` proposal | kernel stop rules by priority `invariant > cancel > exhaustion > loop/format > definition rules > β`; completion admissibility |
 //! | `resume` | at `lifecycle.run.resumed` | re-arm, recompute every counter/ladder/window, INV-1 on past-deadline scopes, resume a pre-crash drain |
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{LoopDetectorKind, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{LoopDetectorKind, StopReason};
+use hharness_wire::json::Json;
 
 use crate::invariants::{InvariantInput, InvariantViolation};
 use crate::output::{ParsedCall, SurfaceSpec};
@@ -89,7 +89,7 @@ pub enum GuardInput {
         /// The model-call scope.
         model_call_id: String,
         /// The gateway stop reason.
-        stop_reason: hh_gateway::vocab::StopReason,
+        stop_reason: hharness_gateway::vocab::StopReason,
         /// Whether the response carried no text.
         text_empty: bool,
         /// The parsed calls.
@@ -168,7 +168,7 @@ pub struct GuardContext {
     pub effect_classes: std::collections::BTreeMap<String, String>,
     /// Whether a cancel arrived through a declared channel (the `cancel`
     /// kernel rule — priority 2).
-    pub cancel_requested: Option<hh_ontology::control::CancelledBy>,
+    pub cancel_requested: Option<hharness_ontology::control::CancelledBy>,
     /// The manifest's attendance (`interactive` ⇒ `escalate` on exhaustion —
     /// ADR-0168 D6; C1 admission — the Stage-1 default is `stop`).
     pub interactive_attendance: bool,
@@ -338,7 +338,7 @@ fn pre_call(
         return GuardVerdict::Stop {
             reason: last_loop_reason(events).unwrap_or(StopReason::LoopDetected {
                 detector: LoopDetectorKind::ExactRepeat,
-                pattern: hh_ontology::control::LoopPattern {
+                pattern: hharness_ontology::control::LoopPattern {
                     cycle_len: 0,
                     repeats: 0,
                     loop_keys: vec![],
@@ -405,8 +405,8 @@ fn pre_call(
     // exhausted one the caller's `remaining` map reports ≤ 0).
     for (dim, rem) in &ctx.remaining {
         if *rem <= 0 {
-            let dimension = hh_ontology::dimensions::DimensionId::parse(dim)
-                .unwrap_or(hh_ontology::dimensions::DimensionId::Turns);
+            let dimension = hharness_ontology::dimensions::DimensionId::parse(dim)
+                .unwrap_or(hharness_ontology::dimensions::DimensionId::Turns);
             let rule = policy.exhaustion.rule(dimension);
             if rule.on_exhaustion == crate::policy::ExhaustionAction::Escalate
                 && ctx.interactive_attendance
@@ -472,7 +472,7 @@ fn last_loop_reason(events: &[EventEnvelope]) -> Option<StopReason> {
     let p = last.payload.get("pattern")?;
     Some(StopReason::LoopDetected {
         detector,
-        pattern: hh_ontology::control::LoopPattern {
+        pattern: hharness_ontology::control::LoopPattern {
             cycle_len: p.get("cycle_len")?.as_int()? as u32,
             repeats: p.get("repeats")?.as_int()? as u32,
             loop_keys: match p.get("loop_keys")? {
@@ -494,7 +494,7 @@ fn interpret(
     policy: &EnvelopePolicy,
     ctx: &GuardContext,
     model_call_id: &str,
-    stop_reason: hh_gateway::vocab::StopReason,
+    stop_reason: hharness_gateway::vocab::StopReason,
     text_empty: bool,
     calls: &[ParsedCall],
     surfaces: &[SurfaceSpec],
@@ -505,7 +505,7 @@ fn interpret(
     // resubmit. Validating them as "empty" would misfile an
     // infrastructure failure as a format error (the F1 table reads
     // `error`/`unknown` on the `error(class)` rows, never `empty`).
-    use hh_gateway::vocab::StopReason as Gw;
+    use hharness_gateway::vocab::StopReason as Gw;
     if matches!(
         stop_reason,
         Gw::Error | Gw::Unknown | Gw::Cancelled | Gw::Deferred | Gw::PauseTurn
@@ -564,7 +564,7 @@ fn interpret(
                 .as_ref()
                 .and_then(|tc| calls.iter().find(|c| &c.tool_call_id == tc))
                 .map(|c| {
-                    hh_identity::idp::idp_id(
+                    hharness_identity::idp::idp_id(
                         "raw_call",
                         format!("{}\n{}", c.surface, c.args_raw).as_bytes(),
                     )
@@ -727,8 +727,8 @@ fn post_effect(
     // `budget_exhausted` stop (E1–E2: soft thresholds nudge; hard stops).
     for (dim, rem) in &ctx.remaining {
         if *rem <= 0 {
-            let dimension = hh_ontology::dimensions::DimensionId::parse(dim)
-                .unwrap_or(hh_ontology::dimensions::DimensionId::Turns);
+            let dimension = hharness_ontology::dimensions::DimensionId::parse(dim)
+                .unwrap_or(hharness_ontology::dimensions::DimensionId::Turns);
             if policy.exhaustion.rule(dimension).on_exhaustion
                 == crate::policy::ExhaustionAction::Escalate
                 && ctx.interactive_attendance
@@ -811,8 +811,8 @@ fn decide(
             ) {
                 break;
             }
-            let dimension = hh_ontology::dimensions::DimensionId::parse(dim)
-                .unwrap_or(hh_ontology::dimensions::DimensionId::Turns);
+            let dimension = hharness_ontology::dimensions::DimensionId::parse(dim)
+                .unwrap_or(hharness_ontology::dimensions::DimensionId::Turns);
             if policy.exhaustion.rule(dimension).on_exhaustion
                 == crate::policy::ExhaustionAction::Escalate
                 && ctx.interactive_attendance
@@ -1042,9 +1042,9 @@ fn resume(events: &[EventEnvelope], policy: &EnvelopePolicy, ctx: &GuardContext)
             .stop_reason
             .and_then(|j| StopReason::from_json(&j))
             .unwrap_or(StopReason::InfrastructureFailure {
-                error_class: hh_ontology::control::InfraError {
-                    family: hh_ontology::control::InfraErrorFamily::Kernel,
-                    class: hh_ontology::control::KernelInfraCause::DrainTimeout
+                error_class: hharness_ontology::control::InfraError {
+                    family: hharness_ontology::control::InfraErrorFamily::Kernel,
+                    class: hharness_ontology::control::KernelInfraCause::DrainTimeout
                         .as_str()
                         .into(),
                 },

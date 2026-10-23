@@ -12,9 +12,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{BoundaryError, ControlBoundary, DecisionPoint, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{
+    BoundaryError, ControlBoundary, DecisionPoint, Owner, StopReason,
+};
+use hharness_wire::json::Json;
 
 use crate::state::ControlState;
 use crate::vocab::{ControlDecision, Cue, DecisionStamp};
@@ -130,7 +132,7 @@ pub struct ControlContext {
     pub process_ref: String,
     /// The `RuntimePlan/1` control nodes (the variant walks them — react's
     /// implicit `Loop(bound){step{propose};step{act}}` for `react/minimal`).
-    pub plan: Vec<hh_compiler::plan::PlanNode>,
+    pub plan: Vec<hharness_compiler::plan::PlanNode>,
     /// The declared β (validated by `open` — I5).
     pub boundary: ControlBoundary,
     /// The `ModelProfile` the variant must honour (`required_inputs` —

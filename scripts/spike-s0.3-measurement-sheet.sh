@@ -16,7 +16,7 @@ RAW="$(mktemp)"
 trap 'rm -f "$RAW"' EXIT
 
 echo "s0.3-spike: building release kernel + codegen + spikes…" >&2
-cargo build -q --release -p hh-kernel -p hh-codegen
+cargo build -q --release -p hharness-kernel -p hharness-codegen
 cargo build -q --release --manifest-path spikes/s1-kernel-spike/Cargo.toml
 cargo build -q --release --manifest-path spikes/s2-boundary-spike/Cargo.toml
 

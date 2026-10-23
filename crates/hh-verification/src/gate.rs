@@ -9,8 +9,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::idp_id;
-use hh_wire::Json;
+use hharness_identity::idp::idp_id;
+use hharness_wire::Json;
 
 use crate::claims::CriterionState;
 use crate::validators::EvidenceRequirement;
@@ -847,11 +847,11 @@ impl std::error::Error for ProjectError {}
 /// `visibility` map (`{criterion_semantic_id → held_out}`) read from the
 /// goal's `ext`/`delivers` declarations; absent ⇒ `visible`.
 pub fn project_contract(
-    doc: &hh_hir::document::HirDocument,
+    doc: &hharness_hir::document::HirDocument,
     goal_semantic_id: &str,
     criterion_visibility: &BTreeMap<String, Visibility>,
 ) -> Result<TaskContract, ProjectError> {
-    use hh_hir::records::KindRecord;
+    use hharness_hir::records::KindRecord;
 
     let node = doc
         .node(goal_semantic_id)

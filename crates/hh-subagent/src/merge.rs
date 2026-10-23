@@ -27,9 +27,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_wire::json::Json;
 
 use crate::consistency::OnAbsentChild;
 use crate::ownership::OwnershipTable;
@@ -278,7 +278,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                 let child_moved = after.is_some() && after != &baseline;
                 if parent_moved && child_moved {
                     let conflict = MergeConflictRecord {
-                        conflict_id: hh_identity::idp::idp_id(
+                        conflict_id: hharness_identity::idp::idp_id(
                             "hh.subagent.conflict",
                             Json::obj([
                                 ("path", Json::str(path.clone())),
@@ -524,7 +524,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
     // comparing this id (AC-R-2.6.5-4; computed over the *outcome*
     // projection — merged refs, conflict ids, absent set — so two
     // different outcomes can never collide).
-    report.merge_hash = hh_identity::idp::idp_id(
+    report.merge_hash = hharness_identity::idp::idp_id(
         "hh.subagent.merge_hash",
         Json::obj([
             ("policy", Json::str(ctx.policy.spelling())),
@@ -699,7 +699,7 @@ pub fn resolve_conflict(
     merge_id: &str,
     conflict_id: &str,
     resolution: &MergeResolution,
-) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+) -> Result<hharness_ledger::event::SeqRange, SpawnError> {
     resolve_conflict_as(
         store,
         parent_run_id,
@@ -723,7 +723,7 @@ pub fn resolve_conflict_as(
     conflict_id: &str,
     resolution: &MergeResolution,
     resolver: &str,
-) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+) -> Result<hharness_ledger::event::SeqRange, SpawnError> {
     let res_json = match resolution {
         MergeResolution::Choose { side } => Json::obj([
             ("kind", Json::str("choose")),
@@ -793,10 +793,10 @@ pub fn project_merge_report(
             let Some(report_ref) = e.payload.get("merge_report_ref").and_then(Json::as_str) else {
                 continue;
             };
-            let parsed = hh_identity::idp::parse_id(report_ref)
+            let parsed = hharness_identity::idp::parse_id(report_ref)
                 .map_err(|e| SpawnError::Kernel(format!("merge_report_ref parse: {e:?}")))?;
             let bytes = store
-                .get_blob(&hh_identity::idp::ContentAddress {
+                .get_blob(&hharness_identity::idp::ContentAddress {
                     idp: "idp/1",
                     algorithm: "sha256",
                     digest: parsed.digest_hex,
@@ -806,7 +806,7 @@ pub fn project_merge_report(
                 .map_err(|e| SpawnError::Kernel(format!("merge report blob: {e}")))?;
             let text = String::from_utf8(bytes)
                 .map_err(|e| SpawnError::Kernel(format!("merge report utf8: {e}")))?;
-            let json = hh_wire::json::parse(&text)
+            let json = hharness_wire::json::parse(&text)
                 .map_err(|e| SpawnError::Kernel(format!("merge report json: {e}")))?;
             return Ok(report_from_json(&json));
         }
@@ -952,10 +952,10 @@ fn three_way_merge_path(
 ) -> Result<TextMerge, SpawnError> {
     let fetch = |id: Option<&str>| -> Result<Option<String>, SpawnError> {
         let Some(id) = id else { return Ok(None) };
-        let Ok(parsed) = hh_identity::idp::parse_id(id) else {
+        let Ok(parsed) = hharness_identity::idp::parse_id(id) else {
             return Ok(None); // a non-idp ref cannot name blob bytes
         };
-        let addr = hh_identity::idp::ContentAddress {
+        let addr = hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex,
@@ -964,7 +964,7 @@ fn three_way_merge_path(
         };
         match store.get_blob(&addr) {
             Ok(bytes) => Ok(String::from_utf8(bytes).ok()),
-            Err(hh_ledger::errors::LedgerError::Missing { .. }) => Ok(None),
+            Err(hharness_ledger::errors::LedgerError::Missing { .. }) => Ok(None),
             Err(e) => Err(SpawnError::Kernel(format!("blob {id}: {e}"))),
         }
     };

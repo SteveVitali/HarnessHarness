@@ -1,4 +1,4 @@
-//! `hh-context` — the C0/Stage-1 context builder / policy engine and the C0
+//! `hharness-context` — the C0/Stage-1 context builder / policy engine and the C0
 //! memory slices (spec §5c.1 R-2.4.1, §5c.3 `R-2.4.3⁰`, §5c.4 `R-2.4.4⁰`;
 //! ticket S1.19; ADR-0072…0083).
 //!
@@ -36,15 +36,15 @@
 //! `MemoryStaleIndex` fold. [`mod@retrieve`] is the one retrieval pipeline —
 //! `enumerate` → validity → authority → readers → `deterministic_default`
 //! ranker → budgeted whole-item cut — with `lexical_index` as the C0
-//! materialized view (stamped through `hh-ledger`'s `View` — one view shape,
+//! materialized view (stamped through `hharness-ledger`'s `View` — one view shape,
 //! CC7) and every retrieval ledgered via `context.retrieval.completed` +
 //! `context.memory.read` payloads.
 //!
 //! Records this crate does **not** redefine (CC7): `Label`/`ProvenanceRecord`/
-//! `AuthorityClass`/`PersistenceScope` (`hh-provenance`), `VersionedRef`/
-//! `Lineage`/`RevocationRecord`/`idp` (`hh-identity`), `Validity`/`Text`/
-//! `ArtifactRecord` (`hh-hir`), `Event`/`View` (`hh-ledger`),
-//! `MeasuredAt` (`hh-telemetry`).
+//! `AuthorityClass`/`PersistenceScope` (`hharness-provenance`), `VersionedRef`/
+//! `Lineage`/`RevocationRecord`/`idp` (`hharness-identity`), `Validity`/`Text`/
+//! `ArtifactRecord` (`hharness-hir`), `Event`/`View` (`hharness-ledger`),
+//! `MeasuredAt` (`hharness-telemetry`).
 
 pub mod assemble;
 pub mod codec;

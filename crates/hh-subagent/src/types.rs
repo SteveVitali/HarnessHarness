@@ -10,15 +10,15 @@
 //! half. No `Text` leaf is ever *read* — `Goal.statement` travels as its
 //! content-addressed leaf (SP-3: a child never sees parent transcript bytes).
 
-use hh_budget::spec::BudgetSpec;
-use hh_budget::BudgetMode;
-use hh_env::handle::{DeriveMode, OnParentEnd};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::{Ref, RefVersion};
-use hh_ontology::control::Owner;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_budget::spec::BudgetSpec;
+use hharness_budget::BudgetMode;
+use hharness_env::handle::{DeriveMode, OnParentEnd};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::{Ref, RefVersion};
+use hharness_ontology::control::Owner;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 fn str_of(j: &Json) -> Option<&str> {
     j.as_str()
@@ -308,7 +308,7 @@ pub fn parse_derive_mode(s: &str) -> Option<DeriveMode> {
     })
 }
 
-/// `OnParentEnd` spellings — the spec's `cancel | detach_to_child` (hh-env's
+/// `OnParentEnd` spellings — the spec's `cancel | detach_to_child` (hharness-env's
 /// `Teardown`/`DetachToChild` machine states; one spelling table).
 pub fn on_parent_end_str(m: OnParentEnd) -> &'static str {
     match m {
@@ -508,7 +508,7 @@ impl ReturnContract {
     /// The payload member the `spawned` row cites (`return_contract_ref` is the
     /// contract's content address under the `hh.subagent.contract` domain).
     pub fn contract_ref(&self) -> String {
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "hh.subagent.contract",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -784,7 +784,7 @@ impl SubagentSpec {
     /// `H(spec)` — the spec half of the `(decision, H(spec))` idempotency key:
     /// idp/1 over the canonical JSON (one hashing scheme — CC1/CC7).
     pub fn spec_hash(&self) -> String {
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "hh.subagent.spec",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -830,11 +830,11 @@ impl SubagentSpec {
 
 /// `OwnedObject` — a coordination object an ownership record names (the
 /// closed sum `{fs_path_prefix | resource_key}`). The implementation lives
-/// in `hh_monitor::ownership` (R-2.11; ADR-0343 D3): the prepare-time
+/// in `hharness_monitor::ownership` (R-2.11; ADR-0343 D3): the prepare-time
 /// `check_write` monitor check is a Π component the seven-stage
-/// dispatcher (`hh-env`) must reach without depending on this crate —
+/// dispatcher (`hharness-env`) must reach without depending on this crate —
 /// one implementation, re-exported here (CC1).
-pub use hh_monitor::ownership::OwnedObject;
+pub use hharness_monitor::ownership::OwnedObject;
 
 /// `OwnershipRecord` — the ledger-side record: an `OwnedObject`, the owning
 /// holder (a `Ref<AgentProcess>` — the run's process ref), and the basis
@@ -848,7 +848,7 @@ pub struct OwnershipRecord {
     pub owner: String,
     /// The conferring `control.ownership.transferred` event ref (`None` for a
     /// declared root).
-    pub grant_ref: Option<hh_ledger::manifest::EventRef>,
+    pub grant_ref: Option<hharness_ledger::manifest::EventRef>,
     /// The fencing generation the grant was minted under (the lease's).
     pub lease_generation: u64,
 }
@@ -1515,7 +1515,7 @@ impl MergeReport {
 
     /// The report's content address (`merge_report_ref`).
     pub fn report_ref(&self) -> String {
-        hh_identity::idp::address(
+        hharness_identity::idp::address(
             self.to_json().to_canonical_string().as_bytes(),
             "application/json",
         )
@@ -1598,11 +1598,11 @@ pub struct Spawned {
     /// The derived environment handle (`isolation.environment = derive{…}`).
     pub env_handle_id: Option<String>,
     /// The `control.subagent.spawned` event ref — the delegated-to edge.
-    pub spawn_event: hh_ledger::manifest::EventRef,
+    pub spawn_event: hharness_ledger::manifest::EventRef,
     /// The child's writer lease (its own — SP-5). `None` on the adopt path
     /// when the original attempt's lease is still live elsewhere (lease
     /// expiry fences it — the caller never fabricates one).
-    pub child_lease: Option<hh_ledger::store::Lease>,
+    pub child_lease: Option<hharness_ledger::store::Lease>,
     /// The `wait` arm the caller drives (`await` ⇒ the parent waits for the
     /// `delegation_completed` cue; `background` ⇒ return immediately).
     pub wait_mode: WaitMode,
@@ -1848,7 +1848,8 @@ fn grant_constraints_json(c: &GrantConstraints) -> Json {
 fn grant_from_json(j: &Json) -> Option<Grant> {
     let c = j.get("constraints");
     Some(Grant {
-        effect: hh_hir::kinds::EffectClass::from_json(j.get("effect")?, "grant.effect").ok()?,
+        effect: hharness_hir::kinds::EffectClass::from_json(j.get("effect")?, "grant.effect")
+            .ok()?,
         scope: str_of(j.get("scope")?)?.to_string(),
         constraints: GrantConstraints {
             budget: c.and_then(|x| x.get("budget")).cloned(),
@@ -1865,7 +1866,7 @@ fn grant_from_json(j: &Json) -> Option<Grant> {
     })
 }
 
-/// `BudgetMode` spelling (`slice | pool` — the hh-budget enum carries no codec).
+/// `BudgetMode` spelling (`slice | pool` — the hharness-budget enum carries no codec).
 pub fn budget_mode_str(m: BudgetMode) -> &'static str {
     match m {
         BudgetMode::Slice => "slice",
@@ -1907,7 +1908,7 @@ fn goal_from_json(j: &Json) -> Option<GoalRecord> {
     // (`authority = external`; the goal's statement is never a decider).
     let stmt = j.get("statement")?;
     let statement = if let Some(s) = stmt.as_str() {
-        let prov = hh_provenance::ProvenanceRecord::kernel("hh-subagent", 0);
+        let prov = hharness_provenance::ProvenanceRecord::kernel("hharness-subagent", 0);
         let mut t = Text::new(s, "parent", prov);
         t.authority = AuthorityClass::External;
         t

@@ -12,7 +12,7 @@
 //!    ADR-0052/OQ-135). Static spec checks (`DefinitionUnresolvable`) run
 //!    first.
 //! 3. `delegate(parent, child_spec, requested_grants, budget_req, at)` —
-//!    `hh-monitor`'s one attenuation seam (ADR-0053 D-1/D-2).
+//!    `hharness-monitor`'s one attenuation seam (ADR-0053 D-1/D-2).
 //! 4. `allocate(parent_budget, spec.budget.spec, mode)` (ADR-0040) — the
 //!    child `BudgetNode` under `slice`/`pool` (R-2.1.6¹).
 //!    - `grant_ownership(ownership_grants[])` ⊆ the parent's valid ownerships
@@ -36,22 +36,22 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::account::Account;
-use hh_budget::quantity::ResourceVector;
-use hh_budget::spec::BudgetScope;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::leases::{LeaseScope, ScopedLease};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::manifest::RunManifest;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::LedgerError;
-use hh_monitor::delegate::{delegate, ChildSpec, LiveCoords};
-use hh_monitor::handle::{AuthorityHandle, HandleId};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::DimensionId;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_budget::account::Account;
+use hharness_budget::quantity::ResourceVector;
+use hharness_budget::spec::BudgetScope;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::leases::{LeaseScope, ScopedLease};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::manifest::RunManifest;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::LedgerError;
+use hharness_monitor::delegate::{delegate, ChildSpec, LiveCoords};
+use hharness_monitor::handle::{AuthorityHandle, HandleId};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::consistency::{k1_check, ConsistencyDeclaration};
 use crate::hosted::{HostedOpen, HostedPlaneError};
@@ -70,7 +70,7 @@ pub fn child_run_id_for(decision: &EventRef, spec_hash: &str) -> String {
     ]);
     format!(
         "sub-{}",
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "hh.subagent.spawn",
             preimage.to_canonical_string().as_bytes()
         )
@@ -123,10 +123,10 @@ pub trait SpawnHook {
 pub struct BranchCtx {
     /// `ctx₀` — the parent's context label at spawn (recorded verbatim on
     /// the `spawned` row's `ctx0` member).
-    pub ctx0: hh_provenance::Label,
+    pub ctx0: hharness_provenance::Label,
     /// The parent's effective authority — the branch's clearance bound
     /// (a `ceiling` request above it refuses `ClearanceExceeded`).
-    pub clearance: hh_provenance::AuthorityClass,
+    pub clearance: hharness_provenance::AuthorityClass,
 }
 
 /// What `spawn` needs beyond its arguments — the parent's seam set. All
@@ -153,7 +153,7 @@ pub struct SpawnCtx<'a> {
     /// The parent's valid ownerships (step 4b's ⊆ check).
     pub parent_ownerships: &'a OwnershipTable,
     /// The parent's sealed tool table (`supplies.tools ⊆`).
-    pub parent_tool_table: &'a [hh_hir::refs::Ref],
+    pub parent_tool_table: &'a [hharness_hir::refs::Ref],
     /// The parent's own delegation depth (`delegation_depth` gauge level).
     pub parent_depth: u64,
     /// The `control.decision{kind: delegate}` this spawn hangs from
@@ -184,7 +184,7 @@ pub struct SpawnCtx<'a> {
     pub hook: Option<&'a mut (dyn SpawnHook + 'static)>,
 }
 
-/// The `derive` port — implemented by `hh_env::driver::EnvDriver` (and test
+/// The `derive` port — implemented by `hharness_env::driver::EnvDriver` (and test
 /// doubles); returns the child's `env_handle_id`.
 pub trait EnvDeriver {
     /// `derive(parent_env, mode, scope, on_parent_end, derived_for) →
@@ -201,26 +201,26 @@ pub trait EnvDeriver {
         store: &mut Store,
         lease: &Lease,
         parent_env_id: &str,
-        mode: hh_env::handle::DeriveMode,
+        mode: hharness_env::handle::DeriveMode,
         scope: Option<&str>,
-        on_parent_end: hh_env::handle::OnParentEnd,
+        on_parent_end: hharness_env::handle::OnParentEnd,
         derived_for: &str,
     ) -> Result<String, String>;
 }
 
-impl EnvDeriver for hh_env::driver::EnvDriver {
+impl EnvDeriver for hharness_env::driver::EnvDriver {
     #[allow(clippy::too_many_arguments)]
     fn derive(
         &mut self,
         store: &mut Store,
         lease: &Lease,
         parent_env_id: &str,
-        mode: hh_env::handle::DeriveMode,
+        mode: hharness_env::handle::DeriveMode,
         scope: Option<&str>,
-        on_parent_end: hh_env::handle::OnParentEnd,
+        on_parent_end: hharness_env::handle::OnParentEnd,
         derived_for: &str,
     ) -> Result<String, String> {
-        let h = hh_env::driver::EnvDriver::derive_for(
+        let h = hharness_env::driver::EnvDriver::derive_for(
             self,
             store,
             lease,
@@ -274,7 +274,7 @@ fn spawned_payload(
     delegation_ref: &EventRef,
     child_handles: &[String],
     parent_handle: &HandleId,
-    ceiling: hh_provenance::AuthorityClass,
+    ceiling: hharness_provenance::AuthorityClass,
     attenuation_delta: &Json,
     budget_id: &str,
     spec: &SubagentSpec,
@@ -376,7 +376,7 @@ fn spawned_payload(
         m.push(("messaging_policy", p.to_json()));
     }
     if let Some(b) = branch {
-        m.push(("ctx0", hh_provenance::label_json_full(&b.ctx0)));
+        m.push(("ctx0", hharness_provenance::label_json_full(&b.ctx0)));
         m.push(("clearance", Json::str(b.clearance.as_str())));
     }
     // T7 — the durable boundary mapping: `hosted{session_ref,
@@ -392,7 +392,7 @@ fn spawned_payload(
 /// The `supplies_digest` — idp/1 over the canonical supplies form (the
 /// spawned row names supplied content by digest, never by value).
 fn supplies_digest(s: &Supplies) -> String {
-    hh_identity::idp::idp_id(
+    hharness_identity::idp::idp_id(
         "hh.subagent.supplies",
         s.to_json().to_canonical_string().as_bytes(),
     )
@@ -577,10 +577,10 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
                 .wakeup_subscribe(
                     ctx.parent_run_id,
                     ctx.parent_lease,
-                    hh_ledger::wakeup::Trigger::ChildTerminal {
+                    hharness_ledger::wakeup::Trigger::ChildTerminal {
                         child_run_id: child_run_id.clone(),
                     },
-                    hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                    hharness_ledger::wakeup::WakeupPolicy::default_policy(),
                     &spawn_event,
                 )
                 .map_err(|e| SpawnError::Kernel(format!("child_terminal subscribe: {e}")))?,
@@ -665,11 +665,12 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     // the spec's closed answer is a spawn refusal, never a late fence.
     if matches!(
         spec.on_parent_end,
-        hh_env::handle::OnParentEnd::DetachToChild
+        hharness_env::handle::OnParentEnd::DetachToChild
     ) && matches!(
         spec.environment,
         EnvIsolation::Derive {
-            mode: hh_env::handle::DeriveMode::Share | hh_env::handle::DeriveMode::ScopedSubtree,
+            mode: hharness_env::handle::DeriveMode::Share
+                | hharness_env::handle::DeriveMode::ScopedSubtree,
             ..
         }
     ) {
@@ -762,7 +763,7 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
                     ctx.reserve_ttl_ms,
                 )
                 .map_err(|e| match e {
-                    hh_budget::BudgetError::InsufficientBudget { dimension, .. } => {
+                    hharness_budget::BudgetError::InsufficientBudget { dimension, .. } => {
                         SpawnError::Refused(SpawnRefused::InsufficientBudget {
                             dimension: dimension.to_string(),
                         })
@@ -776,11 +777,11 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     // ── step 3 — delegate (the Π `spawn_process` row: allow iff
     //    attenuation holds; one attenuation seam — ADR-0053 D-1/D-2) ──────
     let child_spec = ChildSpec {
-        holder: hh_hir::refs::Ref::pinned("agent_process".to_string(), child_run_id.clone()),
+        holder: hharness_hir::refs::Ref::pinned("agent_process".to_string(), child_run_id.clone()),
         requested: spec.requested_grants.clone(),
         ceiling: spec
             .ceiling
-            .unwrap_or(hh_provenance::AuthorityClass::Delegate),
+            .unwrap_or(hharness_provenance::AuthorityClass::Delegate),
         budget_req: (!spec.budget_spec.hard_caps_map().is_empty()).then(|| {
             // The delegate-time budget bound is the child's spec's hard caps
             // as a Json object `{dim: amount}`.
@@ -801,7 +802,7 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
             &mut alloc,
         )
         .map_err(|e| {
-            use hh_monitor::delegate::DelegateError::*;
+            use hharness_monitor::delegate::DelegateError::*;
             SpawnError::Refused(match e {
                 AuthorityWidening { domain } => SpawnRefused::AuthorityWidening {
                     domain: domain.name().to_string(),
@@ -833,7 +834,7 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
             .nodes
             .values()
             .find(|n| {
-                n.node.scope.kind == hh_budget::spec::BudgetScopeKind::AgentProcess
+                n.node.scope.kind == hharness_budget::spec::BudgetScopeKind::AgentProcess
                     && n.node.scope.target == child_run_id
             })
             .map(|n| n.node.budget_id.clone())
@@ -843,15 +844,15 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
                     ctx.parent_lease,
                     Some(ctx.parent_budget_id),
                     BudgetScope {
-                        kind: hh_budget::spec::BudgetScopeKind::AgentProcess,
+                        kind: hharness_budget::spec::BudgetScopeKind::AgentProcess,
                         target: child_run_id.clone(),
                     },
                     spec.budget_spec.clone(),
                 )
             })
             .map_err(|e| match e {
-                hh_budget::BudgetError::InsufficientBudget { dimension, .. }
-                | hh_budget::BudgetError::BudgetExceedsParent { dimension, .. } => {
+                hharness_budget::BudgetError::InsufficientBudget { dimension, .. }
+                | hharness_budget::BudgetError::BudgetExceedsParent { dimension, .. } => {
                     SpawnError::Refused(SpawnRefused::BudgetExceedsParent {
                         detail: format!("{dimension} exceeds the parent's remaining"),
                     })
@@ -966,7 +967,8 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     let mut resource_locks: Vec<ScopedLease> = Vec::new();
     let lock_modes = matches!(
         coordination_mode,
-        Some(hh_env::handle::DeriveMode::Share) | Some(hh_env::handle::DeriveMode::ScopedSubtree)
+        Some(hharness_env::handle::DeriveMode::Share)
+            | Some(hharness_env::handle::DeriveMode::ScopedSubtree)
     );
     if lock_modes && !spec.reserved_keys.is_empty() {
         let mut keys = spec.reserved_keys.clone();
@@ -1043,7 +1045,10 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     // consistent snapshot over the run tree orders the shared writes
     // (mandatory in `share`, optional elsewhere — `scoped_subtree`
     // children stamp through their own lineage).
-    if matches!(coordination_mode, Some(hh_env::handle::DeriveMode::Share)) {
+    if matches!(
+        coordination_mode,
+        Some(hharness_env::handle::DeriveMode::Share)
+    ) {
         ctx.store
             .require_hlc(ctx.parent_run_id)
             .map_err(|e| SpawnError::Kernel(format!("require_hlc: {e}")))?;
@@ -1146,19 +1151,19 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     ]);
     let ceiling = spec
         .ceiling
-        .unwrap_or(hh_provenance::AuthorityClass::Delegate)
+        .unwrap_or(hharness_provenance::AuthorityClass::Delegate)
         .min(
             ctx.handles
                 .get(ctx.parent_handle_id)
                 .map(|p| p.ceiling)
-                .unwrap_or(hh_provenance::AuthorityClass::Delegate),
+                .unwrap_or(hharness_provenance::AuthorityClass::Delegate),
         );
     let attenuation_delta = Json::obj([
         (
             "requested_ceiling",
             Json::str(
                 spec.ceiling
-                    .unwrap_or(hh_provenance::AuthorityClass::Delegate)
+                    .unwrap_or(hharness_provenance::AuthorityClass::Delegate)
                     .as_str(),
             ),
         ),
@@ -1265,10 +1270,10 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
         .wakeup_subscribe(
             ctx.parent_run_id,
             ctx.parent_lease,
-            hh_ledger::wakeup::Trigger::ChildTerminal {
+            hharness_ledger::wakeup::Trigger::ChildTerminal {
                 child_run_id: child_run_id.clone(),
             },
-            hh_ledger::wakeup::WakeupPolicy::default_policy(),
+            hharness_ledger::wakeup::WakeupPolicy::default_policy(),
             &spawn_event,
         )
         .map_err(|e| SpawnError::Kernel(format!("child_terminal subscribe: {e}")))?;
@@ -1429,8 +1434,8 @@ fn finish_child_open(
     extra.insert("child_role".to_string(), Json::str(spec.role.as_str()));
     let harness_def_ref = match &spec.process {
         ChildProcess::Native { harness_def, .. } => match &harness_def.version {
-            hh_hir::refs::RefVersion::Pinned(v) => Some(v.clone()),
-            hh_hir::refs::RefVersion::Selector(_) => None,
+            hharness_hir::refs::RefVersion::Pinned(v) => Some(v.clone()),
+            hharness_hir::refs::RefVersion::Selector(_) => None,
         },
         ChildProcess::Hosted(_) => None,
     };
@@ -1447,11 +1452,11 @@ fn finish_child_open(
         // T7 — a hosted child is `participant_class = hosted` regardless of
         // the parent's class (the class describes the child, not its parent).
         participant_class: match &spec.process {
-            ChildProcess::Hosted(_) => hh_ledger::manifest::ParticipantClass::Hosted,
+            ChildProcess::Hosted(_) => hharness_ledger::manifest::ParticipantClass::Hosted,
             ChildProcess::Native { .. } => parent_manifest.participant_class,
         },
         observability_level: parent_manifest.observability_level.clone(),
-        run_kind: hh_ledger::manifest::RunKind::Agent,
+        run_kind: hharness_ledger::manifest::RunKind::Agent,
         activation_no: 1,
         attendance: parent_manifest.attendance,
         workspace_trust: parent_manifest.workspace_trust,

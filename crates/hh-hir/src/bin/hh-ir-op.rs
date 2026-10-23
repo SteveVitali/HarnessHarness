@@ -18,9 +18,9 @@
 
 use std::io::Read;
 
-use hh_hir::document::parse_document;
-use hh_hir::errors::HirError;
-use hh_wire::json::Json;
+use hharness_hir::document::parse_document;
+use hharness_hir::errors::HirError;
+use hharness_wire::json::Json;
 
 fn read(path: &str) -> Vec<u8> {
     if path == "-" {
@@ -45,7 +45,7 @@ fn out(bytes: Vec<u8>) {
     println!();
 }
 
-fn report_json(r: &hh_hir::errors::ValidationReport) -> Vec<u8> {
+fn report_json(r: &hharness_hir::errors::ValidationReport) -> Vec<u8> {
     Json::obj([
         ("node_count", Json::Int(r.node_count as i64)),
         ("edge_count", Json::Int(r.edge_count as i64)),
@@ -58,66 +58,71 @@ fn report_json(r: &hh_hir::errors::ValidationReport) -> Vec<u8> {
     .into_bytes()
 }
 
-fn provenance_arg(bytes: &[u8]) -> hh_provenance::ProvenanceRecord {
-    let j = hh_wire::canonical::parse_canonical(bytes)
+fn provenance_arg(bytes: &[u8]) -> hharness_provenance::ProvenanceRecord {
+    let j = hharness_wire::canonical::parse_canonical(bytes)
         .unwrap_or_else(|e| panic!("provenance arg not canonical: {e}"));
-    hh_hir::wire::provenance_from_json(&j).expect("provenance arg")
+    hharness_hir::wire::provenance_from_json(&j).expect("provenance arg")
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let op = args.get(1).map(String::as_str).unwrap_or("help");
     match op {
-        "canonicalize" => match hh_hir::canonicalize_bytes(&read(&args[2])) {
+        "canonicalize" => match hharness_hir::canonicalize_bytes(&read(&args[2])) {
             Ok(b) => out(b),
             Err(e) => fail(e),
         },
-        "validate" => match hh_hir::validate_bytes(&read(&args[2])) {
+        "validate" => match hharness_hir::validate_bytes(&read(&args[2])) {
             Ok(r) => out(report_json(&r)),
             Err(e) => fail(e),
         },
         "identity" => {
             match parse_document(&read(&args[2])).map(|mut d| {
-                hh_hir::compute_ids(&mut d);
+                hharness_hir::compute_ids(&mut d);
                 d
             }) {
-                Ok(d) => out(hh_hir::canonicalize(&d)),
+                Ok(d) => out(hharness_hir::canonicalize(&d)),
                 Err(e) => fail(vec![e]),
             }
         }
         "seal" => {
             let at: u64 = args[3].parse().expect("sealed_at (u64)");
-            match hh_hir::seal_bytes(&read(&args[2]), at) {
+            match hharness_hir::seal_bytes(&read(&args[2]), at) {
                 Ok(b) => out(b),
                 Err(e) => fail(e),
             }
         }
         "diff" => {
             let prov = provenance_arg(&read(&args[4]));
-            match hh_hir::diff_bytes(&read(&args[2]), &read(&args[3]), prov, Default::default()) {
+            match hharness_hir::diff_bytes(
+                &read(&args[2]),
+                &read(&args[3]),
+                prov,
+                Default::default(),
+            ) {
                 Ok(b) => out(b),
                 Err(e) => fail(e),
             }
         }
-        "apply" => match hh_hir::apply_bytes(&read(&args[2]), &read(&args[3])) {
+        "apply" => match hharness_hir::apply_bytes(&read(&args[2]), &read(&args[3])) {
             Ok(b) => out(b),
             Err(e) => fail(e),
         },
         "invert" => {
-            let dj = hh_wire::canonical::parse_canonical(&read(&args[2]))
+            let dj = hharness_wire::canonical::parse_canonical(&read(&args[2]))
                 .unwrap_or_else(|e| panic!("diff not canonical: {e}"));
-            match hh_hir::wire::diff_from_json(&dj) {
-                Ok(d) => out(hh_hir::wire::diff_to_json(&hh_hir::invert(&d))
+            match hharness_hir::wire::diff_from_json(&dj) {
+                Ok(d) => out(hharness_hir::wire::diff_to_json(&hharness_hir::invert(&d))
                     .to_canonical_string()
                     .into_bytes()),
                 Err(e) => fail(vec![e]),
             }
         }
-        "migrate" => match hh_hir::migrate_bytes(&read(&args[2]), &args[3], &args[4]) {
+        "migrate" => match hharness_hir::migrate_bytes(&read(&args[2]), &args[3], &args[4]) {
             Ok(b) => out(b),
             Err(e) => fail(e),
         },
-        "project" => match hh_hir::project_bytes(&read(&args[2]), &args[3]) {
+        "project" => match hharness_hir::project_bytes(&read(&args[2]), &args[3]) {
             Ok(b) => out(b),
             Err(e) => fail(e),
         },

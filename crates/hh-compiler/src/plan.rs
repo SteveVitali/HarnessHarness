@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::{
+use hharness_hir::{
     kinds::ToolEffects,
     records::{
         BudgetRecord, DimensionBound, KindRecord, NativeProcess, ProcedureRecord, ProcedureStep,
@@ -15,8 +15,8 @@ use hh_hir::{
     refs::RefVersion,
     DefinitionVersionRef, HirDocument, Node, Ref,
 };
-use hh_ontology::control::{ControlBoundary, StopKind};
-use hh_wire::json::Json;
+use hharness_ontology::control::{ControlBoundary, StopKind};
+use hharness_wire::json::Json;
 
 use crate::errors::CompileError;
 use crate::link::LinkedGraph;
@@ -227,7 +227,7 @@ pub struct DelegateNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StopRuleNode {
     /// The `StopKind` tag of the control-plane `StopReason` the rule fires
-    /// (§5e.2; ADR-0106 D6 — the sum is owned by `hh_ontology::control`; this
+    /// (§5e.2; ADR-0106 D6 — the sum is owned by `hharness_ontology::control`; this
     /// node's `reason` member carries the tag spelling, never a second
     /// three-member subset — retired at S1.20, CC1).
     pub reason: StopKind,
@@ -245,7 +245,7 @@ pub struct ToolBinding {
     /// The capability.
     pub capability: PinnedRef,
     /// The declared effect set (`[]` iff `effects = pure`).
-    pub effects: Vec<hh_hir::EffectClass>,
+    pub effects: Vec<hharness_hir::EffectClass>,
     /// The declared precondition domains.
     pub preconditions: Vec<String>,
     /// The scope-bindings record (`scope_bindings` or `{"unknown": true}` — carried, never
@@ -288,7 +288,7 @@ pub struct EffectRow {
     /// The capability's semantic id.
     pub capability: String,
     /// The declared class.
-    pub effect_class: hh_hir::EffectClass,
+    pub effect_class: hharness_hir::EffectClass,
 }
 
 /// A budget row.
@@ -305,7 +305,7 @@ pub struct BudgetRow {
 }
 
 /// The budget envelope (§3.2.4 `budget`): the process budget, the verbatim control
-/// boundary (the β record — `hh_ontology` owns the type, CC7), and the plan-node ids of
+/// boundary (the β record — `hharness_ontology` owns the type, CC7), and the plan-node ids of
 /// the stop-rule nodes the boundary lowered into (ADR-0106).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BudgetEnvelope {
@@ -526,7 +526,7 @@ pub fn lower_native(linked: &LinkedGraph) -> Result<RuntimePlan, CompileError> {
                 let _ = p as &ProcedureRecord;
             }
             KindRecord::ToolCapability(t) => {
-                let effects: Vec<hh_hir::EffectClass> = match &t.effects {
+                let effects: Vec<hharness_hir::EffectClass> = match &t.effects {
                     ToolEffects::Pure => Vec::new(),
                     ToolEffects::Declared(set) => set.iter().cloned().collect(),
                 };
@@ -537,21 +537,19 @@ pub fn lower_native(linked: &LinkedGraph) -> Result<RuntimePlan, CompileError> {
                     });
                 }
                 let surface = match &node.surface {
-                    Some(hh_hir::SurfaceRecord::Tool(ts)) => Some(crate::equiv::bind_surface(
-                        node,
-                        ts.as_ref(),
-                        &t.input_schema,
-                    )),
+                    Some(hharness_hir::SurfaceRecord::Tool(ts)) => Some(
+                        crate::equiv::bind_surface(node, ts.as_ref(), &t.input_schema),
+                    ),
                     // A non-`Tool` surface record on a `ToolCapability` is a
                     // composite/synthesized surface — admissible only as a `PlanMap`
                     // (§3.2.6 rule iii; ADR-0090 §6). Unexpressible at C0:
                     // `UncheckableSurface`, never a silent drop.
                     Some(other) => {
                         let kind = match other {
-                            hh_hir::SurfaceRecord::Validator(_) => "Validator",
-                            hh_hir::SurfaceRecord::Procedure(_) => "Procedure",
-                            hh_hir::SurfaceRecord::ContextItem(_) => "ContextItem",
-                            hh_hir::SurfaceRecord::Tool(_) => unreachable!("handled above"),
+                            hharness_hir::SurfaceRecord::Validator(_) => "Validator",
+                            hharness_hir::SurfaceRecord::Procedure(_) => "Procedure",
+                            hharness_hir::SurfaceRecord::ContextItem(_) => "ContextItem",
+                            hharness_hir::SurfaceRecord::Tool(_) => unreachable!("handled above"),
                         };
                         return Err(CompileError::UncheckableSurface {
                             surface: node.semantic_id(),
@@ -635,7 +633,7 @@ pub fn lower_native(linked: &LinkedGraph) -> Result<RuntimePlan, CompileError> {
                 artifact_ids.insert(node.semantic_id(), a.content_hash.clone());
             }
             KindRecord::AgentProcess(ap) => {
-                if let hh_hir::AgentProcessBody::Native(n) = &ap.body {
+                if let hharness_hir::AgentProcessBody::Native(n) = &ap.body {
                     lower_native_process(
                         &mut lw,
                         node,
@@ -690,7 +688,7 @@ pub enum ProcedureProduct {
     },
     /// `subagent_task` — the `delegate{spec, budget, permission}` node:
     /// `spec` is the assembled `SubagentSpec` canonical document (the schema
-    /// is `hh-subagent`'s — the compiler carries it as data, CC7); `budget`
+    /// is `hharness-subagent`'s — the compiler carries it as data, CC7); `budget`
     /// is the child sub-budget (≤ parent — `spawn` enforces through
     /// `allocate`/`delegate`); `permission` is the delegated permission ref
     /// (grants ⊆ `allowed_capabilities` — Π's attenuation at `spawn`).
@@ -703,12 +701,12 @@ pub enum ProcedureProduct {
 /// The caller-supplied members of the `subagent_task` lowering (§5c.5;
 /// AC-R-2.4.5-8): the assembled `SubagentSpec` document plus the delegate
 /// node's `budget`/`permission` refs. The procedure's own lowering owns
-/// none of these — the *constructor* (hh-subagent's `spec_for_procedure`)
+/// none of these — the *constructor* (hharness-subagent's `spec_for_procedure`)
 /// assembles the spec from `P` + bound parameters; this record is what the
 /// plan stamps `hir_node_id`/trace onto.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubagentTaskSpec {
-    /// The canonical `SubagentSpec` document (`hh_subagent::SubagentSpec`'s
+    /// The canonical `SubagentSpec` document (`hharness_subagent::SubagentSpec`'s
     /// `to_json` shape — the one schema source).
     pub spec: Json,
     /// The child sub-budget ref (must be `≤` the parent's — `spawn`'s
@@ -728,7 +726,7 @@ pub struct SubagentTaskSpec {
 pub fn lower_procedure(
     doc: &HirDocument,
     proc: &Node,
-    target: hh_hir::procedure::CompilationTarget,
+    target: hharness_hir::procedure::CompilationTarget,
     procedure_render_prefix: Option<&str>,
     subagent: Option<&SubagentTaskSpec>,
 ) -> Result<ProcedureProduct, CompileError> {
@@ -739,7 +737,7 @@ pub fn lower_procedure(
         });
     };
     match target {
-        hh_hir::procedure::CompilationTarget::Instruction => {
+        hharness_hir::procedure::CompilationTarget::Instruction => {
             // The deterministic typed step listing — `step[i] <kind>` lines
             // plus each Instruction step's text. The profile-owned
             // `procedure_render` prefix is the only profile-dependent byte.
@@ -768,7 +766,7 @@ pub fn lower_procedure(
             }
             Ok(ProcedureProduct::Instruction { body: out })
         }
-        hh_hir::procedure::CompilationTarget::WorkflowNode => {
+        hharness_hir::procedure::CompilationTarget::WorkflowNode => {
             let mut lw = Lowering {
                 doc: doc.clone(),
                 next: 0,
@@ -778,7 +776,7 @@ pub fn lower_procedure(
                 nodes: lw.lower_steps(&rec.steps, proc)?,
             })
         }
-        hh_hir::procedure::CompilationTarget::SubagentTask => {
+        hharness_hir::procedure::CompilationTarget::SubagentTask => {
             let Some(spec) = subagent else {
                 return Err(CompileError::PlanError {
                     node: proc.semantic_id(),
@@ -830,8 +828,8 @@ fn lower_native_process(
     // Bound slots → the plan's slot table.
     for (slot, bindings) in &n.slots {
         let one: Vec<&SlotBinding> = match bindings {
-            hh_hir::records::SlotBindings::One(b) => vec![b],
-            hh_hir::records::SlotBindings::Many(bs) => bs.iter().collect(),
+            hharness_hir::records::SlotBindings::One(b) => vec![b],
+            hharness_hir::records::SlotBindings::Many(bs) => bs.iter().collect(),
         };
         for (i, b) in one.iter().enumerate() {
             let version_id = match &b.variant.version {
@@ -891,7 +889,7 @@ fn lower_native_process(
             }
         };
         control.push(mk(lw, StopKind::BudgetExhausted, None));
-        use hh_ontology::control::DecisionPoint;
+        use hharness_ontology::control::DecisionPoint;
         if let Some(guard) = n.control_boundary.guards.get(&DecisionPoint::Stop) {
             control.push(mk(
                 lw,
@@ -909,12 +907,12 @@ fn lower_native_process(
     Ok(())
 }
 
-fn validator_kind_name(k: &hh_hir::ValidatorKind) -> &'static str {
+fn validator_kind_name(k: &hharness_hir::ValidatorKind) -> &'static str {
     match k {
-        hh_hir::ValidatorKind::Executable(_) => "executable",
-        hh_hir::ValidatorKind::Schema => "schema",
-        hh_hir::ValidatorKind::Predicate => "predicate",
-        hh_hir::ValidatorKind::Judge(_) => "judge",
-        hh_hir::ValidatorKind::Human => "human",
+        hharness_hir::ValidatorKind::Executable(_) => "executable",
+        hharness_hir::ValidatorKind::Schema => "schema",
+        hharness_hir::ValidatorKind::Predicate => "predicate",
+        hharness_hir::ValidatorKind::Judge(_) => "judge",
+        hharness_hir::ValidatorKind::Human => "human",
     }
 }

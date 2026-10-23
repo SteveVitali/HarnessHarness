@@ -13,8 +13,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_subagent::types::{MergePolicy, SpawnError};
-use hh_wire::json::Json;
+use hharness_subagent::types::{MergePolicy, SpawnError};
+use hharness_wire::json::Json;
 
 use crate::lab::{match_report, ArmExecution, LabRefusal};
 use crate::topology::TopologyPreset;
@@ -150,7 +150,7 @@ impl CoordinationArmReport {
 /// `all_terminal` (every child reached `result`), the merge counters read
 /// the parent's durable `control.merge.completed`/`resolved` rows.
 pub fn coordination_arm(
-    store: &hh_ledger::store::Store,
+    store: &hharness_ledger::store::Store,
     parent_run_id: &str,
     execution: &ArmExecution,
     factors: &CoordinationFactors,
@@ -186,8 +186,8 @@ pub fn coordination_arm(
                     });
                 // Conflicts fold through the blobbed report when present.
                 if let Some(report_ref) = e.payload.get("merge_report_ref").and_then(Json::as_str) {
-                    if let Ok(parsed) = hh_identity::idp::parse_id(report_ref) {
-                        if let Ok(bytes) = store.get_blob(&hh_identity::idp::ContentAddress {
+                    if let Ok(parsed) = hharness_identity::idp::parse_id(report_ref) {
+                        if let Ok(bytes) = store.get_blob(&hharness_identity::idp::ContentAddress {
                             idp: "idp/1",
                             algorithm: "sha256",
                             digest: parsed.digest_hex,
@@ -195,7 +195,7 @@ pub fn coordination_arm(
                             size: 0,
                         }) {
                             if let Ok(text) = String::from_utf8(bytes) {
-                                if let Ok(report) = hh_wire::json::parse(&text) {
+                                if let Ok(report) = hharness_wire::json::parse(&text) {
                                     if let Some(Json::Arr(cs)) = report.get("conflicts") {
                                         for c in cs {
                                             let open = c
@@ -252,14 +252,17 @@ pub fn coordination_arm(
 pub fn coordination_match_report(
     arms: &[(
         &CoordinationArmReport,
-        Option<&hh_budget::matchspec::MatchSpec>,
+        Option<&hharness_budget::matchspec::MatchSpec>,
     )],
     executions: &BTreeMap<String, &ArmExecution>,
 ) -> Result<Json, LabRefusal> {
     // Re-run the matched gate over the underlying executions — the
     // refusal semantics are identical (an unmatchable arm refuses, never
     // silently compares).
-    let exec_pairs: Vec<(&ArmExecution, Option<&hh_budget::matchspec::MatchSpec>)> = arms
+    let exec_pairs: Vec<(
+        &ArmExecution,
+        Option<&hharness_budget::matchspec::MatchSpec>,
+    )> = arms
         .iter()
         .filter_map(|(r, s)| executions.get(&r.arm_id).map(|e| (*e, *s)))
         .collect();
@@ -272,8 +275,8 @@ pub fn coordination_match_report(
                 m.insert(
                     "match_mode".into(),
                     Json::str(match s.mode {
-                        hh_budget::matchspec::MatchMode::MatchedTotal => "matched_total",
-                        hh_budget::matchspec::MatchMode::MatchedCap => "matched_cap",
+                        hharness_budget::matchspec::MatchMode::MatchedTotal => "matched_total",
+                        hharness_budget::matchspec::MatchMode::MatchedCap => "matched_cap",
                         _ => "other",
                     }),
                 );

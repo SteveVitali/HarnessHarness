@@ -7,18 +7,20 @@
 //! change is accepted — the caller records it as `lifecycle.definition.changed{diff_ref}`
 //! (`crate::events::definition_changed` + `emit`).
 
-use hh_hir::diff::{DiffDerivation, HirDiff};
-use hh_hir::document::{HirDocument, SealedDefinition};
-use hh_hir::records::{AgentProcessBody, DimensionBound, KindRecord, SlotBindings, SurfaceRecord};
-use hh_ledger::event::EventEnvelope;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::diff::{DiffDerivation, HirDiff};
+use hharness_hir::document::{HirDocument, SealedDefinition};
+use hharness_hir::records::{
+    AgentProcessBody, DimensionBound, KindRecord, SlotBindings, SurfaceRecord,
+};
+use hharness_ledger::event::EventEnvelope;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::diagnostics::AssemblyDiagnostic;
 use crate::events::ARTEFACT_DELIVERED;
 
 /// The budget-decrease gate — "accounting allows" (§3.3.4). The run's accounting layer
-/// supplies the verdict (a `hh-budget`-backed gate is the kernel's); `DenyAll` is the
+/// supplies the verdict (a `hharness-budget`-backed gate is the kernel's); `DenyAll` is the
 /// safe default.
 pub trait BudgetGate {
     /// Whether a mid-run budget decrease at `path` (`old` → `new` dimension bounds) is
@@ -112,7 +114,7 @@ pub enum ResumeVerdict {
 
 /// `verify_resume(persisted, current, ledger_view, provenance, derivation)` (§3.3.4).
 /// `provenance`/`derivation` are the edit's provenance — the `Compatible` verdict's
-/// `HirDiff` runs `hh_hir::diff`'s §3.1.7 gates (authority-widening, conditioned-rule,
+/// `HirDiff` runs `hharness_hir::diff`'s §3.1.7 gates (authority-widening, conditioned-rule,
 /// model-origin narrowing); a gated refusal surfaces as `Err` (`C-KERN-*`
 /// diagnostics), not a verdict.
 pub fn verify_resume(
@@ -153,12 +155,12 @@ pub fn verify_resume(
     Ok(ResumeVerdict::Compatible { diff: d, diff_ref })
 }
 
-/// The diff's content address (`hh_identity::idp::address` over the canonical
+/// The diff's content address (`hharness_identity::idp::address` over the canonical
 /// `HirDiff` JSON — the one hasher, CC1).
 fn diff_address(d: &HirDiff) -> String {
-    let j = hh_hir::wire::diff_to_json(d);
+    let j = hharness_hir::wire::diff_to_json(d);
     let bytes = j.to_canonical_string();
-    hh_identity::idp::address(bytes.as_bytes(), "application/x-hir-diff").id()
+    hharness_identity::idp::address(bytes.as_bytes(), "application/x-hir-diff").id()
 }
 
 /// The `class_id`s bound per slot, per `AgentProcess` node (`node_sid → slot →
@@ -175,7 +177,7 @@ fn slot_classes(old: &HirDocument, new: &HirDocument, reasons: &mut Vec<ResumeRe
             };
             let sid = n.semantic_id();
             for (slot, bs) in &native.slots {
-                let class_of = |b: &hh_hir::records::SlotBinding| b.variant.class_id.clone();
+                let class_of = |b: &hharness_hir::records::SlotBinding| b.variant.class_id.clone();
                 let cid = match bs {
                     SlotBindings::One(b) => class_of(b),
                     SlotBindings::Many(v) => v.iter().map(class_of).collect::<Vec<_>>().join(","),
@@ -233,7 +235,7 @@ fn delivered_tools(
     let inventory = |doc: &HirDocument| -> std::collections::BTreeSet<String> {
         let mut inv = std::collections::BTreeSet::new();
         for n in &doc.nodes {
-            if matches!(n.kind, hh_hir::kinds::EntityKind::ToolCapability) {
+            if matches!(n.kind, hharness_hir::kinds::EntityKind::ToolCapability) {
                 inv.insert(n.semantic_id());
                 if let Some(SurfaceRecord::Tool(t)) = &n.surface {
                     inv.insert(t.name.clone());
@@ -267,7 +269,7 @@ fn budget_decreases(
 ) {
     fn budgets(
         doc: &HirDocument,
-    ) -> std::collections::BTreeMap<String, &hh_hir::records::BudgetRecord> {
+    ) -> std::collections::BTreeMap<String, &hharness_hir::records::BudgetRecord> {
         doc.nodes
             .iter()
             .filter_map(|n| match &n.semantic {

@@ -11,8 +11,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::control::{DecisionPoint, Owner};
-use hh_wire::json::Json;
+use hharness_ontology::control::{DecisionPoint, Owner};
+use hharness_wire::json::Json;
 
 /// The checkpoint dialect tag — a `restore` against a different tag is
 /// `DialectMismatch`.
@@ -223,7 +223,7 @@ mod tests {
         s.boundary_view.insert(DecisionPoint::Stop, Owner::Code);
         let bytes = s.checkpoint();
         let back = ControlState::from_json(
-            &hh_wire::json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap(),
+            &hharness_wire::json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap(),
         );
         assert_eq!(back.as_ref(), Some(&s));
     }
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn every_decision_point_and_owner_spelling_round_trips() {
-        for p in hh_ontology::control::DecisionPoint::ALL {
+        for p in hharness_ontology::control::DecisionPoint::ALL {
             assert_eq!(parse_decision_point(decision_point_str(p)), Some(p));
         }
         for o in [Owner::Code, Owner::Model, Owner::Human] {

@@ -18,9 +18,9 @@ use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use hh_containment::admit::{classify_read, classify_write, ReadClass, WriteClass};
-use hh_containment::policy::ContainmentPolicy;
-use hh_wire::json::Json;
+use hharness_containment::admit::{classify_read, classify_write, ReadClass, WriteClass};
+use hharness_containment::policy::ContainmentPolicy;
+use hharness_wire::json::Json;
 
 use crate::exec::{
     group_alive, kill_group, run_child, spawn_pgrp_leader, ExecState, Execution, Shared,
@@ -62,7 +62,7 @@ impl HelperServer {
             session_id: format!(
                 "{}-{}",
                 SESSION_PREFIX,
-                hh_identity::idp::idp_id("helper_session", basis.as_bytes())
+                hharness_identity::idp::idp_id("helper_session", basis.as_bytes())
             ),
             policy: Mutex::new(None),
             roots: Mutex::new((vec![], vec![])),

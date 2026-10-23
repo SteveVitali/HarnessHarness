@@ -20,8 +20,8 @@
 //! `applies_to` lists the mechanisms the probe can exercise — a probe
 //! outside it returns `skipped` with the mechanism named (never `unknown`).
 
-use hh_ontology::participant::HostingMechanism;
-use hh_wire::Json;
+use hharness_ontology::participant::HostingMechanism;
+use hharness_wire::Json;
 
 use crate::abi::HostingError;
 use crate::service::HostingService;
@@ -156,11 +156,11 @@ pub fn probe_spec(id_or_dimension: &str) -> Option<&'static ProbeSpec> {
 }
 
 /// The P0 dimensions (the quarantine set — the boundary filters on this).
-/// The canonical set lives in `hh_ledger::hosted` (CC7 — one schema source:
+/// The canonical set lives in `hharness_ledger::hosted` (CC7 — one schema source:
 /// the catalogue marks `p0` flags, the ledger module is the set the
 /// registry/embed boundary consumes); re-exported here so probe callers
 /// spell it `probes::P0_DIMENSIONS`.
-pub use hh_ledger::hosted::{is_p0, P0_DIMENSIONS};
+pub use hharness_ledger::hosted::{is_p0, P0_DIMENSIONS};
 
 /// What a probe produced — the observed record, records-out.
 #[derive(Debug, Clone, PartialEq)]

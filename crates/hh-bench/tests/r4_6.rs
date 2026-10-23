@@ -29,14 +29,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_bench::adapters::{fixture_task, FixtureTask};
-use hh_lab::bench::{
+use hharness_bench::adapters::{fixture_task, FixtureTask};
+use hharness_lab::bench::{
     split_hash, ForeignTaskId, SplitAssignmentRecord, SuiteManifest, SuiteValidityRecord,
 };
-use hh_lab::model::ForeignRef;
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel, VerifierIsolation};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_lab::model::ForeignRef;
+use hharness_ontology::lab::{
+    ContaminationStratum, EnvironmentFamily, SplitLabel, VerifierIsolation,
+};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 /// The committed pinned subset — the offline arm of the leg.
 const SUBSET: &str = include_str!("../fixtures/live/r4_6/harbor-registry-subset.json");
@@ -60,7 +62,7 @@ enum ImportError {
     /// than fabricate a foreign digest.
     NoPin,
     /// The imported record failed L1 admission.
-    L1(hh_lab::bench::TaskError),
+    L1(hharness_lab::bench::TaskError),
 }
 
 fn member<'a>(row: &'a Json, k: &'static str) -> Result<&'a Json, ImportError> {
@@ -182,7 +184,7 @@ fn import_suite_records(
 /// The committed subset's `entry` member (the slice is `entries[0]`
 /// truncated — same shape as a manifest row entry).
 fn subset_entry() -> (Json, Json) {
-    let subset = hh_wire::parse(SUBSET).expect("committed subset parses");
+    let subset = hharness_wire::parse(SUBSET).expect("committed subset parses");
     let entry = subset.get("entry").expect("subset.entry").clone();
     (subset.get("upstream").unwrap().clone(), entry)
 }
@@ -241,7 +243,7 @@ fn fixture_subset_imports_with_l1_l2_admission() {
             t.record.task_id
         );
         // L1 landed inside `import_row`; the codec round-trip keeps it.
-        let decoded = hh_lab::bench::TaskRecord::from_json(&t.record.to_json()).unwrap();
+        let decoded = hharness_lab::bench::TaskRecord::from_json(&t.record.to_json()).unwrap();
         assert_eq!(decoded.task_id, t.record.task_id);
         assert!(decoded.check_id());
         decoded.validate().unwrap();
@@ -313,7 +315,7 @@ fn forged_id_and_unpinned_row_refuse() {
     if let Json::Obj(ref mut m) = j {
         m.insert("task_id".into(), Json::str("sha256:forged"));
     }
-    let forged = hh_lab::bench::TaskRecord::from_json(&j).unwrap();
+    let forged = hharness_lab::bench::TaskRecord::from_json(&j).unwrap();
     assert!(!forged.check_id());
     let mut unpinned = row.clone();
     if let Json::Obj(ref mut m) = unpinned {
@@ -350,7 +352,7 @@ fn r46_live_manifest_import() {
     let path = std::env::var("HH_FOREIGN_MANIFEST")
         .expect("HH_FOREIGN_MANIFEST — the leg sets it to the verified fetch");
     let text = std::fs::read_to_string(&path).expect("manifest reads");
-    let manifest_json = hh_wire::parse(&text).expect("upstream manifest parses");
+    let manifest_json = hharness_wire::parse(&text).expect("upstream manifest parses");
     let entries = match &manifest_json {
         Json::Arr(a) => a,
         _ => panic!("upstream registry.json is not an array"),
@@ -390,7 +392,7 @@ fn r46_live_manifest_import() {
         // L1 per record + the identity check; then the suite records.
         for (_, t) in &pairs {
             assert!(t.record.check_id());
-            let decoded = hh_lab::bench::TaskRecord::from_json(&t.record.to_json()).unwrap();
+            let decoded = hharness_lab::bench::TaskRecord::from_json(&t.record.to_json()).unwrap();
             assert_eq!(decoded.task_id, t.record.task_id);
             decoded.validate().unwrap();
         }

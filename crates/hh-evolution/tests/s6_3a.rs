@@ -23,51 +23,51 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::matchspec::{MatchMode, MatchSpec};
-use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
-use hh_evolution::errors::{EvolutionError, Refusal};
-use hh_evolution::proposer::{
+use hharness_budget::matchspec::{MatchMode, MatchSpec};
+use hharness_evolution::campaign::{doc_kind, EvolutionCampaign};
+use hharness_evolution::errors::{EvolutionError, Refusal};
+use hharness_evolution::proposer::{
     CodeSearchProposer, CorpusRow, EvidenceCorpus, EvolutionProposer, GeneBankProposer,
     LineageEntry, ProposalConstraints, RhoProposer,
 };
-use hh_evolution::records::{
+use hharness_evolution::records::{
     AcceptanceItem, CandidateProposal, CorpusSpec, EvolutionAcceptanceReport,
     EvolutionCampaignSpec, FailureHypothesis, HostedCoordinateDescriptor, InstallRequest,
     ItemStatus, ParentSelectionPolicy, PortabilityLabel, PredictedDelta, PredictedEffect,
     ProposerFailure, ProposerOutcome, ScreenReport, SecurityInvarianceReport, SlotAllocation,
     StopRule, TransferRow, Tri, EVOLVABLE_TARGET_CLASSES, PROPOSER_FAMILIES, RESEARCH_FAMILIES,
 };
-use hh_evolution::state::{self, CandidateState};
-use hh_experiment::docs::LabDocs;
-use hh_hir::diff::{self, DiffDerivation, HirDiff};
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::leaves::{CompiledPayload, DeclaredInterface};
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::idp_id;
-use hh_lab::analysis::{
+use hharness_evolution::state::{self, CandidateState};
+use hharness_experiment::docs::LabDocs;
+use hharness_hir::diff::{self, DiffDerivation, HirDiff};
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::leaves::{CompiledPayload, DeclaredInterface};
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::idp_id;
+use hharness_lab::analysis::{
     BenefitKind, BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity, OutcomeBounds,
     OutcomeBoundsVerdict, PairedEffect, SignProfile, TailEffects, TestKind, TestRecord,
 };
-use hh_lab::bench::SplitAssignmentRecord;
-use hh_lab::experiment::{
+use hharness_lab::bench::SplitAssignmentRecord;
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_lab::model::{CompatibilityRecord, CompatibilityStatus};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::debt::ExpiryCondition;
-use hh_ontology::eval::{
+use hharness_lab::model::{CompatibilityRecord, CompatibilityStatus};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::debt::ExpiryCondition;
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorKind, IntervalMethod, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixture plumbing (the s6_1a/s6_2 shape — same store/docs machinery) ──
 
@@ -563,7 +563,7 @@ fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> ArmSpec {
             mode,
             ..MatchSpec::matched_cap(&[])
         }),
-        artifact_ref: hh_ontology::config::Ref::new("def:x", "sha256:ee55"),
+        artifact_ref: hharness_ontology::config::Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,
@@ -715,7 +715,7 @@ fn comparison(benefit: BenefitKind, held_out: bool, interval: Json) -> Compariso
             adjusted_ppm: None,
             label: None,
         },
-        label: hh_lab::analysis::ReportLabelKind::Headlined,
+        label: hharness_lab::analysis::ReportLabelKind::Headlined,
         estimator_selection: EstimatorSelection {
             method: IntervalMethod::ClusteredClt,
             selection_rule: "adr-0158.clt_floor".into(),
@@ -780,7 +780,7 @@ fn drive_to_searched(
     docs.put_named(
         doc_kind::SEARCH_BUDGET,
         "budget:search",
-        &hh_ontology::eval::SearchBudgetRecord {
+        &hharness_ontology::eval::SearchBudgetRecord {
             rollouts: 4,
             model_calls: 4,
             tokens: 8_000,
@@ -1300,11 +1300,11 @@ fn install_rides_the_experiments_authority_cap() {
 
 #[test]
 fn install_plan_is_bounded_by_the_experiments_authority_cap() {
-    use hh_registry::extension::lifecycle::{ProposerContext, TrustView};
-    use hh_registry::extension::{
+    use hharness_registry::extension::lifecycle::{ProposerContext, TrustView};
+    use hharness_registry::extension::{
         Candidate, DeclaredSource, ExtensionKind, FetchOutcome, SourceLocator,
     };
-    use hh_registry::records::ModelInstallRule;
+    use hharness_registry::records::ModelInstallRule;
     use std::collections::BTreeSet;
 
     let candidate = Candidate {
@@ -1324,7 +1324,7 @@ fn install_plan_is_bounded_by_the_experiments_authority_cap() {
     };
     let outcome = FetchOutcome {
         resolved: "git:m@abc".into(),
-        content: hh_identity::idp::address(b"pkg", "application/octet-stream"),
+        content: hharness_identity::idp::address(b"pkg", "application/octet-stream"),
         fetched_at: 7,
         code_identity: vec![],
         source_snapshot: None,
@@ -1346,7 +1346,7 @@ fn install_plan_is_bounded_by_the_experiments_authority_cap() {
         hash_only_ceiling: AuthorityClass::External,
         max_age: None,
         model_install: ModelInstallRule::AllowAttenuated,
-        scanner_policy: hh_registry::extension::lifecycle::ScannerPolicy::Advisory,
+        scanner_policy: hharness_registry::extension::lifecycle::ScannerPolicy::Advisory,
         live_policy_ids: vec![],
     };
     let base = base_doc();
@@ -1594,7 +1594,7 @@ fn code_search_emits_a_compiled_payload_candidate() {
         cand.diff.ops
     );
     let t = diff::apply(&base, &cand.diff).unwrap();
-    hh_hir::validate::validate(&t).unwrap();
+    hharness_hir::validate::validate(&t).unwrap();
 }
 
 #[test]
@@ -1618,8 +1618,8 @@ fn code_search_without_payload_class_or_leaf_is_typed() {
 
 #[test]
 fn proposer_suite_in_process_passes_for_research_families() {
-    use hh_evolution::proposer_conformance::{run_proposer_suite, InProcessPort, SuiteDrive};
-    use hh_registry::kinds::ConformanceVerdict::*;
+    use hharness_evolution::proposer_conformance::{run_proposer_suite, InProcessPort, SuiteDrive};
+    use hharness_registry::kinds::ConformanceVerdict::*;
 
     // gene_bank — a multi-class variant over the shared corpus.
     let mut p = GeneBankProposer::new(vec!["guideline".into(), "scheduling_rule".into()]);

@@ -17,12 +17,12 @@
 
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::{Detector, MetricDeclaration};
-use hh_ontology::eval::{
+use hharness_ontology::compliance::{Detector, MetricDeclaration};
+use hharness_ontology::eval::{
     ChargedTo, Dimension, Direction, MediationChannel, MediationRequirement, MetricLevel,
     MetricValueType, OracleClass,
 };
-use hh_ontology::participant::{Observability, ParticipantClass};
+use hharness_ontology::participant::{Observability, ParticipantClass};
 
 /// `secret_value_in_ledger` — a secret value anywhere in the run ledger
 /// (events + blobs; the `leak_scan` targets `event`/`blob`).

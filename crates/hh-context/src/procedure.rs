@@ -19,7 +19,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::events::EventSink;
 use crate::plan::{Candidate, ContextPlan, Estimate};
@@ -40,11 +40,11 @@ pub struct ProcedureIndexEntry {
     pub estimate: Estimate,
     /// The label the index delivers at (the index is a projection — `⊔` of
     /// the profile's `index` block, capped `external` for lifted text).
-    pub label: hh_provenance::label::Label,
+    pub label: hharness_provenance::label::Label,
     /// The index's provenance record.
-    pub provenance: hh_provenance::record::ProvenanceRecord,
+    pub provenance: hharness_provenance::record::ProvenanceRecord,
     /// Whether the run's checkable preconditions passed — `check_preconditions`
-    /// (hh-hir) decides before selection; a violated precondition omits the
+    /// (hharness-hir) decides before selection; a violated precondition omits the
     /// procedure (`OmissionReason::Precondition`).
     pub preconditions_passed: bool,
     /// The `PreconditionUncheckable` notes counted on the selection record.
@@ -117,7 +117,7 @@ pub fn procedure_index_candidate(e: &ProcedureIndexEntry) -> Candidate {
         source_seq: 0,
         label: e.label.clone(),
         provenance: e.provenance.clone(),
-        validity: hh_hir::records::Validity::open_from(0),
+        validity: hharness_hir::records::Validity::open_from(0),
         readers: None,
         slot_hint: Some("procedures".into()),
         volatile: false,
@@ -159,7 +159,7 @@ pub fn procedure_body_candidate(
         source_seq: activation_seq,
         label: e.label.clone(),
         provenance: e.provenance.clone(),
-        validity: hh_hir::records::Validity::open_from(0),
+        validity: hharness_hir::records::Validity::open_from(0),
         readers: None,
         slot_hint: Some("procedures".into()),
         volatile: false,
@@ -259,7 +259,7 @@ pub struct ProcedureTargetRule {
     pub compile_hint: String,
     /// The `AssumptionDebtRecord` — mandatory (a `None` is the
     /// `ConditionedRuleIncomplete` refusal, never a silent admit).
-    pub debt: Option<hh_hir::records::AssumptionDebtRecord>,
+    pub debt: Option<hharness_hir::records::AssumptionDebtRecord>,
 }
 
 /// `resolve_procedure_target(rules, proc_id, tags)` — the selector match:

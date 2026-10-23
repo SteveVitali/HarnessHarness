@@ -17,16 +17,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_fleet::engine::FleetEngine;
-use hh_fleet::errors::FleetError;
-use hh_fleet::source::FixtureAdapter;
-use hh_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
-use hh_fleet::{observe_run, COMPONENT};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_wire::json::Json;
+use hharness_fleet::engine::FleetEngine;
+use hharness_fleet::errors::FleetError;
+use hharness_fleet::source::FixtureAdapter;
+use hharness_fleet::spec::{Capacity, Defaults, FleetSpec, TriggerRule};
+use hharness_fleet::{observe_run, COMPONENT};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -172,7 +172,7 @@ fn r3_2_observe_run_produces_durable_ingress_rows() {
             .and_then(Json::as_str),
         Some(sub.as_str())
     );
-    // The recorded row is kernel-produced (`hh-fleet` — the adapter's
+    // The recorded row is kernel-produced (`hharness-fleet` — the adapter's
     // producer component) and names the occurrence.
     let recorded = s
         .events(&run)

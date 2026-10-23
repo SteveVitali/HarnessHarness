@@ -1,9 +1,9 @@
 //! Kernel-held Ed25519 audit-signer custody (R4.15e; OQ-170; ADR-0376).
 //!
 //! The adopted GATE-G7 ruling (the BL-30 OQ-170 brief): **the kernel holds
-//! the ledger-signing key**; `hh-secrets` is the custody home — the only
+//! the ledger-signing key**; `hharness-secrets` is the custody home — the only
 //! crate admitted to `ring` (ADR-0359 D2, extended by ADR-0376 to
-//! production Ed25519 signing + key generation/persistence). `hh-ledger`
+//! production Ed25519 signing + key generation/persistence). `hharness-ledger`
 //! sees the landed `AuditSigner`/`AuditKeyResolver` seam only: `key_id` +
 //! `sign(preimage)` + public verify bytes — key material never crosses.
 //!
@@ -37,10 +37,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use hh_ledger::audit::{AuditKeyResolver, AuditSigner, CHECKPOINT_ALG, ED25519_ALG};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::sha256::{hmac_sha256, sha256_hex};
+use hharness_ledger::audit::{AuditKeyResolver, AuditSigner, CHECKPOINT_ALG, ED25519_ALG};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::sha256::{hmac_sha256, sha256_hex};
 use ring::rand::SystemRandom;
 use ring::signature::{Ed25519KeyPair, KeyPair, UnparsedPublicKey, ED25519};
 
@@ -62,7 +62,7 @@ pub const SIGNER_VAULT_REF: &str = "ledger-signer";
 /// The file mode every key file must carry — owner-only, `0600`.
 pub const SIGNER_FILE_MODE: u32 = 0o600;
 /// The boot self-check's signed canary — a fixed string, not a secret.
-const SELF_CHECK_CANARY: &[u8] = b"hh-secrets ledger-signer self-check v1";
+const SELF_CHECK_CANARY: &[u8] = b"hharness-secrets ledger-signer self-check v1";
 
 /// A custody-layer typed refusal (OQ-170: missing, mis-permissioned or
 /// corrupt key material refuses — never a placeholder, never a fabricated

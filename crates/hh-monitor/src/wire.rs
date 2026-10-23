@@ -16,19 +16,19 @@
 //! One spelling per record (CC1/CC7): handles encode as
 //! [`events::granted_payload`], leases as [`approval::lease_granted_payload`],
 //! pending requests as [`approval::request_payload`], capability records via
-//! `hh_hir::wire::semantic_record_json`, bindings via
-//! `hh_compiler::schema::surface_binding_json` — the schema sources own the
+//! `hharness_hir::wire::semantic_record_json`, bindings via
+//! `hharness_compiler::schema::surface_binding_json` — the schema sources own the
 //! member spellings; this module owns only the envelope.
 
 use std::collections::BTreeMap;
 
-use hh_compiler::plan::PinnedRef;
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::{Grant, KindRecord};
-use hh_ontology::risk::RiskClass;
-use hh_provenance::authority::{AuthorityClass, ReaderSet};
-use hh_provenance::Label;
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::{Grant, KindRecord};
+use hharness_ontology::risk::RiskClass;
+use hharness_provenance::authority::{AuthorityClass, ReaderSet};
+use hharness_provenance::Label;
+use hharness_wire::json::Json;
 
 use crate::approval::{
     self, ApprovalMode, ApprovalPending, ApprovalState, ApprovalStats, AutoReviewRule,
@@ -79,7 +79,7 @@ pub struct AuthorizeInput {
     pub auto_review_rules: Vec<AutoReviewRule>,
     /// The definition's `FlowPolicy` set (`Monitor.flow_policies` — §5g.2
     /// §2.3 `check_flow`'s `policies` input).
-    pub flow_policies: Vec<hh_provenance::flow_policy::FlowPolicy>,
+    pub flow_policies: Vec<hharness_provenance::flow_policy::FlowPolicy>,
     /// The sealed repeated-denial policy.
     pub denial_policy: Option<DenialPolicy>,
     /// The approval fold (pending/decided/leases/counters).
@@ -247,14 +247,14 @@ impl AuthorizeInput {
                                 ("semantic_id", Json::str(id.clone())),
                                 (
                                     "record",
-                                    hh_hir::wire::semantic_record_json(
+                                    hharness_hir::wire::semantic_record_json(
                                         &KindRecord::ToolCapability(c.record.clone()),
                                         false,
                                     ),
                                 ),
                                 (
                                     "binding",
-                                    hh_compiler::schema::surface_binding_json(&c.binding),
+                                    hharness_compiler::schema::surface_binding_json(&c.binding),
                                 ),
                             ])
                         })
@@ -331,7 +331,7 @@ impl AuthorizeInput {
                     let rec_j = c
                         .get("record")
                         .ok_or_else(|| format!("capabilities[{i}].record missing"))?;
-                    let record = match hh_hir::wire::semantic_record_from_json(
+                    let record = match hharness_hir::wire::semantic_record_from_json(
                         EntityKind::ToolCapability,
                         rec_j,
                         &format!("capabilities[{i}].record"),
@@ -343,7 +343,7 @@ impl AuthorizeInput {
                             return Err(format!("capabilities[{i}].record: not a tool_capability"))
                         }
                     };
-                    let binding = hh_compiler::schema::surface_binding_from_json(
+                    let binding = hharness_compiler::schema::surface_binding_from_json(
                         c.get("binding")
                             .ok_or_else(|| format!("capabilities[{i}].binding missing"))?,
                         &format!("capabilities[{i}].binding"),
@@ -412,7 +412,7 @@ impl AuthorizeInput {
                     .iter()
                     .enumerate()
                     .map(|(i, p)| {
-                        hh_provenance::flow_policy::FlowPolicy::from_json(p)
+                        hharness_provenance::flow_policy::FlowPolicy::from_json(p)
                             .map_err(|e| format!("flow_policies[{i}]: {}", e.detail))
                     })
                     .collect::<Result<Vec<_>, String>>()?,
@@ -464,7 +464,7 @@ fn str_arr(j: &Json, k: &str) -> Result<Vec<String>, String> {
 }
 
 /// The canonical `Label` spelling `{authority, taint[], readers[]}` — the
-/// decode side is `Label::from_json` (hh-provenance); this emit matches it.
+/// decode side is `Label::from_json` (hharness-provenance); this emit matches it.
 fn label_json(l: &Label) -> Json {
     Json::obj([
         ("authority", Json::str(l.authority.as_str())),
@@ -541,17 +541,17 @@ fn cond_from_json(j: &Json, path: &str) -> Result<Cond, String> {
         };
     }
     if let Some(v) = j.get("domain_is").and_then(Json::as_str) {
-        return hh_hir::kinds::EffectDomain::parse(v)
+        return hharness_hir::kinds::EffectDomain::parse(v)
             .map(Cond::DomainIs)
             .map_err(|_| format!("{path}.domain_is: unknown {v}"));
     }
     if let Some(v) = j.get("rev_is").and_then(Json::as_str) {
-        return hh_ontology::risk::RiskReversibility::parse(v)
+        return hharness_ontology::risk::RiskReversibility::parse(v)
             .map(Cond::RevIs)
             .ok_or_else(|| format!("{path}.rev_is: unknown {v}"));
     }
     if let Some(v) = j.get("scope_is").and_then(Json::as_str) {
-        return hh_ontology::risk::RiskScope::parse(v)
+        return hharness_ontology::risk::RiskScope::parse(v)
             .map(Cond::ScopeIs)
             .ok_or_else(|| format!("{path}.scope_is: unknown {v}"));
     }
@@ -701,7 +701,7 @@ fn review_rule_from_json(j: &Json) -> Result<AutoReviewRule, String> {
             .iter()
             .map(|d| {
                 d.as_str()
-                    .and_then(|s| hh_hir::kinds::EffectDomain::parse(s).ok())
+                    .and_then(|s| hharness_hir::kinds::EffectDomain::parse(s).ok())
                     .ok_or_else(|| "auto_review_rule.domains member unknown".to_string())
             })
             .collect::<Result<Vec<_>, String>>()?,
@@ -812,7 +812,7 @@ fn decision_from_json(j: &Json, path: &str) -> Result<Decision, String> {
             .iter()
             .enumerate()
             .map(|(i, r)| {
-                hh_provenance::flow::Remedy::from_json(r, &format!("{path}.remedies[{i}]"))
+                hharness_provenance::flow::Remedy::from_json(r, &format!("{path}.remedies[{i}]"))
                     .map_err(|e| format!("{path}.remedies[{i}]: {}", e.detail))
             })
             .collect::<Result<Vec<_>, String>>()?,
@@ -1182,7 +1182,7 @@ fn proposal_json(p: &Proposal) -> Json {
             Json::Arr(
                 p.requested_grants
                     .iter()
-                    .map(|g| hh_hir::grant_json(g, false))
+                    .map(|g| hharness_hir::grant_json(g, false))
                     .collect(),
             ),
         ),
@@ -1273,7 +1273,7 @@ fn flow_inputs_from_json(j: &Json, path: &str) -> Result<crate::monitor::FlowInp
     if let Some(Json::Arr(items)) = f.get("committed") {
         for (i, e) in items.iter().enumerate() {
             out.committed.push(
-                hh_provenance::flow::CommittedEffect::from_json(
+                hharness_provenance::flow::CommittedEffect::from_json(
                     e,
                     &format!("{path}.committed[{i}]"),
                 )
@@ -1299,7 +1299,7 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
             .iter()
             .enumerate()
             .map(|(i, g)| {
-                hh_hir::grant_from_json(g, &format!("proposal.requested_grants[{i}]"))
+                hharness_hir::grant_from_json(g, &format!("proposal.requested_grants[{i}]"))
                     .map_err(|e| format!("proposal.requested_grants[{i}]: {e}"))
             })
             .collect::<Result<Vec<Grant>, String>>()?,
@@ -1314,7 +1314,7 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
                 .ok_or_else(|| "proposal.capability_ref missing".to_string())?,
             "proposal.capability_ref",
         )?,
-        effect: hh_hir::kinds::EffectClass::from_json(
+        effect: hharness_hir::kinds::EffectClass::from_json(
             j.get("effect")
                 .ok_or_else(|| "proposal.effect missing".to_string())?,
             "proposal.effect",
@@ -1327,7 +1327,7 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
         args_provenance: match j.get("args_provenance") {
             Some(Json::Null) | None => None,
             Some(r) => Some(
-                hh_provenance::ProvenanceRecord::from_json(r)
+                hharness_provenance::ProvenanceRecord::from_json(r)
                     .map_err(|e| format!("proposal.args_provenance: {e}"))?,
             ),
         },
@@ -1358,7 +1358,7 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
         remedy_taken: match j.get("remedy_taken") {
             Some(Json::Null) | None => None,
             Some(r) => Some(
-                hh_provenance::flow::Remedy::from_json(r, "proposal.remedy_taken")
+                hharness_provenance::flow::Remedy::from_json(r, "proposal.remedy_taken")
                     .map_err(|e| format!("proposal.remedy_taken: {}", e.detail))?,
             ),
         },

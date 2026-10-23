@@ -1,13 +1,13 @@
 //! `vocab` — the closed sums the verification plane owns (spec §5f.1–§5f.4 §3;
 //! ADR-0109…0117). Every sum is closed per dialect: unknown spellings refuse,
 //! never coerce. `Detector` itself is *not* re-declared here — the canonical
-//! sum is `hh_ontology::compliance::Detector` (CC7); this module re-exports it.
+//! sum is `hharness_ontology::compliance::Detector` (CC7); this module re-exports it.
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
-pub use hh_hir::kinds::ChargedTo;
-pub use hh_ontology::compliance::Detector;
-pub use hh_ontology::eval::{EvidenceKind, LatticeValue, OracleClass, VerdictType};
+pub use hharness_hir::kinds::ChargedTo;
+pub use hharness_ontology::compliance::Detector;
+pub use hharness_ontology::eval::{EvidenceKind, LatticeValue, OracleClass, VerdictType};
 
 // ── Claims (§5f.2 §3; ADR-0112 D1/D5) ─────────────────────────────────────────
 
@@ -937,8 +937,8 @@ impl AdmissionMode {
 
     /// Whether an item at `authority` is admitted under the mode
     /// (kernel-rendered facts are always admitted).
-    pub fn admits(&self, authority: hh_provenance::authority::AuthorityClass) -> bool {
-        use hh_provenance::authority::AuthorityClass as A;
+    pub fn admits(&self, authority: hharness_provenance::authority::AuthorityClass) -> bool {
+        use hharness_provenance::authority::AuthorityClass as A;
         match self {
             AdmissionMode::PrincipalOnly => authority >= A::Principal || authority == A::Kernel,
             AdmissionMode::QuarantinedExternal | AdmissionMode::AllLabelled => true,
@@ -1256,7 +1256,7 @@ mod tests {
 
     #[test]
     fn admission_modes_admit_per_the_declared_floor() {
-        use hh_provenance::authority::AuthorityClass as A;
+        use hharness_provenance::authority::AuthorityClass as A;
         assert!(AdmissionMode::PrincipalOnly.admits(A::Kernel));
         assert!(AdmissionMode::PrincipalOnly.admits(A::Principal));
         assert!(!AdmissionMode::PrincipalOnly.admits(A::External));

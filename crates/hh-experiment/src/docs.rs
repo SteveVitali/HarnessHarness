@@ -15,9 +15,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hh_identity::idp::idp_id;
-use hh_lab::experiment::{CellPlan, ExperimentSpec};
-use hh_wire::json::{parse as parse_json, Json};
+use hharness_identity::idp::idp_id;
+use hharness_lab::experiment::{CellPlan, ExperimentSpec};
+use hharness_wire::json::{parse as parse_json, Json};
 
 use crate::errors::ExperimentError;
 
@@ -144,10 +144,12 @@ impl LabDocs {
             // The spec's declared id must be its content address — a mismatch
             // is a schema violation, not a re-keying.
             return Err(ExperimentError::Refusal(
-                hh_lab::experiment::ExperimentRefusal::Schema(hh_lab::json_util::SchemaError::v(
-                    "experiment_id",
-                    "spec.experiment_id is not the content address of the spec",
-                )),
+                hharness_lab::experiment::ExperimentRefusal::Schema(
+                    hharness_lab::json_util::SchemaError::v(
+                        "experiment_id",
+                        "spec.experiment_id is not the content address of the spec",
+                    ),
+                ),
             ));
         }
         Ok(id)

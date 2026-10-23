@@ -1,10 +1,10 @@
 //! `hh-memory-store` — the packaged `memory_store` variant (§5c.3; S4.16b).
-//! A deterministic `hh_context::memory::MemoryStore` served out of process
+//! A deterministic `hharness_context::memory::MemoryStore` served out of process
 //! under `plugin_abi/1` via the shared runtime in `hh-plugin-fixture`;
 //! launched by the variant host through `hh-helper`
 //! (`argv = [bin, --socket, <path>, --version-id <pin>, --content <addr>]`).
 //!
-//! Every `invoke` lowers to `hh_context::memory_abi::dispatch` — the ONE
+//! Every `invoke` lowers to `hharness_context::memory_abi::dispatch` — the ONE
 //! wire codec (CC7). Domain refusals return inside `outputs` as the typed
 //! refusal envelope; only a *decode* fault (unknown op/member/shape) is an
 //! `AbiError::SchemaViolation` — the ABI boundary's own failure class.
@@ -12,15 +12,15 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use hh_context::memory::MemoryStore;
-use hh_context::memory_abi::{self, MEMORY_STORE_CLASS, MEMORY_STORE_CONTRACT};
-use hh_embed_schema::plugin_abi::{
+use hharness_context::memory::MemoryStore;
+use hharness_context::memory_abi::{self, MEMORY_STORE_CLASS, MEMORY_STORE_CONTRACT};
+use hharness_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, StreamParams, TriState,
 };
-use hh_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
-use hh_varhost::channel::SocketIo;
-use hh_wire::json::Json;
+use hharness_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
+use hharness_varhost::channel::SocketIo;
+use hharness_wire::json::Json;
 
 /// The variant logic — a live `MemoryStore` behind the contract's op
 /// surface. Stateful (the store IS the state of record for the session);
@@ -45,7 +45,7 @@ impl VariantLogic for MemoryStoreLogic {
         HelloParams {
             plugin_abi_version: format!(
                 "plugin_abi/{}",
-                hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
+                hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
             ),
             plugin_version_id: self.version_id.clone(),
             plugin_content: self.content.clone(),

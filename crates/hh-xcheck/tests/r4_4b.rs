@@ -16,8 +16,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use hh_wire::json::Json;
-use hh_xcheck::check::verify_answers;
+use hharness_wire::json::Json;
+use hharness_xcheck::check::verify_answers;
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -31,7 +31,7 @@ fn bundle_dir() -> PathBuf {
 }
 
 fn load(p: &Path) -> Json {
-    hh_wire::json::parse(&String::from_utf8_lossy(&std::fs::read(p).unwrap())).unwrap()
+    hharness_wire::json::parse(&String::from_utf8_lossy(&std::fs::read(p).unwrap())).unwrap()
 }
 
 /// The five committed hir-documents cases — each must carry a real answer

@@ -10,7 +10,7 @@
 //! verdict is `detector = deterministic` is a reported metric
 //! ([`crate::evalfold`]'s `deterministic_detector_share`).
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// The deterministic detector spellings a `followed` verdict's
 /// `detector_ref` carries.
@@ -21,7 +21,7 @@ pub mod detector {
     pub const ARGS_CONFORM: &str = "tool_surface:args_conform";
     /// Typed `procedure` — the invoked capability is in the activated
     /// procedure's `allowed_capabilities` and the index `delivery_id` is
-    /// in the call's causes (hh-context's `detect_followed`).
+    /// in the call's causes (hharness-context's `detect_followed`).
     pub const PROCEDURE_INVOKED: &str = "procedure:procedure_invoked";
     /// Kernel-executed / soft-budget `rule` — the postcondition held in
     /// the ledger (the nudge's admitted decision is the evidence).

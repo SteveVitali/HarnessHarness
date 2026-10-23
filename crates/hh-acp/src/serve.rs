@@ -11,9 +11,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::acp::{lower_event, AcpDialect};
-use hh_mcp::protocol::NegotiateError;
-use hh_wire::json::Json;
+use hharness_compiler::acp::{lower_event, AcpDialect};
+use hharness_mcp::protocol::NegotiateError;
+use hharness_wire::json::Json;
 
 use crate::artifact::{render_session, AcpArtifact};
 use crate::driver::SessionDriver;

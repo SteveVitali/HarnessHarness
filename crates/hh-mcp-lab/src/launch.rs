@@ -16,12 +16,12 @@
 //! committed event landed fails closed (an event reference — the
 //! adopted handle — never confers a second spawn).
 
-use hh_embed_schema::types::{
+use hharness_embed_schema::types::{
     DefinitionInput, EnvironmentInput, InvocationRecord, OpenSpec, SpawnEventRef,
 };
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::DimensionId;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_wire::json::Json;
 
 use crate::binding::{CallerBinding, CallerKind};
 use crate::dispatch::{op_call, SurfaceError, ToolOutcome};
@@ -29,7 +29,7 @@ use crate::effects::EffectCtx;
 use crate::exposure::ExposureTool;
 use crate::handles::HandleKind;
 use crate::session::SurfaceSession;
-use hh_embed::service::EmbedService;
+use hharness_embed::service::EmbedService;
 
 /// `launch::*` / control-turn dispatch.
 pub fn dispatch(
@@ -98,7 +98,7 @@ fn launch_run(
     // the caller's pool doesn't declare) / `InsufficientBudget` (hard
     // head over remaining) refuse *with the durable refused row* — the
     // `intended` event already landed, so the refusal is ledgered.
-    if let Some(hh_embed_schema::types::BudgetInput::Node(n)) = &budget {
+    if let Some(hharness_embed_schema::types::BudgetInput::Node(n)) = &budget {
         let requested = node_dimensions(n)?;
         if !requested.is_empty() {
             session.check_pool(svc, &requested)?;
@@ -141,7 +141,7 @@ fn launch_run(
         budget,
         participant: Some(crate::launch::participant_descriptor(&binding.caller_kind)),
         supplies: None,
-        attendance: hh_embed_schema::types::AttendanceDeclaration {
+        attendance: hharness_embed_schema::types::AttendanceDeclaration {
             value: attendance.to_string(),
             source: "declared".to_string(),
         },
@@ -168,7 +168,7 @@ fn launch_run(
         argv_canonical: vec!["launch_run".to_string()],
         cwd_ref: "ref://mcp-lab".to_string(),
         principal: binding.principal_ref.clone(),
-        attendance: hh_embed_schema::types::AttendanceDeclaration {
+        attendance: hharness_embed_schema::types::AttendanceDeclaration {
             value: attendance.to_string(),
             source: "declared".to_string(),
         },
@@ -549,7 +549,7 @@ fn parse_environment(v: &Json) -> Result<EnvironmentInput, SurfaceError> {
 /// The `budget` argument → `BudgetInput::Node` — `{dimensions:
 /// {tool_calls:{hard:N},…}}` (or the `{tool_calls:N}` shorthand →
 /// `{hard:N}`).
-fn parse_budget_input(v: &Json) -> Result<hh_embed_schema::types::BudgetInput, SurfaceError> {
+fn parse_budget_input(v: &Json) -> Result<hharness_embed_schema::types::BudgetInput, SurfaceError> {
     let dims = match v.get("dimensions") {
         Some(Json::Obj(m)) => m.clone(),
         Some(Json::Null) | None => match v {
@@ -582,10 +582,9 @@ fn parse_budget_input(v: &Json) -> Result<hh_embed_schema::types::BudgetInput, S
             }
         }
     }
-    Ok(hh_embed_schema::types::BudgetInput::Node(Json::obj([(
-        "dimensions",
-        Json::Obj(dm),
-    )])))
+    Ok(hharness_embed_schema::types::BudgetInput::Node(Json::obj(
+        [("dimensions", Json::Obj(dm))],
+    )))
 }
 
 /// The requested `{dimension → hard}` from a `BudgetInput::Node` JSON —

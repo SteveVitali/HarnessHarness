@@ -1,4 +1,4 @@
-//! `hh-control` — the C0/Stage-1 control plane (spec §5e.1 R-2.6.1, §5e.2
+//! `hharness-control` — the C0/Stage-1 control plane (spec §5e.1 R-2.6.1, §5e.2
 //! R-2.6.2; ticket S1.20; ADR-0103…0108).
 //!
 //! Two halves under one roof:
@@ -26,7 +26,7 @@
 //!
 //! The control-plane `StopReason`/`StopKind`/`OutcomeClass`/`CancelledBy`/
 //! `LoopDetectorKind`/`InvariantId`/`KernelInfraCause` sums live in
-//! `hh_ontology::control` (ADR-0106 D6 — the sum is owned there; the
+//! `hharness_ontology::control` (ADR-0106 D6 — the sum is owned there; the
 //! gateway's `StopReason` at R-2.3.1 is a different sum and is never read
 //! against it). `DecisionPoint`/`Owner`/`ControlBoundary` are reused from the
 //! same module (S1.1; CC7 — no re-declaration).

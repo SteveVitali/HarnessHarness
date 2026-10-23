@@ -12,8 +12,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::idp_id;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_wire::json::Json;
 
 use crate::bind::RowView;
 
@@ -354,7 +354,7 @@ pub fn belief_divergence(rows: &[RowView<'_>]) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::authority::AuthorityClass;
+    use hharness_provenance::authority::AuthorityClass;
 
     fn probe(seq: u64, detector: &str, divergent: bool) -> (u64, String, Json) {
         (

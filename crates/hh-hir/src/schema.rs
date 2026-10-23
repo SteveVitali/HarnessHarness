@@ -1,5 +1,5 @@
 //! The HIR/1 canonical encoding: `HirDocument ⇄ canonical JSON` (the WS-C encoding — sorted
-//! keys, compact form, integer-only, SHA-256; `hh_wire::Json` is already canonical by
+//! keys, compact form, integer-only, SHA-256; `hharness_wire::Json` is already canonical by
 //! construction). This module is the **only** place the wire shape is defined — the schema
 //! source of truth (CC1). [`crate::document::parse_document`] is the out-of-process entry.
 //!
@@ -12,13 +12,13 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::control::{ControlBoundary, DecisionPoint, Owner};
-use hh_ontology::participant::{HostingMechanism, Observability};
-use hh_provenance::{
+use hharness_ontology::control::{ControlBoundary, DecisionPoint, Owner};
+use hharness_ontology::participant::{HostingMechanism, Observability};
+use hharness_provenance::{
     Attestation, AttestationAnchor, AttestationKind, AuthorityClass, Derivation, DerivationKind,
     HumanRole, Origin, PersistenceScope, ProvenanceRecord, ReaderSet, TaintTag,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::document::{Edge, HirDocument, Node};
 use crate::errors::HirError;
@@ -111,7 +111,7 @@ fn tag_of<'a>(j: &'a Json, path: &str) -> Result<&'a str, HirError> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// hh-provenance value (de)serialization — mirrors `ProvenanceRecord::to_json`
+// hharness-provenance value (de)serialization — mirrors `ProvenanceRecord::to_json`
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn origin_from_json(j: &Json, path: &str) -> Result<Origin, HirError> {
@@ -257,7 +257,7 @@ fn attestation_from_json(j: &Json, path: &str) -> Result<Attestation, HirError> 
 }
 
 /// Parse a `ProvenanceRecord` from its canonical form. `Derivation.deriver` is not carried
-/// on the wire (the canonical form is `{kind, inputs, deterministic}` — `hh-provenance`'s
+/// on the wire (the canonical form is `{kind, inputs, deterministic}` — `hharness-provenance`'s
 /// choice); the parser restores a kernel placeholder, which round-trips byte-identically.
 pub(crate) fn provenance_from_json(j: &Json, path: &str) -> Result<ProvenanceRecord, HirError> {
     let origin = origin_from_json(req(j, "origin", path)?, &format!("{path}.origin"))?;
@@ -471,7 +471,7 @@ fn observation_source_parse(s: &str) -> Result<ObservationSource, HirError> {
 }
 
 /// The canonical `AssumptionDebtRecord/1` encoding (CC7 — the schema source owns
-/// both directions; `hh-registry` reuses it for `VariantRecord.conditioned_rules`).
+/// both directions; `hharness-registry` reuses it for `VariantRecord.conditioned_rules`).
 /// The `/1` additive members emit only when present (CC8 additive discipline).
 pub fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
     let mut m = BTreeMap::new();
@@ -521,7 +521,7 @@ pub fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
     Json::Obj(m)
 }
 
-fn debt_member_err(e: hh_ontology::debt::DebtSchemaError) -> HirError {
+fn debt_member_err(e: hharness_ontology::debt::DebtSchemaError) -> HirError {
     HirError::SchemaViolation { detail: e.detail }
 }
 
@@ -536,29 +536,31 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirE
     let mut evidence_refs = Vec::new();
     for (i, v) in arr(j, "evidence_refs", path)?.iter().enumerate() {
         evidence_refs.push(
-            hh_ontology::debt::EvidenceRef::from_json(v, &format!("{path}.evidence_refs[{i}]"))
-                .map_err(debt_member_err)?,
+            hharness_ontology::debt::EvidenceRef::from_json(
+                v,
+                &format!("{path}.evidence_refs[{i}]"),
+            )
+            .map_err(debt_member_err)?,
         );
     }
-    let debt_class =
-        match opt_str(j, "debt_class") {
-            None => None,
-            Some(s) => Some(hh_ontology::debt::DebtClass::parse(&s).ok_or_else(|| {
-                HirError::UnknownKind {
-                    kind: format!("debt class {s}"),
-                }
-            })?),
-        };
+    let debt_class = match opt_str(j, "debt_class") {
+        None => None,
+        Some(s) => Some(
+            hharness_ontology::debt::DebtClass::parse(&s).ok_or_else(|| HirError::UnknownKind {
+                kind: format!("debt class {s}"),
+            })?,
+        ),
+    };
     Ok(AssumptionDebtRecord {
         rule_id: req_str(j, "rule_id", path)?,
         hypothesis: Text::from_json(req(j, "hypothesis", path)?, &format!("{path}.hypothesis"))?,
         evidence_refs,
-        owner: hh_ontology::debt::OwnerRef::from_json(
+        owner: hharness_ontology::debt::OwnerRef::from_json(
             req(j, "owner", path)?,
             &format!("{path}.owner"),
         )
         .map_err(debt_member_err)?,
-        expiry_condition: hh_ontology::debt::ExpiryCondition::from_json(
+        expiry_condition: hharness_ontology::debt::ExpiryCondition::from_json(
             req(j, "expiry_condition", path)?,
             &format!("{path}.expiry_condition"),
         )
@@ -569,7 +571,7 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirE
         hypothesis_typed: match j.get("hypothesis_typed") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::HypothesisTyped::from_json(
+                hharness_ontology::debt::HypothesisTyped::from_json(
                     v,
                     &format!("{path}.hypothesis_typed"),
                 )
@@ -579,14 +581,14 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirE
         scope: match j.get("scope") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
+                hharness_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
                     .map_err(debt_member_err)?,
             ),
         },
         expiry: match j.get("expiry") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
+                hharness_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
                     .map_err(debt_member_err)?,
             ),
         },
@@ -601,14 +603,17 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirE
         revalidation: match j.get("revalidation") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::Revalidation::from_json(v, &format!("{path}.revalidation"))
-                    .map_err(debt_member_err)?,
+                hharness_ontology::debt::Revalidation::from_json(
+                    v,
+                    &format!("{path}.revalidation"),
+                )
+                .map_err(debt_member_err)?,
             ),
         },
         removal_test: match j.get("removal_test") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
+                hharness_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
                     .map_err(debt_member_err)?,
             ),
         },
@@ -1045,11 +1050,11 @@ pub fn boundary_from_json(j: &Json, path: &str) -> Result<ControlBoundary, HirEr
     Ok(b)
 }
 
-/// The wire spelling of `hh_ontology::participant::HostingMechanism` (underscore form —
+/// The wire spelling of `hharness_ontology::participant::HostingMechanism` (underscore form —
 /// ADR-0164 D7). `None` serializes as `none`; a hosted body never carries it (the parse
 /// path refuses it; CF-351).
-fn hosting_mechanism_name(m: hh_ontology::participant::HostingMechanism) -> &'static str {
-    use hh_ontology::participant::HostingMechanism::*;
+fn hosting_mechanism_name(m: hharness_ontology::participant::HostingMechanism) -> &'static str {
+    use hharness_ontology::participant::HostingMechanism::*;
     match m {
         None => "none",
         SessionAbi => "session_abi",

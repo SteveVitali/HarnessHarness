@@ -1,6 +1,6 @@
 //! The newline-delimited JSON-RPC serve loop the `hh-mcp-serve` binary
 //! wraps (binding (b)-style framing: one JSON-RPC message per line —
-//! the same framing `hh-embed`'s stdio binding uses, so the conformance
+//! the same framing `hharness-embed`'s stdio binding uses, so the conformance
 //! driver speaks one dialect).
 //!
 //! Served surface (Stage 3; R-2.11.3⁰ + the R-2.5.4⁰ edge slice, S3.9):
@@ -35,7 +35,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{BufRead, Write};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::artifact::{tools_call, ServedArtifact};
 use crate::protocol::{PINNED_MODERN, PINNED_VERSIONS};
@@ -371,7 +371,7 @@ pub fn serve_dynamic(
         if trimmed.is_empty() {
             continue;
         }
-        let msg = match hh_wire::json::parse(trimmed) {
+        let msg = match hharness_wire::json::parse(trimmed) {
             Ok(m) => m,
             Err(_) => {
                 let frame = error_frame(Json::Null, -32700, "parse_error");

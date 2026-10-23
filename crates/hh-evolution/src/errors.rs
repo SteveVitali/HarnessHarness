@@ -6,8 +6,8 @@
 //! `transitioned{to: rejected{stage, code, report_ref}}` row carries a code
 //! a reader can trace to the spec clause.
 
-use hh_ledger::errors::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::errors::LedgerError;
+use hharness_wire::json::Json;
 
 /// The closed stage-gate refusal sum. `code()` is the canonical snake_case
 /// spelling carried on the durable `rejected{stage, code}` transition.
@@ -382,7 +382,7 @@ pub enum Refusal {
     /// An artifact benefit was produced inside a judge selector's
     /// `held_out_from` closure while naming that selector — the
     /// benefit's producer may never consume the held-out judge's
-    /// verdict (§5f.4; S6.3b; mirrors hh-verification's
+    /// verdict (§5f.4; S6.3b; mirrors hharness-verification's
     /// `JudgeLeakedIntoArtifact` at the evolution boundary).
     JudgeLeakedIntoArtifact {
         /// The artifact-benefit producer inside the closure.

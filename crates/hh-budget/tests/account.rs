@@ -1,12 +1,12 @@
-//! Integration tests — the `hh-budget` account against the real `hh-ledger`
+//! Integration tests — the `hharness-budget` account against the real `hharness-ledger`
 //! store (the ticket's named seams: allocate/reserve/charge/release/exhaust/
 //! amend/advise/attribute_spend/totals/accountability, plus E1–E5 and INV-9's
 //! rebuild equality).
 
-use hh_budget::*;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
+use hharness_budget::*;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,7 +31,7 @@ fn open(tag: &str) -> (Store, String, Lease) {
 }
 
 /// A caller-side event (executor-produced) — for raw accountable rows.
-fn ev(id: &str, class: &str, payload: hh_wire::json::Json) -> Event {
+fn ev(id: &str, class: &str, payload: hharness_wire::json::Json) -> Event {
     Event {
         event_id: id.to_string(),
         class: class.to_string(),
@@ -43,7 +43,7 @@ fn ev(id: &str, class: &str, payload: hh_wire::json::Json) -> Event {
             participant_ref: "none".into(),
         },
         scope: Scope::default(),
-        parent_event_id: hh_ledger::ids::ROOT_EVENT.to_string(),
+        parent_event_id: hharness_ledger::ids::ROOT_EVENT.to_string(),
         causes: Vec::new(),
         refs: Vec::new(),
         ir_refs: Vec::new(),
@@ -61,18 +61,21 @@ fn effect_ev(
     id: &str,
     class: &str,
     effect_id: &str,
-    payload: hh_wire::json::Json,
+    payload: hharness_wire::json::Json,
     fencing: u64,
 ) -> Event {
     let mut e = ev(id, class, payload);
     e.producer = Producer::kernel("kernel:test");
-    e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
+    e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
+        "kernel:test",
+        0,
+    ));
     e.scope.effect_id = Some(effect_id.to_string());
     if fencing > 0 {
-        if let hh_wire::json::Json::Obj(m) = &mut e.payload {
+        if let hharness_wire::json::Json::Obj(m) = &mut e.payload {
             m.insert(
                 "fencing_token".to_string(),
-                hh_wire::json::Json::Int(fencing as i64),
+                hharness_wire::json::Json::Int(fencing as i64),
             );
         }
     }
@@ -86,21 +89,21 @@ fn decided_allow(id: &str, effect_id: &str, attempt: i64) -> Event {
         id,
         "security.permission.decided",
         effect_id,
-        hh_wire::json::Json::obj([
-            ("effect_id", hh_wire::json::Json::str(effect_id)),
-            ("attempt_no", hh_wire::json::Json::Int(attempt)),
-            ("decision", hh_wire::json::Json::str("allow")),
+        hharness_wire::json::Json::obj([
+            ("effect_id", hharness_wire::json::Json::str(effect_id)),
+            ("attempt_no", hharness_wire::json::Json::Int(attempt)),
+            ("decision", hharness_wire::json::Json::str("allow")),
         ]),
         0,
     )
 }
 
 /// A `{reversibility, repeat_safety, scope}` risk-class payload member.
-fn risk_class(rev: &str, rs: &str, scope: &str) -> hh_wire::json::Json {
-    hh_wire::json::Json::obj([
-        ("reversibility", hh_wire::json::Json::str(rev)),
-        ("repeat_safety", hh_wire::json::Json::str(rs)),
-        ("scope", hh_wire::json::Json::str(scope)),
+fn risk_class(rev: &str, rs: &str, scope: &str) -> hharness_wire::json::Json {
+    hharness_wire::json::Json::obj([
+        ("reversibility", hharness_wire::json::Json::str(rev)),
+        ("repeat_safety", hharness_wire::json::Json::str(rs)),
+        ("scope", hharness_wire::json::Json::str(scope)),
     ])
 }
 
@@ -112,9 +115,12 @@ fn source_event(store: &mut Store, run: &str, lease: &Lease, n: u64) -> EventRef
     let mut e = ev(
         &format!("src-{n}"),
         "verification.validator.invoked",
-        hh_wire::json::Json::obj([("validator", hh_wire::json::Json::str("v1"))]),
+        hharness_wire::json::Json::obj([("validator", hharness_wire::json::Json::str("v1"))]),
     );
-    e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
+    e.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
+        "kernel:test",
+        0,
+    ));
     store.append(run, lease, vec![e]).unwrap();
     EventRef {
         run_id: run.to_string(),
@@ -171,7 +177,7 @@ fn class_count(
     acc: &Account,
     run: &str,
     class: &str,
-    pred: impl Fn(&hh_wire::json::Json) -> bool,
+    pred: impl Fn(&hharness_wire::json::Json) -> bool,
 ) -> usize {
     acc.store
         .events(run)
@@ -450,8 +456,8 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
             "eff-i",
             "action.effect.intended",
             "eff-1",
-            hh_wire::json::Json::obj([
-                ("effect_id", hh_wire::json::Json::str("eff-1")),
+            hharness_wire::json::Json::obj([
+                ("effect_id", hharness_wire::json::Json::str("eff-1")),
                 ("effective_risk_class", risky.clone()),
             ]),
             0,
@@ -466,16 +472,16 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
                 "eff-a",
                 "action.effect.authorized",
                 "eff-1",
-                hh_wire::json::Json::obj([("effective_risk_class", risky)]),
+                hharness_wire::json::Json::obj([("effective_risk_class", risky)]),
                 0,
             ),
             effect_ev(
                 "eff-p",
                 "action.effect.prepared",
                 "eff-1",
-                hh_wire::json::Json::obj([(
+                hharness_wire::json::Json::obj([(
                     "idempotency_key",
-                    hh_wire::json::Json::str("k-eff-1"),
+                    hharness_wire::json::Json::str("k-eff-1"),
                 )]),
                 0,
             ),
@@ -484,7 +490,7 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
                 "eff-c",
                 "action.effect.committed",
                 "eff-1",
-                hh_wire::json::Json::obj([("attempt_no", hh_wire::json::Json::Int(1))]),
+                hharness_wire::json::Json::obj([("attempt_no", hharness_wire::json::Json::Int(1))]),
                 gen,
             ),
         ],
@@ -510,9 +516,9 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
             "eff-o",
             "action.effect.observed",
             "eff-1",
-            hh_wire::json::Json::obj([
-                ("attempt_no", hh_wire::json::Json::Int(1)),
-                ("outcome", hh_wire::json::Json::str("applied")),
+            hharness_wire::json::Json::obj([
+                ("attempt_no", hharness_wire::json::Json::Int(1)),
+                ("outcome", hharness_wire::json::Json::str("applied")),
             ]),
             gen,
         )],
@@ -569,8 +575,8 @@ fn df_s1_6_1_read_only_effect_never_blocks_exhaustion() {
             "ro-i",
             "action.effect.intended",
             "eff-ro",
-            hh_wire::json::Json::obj([
-                ("effect_id", hh_wire::json::Json::str("eff-ro")),
+            hharness_wire::json::Json::obj([
+                ("effect_id", hharness_wire::json::Json::str("eff-ro")),
                 (
                     "effective_risk_class",
                     risk_class("read_only", "idempotent", "workspace_local"),
@@ -614,8 +620,8 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
             "ro-i",
             "action.effect.intended",
             "eff-ro",
-            hh_wire::json::Json::obj([
-                ("effect_id", hh_wire::json::Json::str("eff-ro")),
+            hharness_wire::json::Json::obj([
+                ("effect_id", hharness_wire::json::Json::str("eff-ro")),
                 (
                     "effective_risk_class",
                     risk_class("read_only", "idempotent", "workspace_local"),
@@ -635,8 +641,8 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
                 "rk-i",
                 "action.effect.intended",
                 "eff-risky",
-                hh_wire::json::Json::obj([
-                    ("effect_id", hh_wire::json::Json::str("eff-risky")),
+                hharness_wire::json::Json::obj([
+                    ("effect_id", hharness_wire::json::Json::str("eff-risky")),
                     (
                         "effective_risk_class",
                         risk_class("irreversible", "non_idempotent", "external"),
@@ -648,7 +654,7 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
                 "rk-a",
                 "action.effect.authorized",
                 "eff-risky",
-                hh_wire::json::Json::obj([(
+                hharness_wire::json::Json::obj([(
                     "effective_risk_class",
                     risk_class("irreversible", "non_idempotent", "external"),
                 )]),
@@ -658,9 +664,9 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
                 "rk-p",
                 "action.effect.prepared",
                 "eff-risky",
-                hh_wire::json::Json::obj([(
+                hharness_wire::json::Json::obj([(
                     "idempotency_key",
-                    hh_wire::json::Json::str("k-risky"),
+                    hharness_wire::json::Json::str("k-risky"),
                 )]),
                 0,
             ),
@@ -669,7 +675,7 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
                 "rk-c",
                 "action.effect.committed",
                 "eff-risky",
-                hh_wire::json::Json::obj([("attempt_no", hh_wire::json::Json::Int(1))]),
+                hharness_wire::json::Json::obj([("attempt_no", hharness_wire::json::Json::Int(1))]),
                 gen,
             ),
         ],

@@ -16,15 +16,15 @@ use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     plugin_abi_schema_hash, AbiError, AbiPayload, HelloParams, HelloResult, TriState,
 };
-use hh_env::helper::HelperClient;
-use hh_helper::protocol::{CommitProof, HelperRequest, OnKernelLoss};
-use hh_hir::refs::Ref;
-use hh_registry::extension::plugin::Requests;
-use hh_registry::kinds::Placement;
-use hh_wire::json::Json;
+use hharness_env::helper::HelperClient;
+use hharness_helper::protocol::{CommitProof, HelperRequest, OnKernelLoss};
+use hharness_hir::refs::Ref;
+use hharness_registry::extension::plugin::Requests;
+use hharness_registry::kinds::Placement;
+use hharness_wire::json::Json;
 
 use crate::channel::{AbiChannel, FrameIo, SocketIo};
 use crate::lower::{lower_requests, view_kinds_for, LowerContext, LoweredRequests};
@@ -196,7 +196,7 @@ impl VariantSession {
     /// Screen one inbound envelope against the session view (V1/V5).
     pub fn screen(
         &self,
-        env: &hh_embed_schema::plugin_abi::AbiEnvelope,
+        env: &hharness_embed_schema::plugin_abi::AbiEnvelope,
     ) -> Result<(), ScreenViolation> {
         screen_inbound(env, &self.screen_view())
     }
@@ -209,7 +209,7 @@ impl VariantSession {
         if let Some(h) = &mut self.helper {
             let _ = h
                 .client
-                .request(&hh_helper::protocol::HelperRequest::Cancel {
+                .request(&hharness_helper::protocol::HelperRequest::Cancel {
                     execution_id: h.execution_id.clone(),
                     phase: "kill".to_string(),
                 });
@@ -468,7 +468,7 @@ fn expect_hello(session: &mut VariantSession, spec: &SpawnSpec) -> Result<(), Ho
     Ok(())
 }
 
-const PLUGIN_ABI: i64 = hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR;
+const PLUGIN_ABI: i64 = hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR;
 
 /// V5's handshake half — pin, content, protocol range.
 fn check_hello(hello: &HelloParams, spec: &SpawnSpec) -> Result<(), HostError> {
@@ -495,7 +495,8 @@ fn check_hello(hello: &HelloParams, spec: &SpawnSpec) -> Result<(), HostError> {
 fn negotiate(offered: &[Json], host: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut chosen = BTreeMap::new();
     for o in offered {
-        if let Ok(r) = hh_plugin::ContractRef::from_json(o, "hello.contract_versions_offered") {
+        if let Ok(r) = hharness_plugin::ContractRef::from_json(o, "hello.contract_versions_offered")
+        {
             if let Some(v) = host.get(&r.label()) {
                 chosen.insert(r.label(), v.clone());
             }

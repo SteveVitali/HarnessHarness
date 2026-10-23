@@ -25,11 +25,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::eval::PreRegistration;
-use hh_ontology::lab::SplitLabel;
-use hh_wire::Json;
+use hharness_ontology::eval::PreRegistration;
+use hharness_ontology::lab::SplitLabel;
+use hharness_wire::Json;
 
-use hh_lab::analysis::{BenefitKind, ComparisonReport};
+use hharness_lab::analysis::{BenefitKind, ComparisonReport};
 
 use crate::compare::{compare, CompareError, CompareInput, CompareOutcome};
 
@@ -494,7 +494,7 @@ pub fn equivalence_run_full(
                 .reports
                 .iter()
                 .map(|r| {
-                    hh_identity::idp_id(
+                    hharness_identity::idp_id(
                         "eval.comparison_report",
                         r.to_json().to_canonical_string().as_bytes(),
                     )

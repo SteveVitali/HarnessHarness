@@ -24,12 +24,12 @@
 //! unnameable dependency is itself a finding).
 //!
 //! The graph machinery (nodes/edges, tier monotonicity, acyclicity) is
-//! `hh_ontology::dag`'s — the one engine (CC7); this module supplies the §4.4
+//! `hharness_ontology::dag`'s — the one engine (CC7); this module supplies the §4.4
 //! data plane. `DagReport.tier_violations`/`cycles` are the AC-8 surface.
 
 use std::collections::BTreeMap;
 
-use hh_ontology::dag::{check, DagReport, Edge, NodeKind, SpecDag};
+use hharness_ontology::dag::{check, DagReport, Edge, NodeKind, SpecDag};
 
 use crate::contract::{contract_defining_tier, ClassContract, ContractRef};
 

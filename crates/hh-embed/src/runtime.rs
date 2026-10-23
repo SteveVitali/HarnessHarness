@@ -1,11 +1,11 @@
-//! The kernel-side ports the [`Driver`](hh_control::driver::Driver) drives
+//! The kernel-side ports the [`Driver`](hharness_control::driver::Driver) drives
 //! (§7.4 §2.5 — the embed boundary runs the canonical control loop, not a
 //! shadow of it):
 //!
 //! - [`KernelSink`] — `LedgerSink` over `Store::append` under the
 //!   session's fenced writer lease.
 //! - [`EmbedModel`] — the Stage-1 deterministic model port: the
-//!   production `hh-gateway` boundary lands with it; at Stage 1 the
+//!   production `hharness-gateway` boundary lands with it; at Stage 1 the
 //!   embed layer's model is scripted by the submitted input (a
 //!   `{kind:"invoke"}` input block issues that capability call;
 //!   anything else issues the `hh.submit` completion call — the run's
@@ -18,35 +18,37 @@
 //!   `upcall.invoke_host_capability` (the host's `report_host_effect`
 //!   mints the terminal — `unknown` is probe-able, INV-2).
 //! - [`KernelAssembler`] — the context assembler: runs the real
-//!   `hh_context::assemble` builder over the run's durable prefix
+//!   `hharness_context::assemble` builder over the run's durable prefix
 //!   (DF-S2.8-1) — the appended `context.assembled` is the builder's
 //!   canonical plan record.
 
-use hh_context::compact::{CompactInput, CompactionTrigger, EvictOldest};
-use hh_context::consolidate::{ConsolidationCadence, ConsolidationRule};
-use hh_context::events::memory_invalidated_payload;
-use hh_context::policy::ContextPolicy;
-use hh_context::retrieve::{lexical_index, retrieve_indexed, structural_index, RetrievalIndexes};
-use hh_context::{
+use hharness_context::compact::{CompactInput, CompactionTrigger, EvictOldest};
+use hharness_context::consolidate::{ConsolidationCadence, ConsolidationRule};
+use hharness_context::events::memory_invalidated_payload;
+use hharness_context::policy::ContextPolicy;
+use hharness_context::retrieve::{
+    lexical_index, retrieve_indexed, structural_index, RetrievalIndexes,
+};
+use hharness_context::{
     default_layout, lifecycle_state, AssemblyRequest, Candidate, CandidateKind, CandidateState,
     CollectSink, ContextBudget, ContextPlan, DefaultPolicy, DerivedFrom, Estimate,
     LifecycleStateKind, MemoryContent, MemoryDraft, MemoryKind, MemoryStore, PriorityClass,
     Retention, RetrievalBudget, RetrievalQuery, RetrievalRequest, RevocationReason,
     SlotConstraints, TriggerKind, ValidityPolicy, DETERMINISTIC_DEFAULT,
 };
-use hh_control::driver::{
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, CacheBinding, CacheResolution, CompactionDone,
     CompactionImpossible, CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort,
     ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry, StoreSeam,
 };
-use hh_control::output::ParsedCall;
-use hh_control::vocab::SettledOutcome;
-use hh_identity::idp::idp_id;
-use hh_ledger::event::{Event, EventEnvelope};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::views::context_view;
-use hh_wire::json::Json;
+use hharness_control::output::ParsedCall;
+use hharness_control::vocab::SettledOutcome;
+use hharness_identity::idp::idp_id;
+use hharness_ledger::event::{Event, EventEnvelope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::views::context_view;
+use hharness_wire::json::Json;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -60,7 +62,7 @@ pub struct KernelSink<'a> {
     /// run's env driver the boundary take routes through. `None` on the
     /// arm/replay paths (`Driver::open`/`resume_from`) — a cadence never
     /// re-takes on replay.
-    pub envs: Option<&'a mut hh_env::driver::EnvDriver>,
+    pub envs: Option<&'a mut hharness_env::driver::EnvDriver>,
     /// The session's env handle the cadence targets (R-NOSIDE — the id
     /// never leaves the kernel).
     pub env_handle: Option<String>,
@@ -76,7 +78,10 @@ impl LedgerSink for KernelSink<'_> {
         let now = self.store.now_ms();
         for ev in events.iter_mut() {
             if ev.provenance.is_none() {
-                ev.provenance = Some(hh_provenance::ProvenanceRecord::kernel("hh-embed", now));
+                ev.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
+                    "hharness-embed",
+                    now,
+                ));
             }
             // Post-`prepared` effect rows carry `fencing_token = lease
             // generation` (ADR-0030 §6 invariant 6). The lease is the
@@ -103,13 +108,13 @@ impl LedgerSink for KernelSink<'_> {
         for ev in &events {
             match ev.class.as_str() {
                 "lifecycle.turn.finished" => {
-                    triggers.push(hh_env::driver::SnapshotTrigger::TurnBoundary)
+                    triggers.push(hharness_env::driver::SnapshotTrigger::TurnBoundary)
                 }
                 "action.effect.observed"
                 | "action.effect.refused"
                 | "action.effect.unknown"
                 | "action.effect.abandoned" => {
-                    triggers.push(hh_env::driver::SnapshotTrigger::EffectSettled)
+                    triggers.push(hharness_env::driver::SnapshotTrigger::EffectSettled)
                 }
                 _ => {}
             }
@@ -148,8 +153,8 @@ impl LedgerSink for KernelSink<'_> {
     /// writer, CC3: the spawn's rows land durable before the driver's
     /// next decision). The live sink answers `Some`; the replay/arm
     /// sinks (`LedgerSink`'s default `None`) refuse `UnbackedPort`.
-    fn store_seam(&mut self) -> Option<hh_control::driver::StoreSeam<'_>> {
-        Some(hh_control::driver::StoreSeam {
+    fn store_seam(&mut self) -> Option<hharness_control::driver::StoreSeam<'_>> {
+        Some(hharness_control::driver::StoreSeam {
             store: self.store,
             lease: &self.lease,
         })
@@ -196,7 +201,7 @@ impl ModelPort for EmbedModel {
             // `ModelErrorClass` spelling; `calls` empty (the call never
             // produced output — the attempt row's `error` is the record).
             return ModelOutcome {
-                stop_reason: hh_gateway::vocab::StopReason::Error,
+                stop_reason: hharness_gateway::vocab::StopReason::Error,
                 response_ref: String::new(),
                 text_empty: true,
                 calls: Vec::new(),
@@ -212,7 +217,7 @@ impl ModelPort for EmbedModel {
             ),
         };
         ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+            stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
             response_ref: self.response_ref.clone(),
             text_empty: false,
             calls: vec![ParsedCall {
@@ -228,7 +233,7 @@ impl ModelPort for EmbedModel {
 
 /// The §5a.2 invariant-6 set — the post-`prepared` phase classes whose
 /// payloads must carry `fencing_token == lease.generation`
-/// (`hh_ledger`'s fold enforces; the sink stamps the lease it owns).
+/// (`hharness_ledger`'s fold enforces; the sink stamps the lease it owns).
 const FENCED_EFFECT_CLASSES: [&str; 7] = [
     "action.effect.committed",
     "action.effect.observed",
@@ -245,7 +250,7 @@ const FENCED_EFFECT_CLASSES: [&str; 7] = [
 #[derive(Debug, Clone, Default)]
 pub struct HostDecl {
     /// `supplies.host_capabilities[].risk_class` — `None` reads UNKNOWN.
-    pub risk_class: Option<hh_ontology::risk::RiskClass>,
+    pub risk_class: Option<hharness_ontology::risk::RiskClass>,
     /// `supplies.host_capabilities[].requires_approval`.
     pub requires_approval: bool,
 }
@@ -258,7 +263,10 @@ pub struct HostDecl {
 /// The driver appends them before the terminal/outcome (CC3 — the
 /// producer computes, the fenced writer lands; the sink stamps
 /// `fencing_token` on the fenced classes).
-fn dispatch_chain(effect_id: &str, risk: &hh_ontology::risk::RiskClass) -> Vec<(String, Json)> {
+fn dispatch_chain(
+    effect_id: &str,
+    risk: &hharness_ontology::risk::RiskClass,
+) -> Vec<(String, Json)> {
     let rc = risk.to_json();
     vec![
         (
@@ -297,8 +305,8 @@ fn dispatch_chain(effect_id: &str, risk: &hh_ontology::risk::RiskClass) -> Vec<(
 /// verb outside Π's never-auto set honestly — an `irreversible` stamp
 /// would make the kernel's own completion surface a fabricated auto-allow
 /// (I-P1).
-pub(crate) const SUBMIT_RISK: hh_ontology::risk::RiskClass =
-    hh_ontology::risk::RiskClass::READ_ONLY;
+pub(crate) const SUBMIT_RISK: hharness_ontology::risk::RiskClass =
+    hharness_ontology::risk::RiskClass::READ_ONLY;
 
 /// The Stage-1 effect boundary. `hh.submit` completes (the full §5a.2
 /// write-ahead chain mints ahead of the `observed` terminal); declared
@@ -325,7 +333,7 @@ pub struct EmbedGate {
 impl EffectGate for EmbedGate {
     /// The boundary's gate component — the `emitted` rows are this
     /// boundary's Π-floor records (`decided`/`authorized`/`prepared`/
-    /// `committed`), minted under `hh-embed`, never `hh-control`.
+    /// `committed`), minted under `hharness-embed`, never `hharness-control`.
     fn producer_component(&self) -> &'static str {
         "hh-embed/effect-gate"
     }
@@ -339,12 +347,12 @@ impl EffectGate for EmbedGate {
         if let Some(decl) = self.host_surfaces.get(surface) {
             let risk = decl
                 .risk_class
-                .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN);
             // Π floor (ADR-0031 §2 + the open-time approval table): a
             // declared surface whose risk is never-auto or whose
             // declaration asked for approval parks at `intended` — the
             // ask is the service's, the gate never fabricates an allow.
-            let admitted = !decl.requires_approval && !hh_monitor::approval::never_auto(risk);
+            let admitted = !decl.requires_approval && !hharness_monitor::approval::never_auto(risk);
             if !admitted {
                 // The owed decision is durable, never silent: the ask row
                 // names the effect it gates (`permission_id` is derived
@@ -410,7 +418,7 @@ impl EffectGate for EmbedGate {
 }
 
 /// The context assembler (DF-S2.8-1) — the embed boundary runs the real
-/// `hh_context::assemble` builder on every live `propose`: the durable
+/// `hharness_context::assemble` builder on every live `propose`: the durable
 /// prefix folds into `context_view`, `context.observation.recorded` items
 /// project to `Observation` candidates, and `DefaultPolicy` over
 /// `default_layout` assembles the plan the driver appends as
@@ -436,7 +444,7 @@ pub struct KernelAssembler {
 impl KernelAssembler {
     /// Arm the replay substitution — `recorded` is the run's
     /// `RecordedInputs` (`assembly_ms` in `context.assembled` order).
-    pub fn replay_assembly_ms(&mut self, recorded: &hh_control::replay::RecordedInputs) {
+    pub fn replay_assembly_ms(&mut self, recorded: &hharness_control::replay::RecordedInputs) {
         self.recorded_assembly_ms = Some(recorded.assembly_ms.clone());
     }
 }
@@ -472,12 +480,12 @@ fn observation_candidate(
     let provenance = e
         .provenance
         .clone()
-        .unwrap_or_else(|| hh_provenance::ProvenanceRecord::kernel("hh-embed/kernel", e.seq));
+        .unwrap_or_else(|| hharness_provenance::ProvenanceRecord::kernel("hh-embed/kernel", e.seq));
     let authority = provenance.authority;
     let readers = match &provenance.readers {
-        hh_provenance::ReaderSet::Public => None,
-        hh_provenance::ReaderSet::Restricted(rs) => {
-            Some(hh_provenance::ReaderSet::Restricted(rs.clone()))
+        hharness_provenance::ReaderSet::Public => None,
+        hharness_provenance::ReaderSet::Restricted(rs) => {
+            Some(hharness_provenance::ReaderSet::Restricted(rs.clone()))
         }
     };
     Candidate {
@@ -499,9 +507,9 @@ fn observation_candidate(
             event_id: e.event_id.clone(),
         }),
         source_seq: e.seq,
-        label: hh_provenance::label::Label::at(authority),
+        label: hharness_provenance::label::Label::at(authority),
         provenance,
-        validity: hh_hir::records::Validity::open_from(e.seq),
+        validity: hharness_hir::records::Validity::open_from(e.seq),
         readers,
         slot_hint: None,
         volatile: false,
@@ -546,7 +554,7 @@ impl AssemblerPort for KernelAssembler {
             };
             if !entries.is_empty() {
                 let mut sel_sink = CollectSink::default();
-                let selected = hh_context::procedure::select_procedures(
+                let selected = hharness_context::procedure::select_procedures(
                     &entries,
                     if inputs.window_cap_tokens == 0 {
                         u64::MAX
@@ -609,7 +617,7 @@ impl AssemblerPort for KernelAssembler {
             None => {
                 let mut probe_sink = CollectSink::default();
                 let t0 = std::time::Instant::now();
-                let _ = hh_context::assemble(
+                let _ = hharness_context::assemble(
                     &req,
                     policy.as_ref(),
                     ASSEMBLER_LAYOUT_REF,
@@ -621,7 +629,7 @@ impl AssemblerPort for KernelAssembler {
             }
         };
         let mut sink = CollectSink::default();
-        match hh_context::assemble(
+        match hharness_context::assemble(
             &req,
             policy.as_ref(),
             ASSEMBLER_LAYOUT_REF,
@@ -674,8 +682,8 @@ impl AssemblerPort for KernelAssembler {
                 // "`→ stop`" clause, DF-S1.19-2 — `stage01_disposition`
                 // is the one mapping, CC1); every other error leaves the
                 // turn on the raw context request as before.
-                let overflow = hh_context::stage01_disposition(&err).map(|o| match o {
-                    hh_context::Stage01Outcome::Stop { signal } => signal,
+                let overflow = hharness_context::stage01_disposition(&err).map(|o| match o {
+                    hharness_context::Stage01Outcome::Stop { signal } => signal,
                 });
                 AssembledRequest {
                     request: Json::obj([("context_request", context_request.clone())]),
@@ -712,7 +720,11 @@ pub enum KernelStore {
     Local(MemoryStore),
     /// The out-of-process `memory_store` binding (remote-first writes,
     /// mirror-served reads).
-    Remote(hh_context::memory_abi::RemoteStore<Box<dyn hh_context::memory_abi::StoreChannel>>),
+    Remote(
+        hharness_context::memory_abi::RemoteStore<
+            Box<dyn hharness_context::memory_abi::StoreChannel>,
+        >,
+    ),
 }
 
 impl KernelStore {
@@ -741,7 +753,7 @@ impl KernelStore {
     /// The `MemoryStorePort` surface — `put`/`bind`/`revoke`/
     /// `mark_scope_ended`/`consolidate`'s `stale_candidates` route
     /// remote-first on the remote arm, in-process on the local arm.
-    pub fn port(&mut self) -> &mut dyn hh_context::memory::MemoryStorePort {
+    pub fn port(&mut self) -> &mut dyn hharness_context::memory::MemoryStorePort {
         match self {
             KernelStore::Local(s) => s,
             KernelStore::Remote(r) => r,
@@ -823,7 +835,7 @@ pub struct KernelContext {
 
 impl Default for KernelContext {
     fn default() -> Self {
-        Self::for_policy("", hh_context::policy_family::DEFAULT_POLICY_REF)
+        Self::for_policy("", hharness_context::policy_family::DEFAULT_POLICY_REF)
             .expect("the declared default variant always resolves")
     }
 }
@@ -831,7 +843,7 @@ impl Default for KernelContext {
 impl KernelContext {
     /// A fresh fold for `run_id` under the default policy (the C0 floor).
     pub fn new(run_id: &str) -> Self {
-        Self::for_policy(run_id, hh_context::policy_family::DEFAULT_POLICY_REF)
+        Self::for_policy(run_id, hharness_context::policy_family::DEFAULT_POLICY_REF)
             .expect("the declared default variant always resolves")
     }
 
@@ -842,7 +854,7 @@ impl KernelContext {
     /// (`Refused`, never a silent `default` substitution).
     pub fn for_policy(run_id: &str, policy_ref: &str) -> Result<Self, String> {
         let policy: Rc<dyn ContextPolicy> =
-            Rc::from(hh_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
+            Rc::from(hharness_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
             format!(
                 "context_policy variant {policy_ref:?} names no first-party binding                  (declared: default|priority_eviction|world_state_diff|jit_handles|                 recency_plus_pins|retrieval_augmented)"
             )})?);
@@ -868,7 +880,7 @@ impl KernelContext {
     /// `default` substitution.
     pub fn rebind_policy(&mut self, policy_ref: &str) -> Result<(), String> {
         let policy: Rc<dyn ContextPolicy> =
-            Rc::from(hh_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
+            Rc::from(hharness_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
                 format!(
                     "context_policy variant {policy_ref:?} names no first-party binding                      (declared: default|priority_eviction|world_state_diff|jit_handles|                     recency_plus_pins|retrieval_augmented)"
                 )
@@ -887,10 +899,10 @@ impl KernelContext {
     pub fn new_remote(
         run_id: &str,
         policy_ref: &str,
-        channel: Box<dyn hh_context::memory_abi::StoreChannel>,
+        channel: Box<dyn hharness_context::memory_abi::StoreChannel>,
     ) -> Result<Self, String> {
         let mut ctx = Self::for_policy(run_id, policy_ref)?;
-        ctx.store = KernelStore::Remote(hh_context::memory_abi::RemoteStore::new(channel));
+        ctx.store = KernelStore::Remote(hharness_context::memory_abi::RemoteStore::new(channel));
         Ok(ctx)
     }
 
@@ -954,12 +966,13 @@ impl KernelContext {
                 .payload
                 .get("scope")
                 .and_then(Json::as_str)
-                .and_then(hh_provenance::PersistenceScope::parse)
-                .unwrap_or(hh_provenance::PersistenceScope::Session);
+                .and_then(hharness_provenance::PersistenceScope::parse)
+                .unwrap_or(hharness_provenance::PersistenceScope::Session);
             if version_id.is_empty() || semantic_id.is_empty() {
                 continue;
             }
-            let prov = hh_provenance::ProvenanceRecord::kernel("hh-embed/memory-fold", now_ms);
+            let prov =
+                hharness_provenance::ProvenanceRecord::kernel("hh-embed/memory-fold", now_ms);
             // The body plane (R3.4): the row's `content_ref` names the
             // canonical bytes' pool address — a resolvable ref rehydrates
             // the full `MemoryContent` (Structured when the bytes parse,
@@ -981,10 +994,10 @@ impl KernelContext {
                 .map(str::to_string);
             let body: Option<MemoryContent> = content_ref
                 .as_deref()
-                .and_then(|r| hh_identity::idp::parse_id(r).ok())
+                .and_then(|r| hharness_identity::idp::parse_id(r).ok())
                 .and_then(|pid| {
                     ledger
-                        .get_blob(&hh_identity::idp::ContentAddress {
+                        .get_blob(&hharness_identity::idp::ContentAddress {
                             idp: "idp/1",
                             algorithm: "sha256",
                             digest: pid.digest_hex,
@@ -996,10 +1009,10 @@ impl KernelContext {
                 .map(|bytes| {
                     std::str::from_utf8(&bytes)
                         .ok()
-                        .and_then(|t| hh_wire::json::parse(t).ok())
+                        .and_then(|t| hharness_wire::json::parse(t).ok())
                         .map(MemoryContent::Structured)
                         .unwrap_or_else(|| {
-                            MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                            MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
                                 String::from_utf8_lossy(&bytes).into_owned(),
                                 "hh-embed/memory-fold",
                                 prov.clone(),
@@ -1011,41 +1024,41 @@ impl KernelContext {
                 .get("label")
                 .and_then(|l| l.get("authority"))
                 .and_then(Json::as_str)
-                .and_then(hh_provenance::AuthorityClass::parse)
-                .unwrap_or(hh_provenance::AuthorityClass::Kernel);
+                .and_then(hharness_provenance::AuthorityClass::parse)
+                .unwrap_or(hharness_provenance::AuthorityClass::Kernel);
             let readers = match e.payload.get("label").and_then(|l| l.get("readers")) {
                 Some(Json::Obj(m)) => match m.get("restricted") {
-                    Some(Json::Arr(rs)) => hh_provenance::ReaderSet::Restricted(
+                    Some(Json::Arr(rs)) => hharness_provenance::ReaderSet::Restricted(
                         rs.iter()
                             .filter_map(|r| r.as_str().map(str::to_string))
                             .collect(),
                     ),
-                    _ => hh_provenance::ReaderSet::Public,
+                    _ => hharness_provenance::ReaderSet::Public,
                 },
-                _ => hh_provenance::ReaderSet::Public,
+                _ => hharness_provenance::ReaderSet::Public,
             };
-            let version = hh_context::MemoryVersion {
+            let version = hharness_context::MemoryVersion {
                 version_id: version_id.clone(),
                 semantic_id: semantic_id.clone(),
                 kind,
                 subject_key: None,
                 content: body.unwrap_or_else(|| {
-                    MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                    MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
                         "",
                         "hh-embed/memory-fold",
                         prov.clone(),
                     )))
                 }),
-                contract: hh_context::InvalidationContract {
+                contract: hharness_context::InvalidationContract {
                     dependencies: Vec::new(),
-                    cache_hint: hh_context::CacheHint::Cacheable,
+                    cache_hint: hharness_context::CacheHint::Cacheable,
                     validator_ref: None,
                     freshness: None,
                     invalidation_condition: None,
-                    revalidation: hh_context::Revalidation::Never,
+                    revalidation: hharness_context::Revalidation::Never,
                 },
                 scope,
-                label: hh_provenance::label::Label {
+                label: hharness_provenance::label::Label {
                     authority,
                     taint: std::collections::BTreeSet::new(),
                     readers,
@@ -1076,12 +1089,12 @@ impl KernelContext {
                 let canonical = index_text;
                 ctx.store
                     .mirror_mut()
-                    .put_artifact(hh_context::ArtifactVersion {
+                    .put_artifact(hharness_context::ArtifactVersion {
                         artifact_id: cref.clone(),
                         path: semantic_id.clone(),
                         created_at: e.seq,
-                        label: hh_provenance::label::Label::at(
-                            hh_provenance::AuthorityClass::Principal,
+                        label: hharness_provenance::label::Label::at(
+                            hharness_provenance::AuthorityClass::Principal,
                         ),
                         run_id: e.run_id.clone(),
                         classes: ["context.memory.written".to_string()].into_iter().collect(),
@@ -1107,7 +1120,7 @@ impl KernelContext {
         media_type: &str,
         canonical_blob: &[u8],
         kind: MemoryKind,
-        scope: hh_provenance::PersistenceScope,
+        scope: hharness_provenance::PersistenceScope,
     ) -> Result<String, String> {
         let at_seq = ledger
             .events(&self.run_id)
@@ -1119,13 +1132,13 @@ impl KernelContext {
             .put_blob(canonical_blob, media_type)
             .map_err(|e| format!("{e:?}"))?;
         let now = ledger.now_ms();
-        let prov = hh_provenance::ProvenanceRecord::kernel("hh-embed/memory", now);
+        let prov = hharness_provenance::ProvenanceRecord::kernel("hh-embed/memory", now);
         let content = std::str::from_utf8(canonical_blob)
             .ok()
-            .and_then(|t| hh_wire::json::parse(t).ok())
+            .and_then(|t| hharness_wire::json::parse(t).ok())
             .map(MemoryContent::Structured)
             .unwrap_or_else(|| {
-                MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                MemoryContent::Text(Box::new(hharness_hir::leaves::Text::new(
                     String::from_utf8_lossy(canonical_blob).into_owned(),
                     "hh-embed/memory",
                     prov.clone(),
@@ -1142,19 +1155,19 @@ impl KernelContext {
             // carry the empty contract (end-of-run is the invalidation).
             contract: if matches!(
                 scope,
-                hh_provenance::PersistenceScope::Session
-                    | hh_provenance::PersistenceScope::Project
-                    | hh_provenance::PersistenceScope::User
+                hharness_provenance::PersistenceScope::Session
+                    | hharness_provenance::PersistenceScope::Project
+                    | hharness_provenance::PersistenceScope::User
             ) {
-                Some(hh_context::InvalidationContract {
+                Some(hharness_context::InvalidationContract {
                     dependencies: Vec::new(),
-                    cache_hint: hh_context::CacheHint::Cacheable,
+                    cache_hint: hharness_context::CacheHint::Cacheable,
                     validator_ref: None,
                     freshness: None,
-                    invalidation_condition: Some(hh_context::InvalidationCondition::ScopeEnded(
-                        scope,
-                    )),
-                    revalidation: hh_context::Revalidation::Never,
+                    invalidation_condition: Some(
+                        hharness_context::InvalidationCondition::ScopeEnded(scope),
+                    ),
+                    revalidation: hharness_context::Revalidation::Never,
                 })
             } else {
                 None
@@ -1168,9 +1181,9 @@ impl KernelContext {
             semantic_id: Some(name.to_string()),
             validator_endorsed: false,
         };
-        let wctx = hh_context::WriteContext {
-            context_label: hh_provenance::label::Label::at(
-                hh_provenance::AuthorityClass::Principal,
+        let wctx = hharness_context::WriteContext {
+            context_label: hharness_provenance::label::Label::at(
+                hharness_provenance::AuthorityClass::Principal,
             ),
             // The *memory store's* scope lease, not the ledger's writer
             // lease — the fenced-write check reads `store.lease(scope)`
@@ -1201,12 +1214,12 @@ impl KernelContext {
             let index_text = outcome.version.content.index_text();
             self.store
                 .mirror_mut()
-                .put_artifact(hh_context::ArtifactVersion {
+                .put_artifact(hharness_context::ArtifactVersion {
                     artifact_id: format!("{}:{}", addr.algorithm, addr.digest),
                     path: name.to_string(),
                     created_at: at_seq,
-                    label: hh_provenance::label::Label::at(
-                        hh_provenance::AuthorityClass::Principal,
+                    label: hharness_provenance::label::Label::at(
+                        hharness_provenance::AuthorityClass::Principal,
                     ),
                     run_id: self.run_id.clone(),
                     classes: ["context.memory.written".to_string()].into_iter().collect(),
@@ -1237,12 +1250,12 @@ impl KernelContext {
             .ok()
             .and_then(|es| es.last())
             .map(|e| e.event_id.clone())
-            .unwrap_or_else(|| hh_ledger::ids::ROOT_EVENT.to_string());
-        let mut ev = hh_control::events::kernel_event(
+            .unwrap_or_else(|| hharness_ledger::ids::ROOT_EVENT.to_string());
+        let mut ev = hharness_control::events::kernel_event(
             format!("{}-memw-{at_seq}", self.run_id),
             &class,
             ts,
-            hh_ledger::event::Scope::default(),
+            hharness_ledger::event::Scope::default(),
             parent,
             vec![],
             Json::Obj(payload),
@@ -1250,7 +1263,7 @@ impl KernelContext {
         // `context.memory.written` is audit-grade — Rule P requires the
         // kernel's provenance record on the envelope (the sink stamps it
         // on driver-appended rows; this direct append carries its own).
-        ev.provenance = Some(hh_provenance::ProvenanceRecord::kernel(
+        ev.provenance = Some(hharness_provenance::ProvenanceRecord::kernel(
             "hh-embed/memory",
             now,
         ));
@@ -1283,7 +1296,7 @@ pub fn ingest_supplies(
             "application/json",
             &bytes,
             kind,
-            hh_provenance::PersistenceScope::Session,
+            hharness_provenance::PersistenceScope::Session,
         )
         .map_err(|e| format!("supplies.{member}: {e}"))?;
     }
@@ -1300,7 +1313,7 @@ pub fn ingest_supplies(
 fn procedure_index_entries(
     store: &MemoryStore,
     at_seq: u64,
-) -> Vec<hh_context::procedure::ProcedureIndexEntry> {
+) -> Vec<hharness_context::procedure::ProcedureIndexEntry> {
     store
         .version_order()
         .iter()
@@ -1318,12 +1331,12 @@ fn procedure_index_entries(
             let body = match &v.content {
                 MemoryContent::Structured(j) => j.clone(),
                 MemoryContent::Text(t) => {
-                    hh_wire::json::parse(t.content.as_deref().unwrap_or_default())
+                    hharness_wire::json::parse(t.content.as_deref().unwrap_or_default())
                         .unwrap_or(Json::Null)
                 }
             };
             let tokens = (v.content.index_text().len() as u64 / 4).max(1);
-            Some(hh_context::procedure::ProcedureIndexEntry {
+            Some(hharness_context::procedure::ProcedureIndexEntry {
                 procedure_id: v.semantic_id.clone(),
                 estimate: Estimate {
                     tokens,
@@ -1349,7 +1362,7 @@ fn procedure_index_entries(
 /// `KernelMemory` — the kernel's `MemoryPort` (R-2.4.3 / DF-S2.8-1):
 /// `retrieve{query}` decisions, the `trigger{path_touched}` leg, the
 /// carried `resume_set` drain, and `mark_scope_ended` all run the real
-/// `hh_context::retrieve` pipeline over the shared fold-store. The
+/// `hharness_context::retrieve` pipeline over the shared fold-store. The
 /// driver owns the appends — every leg returns its emitted
 /// `(class, payload)` rows in emit order (the `CollectSink` captures;
 /// nothing durable mints inside the port).
@@ -1381,25 +1394,25 @@ impl KernelMemory {
             model_call_id: model_call_id.to_string(),
             at: at.clone(),
             layers: [
-                hh_context::Layer::Artifact,
-                hh_context::Layer::Episodic,
-                hh_context::Layer::Procedural,
-                hh_context::Layer::Session,
+                hharness_context::Layer::Artifact,
+                hharness_context::Layer::Episodic,
+                hharness_context::Layer::Procedural,
+                hharness_context::Layer::Session,
             ]
             .into_iter()
             .collect(),
             query,
             constraints: SlotConstraints {
-                slot_min_authority: hh_provenance::AuthorityClass::Unverified,
+                slot_min_authority: hharness_provenance::AuthorityClass::Unverified,
                 validity_policy: ValidityPolicy {
                     admitted_states: [
-                        hh_context::LifecycleStateKind::Valid,
-                        hh_context::LifecycleStateKind::StaleByDependency,
-                        hh_context::LifecycleStateKind::Unknown,
+                        hharness_context::LifecycleStateKind::Valid,
+                        hharness_context::LifecycleStateKind::StaleByDependency,
+                        hharness_context::LifecycleStateKind::Unknown,
                     ]
                     .into_iter()
                     .collect(),
-                    conflict_policy: hh_context::vocab::ConflictPolicy::DeliverAllAnnotated,
+                    conflict_policy: hharness_context::vocab::ConflictPolicy::DeliverAllAnnotated,
                     max_stale: None,
                 },
                 readers_required: None,
@@ -1410,7 +1423,7 @@ impl KernelMemory {
                 k: 16,
             },
             ranker: DETERMINISTIC_DEFAULT.to_string(),
-            mode: hh_identity::names::ResolveMode::Execute,
+            mode: hharness_identity::names::ResolveMode::Execute,
         };
         let mut sink = CollectSink::default();
         // R4.7b — the session's armed `model_port` lane backs a
@@ -1450,7 +1463,7 @@ impl KernelMemory {
                         structural: Some(&structural),
                         embedder: embedder_hold
                             .as_ref()
-                            .map(|e| e as &dyn hh_context::retrieve::Embedder),
+                            .map(|e| e as &dyn hharness_context::retrieve::Embedder),
                     },
                     || 0,
                 )
@@ -1467,7 +1480,7 @@ impl KernelMemory {
                         structural: Some(&structural),
                         embedder: embedder_hold
                             .as_ref()
-                            .map(|e| e as &dyn hh_context::retrieve::Embedder),
+                            .map(|e| e as &dyn hharness_context::retrieve::Embedder),
                     },
                     || 0,
                 ) {
@@ -1531,11 +1544,11 @@ impl MemoryPort for KernelMemory {
             let scope = {
                 let ctx = self.ctx.borrow();
                 [
-                    hh_provenance::PersistenceScope::Session,
-                    hh_provenance::PersistenceScope::Run,
-                    hh_provenance::PersistenceScope::Project,
-                    hh_provenance::PersistenceScope::User,
-                    hh_provenance::PersistenceScope::Definition,
+                    hharness_provenance::PersistenceScope::Session,
+                    hharness_provenance::PersistenceScope::Run,
+                    hharness_provenance::PersistenceScope::Project,
+                    hharness_provenance::PersistenceScope::User,
+                    hharness_provenance::PersistenceScope::Definition,
                 ]
                 .into_iter()
                 .find(|scope| {
@@ -1545,11 +1558,11 @@ impl MemoryPort for KernelMemory {
                             *scope,
                             Some(head),
                             None,
-                            hh_identity::names::ResolveMode::Audit,
+                            hharness_identity::names::ResolveMode::Audit,
                         )
                         .is_ok()
                 })
-                .unwrap_or(hh_provenance::PersistenceScope::Session)
+                .unwrap_or(hharness_provenance::PersistenceScope::Session)
             };
             events.extend(self.run_retrieve(
                 RetrievalQuery::ByName {
@@ -1564,7 +1577,7 @@ impl MemoryPort for KernelMemory {
 
     fn mark_scope_ended(
         &mut self,
-        scope: hh_provenance::PersistenceScope,
+        scope: hharness_provenance::PersistenceScope,
         at_seq: u64,
     ) -> Vec<(String, Json)> {
         let mut ctx = self.ctx.borrow_mut();
@@ -1599,7 +1612,7 @@ impl MemoryPort for KernelMemory {
             .cloned()
             .collect();
         ctx.store.port().mark_scope_ended(scope);
-        let prov = hh_provenance::ProvenanceRecord::kernel("hh-embed/memory", at_seq);
+        let prov = hharness_provenance::ProvenanceRecord::kernel("hh-embed/memory", at_seq);
         expired
             .into_iter()
             .map(|vid| {
@@ -1677,16 +1690,16 @@ impl MemoryPort for KernelMemory {
             if matches!(rule.cadence, ConsolidationCadence::SessionStart) && last.is_some() {
                 continue;
             }
-            let wctx = hh_context::WriteContext {
-                context_label: hh_provenance::label::Label::at(
-                    hh_provenance::AuthorityClass::Kernel,
+            let wctx = hharness_context::WriteContext {
+                context_label: hharness_provenance::label::Label::at(
+                    hharness_provenance::AuthorityClass::Kernel,
                 ),
                 lease_generation: ctx.store.port().lease(rule.scope),
                 at_seq: ctx.store.applied_seq(),
                 run_id: ctx.run_id.clone(),
             };
             let Some(rec) =
-                hh_context::consolidate::consolidate(ctx.store.port(), rule, &wctx, last)
+                hharness_context::consolidate::consolidate(ctx.store.port(), rule, &wctx, last)
                     .map_err(|e| format!("consolidate:{}: {e}", rule.rule_id))?
             else {
                 // Cadence-closed — the gate's typed skip mints no row and
@@ -1707,8 +1720,8 @@ impl MemoryPort for KernelMemory {
             if let Some(policy) = &rule.retention {
                 if let Some(seam) = seam.as_mut() {
                     let tip = ctx.store.applied_seq();
-                    let usage = hh_context::lifecycle::memory_usage(ctx.store.mirror(), tip);
-                    let stale = hh_context::lifecycle::stale_index(ctx.store.mirror(), tip);
+                    let usage = hharness_context::lifecycle::memory_usage(ctx.store.mirror(), tip);
+                    let stale = hharness_context::lifecycle::stale_index(ctx.store.mirror(), tip);
                     let reclaimable: std::collections::BTreeSet<String> = usage
                         .iter()
                         .filter(|u| stale.entries.contains_key(&u.version_id))
@@ -1723,7 +1736,7 @@ impl MemoryPort for KernelMemory {
                         .store
                         .blob_digests()
                         .iter()
-                        .map(|d| format!("{}:{}", hh_identity::idp::IDP_1.hash_algorithm, d))
+                        .map(|d| format!("{}:{}", hharness_identity::idp::IDP_1.hash_algorithm, d))
                         .collect();
                     for r in &reclaimable {
                         bound.remove(r);
@@ -1771,7 +1784,7 @@ impl MemoryPort for KernelMemory {
             let lease_generation = ctx.store.port().lease(rule.scope);
             events.push((
                 "context.memory.consolidated".to_string(),
-                hh_context::events::memory_consolidated_payload(
+                hharness_context::events::memory_consolidated_payload(
                     &rec,
                     rule,
                     &store_id,
@@ -1788,7 +1801,7 @@ impl MemoryPort for KernelMemory {
 }
 
 /// `KernelCompaction` — the kernel's `CompactionPort` (DF-S2.8-1): the
-/// real `hh_context::compact` ladder over the last assembled plan, with
+/// real `hharness_context::compact` ladder over the last assembled plan, with
 /// `evict_oldest` as the always-present rung (the in-process kernel
 /// strategy; the OOP packaged-variant rung is the corpus battery's).
 /// The emitted `context.compaction.{started,completed}` rows return to
@@ -1799,7 +1812,7 @@ pub struct KernelCompaction {
     pub ctx: Rc<RefCell<KernelContext>>,
     /// Extra strategy rungs ahead of `evict_oldest` (the declared variant
     /// ladder — empty at C0).
-    pub variants: Vec<Box<dyn hh_context::compact::CompactionStrategy>>,
+    pub variants: Vec<Box<dyn hharness_context::compact::CompactionStrategy>>,
 }
 
 impl KernelCompaction {
@@ -1871,12 +1884,12 @@ impl CompactionPort for KernelCompaction {
             trigger,
             needed: 1,
             target_fraction_ppm: 0,
-            scope: hh_provenance::PersistenceScope::Run,
+            scope: hharness_provenance::PersistenceScope::Run,
             at: ctx.store.applied_seq(),
             run_id: ctx.run_id.clone(),
             summarizer: summarizer_hold
                 .as_ref()
-                .map(|s| s as &dyn hh_context::compact::Summarizer),
+                .map(|s| s as &dyn hharness_context::compact::Summarizer),
             slot_min_authority: default_layout()
                 .slots
                 .iter()
@@ -1887,24 +1900,22 @@ impl CompactionPort for KernelCompaction {
             extractor: None,
             provider: provider_hold
                 .as_ref()
-                .map(|p| p as &dyn hh_context::compact_family::ProviderCompaction),
+                .map(|p| p as &dyn hharness_context::compact_family::ProviderCompaction),
             previous_summary_ref: None,
         };
         let fallback = EvictOldest;
-        let mut variant_refs: Vec<&dyn hh_context::compact::CompactionStrategy> =
+        let mut variant_refs: Vec<&dyn hharness_context::compact::CompactionStrategy> =
             self.variants.iter().map(|v| v.as_ref()).collect();
         variant_refs.push(&fallback);
         let mut sink = CollectSink::default();
-        let outcome =
-            hh_context::compact::compact(&input, &variant_refs, &mut sink).map_err(|_e| {
-                CompactionImpossible {
-                    required_tokens: plan.occupancy_estimate,
-                    cap: ctx.window_cap,
-                }
+        let outcome = hharness_context::compact::compact(&input, &variant_refs, &mut sink)
+            .map_err(|_e| CompactionImpossible {
+                required_tokens: plan.occupancy_estimate,
+                cap: ctx.window_cap,
             })?;
         // The post-compaction `context_view` hash — the compacted slots'
         // item ids canonicalized under the view domain (the same `idp/1`
-        // discipline `hh_ledger::views` uses; the record's own hash is
+        // discipline `hharness_ledger::views` uses; the record's own hash is
         // the `compaction_id`).
         let view_preimage = Json::obj([
             ("kind", Json::str("compacted_view")),
@@ -1965,22 +1976,22 @@ pub enum StagedCall {
 /// (§5b.3's enumeration is over the *registered* set; the snapshot is the
 /// sealed-document boundary — a run never observes a mid-run registration,
 /// CF-046's snapshot-confined read model).
-pub struct StaticProfiles(pub Vec<hh_compiler::profile::ModelProfile>);
+pub struct StaticProfiles(pub Vec<hharness_compiler::profile::ModelProfile>);
 
-impl hh_compiler::profile::ProfileView for StaticProfiles {
-    fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
+impl hharness_compiler::profile::ProfileView for StaticProfiles {
+    fn profile(&self, coordinate: &str) -> Option<hharness_compiler::profile::ModelProfile> {
         self.0
             .iter()
             .find(|p| {
-                hh_compiler::profile::profile_coordinate(p) == coordinate
+                hharness_compiler::profile::profile_coordinate(p) == coordinate
                     || p.content_hash == coordinate
             })
             .cloned()
     }
 }
 
-impl hh_compiler::profile::SelectorView for StaticProfiles {
-    fn registered(&self) -> Vec<hh_compiler::profile::ModelProfile> {
+impl hharness_compiler::profile::SelectorView for StaticProfiles {
+    fn registered(&self) -> Vec<hharness_compiler::profile::ModelProfile> {
         self.0.clone()
     }
 }
@@ -2020,7 +2031,7 @@ impl KernelBudget {
     }
 }
 
-impl hh_gateway::router::BudgetPort for KernelBudget {
+impl hharness_gateway::router::BudgetPort for KernelBudget {
     fn reserve(
         &mut self,
         budget_id: &str,
@@ -2028,15 +2039,17 @@ impl hh_gateway::router::BudgetPort for KernelBudget {
         holder: &str,
     ) -> Result<String, String> {
         let amount = max_output_tokens as i64;
-        let qty =
-            hh_budget::ResourceVector::one(hh_budget::DimensionId::TokensOutputVisible, amount);
+        let qty = hharness_budget::ResourceVector::one(
+            hharness_budget::DimensionId::TokensOutputVisible,
+            amount,
+        );
         let reservation_id = format!("res-r27-{}", self.next);
         self.next += 1;
         let refusal = match self.ceilings.get(budget_id) {
             Some(avail) if *avail < amount => {
-                Some(hh_budget::errors::BudgetError::InsufficientBudget {
-                    dimension: hh_budget::DimensionKey::Primary(
-                        hh_budget::DimensionId::TokensOutputVisible,
+                Some(hharness_budget::errors::BudgetError::InsufficientBudget {
+                    dimension: hharness_budget::DimensionKey::Primary(
+                        hharness_budget::DimensionId::TokensOutputVisible,
                     ),
                     requested: amount,
                     available: *avail.max(&0),
@@ -2046,7 +2059,7 @@ impl hh_gateway::router::BudgetPort for KernelBudget {
         };
         self.rows.push((
             "control.budget.reserved".to_string(),
-            hh_budget::events::reserved_payload(
+            hharness_budget::events::reserved_payload(
                 budget_id,
                 &reservation_id,
                 holder,
@@ -2076,11 +2089,11 @@ impl hh_gateway::router::BudgetPort for KernelBudget {
         }
         self.rows.push((
             "control.budget.released".to_string(),
-            hh_budget::events::released_payload(
+            hharness_budget::events::released_payload(
                 &budget_id,
                 Some(reservation_id),
-                &hh_budget::ResourceVector::one(
-                    hh_budget::DimensionId::TokensOutputVisible,
+                &hharness_budget::ResourceVector::one(
+                    hharness_budget::DimensionId::TokensOutputVisible,
                     amount,
                 ),
                 "release",
@@ -2107,7 +2120,7 @@ pub struct KernelRouting {
     /// The slot's dated declared pricing view (R4.5e) — `cost_cap`/G-5
     /// reads it; a stale table withholds the view (`NoPrice` per
     /// candidate, never zero-cost).
-    pricing: Option<hh_gateway::router::DeclaredPricing>,
+    pricing: Option<hharness_gateway::router::DeclaredPricing>,
     /// `seq → now_ms` — the first-observation stamp per durable row (the
     /// health projection's `ts_ms` input; a re-fold re-stamps nothing).
     stamps: BTreeMap<u64, u64>,
@@ -2124,9 +2137,9 @@ impl KernelRouting {
     /// cost-reading policy, never zero-cost).
     pub fn new(
         lane: RoutingLane,
-        profiles: Vec<hh_compiler::profile::ModelProfile>,
+        profiles: Vec<hharness_compiler::profile::ModelProfile>,
         ceilings: BTreeMap<String, i64>,
-        pricing: Option<hh_gateway::router::DeclaredPricing>,
+        pricing: Option<hharness_gateway::router::DeclaredPricing>,
     ) -> KernelRouting {
         KernelRouting {
             lane,
@@ -2141,7 +2154,11 @@ impl KernelRouting {
     /// The `TableHealth` projection over the driver's durable prefix —
     /// `project_health` over `(seq, first-observed-ms, class, payload)`
     /// with the role table's single-candidate suppression.
-    fn health(&mut self, prefix: &[EventEnvelope], now_ms: u64) -> hh_gateway::router::TableHealth {
+    fn health(
+        &mut self,
+        prefix: &[EventEnvelope],
+        now_ms: u64,
+    ) -> hharness_gateway::router::TableHealth {
         for e in prefix {
             self.stamps.entry(e.seq).or_insert(now_ms);
         }
@@ -2195,9 +2212,9 @@ impl KernelRouting {
                     })
             })
             .collect();
-        hh_gateway::router::project_health(
+        hharness_gateway::router::project_health(
             &rows,
-            &hh_gateway::router::HealthConfig::default(),
+            &hharness_gateway::router::HealthConfig::default(),
             &singles,
             &probe_targets,
         )
@@ -2211,23 +2228,24 @@ impl RoutingPort for KernelRouting {
 
     fn select(
         &mut self,
-        request: &hh_gateway::router::RoutingRequest,
+        request: &hharness_gateway::router::RoutingRequest,
         decision_id: &str,
         now_ms: u64,
         attempted: &std::collections::BTreeSet<String>,
         prefix: &[EventEnvelope],
-    ) -> Result<hh_gateway::router::RoutingDecision, hh_gateway::router::RoutingRefusal> {
+    ) -> Result<hharness_gateway::router::RoutingDecision, hharness_gateway::router::RoutingRefusal>
+    {
         let health = self.health(prefix, now_ms);
-        let mut views = hh_gateway::router::RoutingViews::none();
+        let mut views = hharness_gateway::router::RoutingViews::none();
         // R4.5e — the dated declared pricing view; a stale table is
         // withheld so `cost_cap` reads `NoPrice`, never a stale price.
         let pricing = self
             .pricing
             .as_ref()
             .filter(|p| !p.stale(now_ms))
-            .map(|p| p as &dyn hh_gateway::router::PricingView);
+            .map(|p| p as &dyn hharness_gateway::router::PricingView);
         views.pricing = pricing;
-        hh_gateway::router::select_with(
+        hharness_gateway::router::select_with(
             request,
             &self.profiles,
             &mut self.budget,
@@ -2243,25 +2261,25 @@ impl RoutingPort for KernelRouting {
 
     fn attempt_failed(
         &mut self,
-        request: &hh_gateway::router::RoutingRequest,
-        prior: &hh_gateway::router::RoutingDecision,
-        error: &hh_gateway::vocab::ModelErrorClass,
+        request: &hharness_gateway::router::RoutingRequest,
+        prior: &hharness_gateway::router::RoutingDecision,
+        error: &hharness_gateway::vocab::ModelErrorClass,
         attempts_on_target: u32,
         retry_after_ms: Option<u64>,
-        state: &mut hh_gateway::router::AttemptState,
+        state: &mut hharness_gateway::router::AttemptState,
         decision_id: &str,
         now_ms: u64,
         prefix: &[EventEnvelope],
-    ) -> hh_gateway::router::AttemptDisposition {
+    ) -> hharness_gateway::router::AttemptDisposition {
         let health = self.health(prefix, now_ms);
-        let mut views = hh_gateway::router::RoutingViews::none();
+        let mut views = hharness_gateway::router::RoutingViews::none();
         let pricing = self
             .pricing
             .as_ref()
             .filter(|p| !p.stale(now_ms))
-            .map(|p| p as &dyn hh_gateway::router::PricingView);
+            .map(|p| p as &dyn hharness_gateway::router::PricingView);
         views.pricing = pricing;
-        hh_gateway::router::on_attempt_failed(
+        hharness_gateway::router::on_attempt_failed(
             request,
             prior,
             error,
@@ -2325,7 +2343,7 @@ impl RoutingPort for KernelRouting {
 /// honest `miss` row (never a fabricated hit).
 pub struct KernelK5 {
     /// The underlying exact-match store.
-    cache: hh_context::k5::K5Cache,
+    cache: hharness_context::k5::K5Cache,
     /// The sealed binding members.
     binding: CacheBinding,
     /// The lookup/write stamp (`now_ms` at arm).
@@ -2336,15 +2354,15 @@ impl KernelK5 {
     /// Arm the store over the sealed binding.
     pub fn new(binding: CacheBinding, now_ms: u64) -> KernelK5 {
         KernelK5 {
-            cache: hh_context::k5::K5Cache::new(),
+            cache: hharness_context::k5::K5Cache::new(),
             binding,
             now_ms,
         }
     }
 
     /// The `K5Key` the binding + `plan_hash` compose.
-    fn key(&self, plan_hash: &str) -> hh_context::k5::K5Key {
-        hh_context::k5::K5Key {
+    fn key(&self, plan_hash: &str) -> hharness_context::k5::K5Key {
+        hharness_context::k5::K5Key {
             plan_hash: plan_hash.to_string(),
             provider_model_id: self.binding.provider_model_id.clone(),
             served_model: None,
@@ -2364,9 +2382,9 @@ impl ResponseCachePort for KernelK5 {
         let key = self.key(plan_hash);
         let res = self
             .cache
-            .resolve(&key, hh_identity::names::ResolveMode::Execute, false);
+            .resolve(&key, hharness_identity::names::ResolveMode::Execute, false);
         let serve = match &res {
-            hh_context::k5::K5Resolution::Hit { entry } => Some(ServedEntry {
+            hharness_context::k5::K5Resolution::Hit { entry } => Some(ServedEntry {
                 entry_ref: entry.entry_ref.clone(),
                 message: entry.message.clone(),
             }),
@@ -2376,7 +2394,7 @@ impl ResponseCachePort for KernelK5 {
             payload: self.cache.resolved_payload(
                 &key,
                 &res,
-                hh_identity::names::ResolveMode::Execute,
+                hharness_identity::names::ResolveMode::Execute,
                 self.now_ms,
             ),
             serve,
@@ -2390,7 +2408,7 @@ impl ResponseCachePort for KernelK5 {
             .snapshot_id
             .clone()
             .unwrap_or_else(|| "none".to_string());
-        let deps = hh_context::k5::k5_dependencies(
+        let deps = hharness_context::k5::k5_dependencies(
             &snapshot_id,
             &snapshot_id,
             &self.binding.profile_version_id,
@@ -2416,9 +2434,9 @@ pub struct RouterArm {
     /// probe's declared `status` contradicts the bound profile's).
     pub probe_rows: Vec<(String, Json)>,
     /// The `probe_exec[]` live lanes (R4.5e) — the open path executes
-    /// them through `hh_gateway::probes::exec_probe_decl` and appends
+    /// them through `hharness_gateway::probes::exec_probe_decl` and appends
     /// their mint rows to `probe_rows`; resume never re-runs them.
-    pub probe_execs: Vec<hh_gateway::probes::ProbeExecDecl>,
+    pub probe_execs: Vec<hharness_gateway::probes::ProbeExecDecl>,
     /// The `model_fail` script (drained per `EmbedModel::call`).
     pub model_fail: std::collections::VecDeque<StagedCall>,
 }
@@ -2445,17 +2463,17 @@ pub struct RouterArm {
 /// declaration, never coerced.
 pub fn router_arm_from_params(
     params: &Json,
-    table: &hh_gateway::router::ModelRoleTable,
+    table: &hharness_gateway::router::ModelRoleTable,
     default_budget_id: &str,
     configuration_version_id: &str,
-    profiles: Vec<hh_compiler::profile::ModelProfile>,
+    profiles: Vec<hharness_compiler::profile::ModelProfile>,
     now_ms: u64,
 ) -> Result<RouterArm, String> {
     let bad = |d: String| format!("router slot: {d}");
     let policy_doc = params
         .get("policy")
         .ok_or_else(|| bad("policy missing".into()))?;
-    let policy = hh_gateway::router::RoutingPolicy::from_json(policy_doc).map_err(bad)?;
+    let policy = hharness_gateway::router::RoutingPolicy::from_json(policy_doc).map_err(bad)?;
     let lane_j = params.get("lane").cloned().unwrap_or(Json::Null);
     let lane = RoutingLane {
         role: lane_j
@@ -2534,7 +2552,7 @@ pub fn router_arm_from_params(
     // staleness verdicts per-read at select (`NoPrice`).
     let pricing = params
         .get("pricing")
-        .map(|p| hh_gateway::router::DeclaredPricing::from_json(p).map_err(bad))
+        .map(|p| hharness_gateway::router::DeclaredPricing::from_json(p).map_err(bad))
         .transpose()?;
     // R4.5e — `probe_exec[]` — the live `probe_profile`/`ProbeSpec`
     // lanes the open path executes against the admitted dialects:
@@ -2574,7 +2592,7 @@ pub fn router_arm_from_params(
                     _ => Vec::new(),
                 }
             };
-            probe_execs.push(hh_gateway::probes::ProbeExecDecl {
+            probe_execs.push(hharness_gateway::probes::ProbeExecDecl {
                 profile_ref: req("profile_ref")?.to_string(),
                 dialect_coordinate: req("dialect")?.to_string(),
                 endpoint_ref: resolve("endpoint")?,
@@ -2617,7 +2635,12 @@ pub fn router_arm_from_params(
                 .unwrap_or_else(|| format!("probe-{i}"));
             probe_rows.push((
                 "model.profile.probed".to_string(),
-                hh_gateway::events::profile_probed(profile_ref, &probe_run_id, &records, None),
+                hharness_gateway::events::profile_probed(
+                    profile_ref,
+                    &probe_run_id,
+                    &records,
+                    None,
+                ),
             ));
             if let Some(status) = records
                 .iter()
@@ -2626,14 +2649,18 @@ pub fn router_arm_from_params(
                 let declared = profiles
                     .iter()
                     .find(|p| {
-                        hh_compiler::profile::profile_coordinate(p) == profile_ref
+                        hharness_compiler::profile::profile_coordinate(p) == profile_ref
                             || p.content_hash == profile_ref
                     })
-                    .map(|p| hh_compiler::profile::profile_status(p).name().to_string());
+                    .map(|p| {
+                        hharness_compiler::profile::profile_status(p)
+                            .name()
+                            .to_string()
+                    });
                 if declared.as_deref() != Some(status) {
                     probe_rows.push((
                         "model.profile.status.changed".to_string(),
-                        hh_gateway::events::profile_status_changed(
+                        hharness_gateway::events::profile_status_changed(
                             profile_ref,
                             None,
                             declared.as_deref().unwrap_or("unknown"),

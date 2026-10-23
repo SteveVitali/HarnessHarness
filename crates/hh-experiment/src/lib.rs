@@ -1,4 +1,4 @@
-//! `hh-experiment` — the C0/Stage-3 single-worker experiment engine
+//! `hharness-experiment` — the C0/Stage-3 single-worker experiment engine
 //! (spec §6.3 §2.2–§2.5; R-2.10.3⁰ᵇ; ADR-0154/0155/0156/0162).
 //!
 //! - [`docs`] — `LabDocs`, the durable content-addressed document store

@@ -20,8 +20,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
-use hh_wire::json::Json;
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+use hharness_wire::json::Json;
 
 use crate::effect::{idempotency_key, EffectPhase, ObservedOutcome};
 use crate::errors::LedgerError;

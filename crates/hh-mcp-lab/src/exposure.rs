@@ -17,9 +17,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_mcp::artifact::{ArtifactTool, ServedArtifact};
-use hh_telemetry::sinks::{ContentClass, Redaction, Sampling, SinkPolicy};
-use hh_wire::json::Json;
+use hharness_mcp::artifact::{ArtifactTool, ServedArtifact};
+use hharness_telemetry::sinks::{ContentClass, Redaction, Sampling, SinkPolicy};
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 
@@ -274,7 +274,7 @@ pub struct AssumptionDebt {
 /// redaction, requires_consent, page_limit, max_field_bytes}` — the
 /// sink the surface serves under (ADR-0174 D8). `readers` admits
 /// `CallerBinding.readers_identity` values; everything else is the
-/// shared `SinkPolicy` shape (`hh-telemetry` — one policy record, CC1).
+/// shared `SinkPolicy` shape (`hharness-telemetry` — one policy record, CC1).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExposurePolicy {
     /// The admitted `readers_identity` values (empty = the declared
@@ -628,8 +628,10 @@ pub fn parse_exposure(doc: &Json) -> Result<ExposureDef, ExposureError> {
         })?
         .to_string();
     let canonical_bytes = doc.to_canonical_string().into_bytes();
-    let version_id =
-        hh_identity::identify_bytes(hh_identity::RecordKind::SealedDefinition, &canonical_bytes);
+    let version_id = hharness_identity::identify_bytes(
+        hharness_identity::RecordKind::SealedDefinition,
+        &canonical_bytes,
+    );
     let profile_binding = m
         .get("profile_binding")
         .and_then(Json::as_str)
@@ -857,7 +859,7 @@ fn parse_supply(s: &Json, i: usize) -> Result<SupplySurface, ExposureError> {
         .and_then(Json::as_str)
         .map(String::from);
     let artifact_json = m.get("artifact").ok_or_else(|| missing("artifact"))?;
-    let artifact = hh_mcp::artifact::lower_mcp_target(
+    let artifact = hharness_mcp::artifact::lower_mcp_target(
         artifact_json.to_canonical_string().as_bytes(),
         &bundle_id,
         &bundle_id,
@@ -949,7 +951,7 @@ pub fn lower(def: &ExposureDef) -> ServedArtifact {
             .collect(),
     );
     let catalogue_hash =
-        hh_identity::idp_id("mcp.catalogue", projection.to_canonical_string().as_bytes());
+        hharness_identity::idp_id("mcp.catalogue", projection.to_canonical_string().as_bytes());
     ServedArtifact {
         bundle_id: def.version_id.clone(),
         bundle_version: def.version_id.clone(),

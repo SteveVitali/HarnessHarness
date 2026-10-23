@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::errors::HirError;
 use crate::kinds::EntityKind;
@@ -52,8 +52,8 @@ impl Node {
     }
 
     /// `home_plane` — derived, never stored: `classify_home(kind)` (§3.1.2; the per-kind
-    /// table is `hh-ontology`'s, DF-S1.1-1).
-    pub fn home_plane(&self) -> hh_ontology::planes::Plane {
+    /// table is `hharness-ontology`'s, DF-S1.1-1).
+    pub fn home_plane(&self) -> hharness_ontology::planes::Plane {
         self.kind.home()
     }
 
@@ -345,10 +345,10 @@ pub struct SealedDefinition {
 
 impl SealedDefinition {
     /// The minting context this definition confers — plug into
-    /// `hh_provenance::default_authority_in` when minting records produced *inside* this
+    /// `hharness_provenance::default_authority_in` when minting records produced *inside* this
     /// sealed definition (DF-S1.3-3).
-    pub fn minting_context(&self) -> hh_provenance::MintingContext {
-        hh_provenance::MintingContext {
+    pub fn minting_context(&self) -> hharness_provenance::MintingContext {
+        hharness_provenance::MintingContext {
             closed_world_tools: self.closed_world_tools.clone(),
             // A sealed definition vouches for no participant — the vouch set
             // is conferred by the Hosting-ABI boundary, never by a document
@@ -367,9 +367,10 @@ impl SealedDefinition {
 /// `NonCanonicalInput` for malformed encodings; `MissingProvenance` for members without the
 /// mandatory record; `UnknownKind` for unregistered kinds.
 pub fn parse_document(bytes: &[u8]) -> Result<HirDocument, HirError> {
-    let json =
-        hh_wire::canonical::parse_canonical(bytes).map_err(|e| HirError::NonCanonicalInput {
+    let json = hharness_wire::canonical::parse_canonical(bytes).map_err(|e| {
+        HirError::NonCanonicalInput {
             detail: format!("document: {e}"),
-        })?;
+        }
+    })?;
     crate::schema::document_from_json(&json)
 }

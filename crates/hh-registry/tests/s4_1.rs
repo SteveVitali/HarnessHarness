@@ -19,28 +19,28 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::address;
-use hh_identity::names::ResolveMode;
-use hh_identity::supersede::SupersedeReason;
-use hh_provenance::origin::HumanRole;
-use hh_provenance::{
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::address;
+use hharness_identity::names::ResolveMode;
+use hharness_identity::supersede::SupersedeReason;
+use hharness_provenance::origin::HumanRole;
+use hharness_provenance::{
     Attestation, AttestationAnchor, AttestationKind, AuthorityClass, Origin, PersistenceScope,
     ProvenanceRecord,
 };
-use hh_registry::foreign::{self, ForeignRef, ForeignSystem};
-use hh_registry::kinds::{
+use hharness_registry::foreign::{self, ForeignRef, ForeignSystem};
+use hharness_registry::kinds::{
     Admission, ConformanceVerdict, OwnerRef, Placement, ProducedBy, PublishRule,
     RequireConformance, SubjectKind,
 };
-use hh_registry::records::{
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, Implementation,
     NamespaceRecord, RegistryPolicy, RegistryRecord, ReportHost, ReportResult, SuiteTest,
     TrustRootPolicy, VariantRecord,
 };
-use hh_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -114,7 +114,7 @@ fn class(id: &str, contract_version: &str) -> ClassRecord {
             invariants: vec![],
             failure_modes: vec![],
         }],
-        cardinality: hh_registry::kinds::Cardinality::ExactlyOne,
+        cardinality: hharness_registry::kinds::Cardinality::ExactlyOne,
         required_inputs: BTreeSet::from([
             "ModelProfile".to_string(),
             "ResourceAccount".to_string(),
@@ -181,10 +181,10 @@ fn suite(class_ref: &str, contract_version: &str) -> ConformanceSuite {
         contract_version: contract_version.to_string(),
         tests: vec![SuiteTest {
             test_id: "t1".to_string(),
-            kind: hh_registry::kinds::TestKind::Static,
+            kind: hharness_registry::kinds::TestKind::Static,
             fixture_ref: None,
-            driver: hh_registry::kinds::TestDriver::InProcess,
-            oracle_class: hh_registry::kinds::OracleClass::Deterministic,
+            driver: hharness_registry::kinds::TestDriver::InProcess,
+            oracle_class: hharness_registry::kinds::OracleClass::Deterministic,
             budget: Json::Null,
             verdict_rule: "all".to_string(),
         }],
@@ -201,7 +201,7 @@ fn report(subject: &str, suite_ref: &str, by: ProducedBy, run_id: &str) -> Confo
         host: ReportHost {
             placement: Placement::SubprocessConfined,
             isolation: "x".to_string(),
-            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+            instrument: hharness_identity::repro::InstrumentRecord::new("1", "abc", false),
         },
         produced_by: by,
         results: vec![ReportResult {
@@ -229,7 +229,7 @@ fn trust_root(signers: &[&str], require_for: &[&str]) -> TrustRootPolicy {
         max_age: None,
         drift_policy: "quarantine".to_string(),
         scanner_policy: "advisory".to_string(),
-        model_install: hh_registry::records::ModelInstallRule::Deny,
+        model_install: hharness_registry::records::ModelInstallRule::Deny,
         archive_policy: "candidate_only".to_string(),
         ext: BTreeMap::new(),
     }
@@ -256,7 +256,7 @@ fn policy_with_foreign(systems: &[&str]) -> RegistryPolicy {
 fn resolve_execute(
     store: &RegistryStore,
     vid: &str,
-) -> Result<hh_registry::store::ResolvedRecord, RegistryError> {
+) -> Result<hharness_registry::store::ResolvedRecord, RegistryError> {
     store.resolve(
         &ResolveInput::Version(vid.to_string()),
         ResolveMode::Execute,
@@ -846,8 +846,8 @@ fn ac11_export_round_trip_preserves_every_non_lost_field() {
     // Canonical bodies are byte-equal (Text is hash-addressed — `content` is
     // elided on the wire and `content_hash` pins it).
     assert_eq!(
-        hh_registry::schema::body_json(&RegistryRecord::Variant(lifted.clone()), false),
-        hh_registry::schema::body_json(&RegistryRecord::Variant(orig), false),
+        hharness_registry::schema::body_json(&RegistryRecord::Variant(lifted.clone()), false),
+        hharness_registry::schema::body_json(&RegistryRecord::Variant(orig), false),
     );
     let re = s
         .register(RegistryRecord::Variant(lifted), &kernel(), None)
@@ -932,7 +932,7 @@ fn signer_ownership_gates_shared_namespace() {
         s.set_name_status(
             "org.example",
             "w1",
-            hh_identity::names::NameStatus::Deprecated,
+            hharness_identity::names::NameStatus::Deprecated,
             &mallory,
         )
         .unwrap_err(),
@@ -942,7 +942,7 @@ fn signer_ownership_gates_shared_namespace() {
     s.set_name_status(
         "org.example",
         "w1",
-        hh_identity::names::NameStatus::Deprecated,
+        hharness_identity::names::NameStatus::Deprecated,
         &tp_signed,
     )
     .unwrap();
@@ -1075,15 +1075,20 @@ fn experiment_and_principal_owned_namespaces() {
         RegistryError::NamespaceForbidden { .. }
     ));
     assert!(matches!(
-        s.set_name_status("exp/e1", "w1", hh_identity::names::NameStatus::Yanked, &tp,)
-            .unwrap_err(),
+        s.set_name_status(
+            "exp/e1",
+            "w1",
+            hharness_identity::names::NameStatus::Yanked,
+            &tp,
+        )
+        .unwrap_err(),
         RegistryError::AuthorityInsufficient { .. }
     ));
     // The owner can.
     s.set_name_status(
         "exp/e1",
         "w1",
-        hh_identity::names::NameStatus::Yanked,
+        hharness_identity::names::NameStatus::Yanked,
         &principal("alice"),
     )
     .unwrap();

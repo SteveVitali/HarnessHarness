@@ -2,22 +2,22 @@
 //! the `NameSelector` and the canonical provenance hand-off.
 //!
 //! Provenance note (CC1 / CC10). Provenance & authority are owned by **§8.1 / R-2.1.5** and land
-//! at **S1.3** in `hh-provenance`. Identity *carries* a provenance on every [`VersionedRef`] and
+//! at **S1.3** in `hharness-provenance`. Identity *carries* a provenance on every [`VersionedRef`] and
 //! name-history entry, and it is the **canonical [`ProvenanceRecord`]** — this crate does not
 //! define a second record (CC1). DF-S1.2-1 is closed: the interim `Origin`/`Provenance` view is
-//! replaced by `hh_provenance::{Origin, ProvenanceRecord}` and the widening-successor rule in
+//! replaced by `hharness_provenance::{Origin, ProvenanceRecord}` and the widening-successor rule in
 //! [`crate::names`] reads the real `AuthorityClass` (§8.1), not the interim `attested` flag.
 
 use crate::kinds::RecordKind;
 
-// The canonical provenance types (§8.1 / R-2.1.5) — re-exported so `hh_identity::refs::Origin`
-// and `hh_identity::ProvenanceRecord` remain the paths consumers use. `hh-provenance` sits
+// The canonical provenance types (§8.1 / R-2.1.5) — re-exported so `hharness_identity::refs::Origin`
+// and `hharness_identity::ProvenanceRecord` remain the paths consumers use. `hharness-provenance` sits
 // *below* this crate in the build graph (a `ProvenanceRecord` carries identity coordinates as
 // strings; the typed `Ref<T>` projection lands at S1.4 — ADR-0230).
-pub use hh_provenance::{HumanRole, Origin, ProvenanceRecord};
+pub use hharness_provenance::{HumanRole, Origin, ProvenanceRecord};
 
 /// Back-compatible name for the canonical record (CC8 additive): the Stage-1 `Provenance`
-/// wrapper is gone; this alias keeps `hh_identity::Provenance` resolving to the one canonical
+/// wrapper is gone; this alias keeps `hharness_identity::Provenance` resolving to the one canonical
 /// type (never a second scheme — it *is* `ProvenanceRecord`).
 pub type Provenance = ProvenanceRecord;
 
@@ -95,11 +95,11 @@ impl VersionedRef {
 
 /// A verified attestation shared by the provenance-touching tests (hash-chain anchored).
 #[cfg(test)]
-pub(crate) fn test_attestation() -> hh_provenance::Attestation {
-    hh_provenance::Attestation {
-        kind: hh_provenance::AttestationKind::HashChain,
+pub(crate) fn test_attestation() -> hharness_provenance::Attestation {
+    hharness_provenance::Attestation {
+        kind: hharness_provenance::AttestationKind::HashChain,
         subject_hash: "sha256:sub".into(),
-        anchor: hh_provenance::AttestationAnchor::Chain("sha256:head".into()),
+        anchor: hharness_provenance::AttestationAnchor::Chain("sha256:head".into()),
         verified_by: "kernel:chain".into(),
         verified_at: 1,
     }
@@ -108,7 +108,7 @@ pub(crate) fn test_attestation() -> hh_provenance::Attestation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::PersistenceScope;
+    use hharness_provenance::PersistenceScope;
 
     #[test]
     fn versioned_ref_pins_idp_and_version() {
@@ -124,7 +124,7 @@ mod tests {
         // The provenance is the canonical record: a kernel origin mints `kernel` authority.
         assert_eq!(
             r.provenance.authority,
-            hh_provenance::AuthorityClass::Kernel
+            hharness_provenance::AuthorityClass::Kernel
         );
     }
 
@@ -139,7 +139,10 @@ mod tests {
             0,
             test_attestation(),
         );
-        assert_eq!(attested.authority, hh_provenance::AuthorityClass::Principal);
+        assert_eq!(
+            attested.authority,
+            hharness_provenance::AuthorityClass::Principal
+        );
         assert!(attested.attestation.is_some());
         let unattested = ProvenanceRecord::minted(
             Origin::human("alice", HumanRole::Principal),

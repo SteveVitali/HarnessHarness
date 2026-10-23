@@ -4,8 +4,8 @@
 //!
 //! An origin is **a fact, never an ordering**: the record carries who produced it, and
 //! [`default_authority`] derives the class from that fact. Reference fields carry **identity
-//! coordinates** (`version_id` / content-address strings): `hh-provenance` sits *below*
-//! `hh-identity` in the build graph (`VersionedRef.provenance` is a `ProvenanceRecord`), so a
+//! coordinates** (`version_id` / content-address strings): `hharness-provenance` sits *below*
+//! `hharness-identity` in the build graph (`VersionedRef.provenance` is a `ProvenanceRecord`), so a
 //! provenance record cannot embed the canonical `VersionedRef` without a recursive type; the
 //! typed HIR `Ref<T>` projection lands at S1.4 above this layer (ADR-0230).
 
@@ -238,7 +238,7 @@ impl Origin {
 pub struct MintingContext {
     /// Identity coordinates (`semantic_id`s) of `ToolCapability`s declared **closed-world** in
     /// the sealed definition (a tool whose declared effects are all `world = closed`, or
-    /// `effects = pure` — computed by `hh-hir`'s `SealedDefinition`).
+    /// `effects = pure` — computed by `hharness-hir`'s `SealedDefinition`).
     pub closed_world_tools: std::collections::BTreeSet<String>,
     /// `participant_version_identity` coordinates the **Hosting ABI vouches
     /// for** (§6.6; ADR-0164): a `participant` origin naming one mints

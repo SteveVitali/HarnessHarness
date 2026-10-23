@@ -31,10 +31,10 @@
 
 use std::collections::BTreeSet;
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     plugin_abi_schema_hash, AbiEnvelope, AbiPayload, PLUGIN_ABI_MAJOR,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The closed plugin→host verb set (everything else the closed sum contains
 /// is host→plugin; a plugin sending one is forging the host's role).

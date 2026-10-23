@@ -1,7 +1,7 @@
 //! S1.25 — `hh-embed/1` conformance (ticket 029).
 //!
 //! Binding (a) drives [`EmbedService::handle`] in-process; binding (b) drives
-//! the newline-delimited JSON-RPC 2.0 loop ([`hh_embed::stdio::serve`]) over
+//! the newline-delimited JSON-RPC 2.0 loop ([`hharness_embed::stdio::serve`]) over
 //! memory buffers. The AC-1 flow `hello → open_session(new) → submit →
 //! stream_events → close`, the session lifecycle (`new` / `resume{continue,
 //! takeover}` / `attach` read-only / `close`), the closed error sum's stable
@@ -10,28 +10,28 @@
 //!
 //! The `open_session{kind:"new"}` path resolves a real `hir/1` document
 //! (agent + rule + budget + permissions — the same shape as the
-//! hh-assembly acceptance fixture) through `load → resolve → validate →
+//! hharness-assembly acceptance fixture) through `load → resolve → validate →
 //! seal` against the embedded Stage-1 registry.
 
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::{AttendanceDeclaration, ClientDescriptor, HostCapabilities};
-use hh_embed_schema::{ops, Direction};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::{parse, Json};
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::{AttendanceDeclaration, ClientDescriptor, HostCapabilities};
+use hharness_embed_schema::{ops, Direction};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::{parse, Json};
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: a minimal conforming hir/1 document ────────────────────────────
-// The same shape the hh-assembly acceptance suite resolves
+// The same shape the hharness-assembly acceptance suite resolves
 // (`tests/common/mod.rs`): `{HarnessRule, Budget, Permission, AgentProcess}`
 // + the Stage-1 assembly (control_strategy → hh/round_robin, context_policy →
 // hh/full_window — the two variants the embedded registry seeds).
@@ -269,11 +269,13 @@ fn document_json_preauth() -> Json {
     // append a pre-authorize rule granting `fs_read` at `workspace/**`.
     if let Json::Obj(m) = &mut doc {
         if let Some(Json::Arr(nodes)) = m.get_mut("nodes") {
-            let grant = hh_hir::grant_json(
-                &hh_hir::records::Grant {
-                    effect: hh_hir::EffectClass::domain_only(hh_hir::kinds::EffectDomain::FsRead),
+            let grant = hharness_hir::grant_json(
+                &hharness_hir::records::Grant {
+                    effect: hharness_hir::EffectClass::domain_only(
+                        hharness_hir::kinds::EffectDomain::FsRead,
+                    ),
                     scope: "workspace/**".to_string(),
-                    constraints: hh_hir::records::GrantConstraints::default(),
+                    constraints: hharness_hir::records::GrantConstraints::default(),
                     delegable: false,
                 },
                 false,
@@ -296,7 +298,7 @@ fn document_json_preauth() -> Json {
                 ),
                 "test:rule.preauth",
             );
-            nodes.push(hh_hir::wire::node_to_json(&rule));
+            nodes.push(hharness_hir::wire::node_to_json(&rule));
         }
     }
     doc
@@ -441,7 +443,7 @@ fn h_hello_negotiates_identity_and_capabilities() {
     assert_eq!(k.get("contract_major"), Some(&Json::Int(1)));
     assert_eq!(
         k.get("schema_hash").and_then(Json::as_str),
-        Some(hh_embed_schema::schema_hash().as_str())
+        Some(hharness_embed_schema::schema_hash().as_str())
     );
     assert_eq!(
         h.get("negotiated")
@@ -489,7 +491,7 @@ fn h_hello_typed_refusals() {
     if let Json::Obj(m) = &mut good {
         m.insert(
             "schema_hash".into(),
-            Json::str(hh_embed_schema::schema_hash()),
+            Json::str(hharness_embed_schema::schema_hash()),
         );
     }
     assert!(call(&mut svc, "hello", good).get("result").is_some());
@@ -602,7 +604,7 @@ fn s_open_submit_stream_close_the_ac1_flow() {
         .and_then(Json::as_str)
         .unwrap();
     assert!(
-        hh_embed_schema::frames::CLOSED_REASONS.contains(&reason),
+        hharness_embed_schema::frames::CLOSED_REASONS.contains(&reason),
         "{reason}"
     );
 
@@ -1402,7 +1404,7 @@ fn w_permission_allow_lease_mints_lease_row() {
         Some("run")
     );
     // The fold reads the row back — the lease is live for the run.
-    let st = hh_monitor::approval::ApprovalState::project(evs, u64::MAX);
+    let st = hharness_monitor::approval::ApprovalState::project(evs, u64::MAX);
     assert!(!st.leases.is_empty(), "the lease folded live");
     let (rpid, rec) = st
         .decisions
@@ -1412,7 +1414,7 @@ fn w_permission_allow_lease_mints_lease_row() {
     assert_eq!(rpid, &pid);
     assert!(matches!(
         rec.decision,
-        hh_monitor::decision::Decision::Allow
+        hharness_monitor::decision::Decision::Allow
     ));
     assert!(rec.lease_id.is_some(), "the decided↔lease link folded");
     // The `approval`-basis handle — `granted` landed in the same batch as
@@ -1445,14 +1447,14 @@ fn w_permission_allow_lease_mints_lease_row() {
     // The fold's decode side re-pins the holder to the row's event id and
     // the handle lands in the table.
     let handle =
-        hh_monitor::events::handle_from_granted_payload(&granted.payload, &granted.event_id)
+        hharness_monitor::events::handle_from_granted_payload(&granted.payload, &granted.event_id)
             .expect("the granted row decodes");
     assert_eq!(handle.holder.semantic_id, "conformance");
     assert_eq!(
         handle.validity.issued_at, granted.event_id,
         "issued_at is the granted event's own id"
     );
-    let mut table = hh_monitor::table::HandleTable::default();
+    let mut table = hharness_monitor::table::HandleTable::default();
     table.handles.insert(handle.handle_id.clone(), handle);
     assert_eq!(table.handles.len(), 1);
 }
@@ -1596,12 +1598,12 @@ fn w_open_session_mints_preauthorization_handles() {
         "a pre-authorization never outlives the run"
     );
     // The grant material round-trips through the canonical codec.
-    let handle = hh_monitor::events::handle_from_granted_payload(p, &rows[0].event_id)
+    let handle = hharness_monitor::events::handle_from_granted_payload(p, &rows[0].event_id)
         .expect("the granted row decodes");
     assert_eq!(handle.grants.len(), 1);
     assert_eq!(
         handle.grants[0].effect.domain,
-        hh_hir::kinds::EffectDomain::FsRead
+        hharness_hir::kinds::EffectDomain::FsRead
     );
 }
 
@@ -1699,13 +1701,13 @@ fn r4_15c_oq_468_five_ops_stable() {
         ("grant", "S"),
         ("revoke_lease", "S"),
     ] {
-        let op = hh_embed_schema::ops::registry()
+        let op = hharness_embed_schema::ops::registry()
             .into_iter()
             .find(|o| o.name == name)
             .unwrap_or_else(|| panic!("{name} not registered"));
         assert_eq!(
             op.tier,
-            hh_embed_schema::ops::Tier::Stable,
+            hharness_embed_schema::ops::Tier::Stable,
             "{name} promotes to stable (OQ-468)"
         );
         assert_eq!(op.group, group, "{name} keeps the CF-488 grouping");
@@ -2164,7 +2166,7 @@ fn binding_a_and_b_are_byte_identical() {
         let mut svc = service_in(&dir_b);
         let input = tape.join("\n") + "\n";
         let mut r = std::io::BufReader::new(input.as_bytes());
-        hh_embed::stdio::serve(&mut svc, &mut r, &mut out_b).unwrap();
+        hharness_embed::stdio::serve(&mut svc, &mut r, &mut out_b).unwrap();
     }
     // Binding (a): the same tape, one handle() per line.
     let dir_a = test_dir("bind-a");
@@ -2172,7 +2174,7 @@ fn binding_a_and_b_are_byte_identical() {
     {
         let mut svc = service_in(&dir_a);
         for line in &tape {
-            let req = hh_wire::jsonrpc::parse_request(line).unwrap();
+            let req = hharness_wire::jsonrpc::parse_request(line).unwrap();
             let resp = svc.handle(&req);
             out_a.extend_from_slice(resp.to_canonical_string().as_bytes());
             out_a.push(b'\n');
@@ -2200,7 +2202,7 @@ fn binding_b_framing_failures_are_per_line_typed_errors() {
     );
     let mut r = std::io::BufReader::new(input.as_bytes());
     let mut out = Vec::new();
-    hh_embed::stdio::serve(&mut svc, &mut r, &mut out).unwrap();
+    hharness_embed::stdio::serve(&mut svc, &mut r, &mut out).unwrap();
     let text = String::from_utf8(out).unwrap();
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 3, "{text}");
@@ -2724,7 +2726,7 @@ fn w_steerable_submit_mid_turn_admitted_as_steer() {
 #[test]
 fn w_permission_pending_times_out() {
     let root = test_dir("timeout");
-    let clock = hh_ledger::ids::ManualClock::at(0);
+    let clock = hharness_ledger::ids::ManualClock::at(0);
     let mut svc = EmbedService::open_with(
         ServiceConfig {
             store_root: root.join("store"),
@@ -2827,10 +2829,10 @@ fn w_permission_pending_times_out() {
 
 /// A minimal `class` record body (canonical spelling via `body_json`).
 fn lab_class_body(class_id: &str) -> Json {
-    use hh_registry::kinds::Cardinality;
-    use hh_registry::records::{ClassRecord, ContractOperation, RegistryRecord};
+    use hharness_registry::kinds::Cardinality;
+    use hharness_registry::records::{ClassRecord, ContractOperation, RegistryRecord};
     use std::collections::BTreeSet;
-    hh_registry::schema::body_json(
+    hharness_registry::schema::body_json(
         &RegistryRecord::Class(ClassRecord {
             class_id: class_id.to_string(),
             contract: vec![ContractOperation {
@@ -2864,10 +2866,10 @@ fn lab_class_body(class_id: &str) -> Json {
 
 /// A minimal `variant` record body pinned to `class_ref` (S4.1 export path).
 fn lab_variant_body(class_ref: &str, variant_id: &str) -> Json {
-    use hh_registry::kinds::Placement;
-    use hh_registry::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
+    use hharness_registry::kinds::Placement;
+    use hharness_registry::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
     use std::collections::{BTreeMap, BTreeSet};
-    hh_registry::schema::body_json(
+    hharness_registry::schema::body_json(
         &RegistryRecord::Variant(VariantRecord {
             variant_id: variant_id.to_string(),
             class_ref: class_ref.to_string(),
@@ -2875,7 +2877,10 @@ fn lab_variant_body(class_ref: &str, variant_id: &str) -> Json {
             version_label: Some("1.0.0".to_string()),
             param_schema: BTreeMap::new(),
             implementation: Implementation {
-                content: hh_identity::idp::address(b"lab-variant-impl", "application/octet-stream"),
+                content: hharness_identity::idp::address(
+                    b"lab-variant-impl",
+                    "application/octet-stream",
+                ),
                 placement: Placement::SubprocessConfined,
                 host_requirements: Json::Null,
             },
@@ -2888,10 +2893,10 @@ fn lab_variant_body(class_ref: &str, variant_id: &str) -> Json {
                 families: vec![],
             },
             declared_costs: None,
-            summary: hh_hir::leaves::Text::new(
+            summary: hharness_hir::leaves::Text::new(
                 "lab variant",
                 "test",
-                ProvenanceRecord::kernel("hh-embed", 0),
+                ProvenanceRecord::kernel("hharness-embed", 0),
             ),
             dialect_range: "registry/1".to_string(),
         }),
@@ -2912,7 +2917,7 @@ fn lab_hello(svc: &mut EmbedService) {
 }
 
 fn registrar() -> Json {
-    ProvenanceRecord::kernel("hh-embed", 0).to_json()
+    ProvenanceRecord::kernel("hharness-embed", 0).to_json()
 }
 
 #[test]
@@ -3144,7 +3149,7 @@ fn lab_registry_foreign_import_export_pin_round_trip() {
     };
     assert_eq!(docs.len(), 1);
     let manifest = docs[0].get("document").expect("document member").clone();
-    hh_registry::extension::plugin::manifest_from_json(&manifest, "test")
+    hharness_registry::extension::plugin::manifest_from_json(&manifest, "test")
         .expect("the emitted document re-decodes as plugin_manifest/1");
     // And a foreign target refuses typed.
     let e = call(
@@ -3165,7 +3170,7 @@ fn mcp_listing(server_ref: &str, tools: Vec<Json>) -> Json {
         ("server_ref", Json::str(server_ref)),
         (
             "listing_hash",
-            Json::str(hh_identity::idp_id(
+            Json::str(hharness_identity::idp_id(
                 "mcp.listing",
                 Json::Arr(tools.clone()).to_canonical_string().as_bytes(),
             )),
@@ -3445,7 +3450,7 @@ fn s31_kernel_bundle_records_contract_identity_and_exports() {
             _ => None,
         })
         .expect("instrument.component_versions");
-    let expected_hash = hh_embed_schema::schema_hash();
+    let expected_hash = hharness_embed_schema::schema_hash();
     assert!(
         cv.iter()
             .any(|c| c.get("schema_hash").and_then(Json::as_str) == Some(expected_hash.as_str())),
@@ -3454,7 +3459,7 @@ fn s31_kernel_bundle_records_contract_identity_and_exports() {
     // The delivery row landed (`export.delivered`, §5h.5).
     assert_ne!(r.get("delivered_seq"), Some(&Json::Null));
     // The dir on disk decodes.
-    let decoded = hh_bundle::codec::decode_dir(&dir).expect("delivered dir decodes");
+    let decoded = hharness_bundle::codec::decode_dir(&dir).expect("delivered dir decodes");
     assert_eq!(decoded.manifest.bundle_kind, "run");
     // And the ledger carries the `bundle_assembled` row.
     let evs = svc.store().events(&run_id).unwrap();
@@ -3561,11 +3566,15 @@ fn s312_bit_exact_view_derivation_from_bundle_export() {
     // Live-store projections — what the kernel serves.
     let live_ctx = svc
         .store()
-        .project(&run_id, hh_ledger::views::ViewKind::ContextView, None)
+        .project(&run_id, hharness_ledger::views::ViewKind::ContextView, None)
         .unwrap();
     let live_eff = svc
         .store()
-        .project(&run_id, hh_ledger::views::ViewKind::EffectLedger, None)
+        .project(
+            &run_id,
+            hharness_ledger::views::ViewKind::EffectLedger,
+            None,
+        )
         .unwrap();
 
     let dir = test_dir("bitexact");
@@ -3579,7 +3588,7 @@ fn s312_bit_exact_view_derivation_from_bundle_export() {
 
     // Decode the bundle alone — no live-store access. The ledger export's
     // pages are bundle members; `decode_page` is the one decode rule (CC7).
-    let decoded = hh_bundle::codec::decode_dir(&dir).unwrap();
+    let decoded = hharness_bundle::codec::decode_dir(&dir).unwrap();
     let manifest = &decoded.manifest;
     let mut envelopes = Vec::new();
     let export = manifest
@@ -3588,14 +3597,14 @@ fn s312_bit_exact_view_derivation_from_bundle_export() {
         .expect("the subject run's ledger export is a bundle member");
     for page_addr in &export.pages {
         envelopes.extend(
-            hh_bundle::export::decode_page(decoded.members.get(page_addr).unwrap()).unwrap(),
+            hharness_bundle::export::decode_page(decoded.members.get(page_addr).unwrap()).unwrap(),
         );
     }
 
     // The same view functions fold the decoded envelopes to identical
     // `view_hash`es (AC-R-2.12.1-9 — bit-for-bit).
-    let re_ctx = hh_ledger::views::context_view(&run_id, &envelopes, None);
-    let re_eff = hh_ledger::views::effect_ledger(&run_id, &envelopes, None);
+    let re_ctx = hharness_ledger::views::context_view(&run_id, &envelopes, None);
+    let re_eff = hharness_ledger::views::effect_ledger(&run_id, &envelopes, None);
     assert_eq!(live_ctx.view_hash, re_ctx.view_hash, "ContextView diverged");
     assert_eq!(
         live_eff.view_hash, re_eff.view_hash,
@@ -3677,7 +3686,7 @@ fn s312_reproduce_r3_seeds_unbudgeted_arm_distributions_validators() {
 
     // Lift to R3 capability: declared budget + one fingerprinted,
     // pinned snapshot + its `model` member + a bound validator set.
-    let decoded = hh_bundle::codec::decode_dir(&dir).unwrap();
+    let decoded = hharness_bundle::codec::decode_dir(&dir).unwrap();
     let mut m = decoded.manifest.clone();
     let mut members = decoded.members.clone();
     let budget_doc = Json::obj([("limits", Json::obj([("calls", Json::Int(10))]))]);
@@ -3692,14 +3701,15 @@ fn s312_reproduce_r3_seeds_unbudgeted_arm_distributions_validators() {
         ("observed_fingerprint", Json::str("sha256:fp")),
     ]);
     let snap_bytes = snap.to_canonical_string().into_bytes();
-    let snap_addr = hh_identity::address(&snap_bytes, "application/json").id();
+    let snap_addr = hharness_identity::address(&snap_bytes, "application/json").id();
     members.insert(snap_addr.clone(), snap_bytes.clone());
-    m.members.push(hh_bundle::manifest::MemberRef::present(
-        "model",
-        snap_addr,
-        "application/json",
-        snap_bytes.len() as u64,
-    ));
+    m.members
+        .push(hharness_bundle::manifest::MemberRef::present(
+            "model",
+            snap_addr,
+            "application/json",
+            snap_bytes.len() as u64,
+        ));
     m.model = Json::obj([("snapshots", Json::Arr(vec![snap]))]);
     if let Json::Obj(d) = &mut m.resolved_dependencies {
         d.insert(
@@ -3710,7 +3720,7 @@ fn s312_reproduce_r3_seeds_unbudgeted_arm_distributions_validators() {
     // Re-seal — the identity leg's recompute must meet the recorded id.
     m.version_id = m.compute_id();
     let r3dir = test_dir("r3-seeds-r3");
-    hh_bundle::codec::encode_dir(&r3dir, &m, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&r3dir, &m, &members).unwrap();
     let r3path = r3dir.to_string_lossy().to_string();
 
     // R3 with two budgeted seed legs — per-leg distributions, the
@@ -3912,7 +3922,7 @@ fn s31_lab_serve_lowers_target_mcp_and_binds_test_principal() {
     let dir = test_dir("serve-bundle");
     let member = br#"{"schema":"hh-mcp-target/1","target":"mcp","tools":[{"name":"echo","inputSchema":{"type":"object"}}]}"#
         .to_vec();
-    let addr = hh_identity::idp_id("member", &member);
+    let addr = hharness_identity::idp_id("member", &member);
     let doc = Json::obj([
         ("schema", Json::str("hh-bundle/1")),
         ("idp", Json::str("idp/1")),
@@ -3937,11 +3947,11 @@ fn s31_lab_serve_lowers_target_mcp_and_binds_test_principal() {
         ),
         ("version_id", Json::str("pending")),
     ]);
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
     manifest.version_id = manifest.compute_id();
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     members.insert(addr, member);
-    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
 
     let r = ok(&call(
         &mut svc,
@@ -3955,7 +3965,7 @@ fn s31_lab_serve_lowers_target_mcp_and_binds_test_principal() {
     );
     assert_eq!(
         binding.get("principal").and_then(Json::as_str),
-        Some(hh_mcp::binding::TEST_PRINCIPAL),
+        Some(hharness_mcp::binding::TEST_PRINCIPAL),
         "the binding is fixed to the test principal (R-3)"
     );
     let artifact = r.get("artifact").expect("artifact");
@@ -4024,15 +4034,15 @@ fn s31_group_ml_capability_gate() {
 // members, `Design`/`MatchSpec` records and catalogue metric names — the
 // service decodes through the record codecs, never a second schema.
 
-/// One eval_run/1 row (mirrors the hh-eval acceptance fixture).
+/// One eval_run/1 row (mirrors the hharness-eval acceptance fixture).
 fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
-    use hh_eval::runs::{CacheState, EvalRun};
-    use hh_ontology::compliance::Detector;
-    use hh_ontology::control::OutcomeClass;
-    use hh_ontology::eval::{MetricValue, MetricValueKind};
-    use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-    use hh_ontology::participant::{Observability, ParticipantClass};
-    use hh_ontology::DimensionId;
+    use hharness_eval::runs::{CacheState, EvalRun};
+    use hharness_ontology::compliance::Detector;
+    use hharness_ontology::control::OutcomeClass;
+    use hharness_ontology::eval::{MetricValue, MetricValueKind};
+    use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+    use hharness_ontology::participant::{Observability, ParticipantClass};
+    use hharness_ontology::DimensionId;
     let r = EvalRun {
         run_id: format!("r-{arm}-{task}-{rep}"),
         arm_id: arm.into(),
@@ -4094,10 +4104,10 @@ fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
 /// The shared compare params: two arms over tasks t1/t2, paired design,
 /// matched-cap budgets on `model_calls`.
 fn eval_compare_params() -> Json {
-    use hh_ontology::eval::{
+    use hharness_ontology::eval::{
         Design, DesignKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
     };
-    use hh_ontology::DimensionId;
+    use hharness_ontology::DimensionId;
     let design = Design {
         id: "design-1".into(),
         kind: DesignKind::Paired,
@@ -4129,7 +4139,8 @@ fn eval_compare_params() -> Json {
         deviation_policy: None,
         cache_na_stratified: false,
     };
-    let spec = hh_budget::matchspec::MatchSpec::matched_cap(&[DimensionId::ModelCalls]).to_json();
+    let spec =
+        hharness_budget::matchspec::MatchSpec::matched_cap(&[DimensionId::ModelCalls]).to_json();
     let caps = Json::obj([(DimensionId::ModelCalls.as_str(), Json::Int(100))]);
     let arm = Json::obj([
         ("match_spec", spec),
@@ -4280,8 +4291,8 @@ fn lab_eval_render_scorecard_records_in() {
 
 /// The arm row — `limits_enforced: "full"` maps to the native enforcement
 /// view inside the boundary's match-spec binding.
-fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
-    hh_lab::experiment::ArmSpec {
+fn s34c_arm(id: &str, level: &str, eval: &str) -> hharness_lab::experiment::ArmSpec {
+    hharness_lab::experiment::ArmSpec {
         inference_budget: None,
         arm_id: id.into(),
         hypothesis: format!("{id} does better"),
@@ -4290,10 +4301,10 @@ fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
         // Comparative arms carry a search budget too — `UnbudgetedArm`
         // refuses the matched kinds without one.
         search_budget: Some("budget:search".into()),
-        match_spec: Some(hh_budget::MatchSpec::matched_cap(&[
-            hh_budget::DimensionId::ModelCalls,
+        match_spec: Some(hharness_budget::MatchSpec::matched_cap(&[
+            hharness_budget::DimensionId::ModelCalls,
         ])),
-        artifact_ref: hh_ontology::config::Ref::new("artifact:x", "sha256:ee55"),
+        artifact_ref: hharness_ontology::config::Ref::new("artifact:x", "sha256:ee55"),
         limits_enforced: "full".into(),
         model_role_table_ref: None,
         response_cache: None,
@@ -4301,15 +4312,15 @@ fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
     }
 }
 
-/// A registered-experiment fixture — the hh-lab member-level shape with a
+/// A registered-experiment fixture — the hharness-lab member-level shape with a
 /// `Paired` design and a `task_success` primary metric.
-fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
-    use hh_lab::experiment::*;
-    use hh_ontology::eval::{
+fn s34c_spec() -> hharness_lab::experiment::ExperimentSpec {
+    use hharness_lab::experiment::*;
+    use hharness_ontology::eval::{
         Design, DesignKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
     };
-    use hh_ontology::lab::SplitLabel;
-    use hh_ontology::participant::ParticipantClass;
+    use hharness_ontology::lab::SplitLabel;
+    use hharness_ontology::participant::ParticipantClass;
     let seed = || SeedPolicy {
         harness_rng: true,
         requested_sampling_seed: true,
@@ -4349,7 +4360,7 @@ fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
         pre_registration: Some(prereg()),
         factors: vec![FactorSpec {
             name: "model".into(),
-            kind: hh_ontology::eval::FactorKind::ModelSnapshot,
+            kind: hharness_ontology::eval::FactorKind::ModelSnapshot,
             granularity: None,
             role: None,
             levels: vec![
@@ -4420,10 +4431,10 @@ fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
 /// deposits (identical hard caps — `matched_cap` binds).
 fn s34c_budgets() -> Json {
     let caps = || {
-        hh_budget::spec::BudgetSpec::hard_caps(
-            hh_budget::spec::BudgetMode::Pool,
+        hharness_budget::spec::BudgetSpec::hard_caps(
+            hharness_budget::spec::BudgetMode::Pool,
             &[(
-                hh_budget::DimensionKey::Primary(hh_budget::DimensionId::ModelCalls),
+                hharness_budget::DimensionKey::Primary(hharness_budget::DimensionId::ModelCalls),
                 100,
             )],
         )
@@ -4445,15 +4456,15 @@ fn s34c_row(
     task: &str,
     rep: u64,
     pass: bool,
-) -> hh_results::row::ResultsRow {
-    use hh_ontology::eval::MetricValueKind;
-    use hh_results::audit::AuditRef;
-    use hh_results::row::{
+) -> hharness_results::row::ResultsRow {
+    use hharness_ontology::eval::MetricValueKind;
+    use hharness_results::audit::AuditRef;
+    use hharness_results::row::{
         AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection,
         ResultsRow, RowKey,
     };
-    use hh_results::scoring::ScoringContext;
-    use hh_results::watermark::WatermarkSet;
+    use hharness_results::scoring::ScoringContext;
+    use hharness_results::watermark::WatermarkSet;
     let mut watermark = WatermarkSet::new();
     watermark.pin(run_id, 7);
     ResultsRow {
@@ -4561,10 +4572,11 @@ fn lab_analysis_analyze_round_trip() {
     // Seed the ledger + the derived-state store before the service opens.
     let (ra, rb);
     {
-        let mut store = hh_ledger::store::Store::open(root.join("store")).unwrap();
+        let mut store = hharness_ledger::store::Store::open(root.join("store")).unwrap();
         let manifest = || {
-            let mut m =
-                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Experiment);
+            let mut m = hharness_ledger::manifest::RunManifest::minimal(
+                hharness_ledger::manifest::RunKind::Experiment,
+            );
             m.configuration_id = None;
             m.configuration_version_id = None;
             m
@@ -4574,11 +4586,12 @@ fn lab_analysis_analyze_round_trip() {
     }
     let mut keys = Vec::new();
     {
-        let rs = hh_results::store::ResultsStore::open(root.join("store").join("results")).unwrap();
+        let rs = hharness_results::store::ResultsStore::open(root.join("store").join("results"))
+            .unwrap();
         let mut rec = |run_id: &str, arm: &str, rep: u64, pass: bool| {
             let row = s34c_row(run_id, arm, "t1", rep, pass);
             keys.push(row.key.key_id());
-            rs.record(&row, hh_results::version::DerivedReason::Initial)
+            rs.record(&row, hharness_results::version::DerivedReason::Initial)
                 .unwrap();
         };
         // A: 4/4 pass; B: 1/4 — a known positive delta.
@@ -4603,10 +4616,10 @@ fn lab_analysis_analyze_round_trip() {
         .to_string();
 
     let analyze = |spec_ref: &str| {
-        let mut s = hh_lab::analysis::AnalysisSpec {
+        let mut s = hharness_lab::analysis::AnalysisSpec {
             spec_id: String::new(),
             kind: "compare".into(),
-            query: hh_lab::analysis::QuerySpec {
+            query: hharness_lab::analysis::QuerySpec {
                 metrics: vec!["task_success".into()],
                 filters: Some(Json::obj([
                     ("arm_a", Json::str("arm-A")),
@@ -4616,8 +4629,8 @@ fn lab_analysis_analyze_round_trip() {
             },
             spec_ref: Some(spec_ref.to_string()),
             label: None,
-            estimator_selection: hh_ontology::eval::EstimatorSelection {
-                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+            estimator_selection: hharness_ontology::eval::EstimatorSelection {
+                method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
                 selection_rule: "adr-0158.clt_floor".into(),
                 floors: BTreeMap::new(),
                 fallback_chain: vec![],
@@ -4708,18 +4721,18 @@ fn lab_analysis_analyze_refusals() {
     let mut svc = service();
     lab_hello(&mut svc);
     let spec = |spec_ref: &str| {
-        let mut s = hh_lab::analysis::AnalysisSpec {
+        let mut s = hharness_lab::analysis::AnalysisSpec {
             spec_id: String::new(),
             kind: "summarize".into(),
-            query: hh_lab::analysis::QuerySpec {
+            query: hharness_lab::analysis::QuerySpec {
                 metrics: vec!["task_success".into()],
                 filters: None,
                 grain: None,
             },
             spec_ref: Some(spec_ref.to_string()),
             label: None,
-            estimator_selection: hh_ontology::eval::EstimatorSelection {
-                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+            estimator_selection: hharness_ontology::eval::EstimatorSelection {
+                method: hharness_ontology::eval::IntervalMethod::ClusteredClt,
                 selection_rule: "adr-0158.clt_floor".into(),
                 floors: BTreeMap::new(),
                 fallback_chain: vec![],
@@ -4731,7 +4744,7 @@ fn lab_analysis_analyze_refusals() {
         s.spec_id = s.spec_id();
         s
     };
-    let params = |spec: hh_lab::analysis::AnalysisSpec| {
+    let params = |spec: hharness_lab::analysis::AnalysisSpec| {
         Json::obj([
             ("spec", spec.to_json()),
             ("rows", Json::Arr(vec![Json::str("no-such-row")])),
@@ -4791,8 +4804,8 @@ fn assembly_source_json() -> Json {
             "latest",
         ))),
     );
-    let prov = hh_assembly::grammar::LayerProvenance {
-        source_kind: hh_assembly::grammar::LayerSourceKind::User,
+    let prov = hharness_assembly::grammar::LayerProvenance {
+        source_kind: hharness_assembly::grammar::LayerSourceKind::User,
         id: "user:main".into(),
         version: "1".into(),
         precedence: 0,
@@ -4811,7 +4824,7 @@ fn assembly_source_json() -> Json {
         (
             "layers",
             Json::Arr(vec![Json::obj([
-                ("provenance", hh_assembly::grammar::layer_json(&prov)),
+                ("provenance", hharness_assembly::grammar::layer_json(&prov)),
                 ("fragment", assembly.to_json()),
             ])]),
         ),
@@ -4876,7 +4889,7 @@ fn ac10_assembly_ops_run_out_of_process_over_group_l() {
         let mut svc = service_in(&dir_b);
         let input = tape.join("\n") + "\n";
         let mut r = std::io::BufReader::new(input.as_bytes());
-        hh_embed::stdio::serve(&mut svc, &mut r, &mut out_b).unwrap();
+        hharness_embed::stdio::serve(&mut svc, &mut r, &mut out_b).unwrap();
     }
     // Binding (a): in-process `handle()`.
     let dir_a = test_dir("asm-a");
@@ -4884,7 +4897,7 @@ fn ac10_assembly_ops_run_out_of_process_over_group_l() {
     {
         let mut svc = service_in(&dir_a);
         for line in &tape {
-            let req = hh_wire::jsonrpc::parse_request(line).unwrap();
+            let req = hharness_wire::jsonrpc::parse_request(line).unwrap();
             let resp = svc.handle(&req);
             out_a.extend_from_slice(resp.to_canonical_string().as_bytes());
             out_a.push(b'\n');
@@ -5493,7 +5506,7 @@ fn register_skill_extension(
     name: &str,
     payload: &[u8],
 ) -> (String, String) {
-    use hh_registry::extension::{
+    use hharness_registry::extension::{
         extension_body_json, resolve_candidate, Candidate, DeclaredSource, ExtensionKind,
         FetchOutcome, SourceLocator,
     };
@@ -5512,7 +5525,7 @@ fn register_skill_extension(
         },
         &FetchOutcome {
             resolved: format!("resolved:{name}@1"),
-            content: hh_identity::idp::address(payload, "application/octet-stream"),
+            content: hharness_identity::idp::address(payload, "application/octet-stream"),
             fetched_at: 7,
             code_identity: vec![],
             source_snapshot: None,
@@ -5730,7 +5743,7 @@ fn s42_scoped_bundle_validate_status_and_lifecycle() {
     // scoped path returns the manifest only; reconstruct the directory
     // via the container the caller holds? Instead, deliver through the
     // assembly's own members: the pool holds them, and `encode_dir` is
-    // a layer-A concern exercised in hh-bundle's own tests. Here the
+    // a layer-A concern exercised in hharness-bundle's own tests. Here the
     // experiment bundle's `contains` names the arm bundle by
     // `{container}` — but the container file isn't persisted. The
     // honest embed surface: `kernel.bundle{kind}` accepts `contains`
@@ -5738,31 +5751,35 @@ fn s42_scoped_bundle_validate_status_and_lifecycle() {
     // bundle through a directory encode by way of `kernel.reproduce`?
     // The simplest available artifact: re-assemble through the pool is
     // not a decode source. Write the dir via the test's own decode of
-    // the run bundle + the returned manifest — `hh_bundle` is a dep of
+    // the run bundle + the returned manifest — `hharness_bundle` is a dep of
     // the test through the workspace.
-    let arm_members = hh_bundle::codec::Decoded {
-        manifest: hh_bundle::manifest::BundleManifest::from_json(&arm_manifest).unwrap(),
+    let arm_members = hharness_bundle::codec::Decoded {
+        manifest: hharness_bundle::manifest::BundleManifest::from_json(&arm_manifest).unwrap(),
         members: Default::default(),
     };
     // Materialize the members the arm manifest names from the blob pool.
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     for m in &arm_members.manifest.members {
-        let parsed = hh_identity::idp::parse_id(&m.address).unwrap();
-        if let Ok(bytes) = svc.store().get_blob(&hh_identity::idp::ContentAddress {
-            idp: "idp/1",
-            algorithm: "sha256",
-            digest: parsed.digest_hex,
-            media_type: String::new(),
-            size: 0,
-        }) {
+        let parsed = hharness_identity::idp::parse_id(&m.address).unwrap();
+        if let Ok(bytes) = svc
+            .store()
+            .get_blob(&hharness_identity::idp::ContentAddress {
+                idp: "idp/1",
+                algorithm: "sha256",
+                digest: parsed.digest_hex,
+                media_type: String::new(),
+                size: 0,
+            })
+        {
             members.insert(m.address.clone(), bytes);
         }
     }
-    let arm_decoded = hh_bundle::codec::Decoded {
+    let arm_decoded = hharness_bundle::codec::Decoded {
         manifest: arm_members.manifest.clone(),
         members,
     };
-    hh_bundle::codec::encode_dir(&arm_dir, &arm_decoded.manifest, &arm_decoded.members).unwrap();
+    hharness_bundle::codec::encode_dir(&arm_dir, &arm_decoded.manifest, &arm_decoded.members)
+        .unwrap();
 
     let exp = ok(&call(
         &mut svc,
@@ -5805,22 +5822,25 @@ fn s42_scoped_bundle_validate_status_and_lifecycle() {
     // The publication gate — the experiment manifest written to a dir,
     // `kernel.validate{publication: true}` runs S9 over it.
     let exp_dir = test_dir("s42-exp-dir");
-    let exp_manifest_t: hh_bundle::manifest::BundleManifest =
-        hh_bundle::manifest::BundleManifest::from_json(&exp_manifest).unwrap();
-    let mut exp_members = hh_bundle::export::MemberBytes::new();
+    let exp_manifest_t: hharness_bundle::manifest::BundleManifest =
+        hharness_bundle::manifest::BundleManifest::from_json(&exp_manifest).unwrap();
+    let mut exp_members = hharness_bundle::export::MemberBytes::new();
     for m in &exp_manifest_t.members {
-        let parsed = hh_identity::idp::parse_id(&m.address).unwrap();
-        if let Ok(bytes) = svc.store().get_blob(&hh_identity::idp::ContentAddress {
-            idp: "idp/1",
-            algorithm: "sha256",
-            digest: parsed.digest_hex,
-            media_type: String::new(),
-            size: 0,
-        }) {
+        let parsed = hharness_identity::idp::parse_id(&m.address).unwrap();
+        if let Ok(bytes) = svc
+            .store()
+            .get_blob(&hharness_identity::idp::ContentAddress {
+                idp: "idp/1",
+                algorithm: "sha256",
+                digest: parsed.digest_hex,
+                media_type: String::new(),
+                size: 0,
+            })
+        {
             exp_members.insert(m.address.clone(), bytes);
         }
     }
-    hh_bundle::codec::encode_dir(&exp_dir, &exp_manifest_t, &exp_members).unwrap();
+    hharness_bundle::codec::encode_dir(&exp_dir, &exp_manifest_t, &exp_members).unwrap();
     let v9 = ok(&call(
         &mut svc,
         "kernel.validate",
@@ -5844,7 +5864,7 @@ fn s42_scoped_bundle_validate_status_and_lifecycle() {
         .expect("S9 stage in publication report");
     // The synthetic run carries no experiment binding — S9 reports the
     // arm-binding ContainmentMismatch as a typed row (the bound-run clean
-    // pass is hh-bundle's own `s4_2` suite); assert only that every S9
+    // pass is hharness-bundle's own `s4_2` suite); assert only that every S9
     // verdict is one of the closed code set, never a hidden check.
     const S9_CODES: &[&str] = &[
         "ContainmentMismatch",
@@ -6224,8 +6244,10 @@ fn s44_repro_report_independent_and_leaderboard_snapshots() {
 
     // §6.5 §2.2's `snapshots(definition_ref)` — the retained-snapshot
     // list over the persisted index.
-    let def =
-        hh_results::leaderboard::LeaderboardDefinition::new("idp:experiment-s44", "wall_time_ms");
+    let def = hharness_results::leaderboard::LeaderboardDefinition::new(
+        "idp:experiment-s44",
+        "wall_time_ms",
+    );
     let defined = ok(&call(
         &mut svc,
         "lab.leaderboard.define",
@@ -6566,9 +6588,9 @@ fn s4_13_env_suspend_resume_over_the_boundary() {
 fn s51_profile(
     id: &str,
     version: &str,
-    status: hh_compiler::profile::DebtStatus,
-) -> hh_compiler::profile::ModelProfile {
-    use hh_compiler::profile::{
+    status: hharness_compiler::profile::DebtStatus,
+) -> hharness_compiler::profile::ModelProfile {
+    use hharness_compiler::profile::{
         ExpiryCondition, ExpiryKind, ModelProfile, ModelRole, ProfileCompatibility,
         ProfileDebtRecord, ProfileSelector, VersionPattern,
     };
@@ -6592,7 +6614,7 @@ fn s51_profile(
         expiry: ProfileDebtRecord {
             rule_id: format!("{id}.expiry"),
             hypothesis: "the model honours the declared contract".to_string(),
-            evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+            evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
             owner: "test:owner".to_string(),
             reach_via: Vec::new(),
             expiry_condition: ExpiryCondition {
@@ -6600,8 +6622,8 @@ fn s51_profile(
                 value: Some("2099-01-01".to_string()),
             },
             removal_test_ref: "sha256:test".to_string(),
-            removal_test: Some(hh_hir::RemovalTest::new(
-                hh_hir::RemovalTestKind::Inspection,
+            removal_test: Some(hharness_hir::RemovalTest::new(
+                hharness_hir::RemovalTestKind::Inspection,
             )),
             status,
             debt_class: None,
@@ -6619,13 +6641,16 @@ fn s51_profile(
         },
         tests: Json::obj([]),
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
 /// Register a `model_profile` record through the boundary — returns the
 /// record's `version_id` (a resolvable coordinate).
-fn s51_register_profile(svc: &mut EmbedService, p: &hh_compiler::profile::ModelProfile) -> String {
+fn s51_register_profile(
+    svc: &mut EmbedService,
+    p: &hharness_compiler::profile::ModelProfile,
+) -> String {
     let r = call(
         svc,
         "lab.registry.register",
@@ -6635,7 +6660,7 @@ fn s51_register_profile(svc: &mut EmbedService, p: &hh_compiler::profile::ModelP
                 "body",
                 Json::obj([
                     ("kind", Json::str("model_profile")),
-                    ("profile", hh_compiler::schema::profile_to_json(p)),
+                    ("profile", hharness_compiler::schema::profile_to_json(p)),
                 ]),
             ),
             ("registrar", registrar()),
@@ -6772,7 +6797,7 @@ fn s_profile_binding_canonicalises_resolved_coordinates() {
     let p = s51_profile(
         "test:profile.canonical",
         "1",
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     );
     let vid = s51_register_profile(&mut svc, &p);
     let r = s51_open_with_binding(&mut svc, Json::obj([("compaction", Json::str(vid))]));
@@ -6805,7 +6830,7 @@ fn s_profile_binding_model_profile_ref_resolved() {
     let p = s51_profile(
         "test:profile.bound",
         "1",
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     );
     let vid = s51_register_profile(&mut svc, &p);
     let r = s51_open_with_binding(&mut svc, Json::obj([("primary", Json::str(vid.clone()))]));
@@ -6832,9 +6857,9 @@ fn s_profile_binding_expired_requires_intent() {
     let p = s51_profile(
         "test:profile.expired",
         "1",
-        hh_compiler::profile::DebtStatus::Expired,
+        hharness_compiler::profile::DebtStatus::Expired,
     );
-    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let coord = hharness_compiler::profile::profile_coordinate(&p);
 
     // Expired without a declared `intent_ref` — the open refuses
     // `expired_without_intent` (the §5b.3 d.6 link rule at open).

@@ -6,16 +6,16 @@
 
 use std::net::IpAddr;
 
-use hh_containment::egress::{
+use hharness_containment::egress::{
     decide_egress, recheck_resolved, ApprovalCache, CacheScope, EgressReason, EgressRequest,
     EgressSource, EgressVerdict,
 };
-use hh_containment::policy::{
+use hharness_containment::policy::{
     kernel_default, normalize_host, ContainmentPolicy, DefaultUnmatched, DnsPolicy, DnsResolver,
     EgressProtocol, EgressRule, HostPattern, NetMode, NetPolicy, NonPublic, ResidualChannel,
     ResidualKind, RuleDecision, TlsPolicy, UnixSocketMode, UnixSockets,
 };
-use hh_containment::PolicyError;
+use hharness_containment::PolicyError;
 
 fn policy_with(net: NetPolicy) -> ContainmentPolicy {
     let mut p = kernel_default(0);
@@ -326,10 +326,10 @@ fn ac_h4_05_residual_channels_declared_and_owned() {
     ));
     p.residual_channels = vec![ResidualChannel {
         kind: ResidualKind::ApprovedHostBody,
-        statement: hh_hir::leaves::Text::new(
+        statement: hharness_hir::leaves::Text::new(
             "request bodies to approved hosts are opaque",
             "kernel:test",
-            hh_provenance::ProvenanceRecord::kernel("kernel:test", 1_000),
+            hharness_provenance::ProvenanceRecord::kernel("kernel:test", 1_000),
         ),
         closer: "egress leak_scan + sentinel bindings".into(),
         owner: "kernel:egress".into(),
@@ -342,7 +342,7 @@ fn ac_h4_05_residual_channels_declared_and_owned() {
     // validation (N4) — the declaration is enforced, not advisory.
     let mut public = kernel_default(0);
     public.net.mode = NetMode::Public;
-    public.provenance.authority = hh_provenance::AuthorityClass::Principal;
+    public.provenance.authority = hharness_provenance::AuthorityClass::Principal;
     public.compute_ids();
     assert!(matches!(
         public.validate(),

@@ -22,9 +22,9 @@
 //!   privilege grant) — the concrete `probe_boundary` verdicts are the
 //!   evidence, never self-attestation.
 
-use hh_containment::paths;
-use hh_containment::policy::{ContainmentPolicy, ExecPolicy, NetMode, ReadMode};
-use hh_wire::json::Json;
+use hharness_containment::paths;
+use hharness_containment::policy::{ContainmentPolicy, ExecPolicy, NetMode, ReadMode};
+use hharness_wire::json::Json;
 
 /// `seatbelt_profile(policy)` — the SBPL source `sandbox-exec -p` consumes.
 /// Deterministic in the policy (rule order is the policy's own order —
@@ -272,7 +272,7 @@ pub fn describe() -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_containment::policy::{kernel_default, WritableRoot};
+    use hharness_containment::policy::{kernel_default, WritableRoot};
 
     #[test]
     fn profile_is_deny_default_and_deterministic() {
@@ -295,7 +295,7 @@ mod tests {
         // S2.2 (§8.4 subprocess_confined): the plugin's only reach is its
         // host channel — `net.mode = none` + `unix_sockets = allow_listed`
         // must still emit the per-path rule (deny-default covers the rest).
-        use hh_containment::policy::{UnixSocketMode, UnixSockets};
+        use hharness_containment::policy::{UnixSocketMode, UnixSockets};
         let mut p = kernel_default(0);
         p.net.unix_sockets = UnixSockets {
             mode: UnixSocketMode::AllowListed,

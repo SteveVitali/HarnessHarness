@@ -14,45 +14,49 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{
     kernel_default, IsolationClass, NetMode, ResourceLimits, WritableRoot,
 };
-use hh_env::capture::OutputPolicy;
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::events::{EventMinter, ScopeChain};
-use hh_env::executor::{
+use hharness_env::capture::OutputPolicy;
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::events::{EventMinter, ScopeChain};
+use hharness_env::executor::{
     DedupSupport, ExecutionRequest, ExecutorDeclaration, ExecutorSignal, InterruptSupport,
     ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::kinds::{
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_identity::idp::address;
-use hh_ledger::event::{Cursor, Direction, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::ownership::{check_write, OwnedObject, OwnershipTable, WriteVerdict};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::DetectorSet;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_identity::idp::address;
+use hharness_ledger::event::{Cursor, Direction, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::ownership::{check_write, OwnedObject, OwnershipTable, WriteVerdict};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::DetectorSet;
+use hharness_wire::json::Json;
 
 // ── scaffold (the `acceptance.rs` shape) ─────────────────────────────────────
 
@@ -99,14 +103,14 @@ fn workspace(tag: &str) -> PathBuf {
     p
 }
 
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     p.fs.write.allow.push(WritableRoot {
         root: ws.display().to_string(),
         read_only_subpaths: vec![],
         protected_metadata_names: vec![],
     });
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
     p.net.mode = NetMode::None;
     p.compute_ids();
     p
@@ -245,16 +249,18 @@ fn binding() -> SurfaceBinding {
             .collect(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:write_file".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     }
@@ -301,7 +307,7 @@ fn root_handle() -> AuthorityHandle {
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -451,7 +457,7 @@ impl ToolExecutor for MockExecutor {
     }
 }
 
-fn read_all(store: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     store
         .read(run, Cursor::Seq(0), None, Direction::Fwd, usize::MAX)
         .unwrap()
@@ -684,13 +690,13 @@ fn r211_recorded_modified_refuses_as_proposed_effect() {
     // remove the fold arm and this assertion fails.
     let events = disp.store_mut().events(&run).unwrap().to_vec();
     let head = events.last().map(|e| e.seq).unwrap_or(0);
-    let st = hh_monitor::approval::ApprovalState::project(&events, head);
+    let st = hharness_monitor::approval::ApprovalState::project(&events, head);
     let rec = st
         .decisions
         .get(&permission_id)
         .expect("the recorded modified decision folds");
     match &rec.decision {
-        hh_monitor::decision::Decision::Modified { amended_args: a } => {
+        hharness_monitor::decision::Decision::Modified { amended_args: a } => {
             assert_eq!(a, &amended, "the amendment rides the durable row verbatim");
         }
         other => panic!("expected Decision::Modified, folded {other:?}"),
@@ -1032,7 +1038,7 @@ fn r211_prepare_check_write_fenced_refuses() {
     let env = ready_env(&mut store, &lease, &mut driver, &ws);
 
     // The run holds the resource key under writer generation 1.
-    let scope = hh_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
+    let scope = hharness_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
     store
         .lease_acquire(&run, &lease, &scope, &format!("subagent:{run}"), 300_000)
         .unwrap();
@@ -1095,7 +1101,7 @@ fn r211_prepare_check_write_resource_key_rival_refuses() {
     let mut driver = EnvDriver::new(&run);
     let env = ready_env(&mut store, &lease, &mut driver, &ws);
 
-    let scope = hh_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
+    let scope = hharness_ledger::leases::LeaseScope::Resource("shared-counter".to_string());
     store
         .lease_acquire(&rival_run, &rival_lease, &scope, "subagent:rival", 300_000)
         .unwrap();
@@ -1143,7 +1149,7 @@ fn r211_prepare_check_write_resource_key_rival_refuses() {
 
 // ── D3 — the pure check_write still composes over the same rows ────────────
 //
-// The dispatch's prepare gate and `hh-subagent`'s merge path fold the
+// The dispatch's prepare gate and `hharness-subagent`'s merge path fold the
 // same `OwnershipTable` — the pure check over the depth-3 fold agrees
 // with the durable audit (one machine, CC1).
 #[test]
