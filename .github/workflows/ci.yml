@@ -177,6 +177,14 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: cargo test --workspace
 
+      # L4.7: the README's hermetic quickstart block executed verbatim
+      # from a clean clone of this head (clone → build → doctor → a
+      # scripted-lane run). Reads only README.md at the repo root —
+      # gated like the other build legs; one matrix leg suffices.
+      - name: Quickstart (clean clone, verbatim)
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        run: bash scripts/check-quickstart.sh
+
       - name: Schema drift check (CC7)
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-drift.sh

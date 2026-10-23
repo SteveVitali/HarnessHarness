@@ -10,6 +10,62 @@ amend via the manifest protocol + an ADR) and landed ticket-by-ticket — the
 authoritative record of what shipped is `docs/build/`, one row per landed
 ticket in `docs/build/BUILD_INDEX.md`.
 
+## Quickstart
+
+<!-- quickstart:begin -->
+```sh
+# fresh clone → build the CLI pair
+git clone https://github.com/SteveVitali/MetaHarness.git
+cd MetaHarness
+cargo build -p hharness-cli -p hharness-kernel
+
+# connectivity self-check — `hh` over the spawned kernel (binding (b))
+HH_KERNEL_CMD=./target/debug/hh-kernel ./target/debug/hh doctor
+# → {"kind":"result","payload":{"connectivity":"ok", …}}
+
+# a first hermetic run — the offline scripted kernel model over the
+# `hh-embed/1` stdio binding (the conformance fixture definition ships in
+# the repo); the `{kind:"invoke"}` block issues the `hh.submit`
+# completion call, so the run finishes `succeeded`/`completed`
+DOC=$(tr -d '\n' < clients/ts/fixture-definition.json)
+{
+  printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"hello","params":{"contract_major":1,"client":{"name":"quickstart","version":"1","kind":"cli"},"capabilities":{"experimental":true}}}'
+  printf '{"jsonrpc":"2.0","id":2,"method":"open_session","params":{"spec":{"kind":"new","definition":{"kind":"document","document":%s},"environment":{"kind":"connection_info","connection_info":{"class":"local_host"}},"attendance":{"value":"async","source":"declared"}},"idempotency_key":"qs-open"}}\n' "$DOC"
+  printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"submit","params":{"session_id":"sess-1","input":[{"kind":"invoke","capability":"hh.submit","args":{}}],"idempotency_key":"qs-submit"}}'
+  printf '%s\n' '{"jsonrpc":"2.0","id":4,"method":"read","params":{"session_id":"sess-1","cursor":{"kind":"seq","seq":1},"limit":300}}'
+} | ./target/debug/hh-kernel serve
+# → …"class":"lifecycle.run.finished"…"status":"succeeded"…
+```
+<!-- quickstart:end -->
+
+`sess-1` is the first session a fresh `serve` process allocates — the
+pipe works because every line above is independent of the responses.
+The run's durable ledger lands under `.hh/store` (gitignored); read it
+back any time with `hh run events <run_id>`.
+
+Then, if you have a local OpenAI-compatible model endpoint (Ollama or a
+`llama.cpp` server), the same definition drives one real-model run — the
+endpoint and model ride `env:` coordinates the kernel resolves (names
+only, never values in the ledger):
+
+<!-- quickstart-live:begin -->
+```sh
+: "${HH_LOCAL_BASE_URL:?set to your OpenAI-compatible base URL, e.g. http://127.0.0.1:11434}"
+: "${HH_LOCAL_MODEL:?set to a model id the endpoint serves}"
+HH_KERNEL_CMD=./target/debug/hh-kernel \
+  ./target/debug/hh run start clients/ts/fixture-definition.json \
+    'You have exactly one tool available: hh_submit, which takes no arguments. Call hh_submit now with empty arguments {}. If you cannot call tools, reply with the single word done.' \
+    --override '/assembly/slots/model_port={"one":{"enabled":true,"variant":{"class_id":"model_port","variant_id":"hh/gateway_http","version_selector":"latest"},"params":{"dialect":"openai-compatible@1","endpoint":"env:HH_LOCAL_BASE_URL","provider_model_id":"env:HH_LOCAL_MODEL"}}}'
+# → …"class":"lifecycle.run.finished"… — the run reaches a recorded
+#   terminal state; the outcome depends on the model's tool-call fidelity
+#   (a schema-violating answer finishes `format_failure` — honest, not hidden)
+```
+<!-- quickstart-live:end -->
+
+`scripts/check-quickstart.sh` executes the hermetic block verbatim from a
+clean clone — it runs in CI, so the recipe above is what a newcomer
+actually gets.
+
 ## Repository layout
 
 | Path | What it is |

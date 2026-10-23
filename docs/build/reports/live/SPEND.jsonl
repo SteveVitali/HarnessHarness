@@ -57,3 +57,4 @@
 {"ts":"2026-10-23T03:23:02Z","ticket":"L4.6","leg":"capstone-judge","cost_usd":0.001905,"cumulative_usd":25.259768,"record":"2026-10-23-capstone-judge.json"}
 {"ts":"2026-10-23T03:23:51Z","ticket":"L4.6","leg":"capstone-fleet-webhook","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-capstone-fleet-webhook.json"}
 {"ts":"2026-10-23T04:28:56Z","ticket":"L4.6b","leg":"l4-6b-replay","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-l4-6b-replay.json"}
+{"ts":"2026-10-23T05:18:40Z","ticket":"L4.7","leg":"quickstart-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-quickstart-live.json"}
