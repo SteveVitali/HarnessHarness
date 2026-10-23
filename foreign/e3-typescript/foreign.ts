@@ -1,21 +1,17 @@
 #!/usr/bin/env node
 // foreign.ts — the E3-candidate (TypeScript, node type-stripping, stdlib
 // only) replay of the `hh-xcheck-bundle/1` contract (CHECKER.md, spec
-// §10.7, R2.21, ADR-0353) — part 1 (R4.4): the shared `lib/` core plus
-// the identity-trees/records, ledger-transcript, registry-snapshot and
-// canonical-parse arms. R4.4a wired the plugin-manifests and
-// ledger-scenarios arms against the same core; the hir-documents arm is
-// R4.4b's.
+// §10.7, R2.21, ADR-0353): the shared `lib/` core plus all eight arms —
+// identity-trees/records, ledger-transcript, registry-snapshot,
+// canonical-parse (R4.4); plugin-manifests and ledger-scenarios (R4.4a);
+// and hir-documents (R4.4b —
+// docs/tickets/153b_R4.4b__e3-typescript-foreign-impl-part3.md).
 //
 //   node foreign/e3-typescript/foreign.ts <bundle-dir> <answers.json>
 //
 // Reads a cross-impl bundle directory, replays the arms present, and
 // writes an `answers.json` that `hh-xcheck verify <bundle> <answers>`
-// compares against the bundle's committed E1 expectations. R4.4a wires
-// plugin-manifests and ledger-scenarios; the hir-documents arm lands at
-// R4.4b (docs/tickets/153b_R4.4b__e3-typescript-foreign-impl-part3.md) —
-// `verify` reports its cells `missing answer` by name (honest pending,
-// never a fabricated or vacuous answer).
+// compares against the bundle's committed E1 expectations.
 //
 // Honesty note: this is a *candidate* implementation. Its answers are
 // evidence the foreign run produced; a green `verify` does not mint E1
@@ -31,6 +27,7 @@ import { armLedgerTranscript, armLedgerScenarios } from "./lib/ledger.ts";
 import { armRegistrySnapshot } from "./lib/registry.ts";
 import { armCanonicalParse } from "./lib/canonical_parse.ts";
 import { armPluginManifests } from "./lib/plugin.ts";
+import { armHirDocuments } from "./lib/hir.ts";
 
 function main(argv: string[]): number {
   if (argv.length !== 2) {
@@ -49,6 +46,7 @@ function main(argv: string[]): number {
       "plugin-manifests": armPluginManifests(join(armsDir, "plugin-manifests"), bundle),
       "canonical-parse": armCanonicalParse(join(armsDir, "canonical-parse")),
       "ledger-scenarios": armLedgerScenarios(join(armsDir, "ledger-scenarios")),
+      "hir-documents": armHirDocuments(join(armsDir, "hir-documents")),
     },
   };
   writeFileSync(out, Buffer.concat([canonical(answers as Json), Buffer.from("\n")]));

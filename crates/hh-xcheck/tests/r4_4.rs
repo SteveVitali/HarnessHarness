@@ -1,20 +1,21 @@
-//! R4.4 acceptance battery — the `foreign/e3-typescript` part-1 replay
-//! (the E3 candidate's shared `lib/` core + the identity-trees/records,
-//! ledger-transcript, registry-snapshot and canonical-parse arms;
-//! `answers.json`, `scripts/xcheck-e3.sh`).
+//! R4.4 acceptance battery — the `foreign/e3-typescript` replay (the E3
+//! candidate's shared `lib/` core plus all eight arms: R4.4's
+//! identity-trees/records, ledger-transcript, registry-snapshot and
+//! canonical-parse; R4.4a's plugin-manifests and ledger-scenarios;
+//! R4.4b's hir-documents; `answers.json`, `scripts/xcheck-e3.sh`).
 //!
 //! Invariants: the committed `foreign/e3-typescript/answers.json`
-//! verifies green on every arm it answers and fails the R4.4b-owned arm
-//! only as `missing answer` (pending, never a fabricated or vacuous
-//! pass); the tree carries no npm dependency and only `node:`/relative
-//! `.ts` imports; `xcheck-e3.sh` reports `skipped(node-absent)` (exit 3)
-//! when node < 22 is not on PATH. When node ≥ 22 *is* on PATH the replay
-//! leg re-runs `foreign.ts` and asserts byte-identical covered answers —
-//! which is also what proves the tree is erasable-TypeScript (node's own
-//! type-stripping rejects enums/namespaces/parameter properties).
+//! verifies green on every arm — all eight bundle arms are covered as of
+//! R4.4b, with zero cells left `missing answer`; the tree carries no npm
+//! dependency and only `node:`/relative `.ts` imports; `xcheck-e3.sh`
+//! reports `skipped(node-absent)` (exit 3) when node < 22 is not on PATH.
+//! When node ≥ 22 *is* on PATH the replay leg re-runs `foreign.ts` and
+//! asserts byte-identical covered answers — which is also what proves the
+//! tree is erasable-TypeScript (node's own type-stripping rejects
+//! enums/namespaces/parameter properties).
 //!
-//! The pending cells (hir-documents, five cases) are R4.4b's scope —
-//! recorded `missing answer`, never claimed.
+//! The R4.4b-focused invariants (honest bound, E2 absence, coverage
+//! floor) live in `tests/r4_4b.rs`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -38,9 +39,10 @@ fn load(p: &Path) -> Json {
     hh_wire::json::parse(&String::from_utf8_lossy(&std::fs::read(p).unwrap())).unwrap()
 }
 
-/// The arms the E3 tree answers (R4.4's five + R4.4a's plugin-manifests
-/// and ledger-scenarios; `hir-documents` stays R4.4b's pending arm —
-/// `missing answer`, honestly recorded).
+/// The arms the E3 tree answers — all eight bundle arms as of R4.4b
+/// (R4.4's five + R4.4a's plugin-manifests and ledger-scenarios +
+/// R4.4b's hir-documents). The `missing answer` branch below still
+/// guards any future arm the tree has not claimed.
 const COVERED_ARMS: &[&str] = &[
     "identity-trees",
     "identity-records",
@@ -49,6 +51,7 @@ const COVERED_ARMS: &[&str] = &[
     "plugin-manifests",
     "canonical-parse",
     "ledger-scenarios",
+    "hir-documents",
 ];
 
 /// The committed `answers.json` verifies every covered case and reports
@@ -229,10 +232,20 @@ fn e3_tree_carries_no_npm_dependency() {
     assert!(!sources.is_empty());
     for src in sources {
         let text = std::fs::read_to_string(&src).unwrap();
-        // Every `from "<spec>"` specifier (covers multi-line imports).
+        // Every `from "<spec>"` specifier (covers multi-line imports). A
+        // bare `find("from")` also matches the tail of string literals
+        // like `"derived-from"`/`"from"` (real members of the hir.ts
+        // surface), so the `from` must not be preceded by a word or
+        // string character — real imports have whitespace/`}` before it.
         let mut rest = text.as_str();
         while let Some(i) = rest.find("from") {
+            let inside_word = rest.as_bytes()[..i].last().is_some_and(|b| {
+                b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'"' | b'\'' | b'`')
+            });
             rest = &rest[i + 4..];
+            if inside_word {
+                continue;
+            }
             let spec = rest
                 .trim_start()
                 .strip_prefix('"')
