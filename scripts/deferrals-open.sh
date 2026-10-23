@@ -48,7 +48,7 @@ if [ "${1:-}" = "--bl" ]; then
   NR == 1 { next }
   {
     n = csvline($0, f)
-    gsub(/^[ \t]+|[ \t]+$/, "", f[n])
+    gsub(/^[ \t\r]+|[ \t\r]+$/, "", f[n])  # CRLF-tolerant (the CSV may carry \r\n)
     if (f[n] == "open") {
       line = f[1] " | " f[n] " | " f[2]
       printf "%s\n", substr(line, 1, 120)
