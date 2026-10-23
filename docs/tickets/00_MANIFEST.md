@@ -333,6 +333,7 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 164s | `164s_L4.4__crate-rename-hharness.md` | Round 4 | ticket | Scripted crate rename `hh-*` → `hharness-*` (+ umbrella) behind a first-step crates.io availability check (stop-and-ask on collision), binaries unchanged; lib-name + directory decision ADR | — |
 | 164t | `164t_L4.5__publish-readiness-release-workflow.md` | Round 4 | ticket | Publish readiness: metadata (deliberate `rust-version`, CI-verified), `hharness` facade, publish=false set, dry-run order script (name collision = stop-and-ask), docs.rs readiness, v0.1.0, release workflow (ADR target set — macOS arm64/x86_64, linux x86_64/aarch64; Windows excluded — + checksums) | — |
 | 164u | `164u_L4.6__live-e2e-capstone.md` | Round 4 | ticket | Live E2E capstone: reference tasks via `hh` over (a)(b)(c) × local/Anthropic/OpenAI, sandboxed exec, judged, verify+replay, hh-web, MCP (`hh-mcp`), fleet webhook, bundle reproduce (live, USD 30); surface/plugin sweep split to L4.6a | — |
+| 164x | `164x_L4.6b__replay-effect-runs-contract.md` | Round 4 | ticket | Run-time insert: replay of effect-dispatching runs — the shared-allocator ceremony/divergence contract fix (L4.6 surfaced blocker; live re-verify, USD 5) | — |
 | 164v | `164v_L4.7__clean-clone-quickstart.md` | Round 4 | ticket | Clean-clone quickstart: README quickstart executed verbatim as a CI test (+ local-model live block, USD 0) | — |
 | 164w | `164w_L4.6a__live-e2e-surface-plugin-sweep.md` | Round 4 | ticket | Live E2E capstone part 2 — surface & plugin sweep: `hh-acp` via the official ACP SDK client (in-tree client fallback, stated), `hh-mcp-lab` Lab ops over MCP, SDK/embed library-API consumer (binding (a)), packaged plugins out of process (live, USD 0) | — |
 | 165 | `165_R4.16__round4-closure.md` | Round 4 | reconcile | Round-4 closure: zero-deferral accounting, BL flips, coverage recompute, readiness (every public surface/binding/plugin `live-executed` or operator `n/a{reason}`), origin/main containment, DF-S1.15-1 full enumeration, spend + GATE-ACCEPT discharge table | — |
@@ -951,3 +952,14 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   OQ-068 Load line/brief-table reconciliation notes). Round 4 is now **54 rows**; the two
   densest tickets (164f, 164h) carry a split-ready note — further suffix splits are sanctioned
   at run time if their budgets trip. Rows are not renumbered (insert convention).
+
+- 2026-10-23 · **inserted** `164x_L4.6b__replay-effect-runs-contract.md` (id `L4.6b`, row `164x`) between
+  164u (L4.6) and 164v (L4.7) — run-time insert (BM-MANIFEST-03): `decompose-spec mode=extend` scoped to
+  this one ticket; operator ruling on L4.6's surfaced blocker — "I approve inserting the proposed ticket to
+  fix the replay-of-effect-runs contract" (operator chat, received 2026-10-23). Reason: L4.6's live E2E
+  capstone surfaced a 3/3-reproducible kernel-contract defect — deterministic replay of effect-dispatching
+  runs diverges (`invalid{replay_diverged}`) because the live drive mints the dispatch ceremony events
+  (security.permission.decided, action.effect.authorized/prepared, verification.claim/completion) that the
+  ReplayGate does not re-mint, skewing the shared mc-N/tc-N/ef-N/d-N/e-N allocator (~4-id skew on the
+  anthropic lane). Finding: `docs/build/reports/2026-10-23-live-e2e-capstone.md` §SURFACED BLOCKER. No file
+  renamed; no row superseded; round 4 is now 55 rows. LEDGER `nextTicket` → L4.6b.

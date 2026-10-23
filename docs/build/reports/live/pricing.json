@@ -11,7 +11,8 @@
     "R4.7b": 5,
     "R4.7e": 15,
     "L4.6": 30,
-    "reserve": 25
+    "L4.6b": 5,
+    "reserve": 20
   },
   "allocation_note": "every ticket not listed allocates USD 0; the reserve spends only on the operator's recorded words",
   "models": {

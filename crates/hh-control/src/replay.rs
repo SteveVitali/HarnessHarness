@@ -6,9 +6,15 @@
 //! * [`ReplayModel`] — `ModelPort` serving the recorded `model.call.*`
 //!   outcomes in order (`calls`/`stop_reason`/`response_ref` ride the
 //!   `model.call.completed` row — the ADR-0135 §2 recording rule).
-//! * [`ReplayGate`] — `EffectGate` serving the recorded effect terminals;
-//!   **no executor runs** (executor call count = 0 by construction — the
-//!   gate is the recorded terminal, not a dispatch).
+//! * [`ReplayGate`] — `EffectGate` serving the recorded effect terminals
+//!   *and the recorded `emitted` ceremony rows*; **no executor runs**
+//!   (executor call count = 0 by construction — the gate is the recorded
+//!   terminal, not a dispatch). The ceremony re-serve is the shared-
+//!   allocator contract (L4.6b, ADR-0381): the driver appends the gate's
+//!   `emitted` rows through `append_producer`, minting `e-N` ids on the
+//!   one monotone `next_id` — a re-drive that skipped the re-mint skews
+//!   every later `mc-N`/`d-N`/`e-N` and the model port's call-id check
+//!   reports a spurious `replay_diverged`.
 //! * [`ReplaySink`] — `LedgerSink` absorbing the re-driven rows in memory;
 //!   the source run's prefix is never mutated by the replay.
 //! * [`extract_recorded`] — the recorded-input extraction: model rounds,
@@ -111,6 +117,21 @@ pub struct RecordedInputs {
     /// carried, in seq order — the fallback for records predating the
     /// terminal-row `submission_ref` member.
     pub stop_submissions: VecDeque<String>,
+    /// `effect_id → (class, payload)` rows in recorded seq order — the
+    /// §5a.2 dispatch ceremony the live gate returned in `GateOutcome.
+    /// emitted` and the driver appended through the shared `next_id`
+    /// allocator (`security.permission.decided`/`pending`,
+    /// `action.effect.{authorized,prepared,committed}`, …). The re-drive
+    /// re-serves them verbatim (`ReplayGate` → `GateOutcome.emitted`) so
+    /// `append_producer` mints the same `e-N`s the record holds — without
+    /// the re-mint the shared allocator skews ~4 ids per dispatch and the
+    /// model port's call-id check reports a spurious divergence (L4.6b).
+    pub effect_lifecycle: BTreeMap<String, VecDeque<(String, Json)>>,
+    /// The recorded producer of the gate's emitted rows — re-stamped on
+    /// the re-minted rows so the replayed prefix attributes the Π-floor
+    /// records to the boundary that minted them (INV-7), never to the
+    /// replay's own name.
+    pub gate_component: Option<String>,
 }
 
 fn sget<'a>(j: &'a Json, k: &str) -> Option<&'a str> {
@@ -142,12 +163,90 @@ pub fn extract_recorded(
     let mark_for = |a: u64| -> u64 { prefix.iter().filter(|e| e.seq <= a).count() as u64 };
     let prefix: Vec<&EventEnvelope> = prefix.iter().filter(|e| in_window(e)).collect();
     let prefix: &[&EventEnvelope] = &prefix;
+    // L4.6b — the gate-emitted rows the re-drive re-mints. A window opens
+    // on a *driver*-minted `action.effect.intended` (the re-drive re-emits
+    // it; an env-minted `intended` belongs to a dispatch path the replay
+    // never re-runs, so its rows stay external — the pre-fix state).
+    // Inside the window, a non-driver row naming the effect (its scope, or
+    // the payload `effect_id` the §5a.2 chain carries) is a gate-`emitted`
+    // ceremony row the driver re-appends (`ReplayGate` re-serves it —
+    // `security.permission.decided`/`pending`,
+    // `action.effect.{authorized,prepared,committed}`, …). Two rows name
+    // the effect yet never re-serve: the `decider: human` permission row
+    // (the principal's — an external row and an `Approval` cue) and a
+    // *service*-minted terminal (`report_host_effect` settling a `Pending`
+    // dispatch — the live gate answered `Pending` and the boundary minted
+    // the terminal out of loop; re-minting it in-loop would spend an
+    // allocator id the live drive never did, so it stays external and the
+    // replayed gate serves `Pending` exactly as live did).
+    let mut open: BTreeMap<String, ()> = BTreeMap::new();
+    // seq → effect_id for each re-served ceremony row.
+    let mut reemit: BTreeMap<u64, String> = BTreeMap::new();
+    // Effects whose recorded terminal was service-minted — the replayed
+    // gate serves `Pending` (the live answer) and the recorded terminal
+    // row folds the effect settled off the external lane.
+    let mut pending_terminal: BTreeMap<String, ()> = BTreeMap::new();
+    for e in prefix.iter().copied() {
+        if e.class == "action.effect.intended" {
+            if e.producer.component_variant_ref == "hharness-control" {
+                if let Some(ef) = e.scope.effect_id.clone() {
+                    open.insert(ef, ());
+                }
+            }
+            continue;
+        }
+        if open.is_empty() {
+            continue;
+        }
+        let ef = e
+            .scope
+            .effect_id
+            .clone()
+            .or_else(|| sget(&e.payload, "effect_id").map(str::to_string));
+        let Some(ef) = ef.filter(|ef| open.contains_key(ef)) else {
+            continue;
+        };
+        if matches!(
+            e.class.as_str(),
+            "action.effect.observed"
+                | "action.effect.refused"
+                | "action.effect.unknown"
+                | "action.effect.abandoned"
+        ) {
+            open.remove(&ef);
+            if e.producer.component_variant_ref != "hharness-control" {
+                pending_terminal.insert(ef, ());
+            }
+            continue;
+        }
+        if e.producer.component_variant_ref == "hharness-control" {
+            continue;
+        }
+        if e.class == "security.permission.decided" && sget(&e.payload, "decider") == Some("human")
+        {
+            continue;
+        }
+        reemit.insert(e.seq, ef);
+    }
+
     // R4.5b — the seq lattice + the non-driver rows: `hharness-control`-produced
     // envelopes are the rows the re-drive re-emits; everything else is an
     // external row the replayed prefix must carry at its recorded seq.
+    // L4.6b — the recorded gate-`emitted` rows join the lattice: the
+    // re-drive re-appends them (`ReplayGate`'s `emitted` re-serve) at
+    // these recorded seqs.
     for e in prefix.iter().copied() {
-        if e.producer.component_variant_ref == "hharness-control" {
+        if e.producer.component_variant_ref == "hharness-control" || reemit.contains_key(&e.seq) {
             out.driver_seqs.push_back(e.seq);
+            if let Some(ef) = reemit.get(&e.seq) {
+                if out.gate_component.is_none() {
+                    out.gate_component = Some(e.producer.component_variant_ref.clone());
+                }
+                out.effect_lifecycle
+                    .entry(ef.clone())
+                    .or_default()
+                    .push_back((e.class.clone(), e.payload.clone()));
+            }
         } else {
             out.external_events.push_back((*e).clone());
         }
@@ -277,6 +376,17 @@ pub fn extract_recorded(
                     emitted: Vec::new(),
                 },
             );
+        }
+    }
+    // A service-minted terminal settles out of loop — the recorded gate
+    // answer was `Pending` (the live dispatch returned it; the boundary's
+    // `report_host_effect` minted the terminal later). The replayed gate
+    // re-serves that `Pending` answer and the recorded terminal folds the
+    // effect settled off the external lane — a driver re-mint would spend
+    // a `next_id` the live drive never allocated (L4.6b).
+    for ef in pending_terminal.keys() {
+        if let Some(t) = out.effect_terminals.get_mut(ef) {
+            t.outcome = SettledOutcome::Pending;
         }
     }
 
@@ -530,6 +640,15 @@ pub struct ReplayGate {
     /// `submission_ref`s of the recorded `stop` decisions, in order —
     /// popped as submit-surface dispatches re-serve them.
     stop_submissions: VecDeque<String>,
+    /// `effect_id → recorded emitted rows` — the §5a.2 dispatch ceremony
+    /// re-served verbatim so the driver's `append_producer` re-mints the
+    /// recorded `e-N` ids and the shared allocator stays in step (L4.6b —
+    /// a skipped re-mint skews every later `mc-N`/`d-N` and the port's
+    /// call-id check reports a spurious divergence).
+    lifecycle: BTreeMap<String, VecDeque<(String, Json)>>,
+    /// The recorded producer of the emitted rows — `producer_component`
+    /// serves it so the re-minted rows carry the boundary's own ref.
+    component: String,
     /// The first divergence observed.
     pub divergence: Option<ReplayDivergence>,
     /// `dispatch` calls served (recorded-terminal serves — executor calls
@@ -547,6 +666,11 @@ impl ReplayGate {
             submit_surface: submit_surface.map(str::to_string),
             recorded_submissions: recorded.effect_submissions.clone(),
             stop_submissions: recorded.stop_submissions.clone(),
+            lifecycle: recorded.effect_lifecycle.clone(),
+            component: recorded
+                .gate_component
+                .clone()
+                .unwrap_or_else(|| "effect-gate".to_string()),
             divergence: None,
             dispatches: 0,
         }
@@ -554,6 +678,13 @@ impl ReplayGate {
 }
 
 impl EffectGate for ReplayGate {
+    /// The re-minted ceremony rows carry the recorded producer — the
+    /// boundary that minted them live (`component`), never the replay's
+    /// own name (INV-7).
+    fn producer_component(&self) -> &str {
+        &self.component
+    }
+
     fn dispatch(&mut self, effect_id: &str, _attempt_no: u64, intent: &Json) -> GateOutcome {
         self.dispatches += 1;
         let surface = intent
@@ -602,6 +733,14 @@ impl EffectGate for ReplayGate {
                         error_class: None,
                         emitted: Vec::new(),
                     });
+                // The recorded ceremony rows re-serve verbatim — the
+                // driver re-appends them (`append_producer`) minting the
+                // same `e-N`s the record holds (L4.6b).
+                out.emitted = self
+                    .lifecycle
+                    .remove(effect_id)
+                    .map(|q| q.into_iter().collect())
+                    .unwrap_or_default();
                 out.submission_ref = submission_ref;
                 out
             }
@@ -1090,6 +1229,61 @@ mod tests {
         }
     }
 
+    /// The L4.6b gate — a live-shaped `EffectGate` whose `emitted` mints
+    /// the §5a.2 dispatch ceremony `EmbedGate::dispatch_chain` produces
+    /// (`security.permission.decided` → `action.effect.authorized` →
+    /// `action.effect.prepared` → `action.effect.committed`), appended by
+    /// the driver through the shared `next_id` allocator. A dispatch
+    /// followed by further model calls is the window where the capstone's
+    /// ~4-id skew diverged (3/3 on the anthropic lane).
+    struct CeremonyGate;
+    impl EffectGate for CeremonyGate {
+        fn producer_component(&self) -> &str {
+            "test/effect-gate"
+        }
+        fn dispatch(&mut self, ef: &str, _a: u64, i: &Json) -> GateOutcome {
+            let tc = i.get("tool_call_id").and_then(Json::as_str).unwrap_or("");
+            let risk = Json::obj([
+                ("reversibility", Json::str("read_only")),
+                ("repeat_safety", Json::str("idempotent")),
+                ("scope", Json::str("workspace_local")),
+            ]);
+            GateOutcome {
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: (tc == "tc-2").then(|| format!("sub-{ef}")),
+                error_class: None,
+                emitted: vec![
+                    (
+                        "security.permission.decided".to_string(),
+                        Json::obj([
+                            ("effect_id", Json::str(ef)),
+                            ("attempt_no", Json::Int(1)),
+                            ("decision", Json::str("allow")),
+                            ("decider", Json::str("policy")),
+                            ("decision_scope", Json::str("run")),
+                            ("effective_risk_class", risk.clone()),
+                            ("policy_ref", Json::str("test/declared-floor")),
+                        ]),
+                    ),
+                    (
+                        "action.effect.authorized".to_string(),
+                        Json::obj([("effective_risk_class", risk)]),
+                    ),
+                    (
+                        "action.effect.prepared".to_string(),
+                        Json::obj([("idempotency_key", Json::str(format!("key-{ef}")))]),
+                    ),
+                    (
+                        "action.effect.committed".to_string(),
+                        Json::obj([("attempt_no", Json::Int(1))]),
+                    ),
+                ],
+            }
+        }
+    }
+
     /// The live gate — every dispatch observes `applied`; the `hh.submit`
     /// surface's dispatch carries the submission marker the same spelling
     /// `ReplayGate` re-derives (`sub-{effect_id}`) so the stop decision's
@@ -1225,6 +1419,48 @@ mod tests {
         sink.events
     }
 
+    /// The L4.6b fixture — `live_run`'s shape through `CeremonyGate`: an
+    /// `fs.read` dispatch carrying the 4-row §5a.2 ceremony, a second
+    /// model call (the skew window), then the `hh.submit` dispatch with
+    /// its own ceremony plus the completion/verification chain.
+    fn ceremony_run() -> Vec<EventEnvelope> {
+        let mut sink = RecSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver =
+            Driver::open(ReactMinimal::new(), &ctx(), policy, &mut sink, config()).unwrap();
+        let mut model = ScriptedModel {
+            script: [
+                m_outcome(
+                    hharness_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-1".into(),
+                        surface: "fs.read".into(),
+                        args_raw: r#"{"path":"/a"}"#.into(),
+                    }],
+                ),
+                m_outcome(
+                    hharness_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-2".into(),
+                        surface: "hh.submit".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = CeremonyGate;
+        let mut asm = NullAsm;
+        driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        sink.events
+    }
+
     /// AC-R-2.2.1-4 + AC-R-2.2.4-7 — a declaring variant re-driven over the
     /// recorded inputs reproduces the `control.decision`/`context.assembled`
     /// sequences exactly, and every dispatch is served from the record
@@ -1267,6 +1503,126 @@ mod tests {
         let mut recorded = extract_recorded(&events, 0, None);
         // Tamper with the recorded decision sequence — the replay's own
         // decisions are unchanged, so the comparison must name the member.
+        let Json::Obj(m) = &mut recorded.decisions[0].1 else {
+            panic!("decision payload must be an object")
+        };
+        m.insert("tampered".to_string(), Json::Bool(true));
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut asm = NullAsm;
+        let out = deterministic_replay(
+            ReactMinimal::new(),
+            &ctx(),
+            policy,
+            config(),
+            &[],
+            &recorded,
+            &mut asm,
+            Some("hh.submit"),
+            "replay:run",
+            ReplayPorts::default(),
+        )
+        .unwrap();
+        let d = out.diverged.expect("tampered record must diverge");
+        assert!(d.got.contains("tampered"), "{d:?}");
+    }
+
+    /// L4.6b — the capstone's defect: an effect-dispatching run whose
+    /// ledger carries the §5a.2 ceremony (`security.permission.decided`,
+    /// `action.effect.{authorized,prepared,committed}` — the gate's
+    /// `emitted` rows) *followed by further model calls*. The recorded
+    /// rows re-serve verbatim through `GateOutcome.emitted` so the shared
+    /// `next_id` allocator mints the same `e-N`s — the next `mc-N`
+    /// matches the record and the replay reproduces byte-identically.
+    /// Removing the re-serve re-opens the ~4-id skew and this test fails.
+    #[test]
+    fn ceremony_dispatch_run_replays_byte_identical() {
+        let events = ceremony_run();
+        // The fixture must carry the ceremony — the 13-row dispatch
+        // chain the capstone surfaced (proposed + intended + decided +
+        // authorized + prepared + committed + observed, then the second
+        // call's chain + the completion/verification rows).
+        for class in [
+            "security.permission.decided",
+            "action.effect.authorized",
+            "action.effect.prepared",
+            "action.effect.committed",
+        ] {
+            assert!(
+                events.iter().filter(|e| e.class == class).count() >= 2,
+                "fixture carries {class} per dispatch: {:?}",
+                events.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+            );
+        }
+        let recorded = extract_recorded(&events, 0, None);
+        // The recorded ceremony is the re-serve feed — one emitted set
+        // per dispatched effect.
+        assert_eq!(recorded.effect_lifecycle.len(), 2);
+        for rows in recorded.effect_lifecycle.values() {
+            assert_eq!(rows.len(), 4, "four ceremony rows per dispatch");
+        }
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut asm = NullAsm;
+        let out = deterministic_replay(
+            ReactMinimal::new(),
+            &ctx(),
+            policy,
+            config(),
+            &[],
+            &recorded,
+            &mut asm,
+            Some("hh.submit"),
+            "replay:run",
+            ReplayPorts::default(),
+        )
+        .unwrap();
+        assert!(out.reproduced(), "diverged: {:?}", out.diverged);
+        assert_eq!(out.dispatches, 2);
+        assert_eq!(out.model_calls_served, 2);
+        assert!(out.cues_exhausted);
+        assert!(out.run_result.is_some() || out.parked);
+    }
+
+    /// L4.6b — a record the re-drive honestly cannot reproduce still
+    /// diverges: dropping a recorded ceremony row leaves the shared
+    /// allocator one id short, and the port's call-id check reports the
+    /// mismatch — never a silent pass.
+    #[test]
+    fn dropped_ceremony_row_diverges() {
+        let mut events = ceremony_run();
+        let pos = events
+            .iter()
+            .position(|e| e.class == "security.permission.decided")
+            .expect("fixture carries the permission row");
+        events.remove(pos);
+        let recorded = extract_recorded(&events, 0, None);
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut asm = NullAsm;
+        let out = deterministic_replay(
+            ReactMinimal::new(),
+            &ctx(),
+            policy,
+            config(),
+            &[],
+            &recorded,
+            &mut asm,
+            Some("hh.submit"),
+            "replay:run",
+            ReplayPorts::default(),
+        )
+        .unwrap();
+        assert!(
+            out.diverged.is_some(),
+            "a mutated record must diverge loudly, never reconcile"
+        );
+    }
+
+    /// L4.6b — with the ceremony re-serve armed, a tampered decision
+    /// payload still diverges (the divergence report stays honest — the
+    /// fix is an allocator fix, never a wider tolerance).
+    #[test]
+    fn ceremony_tampered_decision_diverges() {
+        let events = ceremony_run();
+        let mut recorded = extract_recorded(&events, 0, None);
         let Json::Obj(m) = &mut recorded.decisions[0].1 else {
             panic!("decision payload must be an object")
         };
