@@ -337,6 +337,7 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 164v | `164v_L4.7__clean-clone-quickstart.md` | Round 4 | ticket | Clean-clone quickstart: README quickstart executed verbatim as a CI test (+ local-model live block, USD 0) | — |
 | 164w | `164w_L4.6a__live-e2e-surface-plugin-sweep.md` | Round 4 | ticket | Live E2E capstone part 2 — surface & plugin sweep: `hh-acp` via the official ACP SDK client (in-tree client fallback, stated), `hh-mcp-lab` Lab ops over MCP, SDK/embed library-API consumer (binding (a)), packaged plugins out of process (live, USD 0) | — |
 | 165 | `165_R4.16__round4-closure.md` | Round 4 | reconcile | Round-4 closure: zero-deferral accounting, BL flips, coverage recompute, readiness (every public surface/binding/plugin `live-executed` or operator `n/a{reason}`), origin/main containment, DF-S1.15-1 full enumeration, spend + GATE-ACCEPT discharge table | — |
+| 165a | `165a_R4.16a__e2-python-extension-arms.md` | Round 4 | ticket | Run-time insert (GATE-G6 finding ruling): e2-python `hir-documents` + `ledger-scenarios` extension arms — foreign-run-verified, discharges DF-S1.2-2 + DF-S1.5-3 (USD 0) | — |
 | 166 | `166_GATE-G6__round4-discharge.md` | Round 4 | gate | Round-4 discharge + launch-readiness review — the charter's zero-deferral / live / launch thresholds | STOP |
 | 167 | `167_R4.17__round4-docs-refresh.md` | Round 4 | docs | Public-facing docs final — README/docs/AGENTS refresh for launch (no conform leg) | — |
 | 167a | `167a_HUMAN-H7__launch.md` | Round 4 | human | Operator launch acts: protect main, checks-required bottom-up merges, main CI + gitleaks green → record merged-main SHA, tag v0.1.0 → release, `cargo publish` in order, repo metadata, DONE flip | — |
@@ -963,3 +964,12 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   ReplayGate does not re-mint, skewing the shared mc-N/tc-N/ef-N/d-N/e-N allocator (~4-id skew on the
   anthropic lane). Finding: `docs/build/reports/2026-10-23-live-e2e-capstone.md` §SURFACED BLOCKER. No file
   renamed; no row superseded; round 4 is now 55 rows. LEDGER `nextTicket` → L4.6b.
+
+- 2026-10-23 · **inserted** `165a_R4.16a__e2-python-extension-arms.md` (id `R4.16a`, row `165a`) between
+  165 (R4.16) and 166 (GATE-G6) — run-time insert (BM-MANIFEST-03): `decompose-spec mode=extend` scoped to
+  this one ticket; operator ruling on GATE-G6's surfaced finding — "ok insert and proceed" (operator chat,
+  received 2026-10-23). Reason: R4.16's closure surfaced DF-S1.2-2 + DF-S1.5-3 OPEN — the `e2-python`
+  `hir-documents.e2-replay`/`ledger-scenarios.e2-replay` extension cells (`verified_by[]` empty), the gate's
+  only blocking finding under the zero-deferral charter. The insert implements the two arms in the e2
+  foreign tree (the e3 reference arms exist; USD 0, `foreign-run-verified`). No file renamed; no row
+  superseded; round 4 is now 56 rows. GATE-G6's signature re-presents after the rows flip DONE.

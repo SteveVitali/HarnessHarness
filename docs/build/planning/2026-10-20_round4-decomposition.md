@@ -585,3 +585,153 @@ marker; an unmarked member (e.g. redaction endorsement rules) is landed or surfa
 left as written — the PHASE LOG entry records 50); DEFERRALS untouched (the duties live in the contracts); no ticket file
 renamed or deleted.
 
+
+## Accounting — R4.16 closure (2026-10-23)
+
+*Appended by R4.16 (`svitali/harnessharness-r4.16`), the round-4 closure ticket. This is the
+landed-vs-carried record GATE-G6's readout reads.*
+
+### Deferral register (`docs/tickets/DEFERRALS.md`, 101 rows)
+
+- **99 / 101 discharged** — every row carries a dated `DONE`/`WONTFIX`/`CLOSED` marker or an
+  ADR-cited waiver. `scripts/deferrals-open.sh` prints exactly the two rows below; the
+  lead-token sweep (BL-41 / LEDGER-OF-6, MAINTAINING.md §Round-closure sweeps) normalized
+  six stale leads this closure (DF-S2.4-2, DF-S4.2-1, DF-S4.2-2, DF-S4.10-1, DF-S4.13-1,
+  DF-S5.6-1 — all carried dated DONE markers; leads normalized with dated notes, evidence
+  unchanged). The same sweep normalized register leads `CF-492`, `CF-493`, `OQ-430`
+  (`open`→`resolved` on their dated R4.15c markers) and `OQ-170` (`open`→`resolved` — its
+  `needs-code-leg(R4.15e)` pointer discharged: custody landed R4.15e, ADR-0376).
+- **2 / 101 OPEN — gate-blocking findings, surfaced, not carried:**
+  - **DF-S1.2-2** — the e2-tree `hir-documents` extension cell: `verified_by[]` empty;
+    `foreign/e2-python` does not implement the HIR/ledger-corpus extension arms (the E3
+    legs replay them 5/5 — `foreign-run-verified`; the E2 arm is unimplemented, not
+    failed). Owed under BL-01 (`accepted`).
+  - **DF-S1.5-3** — the e2-tree `ledger-scenarios` extension cell, same state (E3 replays
+    the three scenario cases byte-for-byte; the E2 arm unimplemented). Owed under BL-01.
+  - `bundle.json` `pending_cells[]`/`arms[].status` machine-readable sweep (the BL-41
+    machine half): verified — every cell carrying `verified_by[]` entries is discharged
+    with dated markers; exactly the two cells above (plus `polyglot-ci.two-toolchain`,
+    whose DONE rests on the R4.5 measurement per its recorded spelling) carry empty
+    `verified_by[]`, matching the OPEN rows one-for-one.
+- **Closed at R4.16:** DF-S1.8-1 (registry-snapshot replay — E2 1/1 + E3 1/1 both
+  `foreign-run-verified`); DF-R4.2a-1 (the Actions-API measurement below).
+
+### Backlog (`docs/build/BACKLOG.csv`, 44 rows)
+
+- **41 closed** — including the 13 flipped exactly once at this closure: BL-02, BL-03,
+  BL-05 (accepted→closed) and BL-30…BL-39 (open→closed); BL-04/17/26/27 had already
+  closed in-round; BL-41/42/43 converted-to-policy at L4.2.
+- **3 accepted (standing, by design):** BL-01 (the two e2 extension cells above),
+  BL-47 + BL-48 (the standing ADR revisit-trigger index homes — `accepted` is their
+  terminal state per MAINTAINING.md §"ADR revisit triggers").
+- **Re-home:** 29 row-bound ADR ids moved off the closing rows' `sources` cells to BL-47
+  (every one retains at least one standing quiet-conditional clause in its own
+  `## Revisit trigger` text; none is wholly consumed). `REVISIT_TRIGGERS.md` regenerated
+  (`scripts/gen-revisit-triggers.sh`); the catalogue now reads 165 ADRs: 113
+  quiet-conditional / 49 fired-and-answered / 3 fired-unanswered row-bound
+  (ADR-0223, ADR-0239, ADR-0353 — homed on BL-01 with its two open cells) /
+  0 superseded.
+- `check-backlog.sh` exit **0**: complete + non-duplicating + verdict-consistent over
+  166 expected sources; `--bl` sweep empty.
+
+### Coverage (`docs/build/COVERAGE_MATRIX.csv`, 66 requirement rows)
+
+- **engineering closed 65 / 66 · requirement satisfied 65 / 66** — 60 MET, 5
+  MET-DIFFERENTLY (each a permanent-design ADR: R-2.7.2→ADR-0146, R-2.11.2→ADR-0050,
+  R-2.12.3→ADR-0050, R-2.12.4→ADR-0210, R-2.12.5→ADR-0003), 1 PARTIAL.
+- **The one PARTIAL is R-2.12.1** — cross-implementation replay: every leg discharged
+  except the DF-S1.2-2/DF-S1.5-3 e2 extension cells above. It is the honest shadow of the
+  two OPEN deferral rows.
+- **Flipped to MET at this closure** (the recorded "verdict flip is R4.16 accounting"
+  executes): R-2.7.1, R-2.7.2b (R4.7e judge legs), R-2.9.3, R-2.10.3 (R4.15d fetch),
+  R-2.9.4, R-2.9.6 (R4.6 import + ADR-0331), R-2.10.5 (R4.9 vocabularies), R-2.11.3
+  (R4.7d oauth-device); R-2.12.6 MET-DIFFERENTLY→MET (R4.7 real adapter superseded the
+  fixture proxy). Every other named row carries a dated re-check note.
+
+### The ten GATE-ACCEPT deviations — discharge table
+
+| # | Deviation | Disposition at R4.16 | Discharging rows | Permanent ADR |
+|---|---|---|---|---|
+| 1 | R-2.7.2 split | **permanent (design)** — confirmed | — | ADR-0146 |
+| 2 | R-2.12.3 foreign legs not executed | discharged | R4.4/R4.4a/R4.5 (+R4.0 e2); DF-S0.3-2 DONE (measured), DF-S0.3-3 waived | ADR-0050 (bind), ADR-0371 (waiver) |
+| 3 | R-2.12.4 spec-level deferral | discharged | R4.8 rulings; L4.1 (OSS files/license), L4.2 (policy), L4.4 (rename), L4.5 (publish metadata/release workflow) | ADR-0210 (the spec-level deferral is the disposition) |
+| 4 | R-2.12.5 naming thesis | discharged | R4.8 market check (54/54 publish-set names free) + L4.4 scheme applied | ADR-0003/0006 (thesis stands program-level) |
+| 5 | R-2.11.2 E3 binding | discharged | R4.2 — operator's H1 "Confirm TypeScript" verbatim on ADR-0050's log; generated `clients/ts` executed (e3-smoke 17/17) | ADR-0050 |
+| 6 | R-2.12.6 real tracker | discharged | R4.7 — GitHub Issues adapter + signed webhook live (`github-live`, `capstone-fleet-webhook`); DF-S5.6-1 DONE | ADR-0369 |
+| 7 | R2 human signature | discharged — **waived, not signed** | R4.15 — operator's verbatim "Record a decline instead" on the H4 row | ADR-0371 (the decline is recorded; the signature is never fabricated) |
+| 8 | trigger-5 satisfied-by-analysis | discharged | R4.5 measurement — C12(E5a)=5 vs assumed 2; decision HOLDS, recorded on ADR-0050's amendment log | ADR-0050 |
+| 9 | foreign-toolchain cells | discharged — **with the two e2 extension cells surfaced** | R4.0 (e2 candidate), R4.3 (bundle extension arms), R4.4/4a/4b (e3 toolchain: 57/57 all eight arms), R4.5 (xcheck-foreign + polyglot measurement); residual: DF-S1.2-2/-S1.5-3 OPEN | ADR-0353 (packaging) |
+| 10 | GATE-G2 recorded set | discharged | R4.6 (LT-03 live corpus), R4.7d/R4.7e (DF-S1.21-2), R4.7f/R4.15e (DF-S1.15-1 full-membership) — the earlier members were already DONE | — |
+
+### DF-R4.2a-1 — hosted-CI measurement (Actions API, 2026-10-23)
+
+**Window:** `pull_request` runs on chain branches `svitali/harnessharness-r4.3` →
+`-l4.6a`, PRs #152–#195 (44 tickets). **Push runs on chain branches: 0.**
+Method: `gh api repos/…/actions/runs` per branch + per-run `jobs` (final attempt);
+classification `fast` = the docs-only path (`ci-mode: fast` — path-filtered jobs only),
+`full` = the complete job set. Raw collection retained at the closure record.
+
+| Class | Runs | Job-minutes | Avg/run |
+|---|---|---|---|
+| fast-path heads | 106 | 190 | 1.8 |
+| full-path heads | 40 | 486 | 12.2 |
+| **actual total** | **146** | **676** | — |
+| counterfactual (every head full at its era's job set) | 146 | ~1882 | — |
+| **reduction** | | | **64.1%** |
+
+Split: R4.3→R4.15e window — 107 runs, 66.1% reduction, fast avg 1.1 min, full avg 8.7.
+L4.1→L4.6a window — 39 runs, 61.9% reduction, fast avg 3.9, full avg 20.2 (the workflow
+grew a two-OS build matrix + always-on `cargo-deny`/`gitleaks` at L4.x; both floors rose).
+Docs-only heads: 27 runs, avg **0.96 min**, all ≤ 2 min. Spot-check: five fast-path heads
+on code PRs (ff1f0fc3, c351f356, aeed5a32, a561f04c, 648f3e58) — every touched file under
+`docs/`/`research/` only; no fast path ever ran on a non-docs head (fail-closed per
+ADR-0362). First cross-PR fast path: run 39550855673 on PR #152 (2026-10-21T05:40Z).
+GATE-G7 full-run evidence: `workflow_dispatch` run **39765822939** on the R4.15 head
+`9a6590a` — 12 job-min, success (ADR-0362 D4 per-gate full read; the only other dispatch
+in the window is R4.2a's own baseline, 39522657481). Red full runs: 8 across the window
+(2 fast-path fails: #158 1 min, #188 1 min — both re-ran green); each is recorded
+per-ticket in its run ledger — none is a fast-path defect, each re-ran or was retried to
+green on the same head.
+
+**Verdict:** **missed by ~13–16 points against the projected 77–80%** — measured
+64.1%. Cause: (a) the L4-era job set roughly doubled (two-OS matrix + supply-chain jobs),
+raising the fast floor to ~4–5 min and full runs to ~20–24 min; (b) 23 superseded-head
+cancels consumed minutes the projection never modelled; (c) stacked-PR retries produced
+more full anchors per ticket than the single-anchor projection assumed. The
+docs-only-head sub-projection ("around one minute") is **met** (0.96 min avg). The
+fail-closed classifier is sound — no fast run carried non-docs changes; the miss is a
+workload-shape miss, not a safety miss. DF-R4.2a-1 **DONE 2026-10-23** — projection
+partially missed, recorded, not hidden (the row's `how to verify` names the verdict
+form "met or missed by <x> (cause)" — this is the "missed" arm, honestly recorded).
+
+### Spend and pre-authorizations
+
+- **Live spend:** USD **25.259768 / 100 cap** — 90 `SPEND.jsonl` rows; R4.16 itself spent
+  USD 0 (offline ticket; `live_verification=false`). The R4.5a allocation table held.
+- **HUMAN-H3 (foreign-toolchain material):** consumed exactly as pre-authorized — the E2
+  candidate environment (PR #136, 49/49 base arms) and the E3 toolchain for
+  R4.4/4a/4b + R4.4b's extension-arm runs; the e2 extension arms stayed unimplemented —
+  surfaced, not provisioned around.
+- **HUMAN-H1/H2/H4:** consumed — "Confirm TypeScript" (ADR-0050 log, R4.2), H2's decline
+  on the tracker signature (superseded by R4.7's real adapter, ADR-0369), H4's recorded
+  decline → ADR-0371 waiver. **HUMAN-H5:** `ring`/rustls admissions consumed under
+  ADR-0359/0361/0365's closed scopes only.
+- **ADR-0367 (declared pricing limitation):** spend figures are ledger-side estimates;
+  console billing is the authority — spot-reconciled at L4.6's capstone closeout, no
+  discrepancy surfaced; the $100 cap was never approached (25.3% consumed).
+
+### Mid-drive main drift (containment record)
+
+`origin/main` moved 34 commits mid-drive (PR merges #138–#170 of earlier chain tickets
+r3.3–r4.8). R4.16 merged it at `6a6475f` (2026-10-23): the merge content was already
+ancestor-contained — **0 conflicts**; re-verification (suite/drift/quickstart) recorded in
+`docs/build/runs/R4.16.md`. Post-merge `git merge-base --is-ancestor origin/main HEAD`
+exits 0.
+
+### Remaining debt statement (for GATE-G6)
+
+Exactly two OPEN deferral rows (the e2 extension cells, BL-01 accepted) + three standing
+accepted rows (BL-01, BL-47, BL-48). Everything else: closed. The two OPEN rows are
+surfaced as gate-blocking findings with full provenance — they require the
+`foreign/e2-python` extension arms to be implemented (a foreign-toolchain leg, not E1
+engineering debt) or an operator descope ruling at the gate.
