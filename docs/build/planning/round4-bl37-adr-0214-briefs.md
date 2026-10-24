@@ -310,3 +310,332 @@ R4.16's accounting after the adopted set conforms.
 <!-- Part 2 (R4.13a) appends below this marker — the adopt-all-except line at the head
      covers both parts; GATE-G7's act performs the ratifications; R4.15a conforms the
      adopted set. -->
+
+## Part 2 (R4.13a) — batch-adoptable table
+
+| id | proposed disposition | one-line basis | conform row |
+|---|---|---|---|
+| OQ-418 | resolve-with-evidence | the landed unconditional inheritance answers both halves: `attendance: parent_manifest.attendance` at spawn with no input selecting otherwise (`crates/hh-subagent/src/spawn.rs`) — an interactive parent *cannot* spawn an unattended child, so the sealed pre-authorization arm is moot; the unattended-column interaction is Π-12's landed transform (`ask` → `deny`/`defer`/`auto_review` — `crates/hh-monitor/src/decision.rs`) | R4.15a |
+| OQ-420 | adopt-interim-as-final | the landed `bandit` kind is the interim's `unknown`-below-`min_n` rule over declared params (`min_n`, `explore_ppm`, `lambda_ppm`, `cold_start_ppm`) on non-pooling `(task_class, model_ref)` cells — a deterministic integer-ppm fold (`crates/hh-gateway/src/router.rs`); window/discount + drift-reset grace stay view-side projection policy; the `lab/value-of-compute-v1` `bandit`-arm re-pin is preserved verbatim as the re-entry trigger | R4.15a |
+| OQ-424 | adopt-interim-as-final | the interim verbatim is the landed gate: `bind` runs in process for every admitted estimator and `bandit`/`surface_prior`/`predictor` are registered but refused `PolicyInvalid{variant_not_admitted}` at bind (`crates/hh-control/src/compute.rs`); the Stage-4 `hot_path` ceiling measurement (OQ-075's M19 `boundary_overhead_ms` method) is preserved verbatim as the re-entry trigger for predictor placement | R4.15a |
+| OQ-430 | needs-code-leg(R4.15c) | proposed ruling: the ADR-0192 G-4 touched-handles default — but it stands unimplemented (`MergePolicy`/`validator_selected`/`MergeReport::blocks_completion` landed, no touched-handle selection — `crates/hh-subagent/src/merge.rs`); the leg: the merge record carries the evidence handles each conflict touched, the default pass selects only validators whose criteria's handles intersect the touched set (the full contract stays opt-in), and `MergeReport` surfaces the selected set + touched handles so the completion gate consults only the selected verdicts | R4.15c |
+| OQ-432 | adopt-interim-as-final | the interim's ledgered reason is the landed basis: every resolution lands a `control.merge.resolved` row carrying an explicit `resolver` member (the parent for `parent_decides`, the `validator_ref` for `validator_selected`) and `supersede{new_ref}` is a parent `delegate`-class effect (`crates/hh-subagent/src/merge.rs`); no recency tie-break (ADR-0082) — the stronger-basis arm rejected: the ledgered reason suffices and a validator verdict is a chosen resolver, never a required extra basis | R4.15a |
+| OQ-433 | resolve-with-evidence | the envelope placement the interim left open is landed: `hlc` is a top-level optional member of `Event`/`EventEnvelope` (`crates/hh-ledger/src/event.rs`; `hlc.rs` the clock) and `require_hlc` is mandatory once a `share` child exists, optional otherwise (`crates/hh-subagent/src/spawn.rs`, `crates/hh-ledger/src/store.rs` — the ADR-0193 K-2 rule verbatim) — only the WS-B1/B3 confirmation act was owed | R4.15a |
+| OQ-434 | adopt-interim-as-final | the interim verbatim is the landed table: the closed `ChildOutcome{result, cancelled, infrastructure_failure}` sum lifts hosted `scored ↦ result` and terminal values through `lift_stop_reason`/adapter facts (`crates/hh-subagent/src/types.rs`, `crates/hh-hosting/src/proj.rs`, `adapter_a.rs`); `refused_at_spawn` is no `HostedEvent` terminal and has no landed spelling — not observable through `hh-hosting/1`, the outcome stays `unknown` by construction | R4.15a |
+| OQ-435 | adopt-interim-as-final | `min_flip_share` is declared MUST-data enforced as a floor (`share_ppm < min_flip_share_ppm` refuses — `crates/hh-evolution/src/campaign.rs`); replicates and the pass^k threshold are pre-registered campaign data; the 0.5 default stands as the launch value — the 6a re-pin and the `disagreement_weighted` screen-substitution ruling are preserved verbatim as re-entry triggers | R4.15a |
+| OQ-436 | adopt-interim-as-final | `held_out_eval` is a landed campaign stage enforcing the pre-registered retention margins and veto checks (`crates/hh-evolution/src/campaign.rs`); "tasks the base passed" = the pre-registered pass^k threshold (the majority arm rejected); the `retention` margin value's 6a re-pin is preserved verbatim — joints OQ-113/OQ-301 stay named | R4.15a |
+| OQ-438 | adopt-interim-as-final | the interim's arm landed: `rebase` (ADR-0195 D12) replays the same edit onto the moved head — semantic-op targets must match, `apply(target, invert(diff)) ≠ head` refuses, and `rebased → validated` re-runs the S1 gates (`crates/hh-evolution/src/campaign.rs`); GumTree-class matching (OQ-061) is not assumed — the S5 re-entry-cost measurement and `CompiledPayload`-body sufficiency preserved verbatim | R4.15a |
+| OQ-441 | adopt-interim-as-final | the CF-489-conformed `DebtPolicy` values are this row's proposals verbatim — 60 d `min_runway` (`InsufficientRunway`), 30 d `warn_within`, 90 d `hypothesized_max_age` (the "one experiment cycle" arm is the ledgered probation `due_at_ms`, DF-S5.4-1), 30 d `grace_period` (`grace_elapsed` ∨ bound), 180 d `evidence_max_age` — joint with OQ-304: instrument-produced evidence only, Tier-A `source` refs never age by themselves; `DebtIndex`/`DebtReport` read the policy at runtime so the re-pin is a data amendment — the Stage-5 `DebtIndex` re-pin preserved verbatim | R4.15a |
+| OQ-446 | resolve-with-evidence | the landed `OwnerRef{kind: principal|team, id, reach_via[]}` sum answers the kind disjunction — both spellings are ref members and no `TeamRef` record kind was minted (`crates/hh-ontology/src/debt.rs`); "reachable by a declared sink" = `reach_via` ∩ the caller-declared sink set (policy `notice_sinks`) ≠ ∅, enforced by `OwnerUnreachable` (`crates/hh-hir/src/debt.rs`); unrouted notices surface `unrouted`, never dropped (`route_notices`) | R4.15a |
+| OQ-448 | adopt-interim-as-final | the OQ-323 placeholders stand landed as MUST-data constants (`K_REEXECUTED = 8`, `K_DETERMINISTIC = 4`, `K_CRN_SEQUENCE = 1`, `K_CRN_OUTCOME = 4`, `TARGET_CAP = 8`; `n_permutations`/`samples_per_eval` declared per design — `crates/hh-analysis/src/attribution.rs`) — ratified as launch constants; the A13 `power` re-check on the Stage-3 suite at n = 5 replicates is preserved verbatim as the re-entry trigger | R4.15a |
+| OQ-450 | adopt-interim-as-final | the interim's "campaign data" is ratified: the landed surface offers refuse — `TooManyTargets` at `TARGET_CAP = 8`, `estimate_rollouts` declared, I4 `budget_reserved` reserve-before-spend (`crates/hh-analysis/src/attribution.rs`); no automatic M3→M2 degrade path exists, so `refuse` is the only admissible campaign declaration at C1; the §05e pricing rule (the OQ-364 ceiling) is preserved verbatim — a degrade arm, if ever ruled, is its own leg | R4.15a |
+| OQ-453 | adopt-interim-as-final | the interim verbatim is landed: `observation_substitution` is the one hosted admissible form — `configuration` granularity under `model_io` interception only, `provisional` per ADR-0200 V9, component-level fields `n/a{class}` (the V9 design gate — `crates/hh-analysis/src/attribution.rs`; the hosted exception rows — `crates/hh-analysis/src/kernel.rs`); the KA-I7 admissibility ruling on intercepted participants preserved verbatim | R4.15a |
+| OQ-457 | adopt-interim-as-final | the admissibility enforcement is landed (`guard_at_bind`: `ExploratoryOnly` lifted only by the `exploratory` declaration or `allow_unverified_snapshot`; `verified`/`trained_under` proceed, `drifted`/`unknown` annotate, `broken` refuses `CompatibilityBroken` — `crates/hh-lab/src/coevolution.rs`); `ConsolidationPolicy{k_cycles = 1, economics_factor = 1.0}` placeholders ratified — the 6d pre-registration re-pin and the `Design.kind` admissibility list preserved verbatim | R4.15a |
+| OQ-458 | adopt-interim-as-final | ADR-0203 D1's family default is ratified: `scope.snapshots` defaults to the bound profile's selector family, not only the `evidence_refs`-named snapshots; the landed guard refuses `MissingSnapshotScope` on a model-conditioned/evolution-origin rule with no `scope.model_selectors` and requires the `model_version_change` expiry (AC-R-2.9.8-12 — `crates/hh-hir/src/debt.rs`) | R4.15a |
+
+## Part 2 — per-OQ basis (ADR-0214 interim quoted; landed evidence re-checked)
+
+Same convention as part 1: each row quotes the ratified interim rule (ADR-0214's
+Decision table); the landed shape is the interim already in force or the evidence
+that answers it; the outstanding workstream legs fold into the adoption — the WS-*
+venues no longer run, so GATE-G7's act *is* the ratification the entry tests
+awaited. Every ADR-0214 entry test stays preserved verbatim as a re-entry trigger;
+R4.15a lands the adopted rulings as register/ADR amendment-log appends.
+
+- **OQ-418 — child `attendance` inheritance + the interactive→unattended fork.**
+  Interim (quoted): "a child inherits the parent's `attendance`; an `interactive`
+  parent may not spawn an `unattended` child without a sealed pre-authorization
+  (ADR-0185; ADR-0052 check 7; ADR-0208 §D.5)". Landed: the child manifest carries
+  `attendance: parent_manifest.attendance` unconditionally at `finish_child_open`
+  (`crates/hh-subagent/src/spawn.rs`) — no spawn input selects a different value,
+  so the interactive→unattended spawn the interim guarded against cannot be
+  constructed at all; Π-12's unattended transform (`ask` → `deny`/`defer`/
+  `auto_review` — `crates/hh-monitor/src/decision.rs`, `monitor.rs`) applies to
+  the child's asks under its inherited mode. The final answer: inheritance is
+  unconditional — stronger than the interim (the sealed pre-authorization arm is
+  moot while no selection exists; if attendance ever becomes selectable the
+  pre-authorization question re-opens by amendment); the approvals-slice
+  interaction resolves to Π-12's landed unattended column.
+- **OQ-420 — `bandit` estimator defaults.** Interim (quoted): "`bandit`
+  window/discount/`min_n` unset; a cell stays `unknown` below `min_n`
+  (ADR-0189)". Landed: `RoutingPolicyKind::Bandit` scores `reward_ppm + bonus` —
+  `success_ppm − lambda_ppm·cost_millis/1000` plus `explore_ppm·√(N/n)` — over
+  non-pooling `(task_class, model_ref)` `BanditCell`s; below `min_n` the cell is
+  `unknown` and scores the declared `cold_start_ppm` prior (ADR-0312 d.1;
+  `crates/hh-gateway/src/router.rs`); the window/discount shape lives in the
+  `BanditView` projection, not the policy — the view supplies the aggregates.
+  The final answer: the declared-param form + `unknown`-below-`min_n` +
+  cold-start prior + non-pooling task-class cells is the ratified posture
+  (per-family vs global resolves to per-`task_class` cells, never global
+  pooling); the measured re-pin on `lab/value-of-compute-v1`'s `bandit` arm —
+  window-vs-discount and drift-reset grace — is preserved verbatim as the
+  re-entry trigger.
+- **OQ-424 — `hot_path` ceiling + predictor placement.** Interim (quoted):
+  "`bind` runs in process for every in-loop estimator; `predictor` variants may
+  not run out of process until the ceiling is measured (ADR-0188; ADR-0181 D8;
+  joins OQ-075/407)". Landed: `bind` is pure over `(decision, ctx)` in process;
+  `bandit`/`surface_prior`/`predictor` are registered variants refused
+  `PolicyInvalid{variant_not_admitted}` at bind-time (`crates/hh-control/src/
+  compute.rs`); the M19 `boundary_overhead_ms` method landed at S3.12 (OQ-075)
+  but no bind-loop ceiling was measured. The final answer: the in-process-only
+  posture is the ratified C1 rule — every admitted estimator is kernel-side and
+  out-of-process `predictor` variants stay unadmitted; the Stage-4 ceiling
+  measurement is preserved verbatim as the re-entry trigger that could admit a
+  `predictor` arm by amendment.
+- **OQ-430 — G-4 validator selection on the merged state.** Interim (quoted):
+  "G-4 runs only the validators whose evidence handles the merge touched
+  (ADR-0192 default)". Landed: the merge machinery carries `MergePolicy`
+  (`parent_decides`/`validator_selected`/…), the `validator_selected` port with
+  an accountable `validator_ref`, `MergeReport::blocks_completion` and
+  `control.merge.resolved` rows (`crates/hh-subagent/src/merge.rs`) — but no
+  landed code records which evidence handles a merge touched, selects validators
+  by that set, or teaches the completion gate the touched set. The final answer
+  needs the leg, not just the ruling: `needs-code-leg(R4.15c)` — (a) the merge
+  record carries the evidence-handle set each conflict touched, (b) the default
+  G-4 pass selects only the validators whose criteria's evidence handles
+  intersect the touched set (the full-contract pass stays an opt-in
+  `MergePolicy` arm), and (c) `MergeReport` surfaces the selected validator set
+  + touched handles so `blocks_completion` consults only the selected verdicts.
+- **OQ-432 — `supersede` basis.** Interim (quoted): "a parent's equal-authority
+  `supersede` over a sibling's `delegate` memory version needs a ledgered
+  reason; no recency tie-break (ADR-0082)". Landed: `resolve_conflict` lands
+  every resolution as a `control.merge.resolved` row carrying an explicit
+  `resolver` member (the parent for `parent_decides`, the `validator_ref` for
+  `validator_selected`) and `supersede{new_ref}` is a parent `delegate`-class
+  effect (`crates/hh-subagent/src/merge.rs`). The final answer: the ledgered
+  reason is the ratified basis — no stronger basis (a reconciliation record or
+  a mandatory validator verdict) is required; where a verdict *is* the basis it
+  rides the `validator_selected` arm as the named resolver — the basis's
+  strength is its ledgered accountability, not a second artifact.
+- **OQ-433 — HLC placement (closes OQ-081 for delegation-bearing runs).**
+  Interim (quoted): "HLC mandatory in `share` mode, optional otherwise
+  (ADR-0193 K-2); envelope placement open". Landed: `hlc` is a top-level
+  optional member of `Event`/`EventEnvelope` (`crates/hh-ledger/src/event.rs`),
+  `hlc.rs` implements the clock, and `require_hlc` is mandatory once a `share`
+  child exists — invoked at `share`-child spawn — and optional otherwise
+  (`crates/hh-subagent/src/spawn.rs`, `crates/hh-ledger/src/store.rs`). The
+  final answer: the open placement leg resolves to a top-level optional
+  envelope member; the K-2 mandatory-in-`share` rule is landed verbatim — only
+  the WS-B1/B3 confirmation act remained, which GATE-G7's adoption performs.
+- **OQ-434 — hosted `ChildOutcome` lifting.** Interim (quoted): "hosted
+  `ChildOutcome` lifts only the values `HostedEvent` terminals carry; the rest
+  is `unknown` (ADR-0187 C-10; ADR-0164)". Landed: `ChildOutcome` is the closed
+  sum `{result, cancelled, infrastructure_failure}` with hosted `scored ↦
+  result` (`crates/hh-subagent/src/types.rs`) and terminal values lift through
+  `lift_stop_reason`/adapter facts (`crates/hh-hosting/src/proj.rs`,
+  `adapter_a.rs`); `refused_at_spawn` has no landed spelling anywhere in
+  `hh-hosting` — a refused spawn never produces a `HostedEvent` terminal. The
+  final answer: the lifting table is the landed closed sum; `refused_at_spawn`
+  is not observable through `hh-hosting/1` — the outcome stays `unknown` by
+  construction (the refusal surfaces on the adapter's own error channel, never
+  as an outcome value).
+- **OQ-435 — S3 screen defaults.** Interim (quoted, the shared OQ-435/436 row):
+  "S3 `min_flip_share = 0.5`; S5 `retention` margin pre-registered per campaign;
+  'tasks the base passed' by the pre-registered pass^k threshold (ADR-0194
+  S3/S5; joins OQ-113/OQ-301)". Landed: `min_flip_share_ppm` is a declared spec
+  member enforced as a floor — `share_ppm < min_flip_share_ppm` refuses
+  (`crates/hh-evolution/src/campaign.rs`); replicate counts are pre-registered
+  (`min_replicates` enforced). The final answer: the 0.5 default stands as the
+  ratified launch value over the declared floor + pre-registered replicates;
+  the `disagreement_weighted` screen-substitution arm is not adopted — a screen
+  substitution would weaken the hypothesis-named set without a measurement, so
+  the 6a re-pin + the substitution ruling are preserved verbatim as re-entry
+  triggers.
+- **OQ-436 — S5 `retention` margin + "tasks the base passed".** Interim
+  (quoted, the shared row): as OQ-435. Landed: `held_out_eval` is a landed
+  campaign stage enforcing the pre-registered `retention` margins and veto
+  checks (`crates/hh-evolution/src/campaign.rs`); observational hypotheses
+  cannot pass S5. The final answer: "tasks the base passed" = the
+  pre-registered pass^k threshold per campaign (the majority arm rejected); the
+  margin *value* re-pins from 6a data — preserved verbatim; joints
+  OQ-113/OQ-301 stay named as the margin's siblings.
+- **OQ-438 — `rebase` at Stage 6c.** Interim (quoted): "code-search candidates
+  re-propose against the moved head (ADR-0195 D12); GumTree-class matching
+  (OQ-061) not assumed". Landed: `rebase` landed at S6.3a (ADR-0195 D12) — a
+  moved lineage head rebases a cleared candidate by replaying the same edit:
+  semantic-op targets must match, `apply(target, invert(diff)) ≠ head` refuses,
+  and the `rebased → validated` transition re-runs the S1 gates and deposits
+  the rebased proposal doc (`crates/hh-evolution/src/campaign.rs`). The final
+  answer: the re-propose arm is the landed mechanism — rebase replays the
+  identical diff, so `CompiledPayload` bodies need no GumTree-class matching at
+  C1 (matching is not assumed, per the interim); the S5 re-entry-cost
+  measurement for parallel campaigns is preserved verbatim as the re-entry
+  trigger.
+- **OQ-441 — `DebtPolicy` defaults + the Stage-5 `DebtIndex` re-pin.** Interim
+  (quoted): "`DebtPolicy` proposed defaults (runway 60 d, probation one cycle
+  or 90 d, warn 30 d, grace one cycle) are placeholders (ADR-0197)". See the
+  joint OQ-441/OQ-304 section below — proposed `adopt-interim-as-final`: the
+  CF-489-conformed values are the ratified launch defaults; the Stage-5
+  `DebtIndex`-data re-pin is preserved verbatim as the re-entry trigger.
+- **OQ-446 — debt-owner kind + "reachable by a declared sink".** Interim
+  (quoted): "debt-record owners are `PrincipalRef`s; 'reachable by a declared
+  sink' means a first-party surface or the audit sink (ADR-0197)". Landed:
+  `OwnerRef` is the sum `{kind: principal|team, id, reach_via[]}` — both
+  spellings admitted as ref members and no separate `TeamRef` record kind
+  minted (`crates/hh-ontology/src/debt.rs`); `OwnerUnreachable` refuses a
+  record whose `reach_via` intersects none of the caller-declared sink set —
+  the policy's `notice_sinks` — and unrouted notices surface `unrouted`, never
+  dropped (`crates/hh-hir/src/debt.rs`, `route_notices` in
+  `crates/hh-lab/src/debt.rs`). The final answer: the kind disjunction resolves
+  to the landed `OwnerRef` sum — owner identity is a ref spelling
+  (`principal{id}` or `team{id}`), not a new record kind; "reachable" = the
+  record's `reach_via` ∩ the declared `notice_sinks` ≠ ∅ — the "first-party
+  surface or the audit sink" enumeration is *data* (which sink ids the policy
+  declares), not a mechanism; the WS-L8 D-1 join is covered by R4.10's
+  `descope-by-ADR` proposal on D-1 — its disposition is GATE-G7's, not this
+  package's (no `PrincipalDirectory` class contract was ever proposed;
+  owner-issued `ApproverGrant`s + declared sinks are the landed mechanism).
+- **OQ-448 — attribution-constant recalibration.** Interim (quoted):
+  "attribution constants (`k` 8/4/1, `target_cap` 8, `n_permutations`,
+  `samples_per_eval`, KA-I7-7 pass rate 80 %) are the OQ-323 placeholders until
+  A13 `power` recalibrates them (ADR-0199 D6; ADR-0201)". Landed:
+  `K_REEXECUTED = 8`, `K_DETERMINISTIC = 4`, `K_CRN_SEQUENCE = 1`,
+  `K_CRN_OUTCOME = 4`, `TARGET_CAP = 8` are MUST-data constants;
+  `n_permutations`/`samples_per_eval` are declared per design with an
+  `Underpowered` floor (`crates/hh-analysis/src/attribution.rs`). The final
+  answer: the placeholders are the ratified launch constants; the A13 `power`
+  run on the Stage-3 suite at n = 5 replicates is preserved verbatim as the
+  re-entry trigger — the constants re-pin by amendment once that measurement
+  exists.
+- **OQ-450 — coalition `target_cap` + the refuse-vs-degrade pricing rule.**
+  Interim (quoted): "refuse-vs-degrade for Shapley walks above the
+  per-experiment ceiling is campaign data (ADR-0200 D3 `estimate_rollouts`;
+  OQ-364 ceiling)". Landed: `TARGET_CAP = 8` refuses `TooManyTargets` at design
+  validation, `estimate_rollouts` is a declared member, and `budget_reserved`
+  enforces I4 reserve-before-spend (`crates/hh-analysis/src/attribution.rs`) —
+  the code itself marks the cap "unruled until the §05e pricing rule lands";
+  no automatic M3→M2 degrade path exists anywhere. The final answer: the
+  rule *is* campaign data — and the landed surface offers only the refuse arm,
+  so `refuse` is the sole admissible campaign declaration at C1 (`degrade`
+  would name a mechanism that does not exist); the §05e pricing rule at the
+  OQ-364 ceiling is preserved verbatim — if a degrade arm is ever ruled it
+  lands by its own leg.
+- **OQ-453 — hosted `observation_substitution` admissibility.** Interim
+  (quoted): "`observation_substitution` at a hosted interception point is
+  admissible only at configuration granularity with `n/a{class}` on
+  component-level fields, and is `provisional` (ADR-0200 V9)". Landed: the V9
+  gate refuses every hosted target except `observation_substitution` at
+  `configuration` granularity under `interception: model_io`
+  (`crates/hh-analysis/src/attribution.rs` — `ClassInadmissible` otherwise);
+  the hosted exception rows compute over hosted runs reporting
+  `validity_mode: hosted_interception` and every non-exception hosted target
+  stays `n/a{class}` (`crates/hh-analysis/src/kernel.rs`). The final answer:
+  the provisional configuration-granularity admission is the ratified launch
+  posture — `observation_substitution` admissible at `configuration` under
+  `model_io`, component-level fields `n/a{class}`; the KA-I7 admissibility
+  ruling on intercepted participants is preserved verbatim as the re-entry
+  trigger that could lift `provisional`.
+- **OQ-457 — consolidation defaults + `allow_unverified_snapshot`.** Interim
+  (quoted, the shared OQ-457/458 row): "`k_cycles`, the economics factor and
+  non-inferiority margins are pre-registered per cycle; `scope.snapshots`
+  defaults to the bound profile's selector family (ADR-0203 D1; ADR-0204)".
+  Landed: `guard_at_bind` enforces the admissibility — an evolution-origin arm
+  with no `CompatibilityRecord` refuses `ExploratoryOnly` unless the experiment
+  declares `exploratory` or the caller passes `allow_unverified_snapshot`;
+  `verified`/`trained_under` proceed, `drifted`/`unknown` annotate, `broken`
+  refuses `CompatibilityBroken` (`crates/hh-lab/src/coevolution.rs`);
+  `ConsolidationPolicy{k_cycles = 1, economics_factor = 1.0}` carries the
+  placeholder defaults. The final answer: the pre-registered placeholders are
+  the ratified launch values and `allow_unverified_snapshot` stays a
+  caller-flagged escape, never a `Design.kind` default — the `Design.kind`
+  admissibility list and the 6d pre-registration re-pin are preserved verbatim
+  as re-entry triggers.
+- **OQ-458 — `scope.snapshots` default.** Interim (quoted, the shared row):
+  "`scope.snapshots` defaults to the bound profile's selector family
+  (ADR-0203 D1)". Landed: a model-conditioned/evolution-origin rule with no
+  `scope.model_selectors` refuses `MissingSnapshotScope` and the
+  `model_version_change` expiry is required (AC-R-2.9.8-12 —
+  `crates/hh-hir/src/debt.rs`); ADR-0203 D1's family default remains the
+  operative rule. The final answer: the bound profile's selector family is the
+  ratified default — not only the `evidence_refs`-named snapshots (the
+  family-level scope is what the `model_version_change` expiry needs to
+  observe); the evidence-named-only arm is rejected as under-inclusive.
+
+## OQ-441 — the Stage-5 `DebtIndex` re-pin (joint with OQ-304, WS-I6)
+
+OQ-441 asked the defaults for `DebtPolicy.min_runway`,
+`hypothesized_max_age` (probation), `warn_within`, `grace_period` — proposed:
+runway 60 d, probation one experiment cycle or 90 d, warn 30 d, grace one
+experiment boundary — joint with OQ-304's `evidence_max_age`. The interim rule
+(quoted): "`DebtPolicy` proposed defaults (runway 60 d, probation one cycle or
+90 d, warn 30 d, grace one cycle) are placeholders (ADR-0197)"; the entry test:
+"WS-I6 re-pins from the Stage-5 `DebtIndex` data; joins OQ-445 (ADR-0210) on
+`evidence_max_age`".
+
+**Post-CF-489 evaluation — the shapes now match the proposals.** CF-489 (the
+R2.24-registered divergence: landed 30 d/14 d vs proposed 60 d/30 d) resolved at
+R3.9 on the operator's direction ruling — the landed `DebtPolicy` placeholders
+conformed to this row's proposed values (`crates/hh-ontology/src/debt.rs` —
+the dated ruling comment stands at the struct). The landed defaults, all
+enforced: `min_runway_ms` 60 d (`InsufficientRunway` when `until − created_at`
+is below it — `crates/hh-hir/src/debt.rs`); `warn_within_ms` 30 d (the
+`expiring` window — `DebtReport`/`expiring_within` and the
+`debt.expiring_within_30d` health metric); `hypothesized_max_age_ms` 90 d (the
+probation bound — the "one experiment cycle" arm is the *ledgered* probation
+row the sweep opens at `due_at = now + hypothesized_max_age`, DF-S5.4-1's book
+of record, with the record-derived `created_at + 90 d` fallback —
+`crates/hh-debt/src/manager.rs`, `crates/hh-lab/src/debt.rs`);
+`grace_period_ms` 30 d (the "one experiment boundary" arm rides the
+caller-flagged `grace_elapsed` observable ∨ the 30 d bound on the
+profile-change leg); `evidence_max_age_ms` 180 d; `max_open_removal_tests` 64;
+`priority "expiry_urgency"`; `schedule "daily"`.
+
+**The `DebtIndex` shape.** `debt_index(entries) → DebtIndexRow[]` is the landed
+fold over the registered `AssumptionDebtRecord`s (`crates/hh-lab/src/debt.rs` —
+`staleness_reasons[]`, `expired_used_runs`, `evidence_grade`, the
+`removal_test{executable, last_report_ref?, last_verdict?}` state);
+`evaluate_debt` emits the `expiring`/`expired`/`revalidated` transitions with
+`causes[]`; `DebtReport`/`DebtNotice` read `warn_within_ms`,
+`hypothesized_max_age_ms`, `grace_period_ms` and `evidence_max_age_ms` from the
+policy *at runtime* (`crates/hh-debt/src/manager.rs` — `report` passes
+`policy.warn_within_ms`; `route_notices` routes only to declared
+`notice_sinks`, unrouted surfaced as `unrouted`). **The re-pin is a data
+amendment, never a code leg** — every constant OQ-441 names is a `DebtPolicy`
+member the running index reads.
+
+**Joint with OQ-304.** OQ-304 resolved at Phase 4 (ADR-0197 D5):
+`evidence_max_age` ages only instrument-produced evidence; Tier-A `source`
+refs never age out by themselves; the default value is OQ-441's. The landed
+pair honours that division: the policy's `evidence_max_age_ms` 180 d governs
+only the `evidence_refresh_due` fallback leg (a record naming the kind without
+`expiry.params.evidence_max_age_ms` reads the policy bound —
+`evaluate_debt`'s §(5) leg), and the record-level
+`expiry.params.evidence_max_age_ms` override wins when declared. Tier-A
+`source` refs carry no aging leg anywhere in the evaluator. The entry test's
+second join — OQ-445 (ADR-0210) on `evidence_max_age` — is R4.8's
+`needs-code-leg(R4.15a)` proposal (`evidence_max_age` = one model generation at
+the spec-debt register header): a different surface (the register's
+revalidation cadence, not the `DebtPolicy` member), so the two dispositions
+stand independently at GATE-G7 — no contradiction.
+
+**Proposed disposition — `adopt-interim-as-final` (the final re-pin).** The
+interim's proposed values are the landed, enforced values: the re-pin this row
+awaited resolves to *adopting the conformed placeholders as the ratified
+defaults* — 60 d `min_runway`, 30 d `warn_within`, 90 d
+`hypothesized_max_age` (probation = ledgered `due_at_ms` ∨ the 90 d bound),
+30 d `grace_period` (`grace_elapsed` ∨ the 30 d bound), 180 d
+`evidence_max_age` (instrument-produced evidence only, per OQ-304). The
+ADR-0214 entry test — WS-I6 re-pins from the Stage-5 `DebtIndex` data — is
+preserved verbatim as the re-entry trigger: the `[[DEFERRED ADR-0214: OQ-441]]`
+markers stand until the running index supplies real aging data (the fixture
+lane supplies none) and the values re-pin by amendment. Conform row R4.15a.
+
+## Conflicts (part 2)
+
+None registered. CF-489 (the OQ-441 `DebtPolicy` placeholder divergence) was
+resolved at R3.9 — the conform is recorded on the OQ-441 register row and in
+the `debt.rs` comment; it is evidence for this package, not a new divergence.
+No part-2 row's landed shape contradicts its interim text per the R2.24
+revalidation cells. No new CF row.
+
+## What part 2 does not decide
+
+Identical to part 1's standing statement: no register status changes, no
+amendment-log appends, no schema or spec conform land here — every cell above
+is a proposal the operator adopts, amends or declines at GATE-G7 (the records
+conform is R4.15a's; OQ-430's `needs-code-leg` lands at R4.15c). The interim
+rules stay in force unchanged until then; every ADR-0214 entry test is
+preserved verbatim as a re-entry trigger — including OQ-441's Stage-5
+`DebtIndex` re-pin, which this proposal resolves as *adopt the conformed
+defaults now, re-pin by amendment when the index data exists*. BL-37's flip
+stays R4.16's accounting after the adopted set conforms.
