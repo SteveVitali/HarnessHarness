@@ -468,12 +468,12 @@ pub fn export_target(
                 ("schema", Json::str("harbor_job/1")),
                 ("job_id", Json::str(manifest.version_id.clone())),
                 ("runs", Json::Arr(runs)),
-                ("subject_lineage", Json::Arr(manifest.subject.lineage.clone())),
+                (
+                    "subject_lineage",
+                    Json::Arr(manifest.subject.lineage.clone()),
+                ),
             ]);
-            files.insert(
-                "job.json".into(),
-                job.to_canonical_string().into_bytes(),
-            );
+            files.insert("job.json".into(), job.to_canonical_string().into_bytes());
             files.insert(
                 "manifest.json".into(),
                 manifest.to_json().to_canonical_string().into_bytes(),
@@ -497,9 +497,9 @@ pub fn export_target(
             // (definition/compiled/models — the trajectory is the only
             // native-shaped payload Harbor carries).
             for m in &manifest.members {
-                let already = loss.iter().any(|e| {
-                    e.get("member").and_then(Json::as_str) == Some(m.role.as_str())
-                });
+                let already = loss
+                    .iter()
+                    .any(|e| e.get("member").and_then(Json::as_str) == Some(m.role.as_str()));
                 if already {
                     continue;
                 }
@@ -561,10 +561,7 @@ pub fn export_target(
                 if let Json::Obj(m) = &micro {
                     for (ccy, v) in m {
                         if let Some(micro_units) = v.as_int() {
-                            units.insert(
-                                ccy.clone(),
-                                Json::Int(micro_units / 1_000_000),
-                            );
+                            units.insert(ccy.clone(), Json::Int(micro_units / 1_000_000));
                         }
                     }
                 }
@@ -608,10 +605,7 @@ pub fn export_target(
             let mut lineage_by_run = BTreeMap::new();
             for (run, export) in &manifest.traces {
                 if !export.lineage_prefixes.is_empty() {
-                    lineage_by_run.insert(
-                        run.clone(),
-                        Json::Arr(export.lineage_prefixes.clone()),
-                    );
+                    lineage_by_run.insert(run.clone(), Json::Arr(export.lineage_prefixes.clone()));
                 }
             }
             let header = Json::obj([
@@ -622,7 +616,10 @@ pub fn export_target(
                     "subject_runs",
                     Json::Arr(manifest.subject.run_ids.iter().map(Json::str).collect()),
                 ),
-                ("subject_lineage", Json::Arr(manifest.subject.lineage.clone())),
+                (
+                    "subject_lineage",
+                    Json::Arr(manifest.subject.lineage.clone()),
+                ),
                 ("lineage_prefixes", Json::Obj(lineage_by_run)),
                 ("cost_views", Json::Obj(cost_views)),
             ]);
@@ -631,9 +628,9 @@ pub fn export_target(
                 header.to_canonical_string().into_bytes(),
             );
             for m in &manifest.members {
-                let already = loss.iter().any(|e| {
-                    e.get("member").and_then(Json::as_str) == Some(m.role.as_str())
-                });
+                let already = loss
+                    .iter()
+                    .any(|e| e.get("member").and_then(Json::as_str) == Some(m.role.as_str()));
                 if already || m.role.starts_with("ledger_page:") {
                     continue;
                 }
@@ -643,18 +640,39 @@ pub fn export_target(
                     ("class", Json::str("untyped_slot")),
                     (
                         "detail",
-                        Json::str("OQ-030: interchange carries the product-granularity minimum set only"),
+                        Json::str(
+                            "OQ-030: interchange carries the product-granularity minimum set only",
+                        ),
                     ),
                 ]));
             }
         }
-        other => {
-            return Err(BundleError::FormatUnknown {
-                detail: format!(
-                    "export target `{other}` — supported: ledger_native, harbor_job_dir, interchange_trajectory"
-                ),
-            })
-        }
+        other => match crate::foreign::ForeignFormat::parse(other) {
+            // R4.9 (DF-S4.2-2): the four foreign lowerings — closed
+            // dispatch into `foreign::export_arm`, every unshipped member
+            // a named loss row.
+            Some(f) if f.exports() => {
+                crate::foreign::export_arm(f, &manifest, &members, &mut files, &mut loss)?
+            }
+            Some(_) => {
+                return Err(BundleError::ForeignDirectionRefused {
+                    format: other.to_string(),
+                    direction: "export",
+                })
+            }
+            None => {
+                return Err(BundleError::FormatUnknown {
+                    detail: format!(
+                        "export target `{other}` — supported: ledger_native + {:?}",
+                        crate::foreign::ForeignFormat::ALL
+                            .iter()
+                            .filter(|f| f.exports())
+                            .map(|f| f.as_str())
+                            .collect::<Vec<_>>()
+                    ),
+                })
+            }
+        },
     }
     let artefact = hh_identity::idp_id(
         "bundle.export",

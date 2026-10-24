@@ -14,18 +14,28 @@ use crate::codec::Decoded;
 use crate::error::BundleError;
 use crate::manifest::{BundleManifest, MemberStatus};
 
-/// The only format this stage lifts: the native `hh-bundle/1` container
-/// (directory or `HHB1`). Foreign formats (`harbor_atif`, `inspect_eval`,
-/// `sarif`, `generic_jsonl`) land with their own tickets.
+/// The only format `lift` admits: the native `hh-bundle/1` container
+/// (directory or `HHB1`). Foreign vocabularies lift through
+/// [`lift_foreign`] below — the closed `ForeignFormat` sum
+/// (`crate::foreign`) is the one grammar.
 pub const NATIVE_FORMAT: &str = "ledger_native";
 
-/// The foreign formats S4.2 lifts (§5h.3 §2 `import`; AC-R-2.9.3-9):
-/// `harbor_trial_dir` — a foreign trial directory tree; `harbor_job_dir`
-/// — our own harbor export shape re-imported (the AC-8 round-trip).
-/// The remaining targets (`inspect_eval_log`, `swebench_submission`,
-/// `in_toto_bundle`, `telemetry_trace`) land with their owning tickets —
-/// `FormatUnknown`, never a guess.
-pub const FOREIGN_FORMATS: [&str; 2] = ["harbor_trial_dir", "harbor_job_dir"];
+/// The foreign formats the import half lifts (§5h.3 §2 `import`;
+/// AC-R-2.9.3-9; DF-S4.2-2/R4.9): the S4.2 `harbor_trial_dir` +
+/// `harbor_job_dir` pair plus the four R4.9 lifts. The closed sum +
+/// direction grammar lives in `crate::foreign::ForeignFormat` (CC1) —
+/// this list is its liftable spellings; `interchange_trajectory` is a
+/// known-but-export-only format (`ForeignDirectionRefused` at `import`,
+/// ADR-0213's OQ-030 deferral). Any other spelling is `FormatUnknown`,
+/// never a guess.
+pub const FOREIGN_FORMATS: [&str; 6] = [
+    "harbor_trial_dir",
+    "harbor_job_dir",
+    "swebench_submission",
+    "inspect_eval_log",
+    "in_toto_bundle",
+    "telemetry_trace",
+];
 
 /// One ledger row the import wants appended — provenance is applied by
 /// the caller at append time (every lifted row carries the import-minted
@@ -319,15 +329,20 @@ pub fn lift_foreign(
     store: &hh_ledger::store::Store,
     run_id: &str,
     files: &std::collections::BTreeMap<String, Vec<u8>>,
-    format: &str,
+    ftype: crate::foreign::ForeignFormat,
     producer: Json,
     created_at: String,
     kernel_version_id: &str,
     now_ms: u64,
 ) -> Result<ForeignLift, BundleError> {
-    if !FOREIGN_FORMATS.contains(&format) {
-        return Err(BundleError::FormatUnknown {
-            detail: format!("{format} — supported foreign lifts: {FOREIGN_FORMATS:?}"),
+    let format = ftype.as_str();
+    if !ftype.lifts() {
+        // A *known* format asked the wrong direction — typed, never
+        // `FormatUnknown` (the spelling is in the sum) and never a
+        // silent skip (ADR-0213 parks the interchange import half).
+        return Err(BundleError::ForeignDirectionRefused {
+            format: format.to_string(),
+            direction: "import",
         });
     }
     let provenance = ProvenanceRecord::minted(
@@ -418,6 +433,19 @@ pub fn lift_foreign(
             }
         }
     }
+
+    // ── the format-aware claim sweep (R4.9 / DF-S4.2-2) ─────────────
+    // `swebench_submission`/`inspect_eval_log`/`in_toto_bundle`/
+    // `telemetry_trace` carry typed structure the artefact's own
+    // vocabulary names — mint the claims it carries (all under the
+    // import-minted `unverified` provenance; a foreign signature or
+    // score is a claim, never re-asserted truth). `harbor_*` formats
+    // have no typed structure beyond the digest claims above.
+    let format_claims = crate::foreign::lift_claims(ftype, files, &prov_json);
+    claims.extend(format_claims.claims);
+    let name_bindings = format_claims.name_bindings;
+    let mut format_loss = format_claims.loss;
+    let format_notes = format_claims.notes;
 
     // ── the required section docs (lifted projections — the foreign
     //    fields have no typed home beyond `foreign` claims) ───────────
@@ -559,7 +587,7 @@ pub fn lift_foreign(
         participant_class: "hosted".into(),
         observability_levels: vec!["ledger".into()],
         claims,
-        name_bindings: vec![],
+        name_bindings,
         fetch_policy: "self_contained".into(),
         fetch: vec![],
         subject,
@@ -648,6 +676,9 @@ pub fn lift_foreign(
             }
         }
     }
+    // The format-aware sweep's losses (R4.9): untyped foreign fields,
+    // narrowed transcripts/signatures, unparseable rows — all named.
+    mapping_loss.append(&mut format_loss);
     let mapping = Json::obj([
         ("format", Json::str(format)),
         (
@@ -658,6 +689,10 @@ pub fn lift_foreign(
         ("dropped", Json::Arr(vec![])),
         ("conflicts", Json::Arr(conflicts)),
         ("mapping_loss", Json::Arr(mapping_loss)),
+        (
+            "notes",
+            Json::Arr(format_notes.iter().map(|n| Json::str(n.clone())).collect()),
+        ),
     ]);
     let mapping_digest =
         hh_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
