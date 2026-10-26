@@ -96,6 +96,7 @@ pub mod mask;
 pub mod metrics;
 pub mod patterns;
 pub mod redact;
+pub mod signer;
 pub mod types;
 
 pub use aead::{RingBlobCipher, BLOB_AEAD_ALG};
@@ -127,6 +128,11 @@ pub use patterns::{SecretPattern, REGISTERED_PATTERNS};
 pub use redact::{
     detect, leak_scan, redact, Canary, DetectorKind, DetectorSet, Hit, Leak, RedactionTombstone,
     ScanTarget,
+};
+pub use signer::{
+    signer_key_id, signer_key_path, CustodyError, CustodySourceResolver, LedgerSignerCustody,
+    LedgerSignerKey, LedgerSignerResolver, SIGNER_ACTIVE_FILE, SIGNER_CHANNEL_ID, SIGNER_FILE_MODE,
+    SIGNER_FILE_PREFIX, SIGNER_VAULT_REF,
 };
 pub use types::{
     AccessClass, BindingState, KernelPurpose, Placeholder, ProvidedSecret, SecretFingerprint,

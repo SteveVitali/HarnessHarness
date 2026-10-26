@@ -551,6 +551,14 @@ pub struct CheckpointClaim {
     pub bridge_record_ref: Option<String>,
     /// The attestation binding the checkpoint (optional; §5g.6 §2).
     pub attestation_ref: Option<String>,
+    /// The **signer-key** rotation member — `key_rotation{from_key_id,
+    /// to_key_id}` on a `kind = rotation` claim (R4.15e; OQ-170): a
+    /// custody rotation, distinct from an idp-rotation claim (which
+    /// carries `rehash`/`bridge_record_ref`). The member is inside the
+    /// signed preimage — the incumbent and successor co-sign over it, and
+    /// a verified claim extends the verifier's effective signer-key set to
+    /// `to_key_id` (retired ids stay resolvable for history).
+    pub key_rotation: Option<Json>,
     /// The raw payload (for re-deriving `idp`/signing preimage).
     pub payload: Json,
 }
@@ -610,6 +618,7 @@ pub fn parse_checkpoint(payload: &Json) -> Option<CheckpointClaim> {
             .get("attestation_ref")
             .and_then(|j| j.as_str())
             .map(str::to_string),
+        key_rotation: payload.get("key_rotation").cloned(),
         payload: payload.clone(),
     })
 }
