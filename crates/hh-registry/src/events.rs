@@ -1,21 +1,21 @@
 //! The `lifecycle.registry.*` audit events (ADR-0151 (e), ADR-0152 (e), ADR-0153 (e)).
 //! Every mutation appends a content-free, audit-grade row — ids and spellings only —
-//! through the run's **single fenced writer** (`hh_ledger::Store::append` under the
+//! through the run's **single fenced writer** (`hharness_ledger::Store::append` under the
 //! writer `Lease`). The store collects each event as a [`RegistryEvent`]; the caller
 //! (the run's kernel seam) drains and appends them — [`emit`] is the one helper.
 //!
 //! The rows are `kernel_origin` + `audit_grade` + `ledger`-durable (the declared
-//! persistence table in `hh-ledger` — CC7; ADR-0239): the emitting *component* is the
+//! persistence table in `hharness-ledger` — CC7; ADR-0239): the emitting *component* is the
 //! kernel-side registry (`producer.component_class = "kernel"`,
 //! `component_variant_ref = "registry"`); the *registrar's* provenance is payload
 //! data, never the row's authority (CC2).
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::LedgerError;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::LedgerError;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 /// The eight `lifecycle.registry.*` classes (the ADR-0151/0152/0153 (e) rows).
 pub const REGISTERED: &str = "lifecycle.registry.registered";
@@ -287,8 +287,11 @@ impl RegistryEvent {
     /// The `security.label.endorsed` pin row — the `LabelEndorsed` payload
     /// partitioned over `LABEL_FIELDS` (`subject_ref` is the `@anchor:<tag>`
     /// placeholder `emit` rewrites to the committed anchor's event id).
-    pub fn pin_endorsed(anchor_tag: &str, ev: &hh_provenance::LabelEndorsed) -> RegistryEvent {
-        let label = |l: &hh_provenance::Label| {
+    pub fn pin_endorsed(
+        anchor_tag: &str,
+        ev: &hharness_provenance::LabelEndorsed,
+    ) -> RegistryEvent {
+        let label = |l: &hharness_provenance::Label| {
             Json::obj([
                 ("authority", Json::str(l.authority.as_str())),
                 (

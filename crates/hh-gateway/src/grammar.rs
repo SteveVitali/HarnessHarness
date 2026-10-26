@@ -17,7 +17,7 @@
 //! The decoder is a state machine over [`WireFrame`]s — deterministic,
 //! content-free (it moves bytes, never reads meaning).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::codec::{self, WireFrame};
 use crate::dialect::WireDialect;
@@ -130,7 +130,7 @@ pub enum ModelEventKind {
     /// `usage.updated{partial: TokenVector, arrival}`.
     UsageUpdated {
         /// The normalized vector (partial — in-stream).
-        usage: hh_telemetry::TokenVector,
+        usage: hharness_telemetry::TokenVector,
         /// `arrival`.
         arrival: UsageArrivalKind,
     },
@@ -163,7 +163,7 @@ pub enum ModelEventKind {
         /// `stop_details?`.
         stop_details: Option<StopDetails>,
         /// The terminal usage.
-        usage: Option<hh_telemetry::TokenVector>,
+        usage: Option<hharness_telemetry::TokenVector>,
         /// `timing`.
         timing: Timing,
         /// `surface_ids`.
@@ -174,7 +174,7 @@ pub enum ModelEventKind {
         /// The classified error.
         error: ModelError,
         /// Usage-so-far where the dialect delivers it.
-        usage: Option<hh_telemetry::TokenVector>,
+        usage: Option<hharness_telemetry::TokenVector>,
         /// `timing`.
         timing: Timing,
     },
@@ -272,7 +272,7 @@ pub struct DecodeState {
     /// `snapshot_id`.
     pub snapshot_id: Option<String>,
     /// The final usage.
-    pub final_usage: Option<hh_telemetry::TokenVector>,
+    pub final_usage: Option<hharness_telemetry::TokenVector>,
     /// The provider's raw usage object on the terminal frame (the
     /// `usage.record.raw` member — opaque, dialect-owned).
     pub raw_usage: Option<Json>,

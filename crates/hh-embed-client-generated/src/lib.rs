@@ -1,4 +1,4 @@
-//! `hh-embed-client-generated` — the generated `hh-embed/1` client.
+//! `hharness-embed-client-generated` — the generated `hh-embed/1` client.
 //!
 //! Everything of substance lives in `generated.rs`, which is **emitted by `hh-codegen`** from
 //! the single schema source and checked in. Do not edit `generated.rs` by hand; the CI drift
@@ -14,7 +14,7 @@
 //! the same canonical request/response contract over loopback HTTP —
 //! `POST /hh-embed/1` is one JSON-RPC request → response, and
 //! `GET /hh-embed/1/events?wait_ms=` drains `stream.frame` + `upcall.*`
-//! notifications as NDJSON. It speaks the exact wire shape `hh-embed`'s
+//! notifications as NDJSON. It speaks the exact wire shape `hharness-embed`'s
 //! (c) server emits (bearer + exact-Host + no Origin); the generated
 //! `*Params`/`*Result` types are transport-agnostic and shared with the
 //! stdio [`Client`].
@@ -22,8 +22,8 @@
 mod generated;
 pub use generated::*;
 
-use hh_wire::http::{read_response, split_target, HttpError, MAX_HEAD_BYTES};
-use hh_wire::json::Json;
+use hharness_wire::http::{read_response, split_target, HttpError, MAX_HEAD_BYTES};
+use hharness_wire::json::Json;
 use std::io::{BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
 
@@ -34,7 +34,7 @@ const NET_MAX_BODY: usize = 64 * 1024 * 1024;
 /// The binding-(c) client. One `TcpStream` per call (the server speaks
 /// `Connection: close`) — the transport is deliberately dumb: it carries
 /// canonical bytes and nothing else (the op contract lives in
-/// `hh-embed-schema`, the wire codec in `hh-wire::http` — CC1).
+/// `hharness-embed-schema`, the wire codec in `hh-wire::http` — CC1).
 pub struct NetClient {
     addr: SocketAddr,
     token: String,
@@ -84,8 +84,8 @@ impl NetClient {
         if status != 200 {
             return Err(ClientError::Transport(format!("http {status}")));
         }
-        let msg =
-            hh_wire::json::parse(body.trim()).map_err(|e| ClientError::Transport(e.to_string()))?;
+        let msg = hharness_wire::json::parse(body.trim())
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
         if msg.get("id").and_then(Json::as_int) != Some(id) {
             return Err(ClientError::Transport(format!(
                 "response id mismatch: got {:?}, want {id}",
@@ -116,7 +116,8 @@ impl NetClient {
             if t.is_empty() {
                 continue;
             }
-            let msg = hh_wire::json::parse(t).map_err(|e| ClientError::Transport(e.to_string()))?;
+            let msg =
+                hharness_wire::json::parse(t).map_err(|e| ClientError::Transport(e.to_string()))?;
             let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
             if method == "stream.frame" {
                 if let Some(p) = msg.get("params") {

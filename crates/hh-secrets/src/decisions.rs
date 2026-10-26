@@ -7,12 +7,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::kinds::EffectDomain;
-use hh_ledger::event::EventEnvelope;
-use hh_monitor::args::scope_covers;
-use hh_monitor::events::handle_from_granted;
-use hh_monitor::AuthorityHandle;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_ledger::event::EventEnvelope;
+use hharness_monitor::args::scope_covers;
+use hharness_monitor::events::handle_from_granted;
+use hharness_monitor::AuthorityHandle;
+use hharness_wire::json::Json;
 
 /// One `security.permission.decided` row, projected to the members the gate
 /// reads (`{event_id, effect_id, decision, handle_ids}`).

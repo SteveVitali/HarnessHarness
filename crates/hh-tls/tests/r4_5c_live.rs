@@ -2,7 +2,7 @@
 //! registry entry): one unauthenticated HTTPS GET to
 //! `https://api.github.com/zen` over the REAL rustls client —
 //! `webpki_roots()` only, full chain + name verification, the one
-//! `hh_wire::http` codec on top. USD 0, no secrets.
+//! `hharness_wire::http` codec on top. USD 0, no secrets.
 //!
 //! `#[ignore]`d — `scripts/live-verify.sh https-reachability` drives it;
 //! an unreachable network prints the honest `SKIPPED-UNREACHABLE` marker
@@ -42,10 +42,10 @@ fn r45c_live_https_zen_get() {
     sock.set_write_timeout(Some(Duration::from_secs(15))).ok();
     // The handshake itself is the claim: a public chain verifies against
     // the Mozilla roots — anything else fails the test (never insecure).
-    let mut s = hh_tls::ClientTls::webpki_roots()
+    let mut s = hharness_tls::ClientTls::webpki_roots()
         .connect(sock, host)
         .expect("the public chain must verify against webpki_roots");
-    hh_wire::http::write_request(
+    hharness_wire::http::write_request(
         &mut s,
         "GET",
         "/zen",
@@ -60,7 +60,7 @@ fn r45c_live_https_zen_get() {
     .expect("request write");
     let mut r = BufReader::new(s);
     let (head, body) =
-        hh_wire::http::read_response_full(&mut r, 1024 * 1024).expect("response read");
+        hharness_wire::http::read_response_full(&mut r, 1024 * 1024).expect("response read");
     assert_eq!(head.status, 200, "head: {head:?} body: {body:?}");
     assert!(!body.is_empty(), "github /zen answers a non-empty body");
     eprintln!(

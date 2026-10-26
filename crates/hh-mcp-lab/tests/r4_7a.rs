@@ -3,7 +3,7 @@
 //! App" ruling; ADR-0351 D5's fired trigger):
 //!
 //! - **oauth** — the provider exchange over the one HTTPS stack
-//!   (`hh_wire::http` atop the admitted TLS client): the device-flow
+//!   (`hharness_wire::http` atop the admitted TLS client): the device-flow
 //!   branches (`authorization_pending`, `slow_down`, `access_denied`,
 //!   `expired_token`, grant-window expiry) against a loopback issuer
 //!   fixture, the bearer→subject verify a declared `issuer_ref` runs,
@@ -26,15 +26,17 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use hh_embed::service::{
+use hharness_embed::service::{
     ClientTls, EmbedService, PeerIdentity, ServerTls, ServiceConfig, TlsStream,
 };
-use hh_mcp_lab::binding::{
+use hharness_mcp_lab::binding::{
     stdio_launch_binding, CallerBinding, CallerCredential, CallerKind, CredentialRefusal,
     SubjectKind,
 };
-use hh_mcp_lab::oauth::{self, BearerVerdict, DeviceFlow, OAuthIssuer, PollOutcome, Transport};
-use hh_mcp_lab::server::LabServer;
+use hharness_mcp_lab::oauth::{
+    self, BearerVerdict, DeviceFlow, OAuthIssuer, PollOutcome, Transport,
+};
+use hharness_mcp_lab::server::LabServer;
 
 // ── store/service + binding fixtures ─────────────────────────────────
 
@@ -108,10 +110,10 @@ fn issuer() -> (u16, std::sync::Arc<Issuer>) {
         let st = st2.clone();
         std::thread::spawn(move || {
             let mut r = BufReader::new(&mut sock);
-            let Ok(Some((head, _))) = hh_wire::http::read_request(&mut r, 64 * 1024) else {
+            let Ok(Some((head, _))) = hharness_wire::http::read_request(&mut r, 64 * 1024) else {
                 return;
             };
-            let path = hh_wire::http::split_target(&head.target).0;
+            let path = hharness_wire::http::split_target(&head.target).0;
             let (status, body) = match (head.method.as_str(), path) {
                 ("POST", "/dc") => (
                     200,
@@ -158,7 +160,7 @@ fn issuer() -> (u16, std::sync::Arc<Issuer>) {
                 }
                 _ => (404, "{}".to_string()),
             };
-            let _ = hh_wire::http::write_response(&mut sock, status, &[], body.as_bytes());
+            let _ = hharness_wire::http::write_response(&mut sock, status, &[], body.as_bytes());
         });
     });
     (port, st)
@@ -293,7 +295,7 @@ fn device_flow_denied_and_expired_are_terminal() {
 
 #[test]
 fn loopback_transport_refuses_non_loopback() {
-    let u = hh_wire::http::parse_http_url("http://github.com/login/device/code").unwrap();
+    let u = hharness_wire::http::parse_http_url("http://github.com/login/device/code").unwrap();
     assert!(matches!(
         oauth::open(Transport::Loopback, &u),
         Err(oauth::OAuthError::Refused(_))
@@ -444,8 +446,8 @@ fn spawn_mtls(srv: LabServer, listener: TcpListener) {
             &pem("hh-test-ca.pem"),
         )
         .unwrap();
-        let origins = hh_mcp::http::OriginPolicy::new(&[], false);
-        let _ = hh_mcp_lab::http::serve_http_mtls(srv, listener, &origins, &tls);
+        let origins = hharness_mcp::http::OriginPolicy::new(&[], false);
+        let _ = hharness_mcp_lab::http::serve_http_mtls(srv, listener, &origins, &tls);
     });
 }
 
@@ -459,7 +461,7 @@ fn client(identity: Option<(&str, &str)>) -> ClientTls {
     c
 }
 
-fn dial_tls(port: u16, c: &ClientTls) -> Result<TlsStream, hh_embed::service::TlsError> {
+fn dial_tls(port: u16, c: &ClientTls) -> Result<TlsStream, hharness_embed::service::TlsError> {
     let sock = TcpStream::connect(("127.0.0.1", port)).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
     sock.set_write_timeout(Some(Duration::from_secs(5)))
@@ -469,7 +471,7 @@ fn dial_tls(port: u16, c: &ClientTls) -> Result<TlsStream, hh_embed::service::Tl
 
 /// POST `/mcp` over the TLS stream; the full response string.
 fn mtls_post(st: &mut TlsStream, body: &str) -> String {
-    hh_wire::http::write_request(
+    hharness_wire::http::write_request(
         st,
         "POST",
         "/mcp",
@@ -478,7 +480,7 @@ fn mtls_post(st: &mut TlsStream, body: &str) -> String {
     )
     .unwrap();
     let mut r = BufReader::new(st);
-    let (head, raw) = hh_wire::http::read_response_full(&mut r, 64 * 1024).unwrap();
+    let (head, raw) = hharness_wire::http::read_response_full(&mut r, 64 * 1024).unwrap();
     format!(
         "HTTP/1.1 {}\r\n\r\n{}",
         head.status,
@@ -531,10 +533,10 @@ fn mtls_missing_or_foreign_cert_refused_at_handshake() {
     match dial_tls(port, &client(None)) {
         Err(_) => {}
         Ok(mut st) => {
-            let r = hh_wire::http::write_request(&mut st, "GET", "/", &[], &[]);
+            let r = hharness_wire::http::write_request(&mut st, "GET", "/", &[], &[]);
             let refused = r.is_err() || {
                 let mut r = BufReader::new(&mut st);
-                hh_wire::http::read_response_full(&mut r, 1024).is_err()
+                hharness_wire::http::read_response_full(&mut r, 1024).is_err()
             };
             assert!(refused, "a certificate-less peer got a usable session");
         }
@@ -547,10 +549,10 @@ fn mtls_missing_or_foreign_cert_refused_at_handshake() {
     ) {
         Err(_) => {}
         Ok(mut st) => {
-            let r = hh_wire::http::write_request(&mut st, "GET", "/", &[], &[]);
+            let r = hharness_wire::http::write_request(&mut st, "GET", "/", &[], &[]);
             let refused = r.is_err() || {
                 let mut r = BufReader::new(&mut st);
-                hh_wire::http::read_response_full(&mut r, 1024).is_err()
+                hharness_wire::http::read_response_full(&mut r, 1024).is_err()
             };
             assert!(refused, "a rogue-CA peer got a usable session");
         }

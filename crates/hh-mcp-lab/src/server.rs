@@ -20,12 +20,12 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{BufRead, Write};
 
-use hh_embed::service::{EmbedService, MintedVerdict};
-use hh_embed_schema::errors::EmbedError;
-use hh_mcp::artifact::ServedArtifact;
-use hh_mcp::protocol::{PINNED_MODERN, PINNED_VERSIONS};
-use hh_mcp::server::ServeError;
-use hh_wire::json::Json;
+use hharness_embed::service::{EmbedService, MintedVerdict};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_mcp::artifact::ServedArtifact;
+use hharness_mcp::protocol::{PINNED_MODERN, PINNED_VERSIONS};
+use hharness_mcp::server::ServeError;
+use hharness_wire::json::Json;
 
 use crate::binding::{
     BindingTable, CallerAuth, CallerBinding, CallerCredential, CredentialRefusal,
@@ -34,7 +34,7 @@ use crate::exposure::{self, ExposureDef};
 use crate::session::SurfaceSession;
 
 /// The server name `initialize`/`serverInfo` reports.
-pub const SERVER_NAME: &str = "hh-mcp-lab";
+pub const SERVER_NAME: &str = "hharness-mcp-lab";
 /// The package version.
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -257,7 +257,7 @@ impl LabServer {
     /// produces, never a guessed subject.
     pub fn resolve_mtls_peer(
         &self,
-        peer: &hh_embed::service::PeerIdentity,
+        peer: &hharness_embed::service::PeerIdentity,
     ) -> Result<CallerBinding, CredentialRefusal> {
         let key = peer
             .subject_common_name
@@ -326,8 +326,10 @@ impl LabServer {
                     .map(|t| t.to_mcp_json(&a.bundle_id))
                     .collect(),
             );
-            a.catalogue_hash =
-                hh_identity::idp_id("mcp.catalogue", projection.to_canonical_string().as_bytes());
+            a.catalogue_hash = hharness_identity::idp_id(
+                "mcp.catalogue",
+                projection.to_canonical_string().as_bytes(),
+            );
             return a;
         }
         self.artifact.clone()
@@ -347,7 +349,7 @@ impl LabServer {
                 let Ok(m) = self.svc.surface_manifest(&run_id) else {
                     continue;
                 };
-                let is_surface = matches!(m.run_kind, hh_ledger::manifest::RunKind::Surface)
+                let is_surface = matches!(m.run_kind, hharness_ledger::manifest::RunKind::Surface)
                     || m.extra.get("run_kind").and_then(Json::as_str) == Some("surface");
                 if !is_surface {
                     continue;
@@ -397,7 +399,7 @@ impl LabServer {
         Some(self.dispatch(binding, method, &params, id))
     }
 
-    /// The method dispatch — same members `hh-mcp` answers, the lab
+    /// The method dispatch — same members `hharness-mcp` answers, the lab
     /// `tools/call` goes through the surface-session chain.
     fn dispatch(&mut self, binding: &CallerBinding, method: &str, params: &Json, id: Json) -> Json {
         // A binding that stopped being live loses its subscriptions
@@ -691,7 +693,7 @@ pub fn serve_stdio(
         if trimmed.is_empty() {
             continue;
         }
-        let msg = match hh_wire::json::parse(trimmed) {
+        let msg = match hharness_wire::json::parse(trimmed) {
             Ok(m) => m,
             Err(_) => {
                 let frame = error_frame(Json::Null, -32700, "parse_error");

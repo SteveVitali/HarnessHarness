@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::{AssemblyDiagnostic, OpacitySummary, ValidationReport};
-use hh_wire::json::Json;
+use hharness_assembly::{AssemblyDiagnostic, OpacitySummary, ValidationReport};
+use hharness_wire::json::Json;
 
 use crate::equiv::{self, EquivalenceEvidence};
 use crate::errors::CompileError;
@@ -233,7 +233,7 @@ pub fn seal_outputs(
             ),
         ),
     ]);
-    let derivation_key = hh_identity::idp_id(
+    let derivation_key = hharness_identity::idp_id(
         "compiler.derivation",
         derivation_inputs.to_canonical_string().as_bytes(),
     );
@@ -272,7 +272,7 @@ pub fn seal_outputs(
     // `SealError{non_canonical}` — the bundle must re-encode to the hashed bytes:
     // encode → parse → recompute identity must reproduce `bundle_id`.
     let encoded = crate::schema::bundle_to_json(&bundle).to_canonical_string();
-    let parsed = hh_wire::canonical::parse_canonical(encoded.as_bytes()).map_err(|e| {
+    let parsed = hharness_wire::canonical::parse_canonical(encoded.as_bytes()).map_err(|e| {
         CompileError::SealError {
             detail: format!("bundle does not re-parse: {e}"),
         }
@@ -296,5 +296,5 @@ pub fn bundle_identity(bundle: &CompiledBundle) -> String {
     if let Json::Obj(m) = &mut b {
         m.remove("bundle_id");
     }
-    hh_identity::idp_id("compiler.bundle", b.to_canonical_string().as_bytes())
+    hharness_identity::idp_id("compiler.bundle", b.to_canonical_string().as_bytes())
 }

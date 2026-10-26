@@ -19,9 +19,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use hh_mcp::client::{ClientError, McpClient, StdioTransport, ToolOutcome};
-use hh_mcp::protocol::{Era, PINNED_LEGACY, PINNED_MODERN};
-use hh_wire::json::Json;
+use hharness_mcp::client::{ClientError, McpClient, StdioTransport, ToolOutcome};
+use hharness_mcp::protocol::{Era, PINNED_LEGACY, PINNED_MODERN};
+use hharness_wire::json::Json;
 
 fn tmpdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("hh-mcp-s39-{tag}-{}", std::process::id()));
@@ -33,7 +33,10 @@ fn tmpdir(tag: &str) -> PathBuf {
 /// A `hh-mcp-target/1` member — `tools` verbatim + `ttl_ms`.
 fn target_doc(tools: Vec<Json>, ttl_ms: i64) -> Json {
     Json::obj([
-        ("schema", Json::str(hh_mcp::artifact::MCP_TARGET_SCHEMA)),
+        (
+            "schema",
+            Json::str(hharness_mcp::artifact::MCP_TARGET_SCHEMA),
+        ),
         ("target", Json::str("mcp")),
         ("ttl_ms", Json::Int(ttl_ms)),
         ("tools", Json::Arr(tools)),
@@ -61,7 +64,7 @@ fn tool(name: &str, desc: &str, meta: Json) -> Json {
 /// Write a fixture bundle dir for `tools`; return its version_id.
 fn write_bundle(dir: &Path, tools: Vec<Json>, ttl_ms: i64) {
     let member = target_doc(tools, ttl_ms).to_canonical_string().into_bytes();
-    let addr = hh_identity::idp_id("blob", &member);
+    let addr = hharness_identity::idp_id("blob", &member);
     let doc = Json::obj([
         ("schema", Json::str("hh-bundle/1")),
         ("idp", Json::str("idp/1")),
@@ -120,11 +123,11 @@ fn write_bundle(dir: &Path, tools: Vec<Json>, ttl_ms: i64) {
         ("ext", Json::obj([])),
         ("version_id", Json::str("pending")),
     ]);
-    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    let mut manifest = hharness_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
     manifest.version_id = manifest.compute_id();
-    let mut members = hh_bundle::export::MemberBytes::new();
+    let mut members = hharness_bundle::export::MemberBytes::new();
     members.insert(addr, member);
-    hh_bundle::codec::encode_dir(dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(dir, &manifest, &members).unwrap();
 }
 
 /// Connect a real client to a spawned server (`--legacy` toggles the
@@ -149,7 +152,7 @@ fn ac_e4_2_byte_identical_listing_with_freshness_meta() {
                 "beta",
                 "second",
                 Json::obj([(
-                    hh_mcp::artifact::HH_META_KEY,
+                    hharness_mcp::artifact::HH_META_KEY,
                     Json::obj([
                         ("semantic_id", Json::str("cap.beta")),
                         ("effects", Json::Arr(vec![Json::str("fs_read")])),
@@ -160,7 +163,7 @@ fn ac_e4_2_byte_identical_listing_with_freshness_meta() {
                 "alpha",
                 "first",
                 Json::obj([(
-                    hh_mcp::artifact::HH_META_KEY,
+                    hharness_mcp::artifact::HH_META_KEY,
                     Json::obj([("semantic_id", Json::str("cap.alpha"))]),
                 )]),
             ),
@@ -184,7 +187,7 @@ fn ac_e4_2_byte_identical_listing_with_freshness_meta() {
     // The minimum carried set rides in `_meta` — `effects` included.
     let hir = la.tools[0]
         .get("_meta")
-        .and_then(|m| m.get(hh_mcp::artifact::HH_META_KEY))
+        .and_then(|m| m.get(hharness_mcp::artifact::HH_META_KEY))
         .expect("hir meta");
     assert_eq!(
         hir.get("semantic_id").and_then(Json::as_str),
@@ -290,7 +293,7 @@ fn ac_e4_4_dual_era_probe_first() {
 /// reports only `1999-01-01`).
 #[test]
 fn ac_e4_4_unpinned_version_refuses_typed() {
-    use hh_mcp::client::Transport;
+    use hharness_mcp::client::Transport;
     use std::collections::VecDeque;
     struct S(VecDeque<String>);
     impl Transport for S {
@@ -360,7 +363,7 @@ fn ac_e4_12_input_required_pause_and_resume() {
             "ask",
             "needs input",
             Json::obj([(
-                hh_mcp::artifact::INPUT_REQUIRED_META_KEY,
+                hharness_mcp::artifact::INPUT_REQUIRED_META_KEY,
                 Json::obj([(
                     "inputRequests",
                     Json::Arr(vec![Json::obj([("question", Json::str("which file?"))])]),
@@ -409,12 +412,15 @@ fn ac_e4_12_input_required_pause_and_resume() {
 // contract to a protocol schema; only `lower_target`, `lift`, `negotiate`,
 // `render_session` and transports import them." The compile-time form of
 // that rule is the dependency graph: the record/contract crates never name
-// the protocol crate (`hh-mcp`) as a dependency — a wire schema stays data,
-// read by the boundary (`hh-embed` ops → `registry::import`, `hh-cli`'s
+// the protocol crate (`hharness-mcp`) as a dependency — a wire schema stays data,
+// read by the boundary (`hharness-embed` ops → `registry::import`, `hharness-cli`'s
 // serve wiring), never by a semantic record.
 #[test]
 fn ac_e4_8_no_spec_edge_to_protocol_schema() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    // PROTECTED spells crate *directories* (`crates/hh-*` stay — ADR-0379 D4);
+    // PROTOCOL spells the *dependency key* a manifest would list (post-L4.4
+    // package names are `hharness-*`).
     const PROTECTED: &[&str] = &[
         // HIR entities, ledger event classes, component-class contracts and
         // their foundations — none may edge to a protocol-schema crate.
@@ -430,7 +436,7 @@ fn ac_e4_8_no_spec_edge_to_protocol_schema() {
         "hh-secrets",
         "hh-registry",
     ];
-    const PROTOCOL: &[&str] = &["hh-mcp"];
+    const PROTOCOL: &[&str] = &["hharness-mcp"];
     for krate in PROTECTED {
         let manifest = root.join("crates").join(krate).join("Cargo.toml");
         let text = std::fs::read_to_string(&manifest)

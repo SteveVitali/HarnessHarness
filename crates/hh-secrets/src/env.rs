@@ -14,8 +14,8 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_monitor::assess::SecretTransport;
-use hh_wire::json::Json;
+use hharness_monitor::assess::SecretTransport;
+use hharness_wire::json::Json;
 
 use crate::errors::{BrokerError, Refused, RefusedCode};
 use crate::redact::detect;

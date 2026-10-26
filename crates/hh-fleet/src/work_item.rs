@@ -2,8 +2,8 @@
 //! fixture occurrences carry) and `WorkItemView` (the fold's synthesized
 //! state — §5i.1 #3's field set verbatim).
 
-use hh_embed_schema::types::NarrowingLeaf;
-use hh_wire::json::Json;
+use hharness_embed_schema::types::NarrowingLeaf;
+use hharness_wire::json::Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::errors::FleetError;
@@ -494,7 +494,7 @@ impl WorkItemInit {
     }
 
     /// The canonical wire form (the inverse of [`WorkItemInit::from_json`]
-    /// — the `hh-fleet-adapter` plugin lane carries items across the
+    /// — the `hharness-fleet-adapter` plugin lane carries items across the
     /// process boundary as records).
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();

@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// The ABI version the Lab speaks.
 pub const ABI_VERSION: &str = "hh-hosting/1";

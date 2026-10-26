@@ -1,7 +1,7 @@
 //! R2.5 / DF-S2.8-1(f) — the OOP differential conformance corpus.
 //!
 //! The packaged `compaction_strategy` variant `hh-compact-evict-oldest`
-//! and the kernel's own `evict_oldest` rung (`hh_context::compact::
+//! and the kernel's own `evict_oldest` rung (`hharness_context::compact::
 //! evict_oldest_propose`) are two spellings of one strategy — evict the
 //! oldest items until the view fits. This battery runs *both* over the
 //! same corpus — the committed `benchset.stage3.v1` tasks, each task's
@@ -33,24 +33,26 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_bench::benchset::Benchset;
-use hh_compact_evict_oldest::compact;
-use hh_context::compact::{Assessment, CompactInput, CompactionOp, CompactionTrigger, Requirement};
-use hh_context::plan::{
+use hharness_bench::benchset::Benchset;
+use hharness_compact_evict_oldest::compact;
+use hharness_context::compact::{
+    Assessment, CompactInput, CompactionOp, CompactionTrigger, Requirement,
+};
+use hharness_context::plan::{
     Candidate, ContextPlan, CutPoint, DerivedFrom, Estimate, PlannedItem, SlotFill,
 };
-use hh_context::vocab::{CandidateKind, CandidateState, PriorityClass, Retention};
-use hh_hir::records::Validity;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::label::Label;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_context::vocab::{CandidateKind, CandidateState, PriorityClass, Retention};
+use hharness_hir::records::Validity;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::label::Label;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 /// The kernel's per-contiguous-range omission reservation — the band
-/// boundary (`hh_context::compact::OMISSION_ITEM_TOKENS`, spelled here so
+/// boundary (`hharness_context::compact::OMISSION_ITEM_TOKENS`, spelled here so
 /// a kernel change that moves it fails this battery loudly rather than
 /// silently shifting the corpus's n/a class).
-const OMISSION_TOKENS: u64 = hh_context::compact::OMISSION_ITEM_TOKENS;
+const OMISSION_TOKENS: u64 = hharness_context::compact::OMISSION_ITEM_TOKENS;
 
 /// One projected corpus member: the wire `context_view` plus the
 /// kernel-side plan it maps to.
@@ -67,7 +69,7 @@ struct Member {
 
 /// Deterministic 4-bytes/token estimator over the recorded call's
 /// canonical form — declared, never measured from a live tokenizer.
-fn call_tokens(call: &hh_bench::benchset::RecordedCall) -> u64 {
+fn call_tokens(call: &hharness_bench::benchset::RecordedCall) -> u64 {
     let doc = Json::obj([
         ("surface", Json::str(&call.surface)),
         ("args", call.args.clone()),
@@ -205,7 +207,7 @@ fn kernel_verdict(m: &Member, target_reclaim: u64) -> BTreeSet<i64> {
         trigger: CompactionTrigger::RequestPrincipal,
         needed: 0,
         target_fraction_ppm: 1_000_000,
-        scope: hh_provenance::PersistenceScope::Run,
+        scope: hharness_provenance::PersistenceScope::Run,
         at: 0,
         run_id: "corpus".into(),
         summarizer: None,
@@ -222,7 +224,7 @@ fn kernel_verdict(m: &Member, target_reclaim: u64) -> BTreeSet<i64> {
         target_reclaim,
         min_reclaim: target_reclaim,
     };
-    let proposal = hh_context::compact::evict_oldest_propose(&input, &assessment)
+    let proposal = hharness_context::compact::evict_oldest_propose(&input, &assessment)
         .expect("kernel evict_oldest_propose");
     let mut seqs = BTreeSet::new();
     for op in &proposal.ops {

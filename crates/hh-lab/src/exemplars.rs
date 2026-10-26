@@ -1,4 +1,4 @@
-//! `hh-lab` exemplars — the two canonical `ExperimentSpec` documents
+//! `hharness-lab` exemplars — the two canonical `ExperimentSpec` documents
 //! (ADR-0156 D1/D2; spec §6.3 §2.5 "the registered recipe catalogue";
 //! S3.4a): `lab/compaction-family-v1` and `lab/control-strategy-family-v1`
 //! instantiated at their Stage-3 sizes.
@@ -18,18 +18,18 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::{CachePolicy, MatchSpec, ModelScope};
-use hh_budget::pricing::PricingTableRef;
-use hh_budget::MatchMode;
-use hh_ontology::config::Ref;
-use hh_ontology::eval::{
+use hharness_budget::matchspec::{CachePolicy, MatchSpec, ModelScope};
+use hharness_budget::pricing::PricingTableRef;
+use hharness_budget::MatchMode;
+use hharness_ontology::config::Ref;
+use hharness_ontology::eval::{
     Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, RoutingPolicy,
     SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::{Granularity, ParticipantClass};
-use hh_ontology::FactorKind;
-use hh_wire::Json;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::{Granularity, ParticipantClass};
+use hharness_ontology::FactorKind;
+use hharness_wire::Json;
 
 use crate::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
@@ -207,7 +207,7 @@ pub struct CompactionFamilyPins {
 /// `{uncached, cache_read, cache_write}`, output = `{visible, reasoning}`;
 /// equal constituents imply equal totals.
 fn compaction_match() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -844,7 +844,7 @@ pub struct ControlStrategyFamilyPins {
 /// The matched dims of the `matched_cap` group: `{model_calls,
 /// tokens.output.visible, time.wall_ms}` (ADR-0156 D2).
 fn control_matched_cap() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![ModelCalls, TokensOutputVisible, TimeWallMs],
         mode: MatchMode::MatchedCap,
@@ -1064,7 +1064,7 @@ pub struct ContextBuilderPins {
 }
 
 fn context_builder_match() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -2246,7 +2246,7 @@ pub struct DelegationPins {
 /// `time.wall_ms`) is a second `MatchSpec` on the same arms — a
 /// cross-mode `compare` is `IncommensurableMatch`.
 fn delegation_match(pricing: &PricingTableRef) -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -2352,7 +2352,7 @@ pub fn delegation_v1(
     // an occupied point is its own comparand group (ADR-0156 D2); a
     // cross-mode `compare` is `IncommensurableMatch`.
     let wall_cap = MatchSpec {
-        dimensions: vec![hh_ontology::dimensions::DimensionId::TimeWallMs],
+        dimensions: vec![hharness_ontology::dimensions::DimensionId::TimeWallMs],
         mode: MatchMode::MatchedCap,
         ..delegation_match(&own.pricing_table_ref)
     };
@@ -2533,7 +2533,7 @@ pub struct ValueOfComputePins {
 /// `{model_calls, tokens.output.visible, time.wall_ms, spend}`
 /// (ADR-0190 D2) with `budget_utilization` reported.
 fn value_of_compute_match(pricing: &PricingTableRef) -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![ModelCalls, TokensOutputVisible, TimeWallMs, Spend],
         mode: MatchMode::MatchedCap,
@@ -2654,7 +2654,7 @@ pub fn value_of_compute_v1(
             ("environment", "coding-suite"),
         ],
         MatchSpec {
-            dimensions: vec![hh_ontology::dimensions::DimensionId::Spend],
+            dimensions: vec![hharness_ontology::dimensions::DimensionId::Spend],
             mode: MatchMode::IsoCost,
             tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
             pricing_table_ref: Some(own.pricing_table_ref.clone()),
@@ -2677,7 +2677,7 @@ pub fn value_of_compute_v1(
     // so the group pins one eval budget (tight) and varies the recipe's
     // suite axis — equal totals by construction.
     let matched_total = {
-        use hh_ontology::dimensions::DimensionId::*;
+        use hharness_ontology::dimensions::DimensionId::*;
         MatchSpec {
             dimensions: vec![
                 TokensInputUncached,
@@ -2887,7 +2887,7 @@ pub struct CoordinationTopologyPins {
 /// `lab/coordination-topology-v1`'s `MatchSpec{matched_total}` — child
 /// spend is `charged_to = subject` (AC-R-2.6.5-7; ADR-0041 M3).
 fn coordination_match(pricing: &PricingTableRef) -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -3165,7 +3165,7 @@ pub struct ExtensionTrustPins {
 /// + `approvals.requested` (Π-denials are a matched cost, never a dropped
 ///   member — AC-R-2.8.5-9).
 fn extension_trust_match() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -3418,7 +3418,7 @@ pub struct ApprovalModePins {
 /// dimension* (AC-R-2.8.7-13): arms that can't match on the ask count
 /// refuse at `register` (`validate_match`), never warn.
 fn approval_mode_match() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,
@@ -3470,20 +3470,26 @@ pub fn approval_mode_v1(
     // are *named* on the document (the debt is the record, never a silent
     // omission).
     let mut ext = BTreeMap::new();
-    let debt: Vec<hh_wire::json::Json> = own
+    let debt: Vec<hharness_wire::json::Json> = own
         .reviewer_levels
         .iter()
         .filter(|r| r.calibration_ref.is_none())
         .map(|r| {
-            hh_wire::json::Json::obj([
-                ("reviewer", hh_wire::json::Json::str(r.level_id.clone())),
-                ("debt", hh_wire::json::Json::str("calibration_ref absent")),
+            hharness_wire::json::Json::obj([
+                (
+                    "reviewer",
+                    hharness_wire::json::Json::str(r.level_id.clone()),
+                ),
+                (
+                    "debt",
+                    hharness_wire::json::Json::str("calibration_ref absent"),
+                ),
             ])
         })
         .collect();
     ext.insert(
         "calibration_debt".to_string(),
-        hh_wire::json::Json::Arr(debt),
+        hharness_wire::json::Json::Arr(debt),
     );
     let mode_levels: &[(&str, &str, &Ref)] = &[
         ("sync", &own.approval_mode_refs.0, &own.artifacts.0),
@@ -3719,9 +3725,12 @@ pub fn compaction_boundary_v1(
     // `boundary_turns = 5` is the companion's continuation length.
     ext.insert(
         "environment_derivation".to_string(),
-        hh_wire::json::Json::str("fork_snapshot"),
+        hharness_wire::json::Json::str("fork_snapshot"),
     );
-    ext.insert("boundary_turns".to_string(), hh_wire::json::Json::Int(5));
+    ext.insert(
+        "boundary_turns".to_string(),
+        hharness_wire::json::Json::Int(5),
+    );
     // The optional C1 judged-fidelity row the companion may emit
     // (`grounding.summary_fidelity_judged` — `detector = judged`,
     // `charged_to = instrument`, never headline; a hosted row reads
@@ -3729,7 +3738,7 @@ pub fn compaction_boundary_v1(
     // metric (the prereg's list is headline-only).
     ext.insert(
         "optional_metrics".to_string(),
-        hh_wire::json::Json::Arr(vec![hh_wire::json::Json::str(
+        hharness_wire::json::Json::Arr(vec![hharness_wire::json::Json::str(
             "grounding.summary_fidelity_judged",
         )]),
     );
@@ -3863,16 +3872,18 @@ pub fn compaction_boundary_v1(
 /// {kind: judge}` declaration, not this record's members. `applies_to`
 /// `native` only — a hosted row renders `n/a{class}` (ADR-0075 d9;
 /// T-LCD-15).
-pub fn summary_fidelity_judged() -> hh_ontology::compliance::MetricDeclaration {
-    use hh_ontology::compliance::{Detector, MetricDeclaration};
-    use hh_ontology::eval::{ChargedTo, Dimension, MetricLevel, MetricValueType, OracleClass};
-    use hh_ontology::participant::{Granularity, Observability};
+pub fn summary_fidelity_judged() -> hharness_ontology::compliance::MetricDeclaration {
+    use hharness_ontology::compliance::{Detector, MetricDeclaration};
+    use hharness_ontology::eval::{
+        ChargedTo, Dimension, MetricLevel, MetricValueType, OracleClass,
+    };
+    use hharness_ontology::participant::{Granularity, Observability};
     MetricDeclaration {
         name: "grounding.summary_fidelity_judged".to_string(),
         dimension: Dimension::Grounding,
         level: MetricLevel::Run,
         value_type: MetricValueType::Decimal,
-        direction: hh_ontology::eval::Direction::Higher,
+        direction: hharness_ontology::eval::Direction::Higher,
         unit: "ppm".to_string(),
         requires_observability: [Observability::ModelIo, Observability::Ledger]
             .into_iter()
@@ -3915,7 +3926,7 @@ pub struct InterventionsPins {
 /// notice tokens, `evaluator_calls` the validator-run cost,
 /// `reconciliation_holds` the hold spend, `time.wall_ms` the wall cost.
 fn interventions_match() -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             ModelCalls,
@@ -3946,7 +3957,7 @@ fn interventions_match() -> MatchSpec {
 /// Primaries `{task_success, false_completion_rate, gate_hold_count,
 /// reconciliation_cost}`; the interaction term
 /// `interventions:model_snapshot` is the H-G2-1 contrast
-/// `hh_eval::interventions::interventions_experiment` computes. Every Γ
+/// `hharness_eval::interventions::interventions_experiment` computes. Every Γ
 /// row and probe rule's `removal_test` points at
 /// `interventions_experiment:{subject}` (T-LCD-05/CC9).
 ///
@@ -4120,7 +4131,7 @@ pub fn interventions_v1(
 /// `requires_match` enforcement, and `spend` matching needs the pinned
 /// pricing table).
 pub fn org_policy_match(pricing: &PricingTableRef) -> MatchSpec {
-    use hh_ontology::dimensions::DimensionId::*;
+    use hharness_ontology::dimensions::DimensionId::*;
     MatchSpec {
         dimensions: vec![
             TokensInputUncached,

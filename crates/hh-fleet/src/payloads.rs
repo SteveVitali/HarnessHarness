@@ -1,7 +1,7 @@
 //! The `control.work_item.*` / `lifecycle.fleet.activated` /
 //! `lifecycle.escalation.*` / `context.observation.recorded` payload
 //! builders + decoders — the Rule-C contract. Every member here is named
-//! in `hh-ledger`'s declared partition for the class (an unknown member is
+//! in `hharness-ledger`'s declared partition for the class (an unknown member is
 //! a schema error at append, so the builders and the partition table move
 //! together — CC7).
 //!
@@ -15,8 +15,8 @@
 //!   next_attempt_at_ms, spec_ref}`);
 //! - `source_conflict` — RC-3's conflict record.
 
-use hh_ledger::event::EventEnvelope;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::FleetError;

@@ -8,15 +8,15 @@
 
 use std::collections::BTreeSet;
 
-use hh_context::{
+use hharness_context::{
     cosine_similarity_ppm, k6_dependencies, K6Cache, K6Entry, K6Refusal, K6Request, K6Resolution,
     K6Scope, K6Verifier, K6Write, PPM,
 };
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, ReaderSet};
-use hh_wire::json::Json;
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, ReaderSet};
+use hharness_wire::json::Json;
 
-fn deps() -> Vec<hh_context::DependencyStamp> {
+fn deps() -> Vec<hharness_context::DependencyStamp> {
     k6_dependencies("snap-1", "snaprec-1", "prof@1", "pv-1", "def-v1")
 }
 

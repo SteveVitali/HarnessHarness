@@ -8,16 +8,16 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::codec::Decoded;
-use hh_bundle::export::{export_target, PublicationPolicy};
-use hh_bundle::manifest::BundlePolicy;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::codec::Decoded;
+use hharness_bundle::export::{export_target, PublicationPolicy};
+use hharness_bundle::manifest::BundlePolicy;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -69,7 +69,7 @@ fn hosted_rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     m.participant_class = ParticipantClass::Hosted;
@@ -205,7 +205,7 @@ fn hosted_bundle_names_adapter_descriptor_and_native_records() {
         .members
         .get(&member.address)
         .expect("the member's bytes ship");
-    let doc = hh_wire::json::parse(&String::from_utf8(bytes.clone()).unwrap()).unwrap();
+    let doc = hharness_wire::json::parse(&String::from_utf8(bytes.clone()).unwrap()).unwrap();
     match doc.get("records") {
         Some(Json::Arr(recs)) => {
             assert_eq!(recs.len(), 2);

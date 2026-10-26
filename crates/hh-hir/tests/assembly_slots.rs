@@ -8,12 +8,12 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::*;
-use hh_hir::diff::{diff, DiffDerivation, DiffOp};
-use hh_hir::document::{parse_document, HirDocument};
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, RefVersion};
-use hh_hir::seal;
-use hh_wire::json::Json;
+use hharness_hir::diff::{diff, DiffDerivation, DiffOp};
+use hharness_hir::document::{parse_document, HirDocument};
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, RefVersion};
+use hharness_hir::seal;
+use hharness_wire::json::Json;
 
 fn root_binding_mut<'a>(doc: &'a mut HirDocument, slot: &str) -> &'a mut SlotBinding {
     let agent = doc.nodes.len() - 1;
@@ -29,10 +29,10 @@ fn root_binding_mut<'a>(doc: &'a mut HirDocument, slot: &str) -> &'a mut SlotBin
     }
 }
 
-fn human_prov() -> hh_provenance::ProvenanceRecord {
-    hh_provenance::ProvenanceRecord::minted(
-        hh_provenance::Origin::human("test:author", hh_provenance::HumanRole::Author),
-        hh_provenance::PersistenceScope::Definition,
+fn human_prov() -> hharness_provenance::ProvenanceRecord {
+    hharness_provenance::ProvenanceRecord::minted(
+        hharness_provenance::Origin::human("test:author", hharness_provenance::HumanRole::Author),
+        hharness_provenance::PersistenceScope::Definition,
         9,
     )
 }
@@ -88,8 +88,8 @@ fn variant_pin_is_version_only_but_name_params_and_enabled_are_semantic() {
     // changes version_id only (refs-by-semantic_id). Computed ids are asserted (the fixture
     // authors `test:` sids).
     let base = valid_doc();
-    let sem = |d: &HirDocument| hh_hir::identity::semantic_id(d.nodes.last().unwrap());
-    let ver = |d: &HirDocument| hh_hir::identity::version_id(d.nodes.last().unwrap());
+    let sem = |d: &HirDocument| hharness_hir::identity::semantic_id(d.nodes.last().unwrap());
+    let ver = |d: &HirDocument| hharness_hir::identity::version_id(d.nodes.last().unwrap());
     let (sem0, ver0) = (sem(&base), ver(&base));
 
     let mut repinned = base.clone();
@@ -118,7 +118,7 @@ fn variant_pin_is_version_only_but_name_params_and_enabled_are_semantic() {
 
 /// The semantic ops of a diff — everything but provenance/version-record members and the
 /// version-only re-pins sealing derives (`classification.semantic_ops` counts these).
-fn semantic_ops(d: &hh_hir::HirDiff) -> Vec<&DiffOp> {
+fn semantic_ops(d: &hharness_hir::HirDiff) -> Vec<&DiffOp> {
     d.ops
         .iter()
         .filter(|op| match op {
@@ -159,7 +159,7 @@ fn ablation_is_one_replace_field_and_a_variant_swap_is_one_rebind() {
     assert!(matches!(sem[0], DiffOp::ReplaceField { path, old, new, .. }
         if path.ends_with("slots.context_policy.one.enabled") && *old == Json::Bool(true) && *new == Json::Bool(false)));
     assert_eq!(
-        hh_hir::apply(&base, &d).unwrap().canonical_bytes(),
+        hharness_hir::apply(&base, &d).unwrap().canonical_bytes(),
         ablated.canonical_bytes()
     );
 
@@ -174,7 +174,7 @@ fn ablation_is_one_replace_field_and_a_variant_swap_is_one_rebind() {
     assert!(matches!(sem[0], DiffOp::Rebind { path, .. }
         if path.ends_with("slots.context_policy.one.variant")));
     assert_eq!(
-        hh_hir::apply(&base, &d).unwrap().canonical_bytes(),
+        hharness_hir::apply(&base, &d).unwrap().canonical_bytes(),
         swapped.canonical_bytes()
     );
 
@@ -212,12 +212,12 @@ fn assembly_section_diffs_at_leaf_granularity() {
     assert!(matches!(&d.ops[0], DiffOp::ReplaceField { id, path, .. }
         if id == "$doc" && path == "assembly.values.k"));
     assert_eq!(
-        hh_hir::apply(&a, &d).unwrap().canonical_bytes(),
+        hharness_hir::apply(&a, &d).unwrap().canonical_bytes(),
         b.canonical_bytes()
     );
-    let inv = hh_hir::invert(&d);
+    let inv = hharness_hir::invert(&d);
     assert_eq!(
-        hh_hir::apply(&b, &inv).unwrap().canonical_bytes(),
+        hharness_hir::apply(&b, &inv).unwrap().canonical_bytes(),
         a.canonical_bytes()
     );
 }

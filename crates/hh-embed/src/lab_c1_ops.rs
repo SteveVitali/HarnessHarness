@@ -23,19 +23,19 @@
 
 use std::collections::BTreeSet;
 
-use hh_experiment::docs::kind as doc_kind;
-use hh_lab::analysis::AnalysisRecord;
-use hh_results::journal::{JournalFilter, JournalKind};
-use hh_results::leaderboard::LeaderboardDefinition;
-use hh_results::query::QuerySpec;
-use hh_results::store::ResultsStore;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::json::Json;
+use hharness_experiment::docs::kind as doc_kind;
+use hharness_lab::analysis::AnalysisRecord;
+use hharness_results::journal::{JournalFilter, JournalKind};
+use hharness_results::leaderboard::LeaderboardDefinition;
+use hharness_results::query::QuerySpec;
+use hharness_results::store::ResultsStore;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::json::Json;
 
 use crate::eval_ops::{bad, opt_str, req, req_str};
 use crate::experiment_ops::{engine_for, park, xerr, Bag};
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 fn refused(e: impl std::fmt::Display) -> EmbedError {
     EmbedError::Refused {
@@ -74,10 +74,10 @@ fn definition_of(
 }
 
 /// `VerifyVerdict` → wire form.
-fn verdict_json(v: &hh_results::store::VerifyVerdict) -> Json {
+fn verdict_json(v: &hharness_results::store::VerifyVerdict) -> Json {
     match v {
-        hh_results::store::VerifyVerdict::Ok => Json::obj([("verdict", Json::str("ok"))]),
-        hh_results::store::VerifyVerdict::Mismatch { recomputed } => Json::obj([
+        hharness_results::store::VerifyVerdict::Ok => Json::obj([("verdict", Json::str("ok"))]),
+        hharness_results::store::VerifyVerdict::Mismatch { recomputed } => Json::obj([
             ("verdict", Json::str("mismatch")),
             ("recomputed", Json::str(recomputed)),
         ]),
@@ -95,7 +95,7 @@ impl EmbedService {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let mut eng =
-            hh_experiment::engine::ExperimentEngine::new(&mut self.store, docs, bag.ctx());
+            hharness_experiment::engine::ExperimentEngine::new(&mut self.store, docs, bag.ctx());
         let run_id = eng.open_experiment(&eid).map_err(xerr)?;
         park(&mut self.experiment_engines, eng);
         Ok(Json::obj([
@@ -246,7 +246,7 @@ impl EmbedService {
         let body = self.report_body(params, "body")?;
         let view = req_str(params, "view")?;
         let options = params.get("options").cloned().unwrap_or(Json::Null);
-        hh_analysis::ops::render(&body, view, &options).map_err(refused)
+        hharness_analysis::ops::render(&body, view, &options).map_err(refused)
     }
 
     /// `lab.analysis.diff_reports{a, b}` — the report-diff view; `a`/`b`
@@ -262,7 +262,7 @@ impl EmbedService {
         } else {
             self.report_body(params, "b")?
         };
-        Ok(hh_analysis::ops::diff_reports(&a, &b))
+        Ok(hharness_analysis::ops::diff_reports(&a, &b))
     }
 
     /// `lab.analysis.power{spec, rows[], …}` — the A13 surface: `analyze`
@@ -473,7 +473,7 @@ impl EmbedService {
         &mut self,
         params: &Json,
     ) -> Result<Json, EmbedError> {
-        let aref = hh_results::audit::AuditRef::from_json(req(params, "audit_ref")?)
+        let aref = hharness_results::audit::AuditRef::from_json(req(params, "audit_ref")?)
             .ok_or_else(|| bad("/audit_ref", "decode failed"))?;
         let v = results(self)?.verify_citation(&self.store, &aref);
         Ok(Json::obj([("verdict", Json::str(v.as_str()))]))
@@ -484,7 +484,7 @@ impl EmbedService {
     /// run; foreign targets carry the `LoweringLossReport`.
     pub(crate) fn lab_results_export_rows(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let target = req_str(params, "target").and_then(|s| {
-            hh_results::export::ExportTarget::parse(s)
+            hharness_results::export::ExportTarget::parse(s)
                 .ok_or_else(|| bad("/target", &format!("unknown export target {s}")))
         })?;
         let r = results(self)?;

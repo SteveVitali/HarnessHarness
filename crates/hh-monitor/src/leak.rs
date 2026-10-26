@@ -14,7 +14,7 @@
 //! authority — the monitor's inputs never include it (AC-2); these checks are
 //! the outgoing/static boundary.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `HandleLeak` — a `hnd-` spelling was found where none may appear.
 #[derive(Debug, Clone, PartialEq)]

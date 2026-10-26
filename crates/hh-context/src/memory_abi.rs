@@ -23,16 +23,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::Validity;
-use hh_identity::kinds::RecordKind;
-use hh_identity::names::ResolveMode;
-use hh_identity::refs::{Name, NameSelector, VersionedRef};
-use hh_identity::supersede::{RevocationRecord, SupersedeReason, SupersedesEdge};
-use hh_ledger::manifest::EventRef;
-use hh_provenance::label::Label;
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::Validity;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::names::ResolveMode;
+use hharness_identity::refs::{Name, NameSelector, VersionedRef};
+use hharness_identity::supersede::{RevocationRecord, SupersedeReason, SupersedesEdge};
+use hharness_ledger::manifest::EventRef;
+use hharness_provenance::label::Label;
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::codec::{
     arr_at, bool_at, expect_obj, int_at, label_json, reject_unknown, str_at, validity_json,
@@ -472,7 +472,7 @@ fn vref_from_json(j: &Json) -> Result<VersionedRef, CodecError> {
         resolved_from,
         supersedes: opt_str(m, "supersedes")?,
         provenance,
-        idp: hh_identity::idp::IDP_1.idp_id,
+        idp: hharness_identity::idp::IDP_1.idp_id,
     })
 }
 
@@ -1438,13 +1438,13 @@ pub fn wrap_output(doc: &Json) -> Json {
 }
 
 /// `wrap_output`'s mirror — after the host's V1 stamp is removed
-/// (`hh_varhost::lower::unstamp_json`), a conforming output is exactly
+/// (`hharness_varhost::lower::unstamp_json`), a conforming output is exactly
 /// `{result: "<canonical-json>"}`; anything else is an ABI fault.
 pub fn unwrap_output(j: &Json) -> Result<Json, ChannelFault> {
     let m = expect_obj(j, "memory_store.output").map_err(ChannelFault::Decode)?;
     reject_unknown(m, &["result"], "memory_store.output").map_err(ChannelFault::Decode)?;
     let s = str_at(m, "result", "memory_store.output").map_err(ChannelFault::Decode)?;
-    hh_wire::json::parse(s).map_err(|_| {
+    hharness_wire::json::parse(s).map_err(|_| {
         ChannelFault::Decode(CodecError::TypeMismatch {
             member: "result".to_string(),
             expected: "a canonical JSON document",
@@ -1563,18 +1563,17 @@ impl<C: StoreChannel> RemoteStore<C> {
 fn label_from_json(j: &Json) -> Result<Label, CodecError> {
     let m = expect_obj(j, "label")?;
     reject_unknown(m, &["authority", "taint", "readers"], "label")?;
-    let authority = hh_provenance::AuthorityClass::parse(str_at(m, "authority", "label")?).ok_or(
-        CodecError::TypeMismatch {
+    let authority = hharness_provenance::AuthorityClass::parse(str_at(m, "authority", "label")?)
+        .ok_or(CodecError::TypeMismatch {
             member: "authority".to_string(),
             expected: "an AuthorityClass spelling",
-        },
-    )?;
+        })?;
     let mut taint = std::collections::BTreeSet::new();
     if let Some(Json::Arr(items)) = m.get("taint") {
         for t in items {
             match t {
                 Json::Str(s) => {
-                    taint.insert(hh_provenance::authority::TaintTag::parse(s).ok_or(
+                    taint.insert(hharness_provenance::authority::TaintTag::parse(s).ok_or(
                         CodecError::TypeMismatch {
                             member: "taint[]".to_string(),
                             expected: "a TaintTag spelling",
@@ -1591,7 +1590,7 @@ fn label_from_json(j: &Json) -> Result<Label, CodecError> {
         }
     }
     let readers = match m.get("readers") {
-        Some(Json::Str(s)) if s == "public" => hh_provenance::authority::ReaderSet::Public,
+        Some(Json::Str(s)) if s == "public" => hharness_provenance::authority::ReaderSet::Public,
         Some(Json::Obj(rm)) => {
             reject_unknown(rm, &["restricted"], "label.readers")?;
             let mut rs = std::collections::BTreeSet::new();
@@ -1608,7 +1607,7 @@ fn label_from_json(j: &Json) -> Result<Label, CodecError> {
                     }
                 }
             }
-            hh_provenance::authority::ReaderSet::Restricted(rs)
+            hharness_provenance::authority::ReaderSet::Restricted(rs)
         }
         Some(_) => {
             return Err(CodecError::TypeMismatch {
@@ -1616,7 +1615,7 @@ fn label_from_json(j: &Json) -> Result<Label, CodecError> {
                 expected: "public | {restricted: [participants]}",
             })
         }
-        None => hh_provenance::authority::ReaderSet::Public,
+        None => hharness_provenance::authority::ReaderSet::Public,
     };
     Ok(Label {
         authority,
@@ -2658,8 +2657,8 @@ impl<C: StoreChannel> MemoryStorePort for RemoteStore<C> {
 pub mod conformance {
     use super::*;
     use crate::memory::MemoryStore;
-    use hh_provenance::label::Label;
-    use hh_provenance::origin::Origin;
+    use hharness_provenance::label::Label;
+    use hharness_provenance::origin::Origin;
 
     fn battery_draft(content: &str) -> MemoryDraft {
         MemoryDraft {
@@ -2736,7 +2735,7 @@ pub mod conformance {
             .unwrap();
         assert!(matches!(r, ResolveOutcome::Live { .. }));
         let revoker = ProvenanceRecord::minted(
-            Origin::human("alice", hh_provenance::origin::HumanRole::Principal),
+            Origin::human("alice", hharness_provenance::origin::HumanRole::Principal),
             PersistenceScope::User,
             3,
         );

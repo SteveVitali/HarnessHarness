@@ -25,9 +25,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::identify_bytes;
-use hh_identity::kinds::RecordKind;
-use hh_wire::json::Json;
+use hharness_identity::idp::identify_bytes;
+use hharness_identity::kinds::RecordKind;
+use hharness_wire::json::Json;
 
 /// Fixed-point scale for probabilities and weights (parts per million).
 pub const PPM: u64 = 1_000_000;
@@ -249,7 +249,7 @@ fn weighted_draw(
         .collect();
     let total: u128 = weights.iter().map(|w| *w as u128).sum();
     let draw_bytes = format!("{seed}|{round}|{strategy}|{estimator}");
-    let draw_id = hh_identity::idp::idp_id("hh/voi_draw", draw_bytes.as_bytes());
+    let draw_id = hharness_identity::idp::idp_id("hh/voi_draw", draw_bytes.as_bytes());
     let draw = u64::from_str_radix(&draw_id["sha256:".len().."sha256:".len() + 16], 16).unwrap_or(0)
         as u128;
     let mut target = draw % total;

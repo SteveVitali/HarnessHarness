@@ -7,14 +7,14 @@
 //!    schemas, names — the canonical form carries them verbatim);
 //! 2. every `Text` leaf's in-memory `content` (the canonical form carries
 //!    `content_hash` only — the leaf bodies are enumerated via
-//!    [`hh_hir::document::HirDocument::text_leaves`]).
+//!    [`hharness_hir::document::HirDocument::text_leaves`]).
 //!
 //! A `placeholder_passthrough`/`$secret:` marker is the *legal* reference form —
 //! it is never an error. `known_value`, `pattern` and `canary` hits are.
 
-use hh_hir::diff::HirDiff;
-use hh_hir::document::{HirDocument, SealedDefinition};
-use hh_hir::errors::HirError;
+use hharness_hir::diff::HirDiff;
+use hharness_hir::document::{HirDocument, SealedDefinition};
+use hharness_hir::errors::HirError;
 
 use crate::redact::{detect, DetectorKind, DetectorSet};
 
@@ -42,7 +42,7 @@ pub fn scan_document(doc: &HirDocument, detectors: &DetectorSet) -> Vec<crate::r
 }
 
 /// `seal_checked(doc, sealed_at, detectors)` — the seal boundary the kernel
-/// calls in place of `hh_hir::ops::seal`: scan first (a literal credential
+/// calls in place of `hharness_hir::ops::seal`: scan first (a literal credential
 /// fails `SecretValueInDefinition`, AC-R-2.8.3-8), then `seal`. The scan's
 /// errors are *collected* alongside `seal`'s like every other validation
 /// failure.
@@ -60,7 +60,7 @@ pub fn seal_checked(
             })
             .collect());
     }
-    hh_hir::ops::seal(doc, sealed_at)
+    hharness_hir::ops::seal(doc, sealed_at)
 }
 
 /// `check_diff(diff, detectors)` — the evolution-context gate (AC-R-2.8.3-8):

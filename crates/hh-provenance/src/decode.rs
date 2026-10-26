@@ -1,19 +1,19 @@
 //! The canonical **decoders** — the `from_json` half of the one provenance schema
 //! (CC7: the schema source owns both directions). These mirror the `to_json` renderings
 //! in [`crate::record`], [`crate::label`] and [`mod@crate::endorse`] exactly: a decoded value
-//! re-encodes byte-identically under the same canonicalizer (`hh-wire`).
+//! re-encodes byte-identically under the same canonicalizer (`hharness-wire`).
 //!
 //! Added for S1.5 (the run ledger needs typed provenance out of stored envelopes, and the
 //! monitor's append-time endorsement check — `check_endorsement` — needs a decoded
 //! `security.label.endorsed` payload). `Derivation.deriver` is not on the wire (the
 //! canonical derivation is `{kind, inputs, deterministic}`); the decoder restores a kernel
 //! placeholder, which round-trips byte-identically because the field is never emitted —
-//! the same convention `hh-hir`'s parser used.
+//! the same convention `hharness-hir`'s parser used.
 
 use std::collections::BTreeSet;
 use std::fmt;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, PersistenceScope, ReaderSet, TaintTag};
 use crate::endorse::{ContentKind, EndorsementBasis, LabelEndorsed};

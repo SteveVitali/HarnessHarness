@@ -5,21 +5,21 @@
 //! row) and the `ErrorFormatSpec`.
 //!
 //! Identity (CC1): `surface_id = idp("tool_surface", H(surface record))` — the
-//! `hh_identity::RecordKind::ToolSurface` domain; a rename changes the
+//! `hharness_identity::RecordKind::ToolSurface` domain; a rename changes the
 //! `surface_id` and the profile hash only, never a `capability_refs` member
 //! (E7/AC-R-2.5.2-2).
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::idp_id;
-use hh_identity::RecordKind;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::idp_id;
+use hharness_identity::RecordKind;
+use hharness_wire::json::Json;
 
 /// The compile-time `exposure_mode` sum of a `SurfaceBinding` (§5d.2 — how a
 /// capability set is *rendered*: `primitive | split | composite | freeform |
 /// code_mode | shim`; ADR-0090 D7). **Distinct** from the run-time
-/// [`hh_hir::tools::ExposureMode`] (`direct | indexed | deferred | code_mode |
+/// [`hharness_hir::tools::ExposureMode`] (`direct | indexed | deferred | code_mode |
 /// hidden` — how a compiled surface is *delivered* per call). Only `primitive`
 /// is produced at C0; the rest are declared so the sum is closed (CC8 —
 /// extension members land with their stage, never by open spelling).

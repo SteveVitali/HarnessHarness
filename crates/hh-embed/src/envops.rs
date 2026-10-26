@@ -14,12 +14,12 @@
 //!   `per_phase_network_policy` *and* the sealed policy's
 //!   `ext["phase_schedule"]` names the phase (CF-318; ADR-0142).
 
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::types::EnvironmentInput;
-use hh_env::handle::{DeriveMode, OnParentEnd};
-use hh_env::snapshot::TakenBy;
-use hh_ledger::store::Lease;
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::types::EnvironmentInput;
+use hharness_env::handle::{DeriveMode, OnParentEnd};
+use hharness_env::snapshot::TakenBy;
+use hharness_ledger::store::Lease;
+use hharness_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
 
@@ -212,7 +212,7 @@ impl EmbedService {
         driver
             .set_phase(&mut self.store, &lease, &env_handle_id, &phase)
             .map_err(|e| match e {
-                hh_env::errors::EnvError::Unsupported { capability, .. }
+                hharness_env::errors::EnvError::Unsupported { capability, .. }
                     if capability == "per_phase_network_policy"
                         || capability == "phase_schedule" =>
                 {
@@ -313,7 +313,7 @@ impl EmbedService {
         let (run_id, lease, env_handle_id) = self.env_subject(params, "env.attach")?;
         let attestation = match params.get("substrate_attestation") {
             None => None,
-            Some(j) => Some(hh_containment::backend::Attestation {
+            Some(j) => Some(hharness_containment::backend::Attestation {
                 method: j
                     .get("method")
                     .and_then(Json::as_str)
@@ -349,7 +349,7 @@ impl EmbedService {
                 });
             }
         }
-        let backend = hh_containment::backend::for_policy(
+        let backend = hharness_containment::backend::for_policy(
             driver.handle(&env_handle_id).unwrap().containment.policy(),
             attestation,
         )
@@ -362,7 +362,7 @@ impl EmbedService {
                 &lease,
                 &env_handle_id,
                 Some(&*backend),
-                hh_containment::attach::AttachMode::FailClosed,
+                hharness_containment::attach::AttachMode::FailClosed,
                 false,
                 &[],
             )

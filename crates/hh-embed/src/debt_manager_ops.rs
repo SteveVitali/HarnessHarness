@@ -1,6 +1,6 @@
 //! Group L — the `lab.debt.*` manager-service dispatch (S6.1b; §5h.6
 //! R-2.9.6; ADR-0197/0198): `manager_open`/`register`/`sweep`/`settle`/
-//! `retire`/`propose` drive `hh_debt::manager::DebtManager` over the
+//! `retire`/`propose` drive `hharness_debt::manager::DebtManager` over the
 //! caller-supplied registry run's `lifecycle.debt.*` book of record.
 //! Records-in/records-out (AC-R-2.9.6-10 — there is no private verb):
 //! `sweep`'s `entries[]` carry each debt record + caller-projected
@@ -16,10 +16,10 @@
 //! A `--no-default-features` build answers `Unsupported{by: "tier-c4"}`
 //! — the ops stay in the schema (CC7) and the tier is removable (CC6).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 #[cfg(feature = "tier-c4")]
 fn bad(path: &str, code: &str) -> EmbedError {
@@ -52,12 +52,12 @@ fn opt_str(j: &Json, k: &str) -> Option<String> {
 /// `WouldBlock`/`SchemaViolation` native (the `lab.evolution.*`
 /// convention).
 #[cfg(feature = "tier-c4")]
-fn mgr_err(e: hh_debt::errors::DebtManagerError) -> EmbedError {
-    use hh_debt::errors::DebtManagerError;
+fn mgr_err(e: hharness_debt::errors::DebtManagerError) -> EmbedError {
+    use hharness_debt::errors::DebtManagerError;
     match e {
-        DebtManagerError::Store(hh_ledger::errors::LedgerError::WouldBlock { active_holder }) => {
-            EmbedError::WouldBlock { active_holder }
-        }
+        DebtManagerError::Store(hharness_ledger::errors::LedgerError::WouldBlock {
+            active_holder,
+        }) => EmbedError::WouldBlock { active_holder },
         DebtManagerError::Schema(d) => EmbedError::SchemaViolation {
             path: "/debt".to_string(),
             code: d,
@@ -72,14 +72,14 @@ fn mgr_err(e: hh_debt::errors::DebtManagerError) -> EmbedError {
 mod imp {
     use super::{bad, mgr_err, opt_str, req, req_str};
     use crate::service::EmbedService;
-    use hh_debt::manager::DebtManager;
-    use hh_debt::propose::ProposalDiff;
-    use hh_debt::records::{DebtManagerRecord, SweepEntry};
-    use hh_embed_schema::errors::EmbedError;
-    use hh_lab::debt::DebtObservables;
-    use hh_ontology::debt::{RemovalTestKind, Verdict};
-    use hh_provenance::ProvenanceRecord;
-    use hh_wire::json::Json;
+    use hharness_debt::manager::DebtManager;
+    use hharness_debt::propose::ProposalDiff;
+    use hharness_debt::records::{DebtManagerRecord, SweepEntry};
+    use hharness_embed_schema::errors::EmbedError;
+    use hharness_lab::debt::DebtObservables;
+    use hharness_ontology::debt::{RemovalTestKind, Verdict};
+    use hharness_provenance::ProvenanceRecord;
+    use hharness_wire::json::Json;
     use std::collections::BTreeSet;
 
     /// The `DebtManager` for `run` — cached, or folded fresh from the
@@ -88,13 +88,13 @@ mod imp {
     /// the ledger are both live across the call.
     fn manager<'m>(
         managers: &'m mut std::collections::BTreeMap<String, DebtManager>,
-        store: &hh_ledger::store::Store,
+        store: &hharness_ledger::store::Store,
         run: &str,
     ) -> Result<&'m mut DebtManager, EmbedError> {
         if !managers.contains_key(run) {
             let mgr = DebtManager::open(
                 store,
-                &hh_hir::refs::RunRef {
+                &hharness_hir::refs::RunRef {
                     run: run.to_string(),
                 },
             )
@@ -129,7 +129,7 @@ mod imp {
             template: m
                 .get("template")
                 .map(|t| {
-                    hh_lab::experiment::ExperimentSpec::from_json(t)
+                    hharness_lab::experiment::ExperimentSpec::from_json(t)
                         .map_err(|e| bad("/entries/template", &format!("{e:?}")))
                 })
                 .transpose()?,
@@ -167,7 +167,7 @@ mod imp {
     fn resolve_template(
         svc: &EmbedService,
         template_ref: &str,
-    ) -> Result<Option<hh_lab::experiment::ExperimentSpec>, EmbedError> {
+    ) -> Result<Option<hharness_lab::experiment::ExperimentSpec>, EmbedError> {
         let docs = svc.lab_docs()?;
         if let Some(spec) = docs
             .spec(template_ref)
@@ -176,10 +176,10 @@ mod imp {
             return Ok(Some(spec));
         }
         match docs
-            .get_named(hh_experiment::docs::kind::SPEC, template_ref)
+            .get_named(hharness_experiment::docs::kind::SPEC, template_ref)
             .map_err(|e| bad("/entries/template_ref", &format!("{e:?}")))?
         {
-            Some(j) => hh_lab::experiment::ExperimentSpec::from_json(&j)
+            Some(j) => hharness_lab::experiment::ExperimentSpec::from_json(&j)
                 .map(Some)
                 .map_err(|e| bad("/entries/template_ref", &format!("{e:?}"))),
             None => Ok(None),
@@ -307,7 +307,7 @@ mod imp {
                 ]))
             }
             // `lab.debt.retire{run_id, debt_ref, record}` → `{outcome}` —
-            // the human-sealed gate (`hh_lab::debt::retire`; the record's
+            // the human-sealed gate (`hharness_lab::debt::retire`; the record's
             // `decided_by` must carry `origin = human` provenance).
             "lab.debt.retire" => {
                 let run = req_str(params, "run_id")?.to_string();
@@ -316,7 +316,7 @@ mod imp {
                 let Json::Obj(rm) = rec else {
                     return Err(bad("/record", "type_mismatch"));
                 };
-                let record = hh_hir::debt::RetirementRecord {
+                let record = hharness_hir::debt::RetirementRecord {
                     removal_test_report_ref: rm
                         .get("removal_test_report_ref")
                         .and_then(Json::as_str)
@@ -338,7 +338,7 @@ mod imp {
                         .get("rationale")
                         .ok_or_else(|| bad("/record/rationale", "missing"))
                         .and_then(|t| {
-                            hh_hir::leaves::Text::from_json(t, "/record/rationale")
+                            hharness_hir::leaves::Text::from_json(t, "/record/rationale")
                                 .map_err(|e| bad("/record/rationale", &format!("{e:?}")))
                         })?,
                 };
@@ -374,7 +374,7 @@ mod imp {
                         _ => Vec::new(),
                     }
                 };
-                let sweep = hh_lab::coevolution::PostImportSweep {
+                let sweep = hharness_lab::coevolution::PostImportSweep {
                     covered: strs("covered"),
                     scheduled: strs("scheduled"),
                     unchanged: strs("unchanged"),
@@ -452,7 +452,7 @@ mod imp {
     }
 
     /// The `SweepReport` result member.
-    fn sweep_report_json(r: &hh_debt::records::SweepReport) -> Json {
+    fn sweep_report_json(r: &hharness_debt::records::SweepReport) -> Json {
         Json::obj([
             ("sweep_seq", Json::Int(r.sweep_seq as i64)),
             ("now_ms", Json::Int(r.now_ms as i64)),

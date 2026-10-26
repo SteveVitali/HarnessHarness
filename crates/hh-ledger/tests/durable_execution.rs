@@ -26,19 +26,19 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::effect::EffectPhase;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::leases::{holder_spelling, LeaseScope};
-use hh_ledger::manifest::{EventRef, LineageLink, RunKind, RunManifest};
-use hh_ledger::saga::{compensating_effect_id, CompensationIntent};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::suspend::SuspendReason;
-use hh_ledger::wakeup::{
+use hharness_ledger::effect::EffectPhase;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::leases::{holder_spelling, LeaseScope};
+use hharness_ledger::manifest::{EventRef, LineageLink, RunKind, RunManifest};
+use hharness_ledger::saga::{compensating_effect_id, CompensationIntent};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::suspend::SuspendReason;
+use hharness_ledger::wakeup::{
     Coalesce, DeliveryMode, FireOutcome, OccurOutcome, ScheduleKind, Trigger, WakeupPolicy,
 };
-use hh_ledger::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::LedgerError;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -128,7 +128,10 @@ fn eff(id: &str, class: &str, effect_id: &str, payload: Json, fencing: u64) -> E
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -255,7 +258,7 @@ fn to_applied(s: &mut Store, run: &str, lease: &Lease, eid: &str, rc: Json) {
     .unwrap();
 }
 
-fn events(s: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn events(s: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     s.events(run).unwrap().to_vec()
 }
 
@@ -264,7 +267,7 @@ fn count_class(s: &Store, run: &str, class: &str) -> usize {
 }
 
 /// The effect fold by id (the public view — `Store::run` is crate-private).
-fn fold(s: &Store, run: &str, effect_id: &str) -> hh_ledger::effect::EffectFold {
+fn fold(s: &Store, run: &str, effect_id: &str) -> hharness_ledger::effect::EffectFold {
     s.effect_folds(run)
         .unwrap()
         .into_iter()
@@ -1206,7 +1209,7 @@ fn r_2_2_3_0b_hlc_absent_on_plain_run_present_on_continuation() {
     // The rendered stamps parse back (canonical round-trip).
     for e in &envs {
         let stamp = e.hlc.as_deref().unwrap();
-        assert!(hh_ledger::hlc::Hlc::parse(stamp).is_some(), "{stamp}");
+        assert!(hharness_ledger::hlc::Hlc::parse(stamp).is_some(), "{stamp}");
     }
 }
 

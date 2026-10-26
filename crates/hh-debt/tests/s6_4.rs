@@ -1,4 +1,4 @@
-//! `hh-debt` S6.4 coverage — R-2.9.8 §2.3 (§5h.8; ADR-0325;
+//! `hharness-debt` S6.4 coverage — R-2.9.8 §2.3 (§5h.8; ADR-0325;
 //! AC-R-2.9.8-7): the import-driven `post_import_sweep` — a
 /// `model_version_change`-conditioned record whose
 /// `scope.model_selectors` covers the imported snapshot transitions
@@ -9,25 +9,25 @@
 /// `kind: post_import` + `trigger_ref` (never attributed to cadence).
 use std::path::PathBuf;
 
-use hh_debt::manager::DebtManager;
-use hh_debt::records::{DebtManagerRecord, SweepEntry};
-use hh_debt::reflexive::reflexive_record;
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_hir::refs::RunRef;
-use hh_lab::coevolution::{self as coe};
-use hh_lab::debt::DebtObservables;
-use hh_lab::model::{PolicyVersionExposed, SnapshotClaim};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::debt::{
+use hharness_debt::manager::DebtManager;
+use hharness_debt::records::{DebtManagerRecord, SweepEntry};
+use hharness_debt::reflexive::reflexive_record;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_hir::refs::RunRef;
+use hharness_lab::coevolution::{self as coe};
+use hharness_lab::debt::DebtObservables;
+use hharness_lab::model::{PolicyVersionExposed, SnapshotClaim};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::debt::{
     DeadWeightWindow, DebtClass, DebtExpiry, DebtPolicy, DebtScope, DebtStatus, EvidenceKind,
     EvidenceRef, ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject, HypothesisTyped,
     ModelSelector, OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind,
 };
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 fn tmp(tag: &str) -> PathBuf {
     let p = std::env::temp_dir().join(format!("hh-debt-s64-{}-{}", tag, std::process::id()));
@@ -86,7 +86,7 @@ fn conditioned_debt(rule_id: &str, model_id: &str) -> AssumptionDebtRecord {
         debt_class: Some(DebtClass::ModelConditioned),
         hypothesis_typed: Some(HypothesisTyped {
             subject: HypothesisSubject::Deficiency,
-            deficiency_class: hh_ontology::debt::DeficiencyClass::PrematureStop,
+            deficiency_class: hharness_ontology::debt::DeficiencyClass::PrematureStop,
             predicted_effect: PredictedEffect::Increase,
             metric_ref: Some("metric:task_success".into()),
         }),

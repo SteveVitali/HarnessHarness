@@ -8,28 +8,28 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use hh_hir::leaves::Text;
-use hh_identity::idp::address;
-use hh_identity::names::{NameStatus, ResolveMode};
-use hh_identity::sameness::SamenessLevel;
-use hh_identity::supersede::SupersedeReason;
-use hh_provenance::{
+use hharness_hir::leaves::Text;
+use hharness_identity::idp::address;
+use hharness_identity::names::{NameStatus, ResolveMode};
+use hharness_identity::sameness::SamenessLevel;
+use hharness_identity::supersede::SupersedeReason;
+use hharness_provenance::{
     Attestation, AttestationAnchor, AttestationKind, HumanRole, Origin, PersistenceScope,
     ProvenanceRecord,
 };
-use hh_registry::kinds::{
+use hharness_registry::kinds::{
     Cardinality, ConformanceVerdict, Placement, ProducedBy, RequireConformance, SubjectKind,
 };
-use hh_registry::records::{
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, Implementation,
     RegistryPolicy, RegistryRecord, ReportHost, ReportResult, SuiteTest, VariantRecord,
 };
-use hh_registry::store::{
+use hharness_registry::store::{
     record_apply, record_diff, QueryPredicate, RegistryStore, ResolveInput, ResolveRequest,
     SlotConstraints,
 };
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-registry-s212-{}-{}", std::process::id(), tag));
@@ -144,10 +144,10 @@ fn suite(class_ref: &str, contract_version: &str) -> ConformanceSuite {
         contract_version: contract_version.to_string(),
         tests: vec![SuiteTest {
             test_id: "t1".to_string(),
-            kind: hh_registry::kinds::TestKind::Static,
+            kind: hharness_registry::kinds::TestKind::Static,
             fixture_ref: None,
-            driver: hh_registry::kinds::TestDriver::InProcess,
-            oracle_class: hh_registry::kinds::OracleClass::Deterministic,
+            driver: hharness_registry::kinds::TestDriver::InProcess,
+            oracle_class: hharness_registry::kinds::OracleClass::Deterministic,
             budget: Json::Null,
             verdict_rule: "all".to_string(),
         }],
@@ -164,7 +164,7 @@ fn report(subject: &str, suite_ref: &str, by: ProducedBy, run_id: &str) -> Confo
         host: ReportHost {
             placement: Placement::SubprocessConfined,
             isolation: "x".to_string(),
-            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+            instrument: hharness_identity::repro::InstrumentRecord::new("1", "abc", false),
         },
         produced_by: by,
         results: vec![ReportResult {
@@ -548,7 +548,7 @@ fn catalog_lists_tombstoned_names_and_scopes_to_snapshots() {
     assert_eq!(cat.len(), scoped.len() + 1);
     assert!(scoped
         .iter()
-        .all(|e| e.envelope.kind != hh_registry::kinds::RecordKind::RegistrySnapshot));
+        .all(|e| e.envelope.kind != hharness_registry::kinds::RecordKind::RegistrySnapshot));
     // A record registered *after* the snapshot is out of the scoped catalog.
     s.register(
         RegistryRecord::Variant(variant(&c.version_id, "v2", Placement::SubprocessConfined)),
@@ -718,13 +718,13 @@ fn widening_publish_needs_attestation_and_a_major_bump_and_mints_diff_ref() {
     // Re-derive: apply(base, ops) == target body.
     let base = &s.get(&v1.version_id).unwrap().1;
     let target = &s.get(&v2.version_id).unwrap().1;
-    let base_body = hh_registry::schema::body_json(base, false);
-    let target_body = hh_registry::schema::body_json(target, false);
+    let base_body = hharness_registry::schema::body_json(base, false);
+    let target_body = hharness_registry::schema::body_json(target, false);
     assert_eq!(record_apply(&base_body, ops).unwrap(), target_body);
     // The ref is the content id of the canonical ops.
     assert_eq!(
         dref,
-        hh_identity::idp::idp_id("registry.diff", ops.to_canonical_string().as_bytes())
+        hharness_identity::idp::idp_id("registry.diff", ops.to_canonical_string().as_bytes())
     );
     // `verify` sees a coherent log; `heal_diffs` has nothing to repair.
     assert!(s.verify().ok());
@@ -766,7 +766,7 @@ fn widening_publish_needs_attestation_and_a_major_bump_and_mints_diff_ref() {
     // L3: the widening successor is incompatible (never resumable, never pooled).
     let sam = s.sameness(&v3.version_id, &v4.version_id).unwrap();
     assert_eq!(sam.level, SamenessLevel::L3);
-    assert!(!hh_identity::sameness::is_resumable(sam));
+    assert!(!hharness_identity::sameness::is_resumable(sam));
 }
 
 #[test]
@@ -825,7 +825,7 @@ fn update_available_notifies_without_resealing() {
 
 // ── environment_record arm (R-2.12.2 registry half) ──────────────────────────
 
-/// The `hh_identity::record::Record::canonical_full()` form `hh-env` mints for
+/// The `hharness_identity::record::Record::canonical_full()` form `hharness-env` mints for
 /// an `EnvironmentRecord` — the registry stores it verbatim.
 fn env_body(containment_vid: &str, tag: &str) -> Json {
     Json::obj([
@@ -873,7 +873,7 @@ fn environment_record_registers_under_the_env_identity_tag() {
         .unwrap();
     let body = env_body(&c.version_id, "e1");
     let expected_vid =
-        hh_identity::idp::idp_id("environment", body.to_canonical_string().as_bytes());
+        hharness_identity::idp::idp_id("environment", body.to_canonical_string().as_bytes());
     let v = s
         .register(
             RegistryRecord::EnvironmentRecord(body.clone()),
@@ -890,16 +890,19 @@ fn environment_record_registers_under_the_env_identity_tag() {
     assert_eq!(
         v.semantic_id.as_deref(),
         Some(
-            hh_identity::idp::idp_id("environment#semantic", sem.to_canonical_string().as_bytes())
-                .as_str()
+            hharness_identity::idp::idp_id(
+                "environment#semantic",
+                sem.to_canonical_string().as_bytes()
+            )
+            .as_str()
         )
     );
     // The record lists in `catalog` under its kind.
     let cat = s
         .catalog(Some(&QueryPredicate {
-            clauses: vec![hh_registry::store::QueryClause {
+            clauses: vec![hharness_registry::store::QueryClause {
                 field: "kind".to_string(),
-                op: hh_registry::store::QueryOp::Eq,
+                op: hharness_registry::store::QueryOp::Eq,
                 value: "environment_record".to_string(),
             }],
             snapshot_id: None,

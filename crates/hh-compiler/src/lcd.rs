@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::ValidationReport;
+use hharness_assembly::ValidationReport;
 
 use crate::link::{ConditionedRule, LinkedGraph};
 use crate::profile::profile_coordinate;

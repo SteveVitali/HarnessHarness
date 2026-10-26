@@ -23,11 +23,11 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use hh_hir::document::HirDocument;
-use hh_hir::records::{KindRecord, SlotBinding, SlotBindings};
-use hh_hir::refs::{ComponentVariantRef, RefVersion};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::document::HirDocument;
+use hharness_hir::records::{KindRecord, SlotBinding, SlotBindings};
+use hharness_hir::refs::{ComponentVariantRef, RefVersion};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::catalog::ClassCatalog;
 use crate::diagnostics::ValidationReport;
@@ -193,7 +193,7 @@ impl Override {
 /// A scalar override value — canonical JSON (`"s"`, `42`, `true`, `[…]`) or a
 /// bare token treated as a string.
 fn parse_value(raw: &str) -> Result<Json, String> {
-    match hh_wire::canonical::parse_canonical(raw.as_bytes()) {
+    match hharness_wire::canonical::parse_canonical(raw.as_bytes()) {
         Ok(j) => Ok(j),
         Err(_) => Ok(Json::str(raw)),
     }
@@ -408,7 +408,7 @@ pub fn apply_override(
             .find(|n| n.semantic_id() == doc.root.semantic_id)
         {
             if let KindRecord::AgentProcess(ap) = &mut root.semantic {
-                if let hh_hir::records::AgentProcessBody::Native(n) = &mut ap.body {
+                if let hharness_hir::records::AgentProcessBody::Native(n) = &mut ap.body {
                     n.slots = a.slots.clone();
                 }
             }

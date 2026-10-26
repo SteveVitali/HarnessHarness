@@ -1,6 +1,6 @@
 //! S4.16b — `grounding.summary_fidelity_judged` through the judged-detector
 //! emission (R-2.4.2² C2; ADR-0077 d4): the declaration lives in
-//! `hh_lab::exemplars` (the boundary companion's optional C1 metric —
+//! `hharness_lab::exemplars` (the boundary companion's optional C1 metric —
 //! `headline = false`, `charged_to = instrument`, `detector = judged`,
 //! `oracle = judge`, native rows only). `emit_judged` is the deterministic
 //! trace predicate over caller-supplied judge verdicts — the judge critic
@@ -8,17 +8,17 @@
 //! verdict lands on the declared row, instrument-charged, exploratory or
 //! `n/a{no_detector}` exactly as the calibration/use pair dictates.
 
-use hh_eval::judge::emit_judged;
-use hh_eval::judge::JudgeContext;
-use hh_lab::exemplars::summary_fidelity_judged;
-use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
-use hh_ontology::eval::{
+use hharness_eval::judge::emit_judged;
+use hharness_eval::judge::JudgeContext;
+use hharness_lab::exemplars::summary_fidelity_judged;
+use hharness_ontology::compliance::{Detector, MetricDeclaration, NaReason};
+use hharness_ontology::eval::{
     ChargedTo, EvidenceKind, MetricValueKind, OracleClass, OracleDeclaration, VerdictType,
 };
-use hh_ontology::participant::Observability;
-use hh_provenance::ProvenanceRecord;
-use hh_verification::critics::IndependenceVector;
-use hh_verification::vocab::{CalibrationStatus, CriticUse};
+use hharness_ontology::participant::Observability;
+use hharness_provenance::ProvenanceRecord;
+use hharness_verification::critics::IndependenceVector;
+use hharness_verification::vocab::{CalibrationStatus, CriticUse};
 
 fn judge_oracle() -> OracleDeclaration {
     OracleDeclaration {

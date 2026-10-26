@@ -29,11 +29,11 @@ body:
     attributes:
       label: Area
       options:
-        - kernel / boundary (hh-kernel, hh-embed)
+        - kernel / boundary (hharness-kernel, hharness-embed)
         - CLI (hh)
         - Lab (experiment / results / eval / bench)
         - services (subagent / orchestrator / fleet / evolution / debt)
-        - surfaces (hh-web, hh-mcp, hh-acp, plugins)
+        - surfaces (hharness-web, hharness-mcp, hharness-acp, plugins)
         - build tooling / CI / docs
     validations:
       required: true

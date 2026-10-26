@@ -10,17 +10,17 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::{DimensionId, MatchSpec};
-use hh_hir::document::Node;
-use hh_hir::kinds::EntityKind;
-use hh_hir::leaves::Text;
-use hh_hir::procedure::{CompilationTarget, SelectCtx};
-use hh_hir::records::{KindRecord, ProcedureRecord, ProcedureStep};
-use hh_lab::experiment::ExperimentRefusal;
-use hh_lab::procedure_test::{
+use hharness_budget::{DimensionId, MatchSpec};
+use hharness_hir::document::Node;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::leaves::Text;
+use hharness_hir::procedure::{CompilationTarget, SelectCtx};
+use hharness_hir::records::{KindRecord, ProcedureRecord, ProcedureStep};
+use hharness_lab::experiment::ExperimentRefusal;
+use hharness_lab::procedure_test::{
     test_procedure, ConformanceValidity, FixtureValidity, ProcedureTestSpec, ValidatorRun,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// A minimal procedure node (one instruction step).
 fn proc() -> Node {
@@ -31,13 +31,13 @@ fn proc() -> Node {
             steps: vec![ProcedureStep::Instruction(Text::new(
                 "do the thing",
                 "test",
-                hh_provenance::ProvenanceRecord::kernel("test", 0),
+                hharness_provenance::ProvenanceRecord::kernel("test", 0),
             ))],
             expected_evidence: Json::Arr(vec![Json::str("ok")]),
             allowed_capabilities: vec![],
             failure_handlers: Json::Arr(vec![]),
         }),
-        hh_provenance::ProvenanceRecord::kernel("test", 0),
+        hharness_provenance::ProvenanceRecord::kernel("test", 0),
     );
     n.version.semantic_id = Some("test:proc".into());
     n

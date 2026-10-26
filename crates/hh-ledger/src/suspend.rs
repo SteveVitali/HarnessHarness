@@ -11,7 +11,7 @@
 //! completes the release — see [`crate::recovery`]; a suspended-but-leased run
 //! is still taken over only on real expiry (never on probe).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::effect::EffectPhase;
 use crate::errors::LedgerError;

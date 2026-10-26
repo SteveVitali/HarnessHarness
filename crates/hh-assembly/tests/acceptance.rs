@@ -1,4 +1,4 @@
-//! `hh-assembly` acceptance suite (spec §3.3; ticket S1.9; the AC-CC-* matrix).
+//! `hharness-assembly` acceptance suite (spec §3.3; ticket S1.9; the AC-CC-* matrix).
 //! Every landed diagnostic code has a fixture; `load(encode(a)) = a`; `resolve` is
 //! closed, secret-free and idempotent; `verify_resume` refuses delivered-tool removal.
 
@@ -8,42 +8,42 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use common::*;
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::diagnostics::{Code, NaReason, Severity};
-use hh_assembly::grammar::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::diagnostics::{Code, NaReason, Severity};
+use hharness_assembly::grammar::{
     Assembly, Constraint, ConstraintKind, EntityBinding, ParamRequirement, ParamType, ParameterSpec,
 };
-use hh_assembly::instantiate::{BindContext, VariantRuntime};
-use hh_assembly::resume::LedgerView;
-use hh_assembly::Stage1Catalog;
-use hh_hir::diff::DiffOp;
-use hh_hir::document::SealedDefinition;
-use hh_hir::records::{SlotBinding, SlotBindings};
-use hh_hir::refs::{ComponentVariantRef, RefVersion};
-use hh_identity::names::ResolveMode;
-use hh_identity::supersede::SupersedeReason;
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_registry::kinds::Placement;
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_assembly::instantiate::{BindContext, VariantRuntime};
+use hharness_assembly::resume::LedgerView;
+use hharness_assembly::Stage1Catalog;
+use hharness_hir::diff::DiffOp;
+use hharness_hir::document::SealedDefinition;
+use hharness_hir::records::{SlotBinding, SlotBindings};
+use hharness_hir::refs::{ComponentVariantRef, RefVersion};
+use hharness_identity::names::ResolveMode;
+use hharness_identity::supersede::SupersedeReason;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_registry::kinds::Placement;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
-fn report_codes(r: &hh_assembly::ValidationReport) -> Vec<String> {
+fn report_codes(r: &hharness_assembly::ValidationReport) -> Vec<String> {
     r.diagnostics.iter().map(|d| d.code.code()).collect()
 }
 
-fn has_code(r: &hh_assembly::ValidationReport, code: &str) -> bool {
+fn has_code(r: &hharness_assembly::ValidationReport, code: &str) -> bool {
     report_codes(r).iter().any(|c| c == code)
 }
 
 fn validate_authored(
-    doc: &hh_hir::document::HirDocument,
+    doc: &hharness_hir::document::HirDocument,
     catalog: &dyn ClassCatalog,
-) -> hh_assembly::ValidationReport {
-    hh_assembly::validate_assembly(
-        hh_assembly::Subject::Authored(doc),
+) -> hharness_assembly::ValidationReport {
+    hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Authored(doc),
         catalog,
         None,
         &kernel(),
@@ -87,7 +87,7 @@ fn load_encode_round_trip_over_a_full_assembly() {
     a.values.insert("window".into(), Json::Int(4));
     a.entities.insert(
         "tool-a".into(),
-        EntityBinding::Ref(hh_hir::refs::Ref::pinned("test:tool", "sha256:t")),
+        EntityBinding::Ref(hharness_hir::refs::Ref::pinned("test:tool", "sha256:t")),
     );
     a.constraints.push(constraint(
         ConstraintKind::Requires,
@@ -96,8 +96,8 @@ fn load_encode_round_trip_over_a_full_assembly() {
             ("needs", Json::str("context_policy")),
         ]),
     ));
-    let bytes = hh_assembly::schema::encode(&a);
-    let decoded = hh_assembly::schema::load(&bytes, None).expect("round-trips");
+    let bytes = hharness_assembly::schema::encode(&a);
+    let decoded = hharness_assembly::schema::load(&bytes, None).expect("round-trips");
     assert_eq!(decoded, a, "load(encode(a)) = a");
 }
 
@@ -117,8 +117,8 @@ fn load_rejects_unknown_keys_and_bad_dialect() {
     assert!(diags.iter().any(|d| d.code == Code::LoadUnknownKey));
 
     // C-LOAD-2 — the wrong dialect.
-    let errs = hh_assembly::schema::load(
-        &hh_assembly::schema::encode(&stage1_assembly()),
+    let errs = hharness_assembly::schema::load(
+        &hharness_assembly::schema::encode(&stage1_assembly()),
         Some("hir/2"),
     )
     .expect_err("wrong dialect is a load error");
@@ -134,7 +134,7 @@ fn a_clean_assembly_passes_all_stages_with_6a_run_6b_not_run() {
     let r = validate_authored(&doc, &cat);
     assert_eq!(
         r.status,
-        hh_assembly::ReportStatus::Pass,
+        hharness_assembly::ReportStatus::Pass,
         "diags: {:?}",
         report_codes(&r)
     );
@@ -218,7 +218,7 @@ fn hosted_root_reports_na_class_for_class_stages() {
 fn benchmark_conditioned_references_are_errors_never_warnings() {
     // AC-CC-13 / 7-L2: `suite_id`/`task_id`/`foreign_id`/`split`/`family` anywhere in
     // the assembly is C-LCD-4 at error severity.
-    for token in hh_assembly::BENCH_TOKENS {
+    for token in hharness_assembly::BENCH_TOKENS {
         let mut a = stage1_assembly();
         a.ext.insert(token.to_string(), Json::str("bench"));
         let doc = doc_with(&a);
@@ -318,11 +318,11 @@ fn every_diagnostic_carries_a_path_and_a_typed_code() {
 // ── resolve ──────────────────────────────────────────────────────────────────
 
 fn resolve_env<'a>(
-    store: &'a mut hh_registry::store::RegistryStore,
+    store: &'a mut hharness_registry::store::RegistryStore,
     catalog: &'a dyn ClassCatalog,
     mode: ResolveMode,
-) -> hh_assembly::resolve::ResolveEnv<'a> {
-    hh_assembly::resolve::ResolveEnv {
+) -> hharness_assembly::resolve::ResolveEnv<'a> {
+    hharness_assembly::resolve::ResolveEnv {
         registry: store,
         catalog,
         snapshot_id: None,
@@ -340,7 +340,7 @@ fn resolve_pins_selectors_records_the_snapshot_and_seals() {
     let doc = doc_with(&stage1_assembly());
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     // The assembly section resolved in place: variant refs are pinned version_ids.
     let asm_json = sealed.document.assembly.as_ref().expect("assembly kept");
@@ -365,12 +365,12 @@ fn resolve_is_idempotent() {
     let doc = doc_with(&stage1_assembly());
     let first = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     // Resolving the sealed document again is a no-op (already resolved).
     let second = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&first.document, &mut env).expect("re-resolve")
+        hharness_assembly::resolve(&first.document, &mut env).expect("re-resolve")
     };
     assert_eq!(
         first.document.canonical_bytes(),
@@ -393,7 +393,7 @@ fn resolve_substitutes_params_entities_and_keeps_secret_channel_names() {
     );
     a.entities.insert(
         "tool-a".into(),
-        EntityBinding::Ref(hh_hir::refs::Ref::selected("test:rule", "latest")),
+        EntityBinding::Ref(hharness_hir::refs::Ref::selected("test:rule", "latest")),
     );
     if let Some(SlotBindings::One(b)) = a.slots.get_mut("control_strategy") {
         b.params.insert("window".into(), Json::str("$param:window"));
@@ -403,7 +403,7 @@ fn resolve_substitutes_params_entities_and_keeps_secret_channel_names() {
     let doc = doc_with(&a);
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     let s = sealed
         .document
@@ -440,7 +440,7 @@ fn resolve_execute_mode_refuses_a_revoked_head() {
         .unwrap();
     let doc = doc_with(&a);
     let mut env = resolve_env(&mut store, &cat, ResolveMode::Execute);
-    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("revoked head refuses");
+    let errs = hharness_assembly::resolve(&doc, &mut env).expect_err("revoked head refuses");
     assert!(
         errs.iter()
             .any(|d| matches!(d.code, Code::RefStaleIndex | Code::Kern(_))),
@@ -457,7 +457,7 @@ fn resolve_rejects_benchmark_conditioned_rules() {
     a.ext.insert("suite_id".into(), Json::str("s1"));
     let doc = doc_with(&a);
     let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("benchmark ref refuses");
+    let errs = hharness_assembly::resolve(&doc, &mut env).expect_err("benchmark ref refuses");
     assert!(errs
         .iter()
         .any(|d| d.code == Code::LcdBenchmarkConditionedRule && d.severity == Severity::Error));
@@ -465,13 +465,13 @@ fn resolve_rejects_benchmark_conditioned_rules() {
 
 // ── identity / diff ──────────────────────────────────────────────────────────
 
-fn resolved_sealed(tag: &str) -> (SealedDefinition, hh_registry::store::RegistryStore) {
+fn resolved_sealed(tag: &str) -> (SealedDefinition, hharness_registry::store::RegistryStore) {
     let (mut store, _) = seeded_store(tag);
     let cat = Stage1Catalog::stage1();
     let doc = doc_with(&stage1_assembly());
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     (sealed, store)
 }
@@ -479,21 +479,21 @@ fn resolved_sealed(tag: &str) -> (SealedDefinition, hh_registry::store::Registry
 #[test]
 fn identity_exposes_root_and_configuration_ids() {
     let (sealed, _store) = resolved_sealed("identity");
-    let def = hh_assembly::identity(&sealed);
+    let def = hharness_assembly::identity(&sealed);
     assert_eq!(def.version_id, sealed.definition_ref.version_id);
-    let inputs = hh_assembly::CompositionInputs {
+    let inputs = hharness_assembly::CompositionInputs {
         model_ref: "model:m1".into(),
         profile: "sha256:profile".into(),
         environment_ref: "env:test".into(),
         budget: "test:budget".into(),
         seed: "7".into(),
     };
-    let a = hh_assembly::configuration(&sealed, &inputs);
-    let b = hh_assembly::configuration(&sealed, &inputs);
+    let a = hharness_assembly::configuration(&sealed, &inputs);
+    let b = hharness_assembly::configuration(&sealed, &inputs);
     assert_eq!(a.configuration_id, b.configuration_id, "identity is stable");
-    let c = hh_assembly::configuration(
+    let c = hharness_assembly::configuration(
         &sealed,
-        &hh_assembly::CompositionInputs {
+        &hharness_assembly::CompositionInputs {
             seed: "8".into(),
             ..inputs
         },
@@ -544,8 +544,8 @@ fn diff_classifies_a_variant_rebind_as_rebind() {
         .iter_mut()
         .find(|n| n.semantic_id() == doc_b.root.semantic_id)
     {
-        if let hh_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
-            if let hh_hir::records::AgentProcessBody::Native(np) = &mut ap.body {
+        if let hharness_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let hharness_hir::records::AgentProcessBody::Native(np) = &mut ap.body {
                 np.slots.insert(
                     "control_strategy".into(),
                     SlotBindings::One(SlotBinding::of(ComponentVariantRef::pinned(
@@ -557,12 +557,12 @@ fn diff_classifies_a_variant_rebind_as_rebind() {
             }
         }
     }
-    let sealed_b = hh_hir::seal(&doc_b, 1).expect("re-seal");
-    let d = hh_assembly::diff(
+    let sealed_b = hharness_hir::seal(&doc_b, 1).expect("re-seal");
+    let d = hharness_assembly::diff(
         &sealed_a,
         &sealed_b,
         prov(9),
-        hh_hir::diff::DiffDerivation::default(),
+        hharness_hir::diff::DiffDerivation::default(),
     )
     .expect("diff");
     assert!(
@@ -589,20 +589,20 @@ fn a_disabled_binding_is_exactly_one_replace_field() {
         .iter_mut()
         .find(|n| n.semantic_id() == doc_b.root.semantic_id)
     {
-        if let hh_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
-            if let hh_hir::records::AgentProcessBody::Native(np) = &mut ap.body {
+        if let hharness_hir::records::KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let hharness_hir::records::AgentProcessBody::Native(np) = &mut ap.body {
                 if let Some(SlotBindings::One(b)) = np.slots.get_mut("control_strategy") {
                     b.enabled = false;
                 }
             }
         }
     }
-    let sealed_b = hh_hir::seal(&doc_b, 1).expect("re-seal");
-    let d = hh_assembly::diff(
+    let sealed_b = hharness_hir::seal(&doc_b, 1).expect("re-seal");
+    let d = hharness_assembly::diff(
         &sealed_a,
         &sealed_b,
         prov(9),
-        hh_hir::diff::DiffDerivation::default(),
+        hharness_hir::diff::DiffDerivation::default(),
     )
     .expect("diff");
     let replaces = d
@@ -626,11 +626,11 @@ impl VariantRuntime for StubRuntime {
     fn bind(
         &self,
         slot: &str,
-        _class: &hh_registry::records::ClassRecord,
+        _class: &hharness_registry::records::ClassRecord,
         _binding: &SlotBinding,
-        _variant: &hh_registry::records::VariantRecord,
+        _variant: &hharness_registry::records::VariantRecord,
         _ctx: &BindContext,
-    ) -> Result<String, hh_assembly::instantiate::BindReason> {
+    ) -> Result<String, hharness_assembly::instantiate::BindReason> {
         Ok(format!("handle:{slot}"))
     }
 }
@@ -642,12 +642,12 @@ impl VariantRuntime for RefusingRuntime {
     fn bind(
         &self,
         _slot: &str,
-        _class: &hh_registry::records::ClassRecord,
+        _class: &hharness_registry::records::ClassRecord,
         _binding: &SlotBinding,
-        _variant: &hh_registry::records::VariantRecord,
+        _variant: &hharness_registry::records::VariantRecord,
         _ctx: &BindContext,
-    ) -> Result<String, hh_assembly::instantiate::BindReason> {
-        Err(hh_assembly::instantiate::BindReason::TrustDenied)
+    ) -> Result<String, hharness_assembly::instantiate::BindReason> {
+        Err(hharness_assembly::instantiate::BindReason::TrustDenied)
     }
 }
 
@@ -659,19 +659,19 @@ fn instantiate_binds_in_process_variants_and_stamps_component_bound() {
     let (run, _lease) = ledger
         .open_run(RunManifest::minimal(RunKind::Agent), "w")
         .unwrap();
-    let account = hh_budget::Account::open(&mut ledger, &run).unwrap();
+    let account = hharness_budget::Account::open(&mut ledger, &run).unwrap();
     let ctx = BindContext {
         run_id: &run,
         profile: Some("sha256:profile"),
         accounting: &account,
     };
-    let out = hh_assembly::instantiate(&sealed, &cat, &store, &StubRuntime, &ctx);
+    let out = hharness_assembly::instantiate(&sealed, &cat, &store, &StubRuntime, &ctx);
     let inst = out.instance.expect("all binds succeeded");
     assert_eq!(inst.bindings.len(), 2, "both stage-1 slots bound");
     assert!(
         out.events
             .iter()
-            .all(|e| e.class == hh_assembly::events::COMPONENT_BOUND),
+            .all(|e| e.class == hharness_assembly::events::COMPONENT_BOUND),
         "every row is lifecycle.component.bound"
     );
     assert_eq!(out.events.len(), 2);
@@ -690,17 +690,17 @@ fn instantiate_reports_a_typed_bind_failure() {
     let (run, _lease) = ledger
         .open_run(RunManifest::minimal(RunKind::Agent), "w")
         .unwrap();
-    let account = hh_budget::Account::open(&mut ledger, &run).unwrap();
+    let account = hharness_budget::Account::open(&mut ledger, &run).unwrap();
     let ctx = BindContext {
         run_id: &run,
         profile: Some("sha256:profile"),
         accounting: &account,
     };
-    let out = hh_assembly::instantiate(&sealed, &cat, &store, &RefusingRuntime, &ctx);
+    let out = hharness_assembly::instantiate(&sealed, &cat, &store, &RefusingRuntime, &ctx);
     assert!(out.instance.is_none());
     assert_eq!(
         out.failure.map(|f| f.reason),
-        Some(hh_assembly::instantiate::BindReason::TrustDenied)
+        Some(hharness_assembly::instantiate::BindReason::TrustDenied)
     );
     assert!(out
         .events
@@ -714,7 +714,7 @@ fn a_model_conditioned_variant_binds_without_touching_core() {
     // names a model condition registers, resolves, seals and binds through the
     // data-only path — no Core change.
     let mut store =
-        hh_registry::store::RegistryStore::open(dir("model-conditioned"), &kernel()).unwrap();
+        hharness_registry::store::RegistryStore::open(dir("model-conditioned"), &kernel()).unwrap();
     // A `context_policy` class whose declaration schema admits the model-condition key.
     let mut cls = class_record("context_policy");
     cls.declaration_schema = Json::obj([
@@ -793,19 +793,19 @@ fn a_model_conditioned_variant_binds_without_touching_core() {
     let cat = Stage1Catalog::stage1();
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("the conditioned variant resolves")
+        hharness_assembly::resolve(&doc, &mut env).expect("the conditioned variant resolves")
     };
     let mut ledger = Store::open_test(dir("model-conditioned-ledger"), 1_000).unwrap();
     let (run, _lease) = ledger
         .open_run(RunManifest::minimal(RunKind::Agent), "w")
         .unwrap();
-    let account = hh_budget::Account::open(&mut ledger, &run).unwrap();
+    let account = hharness_budget::Account::open(&mut ledger, &run).unwrap();
     let ctx = BindContext {
         run_id: &run,
         profile: Some("sha256:profile"),
         accounting: &account,
     };
-    let out = hh_assembly::instantiate(&sealed, &cat, &store, &StubRuntime, &ctx);
+    let out = hharness_assembly::instantiate(&sealed, &cat, &store, &StubRuntime, &ctx);
     assert!(
         out.instance.is_some(),
         "the model-conditioned variant binds: {:?}",
@@ -823,7 +823,7 @@ fn delivered_event(artefact: &str) -> EventEnvelope {
         ts: "2026-09-16T00:00:00.000Z".into(),
         hlc: None,
         plane: EventPlane::Observation,
-        class: hh_assembly::events::ARTEFACT_DELIVERED.into(),
+        class: hharness_assembly::events::ARTEFACT_DELIVERED.into(),
         schema_version: 1,
         producer: Producer::kernel("kernel:context"),
         participant_class: ParticipantClass::Native,
@@ -831,13 +831,13 @@ fn delivered_event(artefact: &str) -> EventEnvelope {
         durability: Durability::Ledger,
         scope: Scope::default(),
         lease_generation: 1,
-        parent_event_id: hh_ledger::ids::ROOT_EVENT.into(),
+        parent_event_id: hharness_ledger::ids::ROOT_EVENT.into(),
         causes: vec![],
         refs: vec![],
         ir_refs: vec![],
         surface_ids: BTreeMap::new(),
         provenance: Some(kernel()),
-        prev_hash: hh_ledger::ids::GENESIS_HASH.into(),
+        prev_hash: hharness_ledger::ids::GENESIS_HASH.into(),
         payload: Json::obj([("artefact_id", Json::str(artefact))]),
         hash: String::new(),
     }
@@ -854,26 +854,26 @@ fn verify_resume_refuses_removal_of_a_delivered_tool() {
     persisted_doc
         .nodes
         .push(named_tool_node("test:search", "search", 8));
-    let persisted = hh_hir::seal(&persisted_doc, 0).expect("seal persisted");
+    let persisted = hharness_hir::seal(&persisted_doc, 0).expect("seal persisted");
     let (current, _s2) = resolved_sealed("resume-deliver");
     let events = vec![delivered_event("search")];
     let view = LedgerView {
         events: &events,
-        budget_gate: &hh_assembly::DenyAll,
+        budget_gate: &hharness_assembly::DenyAll,
     };
-    let verdict = hh_assembly::verify_resume(
+    let verdict = hharness_assembly::verify_resume(
         &persisted,
         &current,
         &view,
         prov(9),
-        hh_hir::diff::DiffDerivation::default(),
+        hharness_hir::diff::DiffDerivation::default(),
     )
     .expect("not a gate failure");
     match verdict {
-        hh_assembly::ResumeVerdict::Incompatible { reasons } => {
+        hharness_assembly::ResumeVerdict::Incompatible { reasons } => {
             assert!(reasons
                 .iter()
-                .any(|r| r.rule == hh_assembly::ResumeRule::DeliveredToolRemoved));
+                .any(|r| r.rule == hharness_assembly::ResumeRule::DeliveredToolRemoved));
         }
         _ => panic!("delivered-tool removal must be incompatible"),
     }
@@ -886,28 +886,28 @@ fn verify_resume_allows_additions() {
     cur_doc
         .nodes
         .push(named_tool_node("test:extra", "extra", 8));
-    let current = hh_hir::seal(&cur_doc, 1).expect("seal current");
+    let current = hharness_hir::seal(&cur_doc, 1).expect("seal current");
     let events = vec![];
     let view = LedgerView {
         events: &events,
-        budget_gate: &hh_assembly::AllowAll,
+        budget_gate: &hharness_assembly::AllowAll,
     };
-    let verdict = hh_assembly::verify_resume(
+    let verdict = hharness_assembly::verify_resume(
         &persisted,
         &current,
         &view,
         prov(9),
-        hh_hir::diff::DiffDerivation::default(),
+        hharness_hir::diff::DiffDerivation::default(),
     )
     .expect("not a gate failure");
     match verdict {
-        hh_assembly::ResumeVerdict::Compatible { diff_ref, .. } => {
+        hharness_assembly::ResumeVerdict::Compatible { diff_ref, .. } => {
             assert!(
                 diff_ref.starts_with("sha256:"),
                 "the diff is content-addressed"
             );
         }
-        hh_assembly::ResumeVerdict::Incompatible { reasons } => {
+        hharness_assembly::ResumeVerdict::Incompatible { reasons } => {
             panic!("an addition is compatible: {reasons:?}")
         }
     }
@@ -928,21 +928,21 @@ fn verify_resume_refuses_a_dialect_change() {
     let events = vec![];
     let view = LedgerView {
         events: &events,
-        budget_gate: &hh_assembly::AllowAll,
+        budget_gate: &hharness_assembly::AllowAll,
     };
-    let verdict = hh_assembly::verify_resume(
+    let verdict = hharness_assembly::verify_resume(
         &persisted,
         &current,
         &view,
         prov(9),
-        hh_hir::diff::DiffDerivation::default(),
+        hharness_hir::diff::DiffDerivation::default(),
     )
     .expect("not a gate failure");
     match verdict {
-        hh_assembly::ResumeVerdict::Incompatible { reasons } => {
+        hharness_assembly::ResumeVerdict::Incompatible { reasons } => {
             assert!(reasons
                 .iter()
-                .any(|r| r.rule == hh_assembly::ResumeRule::DialectChanged));
+                .any(|r| r.rule == hharness_assembly::ResumeRule::DialectChanged));
         }
         _ => panic!("a dialect change is incompatible"),
     }
@@ -954,7 +954,7 @@ fn verify_resume_refuses_a_dialect_change() {
 fn link_precheck_refuses_an_unresolved_selector() {
     let (sealed, _store) = resolved_sealed("link");
     // A clean sealed definition passes.
-    hh_assembly::link_precheck(&sealed).expect("resolved doc passes C-LINK-1");
+    hharness_assembly::link_precheck(&sealed).expect("resolved doc passes C-LINK-1");
     // A fabricated definition with an unpinned selector inside fails C-LINK-1.
     let mut bad = sealed.document.clone();
     if let Some(Json::Obj(m)) = bad.assembly.as_mut() {
@@ -976,7 +976,7 @@ fn link_precheck_refuses_an_unresolved_selector() {
         definition_ref: sealed.definition_ref.clone(),
         closed_world_tools: sealed.closed_world_tools.clone(),
     };
-    let errs = hh_assembly::link_precheck(&fabricated).expect_err("selector → C-LINK-1");
+    let errs = hharness_assembly::link_precheck(&fabricated).expect_err("selector → C-LINK-1");
     assert!(errs.iter().any(|d| d.code == Code::LinkUnboundSlot));
 }
 
@@ -986,18 +986,21 @@ fn link_precheck_refuses_an_unresolved_selector() {
 fn the_must_lists_and_rung_are_declared() {
     // AC-CC-09 — the code/data boundary is published as data: both lists non-empty,
     // disjoint spellings, the rung C0.
-    assert!(!hh_assembly::MUST_BE_CODE.is_empty());
-    assert!(!hh_assembly::MUST_BE_DATA.is_empty());
-    for item in hh_assembly::MUST_BE_CODE {
-        assert!(!hh_assembly::MUST_BE_DATA.contains(item));
+    assert!(!hharness_assembly::MUST_BE_CODE.is_empty());
+    assert!(!hharness_assembly::MUST_BE_DATA.is_empty());
+    for item in hharness_assembly::MUST_BE_CODE {
+        assert!(!hharness_assembly::MUST_BE_DATA.contains(item));
     }
-    assert_eq!(hh_assembly::RUNG, hh_assembly::boundary::LadderRung::C0);
+    assert_eq!(
+        hharness_assembly::RUNG,
+        hharness_assembly::boundary::LadderRung::C0
+    );
 }
 
 // ── extension trust (§5g.5; S1.23) ───────────────────────────────────────────
 
-use hh_assembly::grammar::{ExtensionBlock, MergePolicy};
-use hh_registry::extension::{DeclaredSource, ExtensionKind, ExtensionRef};
+use hharness_assembly::grammar::{ExtensionBlock, MergePolicy};
+use hharness_registry::extension::{DeclaredSource, ExtensionKind, ExtensionRef};
 
 fn git_source() -> DeclaredSource {
     DeclaredSource::Git {
@@ -1026,8 +1029,8 @@ fn extensions_member_round_trips_through_the_grammar() {
             Some("latest"),
         )],
     ));
-    let bytes = hh_assembly::schema::encode(&a);
-    let decoded = hh_assembly::schema::load(&bytes, None).expect("round-trips");
+    let bytes = hharness_assembly::schema::encode(&a);
+    let decoded = hharness_assembly::schema::load(&bytes, None).expect("round-trips");
     assert_eq!(decoded, a, "load(encode(a)) = a");
 }
 
@@ -1066,7 +1069,7 @@ fn ac_2_8_5_1_resolve_pins_extension_refs() {
     let doc = doc_with(&a);
     let sealed = {
         let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     let s = sealed
         .document
@@ -1083,13 +1086,13 @@ fn ac_2_8_5_1_resolve_pins_extension_refs() {
 
 /// Inject an `extensions` member into an already-resolved document's assembly
 /// (the slots stay pinned so `seal` reaches the extension check).
-fn doc_with_extensions(tag: &str, refs: Vec<ExtensionRef>) -> hh_hir::document::HirDocument {
+fn doc_with_extensions(tag: &str, refs: Vec<ExtensionRef>) -> hharness_hir::document::HirDocument {
     let (sealed, _store) = resolved_sealed(tag);
     let mut doc = sealed.document.clone();
     let ext_j = Json::obj([
         (
             "sources",
-            Json::Arr(vec![hh_registry::extension::declared_source_json(
+            Json::Arr(vec![hharness_registry::extension::declared_source_json(
                 &git_source(),
             )]),
         ),
@@ -1097,7 +1100,7 @@ fn doc_with_extensions(tag: &str, refs: Vec<ExtensionRef>) -> hh_hir::document::
             "refs",
             Json::Arr(
                 refs.iter()
-                    .map(hh_registry::extension::extension_ref_json)
+                    .map(hharness_registry::extension::extension_ref_json)
                     .collect(),
             ),
         ),
@@ -1120,10 +1123,12 @@ fn ac_2_8_5_1_seal_refuses_unpinned_extension_ref() {
             Some("latest"),
         )],
     );
-    let errs = hh_hir::seal(&doc, 9).expect_err("unpinned ref refuses");
+    let errs = hharness_hir::seal(&doc, 9).expect_err("unpinned ref refuses");
     assert!(
-        errs.iter()
-            .any(|e| matches!(e, hh_hir::errors::HirError::UnpinnedInSealedForm { .. })),
+        errs.iter().any(|e| matches!(
+            e,
+            hharness_hir::errors::HirError::UnpinnedInSealedForm { .. }
+        )),
         "UnpinnedInSealedForm: {errs:?}"
     );
 }
@@ -1135,10 +1140,11 @@ fn ac_2_8_5_1_seal_refuses_a_pin_missing_content() {
     r.locator.resolved = Some("abc".into());
     r.locator.fetched_at = Some(1);
     let doc = doc_with_extensions("ext-seal-nocontent", vec![r]);
-    let errs = hh_hir::seal(&doc, 9).expect_err("content-less pin refuses");
-    assert!(errs
-        .iter()
-        .any(|e| matches!(e, hh_hir::errors::HirError::UnpinnedInSealedForm { .. })));
+    let errs = hharness_hir::seal(&doc, 9).expect_err("content-less pin refuses");
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        hharness_hir::errors::HirError::UnpinnedInSealedForm { .. }
+    )));
 }
 
 #[test]
@@ -1165,7 +1171,7 @@ fn resolve_extension_ref_reports_undeclared_source() {
     ));
     let doc = doc_with(&a);
     let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("undeclared source refuses");
+    let errs = hharness_assembly::resolve(&doc, &mut env).expect_err("undeclared source refuses");
     assert!(
         errs.iter().any(|d| d.code == Code::ExtUndeclaredSource),
         "C-EXT-2: {:?}",
@@ -1189,7 +1195,7 @@ fn resolve_extension_ref_unmatched_is_typed_refusal() {
     ));
     let doc = doc_with(&a);
     let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
-    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("no record refuses");
+    let errs = hharness_assembly::resolve(&doc, &mut env).expect_err("no record refuses");
     assert!(
         errs.iter().any(|d| d.code == Code::ExtUnresolved),
         "C-EXT-4: {:?}",
@@ -1247,8 +1253,8 @@ fn validate_sealed_reports_an_unpinned_extension_ref() {
         definition_ref: sealed.definition_ref.clone(),
         closed_world_tools: sealed.closed_world_tools.clone(),
     };
-    let r = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&fabricated),
+    let r = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&fabricated),
         &Stage1Catalog::stage1(),
         None,
         &kernel(),

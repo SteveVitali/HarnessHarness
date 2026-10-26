@@ -12,12 +12,12 @@
 
 use std::io::Read;
 
-use hh_bench::adapter::{AdapterError, AdapterOp, BenchmarkAdapter};
-use hh_bench::adapters;
-use hh_bench::grade::GradeRequest;
-use hh_bench::records::{EnvironmentHandle, Surface};
-use hh_ontology::lab::{BenchmarkNetworkMode, EnvironmentFamily, VerifierIsolation};
-use hh_wire::Json;
+use hharness_bench::adapter::{AdapterError, AdapterOp, BenchmarkAdapter};
+use hharness_bench::adapters;
+use hharness_bench::grade::GradeRequest;
+use hharness_bench::records::{EnvironmentHandle, Surface};
+use hharness_ontology::lab::{BenchmarkNetworkMode, EnvironmentFamily, VerifierIsolation};
+use hharness_wire::Json;
 
 fn main() {
     let mut buf = String::new();
@@ -29,7 +29,7 @@ fn main() {
 }
 
 fn run(input: &str) -> i32 {
-    let req = match hh_wire::parse(input) {
+    let req = match hharness_wire::parse(input) {
         Ok(j) => j,
         Err(e) => return fail("MalformedRequest", &format!("parse: {e}")),
     };
@@ -190,7 +190,7 @@ fn dispatch(adapter: &impl BenchmarkAdapter, op: AdapterOp, req: &Json) -> i32 {
             let format = req
                 .get("format")
                 .and_then(Json::as_str)
-                .and_then(hh_bench::adapter::ExportFormat::parse)
+                .and_then(hharness_bench::adapter::ExportFormat::parse)
                 .ok_or_else(|| AdapterError::MalformedRequest("missing/unknown `format`".into()))?;
             // The declaration gate runs before any environment work —
             // an undeclared format refuses at admission.
@@ -206,8 +206,9 @@ fn dispatch(adapter: &impl BenchmarkAdapter, op: AdapterOp, req: &Json) -> i32 {
             let task = adapter.task(&env.task_id)?;
             let reward_ppm = req.get("reward_ppm").and_then(Json::as_int).unwrap_or(0);
             let verdict = req.get("verdict").cloned().unwrap_or(Json::obj([]));
-            let (artifact, loss) =
-                hh_bench::foreign::export(adapter, format, &task, &sub, &verdict, reward_ppm)?;
+            let (artifact, loss) = hharness_bench::foreign::export(
+                adapter, format, &task, &sub, &verdict, reward_ppm,
+            )?;
             Ok(Json::obj([
                 ("artifact", artifact.body.clone()),
                 ("content_ref", Json::str(artifact.content_ref)),

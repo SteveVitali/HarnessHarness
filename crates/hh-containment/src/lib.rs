@@ -1,4 +1,4 @@
-//! `hh-containment` — the C0/Stage-1 **containment floor** of spec §5g.4
+//! `hharness-containment` — the C0/Stage-1 **containment floor** of spec §5g.4
 //! (R-2.8.4; ADR-0060/0061/0062).
 //!
 //! Containment is the deterministic backstop beneath every probabilistic gate:
@@ -12,7 +12,7 @@
 //!   content-addressed record: `{policy_id: semantic_id, version_id,
 //!   provenance, fs, net, proc, resources, amendment, residual_channels[],
 //!   ext}` with `KERNEL_PROTECTED` / `KERNEL_DENY` and the deny-by-default
-//!   kernel policy. Identity runs through `hh_identity` (CC1) — `policy_id`
+//!   kernel policy. Identity runs through `hharness_identity` (CC1) — `policy_id`
 //!   is the semantic projection (`provenance`, `ext`, justification text and
 //!   host spelling excluded — T-LCD-10); `version_id` the full canonical
 //!   record. There is **one** schema (CC7): `to_json`/`from_json` here.
@@ -45,7 +45,7 @@
 //!   `containment_degraded` and never applies to Lab runs.
 //! - **Events** ([`events`]) — the `security.containment.{applied,violated,
 //!   unverified}` payload builders (audit-grade, content-free; the class rows
-//!   are registered in `hh-ledger`).
+//!   are registered in `hharness-ledger`).
 //!
 //! Stage 2 (S2.4; ADR-0266) adds:
 //!
@@ -63,12 +63,12 @@
 //!
 //! Deliberately **absent** (still deferred in `docs/tickets/DEFERRALS.md`):
 //! the credential-binding slot resolution's *helper* side (the mediator
-//! resolves sentinels through `hh-secrets`), resources→budget mapping,
+//! resolves sentinels through `hharness-secrets`), resources→budget mapping,
 //! phase schedules, `user_space_kernel`/`microvm`/`external` attested
 //! backends, `tls.terminate`/`inspect_hooks` enforcement, and the
 //! T-CON/AC-H4 executable battery.
 //!
-//! Boundary rules (same discipline as `hh-monitor`): every type is a
+//! Boundary rules (same discipline as `hharness-monitor`): every type is a
 //! canonical record — no `Text` is *read* on any decision path (the record
 //! carries `Text` justifications/statements as authored data; nothing here
 //! interprets them), authority is conferred by `ProvenanceRecord` never read

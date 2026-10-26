@@ -1,7 +1,7 @@
 //! `FlowPolicy` — the `HarnessRule{action: flow_policy(FlowPolicy)}` payload
 //! shape §5g.2 §3 owns (ADR-0056 D1): `{policy_id, issuer: ProvenanceRecord,
 //! scope: PersistenceScope, rules: [FlowRule]}` issued at `authority ≥
-//! definition`. `hh-hir` carries the action as a structured record
+//! definition`. `hharness-hir` carries the action as a structured record
 //! (`RuleAction::FlowPolicy(Json)`); this module owns the member shape, the
 //! seal-time validation, evaluation through [`check_flow`], and
 //! [`classify_policy_edit`] (ADR-0056 D5).
@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, PersistenceScope};
 use crate::decode::DecodeError;

@@ -26,15 +26,15 @@
 
 use std::io::Read;
 
-use hh_gateway::attempts::CollectSink;
-use hh_gateway::codec::WireFrame;
-use hh_gateway::dialect::WireDialect;
-use hh_gateway::gateway::{
+use hharness_gateway::attempts::CollectSink;
+use hharness_gateway::codec::WireFrame;
+use hharness_gateway::dialect::WireDialect;
+use hharness_gateway::gateway::{
     CredentialHandle, CredentialPort, EndpointAllowlist, ModelGateway, Transport,
 };
-use hh_gateway::plan::{CachePlan, Capabilities, Extensions, ProviderRequestPlan};
-use hh_gateway::vocab::{AttemptPolicy, ModelError, Purpose};
-use hh_wire::json::{parse, Json};
+use hharness_gateway::plan::{CachePlan, Capabilities, Extensions, ProviderRequestPlan};
+use hharness_gateway::vocab::{AttemptPolicy, ModelError, Purpose};
+use hharness_wire::json::{parse, Json};
 
 /// The fake transport — replays the request's `frames` verbatim (the
 /// recording fixture).
@@ -62,15 +62,17 @@ impl CredentialPort for StubCredentials {
         &mut self,
         credential_ref: Option<&str>,
         _endpoint_ref: &str,
-        auth: &[hh_gateway::dialect::AuthKind],
-    ) -> Result<CredentialHandle, hh_gateway::errors::GatewayError> {
+        auth: &[hharness_gateway::dialect::AuthKind],
+    ) -> Result<CredentialHandle, hharness_gateway::errors::GatewayError> {
         let needs = auth
             .iter()
-            .any(|a| *a != hh_gateway::dialect::AuthKind::None);
+            .any(|a| *a != hharness_gateway::dialect::AuthKind::None);
         if needs && credential_ref.is_none() {
-            return Err(hh_gateway::errors::GatewayError::CredentialUnavailable {
-                detail: "dialect requires an auth kind; no credential_ref".into(),
-            });
+            return Err(
+                hharness_gateway::errors::GatewayError::CredentialUnavailable {
+                    detail: "dialect requires an auth kind; no credential_ref".into(),
+                },
+            );
         }
         Ok(CredentialHandle {
             binding_id: credential_ref.map(str::to_string),
@@ -102,10 +104,12 @@ fn main() {
     // contract).
     if str_member(&req, "command").as_deref() == Some("dialect") {
         let doc = match str_member(&req, "id").as_deref() {
-            Some(hh_gateway::dialects::OPENAI_COMPATIBLE_ID) => hh_gateway::openai_compatible_doc(),
-            Some(hh_gateway::dialects::OPENAI_ID) => hh_gateway::openai_doc(),
-            Some(hh_gateway::dialects::ANTHROPIC_MESSAGES_ID) => {
-                hh_gateway::anthropic_messages_doc()
+            Some(hharness_gateway::dialects::OPENAI_COMPATIBLE_ID) => {
+                hharness_gateway::openai_compatible_doc()
+            }
+            Some(hharness_gateway::dialects::OPENAI_ID) => hharness_gateway::openai_doc(),
+            Some(hharness_gateway::dialects::ANTHROPIC_MESSAGES_ID) => {
+                hharness_gateway::anthropic_messages_doc()
             }
             other => {
                 println!("{{\"result\":\"refused\",\"refusal\":\"unknown dialect id {other:?}\"}}");
@@ -165,7 +169,7 @@ fn main() {
     // not plan-schema edge cases; the strict record codecs are unit-tested).
     let plan_j = req.get("plan").cloned().unwrap_or(Json::Null);
     let model_call_id = str_member(&req, "model_call_id").unwrap_or_else(|| "mc-1".into());
-    let model_ref = hh_gateway::plan::ModelRef {
+    let model_ref = hharness_gateway::plan::ModelRef {
         profile_ref: str_member(&req, "profile_ref").unwrap_or_else(|| "prof.test".into()),
         provider_model_id: str_member(&plan_j, "model_ref").unwrap_or_else(|| "m.test".into()),
         snapshot_id: str_member(&plan_j, "snapshot_id"),
@@ -192,7 +196,7 @@ fn main() {
         budget_reservation_id: str_member(&plan_j, "budget_reservation_id"),
         canonical_len: 0,
     };
-    let request = hh_gateway::plan::InferenceRequest {
+    let request = hharness_gateway::plan::InferenceRequest {
         model_call_id: model_call_id.clone(),
         model_ref,
         plan,
@@ -206,10 +210,10 @@ fn main() {
         budget_reservation_id: str_member(&plan_j, "budget_reservation_id"),
         attempt_policy: AttemptPolicy::c0(),
         deadline_ms: None,
-        cache_state_hint: hh_gateway::cache::ExpectedState::Unknown,
+        cache_state_hint: hharness_gateway::cache::ExpectedState::Unknown,
         seed_request: None,
-        observability: hh_gateway::plan::CallObservability::default(),
-        request_class: hh_gateway::plan::RequestClass::Interactive,
+        observability: hharness_gateway::plan::CallObservability::default(),
+        request_class: hharness_gateway::plan::RequestClass::Interactive,
         deferred_deadline_ms: None,
         stream: true,
         substitution_allowed: None,
@@ -230,9 +234,9 @@ fn main() {
     let live = str_member(&req, "transport").as_deref() == Some("live");
     let mut replay_transport = FakeTransport { frames };
     let mut live_transport =
-        live.then(|| hh_gateway::http_transport::HttpModelTransport::new(dialect.clone()));
+        live.then(|| hharness_gateway::http_transport::HttpModelTransport::new(dialect.clone()));
     let mut stub_credentials = StubCredentials;
-    let mut broker_credentials = hh_gateway::credentials::BrokerCredentialPort::default();
+    let mut broker_credentials = hharness_gateway::credentials::BrokerCredentialPort::default();
     let (transport, credentials): (&mut dyn Transport, &mut dyn CredentialPort) =
         match &mut live_transport {
             Some(t) => (t, &mut broker_credentials),

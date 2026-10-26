@@ -13,17 +13,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::BindParams;
-use hh_fleet::capabilities::CapState;
-use hh_fleet::source::WorkSourceAdapter;
-use hh_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
-use hh_fleet_adapter::{WORK_SOURCE_CLASS, WORK_SOURCE_CONTRACT};
-use hh_registry::extension::plugin::{manifest_from_json, manifest_to_json};
-use hh_varhost::{
+use hharness_embed_schema::plugin_abi::BindParams;
+use hharness_fleet::capabilities::CapState;
+use hharness_fleet::source::WorkSourceAdapter;
+use hharness_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
+use hharness_fleet_adapter::{WORK_SOURCE_CLASS, WORK_SOURCE_CONTRACT};
+use hharness_registry::extension::plugin::{manifest_from_json, manifest_to_json};
+use hharness_varhost::{
     load_package, seal_package, spawn, unstamp_json, variant_class, InvokeOutcome, RecordingPorts,
     SpawnSpec, VariantHost, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -44,7 +44,7 @@ fn github_bin() -> Option<PathBuf> {
 
 /// Materialize the package: manifest + `bin/` copy of the built variant
 /// binary, `seal` (real code_pointer pins), write, `load` (verify).
-fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
+fn materialize() -> Option<(tempfile::TempDir, hharness_varhost::VariantPackage)> {
     let bin = github_bin()?;
     let dir = tempfile::tempdir().ok()?;
     let root = dir.path();
@@ -53,7 +53,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
     let text =
         std::fs::read_to_string(repo_root().join("plugins/hh-github-issues/plugin.manifest.json"))
             .unwrap();
-    let j = hh_wire::json::parse(&text).unwrap();
+    let j = hharness_wire::json::parse(&text).unwrap();
     let m = manifest_from_json(&j, "plugin.manifest.json").unwrap();
     let sealed = seal_package(root, &m).expect("seal");
     let sealed_text = manifest_to_json(&sealed).to_canonical_string();
@@ -62,7 +62,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
     Some((dir, pkg))
 }
 
-fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
+fn spec(pkg: hharness_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
     let exec_args = vec![
         "--version-id".into(),
         pkg.version_id().to_string(),
@@ -76,14 +76,14 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
         package: pkg,
         session_id: "gh-pkg-1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir,
         exec_args,
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:hh/hh-github-issues", "pin:sealed"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:hh/hh-github-issues", "pin:sealed"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -100,7 +100,7 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
 /// outputs.
 struct SessionChannel<'a> {
     host: &'a mut VariantHost<RecordingPorts, VecEvents>,
-    session: &'a mut hh_varhost::VariantSession,
+    session: &'a mut hharness_varhost::VariantSession,
     binding: String,
     seq: u64,
 }
@@ -210,7 +210,7 @@ fn packaged_manifest_decodes_and_declares() {
     let text =
         std::fs::read_to_string(repo_root().join("plugins/hh-github-issues/plugin.manifest.json"))
             .expect("packaged manifest readable");
-    let j = hh_wire::json::parse(&text).expect("manifest json");
+    let j = hharness_wire::json::parse(&text).expect("manifest json");
     let m = manifest_from_json(&j, "plugin.manifest.json").expect("manifest decodes");
     assert_eq!(m.identity.id(), "hh/hh-github-issues");
     let c = m
@@ -221,7 +221,7 @@ fn packaged_manifest_decodes_and_declares() {
     let exe = c.unwrap().executable.as_ref().expect("executable");
     assert_eq!(
         exe.isolation,
-        hh_registry::extension::IsolationClass::SubprocessConfined
+        hharness_registry::extension::IsolationClass::SubprocessConfined
     );
     // The confined variant requests nothing — no egress, no env keys,
     // no fs roots (records-in/records-out).
@@ -238,7 +238,7 @@ fn github_plugin_runs_the_contract_ops_end_to_end() {
         eprintln!("hh-github-issues binary not built — skipped");
         return;
     };
-    if hh_env::helper::helper_binary().is_none() {
+    if hharness_env::helper::helper_binary().is_none() {
         eprintln!("hh-helper binary not found — skipped");
         return;
     }

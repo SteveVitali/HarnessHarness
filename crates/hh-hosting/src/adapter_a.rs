@@ -23,9 +23,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::participant::HostingMechanism;
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_ontology::participant::HostingMechanism;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 use crate::abi::{HostingError, ResumeCursor};
 use crate::events::{EventChannel, HostedOrigin, Mediation};
@@ -817,7 +817,7 @@ impl AdapterA {
 pub fn adapter_a_record(
     adapter_version: &str,
     intercept: ModelIoIntercept,
-    debt: hh_hir::records::AssumptionDebtRecord,
+    debt: hharness_hir::records::AssumptionDebtRecord,
 ) -> AdapterRecord {
     let mut defaults = BTreeMap::new();
     for (dim, v) in [

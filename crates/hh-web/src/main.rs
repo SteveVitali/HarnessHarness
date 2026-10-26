@@ -12,13 +12,13 @@
 use std::net::{SocketAddr, TcpListener};
 use std::process::ExitCode;
 
-use hh_telemetry::sinks::SinkPolicy;
-use hh_wire::json::Json;
+use hharness_telemetry::sinks::SinkPolicy;
+use hharness_wire::json::Json;
 
-use hh_web::gate::{mint_token, GateConfig};
-use hh_web::server;
-use hh_web::session::Sessions;
-use hh_web::sink::parse_policy;
+use hharness_web::gate::{mint_token, GateConfig};
+use hharness_web::server;
+use hharness_web::session::Sessions;
+use hharness_web::sink::parse_policy;
 
 fn usage() -> ! {
     eprintln!(
@@ -162,7 +162,7 @@ fn main() -> ExitCode {
     // default (a local display *is* the consent context; the policy's
     // `requires_consent` is asserted by the launcher for content).
     let sink = match &sink_json {
-        Some(s) => match hh_wire::json::parse(s)
+        Some(s) => match hharness_wire::json::parse(s)
             .ok()
             .and_then(|j: Json| parse_policy(&j).ok())
         {
@@ -175,9 +175,9 @@ fn main() -> ExitCode {
         None => {
             let mut p = SinkPolicy::accounting("hh-web");
             p.content_classes
-                .insert(hh_telemetry::sinks::ContentClass::Structural);
+                .insert(hharness_telemetry::sinks::ContentClass::Structural);
             p.content_classes
-                .insert(hh_telemetry::sinks::ContentClass::Content);
+                .insert(hharness_telemetry::sinks::ContentClass::Content);
             p.requires_consent = true;
             p
         }
@@ -194,13 +194,16 @@ fn main() -> ExitCode {
     // The serving scrub — registered patterns + declared canaries (the
     // mask set is empty: live credentials are the kernel broker's; the
     // surface's sweep is defence in depth, AC-6(g)).
-    let mut detectors = hh_secrets::DetectorSet::standard(hh_secrets::MaskSet::default());
+    let mut detectors =
+        hharness_secrets::DetectorSet::standard(hharness_secrets::MaskSet::default());
     for c in &canaries {
         match c.split_once(':') {
-            Some((id, value)) if !value.is_empty() => detectors.canaries.push(hh_secrets::Canary {
-                id: id.into(),
-                value: value.into(),
-            }),
+            Some((id, value)) if !value.is_empty() => {
+                detectors.canaries.push(hharness_secrets::Canary {
+                    id: id.into(),
+                    value: value.into(),
+                })
+            }
             _ => {
                 eprintln!("hh-web: --canary wants <id>:<value>");
                 return ExitCode::FAILURE;

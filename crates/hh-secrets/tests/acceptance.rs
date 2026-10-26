@@ -7,22 +7,22 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_hir::diff::{
+use hharness_hir::diff::{
     AuthorityDelta, Delta, DiffClassification, DiffDerivation, DiffOp, DiffOpTag, HirDiff,
 };
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-use hh_hir::errors::HirError;
-use hh_hir::kinds::EntityKind;
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, KindRecord};
-use hh_hir::refs::Ref;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+use hharness_hir::errors::HirError;
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, KindRecord};
+use hharness_hir::refs::Ref;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_secrets::*;
+use hharness_secrets::*;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -196,8 +196,8 @@ fn github_spec() -> SecretChannelSpec {
         ],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
         delivery_modes: [
-            hh_monitor::assess::SecretTransport::ProxyInjected,
-            hh_monitor::assess::SecretTransport::WrappedLongLived,
+            hharness_monitor::assess::SecretTransport::ProxyInjected,
+            hharness_monitor::assess::SecretTransport::WrappedLongLived,
         ]
         .into_iter()
         .collect(),
@@ -268,8 +268,8 @@ fn ac_r_2_8_3_1_environment_and_views_show_placeholders_only() {
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: decision_ref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -495,8 +495,8 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: decision_ref.clone(),
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },
@@ -572,8 +572,8 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: decision_ref,
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -611,8 +611,8 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: "evt-nonexistent".into(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -655,8 +655,8 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
-            env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-            mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+            env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+            mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
             monitor_decision_ref: deny_id.clone(),
             destinations: ["api.github.com".into()].into_iter().collect(),
         },
@@ -678,8 +678,8 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
-                mode: hh_monitor::assess::SecretTransport::ProxyInjected,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
+                mode: hharness_monitor::assess::SecretTransport::ProxyInjected,
                 monitor_decision_ref: decision_ref,
                 destinations: ["api.github.com".into()].into_iter().collect(),
             },

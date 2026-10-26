@@ -10,22 +10,22 @@
 //!
 //! R-2.11 (ADR-0343 D3): the pure half — [`OwnedObject`],
 //! [`OwnershipTable`], [`WriteVerdict`] and [`check_write`] (monitor
-//! check 8, §5e.5) — lives in `hh_monitor::ownership` so the seven-stage
-//! dispatcher (`hh-env`, a *lower* tier than this crate) runs the check
+//! check 8, §5e.5) — lives in `hharness_monitor::ownership` so the seven-stage
+//! dispatcher (`hharness-env`, a *lower* tier than this crate) runs the check
 //! at `prepare` without a dependency cycle. This module keeps the verb
 //! half — the kernel-minted row producers and the lease-release sweep —
 //! and re-exports the monitor's types so every existing call site keeps
-//! its `hh_subagent::ownership::*` spelling (CC1: one implementation).
+//! its `hharness_subagent::ownership::*` spelling (CC1: one implementation).
 
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::types::OwnedObject;
 use crate::types::SpawnError;
 
 // The monitor half — re-exported so the public path is stable (the
 // implementation moved down-tier at R-2.11; no second spelling).
-pub use hh_monitor::ownership::{check_write, OwnershipTable, WriteVerdict};
+pub use hharness_monitor::ownership::{check_write, OwnershipTable, WriteVerdict};
 
 /// `record_write_refusal(store, run_id, lease, effect_id, object, verdict)`
 /// — the audit half of check 8: `security.policy.evaluated{check:
@@ -34,7 +34,7 @@ pub use hh_monitor::ownership::{check_write, OwnershipTable, WriteVerdict};
 pub fn record_write_refusal(
     store: &mut Store,
     run_id: &str,
-    lease: &hh_ledger::store::Lease,
+    lease: &hharness_ledger::store::Lease,
     effect_id: &str,
     object: &OwnedObject,
     verdict: &WriteVerdict,
@@ -86,11 +86,11 @@ pub fn record_write_refusal(
 pub fn transfer_ownership(
     store: &mut Store,
     run_id: &str,
-    lease: &hh_ledger::store::Lease,
+    lease: &hharness_ledger::store::Lease,
     object: &OwnedObject,
     from: &str,
     to: &str,
-    basis: &hh_ledger::manifest::EventRef,
+    basis: &hharness_ledger::manifest::EventRef,
     ownerships: &OwnershipTable,
 ) -> Result<String, SpawnError> {
     if !ownerships.holds(from, object) {
@@ -129,11 +129,11 @@ pub fn transfer_ownership(
 pub fn return_ownership(
     store: &mut Store,
     run_id: &str,
-    lease: &hh_ledger::store::Lease,
+    lease: &hharness_ledger::store::Lease,
     object: &OwnedObject,
     from: &str,
     to: &str,
-    basis: &hh_ledger::manifest::EventRef,
+    basis: &hharness_ledger::manifest::EventRef,
 ) -> Result<String, SpawnError> {
     let ev = crate::spawn::kernel_ev_pub(
         store,
@@ -166,7 +166,7 @@ pub fn return_ownership(
 pub fn release_resource_locks(
     store: &mut Store,
     run_id: &str,
-    lease: &hh_ledger::store::Lease,
+    lease: &hharness_ledger::store::Lease,
     child_run_id: &str,
 ) -> Result<Vec<String>, SpawnError> {
     let holder = format!("subagent:{child_run_id}");

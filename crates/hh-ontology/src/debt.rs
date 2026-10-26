@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// `DebtStatus` — the canonical four-value lifecycle sum (§5h.6 §3):
 /// `active → expiring → expired → retired`. `retired` is the only exit; expired
@@ -56,8 +56,8 @@ impl DebtStatus {
         }
     }
 
-    /// The legacy interim spellings (pre-`/1` `hh_hir::DebtStatus` /
-    /// `hh_compiler::profile::DebtStatus`): `open` → `active`, `discharged` →
+    /// The legacy interim spellings (pre-`/1` `hharness_hir::DebtStatus` /
+    /// `hharness_compiler::profile::DebtStatus`): `open` → `active`, `discharged` →
     /// `retired`, `violated` → `expired`. Decoding tolerates them so landed
     /// bodies keep decoding (CC8); emission is always canonical.
     pub fn parse_legacy(s: &str) -> Option<DebtStatus> {
@@ -1352,7 +1352,7 @@ pub const DEBT_HEALTH_METRICS: &[&str] = &[
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Canonical JSON codecs (CC7 — one schema source; hh-hir/hh-compiler/hh-registry
+// Canonical JSON codecs (CC7 — one schema source; hharness-hir/hharness-compiler/hharness-registry
 // delegate to these for the plain-data members).
 // ─────────────────────────────────────────────────────────────────────────────
 

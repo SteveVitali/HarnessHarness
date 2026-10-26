@@ -3,17 +3,17 @@
 
 use std::path::PathBuf;
 
-use hh_identity::names::ResolveMode;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::corpus;
-use hh_registry::kinds::RecordKind;
-use hh_registry::records::{RegistryPolicy, RegistryRecord};
-use hh_registry::store::{
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::corpus;
+use hharness_registry::kinds::RecordKind;
+use hharness_registry::records::{RegistryPolicy, RegistryRecord};
+use hharness_registry::store::{
     QueryClause, QueryOp, QueryPredicate, RegistryStore, ResolveInput, ResolveRequest,
     SlotConstraints,
 };
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-registry-ac-{}-{}", std::process::id(), tag));
@@ -88,13 +88,13 @@ fn ac2_closed_kinds_and_closed_status_vocabularies() {
     // A kind in the list but without a Stage-1 schema is refused, not admitted.
     let e = s
         .register(
-            RegistryRecord::ForeignImport(hh_registry::records::ForeignImport {
+            RegistryRecord::ForeignImport(hharness_registry::records::ForeignImport {
                 system: "x".to_string(),
                 locator: "x".to_string(),
                 digest: None,
                 label: None,
                 lifted_record: Json::Null,
-                loss_report: hh_registry::records::LossReport::default(),
+                loss_report: hharness_registry::records::LossReport::default(),
             }),
             &kernel,
             None,
@@ -115,13 +115,13 @@ fn ac2_closed_kinds_and_closed_status_vocabularies() {
         ("version_id", Json::str("sha256:x")),
         ("ext", Json::obj([("status", Json::str("provisional"))])),
     ]);
-    let e = hh_registry::schema::envelope_from_json(&env, "env").unwrap_err();
+    let e = hharness_registry::schema::envelope_from_json(&env, "env").unwrap_err();
     assert!(matches!(e, RegistryError::SchemaViolation { .. }));
     // A bogus top-level status is refused the same way.
     if let Json::Obj(m) = &mut env {
         m.insert("status".to_string(), Json::str("half-committed"));
     }
-    let e = hh_registry::schema::envelope_from_json(&env, "env").unwrap_err();
+    let e = hharness_registry::schema::envelope_from_json(&env, "env").unwrap_err();
     assert!(matches!(e, RegistryError::SchemaViolation { .. }));
 }
 
@@ -205,13 +205,13 @@ fn ac7_names_vs_identity() {
     assert_eq!(vv.semantic_id, rvv.semantic_id);
 }
 
-fn corpus_class() -> hh_registry::records::ClassRecord {
-    hh_registry::suites::control_strategy_class()
+fn corpus_class() -> hharness_registry::records::ClassRecord {
+    hharness_registry::suites::control_strategy_class()
 }
 
 fn corpus_variant(class_ref: &str, tag: &str) -> RegistryRecord {
-    use hh_registry::kinds::Placement;
-    use hh_registry::records::{AppliesTo, Implementation, VariantRecord};
+    use hharness_registry::kinds::Placement;
+    use hharness_registry::records::{AppliesTo, Implementation, VariantRecord};
     use std::collections::{BTreeMap, BTreeSet};
     RegistryRecord::Variant(VariantRecord {
         variant_id: tag.to_string(),
@@ -220,7 +220,7 @@ fn corpus_variant(class_ref: &str, tag: &str) -> RegistryRecord {
         version_label: None,
         param_schema: BTreeMap::new(),
         implementation: Implementation {
-            content: hh_identity::idp::address(tag.as_bytes(), "application/octet-stream"),
+            content: hharness_identity::idp::address(tag.as_bytes(), "application/octet-stream"),
             placement: Placement::SubprocessConfined,
             host_requirements: Json::Null,
         },
@@ -231,7 +231,7 @@ fn corpus_variant(class_ref: &str, tag: &str) -> RegistryRecord {
             families: vec![],
         },
         declared_costs: None,
-        summary: hh_hir::leaves::Text::new(
+        summary: hharness_hir::leaves::Text::new(
             format!("v {tag}"),
             "ac7",
             ProvenanceRecord::kernel("ac7", 0),
@@ -310,7 +310,7 @@ fn registry_event_classes_are_in_the_ledger_table() {
         "lifecycle.registry.snapshotted",
         "lifecycle.registry.conformance_recorded",
     ] {
-        let spec = hh_ledger::classes::lookup(class)
+        let spec = hharness_ledger::classes::lookup(class)
             .unwrap_or_else(|| panic!("class {class} missing from the ledger table"));
         assert!(spec.audit_grade, "{class} must be audit-grade");
         assert!(spec.kernel_origin, "{class} must be kernel-origin");
@@ -322,6 +322,6 @@ fn registry_event_classes_are_in_the_ledger_table() {
 fn the_stage1_floor_is_declared() {
     assert_eq!(
         RegistryPolicy::stage1_default().require_conformance,
-        hh_registry::kinds::RequireConformance::Declared
+        hharness_registry::kinds::RequireConformance::Declared
     );
 }

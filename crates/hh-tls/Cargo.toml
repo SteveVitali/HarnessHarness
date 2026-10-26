@@ -1,5 +1,5 @@
 [package]
-name = "hh-tls"
+name = "hharness-tls"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -23,5 +23,5 @@ webpki-roots = "=1.0.10"
 
 [dev-dependencies]
 # Test-side codec for the wire roundtrips — the TLS stream is the transport
-# beneath `hh_wire::http` (ADR-0364 D1's "mount on the one codec" rule).
-hh-wire = { path = "../hh-wire" }
+# beneath `hharness_wire::http` (ADR-0364 D1's "mount on the one codec" rule).
+hharness-wire = { path = "../hh-wire" }

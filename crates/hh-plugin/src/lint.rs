@@ -11,7 +11,7 @@
 //! - the kernel's projection/handle internals (`hh-kernel::proj`, handles —
 //!   only the *granted views* are reachable, never the internals);
 //! - anything outside the kernel crate set at all (a variant imports kernel
-//!   contracts — `hh_hir`, `hh_registry`, `hh_ontology`, … — plus `std`, never
+//!   contracts — `hharness_hir`, `hharness_registry`, `hharness_ontology`, … — plus `std`, never
 //!   third-party code: the dependency policy pins `default-run` = no external
 //!   crates, and a variant cannot relax it).
 //!
@@ -35,20 +35,20 @@ use std::path::{Path, PathBuf};
 /// The kernel crates a first-party in-process variant may name (the contract
 /// surface — a variant reaches *contracts*, never internals).
 const ALLOWED_CRATES: &[&str] = &[
-    "hh_wire",
-    "hh_identity",
-    "hh_provenance",
-    "hh_ontology",
-    "hh_hir",
-    "hh_registry",
-    "hh_assembly",
-    "hh_embed_schema",
-    "hh_monitor",
-    "hh_control",
-    "hh_embed",
-    "hh_experiment",
-    "hh_plugin",
-    "hh_lab",
+    "hharness_wire",
+    "hharness_identity",
+    "hharness_provenance",
+    "hharness_ontology",
+    "hharness_hir",
+    "hharness_registry",
+    "hharness_assembly",
+    "hharness_embed_schema",
+    "hharness_monitor",
+    "hharness_control",
+    "hharness_embed",
+    "hharness_experiment",
+    "hharness_plugin",
+    "hharness_lab",
     "hh_codegen",
     "hh_lifecycle",
     "hh_determinism",
@@ -66,7 +66,7 @@ pub struct LintViolation {
     pub file: String,
     /// The line number (1-based) when known.
     pub line: usize,
-    /// The offending edge (`use hh_registry::store::…`, `mod helper`, …).
+    /// The offending edge (`use hharness_registry::store::…`, `mod helper`, …).
     pub edge: String,
     /// The rule it broke.
     pub rule: LintRule,
@@ -311,8 +311,8 @@ mod tests {
     fn clean_variant_source_lints_clean() {
         let src = "\
 //! A variant.
-use hh_registry::registry::Registry;
-use hh_wire::json::Json;
+use hharness_registry::registry::Registry;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 pub fn run() { let _ = Json::Null; }

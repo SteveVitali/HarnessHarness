@@ -21,18 +21,18 @@
 //!   guessed subject.
 //!
 //! The transport seam is [`Transport`]: `Tls` dials through the
-//! admitted `hh-tls` client (re-exported via `hh_embed::service` —
+//! admitted `hharness-tls` client (re-exported via `hharness_embed::service` —
 //! ADR-0365 D3's consumer set stays closed), `Loopback` is the hermetic
 //! issuer fixture's dial and refuses any non-loopback host (the
 //! fixture path can never be pointed at a real endpoint). Both ride the
-//! one `hh_wire::http` codec — no second HTTP stack (ADR-0364 D1).
+//! one `hharness_wire::http` codec — no second HTTP stack (ADR-0364 D1).
 
 use std::io::{BufReader, Read, Write};
 use std::time::{Duration, Instant};
 
-use hh_embed::service::ClientTls;
-use hh_wire::http::{self, HttpUrl};
-use hh_wire::json::Json;
+use hharness_embed::service::ClientTls;
+use hharness_wire::http::{self, HttpUrl};
+use hharness_wire::json::Json;
 
 /// `Read + Write` — the codec's stream shape (std names no joint trait,
 /// so the seam names one).
@@ -40,12 +40,12 @@ pub trait Io: Read + Write {}
 impl<T: Read + Write> Io for T {}
 
 /// The wire transport a leg dials — `Tls` terminates the real session
-/// through `hh-tls` (webpki verification always on); `Loopback` is the
+/// through `hharness-tls` (webpki verification always on); `Loopback` is the
 /// fixture dial, restricted to loopback hosts so a fixture wiring can
 /// never silently address a live endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
-    /// Real TLS (`hh_tls::ClientTls::webpki_roots()` — always verified).
+    /// Real TLS (`hharness_tls::ClientTls::webpki_roots()` — always verified).
     Tls,
     /// Plain TCP to `127.0.0.1`/`localhost`/`::1` only — the hermetic
     /// issuer fixture.
@@ -141,7 +141,7 @@ fn http_call(
     let mut br = BufReader::new(st);
     let (head, raw) = http::read_response_full(&mut br, 1 << 20)
         .map_err(|e| OAuthError::Transport(format!("read: {e:?}")))?;
-    let j = hh_wire::json::parse(&String::from_utf8_lossy(&raw)).unwrap_or(Json::Null);
+    let j = hharness_wire::json::parse(&String::from_utf8_lossy(&raw)).unwrap_or(Json::Null);
     Ok((head.status, j))
 }
 

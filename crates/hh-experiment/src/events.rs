@@ -8,10 +8,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::control::OutcomeClass;
-use hh_wire::json::Json;
+use hharness_ontology::control::OutcomeClass;
+use hharness_wire::json::Json;
 
-use hh_lab::experiment::{CellPlan, ExperimentSpec, RunPlan};
+use hharness_lab::experiment::{CellPlan, ExperimentSpec, RunPlan};
 
 /// The class spellings (registered in `hh-ledger::classes`).
 pub mod class {
@@ -450,7 +450,7 @@ pub fn cell_completed(cell_id: &str, accepted: u32, planned: u32) -> Json {
 /// per_plan, picked, charged_to}` — the `voi_weighted` allocator's recorded
 /// table (AC-F4-13; the `charged_to: instrument` member is the allocator's
 /// own spend attribution — integer compute accounting, never money).
-pub fn inclusion_probabilities(rec: &hh_lab::adaptive::InclusionProbabilities) -> Json {
+pub fn inclusion_probabilities(rec: &hharness_lab::adaptive::InclusionProbabilities) -> Json {
     let mut m = match rec.to_json() {
         Json::Obj(m) => m,
         _ => unreachable!("InclusionProbabilities::to_json is an object"),
@@ -462,7 +462,7 @@ pub fn inclusion_probabilities(rec: &hh_lab::adaptive::InclusionProbabilities) -
 /// `halving_bracket{record_id, bracket, eta, kept[], dropped[],
 /// per_plan, charged_to: instrument}` — the `successive_halving`
 /// recorded bracket row (S6.2; R-2.10.3⁴).
-pub fn halving_bracket(rec: &hh_lab::adaptive::HalvingBracket) -> Json {
+pub fn halving_bracket(rec: &hharness_lab::adaptive::HalvingBracket) -> Json {
     let mut m = match rec.to_json() {
         Json::Obj(m) => m,
         _ => unreachable!("HalvingBracket::to_json is an object"),
@@ -575,7 +575,7 @@ pub fn amended(diff_ref: &str, reason: &str, authority: &str) -> Json {
 /// §6.4 §6's `measurement.analysis.recorded` audit event; ADR-0162 D3).
 /// Members are the `AnalysisRecord`'s own facts — the row is the record's
 /// ledger presence, never a copy of its body.
-pub fn analysis_recorded(record: &hh_lab::analysis::AnalysisRecord) -> Json {
+pub fn analysis_recorded(record: &hharness_lab::analysis::AnalysisRecord) -> Json {
     let mut m = BTreeMap::new();
     m.insert("analysis_id".to_string(), Json::str(&record.analysis_id));
     m.insert(

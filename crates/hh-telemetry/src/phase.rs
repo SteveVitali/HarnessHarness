@@ -19,9 +19,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::views::{View, ViewKind};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::views::{View, ViewKind};
+use hharness_wire::json::Json;
 
 use crate::views::measured_value;
 

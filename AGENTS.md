@@ -9,7 +9,7 @@ load-bearing contracts rather than conventions. The system is a 52-crate
 pure-std-modulo-ADR-0359/ADR-0365 Rust workspace (one named, pinned `ring`
 dep — the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361 — and the
 named, pinned rustls/`ring`-backend TLS graph admitted by ADR-0365 for
-`hh-tls`'s closed HTTPS/mTLS scope) plus
+`hharness-tls`'s closed HTTPS/mTLS scope) plus
 committed contract, spec and build records.
 Human-facing overview: `README.md`. The behavioural contract:
 `spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
@@ -25,27 +25,27 @@ Human-facing overview: `README.md`. The behavioural contract:
 - **One boundary, three bindings.** Every `hh-embed/1` op dispatches through
   one `handle` path: (a) the in-process `EmbedService`, (b) stdio JSON-RPC 2.0
   (`hh-kernel serve`), (c) loopback HTTP (`hh-kernel serve --http`). The `hh`
-  CLI (`hh-cli`) is a generated client over the boundary — no kernel semantics
+  CLI (`hharness-cli`) is a generated client over the boundary — no kernel semantics
   (K-2).
-- **Kernel spine (deps point downward only).** `hh-wire` (canonical JSON /
-  JSON-RPC framing / SHA-2) → `hh-ontology` + `hh-identity` + `hh-provenance`
-  (the formal model, idp/1 identity, the label lattice) → `hh-hir` (the HIR/1
-  IR: validate/canonicalize/seal/diff) → `hh-ledger` (the append-only
+- **Kernel spine (deps point downward only).** `hharness-wire` (canonical JSON /
+  JSON-RPC framing / SHA-2) → `hharness-ontology` + `hharness-identity` + `hharness-provenance`
+  (the formal model, idp/1 identity, the label lattice) → `hharness-hir` (the HIR/1
+  IR: validate/canonicalize/seal/diff) → `hharness-ledger` (the append-only
   hash-chained event store — the sole authoritative record of a run). The
-  Stage-1 slices sit beside it: `hh-budget`, `hh-registry`, `hh-secrets`,
-  `hh-telemetry`, `hh-monitor` (the Π reference monitor), `hh-containment`,
-  `hh-env` (execution environments + sandboxed exec), `hh-gateway` (model
-  boundary), `hh-context`, `hh-control`, `hh-verification`; then
-  `hh-assembly`/`hh-compiler` (assembly grammar → `RuntimePlan/1`),
-  `hh-embed` (the boundary service) and the binaries `hh-kernel`, `hh-helper`.
-- **Lab tier (records-in/records-out).** `hh-lab` (schemas + exemplars) →
-  `hh-experiment`/`hh-results`/`hh-analysis`/`hh-eval`/`hh-bench` →
-  `hh-hosting` (the hosted-participant ABI) → the C3–C5 services
-  `hh-subagent`, `hh-orchestrator`, `hh-fleet` (+ `hh-fleet-adapter`),
-  `hh-evolution`, `hh-debt`.
-- **Surfaces & plugins.** `hh-cli` (`hh`), `hh-web`, `hh-mcp`/`hh-mcp-lab`,
-  `hh-acp`; packaged variants under `plugins/` run out of process through
-  `hh-varhost` + `hh-helper` over `plugin_abi/1`.
+  Stage-1 slices sit beside it: `hharness-budget`, `hharness-registry`, `hharness-secrets`,
+  `hharness-telemetry`, `hharness-monitor` (the Π reference monitor), `hharness-containment`,
+  `hharness-env` (execution environments + sandboxed exec), `hharness-gateway` (model
+  boundary), `hharness-context`, `hharness-control`, `hharness-verification`; then
+  `hharness-assembly`/`hharness-compiler` (assembly grammar → `RuntimePlan/1`),
+  `hharness-embed` (the boundary service) and the binaries `hh-kernel`, `hh-helper`.
+- **Lab tier (records-in/records-out).** `hharness-lab` (schemas + exemplars) →
+  `hharness-experiment`/`hharness-results`/`hharness-analysis`/`hharness-eval`/`hharness-bench` →
+  `hharness-hosting` (the hosted-participant ABI) → the C3–C5 services
+  `hharness-subagent`, `hharness-orchestrator`, `hharness-fleet` (+ `hharness-fleet-adapter`),
+  `hharness-evolution`, `hharness-debt`.
+- **Surfaces & plugins.** `hharness-cli` (`hh`), `hharness-web`, `hharness-mcp`/`hharness-mcp-lab`,
+  `hharness-acp`; packaged variants under `plugins/` run out of process through
+  `hharness-varhost` + `hh-helper` over `plugin_abi/1`.
 - **Cross-implementation replay.** `hh-xcheck` packages the committed
   `hh-xcheck-bundle/1` corpus (six arms — identity trees/records, ledger
   transcript+WAL, registry snapshot, plugin manifests, canonical-parse
@@ -80,9 +80,9 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 cargo build --workspace               # all crates + binaries
 cargo build --workspace --all-targets # what CI builds
 cargo test --workspace                # the full suite (~3.5k tests)
-cargo test -p hh-<crate>              # one crate's tests
+cargo test -p hharness-<crate>              # one crate's tests
 cargo fmt --all --check               # CI gate
-cargo clippy -p hh-<crate> -- -D warnings   # convention: clean on touched crates
+cargo clippy -p hharness-<crate> -- -D warnings   # convention: clean on touched crates
 bash scripts/check-drift.sh           # regenerate schema artifacts; fail on drift
 bash scripts/check-removability.sh    # CC6 tier-removability gate
 bash <skills>/build-memory/scripts/check-build-memory.sh .   # build-memory hygiene
@@ -90,7 +90,7 @@ gh workflow run ci.yml --ref <branch>   # a full run (ADR-0362 D4: per gate, nev
 bash scripts/ci/full-run.sh read <sha>        # read a full run (the D-D reader line; `gh run view` by hand)
 ```
 
-Smoke: `cargo build -p hh-cli -p hh-kernel` then
+Smoke: `cargo build -p hharness-cli -p hharness-kernel` then
 `HH_KERNEL_CMD=./target/debug/hh-kernel ./target/debug/hh doctor` →
 `connectivity: ok`. Env vars: `HH_KERNEL_CMD` (kernel child command),
 `HH_STORE_ROOT` (default `<cwd>/.hh/store` — gitignored),
@@ -99,29 +99,29 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 ## Code conventions
 
 - **Pure std, hermetic — modulo ADR-0359 + ADR-0365.** No external runtime
-  crates except (a) the `tempfile` dev-dep of `hh-varhost` tests, (b) the
-  `ring =0.17.14` dep of `hh-secrets` admitted by ADR-0359 for the closed
+  crates except (a) the `tempfile` dev-dep of `hharness-varhost` tests, (b) the
+  `ring =0.17.14` dep of `hharness-secrets` admitted by ADR-0359 for the closed
   DPoP-verifier scope plus `ring::aead`/`ring::rand`, consumed by R3.8's
-  blob-pool AEAD (ADR-0361 — `hh-ledger`'s `BlobCipher` seam, the producer
-  stays in `hh-secrets`), and (c) the `hh-tls`-only rustls graph admitted
+  blob-pool AEAD (ADR-0361 — `hharness-ledger`'s `BlobCipher` seam, the producer
+  stays in `hharness-secrets`), and (c) the `hharness-tls`-only rustls graph admitted
   by ADR-0365 (`rustls =0.23.46` on the `ring` backend +
   `rustls-webpki =0.103.16` + `webpki-roots =1.0.10` — the closed
   HTTPS-client / TLS-server / mTLS scope). Do
   not add dependencies — any further crate or admitted surface is its own ADR.
 - **CC1 — one canonical implementation.** Reuse the existing codec, store,
   canonicalizer or class table; a second spelling of a contract is a defect.
-- **CC7 — the schema source owns both directions.** Change `hh-embed-schema`
+- **CC7 — the schema source owns both directions.** Change `hharness-embed-schema`
   and regenerate; never hand-edit generated artifacts.
 - **CC10 — home-plane ownership.** A record/event kind lives in exactly one
-  plane's home table (`hh-ontology` owns the rule).
+  plane's home table (`hharness-ontology` owns the rule).
 - **Honest refusal, never silent degrade.** A missing capability answers a
   typed refusal (`Unsupported`, `Refused`, `n/a{reason}`) — never a
   fabricated result or a silent zero.
 - **Durable-before-visible.** Kernel state changes append through the run's
   single fenced writer; projections are pure folds over the durable prefix.
 - **Feature tiers = spec maturity.** C1+ halves sit behind `tier-c*` features
-  (`hh-helper`/`hh-ledger`/`hh-env`: `tier-c1`; `hh-embed`: `tier-c4` →
-  `hh-fleet`/`hh-evolution`/`hh-debt`); an absent tier answers `unsupported`.
+  (`hharness-helper`/`hharness-ledger`/`hharness-env`: `tier-c1`; `hharness-embed`: `tier-c4` →
+  `hharness-fleet`/`hharness-evolution`/`hharness-debt`); an absent tier answers `unsupported`.
 - **Tests** are acceptance batteries named per ticket:
   `crates/hh-*/tests/<ticket>.rs` (e.g. `crates/hh-embed/tests/cap_2_composed.rs`).
   Every new behaviour gets a test that fails if removed; `ignore`d tests cite
@@ -144,7 +144,7 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 3. **`hh-kernel doctor` self-checks the negotiated identity** — it exits 0
    on a clean build (DF-DOC.1-1 fixed at R2.1; ADR-0332):
    `KernelDescriptor.version` is the SemVer-class label (the
-   `kernel_version_id` tail via `hh_embed_schema::kernel_version_label`),
+   `kernel_version_id` tail via `hharness_embed_schema::kernel_version_label`),
    never the full `hh-kernel/<ver>` id. `hh doctor` over the boundary
    answers the same facts. A real identity mismatch still fails loudly.
 4. **The `edit` tool can lose writes** (the overlay anomaly — confirmed on
@@ -181,7 +181,7 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 9. **A stale `hh-helper` binary lies to `helper_live`.** An interrupted
    `check-removability.sh` can leave a tier-off `hh-helper` in
    `target/debug`; `helper_live` then fails honestly on the `tier-c1`
-   absence. `cargo build -p hh-helper` restores the default binary.
+   absence. `cargo build -p hharness-helper` restores the default binary.
 10. **A loaded host stalls helper spawns.** On a `syspolicyd`-saturated
     host each fresh test binary's first `exec` can block for minutes —
     `check-removability.sh`'s `helper_live` legs then time out; the script
@@ -206,9 +206,9 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 | Lab | the experiment/evaluation plane (spec §6) |
 | `hh-embed/1` | the one typed kernel boundary every surface speaks |
 | binding (a)/(b)/(c) | in-process / stdio JSON-RPC / loopback HTTP |
-| Π | the reference monitor's authorization interpreter (`hh-monitor`) |
-| run ledger | the append-only hash-chained event store (`hh-ledger`) |
-| HIR/1 | the Harness IR dialect (`hh-hir`) |
+| Π | the reference monitor's authorization interpreter (`hharness-monitor`) |
+| run ledger | the append-only hash-chained event store (`hharness-ledger`) |
+| HIR/1 | the Harness IR dialect (`hharness-hir`) |
 | DF-* | a `docs/tickets/DEFERRALS.md` row — owed work with a compensating control |
 | BL-* | a `docs/build/BACKLOG.csv` normalized-debt row |
 | gate | a manifest STOP row — a pause for operator readout, not a block |
@@ -247,7 +247,7 @@ any ledger (record `provided: yes/no`). Validate with
 
 ## Do
 
-- Run `cargo fmt --all --check` and the scoped `cargo test -p hh-<crate>` (or
+- Run `cargo fmt --all --check` and the scoped `cargo test -p hharness-<crate>` (or
   `--workspace`) before claiming verification — cite the numbers.
 - Cite requirement ids (`R-2.*`), `DF-*`/`BL-*` rows and ADRs when discussing
   scope or owed work.
@@ -256,8 +256,8 @@ any ledger (record `provided: yes/no`). Validate with
 ## Don't
 
 - Don't add runtime dependencies — the workspace is hermetic by contract
-  modulo the named, pinned, scoped admissions (`ring` in `hh-secrets` —
-  ADR-0359; the rustls graph in `hh-tls` — ADR-0365); anything beyond
+  modulo the named, pinned, scoped admissions (`ring` in `hharness-secrets` —
+  ADR-0359; the rustls graph in `hharness-tls` — ADR-0365); anything beyond
   their scope needs its own ADR first.
 - Don't hand-edit generated artifacts, `docs/adr/README.md`, or anything under
   `docs/build/` history regions.

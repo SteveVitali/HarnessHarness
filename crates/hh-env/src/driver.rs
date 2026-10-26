@@ -1,6 +1,6 @@
 //! `EnvDriver` — the kernel-side environment manager (§5a.5 §4 surface). It
 //! owns the `EnvHandle`s, drives the `declared → provisioning → ready →
-//! torn_down` machine, runs fail-closed `attach` through `hh-containment`,
+//! torn_down` machine, runs fail-closed `attach` through `hharness-containment`,
 //! applies `env_apply` (placeholders only), and is the only reachability path
 //! for the fs/`upload`/`download`/`path_baseline` effect surface (R-NOSIDE —
 //! every op is kernel-mediated through a `ready`, verified handle).
@@ -13,16 +13,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_containment::attach::{
+use hharness_containment::attach::{
     attach, AttachInput, AttachMode, AttachOutcome, PolicySlot, SealWarning,
 };
-use hh_containment::backend::ContainmentBackend;
-use hh_containment::report::ContainmentReport;
-use hh_hir::records::Grant;
-use hh_ledger::leases::LeaseScope;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_wire::json::Json;
+use hharness_containment::backend::ContainmentBackend;
+use hharness_containment::report::ContainmentReport;
+use hharness_hir::records::Grant;
+use hharness_ledger::leases::LeaseScope;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_wire::json::Json;
 
 use crate::errors::EnvError;
 use crate::events::{self, EventMinter};
@@ -48,7 +48,7 @@ pub struct EnvDriver {
     pub(crate) sessions: BTreeMap<String, HelperClient>,
     /// The podman containers the `local_container` handles own
     /// (`env_handle_id → backend` — teardown stops them).
-    containers: BTreeMap<String, hh_helper::podman::PodmanBackend>,
+    containers: BTreeMap<String, hharness_helper::podman::PodmanBackend>,
     /// The registered provider adapters — `environment.class → adapter`
     /// (S4.13; one adapter per provider class).
     providers: BTreeMap<String, Box<dyn crate::provider::ProviderAdapter>>,
@@ -78,9 +78,9 @@ pub const DEDUP_WINDOW_MS: u64 = PRESERVE_UNTIL_TTL_MS;
 /// Every member lands as a hard `Ceiling`; gauges (memory/disk/pids/
 /// open_files) cap through the tree's E5 gauge leg, never `reserve`.
 pub fn resource_budget_spec(
-    limits: &hh_containment::policy::ResourceLimits,
-) -> Option<hh_budget::spec::BudgetSpec> {
-    use hh_ontology::dimensions::DimensionId as D;
+    limits: &hharness_containment::policy::ResourceLimits,
+) -> Option<hharness_budget::spec::BudgetSpec> {
+    use hharness_ontology::dimensions::DimensionId as D;
     if limits.is_empty() {
         return None;
     }
@@ -98,13 +98,13 @@ pub fn resource_budget_spec(
     for (v, dim) in pairs {
         if let Some(v) = v {
             caps.push((
-                hh_ontology::dimensions::DimensionKey::Primary(dim),
+                hharness_ontology::dimensions::DimensionKey::Primary(dim),
                 v.min(i64::MAX as u64) as i64,
             ));
         }
     }
-    Some(hh_budget::spec::BudgetSpec::hard_caps(
-        hh_budget::spec::BudgetMode::Pool,
+    Some(hharness_budget::spec::BudgetSpec::hard_caps(
+        hharness_budget::spec::BudgetMode::Pool,
         &caps,
     ))
 }
@@ -155,15 +155,15 @@ fn check_canary_manifest(
 /// re-provision or a derived child on the shared broker; under a different
 /// spec it is a manifest conflict and refuses `CanaryManifest`.
 fn register_declared_canaries(
-    broker: &mut hh_secrets::CredentialBroker,
+    broker: &mut hharness_secrets::CredentialBroker,
     record: &EnvironmentRecord,
     now_ms: u64,
 ) -> Result<(), EnvError> {
-    let prov = hh_provenance::ProvenanceRecord::kernel("hh-env:image-manifest", now_ms);
+    let prov = hharness_provenance::ProvenanceRecord::kernel("hh-env:image-manifest", now_ms);
     for c in &record.canary_channels {
         match broker.register_channel(c.channel_id.clone(), c.spec.clone(), prov.clone()) {
             Ok(_) => {}
-            Err(hh_secrets::BrokerError::ChannelExists { .. }) => {
+            Err(hharness_secrets::BrokerError::ChannelExists { .. }) => {
                 match broker.channel(&c.channel_id) {
                     Some(ch) if ch.spec == c.spec && ch.spec.canary => {}
                     _ => {
@@ -270,7 +270,7 @@ impl EnvDriver {
         store: &mut Store,
         lease: &Lease,
         env_handle_id: &str,
-        limits: &hh_containment::policy::ResourceLimits,
+        limits: &hharness_containment::policy::ResourceLimits,
     ) -> Result<Option<String>, EnvError> {
         let Some(spec) = resource_budget_spec(limits) else {
             return Ok(None);
@@ -287,17 +287,18 @@ impl EnvDriver {
             .ok_or_else(|| EnvError::BudgetRefused {
                 detail: "env resource bounds declared but the run has no root budget".into(),
             })?;
-        let mut acct = hh_budget::account::Account::open(store, &self.run_id).map_err(|e| {
-            EnvError::BudgetRefused {
-                detail: format!("account_open: {e:?}"),
-            }
-        })?;
+        let mut acct =
+            hharness_budget::account::Account::open(store, &self.run_id).map_err(|e| {
+                EnvError::BudgetRefused {
+                    detail: format!("account_open: {e:?}"),
+                }
+            })?;
         let budget_id = acct
             .allocate(
                 lease,
                 Some(&parent),
-                hh_budget::spec::BudgetScope {
-                    kind: hh_budget::spec::BudgetScopeKind::AgentProcess,
+                hharness_budget::spec::BudgetScope {
+                    kind: hharness_budget::spec::BudgetScopeKind::AgentProcess,
                     target: env_handle_id.to_string(),
                 },
                 spec,
@@ -317,7 +318,7 @@ impl EnvDriver {
     pub fn apply_amended_containment(
         &mut self,
         env_handle_id: &str,
-        policy: hh_containment::policy::ContainmentPolicy,
+        policy: hharness_containment::policy::ContainmentPolicy,
     ) -> Result<(), EnvError> {
         let h = self
             .handles
@@ -354,7 +355,7 @@ impl EnvDriver {
         roots: Roots,
         containment: PolicySlot,
         on_loss: OnLoss,
-        canary_broker: Option<&mut hh_secrets::CredentialBroker>,
+        canary_broker: Option<&mut hharness_secrets::CredentialBroker>,
     ) -> Result<EnvHandle, EnvError> {
         if !record.class.provisionable() && !record.class.needs_adapter() {
             return Err(EnvError::Unsupported {
@@ -507,7 +508,7 @@ impl EnvDriver {
         participant_ref: &str,
         hosting_mechanism: &str,
         unobserved: &[&str],
-        canary_broker: Option<&mut hh_secrets::CredentialBroker>,
+        canary_broker: Option<&mut hharness_secrets::CredentialBroker>,
     ) -> Result<EnvHandle, EnvError> {
         if !record.class.needs_adapter() {
             return Err(EnvError::Unsupported {
@@ -617,7 +618,7 @@ impl EnvDriver {
 
     /// `attach(env_handle_id, backend, mode, lab_run, grants) → (report,
     /// warnings)` — the fail-closed DF-S1.12-3 seam: run
-    /// `hh_containment::attach`, store the `ContainmentReport`, append the
+    /// `hharness_containment::attach`, store the `ContainmentReport`, append the
     /// `security.containment.applied`/`unverified` row, then `attached`
     /// (naming the applied event) + `ready`, install the session.
     #[allow(clippy::too_many_arguments)]
@@ -734,7 +735,7 @@ impl EnvDriver {
     /// helper (its `none` isolation is honest — the in-process
     /// `LocalExecutor` runs it).
     fn start_helper(&mut self, store: &mut Store, env_handle_id: &str) -> Result<(), EnvError> {
-        use hh_helper::protocol::OnKernelLoss;
+        use hharness_helper::protocol::OnKernelLoss;
         let h = self.handles.get(env_handle_id).unwrap().clone();
         let (backend, extra_args) = match h.class {
             EnvironmentClass::LocalSandboxed => ("seatbelt".to_string(), Vec::new()),
@@ -791,7 +792,8 @@ impl EnvDriver {
         // env ids coincide can't unlink each other's live socket.
         let sock_dir = std::env::temp_dir().join(format!(
             "hh-s-{}-{}",
-            &hh_identity::idp::idp_id("sock_dir", store.root().to_string_lossy().as_bytes())[..12],
+            &hharness_identity::idp::idp_id("sock_dir", store.root().to_string_lossy().as_bytes())
+                [..12],
             h.env_handle_id
         ));
         let mut client = HelperClient::spawn(&sock_dir, &backend, &extra_args)?;
@@ -1474,7 +1476,7 @@ impl EnvDriver {
         store: &mut Store,
         env_handle_id: &str,
     ) -> Result<(), EnvError> {
-        use hh_helper::protocol::OnKernelLoss;
+        use hharness_helper::protocol::OnKernelLoss;
         let h = self
             .handles
             .get(env_handle_id)
@@ -1569,14 +1571,15 @@ impl EnvDriver {
                     // `fs_tree` — restore the recorded tree into the
                     // successor's workspace (blob-pool content, never the
                     // live tree).
-                    let snap = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content)
-                        .ok_or_else(|| {
+                    let snap =
+                        hharness_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content)
+                            .ok_or_else(|| {
                             EnvError::Blob(format!(
                                 "snapshot {}: malformed manifest",
                                 rec.snapshot_ref
                             ))
                         })?;
-                    hh_helper::fstree::restore(&snap, &ws, &|ca| blob_by_id(store, ca))
+                    hharness_helper::fstree::restore(&snap, &ws, &|ca| blob_by_id(store, ca))
                         .map_err(|e| EnvError::Blob(format!("heal snapshot restore: {e}")))?;
                     None
                 }
@@ -1866,8 +1869,8 @@ impl EnvDriver {
         // `policy_rule` — any other basis is a `basis_not_allowed`
         // refusal, never a silent swap (CF-318).
         let policy = match &mut h.containment {
-            hh_containment::attach::PolicySlot::Inline(p) => &mut **p,
-            hh_containment::attach::PolicySlot::ResolvedRef { policy, .. } => &mut **policy,
+            hharness_containment::attach::PolicySlot::Inline(p) => &mut **p,
+            hharness_containment::attach::PolicySlot::ResolvedRef { policy, .. } => &mut **policy,
         };
         let entry = policy
             .ext
@@ -1895,7 +1898,7 @@ impl EnvDriver {
         // `definition` — a sealed design's level; a *loosening* schedule
         // entry must name `principal`).
         let layer = if let Some(layer_j) = entry.get("layer") {
-            hh_containment::policy::ContainmentPolicy::from_json(layer_j).map_err(|e| {
+            hharness_containment::policy::ContainmentPolicy::from_json(layer_j).map_err(|e| {
                 EnvError::Unsupported {
                     capability: "phase_schedule.layer",
                     detail: format!("phase_schedule layer does not decode: {e}"),
@@ -1913,9 +1916,9 @@ impl EnvDriver {
                 })?;
             let mut l = policy.clone();
             l.net.mode = match net_mode {
-                "none" => hh_containment::policy::NetMode::None,
-                "mediated" => hh_containment::policy::NetMode::Mediated,
-                "public" => hh_containment::policy::NetMode::Public,
+                "none" => hharness_containment::policy::NetMode::None,
+                "mediated" => hharness_containment::policy::NetMode::Mediated,
+                "public" => hharness_containment::policy::NetMode::Public,
                 other => {
                     return Err(EnvError::Unsupported {
                         capability: "phase_schedule.net_mode",
@@ -1926,8 +1929,8 @@ impl EnvDriver {
             l.provenance.authority = entry
                 .get("authority")
                 .and_then(Json::as_str)
-                .and_then(hh_provenance::AuthorityClass::parse)
-                .unwrap_or(hh_provenance::AuthorityClass::Definition);
+                .and_then(hharness_provenance::AuthorityClass::parse)
+                .unwrap_or(hharness_provenance::AuthorityClass::Definition);
             l.compute_ids();
             l
         };
@@ -1935,7 +1938,7 @@ impl EnvDriver {
         // sealed layer narrows or (with entitlement) loosens against the
         // live policy; a `ContainmentWidening`/`ProtectedPathExemption`/
         // invalid layer refuses, never silently swaps (R-2.8.4¹).
-        let next = hh_containment::meet::effective(&[policy.clone(), layer], store.now_ms())
+        let next = hharness_containment::meet::effective(&[policy.clone(), layer], store.now_ms())
             .map_err(|e| EnvError::Unsupported {
                 capability: "phase_schedule.layer",
                 detail: format!("phase layer refused by the meet: {e}"),
@@ -1975,10 +1978,10 @@ impl EnvDriver {
         &mut self,
         store: &mut Store,
         lease: &Lease,
-        broker: &mut hh_secrets::CredentialBroker,
+        broker: &mut hharness_secrets::CredentialBroker,
         parent: &EnvHandle,
         child_id: &str,
-    ) -> Result<hh_secrets::ForkVirtualization, EnvError> {
+    ) -> Result<hharness_secrets::ForkVirtualization, EnvError> {
         let child_state = self.handles.get(child_id).ok_or(EnvError::Unavailable {
             env_handle_id: child_id.to_string(),
             state: "missing",
@@ -2087,7 +2090,7 @@ impl EnvDriver {
         store: &mut Store,
         lease: &Lease,
         env_handle_id: &str,
-    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+    ) -> Result<(SnapshotRecord, hharness_helper::fstree::FsTreeSnapshot), EnvError> {
         self.fs_tree_snapshot_as(store, lease, env_handle_id, TakenBy::Subject)
     }
 
@@ -2102,7 +2105,7 @@ impl EnvDriver {
         lease: &Lease,
         env_handle_id: &str,
         taken_by: TakenBy,
-    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+    ) -> Result<(SnapshotRecord, hharness_helper::fstree::FsTreeSnapshot), EnvError> {
         // R2.14 (M13) — the take window's measured open on the store's
         // clock (`snapshot_ms` on the row).
         let snap_t0 = store.now_ms();
@@ -2122,7 +2125,7 @@ impl EnvDriver {
             };
             (h.roots.workspace_roots.clone(), base)
         };
-        let tree = hh_helper::fstree::walk(&roots)
+        let tree = hharness_helper::fstree::walk(&roots)
             .map_err(|e| EnvError::Blob(format!("fs_tree walk: {e}")))?;
         // The manifest's content addresses must *resolve* — deposit every
         // file's bytes into the ledger blob pool so `fs_tree_restore` is
@@ -2130,7 +2133,7 @@ impl EnvDriver {
         // deduplicate to the same address).
         for (root, entries) in &tree.manifest {
             for (rel, node) in entries {
-                if let hh_helper::fstree::FsNode::File { .. } = node {
+                if let hharness_helper::fstree::FsNode::File { .. } = node {
                     let p = format!("{root}/{rel}");
                     let bytes = std::fs::read(&p)
                         .map_err(|e| EnvError::Blob(format!("fs_tree read {p}: {e}")))?;
@@ -2193,7 +2196,7 @@ impl EnvDriver {
     pub fn fs_tree_verify(
         &mut self,
         env_handle_id: &str,
-        snap: &hh_helper::fstree::FsTreeSnapshot,
+        snap: &hharness_helper::fstree::FsTreeSnapshot,
     ) -> Result<bool, EnvError> {
         let h = self
             .handles
@@ -2203,7 +2206,7 @@ impl EnvDriver {
                 state: "missing",
             })?;
         h.verify_environment()?;
-        hh_helper::fstree::verify(snap).map_err(|e| EnvError::Blob(e.to_string()))
+        hharness_helper::fstree::verify(snap).map_err(|e| EnvError::Blob(e.to_string()))
     }
 
     /// `fs_tree_restore(env_handle_id, snap) → tree_address` — materialise
@@ -2217,7 +2220,7 @@ impl EnvDriver {
         &mut self,
         store: &Store,
         env_handle_id: &str,
-        snap: &hh_helper::fstree::FsTreeSnapshot,
+        snap: &hharness_helper::fstree::FsTreeSnapshot,
     ) -> Result<String, EnvError> {
         let h = self
             .handles
@@ -2233,7 +2236,7 @@ impl EnvDriver {
         // blob's content address is itself the verifiable hash the caller
         // checks the tombstone against (AC-R-2.2.4-9).
         for node in snap.manifest.values().flat_map(|m| m.values()) {
-            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+            if let hharness_helper::fstree::FsNode::File { ca, .. } = node {
                 if blob_by_id(store, ca).is_none() {
                     return Err(EnvError::SnapshotMissing {
                         snapshot_ref: snap.tree_address.clone(),
@@ -2241,7 +2244,7 @@ impl EnvDriver {
                 }
             }
         }
-        let recomputed = hh_helper::fstree::restore(snap, &dest, &|ca| blob_by_id(store, ca))
+        let recomputed = hharness_helper::fstree::restore(snap, &dest, &|ca| blob_by_id(store, ca))
             .map_err(|e| EnvError::Blob(format!("fs_tree restore: {e}")))?;
         if recomputed != snap.tree_address && !snap.roots.is_empty() {
             // A single-root snapshot's address re-keys identically; a
@@ -2253,7 +2256,9 @@ impl EnvDriver {
                 .values()
                 .flat_map(|m| m.values())
                 .all(|n| match n {
-                    hh_helper::fstree::FsNode::File { ca, .. } => blob_by_id(store, ca).is_some(),
+                    hharness_helper::fstree::FsNode::File { ca, .. } => {
+                        blob_by_id(store, ca).is_some()
+                    }
                     _ => true,
                 });
             if !all_ok {
@@ -2487,7 +2492,7 @@ impl EnvDriver {
                 })?;
             let text = String::from_utf8(bytes)
                 .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
-            let j = hh_wire::json::parse(&text)
+            let j = hharness_wire::json::parse(&text)
                 .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
             let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
                 EnvError::Blob(format!(
@@ -2512,7 +2517,7 @@ impl EnvDriver {
         &self,
         store: &Store,
         at_seq: u64,
-    ) -> Result<Option<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot)>, EnvError> {
+    ) -> Result<Option<(SnapshotRecord, hharness_helper::fstree::FsTreeSnapshot)>, EnvError> {
         let rows = store
             .env_snapshots(&self.run_id)
             .map_err(EnvError::Ledger)?;
@@ -2537,16 +2542,17 @@ impl EnvDriver {
         })?;
         let text = String::from_utf8(bytes)
             .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
-        let j = hh_wire::json::parse(&text)
+        let j = hharness_wire::json::parse(&text)
             .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
         let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
             EnvError::Blob(format!(
                 "snapshot record {manifest_ref}: malformed member form"
             ))
         })?;
-        let tree = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content).ok_or_else(
-            || EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest")),
-        )?;
+        let tree = hharness_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content)
+            .ok_or_else(|| {
+                EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest"))
+            })?;
         Ok(Some((rec, tree)))
     }
 
@@ -2563,7 +2569,7 @@ impl EnvDriver {
         store: &mut Store,
         lease: &Lease,
         parent: &EnvHandle,
-        snap: &hh_helper::fstree::FsTreeSnapshot,
+        snap: &hharness_helper::fstree::FsTreeSnapshot,
     ) -> Result<EnvHandle, EnvError> {
         let parent = parent.clone();
         match parent.state {
@@ -2578,7 +2584,7 @@ impl EnvDriver {
         // Content availability first — a GC'd snapshot blob is the typed
         // `SnapshotMissing` refusal, checked before any fs write.
         for node in snap.manifest.values().flat_map(|m| m.values()) {
-            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+            if let hharness_helper::fstree::FsNode::File { ca, .. } = node {
                 if blob_by_id(store, ca).is_none() {
                     return Err(EnvError::SnapshotMissing {
                         snapshot_ref: snap.tree_address.clone(),
@@ -2589,7 +2595,7 @@ impl EnvDriver {
         let new_id = store.alloc_id("env");
         let base_dir = store.root().join("envs").join(&new_id).join("workspace");
         std::fs::create_dir_all(&base_dir).map_err(|e| EnvError::Blob(e.to_string()))?;
-        hh_helper::fstree::restore(snap, &base_dir, &|ca| blob_by_id(store, ca))
+        hharness_helper::fstree::restore(snap, &base_dir, &|ca| blob_by_id(store, ca))
             .map_err(|e| EnvError::Blob(format!("fork snapshot restore: {e}")))?;
         let roots = Roots {
             workspace_roots: vec![base_dir.to_string_lossy().to_string()],
@@ -2651,7 +2657,7 @@ impl EnvDriver {
         };
         // Content availability — the missing/corrupt snapshot refusal.
         for node in snap.manifest.values().flat_map(|m| m.values()) {
-            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+            if let hharness_helper::fstree::FsNode::File { ca, .. } = node {
                 if blob_by_id(store, ca).is_none() {
                     return Err(EnvError::SnapshotMissing {
                         snapshot_ref: snap.tree_address.clone(),
@@ -2661,7 +2667,7 @@ impl EnvDriver {
         }
         let dest = std::path::PathBuf::from(&h.roots.cwd);
         std::fs::create_dir_all(&dest).map_err(|e| EnvError::Blob(e.to_string()))?;
-        hh_helper::fstree::restore_in_place(&snap, &dest, &|ca| blob_by_id(store, ca))
+        hharness_helper::fstree::restore_in_place(&snap, &dest, &|ca| blob_by_id(store, ca))
             .map_err(|e| EnvError::Blob(format!("rollback env restore: {e}")))?;
         // Writable roots outside the snapshot's coverage are uncaptured.
         let covered: std::collections::BTreeSet<&str> =
@@ -2824,7 +2830,7 @@ impl EnvDriver {
         store: &mut Store,
         env_handle_id: &str,
         path: &str,
-    ) -> Result<hh_identity::idp::ContentAddress, EnvError> {
+    ) -> Result<hharness_identity::idp::ContentAddress, EnvError> {
         let bytes = self.fs_read(env_handle_id, path)?;
         store
             .put_blob(&bytes, "application/octet-stream")
@@ -2837,7 +2843,7 @@ impl EnvDriver {
         &mut self,
         store: &mut Store,
         env_handle_id: &str,
-        address: &hh_identity::idp::ContentAddress,
+        address: &hharness_identity::idp::ContentAddress,
         path: &str,
     ) -> Result<(), EnvError> {
         let bytes = store.get_blob(address).map_err(EnvError::Ledger)?;
@@ -3054,7 +3060,7 @@ impl EnvDriver {
         store: &Store,
         _env_handle_id: &str,
         snapshot_ref: &str,
-    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+    ) -> Result<(SnapshotRecord, hharness_helper::fstree::FsTreeSnapshot), EnvError> {
         let rows = store
             .env_snapshots(&self.run_id)
             .map_err(EnvError::Ledger)?;
@@ -3074,16 +3080,17 @@ impl EnvDriver {
         })?;
         let text = String::from_utf8(bytes)
             .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
-        let j = hh_wire::json::parse(&text)
+        let j = hharness_wire::json::parse(&text)
             .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
         let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
             EnvError::Blob(format!(
                 "snapshot record {manifest_ref}: malformed member form"
             ))
         })?;
-        let tree = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content).ok_or_else(
-            || EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest")),
-        )?;
+        let tree = hharness_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content)
+            .ok_or_else(|| {
+                EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest"))
+            })?;
         Ok((rec, tree))
     }
 
@@ -3097,7 +3104,7 @@ impl EnvDriver {
         store: &Store,
         env_handle_id: &str,
         snapshot_ref: &str,
-    ) -> Result<Vec<hh_helper::fstree::FsTreeDiffEntry>, EnvError> {
+    ) -> Result<Vec<hharness_helper::fstree::FsTreeDiffEntry>, EnvError> {
         let h = self
             .handles
             .get(env_handle_id)
@@ -3128,9 +3135,9 @@ impl EnvDriver {
                 })
                 .collect();
         }
-        let now = hh_helper::fstree::walk(&live_roots)
+        let now = hharness_helper::fstree::walk(&live_roots)
             .map_err(|e| EnvError::Blob(format!("fs_tree walk: {e}")))?;
-        Ok(hh_helper::fstree::diff(&baseline, &now))
+        Ok(hharness_helper::fstree::diff(&baseline, &now))
     }
 
     /// `restore_successor(store, lease, env_handle_id, snapshot_ref)` —
@@ -3171,11 +3178,11 @@ impl EnvDriver {
         // provision path uses (the policy slot's own policy; attesting
         // classes need the binding's attestation — `for_policy` refuses
         // `attestation_missing` honestly, never a silent none-backend).
-        let backend = hh_containment::backend::for_policy(child.containment.policy(), None)
+        let backend = hharness_containment::backend::for_policy(child.containment.policy(), None)
             .map_err(|e| EnvError::Unsupported {
-                capability: "attach.backend",
-                detail: format!("{e:?}"),
-            })?;
+            capability: "attach.backend",
+            detail: format!("{e:?}"),
+        })?;
         let child_id = child.env_handle_id.clone();
         self.attach(
             store,
@@ -3196,7 +3203,7 @@ impl EnvDriver {
             .roots
             .workspace_roots
             .clone();
-        let walked = hh_helper::fstree::walk(&child_roots)
+        let walked = hharness_helper::fstree::walk(&child_roots)
             .map_err(|e| EnvError::Blob(format!("restore verify walk: {e}")))?;
         let verified = walked.tree_address == snap.tree_address;
         if !verified {
@@ -3255,7 +3262,7 @@ impl EnvDriver {
         path: &str,
         content: Option<&[u8]>,
         content_address: Option<&str>,
-    ) -> Result<(hh_identity::idp::ContentAddress, u64), EnvError> {
+    ) -> Result<(hharness_identity::idp::ContentAddress, u64), EnvError> {
         if self
             .handles
             .get(env_handle_id)
@@ -3301,7 +3308,7 @@ impl EnvDriver {
         lease: &Lease,
         env_handle_id: &str,
         path: &str,
-    ) -> Result<(hh_identity::idp::ContentAddress, u64), EnvError> {
+    ) -> Result<(hharness_identity::idp::ContentAddress, u64), EnvError> {
         if self
             .handles
             .get(env_handle_id)
@@ -3368,7 +3375,7 @@ fn collect_files(root: &str, out: &mut Vec<String>) {
 /// surfaces as `BlobCorrupt`, never silent bytes).
 pub(crate) fn blob_by_id(store: &Store, ca: &str) -> Option<Vec<u8>> {
     let digest = ca.strip_prefix("sha256:")?.to_string();
-    let addr = hh_identity::idp::ContentAddress {
+    let addr = hharness_identity::idp::ContentAddress {
         idp: "idp/1",
         algorithm: "sha256",
         digest,

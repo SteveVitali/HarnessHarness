@@ -9,9 +9,9 @@
 //! `tolerance`, `context.occupancy`, `budget_utilization`) are parts-per-million
 //! integers — exact, never lossy.
 
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::{DerivedDimension, DimensionId, DimensionKey};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::{DerivedDimension, DimensionId, DimensionKey};
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// Parts-per-million of 1.0 — the canonical exact-ratio form (`coverage`,

@@ -42,9 +42,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::idp_id;
-use hh_identity::names::ResolveMode;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_identity::names::ResolveMode;
+use hharness_wire::json::Json;
 
 use crate::memory::DependencyStamp;
 use crate::vocab::{DependencyKind, Granularity};

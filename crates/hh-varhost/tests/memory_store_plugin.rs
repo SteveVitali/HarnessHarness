@@ -2,7 +2,7 @@
 //! ADR-0078 d2; S4.16b): `plugins/hh-memory-store` is sealed at pack time,
 //! `load` pin-verifies it, the host spawns it `subprocess_confined` through
 //! the helper, binds `memory_store` `1.0`, and the shared
-//! `hh_context::memory_abi::conformance` battery runs against the
+//! `hharness_context::memory_abi::conformance` battery runs against the
 //! `RemoteStore` binding — the same suite the in-process `MemoryStore` and
 //! the dispatch loopback pass (T-LCD-12). Typed domain refusals cross the
 //! process boundary as `MemoryError`s, never faults (the refusal is data).
@@ -11,17 +11,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use hh_context::memory::MemoryStorePort;
-use hh_context::memory_abi::{
+use hharness_context::memory::MemoryStorePort;
+use hharness_context::memory_abi::{
     ChannelFault, RemoteStore, StoreChannel, MEMORY_STORE_CLASS, MEMORY_STORE_CONTRACT,
 };
-use hh_embed_schema::plugin_abi::BindParams;
-use hh_registry::extension::plugin::{manifest_from_json, manifest_to_json};
-use hh_varhost::{
+use hharness_embed_schema::plugin_abi::BindParams;
+use hharness_registry::extension::plugin::{manifest_from_json, manifest_to_json};
+use hharness_varhost::{
     load_package, seal_package, spawn, unstamp_json, variant_class, HostError, InvokeOutcome,
     RecordingPorts, SpawnSpec, VariantHost, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -43,7 +43,7 @@ fn memory_store_bin() -> Option<PathBuf> {
 
 /// Materialize the package: manifest + `bin/` copy of the built variant
 /// binary, `seal` (real code_pointer pins), write, `load` (verify).
-fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
+fn materialize() -> Option<(tempfile::TempDir, hharness_varhost::VariantPackage)> {
     let bin = memory_store_bin()?;
     let dir = tempfile::tempdir().ok()?;
     let root = dir.path();
@@ -52,7 +52,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
     let text =
         std::fs::read_to_string(repo_root().join("plugins/hh-memory-store/plugin.manifest.json"))
             .unwrap();
-    let j = hh_wire::json::parse(&text).unwrap();
+    let j = hharness_wire::json::parse(&text).unwrap();
     let m = manifest_from_json(&j, "plugin.manifest.json").unwrap();
     let sealed = seal_package(root, &m).expect("seal");
     let sealed_text = manifest_to_json(&sealed).to_canonical_string();
@@ -61,7 +61,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
     Some((dir, pkg))
 }
 
-fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
+fn spec(pkg: hharness_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
     let exec_args = vec![
         "--version-id".into(),
         pkg.version_id().to_string(),
@@ -75,14 +75,14 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
         package: pkg,
         session_id: "ms-pkg-1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir,
         exec_args,
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:hh/hh-memory-store", "pin:sealed"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:hh/hh-memory-store", "pin:sealed"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -100,7 +100,7 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
 /// contract member).
 struct SessionChannel<'a> {
     host: &'a mut VariantHost<RecordingPorts, VecEvents>,
-    session: &'a mut hh_varhost::VariantSession,
+    session: &'a mut hharness_varhost::VariantSession,
     binding: String,
     seq: u64,
 }
@@ -125,7 +125,7 @@ impl<'a> StoreChannel for SessionChannel<'a> {
             // `RemoteStore` decodes.
             InvokeOutcome::Outputs(docs) => docs
                 .iter()
-                .map(|d| hh_context::memory_abi::unwrap_output(&unstamp_json(d)))
+                .map(|d| hharness_context::memory_abi::unwrap_output(&unstamp_json(d)))
                 .collect(),
             InvokeOutcome::Failed(e) => Err(ChannelFault::Transport(format!(
                 "plugin abi failure: {e:?}"
@@ -139,7 +139,7 @@ fn packaged_manifest_decodes_and_declares() {
     let text =
         std::fs::read_to_string(repo_root().join("plugins/hh-memory-store/plugin.manifest.json"))
             .expect("packaged manifest readable");
-    let j = hh_wire::json::parse(&text).expect("manifest json");
+    let j = hharness_wire::json::parse(&text).expect("manifest json");
     let m = manifest_from_json(&j, "plugin.manifest.json").expect("manifest decodes");
     assert_eq!(m.identity.id(), "hh/hh-memory-store");
     let c = m
@@ -150,7 +150,7 @@ fn packaged_manifest_decodes_and_declares() {
     let exe = c.unwrap().executable.as_ref().expect("executable");
     assert_eq!(
         exe.isolation,
-        hh_registry::extension::IsolationClass::SubprocessConfined
+        hharness_registry::extension::IsolationClass::SubprocessConfined
     );
 }
 
@@ -160,7 +160,7 @@ fn memory_store_plugin_runs_the_contract_battery_end_to_end() {
         eprintln!("hh-memory-store binary not built — skipped");
         return;
     };
-    if hh_env::helper::helper_binary().is_none() {
+    if hharness_env::helper::helper_binary().is_none() {
         eprintln!("hh-helper binary not found — skipped");
         return;
     }
@@ -201,7 +201,7 @@ fn memory_store_plugin_runs_the_contract_battery_end_to_end() {
         binding: b.clone(),
         seq: 0,
     });
-    hh_context::memory_abi::conformance::run(&mut remote);
+    hharness_context::memory_abi::conformance::run(&mut remote);
     assert!(
         remote.fault().is_none(),
         "latched fault: {:?}",
@@ -212,14 +212,17 @@ fn memory_store_plugin_runs_the_contract_battery_end_to_end() {
     // not a transport fault.
     let err = remote
         .resolve(
-            hh_provenance::authority::PersistenceScope::Run,
+            hharness_provenance::authority::PersistenceScope::Run,
             Some("facts/never-bound"),
             None,
-            hh_identity::names::ResolveMode::Execute,
+            hharness_identity::names::ResolveMode::Execute,
         )
         .unwrap_err();
     assert!(
-        matches!(err, hh_context::memory::MemoryError::UnknownName { .. }),
+        matches!(
+            err,
+            hharness_context::memory::MemoryError::UnknownName { .. }
+        ),
         "{err:?}"
     );
 
@@ -242,7 +245,7 @@ fn memory_store_tampered_package_is_pin_mismatch() {
         matches!(
             r,
             Err(HostError::Abi(
-                hh_embed_schema::plugin_abi::AbiError::PinMismatch
+                hharness_embed_schema::plugin_abi::AbiError::PinMismatch
             ))
         ),
         "{r:?}"

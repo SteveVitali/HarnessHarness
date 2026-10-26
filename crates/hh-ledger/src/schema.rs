@@ -11,10 +11,10 @@
 //!   under `idp/1` domain `ledger.event` (the one hasher — CC1; leaf byte `0x00` is the
 //!   RFC-6962 leaf/domain separator; the node side arrives with the audit tree heads).
 
-use hh_identity::idp::ContentAddress;
-use hh_identity::rowkeys::IrRef;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_identity::idp::ContentAddress;
+use hharness_identity::rowkeys::IrRef;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -55,7 +55,11 @@ pub const DEPRECATIONS: &[FieldDeprecation] = &[];
 /// `hash = H(leaf_tag ∥ canonical(envelope − {hash}) ∥ prev_hash)` — rendered as an
 /// idp/1 id (`sha256:<hex>`) under the `ledger.event` domain.
 pub fn event_hash(envelope_without_hash: &Json, prev_hash: &str) -> String {
-    event_hash_in(&hh_identity::idp::IDP_1, envelope_without_hash, prev_hash)
+    event_hash_in(
+        &hharness_identity::idp::IDP_1,
+        envelope_without_hash,
+        prev_hash,
+    )
 }
 
 /// `event_hash` under an explicit identity profile — the rotation slice's
@@ -64,7 +68,7 @@ pub fn event_hash(envelope_without_hash: &Json, prev_hash: &str) -> String {
 /// argument is the recomputed predecessor under `profile`, so the result
 /// is a self-consistent parallel chain — `event_hash_in(p, ev_i, chain'_{i-1})`.
 pub fn event_hash_in(
-    profile: &hh_identity::idp::IdentityProfile,
+    profile: &hharness_identity::idp::IdentityProfile,
     envelope_without_hash: &Json,
     prev_hash: &str,
 ) -> String {
@@ -72,7 +76,7 @@ pub fn event_hash_in(
     preimage.push(LEAF_TAG);
     preimage.extend_from_slice(envelope_without_hash.to_canonical_string().as_bytes());
     preimage.extend_from_slice(prev_hash.as_bytes());
-    hh_identity::idp::idp_id_in(profile, EVENT_HASH_DOMAIN, &preimage)
+    hharness_identity::idp::idp_id_in(profile, EVENT_HASH_DOMAIN, &preimage)
 }
 
 fn envelope_json(e: &EventEnvelope, with_hash: bool) -> Json {
@@ -201,7 +205,7 @@ impl EventEnvelope {
     /// preimage (bound as data, not as the link — see `event_hash_in`).
     pub fn recompute_hash_in(
         &self,
-        profile: &hh_identity::idp::IdentityProfile,
+        profile: &hharness_identity::idp::IdentityProfile,
         chain_prev: &str,
     ) -> String {
         event_hash_in(profile, &self.preimage_json(), chain_prev)
@@ -311,7 +315,7 @@ impl EventEnvelope {
                         Some(n) if n >= 0 => n as u64,
                         _ => return Err(bad("refs.size missing/not an int >= 0".into())),
                     };
-                    let parsed = hh_identity::idp::parse_id(id)
+                    let parsed = hharness_identity::idp::parse_id(id)
                         .map_err(|_| bad(format!("refs.id {id} is not an idp/1 id")))?;
                     Ok::<ContentAddress, LedgerError>(ContentAddress {
                         idp: "idp/1",
@@ -619,7 +623,7 @@ mod tests {
         let mut e = sample();
         e.hash = e.recompute_hash();
         let bytes = e.canonical_bytes();
-        let parsed = hh_wire::json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
+        let parsed = hharness_wire::json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
         let back = EventEnvelope::from_json(&parsed).unwrap();
         assert_eq!(back, e);
         assert_eq!(back.canonical_bytes(), bytes);

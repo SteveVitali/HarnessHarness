@@ -11,15 +11,15 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_budget::pricing::SpendRow;
-use hh_ledger::classes::ScopeKind as LedgerScope;
-use hh_ledger::effect::{self, EffectFold};
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::views::{View, ViewKind};
-use hh_ontology::compliance::NaReason;
-use hh_ontology::participant::Observability;
-use hh_wire::json::Json;
+use hharness_budget::pricing::SpendRow;
+use hharness_ledger::classes::ScopeKind as LedgerScope;
+use hharness_ledger::effect::{self, EffectFold};
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::views::{View, ViewKind};
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::participant::Observability;
+use hharness_wire::json::Json;
 
 use crate::catalogue::{self, FoldStatus};
 use crate::clocks::{self, skewed, ts_span_ms};
@@ -1138,7 +1138,7 @@ impl SubjectAcc {
             spend: BTreeMap::new(),
             provenance_mix: BTreeMap::new(),
             confidence_min: 3,
-            coverage_min_ppm: hh_budget::quantity::PPM_SCALE,
+            coverage_min_ppm: hharness_budget::quantity::PPM_SCALE,
         }
     }
 }
@@ -1150,10 +1150,10 @@ fn na(r: NaReason) -> Json {
 
 /// The `q_ppm`-quantile of a **sorted** sample (nearest-rank — the result is
 /// always a realised value, never interpolated; deterministic). The one
-/// rounding rule mirrors `hh-eval::stats::quantile` (hh-telemetry does not
-/// depend on hh-eval — the rule is duplicated, not shared).
+/// rounding rule mirrors `hh-eval::stats::quantile` (hharness-telemetry does not
+/// depend on hharness-eval — the rule is duplicated, not shared).
 fn nearest_rank(sorted: &[i64], q_ppm: i64) -> i64 {
-    let ppm = hh_budget::quantity::PPM_SCALE;
+    let ppm = hharness_budget::quantity::PPM_SCALE;
     let n = sorted.len() as i64;
     let rank = ((q_ppm.clamp(0, ppm) as i128 * n as i128 + ppm as i128 - 1) / ppm as i128)
         .clamp(1, n as i128) as usize;
@@ -1179,7 +1179,7 @@ pub fn metric_view(
     metric_view_scoped(
         run_id,
         root_run_id,
-        hh_ontology::participant::ParticipantClass::Native,
+        hharness_ontology::participant::ParticipantClass::Native,
         declared,
         events,
         until_seq,
@@ -1194,7 +1194,7 @@ pub fn metric_view(
 pub fn metric_view_scoped(
     run_id: &str,
     root_run_id: &str,
-    participant_class: hh_ontology::participant::ParticipantClass,
+    participant_class: hharness_ontology::participant::ParticipantClass,
     declared: &BTreeSet<Observability>,
     events: &[EventEnvelope],
     until_seq: Option<u64>,
@@ -1295,11 +1295,14 @@ pub fn catalogue_distributions(configuration_id: &str, runs: &[(String, Json)]) 
             row.insert("min".to_string(), Json::Int(v[0]));
             row.insert(
                 "p50".to_string(),
-                Json::Int(nearest_rank(&v, hh_budget::quantity::PPM_SCALE / 2)),
+                Json::Int(nearest_rank(&v, hharness_budget::quantity::PPM_SCALE / 2)),
             );
             row.insert(
                 "p95".to_string(),
-                Json::Int(nearest_rank(&v, hh_budget::quantity::PPM_SCALE * 95 / 100)),
+                Json::Int(nearest_rank(
+                    &v,
+                    hharness_budget::quantity::PPM_SCALE * 95 / 100,
+                )),
             );
             row.insert("max".to_string(), Json::Int(v[v.len() - 1]));
         } else {
@@ -1382,7 +1385,7 @@ fn token_sum(ev: &[&EventEnvelope]) -> (TokenVector, i64) {
 
 /// The per-metric fold — one arm per `Computable` catalogue row.
 fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
-    let ppm = hh_budget::quantity::PPM_SCALE;
+    let ppm = hharness_budget::quantity::PPM_SCALE;
     let count = |classes: &[&str]| -> i64 {
         ev.iter()
             .filter(|e| classes.contains(&e.class.as_str()))
@@ -1499,18 +1502,18 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
         // `n/a{estimator_undefined}`, never a fabricated 0).
         "belief_divergence" => {
             // Project envelopes to `RowView` and call the one fold
-            // (hh-verification owns the probe record — CC7).
-            let rows: Vec<hh_verification::bind::RowView<'_>> = ev
+            // (hharness-verification owns the probe record — CC7).
+            let rows: Vec<hharness_verification::bind::RowView<'_>> = ev
                 .iter()
-                .map(|e| hh_verification::bind::RowView {
+                .map(|e| hharness_verification::bind::RowView {
                     seq: e.seq,
                     class: &e.class,
                     payload: &e.payload,
-                    authority: hh_provenance::authority::AuthorityClass::Kernel,
+                    authority: hharness_provenance::authority::AuthorityClass::Kernel,
                     scope_effect_id: None,
                 })
                 .collect();
-            hh_verification::belief_probe::belief_divergence(&rows)
+            hharness_verification::belief_probe::belief_divergence(&rows)
         }
         "scheduling.decision_count" => Json::Int(count(&["control.compute.decided"])),
         "scheduling.option_share" => {

@@ -1,4 +1,4 @@
-//! R3.8 acceptance coverage — `hh_secrets::aead::RingBlobCipher`, the
+//! R3.8 acceptance coverage — `hharness_secrets::aead::RingBlobCipher`, the
 //! workspace's one real AEAD construction over `ring::aead::AES_256_GCM`
 //! (ADR-0359's reserved `ring::aead`/`ring::rand` scope consumed;
 //! ADR-0361; §5g.6 C2 "blob encryption with per-event keys"; I-A8's
@@ -11,11 +11,11 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::cipher::{self, BlobCipher};
-use hh_ledger::errors::{LedgerError, MissingReason};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_secrets::{RingBlobCipher, BLOB_AEAD_ALG};
+use hharness_ledger::cipher::{self, BlobCipher};
+use hharness_ledger::errors::{LedgerError, MissingReason};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_secrets::{RingBlobCipher, BLOB_AEAD_ALG};
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -35,8 +35,8 @@ fn cipher_with(key_id: &str, master: [u8; 32]) -> RingBlobCipher {
     RingBlobCipher::new(key_id, master).unwrap()
 }
 
-fn blob_addr(bytes: &[u8]) -> hh_identity::idp::ContentAddress {
-    hh_identity::idp::address(bytes, "text/plain")
+fn blob_addr(bytes: &[u8]) -> hharness_identity::idp::ContentAddress {
+    hharness_identity::idp::address(bytes, "text/plain")
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn store_round_trips_through_the_ring_cipher_end_to_end() {
         .open_run(
             {
                 let mut m = RunManifest::minimal(RunKind::Agent);
-                m.blob_encryption = Some(hh_ledger::manifest::BlobEncryptionDecl {
+                m.blob_encryption = Some(hharness_ledger::manifest::BlobEncryptionDecl {
                     alg: BLOB_AEAD_ALG.to_string(),
                     key_id: "key-a".to_string(),
                 });
@@ -165,6 +165,6 @@ fn store_round_trips_through_the_ring_cipher_end_to_end() {
     s2.set_blob_cipher(Box::new(cipher_with("key-a", fixture_master(0xA6))));
     assert_eq!(s2.get_blob(&addr).unwrap(), b"the dossier");
     // The audit surface reads the declared coverage honestly.
-    let view = s2.project(&run, hh_ledger::views::ViewKind::AuditView, None);
+    let view = s2.project(&run, hharness_ledger::views::ViewKind::AuditView, None);
     assert!(view.is_ok());
 }

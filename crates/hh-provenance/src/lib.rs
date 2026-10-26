@@ -1,13 +1,13 @@
-//! `hh-provenance` — the canonical §8.1 **provenance & authority model** (ticket S1.3,
+//! `hharness-provenance` — the canonical §8.1 **provenance & authority model** (ticket S1.3,
 //! R-2.1.5). One crate owns the *one* `ProvenanceRecord`, the seven `AuthorityClass` values,
 //! `default_authority`, the `Label` lattice, the R-TEXT rule, ledger stamping, propagation
 //! (P1/P6/P7 + RP), the `seal`/`endorse`/`declassify` basis, and monitor checks 1/2/5/7 —
-//! consumed by `hh-identity` (DF-S1.2-1), `hh-kernel`, and every later stage.
+//! consumed by `hharness-identity` (DF-S1.2-1), `hh-kernel`, and every later stage.
 //!
 //! # Invariants this crate enforces
 //!
 //! - **CC1 — one scheme per concern.** [`record::ProvenanceRecord`] is the only provenance
-//!   record; `hh-identity` *uses* it rather than defining a second one.
+//!   record; `hharness-identity` *uses* it rather than defining a second one.
 //! - **CC2 — authority is conferred, never read.** [`origin::default_authority`] is total and
 //!   pure over `(origin, scope, attestation?)` and never inspects a payload's self-declared
 //!   class (it never reads `scope` — location cannot elevate); a label rises only through

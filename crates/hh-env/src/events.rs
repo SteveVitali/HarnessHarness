@@ -7,19 +7,19 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::Store;
-use hh_ledger::LedgerError;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::Store;
+use hharness_ledger::LedgerError;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::handle::EnvHandle;
 
 /// The emitting component label (`producer.component_variant_ref`).
-pub const COMPONENT: &str = "hh-env";
+pub const COMPONENT: &str = "hharness-env";
 
-/// `EventMinter` — the kernel event factory (the `hh-budget` `Account::mint`
+/// `EventMinter` — the kernel event factory (the `hharness-budget` `Account::mint`
 /// pattern: `alloc_id` + `ts_now` + `head_event_id` + `ProvenanceRecord::
 /// kernel`). Borrows the `Store`; `append` is the caller's.
 pub struct EventMinter<'a> {
@@ -58,7 +58,7 @@ impl<'a> EventMinter<'a> {
     /// `origin = participant` for the transitions the adapter reports (the
     /// `action.environment.*` family admits `Origin::Participant` for this
     /// path only — the store's `kernel_origin` carve-out is class-scoped).
-    /// The producer stays `hh-env` (the kernel component recorded the fact);
+    /// The producer stays `hharness-env` (the kernel component recorded the fact);
     /// the *origin* is the participant whose adapter observed it — never a
     /// second authority.
     pub fn mint_participant(
@@ -70,8 +70,8 @@ impl<'a> EventMinter<'a> {
     ) -> Result<Event, LedgerError> {
         let mut ev = self.mint(class, payload)?;
         ev.provenance = Some(ProvenanceRecord::minted(
-            hh_provenance::Origin::participant(participant_ref, hosting_mechanism),
-            hh_provenance::PersistenceScope::Run,
+            hharness_provenance::Origin::participant(participant_ref, hosting_mechanism),
+            hharness_provenance::PersistenceScope::Run,
             self.store.now_ms(),
         ));
         Ok(ev)
@@ -491,8 +491,8 @@ pub fn downloaded_payload(h: &EnvHandle, path: &str, address: &str, size_bytes: 
 /// capability_version, args_canonical_hash, ordinal, parent_effect_id?}` —
 /// opens the effect scope.
 pub fn intended_payload(
-    effective: &hh_ontology::risk::RiskClass,
-    declared: Option<&hh_ontology::risk::RiskClass>,
+    effective: &hharness_ontology::risk::RiskClass,
+    declared: Option<&hharness_ontology::risk::RiskClass>,
     capability_version: &str,
     args_canonical_hash: &str,
     ordinal: u64,
@@ -521,8 +521,8 @@ pub fn intended_payload(
 /// re-dispatch ran under — the effect-side record of the take (absent,
 /// never nulled, when no remedy was consumed).
 pub fn authorized_payload(
-    effective: &hh_ontology::risk::RiskClass,
-    remedy_taken: Option<&hh_provenance::flow::Remedy>,
+    effective: &hharness_ontology::risk::RiskClass,
+    remedy_taken: Option<&hharness_provenance::flow::Remedy>,
 ) -> Json {
     let mut m = vec![("effective_risk_class", effective.to_json())];
     if let Some(r) = remedy_taken {
@@ -570,7 +570,7 @@ pub fn elicitation_intended_payload(
     let mut m = BTreeMap::new();
     m.insert(
         "effective_risk_class".to_string(),
-        hh_ontology::risk::RiskClass::UNKNOWN.to_json(),
+        hharness_ontology::risk::RiskClass::UNKNOWN.to_json(),
     );
     m.insert("domain".to_string(), Json::str("message_human"));
     m.insert("elicitation_of".to_string(), Json::str(parent_effect_id));
@@ -675,7 +675,7 @@ pub fn observation_recorded_payload(
     capability_semantic_id: &str,
     manifest_ref: &str,
     outcome: &crate::observe::EffectOutcome,
-    admission: &hh_provenance::flow::Admission,
+    admission: &hharness_provenance::flow::Admission,
     leaves: &[Json],
 ) -> Json {
     let mut m = vec![
@@ -690,7 +690,7 @@ pub fn observation_recorded_payload(
         ("admission", Json::str(admission.kind.as_str())),
         (
             "label",
-            hh_provenance::flow::label_json_full(&admission.label),
+            hharness_provenance::flow::label_json_full(&admission.label),
         ),
     ];
     // Absent-not-null (CC8): a contract without `labels_leaves` mints the

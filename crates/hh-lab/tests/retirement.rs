@@ -1,4 +1,4 @@
-//! `hh-lab` Stage-3 retirement fixtures — R-2.9.6⁰ᵇ (§5h.6;
+//! `hharness-lab` Stage-3 retirement fixtures — R-2.9.6⁰ᵇ (§5h.6;
 //! AC-R-2.9.6-2/-4/-5): a `retirement` `ExperimentSpec` per conditioned
 //! rule of the two minimal profiles registers on the held-out split and
 //! yields a `ComparisonReport{benefit_kind: artifact_benefit,
@@ -8,25 +8,25 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::MatchSpec;
-use hh_hir::debt::RetirementRecord;
-use hh_hir::leaves::Text;
-use hh_ontology::config::Ref;
-use hh_ontology::debt::{DebtStatus, OwnerRef, RemovalTestKind, RemovalVerdict, Verdict};
-use hh_ontology::eval::{
+use hharness_budget::matchspec::MatchSpec;
+use hharness_hir::debt::RetirementRecord;
+use hharness_hir::leaves::Text;
+use hharness_ontology::config::Ref;
+use hharness_ontology::debt::{DebtStatus, OwnerRef, RemovalTestKind, RemovalVerdict, Verdict};
+use hharness_ontology::eval::{
     Design, DesignKind, FactorKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{HumanRole, Origin, ProvenanceRecord};
-use hh_wire::Json;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{HumanRole, Origin, ProvenanceRecord};
+use hharness_wire::Json;
 
-use hh_compiler::profile::minimal_profiles;
-use hh_lab::debt::{
+use hharness_compiler::profile::minimal_profiles;
+use hharness_lab::debt::{
     expired_used_payload, headline_admitted, retire, settle_removal_test, AssumptionDebtHealth,
     DebtIndexRow, DebtReport, RetireError, SettleEffect,
 };
-use hh_lab::experiment::{
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentRefusal, ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy,
     SchedulingPolicy, SpecContext, SuiteBinding, ValidationStrategy,
@@ -37,7 +37,7 @@ use hh_lab::experiment::{
 fn human(author: &str) -> ProvenanceRecord {
     ProvenanceRecord::minted(
         Origin::human(author, HumanRole::Principal),
-        hh_provenance::PersistenceScope::Run,
+        hharness_provenance::PersistenceScope::Run,
         1,
     )
 }
@@ -454,8 +454,8 @@ fn minimal_debt_report_buckets_and_round_trip() {
                 owner: OwnerRef::principal("test:owner"),
                 status,
                 removal_test_kind: kind,
-                expiry_condition: hh_ontology::debt::ExpiryCondition {
-                    kind: hh_ontology::debt::ExpiryKind::Date,
+                expiry_condition: hharness_ontology::debt::ExpiryCondition {
+                    kind: hharness_ontology::debt::ExpiryKind::Date,
                     value: None,
                 },
                 created_at: 0,
@@ -525,7 +525,7 @@ fn minimal_debt_report_buckets_and_round_trip() {
 // records-in (`RetirementDiffView` — `hh-hir::diff` computes, the Lab
 // reads).
 
-use hh_lab::experiment::RetirementDiffView;
+use hharness_lab::experiment::RetirementDiffView;
 
 fn classified_ctx(
     candidate: &str,

@@ -7,23 +7,23 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use hh_hir::document::Node;
-use hh_hir::kinds::{
+use hharness_hir::document::Node;
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, EntityKind, Mutability, RepeatSafety,
     Reversibility, ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_ontology::risk::{RiskReversibility, RiskScope};
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_registry::capability::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
+use hharness_ontology::risk::{RiskReversibility, RiskScope};
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_registry::capability::{
     capability_at, catalog, estimate, project_risk, required_grants, search_projection,
     CatalogFilter, EstimateBasis,
 };
-use hh_registry::records::{CapabilityRecord, RegistryRecord};
-use hh_registry::store::RegistryStore;
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::records::{CapabilityRecord, RegistryRecord};
+use hharness_registry::store::RegistryStore;
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-capability-test-{}-{}", std::process::id(), tag));
@@ -109,7 +109,7 @@ fn ac_e1_1_clean_capability_registers_with_lifecycle_event() {
             None,
         )
         .expect("register");
-    assert_eq!(vref.kind, hh_identity::RecordKind::RegistryRecord);
+    assert_eq!(vref.kind, hharness_identity::RecordKind::RegistryRecord);
     // `lifecycle.capability.registered` is emitted (content-free — ids only).
     let events = store.drain_events();
     assert!(
@@ -225,8 +225,8 @@ fn ac_e1_2_surface_and_hint_changes_keep_semantic_id() {
         "cost_model is semantic"
     );
     // A surface rename/description change is a surface member — not semantic.
-    b.surface = Some(hh_hir::records::SurfaceRecord::Tool(Box::new(
-        hh_hir::records::ToolSurface {
+    b.surface = Some(hharness_hir::records::SurfaceRecord::Tool(Box::new(
+        hharness_hir::records::ToolSurface {
             name: "renamed_tool".into(),
             namespace: "test".into(),
             description_template: text("different prose", 9),
@@ -319,13 +319,16 @@ fn ac_e1_3_project_risk_axes() {
         )
         .expect("register");
     let (env, _rec) = store.get(&vref.version_id).expect("stored");
-    assert_eq!(env.admission, hh_registry::kinds::Admission::Quarantined);
+    assert_eq!(
+        env.admission,
+        hharness_registry::kinds::Admission::Quarantined
+    );
     let risk = project_risk(&store, &vref.version_id).expect("project_risk");
     assert_eq!(risk.scope, RiskScope::External);
     assert_eq!(risk.reversibility, RiskReversibility::Irreversible);
     assert_eq!(
         risk.repeat_safety,
-        hh_ontology::risk::RepeatSafety::NonIdempotent
+        hharness_ontology::risk::RepeatSafety::NonIdempotent
     );
 
     // `pure` ⇒ read-only.
@@ -371,7 +374,7 @@ fn ac_e1_7_catalog_search_snapshot_are_deterministic() {
     let snap = store.snapshot(&kernel()).expect("snapshot");
     // The id is content-addressed over the closure — it re-mints to itself.
     assert_eq!(
-        hh_registry::identity::snapshot_id_of(&snap),
+        hharness_registry::identity::snapshot_id_of(&snap),
         snap.snapshot_id
     );
     let a = catalog(&store, &CatalogFilter::default(), &snap).expect("catalog a");
@@ -406,7 +409,7 @@ fn ac_e1_10_error_classes_declared_and_estimate_never_zero() {
         )
         .expect("register");
     let (c, _) = capability_at(&store, &vref.version_id).expect("capability");
-    let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
+    let hharness_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
         panic!("kind");
     };
     // `error_classes` is declared on every record.
@@ -420,7 +423,7 @@ fn ac_e1_10_error_classes_declared_and_estimate_never_zero() {
     let est = estimate(&store, &vref.version_id, None).expect("estimate");
     assert_eq!(
         est.per_dimension.len(),
-        hh_ontology::dimensions::DimensionId::ALL.len()
+        hharness_ontology::dimensions::DimensionId::ALL.len()
     );
     assert!(est
         .per_dimension

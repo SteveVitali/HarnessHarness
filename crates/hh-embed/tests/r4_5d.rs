@@ -14,16 +14,16 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── the conformance document (the r4_5b shape) ────────────────────────────
 
@@ -405,7 +405,8 @@ impl FakeProvider {
         for _ in 0..50 {
             if let Some(buf) = self.got.lock().unwrap().as_ref() {
                 let p = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
-                return hh_wire::json::parse(&String::from_utf8_lossy(&buf[p + 4..])).unwrap();
+                return hharness_wire::json::parse(&String::from_utf8_lossy(&buf[p + 4..]))
+                    .unwrap();
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
@@ -669,10 +670,10 @@ fn anthropic_lane_streaming_call_lands_members() {
         .get("response_ref")
         .and_then(Json::as_str)
         .expect("response_ref");
-    let parsed = hh_identity::idp::parse_id(resp_ref).expect("idp id");
+    let parsed = hharness_identity::idp::parse_id(resp_ref).expect("idp id");
     let blob = std::fs::read(svc.store().root().join("blobs").join(&parsed.digest_hex))
         .expect("model_io blob resolves");
-    let io: Json = hh_wire::json::parse(&String::from_utf8_lossy(&blob)).unwrap();
+    let io: Json = hharness_wire::json::parse(&String::from_utf8_lossy(&blob)).unwrap();
     assert_eq!(
         io.get("schema").and_then(Json::as_str),
         Some("hh.model_io/1")

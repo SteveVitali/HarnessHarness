@@ -3,9 +3,9 @@
 //! The seven `applies_to_classes = {hosted}` declarations live in
 //! [`crate::catalogue`]; this module is the fold that produces their values
 //! from a hosted run's *projected* ledger rows — the native-class rows the
-//! Hosting ABI projection (`proj_ABI`, `hh-hosting`) lifted with their
+//! Hosting ABI projection (`proj_ABI`, `hharness-hosting`) lifted with their
 //! `mediation` stamp preserved in the payload (the `mediation` payload field
-//! on every hosted row, §6.6 §3). `hh-eval` never depends on `hh-hosting`:
+//! on every hosted row, §6.6 §3). `hharness-eval` never depends on `hharness-hosting`:
 //! the fold reads ledger data, not hosting code (CC5/CC6 — the hosting tier
 //! removes, these declarations simply produce `n/a{not_run}`).
 //!
@@ -49,7 +49,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::facts::FactRow;
 use crate::stats::PPM;
@@ -294,7 +294,7 @@ pub fn emit(m: &HostedMetrics) -> Vec<(&'static str, Option<i64>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_wire::Json;
+    use hharness_wire::Json;
 
     fn row(seq: u64, class: &str, payload: Json) -> FactRow {
         FactRow {

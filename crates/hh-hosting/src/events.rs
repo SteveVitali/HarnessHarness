@@ -28,11 +28,11 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 
-use hh_ledger::classes;
-use hh_ontology::control::{InfraError, InfraErrorFamily, StopReason};
-use hh_ontology::participant::Observability;
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_ledger::classes;
+use hharness_ontology::control::{InfraError, InfraErrorFamily, StopReason};
+use hharness_ontology::participant::Observability;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 /// `provenance.origin ∈ {participant, intercept, environment, adapter}` — the
 /// closed §6.6 sum (distinct from the ledger's `Origin` sum — this is the

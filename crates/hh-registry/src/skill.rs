@@ -26,7 +26,7 @@
 //!   `version_label` claim (CF-087);
 //! - render purity is `validate`'s gate: a body carrying the declared
 //!   render-time exec marker (`` !` ``&lt;cmd&gt;`` ` ``) fails
-//!   [`mod@hh_hir::validate`] with `RenderTimeExecution` — the lift produces the
+//!   [`mod@hharness_hir::validate`] with `RenderTimeExecution` — the lift produces the
 //!   doc faithfully, the gate refuses it.
 //!
 //! The registry never performs I/O: the caller supplies the read tree
@@ -34,19 +34,19 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::document::Node;
-use hh_hir::kinds::{EffectClass, EffectDomain, EntityKind};
-use hh_hir::leaves::{CompiledPayload, DeclaredInterface, Text};
-use hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY;
-use hh_hir::records::{
+use hharness_hir::document::Node;
+use hharness_hir::kinds::{EffectClass, EffectDomain, EntityKind};
+use hharness_hir::leaves::{CompiledPayload, DeclaredInterface, Text};
+use hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY;
+use hharness_hir::records::{
     ArtifactRecord, CompileHint, KindRecord, ProcedureRecord, ProcedureStep, ProcedureSurface,
     SurfaceRecord,
 };
-use hh_hir::refs::Ref;
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::refs::Ref;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::extension::{DeclaredClaim, DeclaredClaimKind, ExtensionKind, ExtensionRecord};
 
@@ -190,7 +190,7 @@ pub fn lift_skill(
     };
     let prov = || ProvenanceRecord::minted(ext_origin.clone(), PersistenceScope::Run, at);
     let text_authority = ext.trust.text_authority;
-    if text_authority > hh_provenance::authority::AuthorityClass::External {
+    if text_authority > hharness_provenance::authority::AuthorityClass::External {
         loss.notes.push(format!(
             "text_authority {ta} capped at external at lift — re-endorse at seal",
             ta = text_authority.as_str()
@@ -235,7 +235,7 @@ pub fn lift_skill(
     let mut steps = vec![ProcedureStep::Instruction(body.clone())];
     let mut payloads = Vec::new();
     for f in &tree.scripts {
-        let addr = hh_identity::idp::address(&f.bytes, f.media_type.clone());
+        let addr = hharness_identity::idp::address(&f.bytes, f.media_type.clone());
         let payload = CompiledPayload {
             format_tag: "script".into(),
             bytes_hash: addr.id(),
@@ -353,7 +353,7 @@ pub fn lift_skill(
     // ── references/* + assets/* → content-addressed Artifacts ────────────
     let mut artifacts = Vec::new();
     for f in tree.references.iter().chain(tree.assets.iter()) {
-        let addr = hh_identity::idp::address(&f.bytes, f.media_type.clone());
+        let addr = hharness_identity::idp::address(&f.bytes, f.media_type.clone());
         let mut a = Node::new(
             EntityKind::Artifact,
             KindRecord::Artifact(ArtifactRecord {
@@ -453,7 +453,7 @@ pub fn export_skill(
     let mut loss = LoweringLossReport::default();
 
     // Profile-derived members (the lift's `index`/`source` back-references).
-    if let Ok(Some(profile)) = hh_hir::procedure::ProcedureProfile::from_node(procedure) {
+    if let Ok(Some(profile)) = hharness_hir::procedure::ProcedureProfile::from_node(procedure) {
         if let Some(tag) = profile.index_tags.first() {
             tree.description = tag.clone();
         }

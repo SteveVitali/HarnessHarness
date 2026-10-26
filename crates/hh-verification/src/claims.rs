@@ -8,9 +8,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::vocab::{
     Agreement, ChargedTo, ClaimKind, Detector, DivergenceClass, EvidenceClass, ExtractedBy,
@@ -1100,8 +1100,8 @@ fn extract_free(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_provenance::authority::PersistenceScope;
-    use hh_provenance::origin::Origin;
+    use hharness_provenance::authority::PersistenceScope;
+    use hharness_provenance::origin::Origin;
 
     fn delegate_prov() -> ProvenanceRecord {
         ProvenanceRecord::minted(
@@ -1393,7 +1393,7 @@ mod tests {
         assert_eq!(c.evidence_refs, vec!["sha256:ev1".to_string()]);
         assert_eq!(
             c.provenance.authority,
-            hh_provenance::authority::AuthorityClass::Delegate
+            hharness_provenance::authority::AuthorityClass::Delegate
         );
         assert_eq!(c.extraction_confidence_ppm, 1_000_000);
         assert!(matches!(c.extracted_by, ExtractedBy::Structured(_)));
@@ -1486,7 +1486,10 @@ mod tests {
         // AC-R-2.7.2a-1's `AuthorityExceedsOrigin`: a claim may never carry
         // authority above `delegate` — extract refuses at the boundary.
         let principal = ProvenanceRecord::minted(
-            Origin::human("author:1", hh_provenance::origin::HumanRole::Principal),
+            Origin::human(
+                "author:1",
+                hharness_provenance::origin::HumanRole::Principal,
+            ),
             PersistenceScope::Run,
             7,
         );

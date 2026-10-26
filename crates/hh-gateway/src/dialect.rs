@@ -10,7 +10,7 @@
 //! refuses to load when any is incomplete (T-LCD-05 reflexive — no `unknown`
 //! escape at load).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::cache::CacheSemantics;
 use crate::errors::CodecError;
@@ -124,7 +124,7 @@ impl RetryAfterSource {
     }
 }
 
-/// `Json` array access (`hh_wire::Json` carries no `as_arr` — pattern-match).
+/// `Json` array access (`hharness_wire::Json` carries no `as_arr` — pattern-match).
 pub(crate) fn json_arr(j: &Json) -> Option<&Vec<Json>> {
     match j {
         Json::Arr(a) => Some(a),
@@ -442,7 +442,7 @@ impl WireDialect {
         if let Json::Obj(m) = &mut j {
             m.remove("dialect_id");
         }
-        hh_identity::idp_id("dialect.1", j.to_canonical_string().as_bytes())
+        hharness_identity::idp_id("dialect.1", j.to_canonical_string().as_bytes())
     }
 
     /// The canonical JSON form.

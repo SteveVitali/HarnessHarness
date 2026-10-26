@@ -21,19 +21,19 @@ mod common;
 
 use common::*;
 
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::errors::HirError;
-use hh_hir::kinds::{EntityKind, ValidatorKind};
-use hh_hir::procedure::{
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::errors::HirError;
+use hharness_hir::kinds::{EntityKind, ValidatorKind};
+use hharness_hir::procedure::{
     check_preconditions, select_target, CompilationTarget, Precondition, PreconditionEnv,
     Predicate, SelectError,
 };
-use hh_hir::records::{
+use hharness_hir::records::{
     CompileHint, KindRecord, ProcedureRecord, ProcedureStep, ProcedureSurface, SurfaceRecord,
     ValidatorRecord,
 };
-use hh_hir::validate;
-use hh_wire::json::Json;
+use hharness_hir::validate;
+use hharness_wire::json::Json;
 
 /// `{"step_failed": "any"}` — the catch-all step_failed class spelling.
 fn on_step_failed() -> Json {
@@ -208,7 +208,7 @@ fn bound_parameter_validates() {
         handler(Json::str("permission_denied")),
     ]);
     p.ext.insert(
-        hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
+        hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
         Json::obj([(
             "parameters",
             Json::Arr(vec![Json::obj([
@@ -227,7 +227,7 @@ fn handler_incomplete_when_a_declared_class_is_uncovered() {
     let mut p = proc_node("test:proc", vec![], 5);
     // Declare `failure_classes: [timeout]` in the profile but no handler.
     p.ext.insert(
-        hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
+        hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
         Json::obj([("failure_classes", Json::Arr(vec![Json::str("timeout")]))]),
     );
     let es = errs(&doc_with(vec![p]));
@@ -243,7 +243,7 @@ fn composition_cycle_is_detected() {
     // A → B → A through `composition[].callee`.
     let mut a = proc_node("test:pa", vec![], 5);
     a.ext.insert(
-        hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
+        hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
         Json::obj([(
             "composition",
             Json::Arr(vec![Json::obj([("callee", ref_json("test:pb"))])]),
@@ -251,7 +251,7 @@ fn composition_cycle_is_detected() {
     );
     let mut b = proc_node("test:pb", vec![], 6);
     b.ext.insert(
-        hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
+        hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
         Json::obj([(
             "composition",
             Json::Arr(vec![Json::obj([("callee", ref_json("test:pa"))])]),
@@ -277,7 +277,7 @@ fn ref_json(sid_: &str) -> Json {
 fn acyclic_composition_validates() {
     let mut a = proc_node("test:pa", vec![], 5);
     a.ext.insert(
-        hh_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
+        hharness_hir::procedure::PROCEDURE_PROFILE_EXT_KEY.into(),
         Json::obj([(
             "composition",
             Json::Arr(vec![Json::obj([("callee", ref_json("test:pb"))])]),
@@ -291,17 +291,18 @@ fn acyclic_composition_validates() {
 fn procedure_unverifiable_risk_floor() {
     // An `Opaque` step whose declared interface has an `open`-world effect
     // and the procedure declares no `expected_evidence`.
-    let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::Exec);
-    e.attributes = Some(hh_hir::kinds::EffectAttributes {
-        mutability: hh_hir::kinds::Mutability::Destructive,
-        repeat_safety: hh_hir::kinds::RepeatSafety::NonIdempotent,
-        world: hh_hir::kinds::World::Open,
-        reversibility: hh_hir::kinds::Reversibility::Irreversible,
+    let mut e =
+        hharness_hir::kinds::EffectClass::domain_only(hharness_hir::kinds::EffectDomain::Exec);
+    e.attributes = Some(hharness_hir::kinds::EffectAttributes {
+        mutability: hharness_hir::kinds::Mutability::Destructive,
+        repeat_safety: hharness_hir::kinds::RepeatSafety::NonIdempotent,
+        world: hharness_hir::kinds::World::Open,
+        reversibility: hharness_hir::kinds::Reversibility::Irreversible,
     });
-    let payload = hh_hir::leaves::CompiledPayload {
+    let payload = hharness_hir::leaves::CompiledPayload {
         format_tag: "script".into(),
         bytes_hash: "sha256:deadbeef".into(),
-        declared_interface: Some(hh_hir::leaves::DeclaredInterface {
+        declared_interface: Some(hharness_hir::leaves::DeclaredInterface {
             inputs: Json::Null,
             outputs: Json::Null,
             effects: [e].into_iter().collect(),
@@ -423,7 +424,7 @@ fn ac_r_2_4_5_11_malformed_precondition_is_schema_violation() {
 
 // ── select_target — the full Stage-3 rule (§5c.5 row 8) ─────────────────────
 
-use hh_hir::procedure::{
+use hharness_hir::procedure::{
     b_procedure, i_procedure, validate_hook_guard, HookGuardError, SelectCtx, TargetDecision,
     WorkflowReason,
 };
@@ -508,7 +509,7 @@ fn b_procedure_typed_failure_reasons() {
     let (_, reason) = b_procedure(&steps, &params, &empty_index(), "p").unwrap_err();
     assert_eq!(reason, WorkflowReason::UnboundedLoop);
     // opaque_without_interface
-    let payload = hh_hir::leaves::CompiledPayload {
+    let payload = hharness_hir::leaves::CompiledPayload {
         format_tag: "script".into(),
         bytes_hash: "sha256:deadbeef".into(),
         declared_interface: None,
@@ -583,9 +584,9 @@ fn select_target_subagent_path_selects_under_stage4_and_refuses_on_demand() {
 
     // Demanded (a `subagent_task` override) with no binding →
     // `DelegationUnavailable`, never a silent instruction fallback.
-    let override_profile = hh_hir::procedure::ProcedureProfile {
-        target_override: Some(hh_hir::records::CompileHint::SubagentTask),
-        ..hh_hir::procedure::ProcedureProfile::default()
+    let override_profile = hharness_hir::procedure::ProcedureProfile {
+        target_override: Some(hharness_hir::records::CompileHint::SubagentTask),
+        ..hharness_hir::procedure::ProcedureProfile::default()
     };
     assert!(matches!(
         select_target(
@@ -619,17 +620,18 @@ fn select_target_unexpressible_surface_when_body_exceeds_budget() {
 fn select_target_risk_floor_requires_expected_evidence() {
     // An Opaque step with an open-world irreversible effect: `R(P)` holds,
     // `expected_evidence` empty → `ProcedureUnverifiable` on every path.
-    let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::Exec);
-    e.attributes = Some(hh_hir::kinds::EffectAttributes {
-        mutability: hh_hir::kinds::Mutability::Destructive,
-        repeat_safety: hh_hir::kinds::RepeatSafety::NonIdempotent,
-        world: hh_hir::kinds::World::Open,
-        reversibility: hh_hir::kinds::Reversibility::Irreversible,
+    let mut e =
+        hharness_hir::kinds::EffectClass::domain_only(hharness_hir::kinds::EffectDomain::Exec);
+    e.attributes = Some(hharness_hir::kinds::EffectAttributes {
+        mutability: hharness_hir::kinds::Mutability::Destructive,
+        repeat_safety: hharness_hir::kinds::RepeatSafety::NonIdempotent,
+        world: hharness_hir::kinds::World::Open,
+        reversibility: hharness_hir::kinds::Reversibility::Irreversible,
     });
-    let payload = hh_hir::leaves::CompiledPayload {
+    let payload = hharness_hir::leaves::CompiledPayload {
         format_tag: "script".into(),
         bytes_hash: "sha256:deadbeef".into(),
-        declared_interface: Some(hh_hir::leaves::DeclaredInterface {
+        declared_interface: Some(hharness_hir::leaves::DeclaredInterface {
             inputs: Json::Null,
             outputs: Json::Null,
             effects: [e].into_iter().collect(),

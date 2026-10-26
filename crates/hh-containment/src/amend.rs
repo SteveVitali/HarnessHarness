@@ -22,8 +22,8 @@
 //! The applied diff is *additive only* (`ContainmentDiff` has no removal
 //! variant — the meet's anti-laundering is unaffected; ADR-0266 D5).
 
-use hh_hir::leaves::Text;
-use hh_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_hir::leaves::Text;
+use hharness_provenance::{AuthorityClass, Origin, PersistenceScope, ProvenanceRecord};
 
 use crate::admit::ContainmentDiff;
 use crate::policy::{
@@ -205,7 +205,7 @@ pub fn amend(
                 credential_bindings: vec![],
                 justification: Some(Text::new(
                     format!("amended by {} at {}", basis.as_str(), scope.as_str()),
-                    "hh-containment",
+                    "hharness-containment",
                     endorser.clone(),
                 )),
                 provenance: Some(endorser.clone()),
@@ -239,8 +239,8 @@ pub fn amend(
 
 /// The `ContainmentDiff`'s canonical JSON member set (for
 /// `security.containment.amended`'s `diff` member).
-pub fn diff_json(diff: &ContainmentDiff) -> hh_wire::json::Json {
-    use hh_wire::json::Json;
+pub fn diff_json(diff: &ContainmentDiff) -> hharness_wire::json::Json {
+    use hharness_wire::json::Json;
     let mut m = std::collections::BTreeMap::new();
     match diff {
         ContainmentDiff::AddWritableRoot { root } => {
@@ -273,7 +273,7 @@ pub fn diff_json(diff: &ContainmentDiff) -> hh_wire::json::Json {
 mod tests {
     use super::*;
     use crate::policy::{kernel_default, AmendmentPolicy};
-    use hh_provenance::{HumanRole, Origin};
+    use hharness_provenance::{HumanRole, Origin};
     use std::collections::BTreeSet;
 
     fn base_policy() -> ContainmentPolicy {

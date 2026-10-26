@@ -18,32 +18,32 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use hh_budget::account::Account;
-use hh_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_containment::egress::{ApprovalCache, EgressRequest};
-use hh_containment::policy::{
+use hharness_budget::account::Account;
+use hharness_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_containment::egress::{ApprovalCache, EgressRequest};
+use hharness_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressProtocol,
     EgressRule, HostPattern, NetMode, NonPublic, RuleDecision,
 };
-use hh_env::egress::{
+use hharness_env::egress::{
     EgressMediator, EgressTransport, MediatedOutcome, StaticResolver, WireResponse,
 };
-use hh_env::events::{intended_payload, EventMinter, ScopeChain};
-use hh_env::tokens::TokenMinter;
-use hh_hir::records::GrantConstraints;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::approval::{ApprovalResponse, EndorserRef, LeaseSpec, ResponseChoice};
-use hh_monitor::assess::SecretTransport;
-use hh_monitor::decision::DecisionScope;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::risk::{
+use hharness_env::events::{intended_payload, EventMinter, ScopeChain};
+use hharness_env::tokens::TokenMinter;
+use hharness_hir::records::GrantConstraints;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::approval::{ApprovalResponse, EndorserRef, LeaseSpec, ResponseChoice};
+use hharness_monitor::assess::SecretTransport;
+use hharness_monitor::decision::DecisionScope;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::risk::{
     RepeatSafety as RiskRepeatSafety, RiskClass, RiskReversibility, RiskScope,
 };
-use hh_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord};
-use hh_secrets::*;
-use hh_wire::json::Json;
+use hharness_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::*;
+use hharness_wire::json::Json;
 
 // ── scaffold ─────────────────────────────────────────────────────────────────
 
@@ -321,7 +321,7 @@ fn bound_binding(
                 channel_id: channel_id.into(),
                 holder: "agent.main".into(),
                 env_handle_ref: env_handle.into(),
-                env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
+                env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
                 mode: SecretTransport::ProxyInjected,
                 monitor_decision_ref: dref,
                 destinations: destinations.iter().map(|d| d.to_string()).collect(),
@@ -561,7 +561,7 @@ fn class_where(
     run_id: &str,
     class: &str,
     pred: impl Fn(&Json) -> bool,
-) -> Vec<hh_ledger::event::EventEnvelope> {
+) -> Vec<hharness_ledger::event::EventEnvelope> {
     store
         .events(run_id)
         .unwrap()
@@ -650,8 +650,8 @@ fn lt02_bound_destination_receives_real_carrier_over_real_wire() {
         cache: ApprovalCache::default(),
         budget_id: Some(budget_id),
         participant_ref: "agent.main".into(),
-        resolver: Box::new(hh_env::egress::SystemResolver),
-        transport: Box::new(hh_env::egress::LocalHttpTransport::default()),
+        resolver: Box::new(hharness_env::egress::SystemResolver),
+        transport: Box::new(hharness_env::egress::LocalHttpTransport::default()),
         inspect_hooks: std::collections::BTreeMap::new(),
     };
 
@@ -909,7 +909,10 @@ fn lt09_unattributed_request_denied_fail_closed() {
     let MediatedOutcome::Refused { reason, .. } = out else {
         panic!("expected Refused, got {out:?}");
     };
-    assert_eq!(reason, hh_containment::egress::EgressReason::Unattributed);
+    assert_eq!(
+        reason,
+        hharness_containment::egress::EgressReason::Unattributed
+    );
     assert!(transport.log.lock().unwrap().is_empty());
     // requested + decided are durable even for the unattributed deny.
     assert_eq!(class_count(med.store, &run, "security.egress.requested"), 1);
@@ -1003,7 +1006,7 @@ fn non_public_guard_denies_then_allow_listed_forwards() {
     };
     assert_eq!(
         reason,
-        hh_containment::egress::EgressReason::NotAllowedLocal
+        hharness_containment::egress::EgressReason::NotAllowedLocal
     );
     assert!(transport.log.lock().unwrap().is_empty());
 
@@ -1115,7 +1118,7 @@ fn default_unmatched_ask_endorse_lease_amends_and_forwards() {
         permission_id: permission_id.clone(),
         choice: ResponseChoice::AllowLease(LeaseSpec {
             pattern: None,
-            scope: hh_monitor::approval::LeaseScope::Run,
+            scope: hharness_monitor::approval::LeaseScope::Run,
             max_uses: None,
         }),
         scope: DecisionScope::Session,
@@ -1362,7 +1365,7 @@ fn network_calls_exhaustion_gates_before_wire() {
     };
     assert_eq!(
         reason,
-        hh_containment::egress::EgressReason::BudgetExhausted
+        hharness_containment::egress::EgressReason::BudgetExhausted
     );
     assert_eq!(transport.log.lock().unwrap().len(), 1);
     assert_eq!(class_count(med.store, &run, "control.budget.consumed"), 1);
@@ -1417,7 +1420,7 @@ fn approvals_exhaustion_converts_ask_to_deny() {
     };
     assert_eq!(
         reason,
-        hh_containment::egress::EgressReason::BudgetExhausted
+        hharness_containment::egress::EgressReason::BudgetExhausted
     );
     // No wire, no pending/requested permission — the reserve's decided row
     // and the egress decided deny are the durable record.
@@ -1885,10 +1888,10 @@ fn lt06_stale_cas_conflict_and_old_value_masked() {
     // surface carrying either is a detected leak.
     let det = DetectorSet::standard(broker.mask_set().unwrap());
     for v in ["tok-OLD", "tok-NEW"] {
-        let hits = hh_secrets::redact::detect(&format!("prefix {v} suffix"), &det);
+        let hits = hharness_secrets::redact::detect(&format!("prefix {v} suffix"), &det);
         assert!(
             hits.iter()
-                .any(|h| h.detector == hh_secrets::redact::DetectorKind::KnownValue),
+                .any(|h| h.detector == hharness_secrets::redact::DetectorKind::KnownValue),
             "{v} not masked"
         );
     }
@@ -2046,17 +2049,17 @@ fn lt09_snapshot_placeholders_only_fork_virtualizes() {
 
 // ── R4.5c — LT-02/LT-05 over a real terminated TLS leg (DF-S2.4-2; ADR-0365) ──
 
-/// The committed test PKI (`hh-tls`'s fixture — fake material, the
+/// The committed test PKI (`hharness-tls`'s fixture — fake material, the
 /// gitleaks allowlist names the directory).
 fn pki(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../hh-tls/fixtures/pki/{name}"))
 }
 
-/// The TLS twin of `http_fixture` — `hh_tls::ServerTls` terminates the
+/// The TLS twin of `http_fixture` — `hharness_tls::ServerTls` terminates the
 /// committed test PKI, captures the *decrypted* request bytes, answers
 /// `200 ok`. Returns (port, captured, join).
 fn https_fixture(n: usize) -> (u16, Arc<Mutex<Vec<String>>>, thread::JoinHandle<()>) {
-    let tls = hh_tls::ServerTls::new(
+    let tls = hharness_tls::ServerTls::new(
         &std::fs::read_to_string(pki("server.pem")).unwrap(),
         &std::fs::read_to_string(pki("server-key.pem")).unwrap(),
     )
@@ -2142,8 +2145,8 @@ fn req_https(
 
 /// The mediator's client-TLS config over the committed test CA — the
 /// explicit extra-roots file is the only path to a private issuer.
-fn test_tls() -> hh_tls::ClientTls {
-    hh_tls::ClientTls::webpki_roots()
+fn test_tls() -> hharness_tls::ClientTls {
+    hharness_tls::ClientTls::webpki_roots()
         .extra_roots_file(&pki("hh-test-ca.pem"))
         .unwrap()
 }
@@ -2217,7 +2220,7 @@ fn lt02_tls_bound_destination_receives_real_carrier() {
         budget_id: Some(budget_id),
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
-        transport: Box::new(hh_env::egress::LocalTlsTransport {
+        transport: Box::new(hharness_env::egress::LocalTlsTransport {
             tls: test_tls(),
             ..Default::default()
         }),
@@ -2310,7 +2313,7 @@ fn tls_leg_private_issuer_needs_declared_roots() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
         // `webpki_roots()` only — the test CA is NOT declared.
-        transport: Box::new(hh_env::egress::LocalTlsTransport::default()),
+        transport: Box::new(hharness_env::egress::LocalTlsTransport::default()),
         inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med.handle(
@@ -2382,7 +2385,7 @@ fn lt05_tls_revoke_fences_replay_and_destination() {
         budget_id: None,
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("localhost", "127.0.0.1")])),
-        transport: Box::new(hh_env::egress::LocalTlsTransport {
+        transport: Box::new(hharness_env::egress::LocalTlsTransport {
             tls: test_tls(),
             ..Default::default()
         }),

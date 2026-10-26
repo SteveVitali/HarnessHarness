@@ -8,9 +8,9 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::OutcomeClass;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::OutcomeClass;
+use hharness_wire::json::Json;
 
 use crate::events::class;
 

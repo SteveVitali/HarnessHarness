@@ -14,23 +14,23 @@
 
 use std::collections::BTreeMap;
 
-use hh_analysis::{eval_run as project_eval_run, AnalysisError};
-use hh_eval::catalogue;
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{EvalRun, SuiteContext};
-use hh_eval::scorecard::descriptor;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ontology::compliance::NaReason;
-use hh_ontology::eval::MetricValueKind;
-use hh_ontology::participant::{CapabilityVerdict, ParticipantClass};
-use hh_results::audit::AuditRef;
-use hh_results::row::{
+use hharness_analysis::{eval_run as project_eval_run, AnalysisError};
+use hharness_eval::catalogue;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{EvalRun, SuiteContext};
+use hharness_eval::scorecard::descriptor;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::eval::MetricValueKind;
+use hharness_ontology::participant::{CapabilityVerdict, ParticipantClass};
+use hharness_results::audit::AuditRef;
+use hharness_results::row::{
     AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection, ResultsRow,
     RowKey,
 };
-use hh_results::scoring::ScoringContext;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::Json;
+use hharness_results::scoring::ScoringContext;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::Json;
 
 /// A finished hosted `ResultsRow` — `capability_vector_ref` binds the
 /// participant's reconciled record; the launch-stamped verdicts ride the
@@ -150,7 +150,7 @@ fn suite() -> SuiteContext {
     SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
-        family: hh_ontology::lab::EnvironmentFamily::CodingTerminal,
+        family: hharness_ontology::lab::EnvironmentFamily::CodingTerminal,
     }
 }
 
@@ -166,7 +166,7 @@ fn project(manifest: Option<&RunManifest>) -> Result<EvalRun, AnalysisError> {
 
 /// The `approval_rate` declaration — a catalogue row with
 /// `requires_capabilities = {permission_surface}` (§5g.7).
-fn approval_rate() -> hh_ontology::compliance::MetricDeclaration {
+fn approval_rate() -> hharness_ontology::compliance::MetricDeclaration {
     catalogue::scorecard_metrics()
         .into_iter()
         .find(|d| d.name == "approval_rate")

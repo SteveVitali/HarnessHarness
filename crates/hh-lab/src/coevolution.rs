@@ -12,7 +12,7 @@
 //!   state.
 //! - [`project_training_export`] is a *pure projection* of the ledger prefix
 //!   (records-in/records-out — the caller supplies decoded ledger
-//!   envelopes as canonical `Json` rows, this crate holds no `hh-ledger`
+//!   envelopes as canonical `Json` rows, this crate holds no `hharness-ledger`
 //!   edge). Same prefix + same policy ⇒ the byte-identical export (E-1).
 //! - [`import_snapshot`] takes a [`SnapshotClaim`] — claims-only, never
 //!   identity-pinning (I-2) — and produces the `ModelSnapshotRecord` +
@@ -31,14 +31,14 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::debt::{
+use hharness_ontology::debt::{
     DebtClass, DebtExpiry, DebtScope, DebtStatus, DeficiencyClass, EvidenceKind, EvidenceRef,
     ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject, HypothesisTyped, ModelSelector,
     OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind, Revalidation, RevalidationAction,
     RevalidationOn,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 use crate::model::{
@@ -617,7 +617,7 @@ impl TrainingExport {
     pub fn seal(&mut self) {
         self.export_id = String::new();
         self.exposure.export_id = String::new();
-        let id = hh_identity::idp_id(
+        let id = hharness_identity::idp_id(
             "hh.training_export",
             &self.to_json().to_canonical_string().into_bytes(),
         );
@@ -690,7 +690,7 @@ fn event_ref_of(e: &Json) -> String {
 /// `project_training_export(run_id, events, policy, ctx) →
 /// (TrainingExport, loss)` — the E-1..E-8 pure projection over one
 /// subject run's decoded ledger envelopes (canonical `Json` rows — this
-/// crate holds no `hh-ledger` edge).
+/// crate holds no `hharness-ledger` edge).
 ///
 /// - **E-1** — deterministic: `samples` order by `seq`; same inputs ⇒
 ///   the byte-identical export.
@@ -981,11 +981,11 @@ pub fn export_regression_suite(
         ArmSpec, BundlePolicy, ExperimentKind, ExperimentSpec, FactorSpec, LevelSpec, SuiteBinding,
         ValidationStrategy,
     };
-    use hh_ontology::eval::{
+    use hharness_ontology::eval::{
         Design, DesignKind, FactorDeclaration, FactorLevel, ModelRole, Pairing, PreRegistration,
         RoutingPolicy,
     };
-    use hh_ontology::FactorKind;
+    use hharness_ontology::FactorKind;
 
     let suite_id = format!("lab/regression/{definition_ref}@{snapshot_in}");
     let primary_metrics: Vec<String> = compliance_rules.values().cloned().collect();
@@ -1006,24 +1006,24 @@ pub fn export_regression_suite(
         interactions: vec![],
         dead_weight_purpose: false,
     };
-    let match_spec = hh_budget::matchspec::MatchSpec {
+    let match_spec = hharness_budget::matchspec::MatchSpec {
         // The snapshot pair crosses models by construction — the
         // matched-cap mode + `cross_model` scope name the comparison's
         // shape; `cold_start` holds the cache factor fixed.
         dimensions: vec![
-            hh_ontology::dimensions::DimensionId::TokensInputUncached,
-            hh_ontology::dimensions::DimensionId::TokensInputCacheRead,
-            hh_ontology::dimensions::DimensionId::TokensInputCacheWrite,
-            hh_ontology::dimensions::DimensionId::TokensOutputVisible,
-            hh_ontology::dimensions::DimensionId::TokensOutputReasoning,
-            hh_ontology::dimensions::DimensionId::ModelCalls,
-            hh_ontology::dimensions::DimensionId::TimeWallMs,
+            hharness_ontology::dimensions::DimensionId::TokensInputUncached,
+            hharness_ontology::dimensions::DimensionId::TokensInputCacheRead,
+            hharness_ontology::dimensions::DimensionId::TokensInputCacheWrite,
+            hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
+            hharness_ontology::dimensions::DimensionId::TokensOutputReasoning,
+            hharness_ontology::dimensions::DimensionId::ModelCalls,
+            hharness_ontology::dimensions::DimensionId::TimeWallMs,
         ],
-        mode: hh_budget::MatchMode::MatchedCap,
+        mode: hharness_budget::MatchMode::MatchedCap,
         tolerance_ppm: 100_000,
         pricing_table_ref: pins.pricing_table_ref.clone(),
-        model_scope: hh_budget::matchspec::ModelScope::CrossModel,
-        cache_policy: hh_budget::matchspec::CachePolicy::ColdStart,
+        model_scope: hharness_budget::matchspec::ModelScope::CrossModel,
+        cache_policy: hharness_budget::matchspec::CachePolicy::ColdStart,
         utilization_floor_ppm: None,
     };
     let level = |id: &str, r: &str, label: &str| LevelSpec {
@@ -1031,7 +1031,7 @@ pub fn export_regression_suite(
         ref_: r.to_string(),
         overrides: None,
         label: label.to_string(),
-        class: hh_ontology::participant::ParticipantClass::Native,
+        class: hharness_ontology::participant::ParticipantClass::Native,
         non_portable: false,
     };
     let decl_level = |id: &str, r: &str, label: &str| FactorLevel {
@@ -1039,27 +1039,28 @@ pub fn export_regression_suite(
         content_ref: r.to_string(),
         label: label.to_string(),
     };
-    let artifact = hh_ontology::config::Ref::new(
+    let artifact = hharness_ontology::config::Ref::new(
         pins.artifact_semantic_id.clone(),
         pins.artifact_version_id.clone(),
     );
-    let arm = |arm_id: &str, hyp: &str, lvl: &str, artifact: &hh_ontology::config::Ref| ArmSpec {
-        arm_id: arm_id.to_string(),
-        hypothesis: hyp.to_string(),
-        level_assignment: BTreeMap::from([
-            ("model_snapshot".to_string(), lvl.to_string()),
-            ("environment".to_string(), pins.environment_level_id.clone()),
-        ]),
-        eval_budget: pins.eval_budget_ref.clone(),
-        search_budget: Some(pins.search_budget_ref.clone()),
-        inference_budget: None,
-        match_spec: Some(match_spec.clone()),
-        artifact_ref: artifact.clone(),
-        limits_enforced: "full".to_string(),
-        model_role_table_ref: None,
-        response_cache: None,
-        ensemble_k: None,
-    };
+    let arm =
+        |arm_id: &str, hyp: &str, lvl: &str, artifact: &hharness_ontology::config::Ref| ArmSpec {
+            arm_id: arm_id.to_string(),
+            hypothesis: hyp.to_string(),
+            level_assignment: BTreeMap::from([
+                ("model_snapshot".to_string(), lvl.to_string()),
+                ("environment".to_string(), pins.environment_level_id.clone()),
+            ]),
+            eval_budget: pins.eval_budget_ref.clone(),
+            search_budget: Some(pins.search_budget_ref.clone()),
+            inference_budget: None,
+            match_spec: Some(match_spec.clone()),
+            artifact_ref: artifact.clone(),
+            limits_enforced: "full".to_string(),
+            model_role_table_ref: None,
+            response_cache: None,
+            ensemble_k: None,
+        };
     let mut spec = ExperimentSpec {
         experiment_id: String::new(),
         kind: ExperimentKind::Comparative,
@@ -1199,7 +1200,7 @@ pub struct RegressionSuitePins {
     /// The suite ref the `SuiteBinding` names.
     pub suite_ref: String,
     /// The split labels the suite may use.
-    pub split_labels_used: Vec<hh_ontology::lab::SplitLabel>,
+    pub split_labels_used: Vec<hharness_ontology::lab::SplitLabel>,
     /// The `SplitAssignmentRecord` ref.
     pub split_assignment_ref: String,
     /// The pinned `eval_budget` ref.
@@ -1223,13 +1224,13 @@ pub struct RegressionSuitePins {
     /// The cross-model pricing table ref (`cross_model` MatchSpec
     /// requires one where spend matches — `None` names a
     /// token-only match).
-    pub pricing_table_ref: Option<hh_budget::pricing::PricingTableRef>,
+    pub pricing_table_ref: Option<hharness_budget::pricing::PricingTableRef>,
     /// The transaction seq the pre-registration commits at.
     pub registered_at: u64,
     /// Replicates per cell.
     pub replicates_per_cell: u32,
     /// The seed policy.
-    pub seed_policy: hh_ontology::eval::SeedPolicy,
+    pub seed_policy: hharness_ontology::eval::SeedPolicy,
     /// The scheduling declaration.
     pub scheduling: crate::experiment::SchedulingPolicy,
     /// The reattempt policy.
@@ -1300,7 +1301,7 @@ impl CompatibilityTagSet {
 pub fn export_compatibility_tags(
     snapshot_id: &str,
     records: &[CompatibilityRecord],
-    debts: &[hh_hir::records::AssumptionDebtRecord],
+    debts: &[hharness_hir::records::AssumptionDebtRecord],
 ) -> CompatibilityTagSet {
     let mut set = CompatibilityTagSet {
         snapshot_id: snapshot_id.to_string(),
@@ -1330,7 +1331,7 @@ pub fn export_compatibility_tags(
         }
     }
     for d in debts {
-        use hh_ontology::debt::{DebtStatus, ExpiryKind};
+        use hharness_ontology::debt::{DebtStatus, ExpiryKind};
         let tag = match d.status {
             DebtStatus::Expiring | DebtStatus::Expired => Some("expiring"),
             DebtStatus::Retired => Some("retired"),
@@ -1465,7 +1466,7 @@ pub fn selector_covers_claim(sel: &ModelSelector, claim: &SnapshotClaim) -> bool
 pub fn import_snapshot(
     claim: &SnapshotClaim,
     sealed_definitions: &[SealedDefinition],
-    debts: &[hh_hir::records::AssumptionDebtRecord],
+    debts: &[hharness_hir::records::AssumptionDebtRecord],
     route_status: RouteStatus,
     known_snapshot_ids: &[String],
     descendant_snapshot_ids: &[String],
@@ -1744,7 +1745,7 @@ pub struct PostImportSweep {
 /// side) or *scheduled* (none match — the reverse-sweep side);
 /// unscoped debts are `unchanged`.
 pub fn post_import_sweep(
-    debts: &[hh_hir::records::AssumptionDebtRecord],
+    debts: &[hharness_hir::records::AssumptionDebtRecord],
     claim: &SnapshotClaim,
 ) -> PostImportSweep {
     let mut out = PostImportSweep {
@@ -1807,9 +1808,9 @@ pub fn interface_debt_record(
     owner: &OwnerRef,
     created_by: &ProvenanceRecord,
     created_at: u64,
-) -> hh_hir::records::AssumptionDebtRecord {
-    use hh_hir::leaves::Text;
-    hh_hir::records::AssumptionDebtRecord {
+) -> hharness_hir::records::AssumptionDebtRecord {
+    use hharness_hir::leaves::Text;
+    hharness_hir::records::AssumptionDebtRecord {
         rule_id: INTERFACE_DEBT_RULE_ID.to_string(),
         hypothesis: Text::new(
             String::from(
@@ -2241,7 +2242,7 @@ impl ConsolidationReport {
     /// Fill `report_id` with the body's `idp/1` address.
     pub fn seal(&mut self) {
         self.report_id = String::new();
-        self.report_id = hh_identity::idp_id(
+        self.report_id = hharness_identity::idp_id(
             "hh.consolidation_report",
             &self.to_json().to_canonical_string().into_bytes(),
         );
@@ -2258,12 +2259,12 @@ pub fn consolidation_retirement_record(
     report: &ConsolidationReport,
     verdict_ref: &str,
     decided_by: &ProvenanceRecord,
-) -> hh_hir::debt::RetirementRecord {
-    hh_hir::debt::RetirementRecord {
+) -> hharness_hir::debt::RetirementRecord {
+    hharness_hir::debt::RetirementRecord {
         removal_test_report_ref: report.report_id.clone(),
         verdict_ref: verdict_ref.to_string(),
         decided_by: decided_by.clone(),
-        rationale: hh_hir::leaves::Text::new(
+        rationale: hharness_hir::leaves::Text::new(
             format!(
                 "absorbed into weights — snapshot {} (consolidation {} verdict {})",
                 report.snapshot_ref,
@@ -2714,7 +2715,7 @@ impl CoEvolutionCycleRecord {
     /// content-derived).
     pub fn seal(&mut self) {
         self.cycle_id = String::new();
-        self.cycle_id = hh_identity::idp_id(
+        self.cycle_id = hharness_identity::idp_id(
             "hh.co_evolution_cycle",
             &self.to_json().to_canonical_string().into_bytes(),
         );

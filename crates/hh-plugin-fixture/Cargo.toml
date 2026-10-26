@@ -1,5 +1,5 @@
 [package]
-name = "hh-plugin-fixture"
+name = "hharness-plugin-fixture"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,12 +11,12 @@ name = "hh-plugin-fixture"
 path = "src/main.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-varhost = { path = "../hh-varhost" }
-hh-control = { path = "../hh-control" }
-hh-verification = { path = "../hh-verification" }
-hh-provenance = { path = "../hh-provenance" }
-hh-identity = { path = "../hh-identity" }
-hh-hir = { path = "../hh-hir" }
-hh-ontology = { path = "../hh-ontology" }
+hharness-wire = { path = "../hh-wire" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-varhost = { path = "../hh-varhost" }
+hharness-control = { path = "../hh-control" }
+hharness-verification = { path = "../hh-verification" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-identity = { path = "../hh-identity" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ontology = { path = "../hh-ontology" }

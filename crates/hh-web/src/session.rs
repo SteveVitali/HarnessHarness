@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_embed_client_generated::{ClientError, NetClient};
-use hh_telemetry::sinks::SinkPolicy;
-use hh_wire::json::Json;
+use hharness_embed_client_generated::{ClientError, NetClient};
+use hharness_telemetry::sinks::SinkPolicy;
+use hharness_wire::json::Json;
 
 use crate::ops;
 
@@ -296,7 +296,7 @@ impl Sessions {
 }
 
 /// The `responder`/`registrar`/`invocation` JSON the surface mints —
-/// `hh_embed_schema`/`hh_provenance` canonical members, spelled once
+/// `hharness_embed_schema`/`hharness_provenance` canonical members, spelled once
 /// here (the browser's bytes never reach these fields — CC2).
 fn responder_json(subject: &str, session: &str, surface: &str) -> Json {
     Json::obj([
@@ -306,7 +306,7 @@ fn responder_json(subject: &str, session: &str, surface: &str) -> Json {
     ])
 }
 
-/// The `invocation` member (`hh_embed_schema::types::InvocationRecord`'s
+/// The `invocation` member (`hharness_embed_schema::types::InvocationRecord`'s
 /// canonical JSON — the surface's own record of the human's act).
 fn invocation_json(subject: &str, surface: &str, op: &str, seq: u64) -> Json {
     Json::obj([
@@ -368,7 +368,7 @@ fn registrar_json(subject: &str, seq: u64, attested: bool, params: &Json) -> Jso
 /// recorded the act at the request's logical time (clock-monotonic,
 /// never wall-clock).
 fn attestation_json(subject: &str, seq: u64, params: &Json) -> Json {
-    let subject_hash = hh_identity::idp_id(
+    let subject_hash = hharness_identity::idp_id(
         "web.edit.attestation",
         params.to_canonical_string().as_bytes(),
     );

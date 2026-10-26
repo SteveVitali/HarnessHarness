@@ -14,21 +14,21 @@
 //!   `regression_drifted_rules` ⇒ `expiring` (ADR-0203),
 //!   `synthetic_snapshot_claim`, `guard_at_bind`, `snapshot_span`.
 
-use hh_compiler::expiry::{ExpiryObservables, RevalidationObs};
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_ontology::debt::{
+use hharness_compiler::expiry::{ExpiryObservables, RevalidationObs};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_ontology::debt::{
     DebtClass, DebtPolicy, DebtScope, DebtStatus, EvidenceKind, EvidenceRef, ExpiryCondition,
     ExpiryKind, ModelSelector, OwnerRef, RemovalTest, RemovalTestKind,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_lab::debt::{
+use hharness_lab::debt::{
     debt_index, evaluate_debt, missing_required_fields, route_notices, AssumptionDebtHealth,
     DebtIndexEntry, DebtObservables, ProfileChange, ProfileChangeKind,
 };
-use hh_lab::model::{
+use hharness_lab::model::{
     guard_at_bind, regression_drifted_rules, run_regression_suite, snapshot_span,
     synthetic_snapshot_claim, CompatibilityStatus, GuardAtBindError, HarnessRegressionSuite,
     RegressionCheck, RegressionVerdict,
@@ -71,7 +71,7 @@ fn policy() -> DebtPolicy {
     DebtPolicy::default()
 }
 
-fn causes(t: &hh_lab::debt::DebtTransition) -> Vec<String> {
+fn causes(t: &hharness_lab::debt::DebtTransition) -> Vec<String> {
     t.causes.clone()
 }
 
@@ -173,7 +173,7 @@ fn probation_overrun_warns_on_hypothesized_records() {
     r.created_at = Some(0);
     assert_eq!(
         r.evidence_grade(),
-        hh_ontology::debt::EvidenceGrade::Hypothesized
+        hharness_ontology::debt::EvidenceGrade::Hypothesized
     );
     let mut p = policy();
     p.hypothesized_max_age_ms = 100;
@@ -201,7 +201,7 @@ fn ledgered_probation_overrun_cites_the_ledgered_row() {
     // Book of record says due at 5_000 — at 1_000 the record-derived
     // bound (0 + 100) would already fire, but the ledgered entry wins.
     let obs = DebtObservables {
-        probation: Some(hh_lab::debt::LedgeredProbation {
+        probation: Some(hharness_lab::debt::LedgeredProbation {
             debt_ref: "debt:r1".into(),
             opened_at_ms: 900,
             due_at_ms: 5_000,
@@ -221,7 +221,7 @@ fn ledgered_probation_overrun_cites_the_ledgered_row() {
     // A probation row for *another* debt does not apply — the
     // record-derived fallback governs.
     let obs = DebtObservables {
-        probation: Some(hh_lab::debt::LedgeredProbation {
+        probation: Some(hharness_lab::debt::LedgeredProbation {
             debt_ref: "debt:other".into(),
             opened_at_ms: 0,
             due_at_ms: u64::MAX,
@@ -326,14 +326,14 @@ fn revalidated_model_conditioned_requires_evidenced_grade() {
             }),
             ..Default::default()
         },
-        revalidation_grade: Some(hh_ontology::debt::EvidenceGrade::Hypothesized),
+        revalidation_grade: Some(hharness_ontology::debt::EvidenceGrade::Hypothesized),
         ..Default::default()
     };
     // `hypothesized` fresh evidence — the leg is suppressed.
     assert!(evaluate_debt("debt:r1", &r, Some(3), &obs, 1_000, &policy()).is_empty());
     // `evidenced` — `expiring → active`.
     let obs_ok = DebtObservables {
-        revalidation_grade: Some(hh_ontology::debt::EvidenceGrade::Evidenced),
+        revalidation_grade: Some(hharness_ontology::debt::EvidenceGrade::Evidenced),
         ..obs.clone()
     };
     let ts = evaluate_debt("debt:r1", &r, Some(3), &obs_ok, 1_000, &policy());
@@ -368,7 +368,7 @@ fn index_folds_transitions_and_names_the_last_trigger() {
             version_id: Some("v-1".into()),
             record: r.clone(),
             transitions: vec![
-                hh_lab::debt::DebtTransition {
+                hharness_lab::debt::DebtTransition {
                     debt_ref: "debt:r1".into(),
                     from: DebtStatus::Active,
                     to: DebtStatus::Expiring,
@@ -376,7 +376,7 @@ fn index_folds_transitions_and_names_the_last_trigger() {
                     evidence_ref: None,
                     causes: vec!["fingerprint_drift".into()],
                 },
-                hh_lab::debt::DebtTransition {
+                hharness_lab::debt::DebtTransition {
                     debt_ref: "debt:r1".into(),
                     from: DebtStatus::Expiring,
                     to: DebtStatus::Expired,
@@ -418,9 +418,9 @@ fn index_folds_transitions_and_names_the_last_trigger() {
     // Rebuild equality — the same entries fold to the same rows.
     assert_eq!(debt_index(&entries), rows);
     // The row round-trips through the canonical JSON (the two-surface
-    // contract — `hh-embed` decodes the same shape).
+    // contract — `hharness-embed` decodes the same shape).
     let j = row.to_json();
-    let back = hh_lab::debt::DebtIndexRow::from_json(&j).expect("roundtrip");
+    let back = hharness_lab::debt::DebtIndexRow::from_json(&j).expect("roundtrip");
     assert_eq!(&back, row);
 }
 
@@ -434,7 +434,7 @@ fn report_buckets_and_notice_routing() {
     let rows = vec![
         // An expiring row inside the warn window (`expiry_at` within
         // `warn_within_ms` of `now`).
-        hh_lab::debt::DebtIndexRow {
+        hharness_lab::debt::DebtIndexRow {
             rule_id: "r1".into(),
             owner: OwnerRef {
                 team: false,
@@ -463,7 +463,7 @@ fn report_buckets_and_notice_routing() {
         },
         // An expired row still conditioning a rule — an unreachable
         // owner (no reach_via sinks) → `unrouted`, never dropped.
-        hh_lab::debt::DebtIndexRow {
+        hharness_lab::debt::DebtIndexRow {
             rule_id: "r2".into(),
             owner: OwnerRef::principal("o2"),
             status: DebtStatus::Expired,
@@ -593,10 +593,10 @@ fn synthetic_snapshot_claim_shape() {
     assert!(claim.serving_route.is_none());
     assert_eq!(
         claim.policy_version_exposed,
-        hh_lab::model::PolicyVersionExposed::Unknown
+        hharness_lab::model::PolicyVersionExposed::Unknown
     );
     // The canonical JSON round-trips.
-    let back = hh_lab::model::SnapshotClaim::from_json(&claim.to_json())
+    let back = hharness_lab::model::SnapshotClaim::from_json(&claim.to_json())
         .expect("snapshot claim roundtrip");
     assert_eq!(back, claim);
 }

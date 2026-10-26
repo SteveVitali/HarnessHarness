@@ -10,14 +10,14 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::manifest::BundlePolicy;
-use hh_bundle::runrefs::{declared_run_refs, manifest_refs};
-use hh_bundle::validate::{check_completeness, CheckStatus};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::manifest::BundlePolicy;
+use hharness_bundle::runrefs::{declared_run_refs, manifest_refs};
+use hharness_bundle::validate::{check_completeness, CheckStatus};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-bundle-s312-{}-{tag}", std::process::id()));
@@ -38,13 +38,13 @@ fn fixture(tag: &str) -> Fixture {
     let mut store = Store::open(dir(tag)).unwrap();
     let def = Json::obj([("sealed", Json::str("definition"))]);
     let def_bytes = def.to_canonical_string().into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut manifest = RunManifest::minimal(RunKind::Agent);
     manifest.harness_def_ref = Some(def_addr.clone());
-    manifest.task_ref = Some(hh_ledger::manifest::TaskRef {
+    manifest.task_ref = Some(hharness_ledger::manifest::TaskRef {
         task_id: "task:fixture".into(),
         suite_id: "suite:fixture".into(),
-        split_label: hh_ontology::lab::SplitLabel::Dev,
+        split_label: hharness_ontology::lab::SplitLabel::Dev,
     });
     let (run_id, _lease) = store.open_run(manifest, "s312.test").unwrap();
     let mut blobs = BTreeMap::new();
@@ -89,9 +89,9 @@ fn inputs<'a>(
 
 /// S1's `run_refs:*` rows for `run` — the closure check's verdicts.
 fn run_ref_rows(
-    report: &hh_bundle::validate::BundleValidationReport,
+    report: &hharness_bundle::validate::BundleValidationReport,
     run: &str,
-) -> Vec<hh_bundle::validate::CheckRow> {
+) -> Vec<hharness_bundle::validate::CheckRow> {
     let prefix = format!("run_refs:{run}");
     report
         .stages
@@ -181,7 +181,7 @@ fn manifest_reference_unresolved_fails_completeness() {
 
     let report = check_completeness(&assembled.manifest, &assembled.members);
     let rows = run_ref_rows(&report, &f.run_id);
-    let fails: Vec<&hh_bundle::validate::CheckRow> = rows
+    let fails: Vec<&hharness_bundle::validate::CheckRow> = rows
         .iter()
         .filter(|r| r.status == CheckStatus::Fail)
         .collect();

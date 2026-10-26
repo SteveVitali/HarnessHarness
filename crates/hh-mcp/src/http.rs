@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::BufReader;
 use std::net::{TcpListener, TcpStream};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::artifact::ServedArtifact;
 use crate::client::Transport;
@@ -144,7 +144,7 @@ impl HttpTransport {
     /// for the OAuth path's `401` challenge handling. Non-2xx statuses
     /// are returned, not flattened — the caller decides.
     ///
-    /// The wire shape is `hh_wire::http`'s one codec (R4.5b; ADR-0364
+    /// The wire shape is `hharness_wire::http`'s one codec (R4.5b; ADR-0364
     /// D1 — CC1: no second HTTP/1.1 spelling in-tree).
     pub fn post(&mut self, body: &str) -> Result<HttpResponse, String> {
         let mut s = TcpStream::connect(&self.addr).map_err(|e| format!("connect: {e}"))?;
@@ -164,10 +164,10 @@ impl HttpTransport {
         if let Some(b) = &bearer_header {
             hdrs.push(("Authorization", b.as_str()));
         }
-        hh_wire::http::write_request(&mut s, "POST", &self.target, &hdrs, body.as_bytes())
+        hharness_wire::http::write_request(&mut s, "POST", &self.target, &hdrs, body.as_bytes())
             .map_err(|e| format!("write: {e}"))?;
         let mut r = BufReader::new(s);
-        let (head, body) = hh_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+        let (head, body) = hharness_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
             .map_err(|e| format!("read: {e}"))?;
         Ok(HttpResponse {
             status: head.status,
@@ -189,7 +189,7 @@ impl HttpTransport {
         if resp.status != 200 {
             return Err(format!("subscriptions/listen: http {}", resp.status));
         }
-        let parsed = hh_wire::json::parse(&resp.body).map_err(|e| format!("parse: {e}"))?;
+        let parsed = hharness_wire::json::parse(&resp.body).map_err(|e| format!("parse: {e}"))?;
         let items = parsed
             .get("result")
             .and_then(|r| r.get("notifications"))
@@ -238,7 +238,7 @@ impl std::fmt::Display for ServeHttpError {
 impl std::error::Error for ServeHttpError {}
 
 /// Write one HTTP response (Connection: close — the fixture form). The
-/// wire shape is `hh_wire::http`'s one codec (R4.5b; ADR-0364 D1).
+/// wire shape is `hharness_wire::http`'s one codec (R4.5b; ADR-0364 D1).
 fn respond(
     stream: &mut TcpStream,
     status: u16,
@@ -250,7 +250,7 @@ fn respond(
     hdrs.push(("Content-Type", "application/json"));
     hdrs.push(("Connection", "close"));
     hdrs.extend_from_slice(headers);
-    hh_wire::http::write_response(stream, status, &hdrs, body.as_bytes())
+    hharness_wire::http::write_response(stream, status, &hdrs, body.as_bytes())
         .map_err(|e| ServeHttpError::Io(std::io::Error::other(e.to_string())))
 }
 
@@ -285,12 +285,12 @@ pub fn serve_http(
             Ok(s) => s,
             Err(e) => return Err(ServeHttpError::Io(e)),
         });
-        // One `hh_wire::http` request (head + body — the body reads BEFORE
+        // One `hharness_wire::http` request (head + body — the body reads BEFORE
         // any rejection: a socket closed with unread inbound data resets
         // (RST) and the client loses the response; the guards still run
         // before any *dispatch*, the bytes are inert until parsed below).
         // Chunked request bodies decode inside the codec (R4.5b).
-        let (head, body) = match hh_wire::http::read_request(&mut reader, 8 * 1024 * 1024) {
+        let (head, body) = match hharness_wire::http::read_request(&mut reader, 8 * 1024 * 1024) {
             Ok(Some(r)) => r,
             Ok(None) => continue,
             Err(_) => {
@@ -350,7 +350,7 @@ pub fn serve_http(
             ]));
             artifact = next;
         }
-        let msg = match hh_wire::json::parse(&text) {
+        let msg = match hharness_wire::json::parse(&text) {
             Ok(m) => m,
             Err(_) => {
                 let frame = crate::server::error_frame_pub(Json::Null, -32700, "parse_error");
@@ -366,7 +366,7 @@ pub fn serve_http(
             // session binding) — echoed as a response header.
             let mut extra: Vec<(&str, &str)> = Vec::new();
             if is_initialize && session_id.is_none() {
-                let sid = hh_identity::idp::idp_id("mcp_session", text.as_bytes());
+                let sid = hharness_identity::idp::idp_id("mcp_session", text.as_bytes());
                 session_id = Some(sid);
             }
             if let Some(sid) = &session_id {
@@ -451,7 +451,7 @@ mod tests {
         let mut bad = HttpTransport::new(&addr, "/mcp", "http://evil.local");
         let resp = bad.post("{}").unwrap();
         assert_eq!(resp.status, 403);
-        let body = hh_wire::json::parse(&resp.body).unwrap();
+        let body = hharness_wire::json::parse(&resp.body).unwrap();
         assert_eq!(
             body.get("error"),
             Some(&Json::str("origin_untrusted: http://evil.local"))

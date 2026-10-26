@@ -8,14 +8,14 @@
 //! adjusted_ppm, label}` on every `ComparisonReport`), never a filter.
 //!
 //! The raw p-value is the two-sided sign-flip permutation p over the
-//! paired per-task deltas (`hh_eval::stats::permutation_signflip_p` —
+//! paired per-task deltas (`hharness_eval::stats::permutation_signflip_p` —
 //! exact ≤ 20 tasks, deterministic seeded Monte-Carlo above).
 
 use std::collections::BTreeSet;
 
-use hh_eval::stats;
-use hh_lab::analysis::ComparisonReport;
-use hh_ontology::eval::PreRegistration;
+use hharness_eval::stats;
+use hharness_lab::analysis::ComparisonReport;
+use hharness_ontology::eval::PreRegistration;
 
 /// `apply_multiplicity(comparisons, delta_sets, prereg, draws, seed)` —
 /// mutate every report's `multiplicity` member in place. `delta_sets[i]`

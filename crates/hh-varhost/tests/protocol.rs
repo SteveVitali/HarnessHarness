@@ -8,19 +8,19 @@ use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardSubjectKind,
     GuardVerdict, Narrow,
 };
-use hh_plugin_fixture::fixture::{FixtureLogic, FixtureVerdict, Mode};
-use hh_plugin_fixture::PluginRuntime;
-use hh_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
-use hh_varhost::channel::MemIo;
-use hh_varhost::{
+use hharness_plugin_fixture::fixture::{FixtureLogic, FixtureVerdict, Mode};
+use hharness_plugin_fixture::PluginRuntime;
+use hharness_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
+use hharness_varhost::channel::MemIo;
+use hharness_varhost::{
     attach, HostError, InvokeOutcome, RecordingPorts, SpawnSpec, VariantHost, VariantPackage,
     VariantSession, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -66,7 +66,7 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         package: pkg,
         session_id: "s1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: {
             static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -80,7 +80,7 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:test", "v1"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:test", "v1"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -163,7 +163,7 @@ fn grants_cap(domains: &[&str]) -> Requests {
     Requests {
         effects: domains
             .iter()
-            .map(|d| hh_registry::extension::plugin::EffectRequest {
+            .map(|d| hharness_registry::extension::plugin::EffectRequest {
                 domain: d.to_string(),
                 scope: "*".to_string(),
             })
@@ -206,8 +206,8 @@ fn hello_wrong_abi_version_refused() {
     l.version_id = "pin:null".into();
     // Claim a different abi version — HelloParams carries it verbatim.
     struct V2(FixtureLogic);
-    impl hh_plugin_fixture::VariantLogic for V2 {
-        fn hello(&self) -> hh_embed_schema::plugin_abi::HelloParams {
+    impl hharness_plugin_fixture::VariantLogic for V2 {
+        fn hello(&self) -> hharness_embed_schema::plugin_abi::HelloParams {
             let mut h = self.0.hello();
             h.plugin_abi_version = "plugin_abi/99".into();
             h
@@ -217,19 +217,23 @@ fn hello_wrong_abi_version_refused() {
         }
         fn invoke(
             &mut self,
-            p: &hh_embed_schema::plugin_abi::InvokeParams,
-            c: &mut hh_plugin_fixture::PluginCtx,
+            p: &hharness_embed_schema::plugin_abi::InvokeParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
         ) -> Result<Vec<Json>, AbiError> {
             self.0.invoke(p, c)
         }
         fn stream(
             &mut self,
-            p: &hh_embed_schema::plugin_abi::StreamParams,
-            c: &mut hh_plugin_fixture::PluginCtx,
+            p: &hharness_embed_schema::plugin_abi::StreamParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
         ) -> Result<(), AbiError> {
             self.0.stream(p, c)
         }
-        fn guard(&mut self, p: &GuardParams, c: &mut hh_plugin_fixture::PluginCtx) -> GuardVerdict {
+        fn guard(
+            &mut self,
+            p: &GuardParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
+        ) -> GuardVerdict {
             self.0.guard(p, c)
         }
         fn conformance(&mut self, p: &ConformanceParams) -> Json {
@@ -732,8 +736,8 @@ fn propose_effect_inside_guard_refused() {
     // Wrap: guard calls ctx.propose_effect — the fixture's guard path
     // doesn't; emulate via a custom logic.
     struct GuardProposer(FixtureLogic);
-    impl hh_plugin_fixture::VariantLogic for GuardProposer {
-        fn hello(&self) -> hh_embed_schema::plugin_abi::HelloParams {
+    impl hharness_plugin_fixture::VariantLogic for GuardProposer {
+        fn hello(&self) -> hharness_embed_schema::plugin_abi::HelloParams {
             self.0.hello()
         }
         fn bind(&mut self, p: &BindParams) -> Result<String, BindFailure> {
@@ -741,19 +745,23 @@ fn propose_effect_inside_guard_refused() {
         }
         fn invoke(
             &mut self,
-            p: &hh_embed_schema::plugin_abi::InvokeParams,
-            c: &mut hh_plugin_fixture::PluginCtx,
+            p: &hharness_embed_schema::plugin_abi::InvokeParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
         ) -> Result<Vec<Json>, AbiError> {
             self.0.invoke(p, c)
         }
         fn stream(
             &mut self,
-            p: &hh_embed_schema::plugin_abi::StreamParams,
-            c: &mut hh_plugin_fixture::PluginCtx,
+            p: &hharness_embed_schema::plugin_abi::StreamParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
         ) -> Result<(), AbiError> {
             self.0.stream(p, c)
         }
-        fn guard(&mut self, p: &GuardParams, c: &mut hh_plugin_fixture::PluginCtx) -> GuardVerdict {
+        fn guard(
+            &mut self,
+            p: &GuardParams,
+            c: &mut hharness_plugin_fixture::PluginCtx,
+        ) -> GuardVerdict {
             let _ = p;
             let _ = c.propose_effect(Json::obj([
                 ("domain", Json::str("exec")),

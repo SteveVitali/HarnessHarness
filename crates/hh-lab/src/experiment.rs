@@ -17,19 +17,19 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_budget::{
+use hharness_budget::{
     validate_match_at, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, CachePolicy,
     MatchError, MatchMode, MatchRefusal, MatchSpec,
 };
-use hh_identity::idp::{identify_bytes, idp_id};
-use hh_identity::kinds::RecordKind;
-use hh_ontology::config::Ref;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::eval::{Design, DesignKind, PreRegistration, SeedPolicy};
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::{Granularity, ParticipantClass};
-use hh_ontology::FactorKind;
-use hh_wire::Json;
+use hharness_identity::idp::{identify_bytes, idp_id};
+use hharness_identity::kinds::RecordKind;
+use hharness_ontology::config::Ref;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::eval::{Design, DesignKind, PreRegistration, SeedPolicy};
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::{Granularity, ParticipantClass};
+use hharness_ontology::FactorKind;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 
@@ -180,7 +180,7 @@ impl LevelSpec {
 
 /// `FactorSpec{kind ∈ {model_snapshot, harness, environment, task, budget,
 /// replicate}, granularity?, role?, levels[]}` — a declared experimental
-/// factor (§6.3; the kind sum is `hh_ontology::FactorKind`).
+/// factor (§6.3; the kind sum is `hharness_ontology::FactorKind`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FactorSpec {
     /// The factor name (unique within the spec).
@@ -244,7 +244,7 @@ impl FactorSpec {
 ///
 /// `eval_budget`/`search_budget` are the pinned budget vector *refs* (the
 /// §8.2-owned bodies live on the budget plane); `match_spec` is the
-/// `hh-budget` `MatchSpec` (with `cache_policy`); `limits_enforced` is the
+/// `hharness-budget` `MatchSpec` (with `cache_policy`); `limits_enforced` is the
 /// derived enforced-limit stamp (`full | partial | none` — data at C0).
 /// `response_cache` — the arm's response-cache declaration (ADR-0129 d.2).
 /// A closed sum: `k5` is the exact-match response cache (the only kind the
@@ -903,7 +903,7 @@ pub enum ExperimentRefusal {
         detail: String,
     },
     /// The match is incommensurable (projected `MatchError` from
-    /// `hh_budget::matchspec::validate_match`, or a `matched_cap` dimension
+    /// `hharness_budget::matchspec::validate_match`, or a `matched_cap` dimension
     /// not `enforced` on every arm — ADR-0041 as amended).
     IncommensurableMatch {
         /// The failure detail.
@@ -952,7 +952,7 @@ pub enum ExperimentRefusal {
     /// The sealed configuration's `budget_vector` is not the arm's
     /// `eval_budget` — the `declare_arm` engine precondition (§5h.2 §2;
     /// ADR-0046 D1; CF-099; the record-level mirror is
-    /// `hh_ontology::eval::ArmError::BudgetMismatchWithinArm`). Surfaces at
+    /// `hharness_ontology::eval::ArmError::BudgetMismatchWithinArm`). Surfaces at
     /// `expand` when the `arm_config` resolver supplies the configuration's
     /// `budget_ref` and it differs from `arm.eval_budget` by identity.
     BudgetMismatchWithinArm {
@@ -1012,7 +1012,7 @@ pub enum ExperimentRefusal {
     },
     /// `PreRegistrationInvalid` — a K5-enabled arm on a non-`reproduction`
     /// spec without `cache` declared as a factor (AC-R-2.3.4-11;
-    /// ADR-0129 d.2 — the same refusal name `hh_context::k5` uses).
+    /// ADR-0129 d.2 — the same refusal name `hharness_context::k5` uses).
     PreRegistrationInvalid {
         /// The failure detail.
         detail: String,
@@ -1344,7 +1344,7 @@ impl ExperimentSpec {
             }
             // AC-R-2.3.4-11 — a K5-enabled arm on a non-`reproduction` spec
             // requires `cache` declared as a factor of the pre-registered
-            // design (the same `PreRegistrationInvalid` `hh_context::k5`'s
+            // design (the same `PreRegistrationInvalid` `hharness_context::k5`'s
             // `admit` reports).
             if arm.response_cache.is_some() && self.kind != ExperimentKind::Reproduction {
                 let declared = self.factors.iter().any(|f| f.name == "cache");
@@ -1563,9 +1563,9 @@ impl ExperimentSpec {
                 let subgroup = defining_subgroup(&gens);
                 let computed = resolution_of(&subgroup);
                 let declared_n = match declared {
-                    hh_ontology::eval::FractionalResolution::III => 3,
-                    hh_ontology::eval::FractionalResolution::IV => 4,
-                    hh_ontology::eval::FractionalResolution::V => 5,
+                    hharness_ontology::eval::FractionalResolution::III => 3,
+                    hharness_ontology::eval::FractionalResolution::IV => 4,
+                    hharness_ontology::eval::FractionalResolution::V => 5,
                 };
                 if computed != declared_n {
                     return Err(ExperimentRefusal::ResolutionInsufficient {
@@ -1604,7 +1604,7 @@ impl ExperimentSpec {
                         ),
                     });
                 }
-                if declared < hh_ontology::eval::FractionalResolution::V {
+                if declared < hharness_ontology::eval::FractionalResolution::V {
                     // Two named 2FIs aliased to each other are confounded.
                     for (i, a) in named.iter().enumerate() {
                         for b in &named[i + 1..] {
@@ -1874,7 +1874,7 @@ impl ExperimentSpec {
                         !e.levels.is_empty()
                             && e.levels
                                 .values()
-                                .all(|l| *l == hh_budget::errors::EnforcementLevel::Enforced)
+                                .all(|l| *l == hharness_budget::errors::EnforcementLevel::Enforced)
                     })
                     .unwrap_or(false);
                 if !proven_full {
@@ -2388,7 +2388,7 @@ pub fn run_plan_id(
 
 /// `Cell{cell_id, arm_id, configuration_id, configuration_version_id,
 /// task_id, split_label, na_reason?}` — one planned cell (§6.3 `expand`).
-/// `na_reason` carries the typed `n/a{reason}` (`hh_ontology::compliance::
+/// `na_reason` carries the typed `n/a{reason}` (`hharness_ontology::compliance::
 /// NaReason`) for a cell the plan knows is ineligible before any run opens —
 /// e.g. `capability` for a cell whose level requires a capability the pinned
 /// `registry_snapshot_id` does not supply (§6.3's `slot_choices`-floor check;
@@ -2409,7 +2409,7 @@ pub struct PlanCell {
     /// The task's split label.
     pub split_label: SplitLabel,
     /// The typed `n/a{reason}` for a planned-but-ineligible cell.
-    pub na_reason: Option<hh_ontology::compliance::NaReason>,
+    pub na_reason: Option<hharness_ontology::compliance::NaReason>,
 }
 
 /// `environment_derivation` — how the run's environment derives (§6.3:
@@ -2622,7 +2622,7 @@ impl CellPlan {
                         .ok_or_else(|| SchemaError::v("split_label", "unknown split label"))?,
                     na_reason: opt_str_at(cm, "na_reason")?
                         .map(|s| {
-                            hh_ontology::compliance::NaReason::parse(s).ok_or_else(|| {
+                            hharness_ontology::compliance::NaReason::parse(s).ok_or_else(|| {
                                 SchemaError::v("na_reason", format!("unknown `n/a` reason `{s}`"))
                             })
                         })

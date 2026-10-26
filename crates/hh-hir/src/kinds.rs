@@ -1,16 +1,16 @@
 //! The closed per-dialect kind sums (§3.1.2; AC-IR-01): **thirteen `EntityKind`s**, the seven
 //! `EdgeKind`s, `since = HIR/1` on every kind, and the frozen `EffectDomain` /
 //! `EffectAttributes` sums. `Text` and `CompiledPayload` are the two opaque *leaf* kinds —
-//! they appear in the §3.1.2 roster and the `hh-ontology` classification table but are not
+//! they appear in the §3.1.2 roster and the `hharness-ontology` classification table but are not
 //! DAG nodes; they are embedded records ([`crate::leaves`]).
 //!
-//! Per-kind `classify_home` values live in `hh_ontology::IrEntityKind` (CC10 — the ontology
+//! Per-kind `classify_home` values live in `hharness_ontology::IrEntityKind` (CC10 — the ontology
 //! layer owns the home-plane classification; DF-S1.1-1).
 
 use std::fmt;
 
-use hh_ontology::planes::Plane;
-use hh_wire::json::Json;
+use hharness_ontology::planes::Plane;
+use hharness_wire::json::Json;
 
 use crate::errors::HirError;
 
@@ -123,15 +123,15 @@ impl EntityKind {
     }
 
     /// `until` — no kind is deprecated (CC8 `until` support is the same proven mechanism as
-    /// `hh_ontology::OntologyKind`).
+    /// `hharness_ontology::OntologyKind`).
     pub fn until(self) -> Option<&'static str> {
         None
     }
 
-    /// The `hh-ontology` kind carrying this entity's per-kind `classify_home` (CC10; the
+    /// The `hharness-ontology` kind carrying this entity's per-kind `classify_home` (CC10; the
     /// thirteen-row table of §3.1.3 lives there — DF-S1.1-1).
-    pub fn ir_kind(self) -> hh_ontology::IrEntityKind {
-        use hh_ontology::IrEntityKind as I;
+    pub fn ir_kind(self) -> hharness_ontology::IrEntityKind {
+        use hharness_ontology::IrEntityKind as I;
         match self {
             EntityKind::Goal => I::Goal,
             EntityKind::Observation => I::Observation,
@@ -149,11 +149,11 @@ impl EntityKind {
         }
     }
 
-    /// The home plane — the `classify_home` table of §3.1.3, owned by `hh-ontology`.
+    /// The home plane — the `classify_home` table of §3.1.3, owned by `hharness-ontology`.
     /// Every IR entity/leaf homes to a plane (the table is total over `Plane` members).
     pub fn home(self) -> Plane {
         match self.ir_kind().home() {
-            hh_ontology::planes::Home::Plane(p) => p,
+            hharness_ontology::planes::Home::Plane(p) => p,
             other => unreachable!("IR entity {} homed at {:?}", self.name(), other),
         }
     }
@@ -374,10 +374,10 @@ impl Mutability {
 }
 
 /// `repeat_safety ∈ {idempotent, non_idempotent}` — the canonical sum lives in
-/// `hh_ontology::risk` (the risk-class projection carries it verbatim, ADR-0031 §1 —
-/// one sum, one spelling; CC1). Re-exported here so `hh_hir::kinds::RepeatSafety`
+/// `hharness_ontology::risk` (the risk-class projection carries it verbatim, ADR-0031 §1 —
+/// one sum, one spelling; CC1). Re-exported here so `hharness_hir::kinds::RepeatSafety`
 /// keeps resolving.
-pub use hh_ontology::risk::RepeatSafety;
+pub use hharness_ontology::risk::RepeatSafety;
 
 /// `world ∈ {closed, open}`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -623,9 +623,9 @@ pub struct JudgeProfile {
 /// `charged_to: subject | instrument`. The canonical definition lives in
 /// `hh-ontology::eval` (S1.22, R-2.9.2 — the eval vocabulary was lowered so
 /// P7 records may name it without reaching above the telemetry layer); this
-/// re-export keeps the `hh_hir::kinds::ChargedTo` spelling (CC7 — one
+/// re-export keeps the `hharness_hir::kinds::ChargedTo` spelling (CC7 — one
 /// definition, two spellings resolve to it).
-pub use hh_ontology::eval::ChargedTo;
+pub use hharness_ontology::eval::ChargedTo;
 
 /// `ToolCapability.effects` (§3.1.3): `pure | declared{effects: set<EffectClass>}` — **closed
 /// only**: the spec's declarative language is closed-effects-only; an agent that needs open

@@ -5,9 +5,9 @@
 
 use std::time::Duration;
 
-use hh_plugin_fixture::fixture::FixtureLogic;
-use hh_plugin_fixture::PluginRuntime;
-use hh_varhost::channel::SocketIo;
+use hharness_plugin_fixture::fixture::FixtureLogic;
+use hharness_plugin_fixture::PluginRuntime;
+use hharness_varhost::channel::SocketIo;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

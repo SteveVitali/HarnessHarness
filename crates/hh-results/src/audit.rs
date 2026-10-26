@@ -5,10 +5,10 @@
 //! addresses the cited evidence depends on (a redacted blob resolves
 //! `Missing{redacted}`, never silently dropped — AC-R-2.10.5-12).
 
-use hh_ledger::audit::BlobStatus;
-use hh_ledger::errors::MissingReason;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::audit::BlobStatus;
+use hharness_ledger::errors::MissingReason;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 /// `audit_ref{run_id, seq, hash, checkpoint_ref?, content_refs[]}` — a chain
 /// citation plus the blob addresses the cited evidence names.
@@ -146,10 +146,10 @@ pub fn verify_citation(store: &Store, audit_ref: &AuditRef) -> CitationVerdict {
     // run's Merkle tree head (recomputed from the committed prefix), not
     // just the envelope scan.
     let leaves: Vec<String> = events.iter().map(|e| e.hash.clone()).collect();
-    let tree_head = hh_ledger::tree::mth(&leaves);
+    let tree_head = hharness_ledger::tree::mth(&leaves);
     match store.prove_inclusion(&audit_ref.run_id, audit_ref.seq, None) {
         Ok(proof) => {
-            if !hh_ledger::tree::verify_inclusion(&proof, &audit_ref.hash, &tree_head) {
+            if !hharness_ledger::tree::verify_inclusion(&proof, &audit_ref.hash, &tree_head) {
                 return CitationVerdict::ProofInvalid;
             }
         }

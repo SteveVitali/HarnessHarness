@@ -27,9 +27,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::equiv::{ArgTransform, SurfaceBinding};
-use hh_hir::records::ScopeBindings;
-use hh_wire::json::Json;
+use hharness_compiler::equiv::{ArgTransform, SurfaceBinding};
+use hharness_hir::records::ScopeBindings;
+use hharness_wire::json::Json;
 
 /// The arg-resolution error sum — both members are `DenyReason`s verbatim
 /// (§5g.1 §3; the `DenyReason` spelling is the refusal identity, ADR-0052 D3).
@@ -49,9 +49,9 @@ pub enum ArgError {
 }
 
 // `ScopeBinding`, `ScopeKind` and the `scope_bindings` parser live in
-// `hh_hir::tools` — the one schema source (CC7; V-E1-3/4 read the same
+// `hharness_hir::tools` — the one schema source (CC7; V-E1-3/4 read the same
 // definition at validate/register as the monitor reads at dispatch).
-pub use hh_hir::tools::{ScopeBinding, ScopeKind};
+pub use hharness_hir::tools::{ScopeBinding, ScopeKind};
 
 /// Parse a `ScopeBindings` record into the binding list. `Bindings(json)` is
 /// `[{param_path, scope_kind, canonicalization?}]`; `Unknown` ⇒ `None` (the
@@ -60,7 +60,7 @@ pub use hh_hir::tools::{ScopeBinding, ScopeKind};
 /// coverage); V-E1 refuses the malformed member at validate/register, so this
 /// branch is defence in depth, not a silent drop (CC3 is enforced upstream).
 pub fn scope_bindings(s: &ScopeBindings) -> Option<Vec<ScopeBinding>> {
-    hh_hir::tools::scope_bindings(s).ok().flatten()
+    hharness_hir::tools::scope_bindings(s).ok().flatten()
 }
 
 /// The canonical-parameter projection of a call — `param_path → value` (the
@@ -171,7 +171,7 @@ pub fn eval(
 /// lease key's exact-args leg and the `permission_id` mint input (§5g.7 I-P6;
 /// one derivation, CC1 — the dispatcher and the monitor share it).
 pub fn canonical_args_hash(c: &CanonicalArgs) -> String {
-    hh_identity::idp::idp_id(
+    hharness_identity::idp::idp_id(
         "canonical_args",
         Json::Obj(c.params.clone()).to_canonical_string().as_bytes(),
     )

@@ -1,4 +1,4 @@
-//! `hh-debt` S6.1b coverage — R-2.9.6 (§5h.6; ADR-0197/0198;
+//! `hharness-debt` S6.1b coverage — R-2.9.6 (§5h.6; ADR-0197/0198;
 //! AC-R-2.9.6-4/-10/-11/-12; DF-S5.4-1): the schedule pipeline
 //! (`schedule_removal_test` under `DebtPolicy` — `expiry_urgency` order,
 //! the `max_open_removal_tests` bound, the instrument-budget reservation,
@@ -12,43 +12,43 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use hh_budget::matchspec::MatchSpec;
-use hh_debt::errors::{DebtManagerError, Refusal};
-use hh_debt::manager::DebtManager;
-use hh_debt::propose::{propose_retirement, ProposalDiff};
-use hh_debt::records::{DebtManagerRecord, SchedulableEntry, SweepEntry};
-use hh_debt::reflexive::{evaluate_reflexive, reflexive_record};
-use hh_debt::schedule::{
+use hharness_budget::matchspec::MatchSpec;
+use hharness_debt::errors::{DebtManagerError, Refusal};
+use hharness_debt::manager::DebtManager;
+use hharness_debt::propose::{propose_retirement, ProposalDiff};
+use hharness_debt::records::{DebtManagerRecord, SchedulableEntry, SweepEntry};
+use hharness_debt::reflexive::{evaluate_reflexive, reflexive_record};
+use hharness_debt::schedule::{
     instantiate, priority_class, schedule_batch, schedule_removal_test, DeferredReason,
     ScheduleContext, ScheduleOutcome,
 };
-use hh_debt::view::ManagerView;
-use hh_hir::debt::RetirementRecord;
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_hir::refs::RunRef;
-use hh_lab::experiment::{
+use hharness_debt::view::ManagerView;
+use hharness_hir::debt::RetirementRecord;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_hir::refs::RunRef;
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentRefusal, ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy,
     SchedulingPolicy, SpecContext, SuiteBinding, ValidationStrategy,
 };
-use hh_ledger::ids::{Clock, ManualClock};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::config::Ref;
-use hh_ontology::debt::{
+use hharness_ledger::ids::{Clock, ManualClock};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::config::Ref;
+use hharness_ontology::debt::{
     DeadWeightWindow, DebtClass, DebtExpiry, DebtPolicy, DebtScope, DebtStatus, DeficiencyClass,
     EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject,
     HypothesisTyped, OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind, Revalidation,
     RevalidationAction, RevalidationOn, Verdict,
 };
-use hh_ontology::eval::{
+use hharness_ontology::eval::{
     Design, DesignKind, FactorKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ fn sched_entry(debt_ref: &str, status: DebtStatus, used: bool) -> SchedulableEnt
     SchedulableEntry {
         debt_ref: debt_ref.to_string(),
         current_status: status,
-        evidence_grade: hh_ontology::debt::EvidenceGrade::Hypothesized,
+        evidence_grade: hharness_ontology::debt::EvidenceGrade::Hypothesized,
         used,
         probation_due: false,
         next_time_expiry_ms: None,
@@ -731,7 +731,7 @@ fn reflexive_verdict_reads_the_window() {
 /// widening/over-removing diff ⇒ `NotARetirementDiff`.
 #[test]
 fn proposal_gate_separates_proposal_from_deployment() {
-    let verdicts = vec![hh_ontology::debt::RemovalVerdict {
+    let verdicts = vec![hharness_ontology::debt::RemovalVerdict {
         debt_ref: "debt:r1".into(),
         kind: RemovalTestKind::RetirementExperiment,
         verdict: Verdict::Pass,

@@ -8,7 +8,7 @@ ROOT="${1:-$(git rev-parse --show-toplevel)}"
 cd "$ROOT"
 
 echo "check-drift: regenerating artifacts from the single schema source…"
-cargo run -q -p hh-codegen -- --root "$ROOT"
+cargo run -q -p hharness-codegen -- --root "$ROOT"
 
 TARGETS=(schema/hh-embed-1.schema.json schema/compat-1.matrix.json crates/hh-embed-client-generated/src/generated.rs clients/ts/hh-embed.ts)
 
@@ -18,6 +18,6 @@ if git diff --quiet -- "${TARGETS[@]}"; then
 fi
 
 echo "check-drift: SCHEMA DRIFT — generated artifacts are stale." >&2
-echo "  Fix: cargo run -p hh-codegen -- --root . && git add ${TARGETS[*]}" >&2
+echo "  Fix: cargo run -p hharness-codegen -- --root . && git add ${TARGETS[*]}" >&2
 git --no-pager diff -- "${TARGETS[@]}" >&2
 exit 1

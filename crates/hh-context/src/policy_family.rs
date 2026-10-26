@@ -20,7 +20,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::plan::{Candidate, Layout};
 use crate::policy::{

@@ -8,9 +8,9 @@
 //! "Retire rule R" is `relower(bundle, profile − R)` (T-LCD-05): a delete-this-rule
 //! arm is one compile away.
 
-use hh_assembly::ClassCatalog;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_assembly::ClassCatalog;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::compiler::{compile, CompileInputs};
 use crate::errors::CompileError;

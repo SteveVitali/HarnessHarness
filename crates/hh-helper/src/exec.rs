@@ -23,7 +23,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "tier-c1")]
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::protocol::HelperFrame;
 

@@ -11,20 +11,20 @@
 //!   admits it — the deterministic and judged execution-alignment metrics
 //!   are distinct catalogue rows, never merged;
 //! - hosted rows project their `capability_vector` (the analysis
-//!   projection's manifest.extra half is covered in hh-analysis; the row
+//!   projection's manifest.extra half is covered in hharness-analysis; the row
 //!   itself carries it into `applicability`).
 
-use hh_eval::catalogue;
-use hh_eval::judge::{admit_judge, emit_judged, JudgeAdmission, JudgeContext, JudgeError};
-use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
-use hh_ontology::eval::{
+use hharness_eval::catalogue;
+use hharness_eval::judge::{admit_judge, emit_judged, JudgeAdmission, JudgeContext, JudgeError};
+use hharness_ontology::compliance::{Detector, MetricDeclaration, NaReason};
+use hharness_ontology::eval::{
     ChargedTo, EvidenceKind, MetricValueKind, OracleClass, OracleDeclaration, OracleError,
     VerdictType,
 };
-use hh_ontology::participant::Observability;
-use hh_provenance::ProvenanceRecord;
-use hh_verification::critics::IndependenceVector;
-use hh_verification::vocab::{
+use hharness_ontology::participant::Observability;
+use hharness_provenance::ProvenanceRecord;
+use hharness_verification::critics::IndependenceVector;
+use hharness_verification::vocab::{
     CalibrationStatus, CapabilityIndependence, ContextIndependence, CriticUse, Optimization,
     ProvenanceIndependence, SnapshotIndependence,
 };
@@ -378,7 +378,7 @@ fn execution_alignment_detectors_are_distinct() {
     assert!(det.requires_observability.contains(&Observability::Ledger));
     assert!(det
         .applies_to_classes
-        .contains(&hh_ontology::participant::ParticipantClass::Hosted));
+        .contains(&hharness_ontology::participant::ParticipantClass::Hosted));
     assert!(jud.requires_observability.contains(&Observability::ModelIo));
     // The catalogue check stays clean with both rows.
     assert!(catalogue::check_catalogue().findings.is_empty());

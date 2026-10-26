@@ -1,4 +1,4 @@
-//! `hh-gateway` — the C0/Stage-1 model adapter / gateway (spec §5b.1–§5b.4;
+//! `hharness-gateway` — the C0/Stage-1 model adapter / gateway (spec §5b.1–§5b.4;
 //! R-2.3.1, the R-2.3.2 C0 static slice, R-2.3.4⁰; ADR-0118…0128; ticket
 //! S1.18).
 //!
@@ -20,7 +20,7 @@
 //! - [`message`] — `ModelMessage{blocks[]}`, `ModelBlock`, `Text`,
 //!   `OpaqueBlock`, `ToolCall`, the strict tool-call parse.
 //! - [`codec`] — `serialize`/`decode`/`estimate_tokens`, HTTP→class
-//!   classification, usage normalization (delegates to `hh-telemetry`'s one
+//!   classification, usage normalization (delegates to `hharness-telemetry`'s one
 //!   convention), opaque pass-through.
 //! - [`grammar`] — the `ModelEvent` grammar G1–G7 and the stream decoder.
 //! - [`attempts`] — the R-RT-1…6 attempt driver (identical bytes; the policy

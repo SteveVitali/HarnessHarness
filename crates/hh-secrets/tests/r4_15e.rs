@@ -18,11 +18,11 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::audit::{AuditKeyResolver, AuditSigner, ED25519_ALG};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_secrets::{
+use hharness_ledger::audit::{AuditKeyResolver, AuditSigner, ED25519_ALG};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_secrets::{
     signer_key_id, signer_key_path, CredentialBroker, CustodyError, CustodySourceResolver,
     DenyAllResolver, LedgerSignerCustody, LedgerSignerKey, SecretSource, SecretSourceResolver,
     SIGNER_ACTIVE_FILE, SIGNER_CHANNEL_ID, SIGNER_FILE_MODE, SIGNER_VAULT_REF,
@@ -347,7 +347,7 @@ fn kernel_use_provisions_the_signer_with_a_durable_row() {
     let dest = row
         .payload
         .get("destination")
-        .and_then(hh_wire::json::Json::as_str)
+        .and_then(hharness_wire::json::Json::as_str)
         .unwrap_or("");
     assert_eq!(dest, "kernel:ledger_signing", "{row:?}");
     // The signer really signs — the self-check at build + a fresh sign.
@@ -431,12 +431,12 @@ fn custody_source_delegates_foreign_sources() {
     // A next-hop resolver that serves exactly one vault ref.
     struct OneVault;
     impl SecretSourceResolver for OneVault {
-        fn resolve(&self, source: &SecretSource) -> Result<String, hh_secrets::SourceError> {
+        fn resolve(&self, source: &SecretSource) -> Result<String, hharness_secrets::SourceError> {
             match source {
                 SecretSource::OperatorVault { vault_ref } if vault_ref == "vault:other" => {
                     Ok("foreign-secret".to_string())
                 }
-                _ => Err(hh_secrets::SourceError {
+                _ => Err(hharness_secrets::SourceError {
                     kind: source.kind(),
                     detail: "denied".into(),
                 }),
@@ -482,13 +482,13 @@ fn the_channel_spec_is_kernel_only_and_unbindable() {
     let spec = LedgerSignerCustody::channel_spec();
     assert_eq!(
         spec.access_class,
-        hh_secrets::AccessClass::KernelOnly,
+        hharness_secrets::AccessClass::KernelOnly,
         "the signer channel is kernel-only"
     );
     assert!(!spec.bindable, "a signing key never mints a binding");
     assert!(spec.destinations.is_empty());
     assert!(spec.allowed_env_names.is_none(), "never an env projection");
-    assert_eq!(spec.kind, hh_secrets::CredentialKind::SigningKey);
+    assert_eq!(spec.kind, hharness_secrets::CredentialKind::SigningKey);
     // The broker admits it under its canonical id.
     let mut broker = CredentialBroker::new(Box::new(DenyAllResolver), "test-broker");
     broker

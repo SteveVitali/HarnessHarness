@@ -1,4 +1,4 @@
-//! `hh-assembly` R2.18 acceptance suite (spec §3.3.2/§3.3.13, §5b; ticket
+//! `hharness-assembly` R2.18 acceptance suite (spec §3.3.2/§3.3.13, §5b; ticket
 //! R2.18; R-2.1.4, R-2.3.3): the document-side `profile_binding`
 //! `ProfileConstraint` grammar — parse/validate/round-trip with typed
 //! diagnostics — and the C2 organisation layers: the declared
@@ -9,14 +9,14 @@
 mod common;
 
 use common::*;
-use hh_assembly::compose::{compose, Layer};
-use hh_assembly::diagnostics::{Code, Stage};
-use hh_assembly::grammar::{
+use hharness_assembly::compose::{compose, Layer};
+use hharness_assembly::diagnostics::{Code, Stage};
+use hharness_assembly::grammar::{
     profile_binding_from_json, Assembly, Constraint, ConstraintKind, ConstraintSelector,
     LayerProvenance, LayerSourceKind, ProfileBinding, ProfileConstraint,
 };
-use hh_ontology::eval::{ModelRole, VersionPattern};
-use hh_wire::json::Json;
+use hharness_ontology::eval::{ModelRole, VersionPattern};
+use hharness_wire::json::Json;
 
 fn layer(kind: LayerSourceKind, id: &str, precedence: i64, fragment: Assembly) -> Layer {
     Layer {
@@ -43,7 +43,7 @@ fn decode(
     j: &Json,
 ) -> (
     Option<Assembly>,
-    Vec<hh_assembly::diagnostics::AssemblyDiagnostic>,
+    Vec<hharness_assembly::diagnostics::AssemblyDiagnostic>,
 ) {
     let mut diags = Vec::new();
     let a = Assembly::from_json(j, "/assembly", &kernel(), &mut diags);
@@ -274,7 +274,7 @@ fn bound_profile_coordinates_names_the_constraint_fallback() {
         ..ProfileConstraint::default()
     });
     let doc = doc_with(&a);
-    let coords = hh_assembly::validate::bound_profile_coordinates(&doc, Some(&a));
+    let coords = hharness_assembly::validate::bound_profile_coordinates(&doc, Some(&a));
     assert!(
         coords.iter().any(|c| c == "sha256:fallback@1.0"),
         "the constraint's fallback is a bound coordinate: {coords:?}"
@@ -283,7 +283,7 @@ fn bound_profile_coordinates_names_the_constraint_fallback() {
     let mut a2 = stage1_assembly();
     a2.profile_binding = ProfileBinding::Constraint(ProfileConstraint::default());
     let doc2 = doc_with(&a2);
-    let coords2 = hh_assembly::validate::bound_profile_coordinates(&doc2, Some(&a2));
+    let coords2 = hharness_assembly::validate::bound_profile_coordinates(&doc2, Some(&a2));
     assert!(
         !coords2.iter().any(|c| c.contains("fallback")),
         "no fallback → no named coordinate: {coords2:?}"
@@ -475,7 +475,7 @@ fn fragment_authoring_layers_or_resolved_refuses_typed() {
     assert_eq!(d.source_layer.as_deref(), Some("user"));
 
     let mut authored2 = Assembly::empty();
-    authored2.resolved = Some(hh_assembly::grammar::ResolvedInfo {
+    authored2.resolved = Some(hharness_assembly::grammar::ResolvedInfo {
         registry_snapshot_id: "sha256:snap".into(),
         resolved_at: 7,
     });

@@ -6,15 +6,15 @@
 //! the live-trigger seam stamps `changed_at_ms` so a later sweep gets the
 //! policy-true answer).
 
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_ontology::debt::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_ontology::debt::{
     DebtClass, DebtPolicy, DebtScope, DebtStatus, EvidenceRef, ExpiryCondition, ExpiryKind,
     ModelSelector, OwnerRef, RemovalTest, RemovalTestKind,
 };
-use hh_provenance::ProvenanceRecord;
+use hharness_provenance::ProvenanceRecord;
 
-use hh_lab::debt::{evaluate_debt, DebtObservables, ProfileChange, ProfileChangeKind};
+use hharness_lab::debt::{evaluate_debt, DebtObservables, ProfileChange, ProfileChangeKind};
 
 fn debt_record(rule_id: &str) -> AssumptionDebtRecord {
     AssumptionDebtRecord {

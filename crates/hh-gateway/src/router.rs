@@ -24,11 +24,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::profile::{
+use hharness_compiler::profile::{
     profile_status, resolve_profile, CapabilityState, DebtStatus, ModelCoordinate,
     ProfileDebtRecord, ProfileResolveError, SelectorView,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::plan::ModelRef;
 use crate::vocab::{ModelErrorClass, RerouteReason};
@@ -90,7 +90,7 @@ pub struct RoutingRequest {
 pub struct LiftedPreferences {
     /// The minted authority — `unverified` for imported content,
     /// `external` at most (ADR-0033 d.2).
-    pub authority: hh_provenance::authority::AuthorityClass,
+    pub authority: hharness_provenance::authority::AuthorityClass,
     /// `cost_priority` (ppm — higher prefers cheaper).
     pub cost_priority: Option<i64>,
     /// `speed_priority` (ppm — higher prefers lower latency).
@@ -110,7 +110,7 @@ impl LiftedPreferences {
     /// (anything above is a minting violation; the router refuses the record
     /// rather than trusting it — CC2).
     pub fn legal(&self) -> bool {
-        self.authority <= hh_provenance::authority::AuthorityClass::External
+        self.authority <= hharness_provenance::authority::AuthorityClass::External
     }
 
     /// Whether the preference vetoes `spelling` (a `model_ref` spelling or a
@@ -437,7 +437,7 @@ impl RoutingPolicy {
 
     /// `content_hash` — the `idp/1` address of `to_json()`.
     pub fn content_id(&self) -> String {
-        hh_identity::idp_id(
+        hharness_identity::idp_id(
             "routing_policy.1",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -516,7 +516,7 @@ impl RoutingPolicy {
                 match &rule.debt {
                     Some(d) if d.is_complete() => {
                         if d.expiry_condition.kind
-                            != hh_compiler::profile::ExpiryKind::ModelVersionChange
+                            != hharness_compiler::profile::ExpiryKind::ModelVersionChange
                         {
                             return Err(RoutingRefusal::PolicyInvalid {
                                 rule_id: rule.rule_id.clone(),
@@ -680,7 +680,7 @@ fn conditioned_rule_json(r: &PolicyConditionedRule) -> Json {
         // The record spelling (schema's `debt_to_json`), not the event
         // projection — `RoutingPolicy` is a sealed document and the
         // codec must round-trip `removal_test` & the additive members.
-        m.insert("debt".into(), hh_compiler::schema::debt_to_json(d));
+        m.insert("debt".into(), hharness_compiler::schema::debt_to_json(d));
     }
     Json::Obj(m)
 }
@@ -701,7 +701,7 @@ fn conditioned_rule_from_json(j: &Json, path: &str) -> Result<PolicyConditionedR
     let debt = match j.get("debt") {
         None | Some(Json::Null) => None,
         Some(d) => Some(
-            hh_compiler::schema::debt_from_json(d, &format!("{path}.debt"))
+            hharness_compiler::schema::debt_from_json(d, &format!("{path}.debt"))
                 .map_err(|e| format!("{path}.debt: {e:?}"))?,
         ),
     };
@@ -1187,7 +1187,7 @@ impl ModelRoleTable {
             Some(Json::Obj(m)) => {
                 for (role, b) in m {
                     // The role key must name a ratified `ModelRole`.
-                    hh_compiler::profile::ModelRole::parse(role)?;
+                    hharness_compiler::profile::ModelRole::parse(role)?;
                     roles.insert(role.clone(), RoleBinding::from_json(b)?);
                 }
             }
@@ -1200,7 +1200,7 @@ impl ModelRoleTable {
     /// `configuration_id.model_ref` names *this* id, never a surface alias —
     /// the model set is a factor coordinate, `bundle_id` never is).
     pub fn semantic_id(&self) -> String {
-        hh_identity::idp_id(
+        hharness_identity::idp_id(
             "model_role_table.1",
             self.to_json().to_canonical_string().as_bytes(),
         )
@@ -1247,14 +1247,14 @@ pub trait BudgetPort {
     fn release(&mut self, reservation_id: &str) -> Result<(), String>;
 }
 
-/// `AccountBudget` — the `hh_budget::Account` adapter (`AccountingHandle`):
+/// `AccountBudget` — the `hharness_budget::Account` adapter (`AccountingHandle`):
 /// reserves `tokens.output.visible = max_output(profile)` under the caller's
 /// lease; a conservation refusal maps to its `dimension`.
 pub struct AccountBudget<'a> {
     /// The accounting handle.
-    pub account: &'a mut hh_budget::Account<'a>,
+    pub account: &'a mut hharness_budget::Account<'a>,
     /// The writer lease.
-    pub lease: &'a hh_ledger::store::Lease,
+    pub lease: &'a hharness_ledger::store::Lease,
     /// The reservation TTL (ms).
     pub ttl_ms: u64,
 }
@@ -1266,14 +1266,14 @@ impl BudgetPort for AccountBudget<'_> {
         max_output_tokens: u64,
         holder: &str,
     ) -> Result<String, String> {
-        let quantity = hh_budget::ResourceVector::one(
-            hh_budget::DimensionId::TokensOutputVisible,
+        let quantity = hharness_budget::ResourceVector::one(
+            hharness_budget::DimensionId::TokensOutputVisible,
             max_output_tokens as i64,
         );
         self.account
             .reserve(self.lease, budget_id, &quantity, holder, self.ttl_ms)
             .map_err(|e| match e {
-                hh_budget::errors::BudgetError::InsufficientBudget { dimension, .. } => {
+                hharness_budget::errors::BudgetError::InsufficientBudget { dimension, .. } => {
                     dimension.as_str().to_string()
                 }
                 other => format!("{other}"),
@@ -1310,7 +1310,7 @@ impl TargetHealth {
         if self.attempts == 0 {
             None
         } else {
-            Some(self.failures as i64 * hh_budget::quantity::PPM_SCALE / self.attempts as i64)
+            Some(self.failures as i64 * hharness_budget::quantity::PPM_SCALE / self.attempts as i64)
         }
     }
 }
@@ -1595,7 +1595,7 @@ pub fn project_health(
         let mut cooldown = agg.rl_cooldown_until_ms;
         if !solo
             && attempts >= cfg.min_attempts
-            && failures as i64 * hh_budget::quantity::PPM_SCALE / attempts.max(1) as i64
+            && failures as i64 * hharness_budget::quantity::PPM_SCALE / attempts.max(1) as i64
                 > cfg.failure_rate_threshold_ppm
         {
             cooldown = cooldown.max(Some(agg.last_failed_at + cfg.failure_cooldown_ms));
@@ -2032,7 +2032,7 @@ fn admit_candidate(
     };
     let leaf = chain.profiles.last().expect("resolve_profile yields ≥1");
     let status = profile_status(leaf);
-    let leaf_ref = hh_compiler::profile::profile_coordinate(leaf);
+    let leaf_ref = hharness_compiler::profile::profile_coordinate(leaf);
     match status {
         DebtStatus::Active | DebtStatus::Expiring => {}
         DebtStatus::Expired => {
@@ -3296,9 +3296,9 @@ pub fn lower(request: &RoutingRequest) -> (Json, LoweringLossReport) {
 /// member above `external` is `PolicyInvalid`.
 pub fn lift(
     document: &Json,
-    origin_authority: hh_provenance::authority::AuthorityClass,
+    origin_authority: hharness_provenance::authority::AuthorityClass,
 ) -> Result<(LiftedPreferences, LoweringLossReport), RoutingRefusal> {
-    if origin_authority > hh_provenance::authority::AuthorityClass::External {
+    if origin_authority > hharness_provenance::authority::AuthorityClass::External {
         return Err(RoutingRefusal::PolicyInvalid {
             rule_id: "lift".to_string(),
             reason: format!(

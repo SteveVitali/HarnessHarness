@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The binding record's schema id.
 pub const CALLER_BINDING_SCHEMA: &str = "hh-caller-binding/1";

@@ -37,17 +37,17 @@
 use std::collections::BTreeMap;
 use std::io::{BufReader, Cursor, Read, Write};
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
-use hh_mcp_lab::exposure;
-use hh_mcp_lab::server::{serve_stdio, LabServer};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_mcp_lab::binding::{stdio_launch_binding, CallerBinding, CallerKind};
+use hharness_mcp_lab::exposure;
+use hharness_mcp_lab::server::{serve_stdio, LabServer};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── store/service fixtures ──────────────────────────────────────────
 
@@ -86,7 +86,7 @@ fn human() -> CallerBinding {
     stdio_launch_binding("test-human", CallerKind::HumanPrincipal)
 }
 
-// ── the hir/1 fixture document (verbatim the hh-embed conformance
+// ── the hir/1 fixture document (verbatim the hharness-embed conformance
 // shape — agent + rule + budget + permission + the Stage-1 assembly) ─
 
 fn prov(seq: u64) -> ProvenanceRecord {
@@ -717,14 +717,17 @@ fn supply_artifact() -> Json {
             (
                 "_meta",
                 Json::obj([(
-                    hh_mcp::artifact::HH_META_KEY,
+                    hharness_mcp::artifact::HH_META_KEY,
                     Json::obj([("semantic_id", Json::str(sid))]),
                 )]),
             ),
         ])
     };
     Json::obj([
-        ("schema", Json::str(hh_mcp::artifact::MCP_TARGET_SCHEMA)),
+        (
+            "schema",
+            Json::str(hharness_mcp::artifact::MCP_TARGET_SCHEMA),
+        ),
         ("target", Json::str("mcp")),
         (
             "tools",
@@ -925,7 +928,7 @@ fn ac12_assumption_debt_required_at_link() {
 /// undeclared surface verbs exist.
 #[test]
 fn ac13_every_tool_wraps_a_real_op_or_declared_lowering() {
-    let schema = hh_embed_schema::export_schema();
+    let schema = hharness_embed_schema::export_schema();
     let ops: std::collections::BTreeSet<String> = schema
         .get("methods")
         .and_then(|m| match m {
@@ -994,15 +997,15 @@ fn ac11_stdio_loop() {
     assert_eq!(a[1], b[1]);
     assert_eq!(a[2], b[2]);
     assert_eq!(a[3], b[3]);
-    let f0 = hh_wire::json::parse(&a[0]).unwrap();
+    let f0 = hharness_wire::json::parse(&a[0]).unwrap();
     assert_eq!(
         f0.get("result")
             .and_then(|r| r.get("serverInfo"))
             .and_then(|s| s.get("name"))
             .and_then(Json::as_str),
-        Some("hh-mcp-lab")
+        Some("hharness-mcp-lab")
     );
-    let f3 = hh_wire::json::parse(&a[3]).unwrap();
+    let f3 = hharness_wire::json::parse(&a[3]).unwrap();
     assert_eq!(
         f3.get("error")
             .and_then(|e| e.get("code"))
@@ -1010,7 +1013,7 @@ fn ac11_stdio_loop() {
         Some(-32700),
         "malformed line answers parse_error"
     );
-    let f4 = hh_wire::json::parse(&a[4]).unwrap();
+    let f4 = hharness_wire::json::parse(&a[4]).unwrap();
     assert_eq!(
         f4.get("result")
             .and_then(|r| r.get("structuredContent"))
@@ -1033,22 +1036,22 @@ fn ac11_http_transport() {
     srv.grant_bearer("tok-test-1", agent());
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let origins = hh_mcp::http::OriginPolicy::new(&[], false);
+    let origins = hharness_mcp::http::OriginPolicy::new(&[], false);
     // `LabServer` is `!Send` (EmbedService's dyn ports are not `Send`) —
     // the fixture spawns the accept loop anyway: the serve thread is the
     // ONLY owner of `srv` for the rest of the test (the main thread only
     // ever does client-side TcpStream IO and never reads server state),
     // so the pointer hand-off is sound here. The server is leaked for
     // the detached thread; the process reaps it at exit (the same shape
-    // as hh-mcp's own http fixture).
+    // as hharness-mcp's own http fixture).
     let srv_ptr = Box::into_raw(Box::new(srv)) as usize;
     let listener_ptr = Box::into_raw(Box::new(listener)) as usize;
     let origins_ptr = Box::into_raw(Box::new(origins)) as usize;
     std::thread::spawn(move || {
         let srv = unsafe { &mut *(srv_ptr as *mut LabServer) };
         let listener = unsafe { &*(listener_ptr as *const std::net::TcpListener) };
-        let origins = unsafe { &*(origins_ptr as *const hh_mcp::http::OriginPolicy) };
-        let _ = hh_mcp_lab::http::serve_http(srv, listener, origins);
+        let origins = unsafe { &*(origins_ptr as *const hharness_mcp::http::OriginPolicy) };
+        let _ = hharness_mcp_lab::http::serve_http(srv, listener, origins);
     });
 
     fn post(addr: &std::net::SocketAddr, headers: &[(&str, &str)], body: &str) -> String {
@@ -1100,7 +1103,7 @@ fn ac11_http_transport() {
     );
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
     let body = r.split("\r\n\r\n").nth(1).unwrap_or("");
-    let f = hh_wire::json::parse(body).unwrap();
+    let f = hharness_wire::json::parse(body).unwrap();
     assert_eq!(
         f.get("result")
             .and_then(|x| x.get("structuredContent"))

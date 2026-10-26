@@ -12,15 +12,15 @@
 
 use std::collections::BTreeMap;
 
-use hh_hir::leaves::Text;
-use hh_hir::records::{AssumptionDebtRecord, ExpiryCondition, OwnerRef};
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::debt::{DebtStatus, ExpiryKind};
-use hh_ontology::participant::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{AssumptionDebtRecord, ExpiryCondition, OwnerRef};
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::debt::{DebtStatus, ExpiryKind};
+use hharness_ontology::participant::{
     CapabilityVerdict, HostingMechanism, Observability, ParticipantClass, ParticipantDescriptor,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::proj::{project, Projection};
 use crate::records::{AdapterRecord, HostingExt, ModelIoIntercept, ProcessPlacement};

@@ -1,73 +1,73 @@
 [package]
-name = "hh-embed"
+name = "hharness-embed"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25). EmbedService is binding (a) — the in-process service over Store + EnvDriver + the hh-control Driver; the stdio JSON-RPC loop in `stdio` is binding (b) — both dispatch through the one `handle` path so the bindings are byte-identical by construction. Sessions are ledger runs under a fenced writer lease; attach sessions are read-only by construction (no lease, no appends)."
+description = "The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25). EmbedService is binding (a) — the in-process service over Store + EnvDriver + the hharness-control Driver; the stdio JSON-RPC loop in `stdio` is binding (b) — both dispatch through the one `handle` path so the bindings are byte-identical by construction. Sessions are ledger runs under a fenced writer lease; attach sessions are read-only by construction (no lease, no appends)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 # The ADR-0365 TLS home — the model_port `tls{}` params build the
 # `ClientTls` `HttpModelTransport` consumes on `https:` lanes.
-hh-tls = { path = "../hh-tls" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger" }
-hh-assembly = { path = "../hh-assembly" }
-hh-registry = { path = "../hh-registry" }
-hh-env = { path = "../hh-env" }
-hh-control = { path = "../hh-control" }
-hh-context = { path = "../hh-context" }
-hh-verification = { path = "../hh-verification" }
-hh-containment = { path = "../hh-containment" }
-hh-secrets = { path = "../hh-secrets" }
-hh-monitor = { path = "../hh-monitor" }
-hh-gateway = { path = "../hh-gateway" }
-hh-compiler = { path = "../hh-compiler" }
-hh-eval = { path = "../hh-eval" }
-hh-budget = { path = "../hh-budget" }
-hh-lab = { path = "../hh-lab" }
-hh-bundle = { path = "../hh-bundle" }
-hh-experiment = { path = "../hh-experiment" }
-hh-analysis = { path = "../hh-analysis" }
-hh-results = { path = "../hh-results" }
-hh-mcp = { path = "../hh-mcp" }
+hharness-tls = { path = "../hh-tls" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
+hharness-ledger = { path = "../hh-ledger" }
+hharness-assembly = { path = "../hh-assembly" }
+hharness-registry = { path = "../hh-registry" }
+hharness-env = { path = "../hh-env" }
+hharness-control = { path = "../hh-control" }
+hharness-context = { path = "../hh-context" }
+hharness-verification = { path = "../hh-verification" }
+hharness-containment = { path = "../hh-containment" }
+hharness-secrets = { path = "../hh-secrets" }
+hharness-monitor = { path = "../hh-monitor" }
+hharness-gateway = { path = "../hh-gateway" }
+hharness-compiler = { path = "../hh-compiler" }
+hharness-eval = { path = "../hh-eval" }
+hharness-budget = { path = "../hh-budget" }
+hharness-lab = { path = "../hh-lab" }
+hharness-bundle = { path = "../hh-bundle" }
+hharness-experiment = { path = "../hh-experiment" }
+hharness-analysis = { path = "../hh-analysis" }
+hharness-results = { path = "../hh-results" }
+hharness-mcp = { path = "../hh-mcp" }
 # S4.10 (R-2.11.2): the `trace_view`/`cost_view` projections fold in the
 # owning crate (ADR-0042 D2) — the boundary calls the owner fold; the
 # ledger only hosts ledger-owned kinds.
-hh-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry" }
 # S4.9 (§5i.1, C4): the organizational layer is a removable tier — the
 # `fleet.*` ops stay in the schema (CC7 single source) and answer
 # `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
-hh-fleet = { path = "../hh-fleet", optional = true }
+hharness-fleet = { path = "../hh-fleet", optional = true }
 # S6.1a (§05h, C4): the evolution pipeline is a removable tier too —
 # `lab.evolution.*` ops stay in the schema (CC7) and answer
 # `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
-hh-evolution = { path = "../hh-evolution", optional = true }
+hharness-evolution = { path = "../hh-evolution", optional = true }
 # S6.1b (§5h.6, C4): the assumption-debt manager is a removable tier too —
 # `lab.debt.{register,sweep,settle,retire,propose,manager_open}` ops stay
 # in the schema (CC7) and answer `Unsupported{by: "tier-c4"}` on a
 # `--no-default-features` build.
-hh-debt = { path = "../hh-debt", optional = true }
+hharness-debt = { path = "../hh-debt", optional = true }
 
-# CAP.2's composed hosted-participant spine drives a real `hh_hosting`
+# CAP.2's composed hosted-participant spine drives a real `hharness_hosting`
 # `HostingService` next to `EmbedService` — a test-only edge (the
 # production boundary stays records-in/records-out; `hosting_edges = []`).
 [dev-dependencies]
-hh-hosting = { path = "../hh-hosting" }
+hharness-hosting = { path = "../hh-hosting" }
 # R4.7 (AC-R-2.12.6-9): the `github-live` leg's out-of-process cell drives
 # the packaged `hh-github-issues` variant through the real varhost spawn +
 # `PluginSourceAdapter` seam over the live-captured issue snapshot.
-hh-varhost = { path = "../hh-varhost" }
-hh-fleet-adapter = { path = "../hh-fleet-adapter" }
+hharness-varhost = { path = "../hh-varhost" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
 
 [features]
 default = ["tier-c4"]
-tier-c4 = ["dep:hh-fleet", "dep:hh-evolution", "dep:hh-debt"]
+tier-c4 = ["dep:hharness-fleet", "dep:hharness-evolution", "dep:hharness-debt"]

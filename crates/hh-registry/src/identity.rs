@@ -10,11 +10,11 @@
 //!   projection (variant, class). The surface fields and the tag stay out, so the
 //!   coordinate **survives** a rename/summary edit (AC-7).
 //!
-//! All ids are minted/verified through `hh_identity::idp` over `hh_wire` canonical
+//! All ids are minted/verified through `hharness_identity::idp` over `hharness_wire` canonical
 //! JSON — no second scheme (CC1/CC7).
 
-use hh_identity::idp::{address, idp_digest, idp_id as mint_id, parse_id, IDP_1};
-use hh_wire::json::Json;
+use hharness_identity::idp::{address, idp_digest, idp_id as mint_id, parse_id, IDP_1};
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::records::{RegistryRecord, RegistrySnapshot};
@@ -27,7 +27,7 @@ pub fn version_id(r: &RegistryRecord) -> String {
     // envelope never enters it, and the same record carries one id wherever it
     // is pinned (a `SurfaceBinding.capability_ref` resolves to this value).
     if let RegistryRecord::Capability(c) = r {
-        return hh_hir::identity::version_id(&c.node);
+        return hharness_hir::identity::version_id(&c.node);
     }
     // A sealed definition's `version_id` is the definition's own — the root's
     // sealed coordinate (one coordinate wherever the definition is pinned).
@@ -46,10 +46,10 @@ pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
     // The capability's `semantic_id` is the node's own projection coordinate
     // (V-E1-9 — `exposure_hint`/`cost_model.measured_ref` already excluded).
     if let RegistryRecord::Capability(c) = r {
-        return Some(hh_hir::identity::semantic_id(&c.node));
+        return Some(hharness_hir::identity::semantic_id(&c.node));
     }
     // The environment record's semantic coordinate mints under the
-    // `hh_identity::record` semantic domain (`"<tag>#semantic"`) — NOT this
+    // `hharness_identity::record` semantic domain (`"<tag>#semantic"`) — NOT this
     // crate's `semantic.<kind>` tag: the same body must mint the same
     // `semantic_id` wherever it is identified (CC1).
     if let RegistryRecord::EnvironmentRecord(_) = r {
@@ -76,7 +76,7 @@ pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
 /// the id member itself.
 pub fn verify_body(r: &RegistryRecord, claimed_version_id: &str) -> Result<(), RegistryError> {
     if let RegistryRecord::Capability(c) = r {
-        let recomputed = hh_hir::identity::version_id(&c.node);
+        let recomputed = hharness_hir::identity::version_id(&c.node);
         return if recomputed == claimed_version_id {
             Ok(())
         } else {
@@ -103,7 +103,7 @@ pub fn verify_body(r: &RegistryRecord, claimed_version_id: &str) -> Result<(), R
         let recomputed = s
             .document
             .node(&s.document.root.semantic_id)
-            .map(hh_hir::identity::version_id);
+            .map(hharness_hir::identity::version_id);
         return if recomputed.as_deref() == Some(claimed_version_id) {
             Ok(())
         } else {

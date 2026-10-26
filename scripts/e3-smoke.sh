@@ -24,7 +24,7 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   exit 3
 fi
 if [ ! -x "$KERNEL" ]; then
-  echo "e3-smoke: $KERNEL missing — run 'cargo build -p hh-kernel' first" >&2
+  echo "e3-smoke: $KERNEL missing — run 'cargo build -p hharness-kernel' first" >&2
   exit 2
 fi
 

@@ -14,10 +14,12 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ledger::manifest::ObservabilityLevel;
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::eval::{Dimension, Direction, MetricLevel, MetricValueType, OutcomeClassPolicy};
-use hh_ontology::participant::{Observability, ParticipantClass};
+use hharness_ledger::manifest::ObservabilityLevel;
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::eval::{
+    Dimension, Direction, MetricLevel, MetricValueType, OutcomeClassPolicy,
+};
+use hharness_ontology::participant::{Observability, ParticipantClass};
 
 use crate::errors::TelemetryError;
 
@@ -78,7 +80,7 @@ pub enum FoldStatus {
     Computable,
     /// A typed `n/a{reason}` — the classes/estimator/stage the row needs are
     /// not live (never 0, never a proxy).
-    NotComputed(hh_ontology::compliance::NaReason),
+    NotComputed(hharness_ontology::compliance::NaReason),
 }
 
 /// One catalogue row — the §5h.1 §3 `MetricDeclaration` shape plus the
@@ -122,7 +124,7 @@ impl ProcessMetric {
             unit: self.unit.as_str().to_string(),
             requires_observability: self.requires_observability.iter().copied().collect(),
             applies_to_classes: self.applies_to.iter().copied().collect(),
-            detector_classes_allowed: [hh_ontology::compliance::Detector::Deterministic]
+            detector_classes_allowed: [hharness_ontology::compliance::Detector::Deterministic]
                 .into_iter()
                 .collect(),
             outcome_class_policy: match self.dimension {
@@ -144,7 +146,7 @@ impl ProcessMetric {
     }
 }
 
-use hh_ontology::compliance::NaReason as NA;
+use hharness_ontology::compliance::NaReason as NA;
 use FoldStatus::{Computable as C, NotComputed as N};
 use Observability::{Events as EV, Ledger as LG, ModelIo as IO};
 use ParticipantClass::{Hosted as H, Native as N_};
@@ -465,7 +467,7 @@ pub struct FleetMetric {
     /// (`unowned_dispatch_count` only).
     pub veto: bool,
     /// The `charged_to` clause.
-    pub charged_to: hh_ontology::eval::ChargedTo,
+    pub charged_to: hharness_ontology::eval::ChargedTo,
 }
 
 impl FleetMetric {
@@ -488,7 +490,7 @@ impl FleetMetric {
             unit: self.unit.as_str().to_string(),
             requires_observability: self.requires_observability.iter().copied().collect(),
             applies_to_classes: self.applies_to.iter().copied().collect(),
-            detector_classes_allowed: [hh_ontology::compliance::Detector::Deterministic]
+            detector_classes_allowed: [hharness_ontology::compliance::Detector::Deterministic]
                 .into_iter()
                 .collect(),
             outcome_class_policy: match self.dimension {
@@ -502,7 +504,7 @@ impl FleetMetric {
     }
 }
 
-use hh_ontology::eval::{ChargedTo as CT, MetricLevel as ML};
+use hharness_ontology::eval::{ChargedTo as CT, MetricLevel as ML};
 
 /// The fleet-layer declarations — §5i.1 §3's fourteen rows plus
 /// `unowned_dispatch_count` (the veto). Level `work_item` unless the fold
@@ -617,7 +619,7 @@ fn check_parts(requires: &[Observability], computed_from: &[&'static str]) -> Re
     let mut resolved = BTreeMap::new();
     let mut pending = Vec::new();
     for c in computed_from {
-        match hh_ledger::classes::lookup(c) {
+        match hharness_ledger::classes::lookup(c) {
             Some(spec) => {
                 resolved.insert(*c, to_ontology(spec.min_observability));
             }

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CompileError;
 
@@ -137,15 +137,15 @@ pub enum ComplianceDetector {
 }
 
 /// The expiry/invalidation condition kinds (§3.2.8; §5h.6 §3): the canonical
-/// `hh_ontology::debt` closed sum — one vocabulary across homes (CF-049).
-pub use hh_ontology::debt::ExpiryKind;
+/// `hharness_ontology::debt` closed sum — one vocabulary across homes (CF-049).
+pub use hharness_ontology::debt::ExpiryKind;
 
-/// The debt status (§3.2.8; §5h.6 §3) — the canonical `hh_ontology::debt`
+/// The debt status (§3.2.8; §5h.6 §3) — the canonical `hharness_ontology::debt`
 /// four-value sum. `Expired` is a state *recorded on the record* (compiled-out
 /// artifacts carry it and it lands in `lcd_report.conditioned_rules`; it never
 /// silently weakens a rule — compiling under it requires an explicit recorded
 /// intent, ADR-0020 §7).
-pub use hh_ontology::debt::DebtStatus;
+pub use hharness_ontology::debt::DebtStatus;
 
 /// The assumption-debt record (§3.2.8) — the one CF-049 field shape
 /// `{rule_id, hypothesis, evidence_refs, owner, expiry_condition{kind, value?},
@@ -171,7 +171,7 @@ pub struct ProfileDebtRecord {
     pub hypothesis: String,
     /// Evidence refs — typed `EvidenceRef`s (bare strings decode as
     /// `{kind: source, ref}`).
-    pub evidence_refs: Vec<hh_ontology::debt::EvidenceRef>,
+    pub evidence_refs: Vec<hharness_ontology::debt::EvidenceRef>,
     /// The accountable owner (the profile home's principal id spelling).
     pub owner: String,
     /// `/1`: the notification sinks the owner is reachable through (`reach_via`).
@@ -181,32 +181,32 @@ pub struct ProfileDebtRecord {
     /// The test that would discharge the debt (the template/design ref).
     pub removal_test_ref: String,
     /// `/1`: the typed removal test.
-    pub removal_test: Option<hh_ontology::debt::RemovalTest>,
+    pub removal_test: Option<hharness_ontology::debt::RemovalTest>,
     /// The debt's status.
     pub status: DebtStatus,
     /// `/1`: the closed debt class.
-    pub debt_class: Option<hh_ontology::debt::DebtClass>,
+    pub debt_class: Option<hharness_ontology::debt::DebtClass>,
     /// `/1`: the typed hypothesis.
-    pub hypothesis_typed: Option<hh_ontology::debt::HypothesisTyped>,
+    pub hypothesis_typed: Option<hharness_ontology::debt::HypothesisTyped>,
     /// `/1`: the applicability scope.
-    pub scope: Option<hh_ontology::debt::DebtScope>,
+    pub scope: Option<hharness_ontology::debt::DebtScope>,
     /// `/1`: the parameterized expiry.
-    pub expiry: Option<hh_ontology::debt::DebtExpiry>,
+    pub expiry: Option<hharness_ontology::debt::DebtExpiry>,
     /// `/1`: the declared runway (ms).
     pub runway_ms: Option<u64>,
     /// `/1`: the revalidation policy.
-    pub revalidation: Option<hh_ontology::debt::Revalidation>,
+    pub revalidation: Option<hharness_ontology::debt::Revalidation>,
     /// `/1`: when the record was created.
     pub created_at: Option<u64>,
     /// `/1`: the retirement record this supersedes.
     pub supersedes: Option<String>,
 }
 
-/// `expiry_condition{kind, value?}` — the canonical `hh_ontology::debt` shape.
-pub use hh_ontology::debt::ExpiryCondition;
+/// `expiry_condition{kind, value?}` — the canonical `hharness_ontology::debt` shape.
+pub use hharness_ontology::debt::ExpiryCondition;
 /// The `/1` debt vocabulary the profile record carries — re-exported so the
 /// codec and downstream emitters share the one source (CC7).
-pub use hh_ontology::debt::{EvidenceKind, EvidenceRef, RemovalTest, RemovalTestKind};
+pub use hharness_ontology::debt::{EvidenceKind, EvidenceRef, RemovalTest, RemovalTestKind};
 
 impl ProfileDebtRecord {
     /// Debt completeness (AC-CP-06/T-LCD-05; the `/1` required set — base
@@ -235,8 +235,8 @@ impl ProfileDebtRecord {
 
     /// The derived `evidence_grade` (ADR-0197 — derived from `evidence_refs`,
     /// never stored).
-    pub fn evidence_grade(&self) -> hh_ontology::debt::EvidenceGrade {
-        hh_ontology::debt::evidence_grade(&self.evidence_refs)
+    pub fn evidence_grade(&self) -> hharness_ontology::debt::EvidenceGrade {
+        hharness_ontology::debt::evidence_grade(&self.evidence_refs)
     }
 }
 
@@ -389,7 +389,7 @@ impl Default for ProfileCapabilities {
 /// `Pattern` grammar. The canonical definition lives in `hh-ontology::eval`
 /// (R2.18 — the document-side `ProfileConstraint` narrowing spells the same
 /// grammar; one spelling, CC7 — same convention as `ModelRole` below).
-pub use hh_ontology::eval::VersionPattern;
+pub use hharness_ontology::eval::VersionPattern;
 
 /// The selector (§3.2.3): `{provider_api_family, model_family, version_pattern,
 /// precedence, successor_ref?, retirement_at?, roles_admitted}`.
@@ -416,7 +416,7 @@ pub struct ProfileSelector {
 /// The canonical definition lives in `hh-ontology::eval` (S1.22, R-2.9.2 —
 /// the eval `Factor.role` member names the same closed sum; CC7 — one
 /// definition, both spellings resolve to it).
-pub use hh_ontology::eval::ModelRole;
+pub use hharness_ontology::eval::ModelRole;
 
 /// A typed, metered `ext` block — `{vendor-prefix: typed block}` where the block carries
 /// its own debt record (§3.2.3; the same CF-049 shape).
@@ -501,7 +501,7 @@ pub enum ProfileMergePolicy {
 }
 
 /// The declared per-field merge policy over the `ModelProfile/1` top-level members —
-/// longest-prefix table as data, same discipline as `hh_assembly::MERGE_POLICIES`
+/// longest-prefix table as data, same discipline as `hharness_assembly::MERGE_POLICIES`
 /// (CC1: one declared policy; a field without a row is a schema bug).
 pub const PROFILE_MERGE_POLICIES: &[(&str, ProfileMergePolicy)] = &[
     ("/profile_id", ProfileMergePolicy::Override),
@@ -571,7 +571,7 @@ pub fn profile_identity(profile: &ModelProfile) -> String {
     if let Json::Obj(m) = &mut j {
         m.remove("content_hash");
     }
-    hh_identity::idp_id("model_profile.1", j.to_canonical_string().as_bytes())
+    hharness_identity::idp_id("model_profile.1", j.to_canonical_string().as_bytes())
 }
 
 /// The union of fields a profile's rules own — the set a child's overrides may touch
@@ -992,7 +992,7 @@ pub fn null_profile() -> ModelProfile {
             hypothesis: "the null profile declares nothing; it exists so the \
                          machinery has a floor, never as a silent default"
                 .to_string(),
-            evidence_refs: vec![hh_ontology::debt::EvidenceRef::legacy("null_profile")],
+            evidence_refs: vec![hharness_ontology::debt::EvidenceRef::legacy("null_profile")],
             owner: "kernel".to_string(),
             reach_via: Vec::new(),
             expiry_condition: ExpiryCondition {
@@ -1000,11 +1000,11 @@ pub fn null_profile() -> ModelProfile {
                 value: Some("9999-12-31".to_string()),
             },
             removal_test_ref: "null_profile_compile".to_string(),
-            removal_test: Some(hh_ontology::debt::RemovalTest {
-                kind: hh_ontology::debt::RemovalTestKind::Documentation,
+            removal_test: Some(hharness_ontology::debt::RemovalTest {
+                kind: hharness_ontology::debt::RemovalTestKind::Documentation,
                 criteria: Some("the null profile compiles".to_string()),
-                ..hh_ontology::debt::RemovalTest::new(
-                    hh_ontology::debt::RemovalTestKind::Documentation,
+                ..hharness_ontology::debt::RemovalTest::new(
+                    hharness_ontology::debt::RemovalTestKind::Documentation,
                 )
             }),
             status: DebtStatus::Active,
@@ -1042,7 +1042,7 @@ pub fn minimal_profiles() -> (ModelProfile, ModelProfile) {
         rule_id: rule_id.to_string(),
         hypothesis: "the minimal profile's single surface decision holds for the                      fixture family (T-LCD-01/-04)"
             .to_string(),
-        evidence_refs: vec![hh_ontology::debt::EvidenceRef::legacy("minimal_profile")],
+        evidence_refs: vec![hharness_ontology::debt::EvidenceRef::legacy("minimal_profile")],
         owner: "kernel".to_string(),
         reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
@@ -1050,11 +1050,11 @@ pub fn minimal_profiles() -> (ModelProfile, ModelProfile) {
             value: Some("9999-12-31".to_string()),
         },
         removal_test_ref: "minimal_profile_compile".to_string(),
-        removal_test: Some(hh_ontology::debt::RemovalTest {
-            kind: hh_ontology::debt::RemovalTestKind::Documentation,
+        removal_test: Some(hharness_ontology::debt::RemovalTest {
+            kind: hharness_ontology::debt::RemovalTestKind::Documentation,
             criteria: Some("the minimal profile compiles".to_string()),
-            ..hh_ontology::debt::RemovalTest::new(
-                hh_ontology::debt::RemovalTestKind::Documentation,
+            ..hharness_ontology::debt::RemovalTest::new(
+                hharness_ontology::debt::RemovalTestKind::Documentation,
             )
         }),
         status: DebtStatus::Active,

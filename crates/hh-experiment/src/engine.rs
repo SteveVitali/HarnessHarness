@@ -16,7 +16,7 @@
 //!   against the engine's [`EngineContext`] resolvers) and durably stores the
 //!   spec in [`LabDocs`] — a refusal is typed, never a warning (T-LCD-14).
 //! - `expand` re-runs the refusal gate, then calls the pure
-//!   `hh_lab::expand::expand` and stores the content-addressed `CellPlan`.
+//!   `hharness_lab::expand::expand` and stores the content-addressed `CellPlan`.
 //! - `open_experiment` mints the `run_kind = experiment` run under the
 //!   engine's fenced writer, allocates the experiment budget root, and commits
 //!   `declared` + one `run_planned` per `RunPlan` + the `opened` drift bracket
@@ -46,29 +46,29 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_budget::account::{Account, ChargeRequest};
-use hh_budget::attribution::Attribution;
-use hh_budget::quantity::ResourceQuantity;
-use hh_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_budget::{BudgetEnforcement, MatchMode, MatchSpec};
-use hh_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
-use hh_lab::experiment::{
+use hharness_budget::account::{Account, ChargeRequest};
+use hharness_budget::attribution::Attribution;
+use hharness_budget::quantity::ResourceQuantity;
+use hharness_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_budget::{BudgetEnforcement, MatchMode, MatchSpec};
+use hharness_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
+use hharness_lab::experiment::{
     ArmSpec, BudgetRelevantParam, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec,
     RetirementDiffResolver, SpecContext, ValidationStrategy,
 };
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::leases::LeaseScope;
-use hh_ledger::manifest::{
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::leases::LeaseScope;
+use hharness_ledger::manifest::{
     EventRef, ExperimentBinding, ParticipantClass as ManifestClass, RunKind, RunManifest, TaskRef,
 };
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::compliance::NaReason;
-use hh_ontology::control::{CancelledBy, OutcomeClass, StopReason};
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::FactorKind;
-use hh_ontology::participant::ParticipantClass as LevelClass;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::control::{CancelledBy, OutcomeClass, StopReason};
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::FactorKind;
+use hharness_ontology::participant::ParticipantClass as LevelClass;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::docs::{kind as doc_kind, LabDocs};
 use crate::errors::ExperimentError;
@@ -488,7 +488,7 @@ impl<'a> ExperimentEngine<'a> {
                 .ok_or_else(|| ExperimentError::Unresolvable {
                     detail: "arm_config resolver absent".to_string(),
                 })?;
-        let plan = hh_lab::expand::expand(
+        let plan = hharness_lab::expand::expand(
             &spec,
             &tasks,
             &ExpandContext {
@@ -534,7 +534,7 @@ impl<'a> ExperimentEngine<'a> {
                         .is_some_and(|p| p.registered_at > bound_seq);
                     if prereg_late {
                         return Err(ExperimentError::Refusal(
-                            hh_lab::experiment::ExperimentRefusal::PreRegistrationLate {
+                            hharness_lab::experiment::ExperimentRefusal::PreRegistrationLate {
                                 detail: format!(
                                     "pre_registration.registered_at {} postdates the first run_bound (seq {bound_seq})",
                                     spec.pre_registration
@@ -546,7 +546,7 @@ impl<'a> ExperimentEngine<'a> {
                         ));
                     }
                     return Err(ExperimentError::Refusal(
-                        hh_lab::experiment::ExperimentRefusal::DeclarationLate {
+                        hharness_lab::experiment::ExperimentRefusal::DeclarationLate {
                             detail: format!(
                                 "experiment run {run_id} already carries run_bound rows"
                             ),
@@ -695,7 +695,7 @@ impl<'a> ExperimentEngine<'a> {
             .store
             .acquire_writer(&self.holder, run_id, self.writer_ttl_ms)
             .map_err(|e| match e {
-                hh_ledger::errors::LedgerError::WouldBlock { active_holder } => {
+                hharness_ledger::errors::LedgerError::WouldBlock { active_holder } => {
                     ExperimentError::WouldBlock {
                         holder: active_holder,
                     }
@@ -786,7 +786,7 @@ impl<'a> ExperimentEngine<'a> {
         if let Some(sp) = &spec {
             // Per-cell settled-outcome statistics — every adaptive
             // estimator's `p̄` is the scored fraction of settled attempts.
-            let mut stats: BTreeMap<String, hh_lab::adaptive::CellStats> = BTreeMap::new();
+            let mut stats: BTreeMap<String, hharness_lab::adaptive::CellStats> = BTreeMap::new();
             if !matches!(sp.validation_strategy, ValidationStrategy::FullSet) {
                 for ps in view.plans.values() {
                     let st = stats.entry(ps.cell_id.clone()).or_default();
@@ -815,7 +815,7 @@ impl<'a> ExperimentEngine<'a> {
                     min_inclusion_fraction_ppm,
                     min_replicates,
                 } => {
-                    let params = hh_lab::adaptive::VoiParams {
+                    let params = hharness_lab::adaptive::VoiParams {
                         estimator: match estimator.as_str() {
                             "expected_information_gain" => "expected_information_gain",
                             _ => "disagreement",
@@ -824,7 +824,7 @@ impl<'a> ExperimentEngine<'a> {
                         min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
                         min_replicates: *min_replicates,
                     };
-                    if let Some(rec) = hh_lab::adaptive::voi_allocate(
+                    if let Some(rec) = hharness_lab::adaptive::voi_allocate(
                         &params,
                         &candidates,
                         &stats_of,
@@ -853,7 +853,7 @@ impl<'a> ExperimentEngine<'a> {
                     lambda,
                     min_inclusion_fraction_ppm,
                 } => {
-                    let params = hh_lab::adaptive::DisagreementParams {
+                    let params = hharness_lab::adaptive::DisagreementParams {
                         estimator: match estimator.as_str() {
                             "anchored_difference" => "anchored_difference",
                             _ => "hajek",
@@ -862,7 +862,7 @@ impl<'a> ExperimentEngine<'a> {
                         min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
                         min_replicates: 1,
                     };
-                    if let Some(rec) = hh_lab::adaptive::disagreement_weighted_allocate(
+                    if let Some(rec) = hharness_lab::adaptive::disagreement_weighted_allocate(
                         &params,
                         &candidates,
                         &stats_of,
@@ -893,12 +893,12 @@ impl<'a> ExperimentEngine<'a> {
                     min_budget,
                     brackets,
                 } => {
-                    let params = hh_lab::adaptive::HalvingParams {
+                    let params = hharness_lab::adaptive::HalvingParams {
                         eta: *eta,
                         min_budget: *min_budget,
                         brackets: *brackets,
                     };
-                    if let Some(rec) = hh_lab::adaptive::successive_halving_allocate(
+                    if let Some(rec) = hharness_lab::adaptive::successive_halving_allocate(
                         &params,
                         &candidates,
                         &stats_of,
@@ -1003,7 +1003,7 @@ impl<'a> ExperimentEngine<'a> {
             .store
             .lease_acquire(&run_id, &lease, &scope, holder, self.claim_ttl_ms)
             .map_err(|e| match e {
-                hh_ledger::errors::LedgerError::WouldBlock { active_holder } => {
+                hharness_ledger::errors::LedgerError::WouldBlock { active_holder } => {
                     ExperimentError::WouldBlock {
                         holder: active_holder,
                     }
@@ -1565,7 +1565,7 @@ impl<'a> ExperimentEngine<'a> {
                 run_id: attempt.run_id.clone(),
             })?;
         let (stop, oracle_failed) = terminal_of(&finished.payload);
-        let outcome_class = hh_ontology::eval::derive_outcome_class(&stop, oracle_failed);
+        let outcome_class = hharness_ontology::eval::derive_outcome_class(&stop, oracle_failed);
 
         // Consumed vector — the subject run's `control.budget.consumed` rows
         // (the run's own accounting; the slice charge rides the experiment
@@ -1797,18 +1797,18 @@ impl<'a> ExperimentEngine<'a> {
         // the subject run. `None` members stay unemitted — the cell
         // renders `n/a{not_run}`, never 0.
         {
-            let rows: Vec<hh_eval::facts::FactRow> = subject_events
+            let rows: Vec<hharness_eval::facts::FactRow> = subject_events
                 .iter()
                 .enumerate()
-                .map(|(i, e)| hh_eval::facts::FactRow {
+                .map(|(i, e)| hharness_eval::facts::FactRow {
                     seq: i as u64,
                     event_id: Some(e.event_id.clone()),
                     class: e.class.clone(),
                     payload: e.payload.clone(),
                 })
                 .collect();
-            let folded = hh_eval::security_metrics::fold(&rows);
-            for (name, value) in hh_eval::security_metrics::emit(&folded) {
+            let folded = hharness_eval::security_metrics::fold(&rows);
+            for (name, value) in hharness_eval::security_metrics::emit(&folded) {
                 let Some(v) = value else { continue };
                 batch.push(self.mint(
                     &run_id,
@@ -2043,7 +2043,7 @@ impl<'a> ExperimentEngine<'a> {
     /// stamp is a fact the ledger must not vouch for).
     pub fn record_analysis(
         &mut self,
-        record: &hh_lab::analysis::AnalysisRecord,
+        record: &hharness_lab::analysis::AnalysisRecord,
         report_body: Option<&Json>,
     ) -> Result<(), ExperimentError> {
         let (exp_run, lease) = self.bound()?;
@@ -2058,7 +2058,7 @@ impl<'a> ExperimentEngine<'a> {
         if let Some(r) = &record.experiment_run_id {
             if *r != exp_run {
                 return Err(ExperimentError::Refusal(
-                    hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                    hharness_lab::experiment::ExperimentRefusal::NotPreRegistered {
                         detail: format!(
                             "record binds experiment_run_id {r} — this run is {exp_run}"
                         ),
@@ -2074,14 +2074,14 @@ impl<'a> ExperimentEngine<'a> {
                 for c in comps {
                     if c.get("budget_match").is_none() {
                         return Err(ExperimentError::Refusal(
-                            hh_lab::experiment::ExperimentRefusal::UnmatchedBudget {
+                            hharness_lab::experiment::ExperimentRefusal::UnmatchedBudget {
                                 detail: "comparison report lacks budget_match".into(),
                             },
                         ));
                     }
                     if c.get("benefit_kind").is_none() {
                         return Err(ExperimentError::Refusal(
-                            hh_lab::experiment::ExperimentRefusal::MissingMatchSpec {
+                            hharness_lab::experiment::ExperimentRefusal::MissingMatchSpec {
                                 arm: "comparison report lacks benefit_kind".into(),
                             },
                         ));
@@ -2101,7 +2101,7 @@ impl<'a> ExperimentEngine<'a> {
             let claimed = record.registered_analysis_ref.clone().unwrap_or_default();
             if plan_ref.is_empty() || claimed != plan_ref {
                 return Err(ExperimentError::Refusal(
-                    hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                    hharness_lab::experiment::ExperimentRefusal::NotPreRegistered {
                         detail: format!(
                             "registered_analysis_ref {claimed:?} does not match the pinned plan {plan_ref:?}"
                         ),
@@ -2113,7 +2113,7 @@ impl<'a> ExperimentEngine<'a> {
         // carry the flag (the ledger does not stamp a stale claim).
         if !view.amendments.is_empty() && !record.post_amendment {
             return Err(ExperimentError::Refusal(
-                hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                hharness_lab::experiment::ExperimentRefusal::NotPreRegistered {
                     detail: "record postdates an amendment but post_amendment = false".into(),
                 },
             ));
@@ -2506,7 +2506,7 @@ impl<'a> ExperimentEngine<'a> {
                         .store
                         .acquire_writer(&self.holder, &run_id, self.writer_ttl_ms)
                         .map_err(|e| match e {
-                            hh_ledger::errors::LedgerError::WouldBlock { active_holder } => {
+                            hharness_ledger::errors::LedgerError::WouldBlock { active_holder } => {
                                 ExperimentError::WouldBlock {
                                     holder: active_holder,
                                 }
@@ -2714,7 +2714,7 @@ impl<'a> ExperimentEngine<'a> {
                             detail: format!("eval budget key {k} unknown"),
                         })?;
                     s.dimensions
-                        .insert(key, hh_budget::spec::DimensionRule::hard(v, key));
+                        .insert(key, hharness_budget::spec::DimensionRule::hard(v, key));
                 }
                 Ok(s)
             }
@@ -2934,7 +2934,7 @@ impl Drop for ExperimentEngine<'_> {
 /// The arm's environment-level fault/perturbation profiles (S4.15; §5h.4
 /// C1's F-suite binding): a `FactorKind::Environment` level's `overrides`
 /// may carry `fault_profile`/`perturbation_profile` members, each naming a
-/// Stage-3 catalogue profile (`hh_eval::stage3_fault_profiles()` /
+/// Stage-3 catalogue profile (`hharness_eval::stage3_fault_profiles()` /
 /// `stage3_perturbation_profiles()`). The member must be a string id in
 /// the catalogue — anything else, or two environment levels disagreeing
 /// on the same member, is a typed `InadmissibleFactor` refusal (CC10:
@@ -2944,11 +2944,11 @@ fn env_profiles(
     spec: &ExperimentSpec,
     arm: &ArmSpec,
 ) -> Result<(Option<String>, Option<String>), ExperimentError> {
-    let fault_ids: BTreeSet<String> = hh_eval::stage3_fault_profiles()
+    let fault_ids: BTreeSet<String> = hharness_eval::stage3_fault_profiles()
         .iter()
         .map(|p| p.profile_id.clone())
         .collect();
-    let perturbation_ids: BTreeSet<String> = hh_eval::stage3_perturbation_profiles()
+    let perturbation_ids: BTreeSet<String> = hharness_eval::stage3_perturbation_profiles()
         .iter()
         .map(|p| p.profile_id.clone())
         .collect();
@@ -3046,7 +3046,7 @@ fn terminal_of(payload: &Json) -> (StopReason, bool) {
 
 /// The subject run's consumed vector — the `control.budget.consumed` rows'
 /// `{dimension, amount}` summed.
-fn consumed_vector(events: &[hh_ledger::event::EventEnvelope]) -> Vec<(DimensionId, i64)> {
+fn consumed_vector(events: &[hharness_ledger::event::EventEnvelope]) -> Vec<(DimensionId, i64)> {
     let mut v = BTreeMap::new();
     for e in events {
         if e.class != "control.budget.consumed" {
@@ -3068,7 +3068,7 @@ fn consumed_vector(events: &[hh_ledger::event::EventEnvelope]) -> Vec<(Dimension
 /// The subject run's veto trips — `security.invariant.violated` /
 /// `control.veto.*` rows carrying `veto_id`/`metric` (annotate-only at
 /// settle; ADR-0047).
-fn veto_trips(events: &[hh_ledger::event::EventEnvelope]) -> Vec<String> {
+fn veto_trips(events: &[hharness_ledger::event::EventEnvelope]) -> Vec<String> {
     let mut out = BTreeSet::new();
     for e in events {
         if !e.class.starts_with("security.invariant") && !e.class.starts_with("control.veto") {

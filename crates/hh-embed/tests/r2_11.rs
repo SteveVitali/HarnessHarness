@@ -9,19 +9,19 @@
 //! The surface seam is the honest driver: the test opens a surface run,
 //! appends the dispatch-shape `anchor + pending` rows through the append
 //! gate, then answers through `surface_respond_permission` — the same
-//! path `hh-mcp-lab`'s `respond_approval` tool calls.
+//! path `hharness-mcp-lab`'s `respond_approval` tool calls.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::PermissionOutcome;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_monitor::approval::{
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::PermissionOutcome;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_monitor::approval::{
     ApprovalMode, ApprovalOption, ApprovalOptionId, ApprovalRequest, Explanation, PermissionRequest,
 };
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -43,7 +43,7 @@ fn service(tag: &str) -> EmbedService {
 }
 
 /// A surface run carries no `configuration_id`/`environment_ref` — the
-/// `open_run` invariant refuses them (`hh-mcp-lab`'s session does the
+/// `open_run` invariant refuses them (`hharness-mcp-lab`'s session does the
 /// same clearing).
 fn surface_manifest() -> RunManifest {
     let mut m = RunManifest::minimal(RunKind::Surface);
@@ -69,7 +69,7 @@ fn request(pid: &str, options: Vec<ApprovalOptionId>, remedies: Vec<Json>) -> Ap
         permission_id: pid.to_string(),
         request: PermissionRequest {
             subject_ref: "test:agent".to_string(),
-            capability_ref: hh_compiler::plan::PinnedRef {
+            capability_ref: hharness_compiler::plan::PinnedRef {
                 semantic_id: "test:fetch".to_string(),
                 version_id: "v-cap".to_string(),
             },
@@ -86,13 +86,13 @@ fn request(pid: &str, options: Vec<ApprovalOptionId>, remedies: Vec<Json>) -> Ap
             model_justification: None,
         },
         batch_id: None,
-        // `remedies` are `hh_provenance::flow::Remedy` — the test spells
+        // `remedies` are `hharness_provenance::flow::Remedy` — the test spells
         // the closed sum directly (from_json over the canonical shape).
         remedies: remedies
             .iter()
             .enumerate()
             .map(|(i, r)| {
-                hh_provenance::flow::Remedy::from_json(r, &format!("remedies[{i}]")).unwrap()
+                hharness_provenance::flow::Remedy::from_json(r, &format!("remedies[{i}]")).unwrap()
             })
             .collect(),
     }
@@ -105,8 +105,8 @@ fn anchor_event(
     run_id: &str,
     pid: &str,
     effect_id: &str,
-) -> hh_ledger::event::Event {
-    let m = hh_env::events::EventMinter::new(svc.store(), run_id);
+) -> hharness_ledger::event::Event {
+    let m = hharness_env::events::EventMinter::new(svc.store(), run_id);
     let mut ev = m
         .mint(
             "action.intent.anchored",
@@ -130,7 +130,7 @@ fn anchor_event(
         PersistenceScope::Run,
         0,
     ));
-    ev.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+    ev.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
     ev
 }
 
@@ -143,11 +143,11 @@ fn pending_event(
     effect_id: &str,
     options: Vec<ApprovalOptionId>,
     remedies: Vec<Json>,
-) -> hh_ledger::event::Event {
-    let m = hh_env::events::EventMinter::new(svc.store(), run_id);
+) -> hharness_ledger::event::Event {
+    let m = hharness_env::events::EventMinter::new(svc.store(), run_id);
     m.mint(
         "security.permission.pending",
-        hh_monitor::approval::pending_payload(
+        hharness_monitor::approval::pending_payload(
             &request(pid, options, remedies),
             effect_id,
             svc.store().now_ms(),
@@ -156,7 +156,7 @@ fn pending_event(
     .unwrap()
 }
 
-fn events(svc: &EmbedService, run_id: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn events(svc: &EmbedService, run_id: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     svc.surface_events(run_id).unwrap().to_vec()
 }
 
@@ -358,7 +358,7 @@ fn r211_modified_outcome_mints_decided_with_amended_args() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::AlreadyDecided { .. }
+            hharness_embed_schema::errors::EmbedError::AlreadyDecided { .. }
         ),
         "a second answer refuses typed: {err:?}"
     );
@@ -399,7 +399,7 @@ fn r211_modified_without_offered_modify_refuses() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::OptionNotOffered { .. }
+            hharness_embed_schema::errors::EmbedError::OptionNotOffered { .. }
         ),
         "unoffered modify refuses OptionNotOffered: {err:?}"
     );
@@ -420,7 +420,7 @@ fn r211_modified_without_offered_modify_refuses() {
     assert!(
         matches!(
             err,
-            hh_embed_schema::errors::EmbedError::OptionNotOffered { .. }
+            hharness_embed_schema::errors::EmbedError::OptionNotOffered { .. }
         ),
         "the recorded offer governs `selected` too: {err:?}"
     );

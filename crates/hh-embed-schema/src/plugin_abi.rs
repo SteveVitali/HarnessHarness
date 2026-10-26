@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The contract name, as it appears in the exported schema `$id` and in
 /// `requires.plugin_abi` ranges.
@@ -488,7 +488,7 @@ pub struct HelloParams {
     /// `plugin.content` — the package content address.
     pub plugin_content: String,
     /// The contract versions the plugin offers (`ContractRef` canonical JSON —
-    /// `hh_plugin::ContractRef::from_json` decodes them; the ABI schema carries
+    /// `hharness_plugin::ContractRef::from_json` decodes them; the ABI schema carries
     /// them as canonical objects, CC7).
     pub contract_versions_offered: Vec<Json>,
     /// Tri-state capabilities the plugin declares (`SUPPORTED|UNSUPPORTED|
@@ -1420,7 +1420,7 @@ pub fn canonical_plugin_abi_bytes() -> String {
 /// The content address of the `plugin_abi/1` schema export — the value every
 /// envelope's `schema_hash` asserts (V5/V6; `idp/1`, CC1).
 pub fn plugin_abi_schema_hash() -> String {
-    hh_identity::address(
+    hharness_identity::address(
         canonical_plugin_abi_bytes().as_bytes(),
         "application/schema+json",
     )
@@ -1552,7 +1552,7 @@ mod tests {
     fn no_hosting_abi_reference() {
         // AC-12: nothing in this schema names the Hosting ABI.
         let s = canonical_plugin_abi_bytes();
-        assert!(!s.contains("hh-hosting"));
+        assert!(!s.contains("hharness-hosting"));
         assert!(!s.contains("OpaqueProcess"));
         assert!(!s.contains("hosting"));
     }

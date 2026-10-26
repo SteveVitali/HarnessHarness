@@ -19,7 +19,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
 use crate::dispatch::{op_call, SurfaceError};

@@ -21,8 +21,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_provenance::authority::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_wire::json::Json;
 
 use crate::memory::{MemoryError, MemoryStorePort, WriteContext};
 
@@ -120,7 +120,7 @@ pub struct ConsolidationRule {
     /// consolidation boundary also classifies the memory blob pool under
     /// the `memory_usage` fold — the landed `evaluate_retention`
     /// scheduler, never a second mechanism (CC1).
-    pub retention: Option<hh_ledger::retention::RetentionPolicy>,
+    pub retention: Option<hharness_ledger::retention::RetentionPolicy>,
 }
 
 /// `ConsolidatorKind` — the closed set of consolidation mechanics. `Dedupe`
@@ -419,7 +419,10 @@ pub fn consolidate(
         ("attribution", Json::str("harness_overhead.consolidation")),
     ]);
     Ok(Some(ConsolidationRecord {
-        consolidation_id: hh_identity::idp::idp_id("memory_consolidation.1", preimage.as_bytes()),
+        consolidation_id: hharness_identity::idp::idp_id(
+            "memory_consolidation.1",
+            preimage.as_bytes(),
+        ),
         rule_id: rule.rule_id.clone(),
         consolidator: rule.consolidator.as_str().to_string(),
         input_watermark,
@@ -526,7 +529,7 @@ pub fn rule_from_action(rule_id: &str, action: &Json) -> Result<ConsolidationRul
     let retention = match m.get("retention") {
         None | Some(Json::Null) => None,
         Some(j) => Some(
-            hh_ledger::retention::RetentionPolicy::from_json(j)
+            hharness_ledger::retention::RetentionPolicy::from_json(j)
                 .map_err(|e| format!("consolidate_memories{rule_id}: retention: {e}"))?,
         ),
     };

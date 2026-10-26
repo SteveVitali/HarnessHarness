@@ -12,14 +12,14 @@
 //! `instruction_delivery` dimension is `supported`.
 //!
 //! `handle(op, params)` is the records-in/records-out surface — the
-//! boundary's hosting plane wires a closure to it (`hh-embed` never depends
+//! boundary's hosting plane wires a closure to it (`hharness-embed` never depends
 //! on this crate — the seam is Json).
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::participant::{Observability, ParticipantClass};
-use hh_wire::Json;
+use hharness_ontology::participant::{Observability, ParticipantClass};
+use hharness_wire::Json;
 
 use crate::abi::{
     is_admitted_verb, refuse_handle_keys, EndState, HostedRunSpec, HostingError, Negotiated,
@@ -968,7 +968,7 @@ impl HostingService {
             ]),
             provenance: HostedProvenance {
                 origin: crate::events::HostedOrigin::Adapter,
-                authority: hh_provenance::AuthorityClass::Unverified,
+                authority: hharness_provenance::AuthorityClass::Unverified,
             },
             mediation: crate::events::Mediation::Observed,
             event_channel: crate::events::EventChannel::Handle,
@@ -983,7 +983,7 @@ impl HostingService {
                 // when the boundary's dimension is not a kernel
                 // `DimensionId` (the raw spelling stays on the event
                 // payload's `dimension` member — preserved, never dropped).
-                let canonical = hh_ontology::dimensions::DimensionId::parse(dimension);
+                let canonical = hharness_ontology::dimensions::DimensionId::parse(dimension);
                 end.reason = match canonical {
                     Some(d) => format!("budget_exhausted{{{}}}", d.as_str()),
                     None => "budget_exhausted{unknown}".to_string(),
@@ -1005,10 +1005,10 @@ mod tests {
     use super::*;
     use crate::adapter_a::allow_all_decider;
     use crate::fixture::FixtureParticipant;
-    use hh_hir::leaves::Text;
-    use hh_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
-    use hh_ontology::debt::DebtStatus;
-    use hh_provenance::ProvenanceRecord;
+    use hharness_hir::leaves::Text;
+    use hharness_hir::records::{AssumptionDebtRecord, EvidenceRef, ExpiryCondition, OwnerRef};
+    use hharness_ontology::debt::DebtStatus;
+    use hharness_provenance::ProvenanceRecord;
 
     pub fn complete_debt() -> AssumptionDebtRecord {
         let provenance = ProvenanceRecord::kernel("hh-hosting/test", 0);
@@ -1022,7 +1022,7 @@ mod tests {
             evidence_refs: vec![EvidenceRef::legacy("adapterA-fixture")],
             owner: OwnerRef::principal("hh.adapter.a"),
             expiry_condition: ExpiryCondition {
-                kind: hh_ontology::debt::ExpiryKind::ProbeFailure,
+                kind: hharness_ontology::debt::ExpiryKind::ProbeFailure,
                 value: Some("P0 dimension drift".into()),
             },
             removal_test_ref: "tests/probes.rs".into(),
@@ -1047,16 +1047,16 @@ mod tests {
             decl.insert(d.to_string(), Json::str(*v));
             capability_vector.insert(
                 d.to_string(),
-                hh_ontology::participant::CapabilityVerdict::parse(v)
-                    .unwrap_or(hh_ontology::participant::CapabilityVerdict::Unknown),
+                hharness_ontology::participant::CapabilityVerdict::parse(v)
+                    .unwrap_or(hharness_ontology::participant::CapabilityVerdict::Unknown),
             );
         }
         ParticipantRecord::new(
             "p:test",
             "1.0.0",
-            hh_ontology::participant::ParticipantDescriptor {
+            hharness_ontology::participant::ParticipantDescriptor {
                 class: ParticipantClass::Hosted,
-                hosting_mechanism: hh_ontology::participant::HostingMechanism::SessionAbi,
+                hosting_mechanism: hharness_ontology::participant::HostingMechanism::SessionAbi,
                 observability_level: [Observability::Events, Observability::EndState]
                     .into_iter()
                     .collect(),

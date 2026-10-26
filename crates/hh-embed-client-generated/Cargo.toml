@@ -1,5 +1,5 @@
 [package]
-name = "hh-embed-client-generated"
+name = "hharness-embed-client-generated"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ description = "The generated, drift-checked hh-embed/1 client (ADR-0179: a gener
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 
 [dev-dependencies]
-hh-embed-schema = { path = "../hh-embed-schema" }
+hharness-embed-schema = { path = "../hh-embed-schema" }

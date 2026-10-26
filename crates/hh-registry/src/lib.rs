@@ -1,11 +1,11 @@
-//! `hh-registry` — the §6.2 component-variation registry **store** (S1.8, `R-2.10.2⁰`).
+//! `hharness-registry` — the §6.2 component-variation registry **store** (S1.8, `R-2.10.2⁰`).
 //!
 //! The one typed record store for every registry-shaped kind: component classes and
 //! their variants, conformance suites and reports, namespaces, name-history entries,
 //! snapshots, foreign imports and the rest of the closed `registry/1` kind list —
-//! under the **one** `idp/1` identity model (`hh-identity`), the **one** canonical
-//! `ProvenanceRecord` (`hh-provenance`), the **one** canonicalizer (`hh-wire`) and the
-//! **one** event store (`hh-ledger`) — CC1/CC2/CC7.
+//! under the **one** `idp/1` identity model (`hharness-identity`), the **one** canonical
+//! `ProvenanceRecord` (`hharness-provenance`), the **one** canonicalizer (`hharness-wire`) and the
+//! **one** event store (`hharness-ledger`) — CC1/CC2/CC7.
 //!
 //! This is the **C0/Stage-1 slice** (ADR-0151 decisions 1–5, 7; ADR-0152 Stage-1
 //! shapes; ADR-0153 `hh/`+`local/` namespaces): file/ledger-backed store, the closed

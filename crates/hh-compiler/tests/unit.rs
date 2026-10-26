@@ -1,4 +1,4 @@
-//! `hh-compiler` unit suite (spec §3.2; ticket S1.10; the run-ledger test matrix).
+//! `hharness-compiler` unit suite (spec §3.2; ticket S1.10; the run-ledger test matrix).
 //! Per-module tests: stage-0 `accept`, stage-1 `link` (selector refusal — DF-S1.9-3,
 //! zero resolutions, profile chain, debt completeness, capability_requires, targets),
 //! stage-2 `lower_native`, profile schema, `schema_includes`, `trace`.
@@ -9,23 +9,25 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use common::*;
-use hh_compiler::compiler::{accept, accept_bytes};
-use hh_compiler::equiv::{schema_includes, ArgMapEntry, ArgTransform, Inclusion, SurfaceBinding};
-use hh_compiler::errors::{CompileError, LinkErrorKind};
-use hh_compiler::link::{link, LinkedGraph, NoVariants, TargetSpec, VariantView};
-use hh_compiler::plan::{lower_native, PlanNode, PlanNodePayload};
-use hh_compiler::profile::{
+use hharness_compiler::compiler::{accept, accept_bytes};
+use hharness_compiler::equiv::{
+    schema_includes, ArgMapEntry, ArgTransform, Inclusion, SurfaceBinding,
+};
+use hharness_compiler::errors::{CompileError, LinkErrorKind};
+use hharness_compiler::link::{link, LinkedGraph, NoVariants, TargetSpec, VariantView};
+use hharness_compiler::plan::{lower_native, PlanNode, PlanNodePayload};
+use hharness_compiler::profile::{
     member_diff, profile_coordinate, profile_identity, resolve_chain, DebtStatus, ExpiryCondition,
     ExpiryKind, ProfileMergePolicy, ProfileRuleKind,
 };
-use hh_compiler::schema::{profile_from_json, profile_to_json};
-use hh_compiler::trace::{build_trace_map, trace};
-use hh_compiler::CompileInputs;
-use hh_hir::document::SealedDefinition;
-use hh_hir::records::*;
-use hh_hir::refs::{ProfileRef, RefVersion};
-use hh_hir::{CompiledPayload, DeclaredInterface, PreconditionDomain, ToolEffects};
-use hh_wire::json::Json;
+use hharness_compiler::schema::{profile_from_json, profile_to_json};
+use hharness_compiler::trace::{build_trace_map, trace};
+use hharness_compiler::CompileInputs;
+use hharness_hir::document::SealedDefinition;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ProfileRef, RefVersion};
+use hharness_hir::{CompiledPayload, DeclaredInterface, PreconditionDomain, ToolEffects};
+use hharness_wire::json::Json;
 
 fn link_of(sealed: &SealedDefinition, store: &dyn VariantView) -> LinkedGraph {
     let profiles = MapProfileView::of(vec![test_profile()]);
@@ -47,14 +49,14 @@ fn link_of(sealed: &SealedDefinition, store: &dyn VariantView) -> LinkedGraph {
 #[test]
 fn accept_happy_path_over_a_sealed_definition() {
     let (_store, sealed, _vids) = sealed_doc("accept-ok");
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let outcome = accept(&sealed, &cat, &kernel()).expect("accept");
     assert!(
         outcome
             .report
             .diagnostics
             .iter()
-            .all(|d| d.severity != hh_assembly::Severity::Error),
+            .all(|d| d.severity != hharness_assembly::Severity::Error),
         "no error diagnostics on a clean sealed definition"
     );
 }
@@ -63,7 +65,7 @@ fn accept_happy_path_over_a_sealed_definition() {
 fn accept_refuses_an_unsealed_node() {
     let (_store, mut sealed, _vids) = sealed_doc("accept-unsealed");
     sealed.document.nodes[0].version.sealed = false;
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     match accept(&sealed, &cat, &kernel()) {
         Err(CompileError::NotSealed { detail }) => {
             assert!(detail.contains("sealed marker"), "{detail}");
@@ -76,7 +78,7 @@ fn accept_refuses_an_unsealed_node() {
 fn accept_reasserts_the_canonical_hash() {
     let (_store, mut sealed, _vids) = sealed_doc("accept-hash");
     sealed.definition_ref.version_id = "sha256:tampered".to_string();
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     match accept(&sealed, &cat, &kernel()) {
         Err(CompileError::NonCanonicalInput { detail }) => {
             assert!(detail.contains("recomputed"), "{detail}");
@@ -88,7 +90,7 @@ fn accept_reasserts_the_canonical_hash() {
 #[test]
 fn accept_bytes_round_trips_the_sealed_document() {
     let (_store, sealed, _vids) = sealed_doc("accept-bytes");
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let (rebuilt, outcome) =
         accept_bytes(&sealed.canonical_bytes(), &cat, &kernel()).expect("accept_bytes");
     assert_eq!(
@@ -100,12 +102,12 @@ fn accept_bytes_round_trips_the_sealed_document() {
         .report
         .diagnostics
         .iter()
-        .all(|d| d.severity != hh_assembly::Severity::Error));
+        .all(|d| d.severity != hharness_assembly::Severity::Error));
 }
 
 #[test]
 fn accept_bytes_refuses_malformed_and_unsealed() {
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     match accept_bytes(b"not json", &cat, &kernel()) {
         Err(CompileError::NonCanonicalInput { .. }) => {}
         other => panic!("expected NonCanonicalInput, got {other:?}"),
@@ -151,7 +153,8 @@ fn link_refuses_a_surviving_selector() {
             assert!(
                 diagnostics
                     .iter()
-                    .any(|d| d.code.code() == "C-LINK-1" && d.stage == hh_assembly::Stage::Link),
+                    .any(|d| d.code.code() == "C-LINK-1"
+                        && d.stage == hharness_assembly::Stage::Link),
                 "the link_precheck diagnostic set carries C-LINK-1 at Stage::Link"
             );
         }
@@ -371,7 +374,7 @@ fn link_missing_debt_record_on_a_conditioned_rule() {
         },
         Some(complete_debt(
             "test:crule.rule",
-            hh_hir::DebtStatus::Retired,
+            hharness_hir::DebtStatus::Retired,
             5,
         )),
         5,
@@ -481,10 +484,13 @@ fn link_expired_rule_warns_only_under_recorded_intent() {
         Some("design/expired-intent"),
     )
     .expect("recorded intent admits expired rules");
-    assert!(linked
-        .diagnostics
-        .iter()
-        .any(|d| d.code.code() == "C-LINK-6" && d.severity == hh_assembly::Severity::Warning));
+    assert!(
+        linked
+            .diagnostics
+            .iter()
+            .any(|d| d.code.code() == "C-LINK-6"
+                && d.severity == hharness_assembly::Severity::Warning)
+    );
     assert!(linked
         .conditioned_rules
         .iter()
@@ -531,8 +537,8 @@ fn link_capability_requires_satisfied_by_a_depends_on_edge() {
     }
     doc.nodes.push(t);
     doc.nodes.push(tool_node("test:provider", 6));
-    doc.edges.push(hh_hir::Edge::new(
-        hh_hir::EdgeKind::DependsOn,
+    doc.edges.push(hharness_hir::Edge::new(
+        hharness_hir::EdgeKind::DependsOn,
         "test:needy",
         "test:provider",
         EdgeRecord::DependsOn {
@@ -643,8 +649,8 @@ fn link_refuses_undeclared_dialect_narrowing() {
             assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
             let d = &diagnostics[0];
             assert_eq!(d.code.code(), "C-LINK-9");
-            assert_eq!(d.stage, hh_assembly::Stage::Link);
-            assert_eq!(d.severity, hh_assembly::Severity::Error);
+            assert_eq!(d.stage, hharness_assembly::Stage::Link);
+            assert_eq!(d.severity, hharness_assembly::Severity::Error);
         }
         other => panic!("expected DialectNarrowingUndeclared, got {other:?}"),
     }
@@ -775,8 +781,8 @@ fn link_ambiguous_selector_tie_mints_c_link_8() {
             assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
             let d = &diagnostics[0];
             assert_eq!(d.code.code(), "C-LINK-8");
-            assert_eq!(d.stage, hh_assembly::Stage::Link);
-            assert_eq!(d.severity, hh_assembly::Severity::Error);
+            assert_eq!(d.stage, hharness_assembly::Stage::Link);
+            assert_eq!(d.severity, hharness_assembly::Severity::Error);
             assert_eq!(d.path, "/assembly/profile_binding");
         }
         other => panic!("expected AmbiguousSelector, got {other:?}"),
@@ -815,7 +821,7 @@ fn link_refuses_an_override_outside_owned_fields() {
 
 #[test]
 fn profile_merge_policy_is_declared_for_every_member() {
-    use hh_compiler::profile::{profile_merge_policy, PROFILE_MERGE_POLICIES};
+    use hharness_compiler::profile::{profile_merge_policy, PROFILE_MERGE_POLICIES};
     // Every `ModelProfile/1` top-level member has a row (CC1: one declared policy).
     for member in [
         "profile_id",
@@ -954,7 +960,7 @@ fn profile_rule_kind_set_is_closed_and_spellings_round_trip() {
 
 // ── stage 2: lower_native ─────────────────────────────────────────────────────
 
-fn all_payloads(plan: &hh_compiler::plan::RuntimePlan) -> Vec<&PlanNodePayload> {
+fn all_payloads(plan: &hharness_compiler::plan::RuntimePlan) -> Vec<&PlanNodePayload> {
     fn walk<'p>(nodes: &'p [PlanNode], out: &mut Vec<&'p PlanNodePayload>) {
         for n in nodes {
             out.push(&n.payload);
@@ -1048,7 +1054,7 @@ fn plan_refuses_an_opaque_step_as_unsupported_construct() {
         "test:proc",
         vec![ProcedureStep::Opaque(CompiledPayload {
             format_tag: "opaque-fmt".to_string(),
-            bytes_hash: hh_identity::idp::address(b"x", "application/octet-stream").digest,
+            bytes_hash: hharness_identity::idp::address(b"x", "application/octet-stream").digest,
             declared_interface: Some(DeclaredInterface {
                 inputs: Json::Null,
                 outputs: Json::Null,
@@ -1156,8 +1162,8 @@ fn plan_carries_declared_effects_in_the_effect_table() {
     let mut t = tool_node("test:tool", 5);
     if let KindRecord::ToolCapability(tc) = &mut t.semantic {
         tc.effects = ToolEffects::Declared(
-            vec![hh_hir::EffectClass::domain_only(
-                hh_hir::EffectDomain::FsWrite,
+            vec![hharness_hir::EffectClass::domain_only(
+                hharness_hir::EffectDomain::FsWrite,
             )]
             .into_iter()
             .collect(),
@@ -1226,7 +1232,7 @@ fn bind_surface_derives_the_identity_arg_map() {
         KindRecord::ToolCapability(t) => t,
         _ => unreachable!(),
     };
-    let binding = hh_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
+    let binding = hharness_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
     assert_eq!(binding.surface_name, "tool_a");
     assert_eq!(binding.dialect, "json-schema-2020-12");
     assert_eq!(binding.arg_map.len(), 2);
@@ -1250,7 +1256,7 @@ fn check_equivalence_e2_fails_on_an_arg_outside_the_schema() {
         KindRecord::ToolCapability(t) => t,
         _ => unreachable!(),
     };
-    let mut binding = hh_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
+    let mut binding = hharness_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
     // An arg naming no declared `input_schema` property → E2 fail.
     binding.arg_map.insert(
         "ghost".to_string(),
@@ -1260,21 +1266,21 @@ fn check_equivalence_e2_fails_on_an_arg_outside_the_schema() {
             narrowing: None,
         },
     );
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+    let e = hharness_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
         .expect("evidence");
     assert!(matches!(
         e.e2_authority,
-        hh_compiler::equiv::EvidenceVerdict::Fail { .. }
+        hharness_compiler::equiv::EvidenceVerdict::Fail { .. }
     ));
     // E7 still passes — the binding names C.
     assert_eq!(
         e.e7_accounting_identity,
-        hh_compiler::equiv::EvidenceVerdict::Pass
+        hharness_compiler::equiv::EvidenceVerdict::Pass
     );
     // E4 is `n/a` — never a verdict (T-LCD-15; pure tool → not open-world → stage_3).
     assert!(matches!(
         e.e4_differential,
-        hh_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
+        hharness_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
     ));
 }
 
@@ -1305,12 +1311,12 @@ fn check_equivalence_e2_fails_when_a_surface_field_lacks_a_map_entry() {
         KindRecord::ToolCapability(t) => t,
         _ => unreachable!(),
     };
-    let mut binding = hh_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
+    let mut binding = hharness_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
     binding.arg_map.remove("mode");
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+    let e = hharness_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
         .expect("evidence");
     match &e.e2_authority {
-        hh_compiler::equiv::EvidenceVerdict::Fail { reason } => {
+        hharness_compiler::equiv::EvidenceVerdict::Fail { reason } => {
             assert!(reason.contains("mode"), "{reason}");
         }
         other => panic!("expected E2 fail for unmapped surface field, got {other:?}"),
@@ -1322,8 +1328,8 @@ fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
     let mut n = tool_node("test:tool", 5);
     if let KindRecord::ToolCapability(tc) = &mut n.semantic {
         tc.effects = ToolEffects::Declared(
-            vec![hh_hir::EffectClass::domain_only(
-                hh_hir::EffectDomain::NetEgress,
+            vec![hharness_hir::EffectClass::domain_only(
+                hharness_hir::EffectDomain::NetEgress,
             )]
             .into_iter()
             .collect(),
@@ -1331,7 +1337,7 @@ fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
     }
     let binding = SurfaceBinding {
         surface_name: "s".to_string(),
-        capability_ref: hh_compiler::plan::PinnedRef {
+        capability_ref: hharness_compiler::plan::PinnedRef {
             semantic_id: "test:tool".to_string(),
             version_id: "v".to_string(),
         },
@@ -1339,34 +1345,36 @@ fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
         arg_map: BTreeMap::new(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:tool".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     };
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+    let e = hharness_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
         .expect("evidence");
     match &e.e4_differential {
-        hh_compiler::equiv::EvidenceVerdict::NotApplicable { reason } => {
+        hharness_compiler::equiv::EvidenceVerdict::NotApplicable { reason } => {
             assert_eq!(reason, "open-world", "E4 n/a(open-world) — T-LCD-15");
         }
         other => panic!("expected n/a(open-world), got {other:?}"),
     }
     assert!(matches!(
         e.e5_error_surjectivity,
-        hh_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
+        hharness_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
     ));
     assert!(matches!(
         e.e6_result_observation,
-        hh_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
+        hharness_compiler::equiv::EvidenceVerdict::NotApplicable { .. }
     ));
 }
 
@@ -1375,7 +1383,7 @@ fn check_equivalence_e7_fails_on_a_misattributed_binding() {
     let n = tool_node("test:tool", 5);
     let binding = SurfaceBinding {
         surface_name: "s".to_string(),
-        capability_ref: hh_compiler::plan::PinnedRef {
+        capability_ref: hharness_compiler::plan::PinnedRef {
             semantic_id: "test:other".to_string(),
             version_id: "v".to_string(),
         },
@@ -1383,24 +1391,26 @@ fn check_equivalence_e7_fails_on_a_misattributed_binding() {
         arg_map: BTreeMap::new(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:other".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     };
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+    let e = hharness_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
         .expect("evidence");
     assert!(matches!(
         e.e7_accounting_identity,
-        hh_compiler::equiv::EvidenceVerdict::Fail { .. }
+        hharness_compiler::equiv::EvidenceVerdict::Fail { .. }
     ));
 }
 
@@ -1458,7 +1468,7 @@ fn plan_refuses_a_non_tool_surface_on_a_capability_as_uncheckable() {
     // the compiler's own guard.)
     let mut doc = doc_with(&stage1_assembly());
     let mut t = tool_node("test:tool", 5);
-    t.surface = Some(SurfaceRecord::Validator(hh_hir::ValidatorSurface {
+    t.surface = Some(SurfaceRecord::Validator(hharness_hir::ValidatorSurface {
         rubric_rendering: Json::Null,
         explain: Json::Null,
     }));
@@ -1466,7 +1476,7 @@ fn plan_refuses_a_non_tool_surface_on_a_capability_as_uncheckable() {
     let (store, sealed, _vids) = sealed_doc_with("uncheckable", doc, vec![], vec![]);
     let p = test_profile();
     let profiles = MapProfileView::of(vec![p]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let inputs = CompileInputs {
         sealed: sealed.clone(),
         profile_refs: vec![profile_coordinate(&test_profile())],
@@ -1475,7 +1485,7 @@ fn plan_refuses_a_non_tool_surface_on_a_capability_as_uncheckable() {
         compile_for_expired: false,
         intent_ref: None,
     };
-    match hh_compiler::compile(&inputs, &profiles, &store, &cat, &kernel()) {
+    match hharness_compiler::compile(&inputs, &profiles, &store, &cat, &kernel()) {
         Err(CompileError::UncheckableSurface { surface, .. }) => {
             assert_eq!(surface, "test:tool");
         }

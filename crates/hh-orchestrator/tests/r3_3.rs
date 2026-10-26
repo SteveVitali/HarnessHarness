@@ -3,7 +3,7 @@
 //! `Store`, the model's `hh.delegate` call minting
 //! `control.delegate.proposed`, the fold emitting `delegate` under the
 //! react preset's `delegate = model` point, and `SpawnDelegatePort`
-//! executing through `hh-subagent`'s one `spawn` path — the
+//! executing through `hharness-subagent`'s one `spawn` path — the
 //! `control.subagent.spawned` + grant rows land durable under the parent's
 //! fenced writer before the next visible cue (CC3), the spec's own
 //! `delegation_reason` rides the audit row, and a malformed/attenuation-
@@ -14,39 +14,41 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::plan::PinnedRef;
-use hh_control::driver::{
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::plan::PinnedRef;
+use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, DelegateOutcome, DelegatePort, Driver,
     DriverConfig, EffectGate, GateOutcome, LedgerSink, ModelOutcome, ModelPort, StoreSeam,
 };
-use hh_control::output::ParsedCall;
-use hh_control::policy::EnvelopePolicy;
-use hh_control::react::{self, ReactSteerable};
-use hh_control::vocab::{Cue, HumanInput, SettledOutcome};
-use hh_env::handle::OnParentEnd;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::event::{Event, EventEnvelope, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::ownership::OwnedObject;
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_orchestrator::{ParentBinding, SpawnDelegatePort};
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::ownership::OwnershipTable;
-use hh_subagent::types::{
+use hharness_control::output::ParsedCall;
+use hharness_control::policy::EnvelopePolicy;
+use hharness_control::react::{self, ReactSteerable};
+use hharness_control::vocab::{Cue, HumanInput, SettledOutcome};
+use hharness_env::handle::OnParentEnd;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::event::{Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::ownership::OwnedObject;
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_orchestrator::{ParentBinding, SpawnDelegatePort};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_subagent::ownership::OwnershipTable;
+use hharness_subagent::types::{
     ChildProcess, ChildRole, ContextIsolation, DelegationReason, EnvIsolation, ReturnContract,
     SubagentSpec, Supplies, WaitMode,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── fixtures (the s4_6 seam set — the real store, never a mock) ─────────
 
@@ -135,7 +137,7 @@ fn root_spec() -> BudgetSpec {
 struct Parent {
     store: Store,
     run_id: String,
-    lease: hh_ledger::store::Lease,
+    lease: hharness_ledger::store::Lease,
     budget_id: String,
     handle_id: HandleId,
     ownerships: OwnershipTable,
@@ -263,7 +265,7 @@ fn stage_spec(tag: &str) -> SubagentSpec {
 struct StoreSink<'a> {
     store: &'a mut Store,
     run_id: String,
-    lease: &'a hh_ledger::store::Lease,
+    lease: &'a hharness_ledger::store::Lease,
 }
 
 impl LedgerSink for StoreSink<'_> {
@@ -299,7 +301,7 @@ struct ScriptedModel {
 impl ModelPort for ScriptedModel {
     fn call(&mut self, _id: &str, _req: &Json) -> ModelOutcome {
         self.script.pop_front().unwrap_or(ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+            stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             response_ref: "r-empty".into(),
             text_empty: true,
             calls: vec![],
@@ -347,14 +349,14 @@ impl AssemblerPort for FakeAssembler {
 /// `{spec_ref, delegation_reason}` (`spec` inline for small asks); the
 /// 512 B `model.call.completed` audit bound keeps the spec record
 /// content-addressed, never inline.
-fn delegate_surface() -> hh_control::output::SurfaceSpec {
-    let p = |required| hh_control::output::ParamSpec {
+fn delegate_surface() -> hharness_control::output::SurfaceSpec {
+    let p = |required| hharness_control::output::ParamSpec {
         required,
-        kind: hh_control::output::ParamKind::Any,
+        kind: hharness_control::output::ParamKind::Any,
         enum_values: vec![],
         domain: vec![],
     };
-    hh_control::output::SurfaceSpec {
+    hharness_control::output::SurfaceSpec {
         surface_id: "hh.delegate".into(),
         semantic_id: "sem/hh.delegate".into(),
         params: [
@@ -412,7 +414,7 @@ fn steerable_run_delegates_through_the_spawn_port() {
     let policy = EnvelopePolicy::stage1_default(&parent.budget_id)
         .seal()
         .unwrap();
-    let ctx = hh_control::strategy::ControlContext {
+    let ctx = hharness_control::strategy::ControlContext {
         process_ref: parent.run_id.clone(),
         plan: vec![],
         boundary: react::react_preset(),
@@ -423,8 +425,8 @@ fn steerable_run_delegates_through_the_spawn_port() {
         parameters: Default::default(),
         capabilities_available: vec!["hh.delegate".into()],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     };
     // The port's binding + handles clone before `parent.store` is
@@ -455,7 +457,7 @@ fn steerable_run_delegates_through_the_spawn_port() {
     driver.set_delegate_port(Box::new(port));
     let mut model = ScriptedModel {
         script: VecDeque::from([ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+            stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
             response_ref: "r-1".into(),
             text_empty: false,
             calls: vec![ParsedCall {
@@ -473,7 +475,7 @@ fn steerable_run_delegates_through_the_spawn_port() {
     // the substrate's own wakeup — the test ends it with an interrupt).
     let first = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
     assert!(
-        matches!(first, Err(hh_control::driver::DriverError::Port { port, .. }) if port == "inbox"),
+        matches!(first, Err(hharness_control::driver::DriverError::Port { port, .. }) if port == "inbox"),
         "the run parks once the delegate executes: {first:?}"
     );
     driver.submit(Cue::HumanInput(HumanInput::Interrupt));
@@ -551,7 +553,7 @@ fn missing_delegation_reason_refuses_before_the_port() {
     let policy = EnvelopePolicy::stage1_default(&parent.budget_id)
         .seal()
         .unwrap();
-    let ctx = hh_control::strategy::ControlContext {
+    let ctx = hharness_control::strategy::ControlContext {
         process_ref: parent.run_id.clone(),
         plan: vec![],
         boundary: react::react_preset(),
@@ -562,8 +564,8 @@ fn missing_delegation_reason_refuses_before_the_port() {
         parameters: Default::default(),
         capabilities_available: vec!["hh.delegate".into()],
         steering: (
-            hh_control::strategy::SteerMode::Unsupported,
-            hh_control::strategy::ConcurrentInput::QueueOnly,
+            hharness_control::strategy::SteerMode::Unsupported,
+            hharness_control::strategy::ConcurrentInput::QueueOnly,
         ),
     };
     // The port's binding + handles clone before `parent.store` is
@@ -594,7 +596,7 @@ fn missing_delegation_reason_refuses_before_the_port() {
     driver.set_delegate_port(Box::new(port));
     let mut model = ScriptedModel {
         script: VecDeque::from([ModelOutcome {
-            stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+            stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
             response_ref: "r-1".into(),
             text_empty: false,
             calls: vec![ParsedCall {

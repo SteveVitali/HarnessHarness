@@ -9,7 +9,7 @@
 //! `prefix_affecting` marking lives on the `WireDialect` (`prefix_affecting_
 //! params[]`, data not code, LC-5).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 use crate::vocab::Purpose;
@@ -244,15 +244,17 @@ impl ModelRef {
         }
     }
 
-    /// The charge-side `hh_budget::ModelRef` (`serving_route` required —
+    /// The charge-side `hharness_budget::ModelRef` (`serving_route` required —
     /// `None` when the route hasn't resolved; ADR-0039 d.3).
-    pub fn charge_ref(&self) -> Option<hh_budget::ModelRef> {
-        self.serving_route.as_ref().map(|r| hh_budget::ModelRef {
-            profile_ref: self.profile_ref.clone(),
-            provider_model_id: self.provider_model_id.clone(),
-            serving_route: r.clone(),
-            effort: self.effort.clone(),
-        })
+    pub fn charge_ref(&self) -> Option<hharness_budget::ModelRef> {
+        self.serving_route
+            .as_ref()
+            .map(|r| hharness_budget::ModelRef {
+                profile_ref: self.profile_ref.clone(),
+                provider_model_id: self.provider_model_id.clone(),
+                serving_route: r.clone(),
+                effort: self.effort.clone(),
+            })
     }
 }
 
@@ -465,7 +467,7 @@ pub struct CachePlan {
 impl ProviderRequestPlan {
     /// The plan's content id (`plan.1`).
     pub fn content_id(&self) -> String {
-        hh_identity::idp_id("plan.1", self.to_json().to_canonical_string().as_bytes())
+        hharness_identity::idp_id("plan.1", self.to_json().to_canonical_string().as_bytes())
     }
 
     /// Canonical JSON.

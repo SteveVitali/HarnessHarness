@@ -10,7 +10,7 @@
 //! choose semantics** (K1-1; AC-R-2.3.4-1) — every decision reads the declared
 //! `CacheSemantics` value.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 use crate::vocab::Purpose;
@@ -551,7 +551,7 @@ pub fn derive_affinity_key(
     support: AffinitySupport,
 ) -> Result<AffinityKey, CodecError> {
     let material = format!("{scope}\u{1f}{static_hash}\u{1f}{}", purpose.as_str());
-    let full = hh_identity::idp_id("cache.affinity.1", material.as_bytes());
+    let full = hharness_identity::idp_id("cache.affinity.1", material.as_bytes());
     let wire = match support {
         AffinitySupport::Supported { max_key_length } => {
             // The wire form is a `full` prefix at the declared bound — a
@@ -911,7 +911,7 @@ pub struct CacheObservation {
 
 /// `observe_cache(usage, expected)` — the gateway-side stamp. `usage = None`
 /// (unavailable) ⇒ `observed = unknown`.
-pub fn observe_cache(usage: Option<&hh_telemetry::TokenVector>) -> CacheObservation {
+pub fn observe_cache(usage: Option<&hharness_telemetry::TokenVector>) -> CacheObservation {
     match usage {
         None => CacheObservation {
             observed: ObservedState::Unknown,
@@ -937,7 +937,7 @@ pub fn observe_cache(usage: Option<&hh_telemetry::TokenVector>) -> CacheObservat
                 write_ratio_ppm: if v.input_total == 0 {
                     None
                 } else {
-                    Some(v.cache_write * hh_budget::quantity::PPM_SCALE / v.input_total)
+                    Some(v.cache_write * hharness_budget::quantity::PPM_SCALE / v.input_total)
                 },
             }
         }

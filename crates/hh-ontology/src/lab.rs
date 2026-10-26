@@ -5,7 +5,7 @@
 //! mode. Every sum is closed: an unknown spelling is a typed refusal, never a
 //! forward-compat guess (CC3 — nothing unaccounted).
 //!
-//! These live in `hh-ontology` (not `hh-lab`) because they are shared vocabulary: the
+//! These live in `hharness-ontology` (not `hharness-lab`) because they are shared vocabulary: the
 //! ledger manifest (`TaskRef.split_label`), the compliance metric declarations
 //! (`applies_to_families`), the HIR debt scope (`task_classes`), and the Lab records all
 //! reference the same closed sets — one schema source (CC7).
@@ -464,7 +464,7 @@ impl BenchmarkNetworkMode {
 /// fault_profiles_admissible[], perturbation_profiles_admissible[],
 /// episode_model, provenance}` — the registered `environment_family` record
 /// body (§5h.4; R-2.9.4⁰ᵃ row 2; ADR-0142). The ontology owns the schema the
-/// way it owns `MetricDeclaration` (CC7); `hh-registry` carries the record
+/// way it owns `MetricDeclaration` (CC7); `hharness-registry` carries the record
 /// variant.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnvironmentFamilyRecord {
@@ -490,7 +490,7 @@ pub struct EnvironmentFamilyRecord {
     /// The family's episode model.
     pub episode_model: EpisodeModel,
     /// The record's provenance (mandatory).
-    pub provenance: hh_provenance::ProvenanceRecord,
+    pub provenance: hharness_provenance::ProvenanceRecord,
 }
 
 /// `EnvironmentFamilyRecord` schema errors (typed, never a warning).
@@ -527,79 +527,79 @@ impl EnvironmentFamilyRecord {
     }
 
     /// The canonical JSON.
-    pub fn to_json(&self) -> hh_wire::Json {
+    pub fn to_json(&self) -> hharness_wire::Json {
         let mut m = std::collections::BTreeMap::new();
         m.insert(
             "family_id".into(),
-            hh_wire::Json::str(self.family_id.name()),
+            hharness_wire::Json::str(self.family_id.name()),
         );
-        m.insert("version".into(), hh_wire::Json::str(&self.version));
+        m.insert("version".into(), hharness_wire::Json::str(&self.version));
         m.insert(
             "requires".into(),
-            hh_wire::Json::Obj(
+            hharness_wire::Json::Obj(
                 self.requires
                     .iter()
-                    .map(|(k, v)| (k.name().to_string(), hh_wire::Json::str(v.name())))
+                    .map(|(k, v)| (k.name().to_string(), hharness_wire::Json::str(v.name())))
                     .collect(),
             ),
         );
         m.insert(
             "oracle_classes_available".into(),
-            hh_wire::Json::Arr(
+            hharness_wire::Json::Arr(
                 self.oracle_classes_available
                     .iter()
-                    .map(hh_wire::Json::str)
+                    .map(hharness_wire::Json::str)
                     .collect(),
             ),
         );
         m.insert(
             "submission_kind".into(),
-            hh_wire::Json::str(self.submission_kind.name()),
+            hharness_wire::Json::str(self.submission_kind.name()),
         );
         m.insert(
             "verifier_isolation_default".into(),
-            hh_wire::Json::str(self.verifier_isolation_default.name()),
+            hharness_wire::Json::str(self.verifier_isolation_default.name()),
         );
         m.insert(
             "process_metrics".into(),
-            hh_wire::Json::Arr(
+            hharness_wire::Json::Arr(
                 self.process_metrics
                     .iter()
-                    .map(hh_wire::Json::str)
+                    .map(hharness_wire::Json::str)
                     .collect(),
             ),
         );
         m.insert(
             "fault_profiles_admissible".into(),
-            hh_wire::Json::Arr(
+            hharness_wire::Json::Arr(
                 self.fault_profiles_admissible
                     .iter()
-                    .map(hh_wire::Json::str)
+                    .map(hharness_wire::Json::str)
                     .collect(),
             ),
         );
         m.insert(
             "perturbation_profiles_admissible".into(),
-            hh_wire::Json::Arr(
+            hharness_wire::Json::Arr(
                 self.perturbation_profiles_admissible
                     .iter()
-                    .map(hh_wire::Json::str)
+                    .map(hharness_wire::Json::str)
                     .collect(),
             ),
         );
         m.insert(
             "episode_model".into(),
-            hh_wire::Json::str(self.episode_model.name()),
+            hharness_wire::Json::str(self.episode_model.name()),
         );
         m.insert("provenance".into(), self.provenance.to_json());
-        hh_wire::Json::Obj(m)
+        hharness_wire::Json::Obj(m)
     }
 
     /// Strict decode — unknown members, spellings and member types refuse.
-    pub fn from_json(j: &hh_wire::Json) -> Result<EnvironmentFamilyRecord, FamilyError> {
+    pub fn from_json(j: &hharness_wire::Json) -> Result<EnvironmentFamilyRecord, FamilyError> {
         const REC: &str = "EnvironmentFamilyRecord";
         let m = match j {
-            hh_wire::Json::Obj(m) => m,
+            hharness_wire::Json::Obj(m) => m,
             _ => {
                 return Err(FamilyError::SchemaViolation {
                     member: REC.to_string(),
@@ -631,7 +631,7 @@ impl EnvironmentFamilyRecord {
         }
         let str_at = |member: &str| -> Result<&str, FamilyError> {
             m.get(member)
-                .and_then(hh_wire::Json::as_str)
+                .and_then(hharness_wire::Json::as_str)
                 .ok_or_else(|| FamilyError::SchemaViolation {
                     member: member.to_string(),
                     detail: format!("{REC}.{member} must be a string"),
@@ -639,7 +639,7 @@ impl EnvironmentFamilyRecord {
         };
         let str_vec_at = |member: &str| -> Result<Vec<String>, FamilyError> {
             match m.get(member) {
-                Some(hh_wire::Json::Arr(a)) => a
+                Some(hharness_wire::Json::Arr(a)) => a
                     .iter()
                     .map(|j| {
                         j.as_str()
@@ -658,7 +658,7 @@ impl EnvironmentFamilyRecord {
         };
         let mut requires = std::collections::BTreeMap::new();
         match m.get("requires") {
-            Some(hh_wire::Json::Obj(rm)) => {
+            Some(hharness_wire::Json::Obj(rm)) => {
                 for (k, v) in rm {
                     let cap =
                         HandleCapability::parse(k).ok_or_else(|| FamilyError::SchemaViolation {
@@ -713,7 +713,7 @@ impl EnvironmentFamilyRecord {
                     detail: "unknown episode model".to_string(),
                 }
             })?,
-            provenance: hh_provenance::ProvenanceRecord::from_json(
+            provenance: hharness_provenance::ProvenanceRecord::from_json(
                 m.get("provenance")
                     .ok_or_else(|| FamilyError::SchemaViolation {
                         member: "provenance".to_string(),

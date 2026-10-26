@@ -15,11 +15,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 
-use hh_embed_client_generated::{
+use hharness_embed_client_generated::{
     AttendanceDeclaration, AttendanceSource, AttendanceValue, InvocationRecord, OutputFormat,
     Override, PermissionOutcome, Session,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::boundary::{Boundary, CliError, ProcessBoundary};
 use crate::exit_class::{
@@ -1868,7 +1868,7 @@ fn cmd_run_start(
         .flag_all("capability")
         .iter()
         .map(|s| {
-            hh_wire::json::parse(s)
+            hharness_wire::json::parse(s)
                 .map_err(|e| inv("bad_capability", "--capability", &e.to_string()))
         })
         .collect::<Result<_, _>>()?;
@@ -1970,7 +1970,7 @@ fn cmd_run_start(
         for cap in p
             .flag_all("capability")
             .iter()
-            .filter_map(|s| hh_wire::json::parse(s).ok())
+            .filter_map(|s| hharness_wire::json::parse(s).ok())
         {
             let domain = cap.get("domain").and_then(Json::as_str).unwrap_or("");
             let name = cap
@@ -2206,7 +2206,7 @@ fn definition_input(p: &Parsed) -> Result<Json, InvocationError> {
                     )
                 })?
             };
-            let doc = hh_wire::json::parse(&text).map_err(|e| {
+            let doc = hharness_wire::json::parse(&text).map_err(|e| {
                 InvocationError::at("definition_invalid_json", "<definition>", &e.to_string())
             })?;
             Ok(Json::obj([
@@ -2245,7 +2245,7 @@ fn parse_overrides(list: &[String]) -> Result<Vec<Override>, InvocationError> {
                 "override pointers start with /",
             ));
         }
-        let value = hh_wire::json::parse(val).unwrap_or_else(|_| Json::str(val));
+        let value = hharness_wire::json::parse(val).unwrap_or_else(|_| Json::str(val));
         out.push(Override {
             pointer: ptr.to_string(),
             value,
@@ -2581,7 +2581,7 @@ fn cmd_run_amend(
             )
         })?;
     let value = if value_str.starts_with('{') {
-        hh_wire::json::parse(&value_str)
+        hharness_wire::json::parse(&value_str)
             .map_err(|e| inv("bad_amend_value", "<value>", &e.to_string()))?
     } else if target == "attendance" || target == "approval_mode" {
         // A bare mode spelling — `run amend <run> attendance interactive`.
@@ -2629,7 +2629,7 @@ fn cmd_run_amend(
         if let Json::Obj(m) = &mut params {
             m.insert(
                 "attestation".into(),
-                hh_wire::json::parse(&a).unwrap_or(Json::Null),
+                hharness_wire::json::parse(&a).unwrap_or(Json::Null),
             );
         }
     }
@@ -2775,13 +2775,15 @@ fn cmd_approval_show(
         })
         .collect();
     if rows.is_empty() {
-        return Err(CliError::Kernel(hh_embed_client_generated::EmbedError {
-            code: 1503,
-            kind: "UnknownPermission".into(),
-            retryable: false,
-            message: format!("no permission rows for {pid}"),
-            data: Json::obj([("permission_id", Json::str(pid))]),
-        }));
+        return Err(CliError::Kernel(
+            hharness_embed_client_generated::EmbedError {
+                code: 1503,
+                kind: "UnknownPermission".into(),
+                retryable: false,
+                message: format!("no permission rows for {pid}"),
+                data: Json::obj([("permission_id", Json::str(pid))]),
+            },
+        ));
     }
     ok_outcome("approval_show", Json::Arr(rows), r.format)
 }
@@ -2872,7 +2874,7 @@ fn cmd_fleet(
                 &format!("cannot read {src}: {e}"),
             )
         })?;
-        let doc = hh_wire::json::parse(&text).map_err(|e| {
+        let doc = hharness_wire::json::parse(&text).map_err(|e| {
             inv(
                 "invalid_json",
                 "--source",
@@ -2918,7 +2920,7 @@ fn cmd_fleet(
                     &format!("cannot read {delivery_path}: {e}"),
                 )
             })?;
-            let delivery = hh_wire::json::parse(&text).map_err(|e| {
+            let delivery = hharness_wire::json::parse(&text).map_err(|e| {
                 inv(
                     "invalid_json",
                     "--delivery",

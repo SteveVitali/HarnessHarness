@@ -19,25 +19,25 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use hh_containment::egress::ApprovalCache;
-use hh_containment::policy::{
+use hharness_containment::egress::ApprovalCache;
+use hharness_containment::policy::{
     kernel_default, AmendmentBasis, ContainmentPolicy, DefaultUnmatched, EgressRule, HostPattern,
     NetMode, NonPublic, RuleDecision,
 };
-use hh_embed::subscriber::{
+use hharness_embed::subscriber::{
     ExportSubscriber, PollOutcome, SinkDestination, SinkWire, SubscriberEgress,
 };
-use hh_env::egress::{EgressMediator, LocalHttpTransport, StaticResolver};
-use hh_env::events::{intended_payload, EventMinter, ScopeChain};
-use hh_env::tokens::{TokenMinter, TokenResolver};
-use hh_ledger::event::Scope;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::PersistenceScope;
-use hh_secrets::{CredentialBroker, DenyAllResolver};
-use hh_telemetry::sinks::SinkPolicy;
-use hh_wire::json::Json;
+use hharness_env::egress::{EgressMediator, LocalHttpTransport, StaticResolver};
+use hharness_env::events::{intended_payload, EventMinter, ScopeChain};
+use hharness_env::tokens::{TokenMinter, TokenResolver};
+use hharness_ledger::event::Scope;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::PersistenceScope;
+use hharness_secrets::{CredentialBroker, DenyAllResolver};
+use hharness_telemetry::sinks::SinkPolicy;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);

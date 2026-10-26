@@ -2,7 +2,7 @@
 //! matched-budget conditional reporting — AC "C3 values remain
 //! matched-budget conditional").
 //!
-//! The recipe itself is the registered `hh_lab::exemplars::delegation_v1`
+//! The recipe itself is the registered `hharness_lab::exemplars::delegation_v1`
 //! `ExperimentSpec` — this module is the *execution* half: one arm's
 //! topology instantiation through the real `spawn` path, the per-arm
 //! usage fold, and the matched-budget gate every comparison passes
@@ -12,14 +12,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::matchspec::MatchSpec;
-use hh_budget::quantity::ResourceVector;
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::Store;
-use hh_monitor::table::HandleTable;
-use hh_subagent::spawn::{fold_children, EnvDeriver, SpawnHook};
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_budget::matchspec::MatchSpec;
+use hharness_budget::quantity::ResourceVector;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::Store;
+use hharness_monitor::table::HandleTable;
+use hharness_subagent::spawn::{fold_children, EnvDeriver, SpawnHook};
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 
 use crate::orchestrator::{Orchestrator, ParentBinding, TopologyRun};
 use crate::topology::{TopologyPreset, WaitPolicy};
@@ -40,7 +40,7 @@ pub struct ArmExecution {
     /// The primary dimensions the arm's budget tree declares (a zero spend
     /// is evidence only for a declared/accounted dimension — absent is
     /// `IncommensurableMatch`, never zero).
-    pub accounted_dimensions: BTreeSet<hh_ontology::dimensions::DimensionId>,
+    pub accounted_dimensions: BTreeSet<hharness_ontology::dimensions::DimensionId>,
     /// `coordination.lost_write_count` primary — folded from the arm's
     /// `MergeReport`s (`0` arms merge nothing).
     pub lost_write_count: u64,
@@ -137,15 +137,15 @@ pub fn fold_arm_usage(
         .events(&binding.parent_run_id)
         .map_err(|e| SpawnError::Kernel(e.to_string()))?;
     let budget_tree =
-        hh_budget::tree::BudgetTree::project(binding.parent_run_id.clone(), budget_events)
+        hharness_budget::tree::BudgetTree::project(binding.parent_run_id.clone(), budget_events)
             .map_err(|e| SpawnError::Kernel(e.to_string()))?;
     for node in budget_tree.nodes.values() {
         for key in node.node.spec.dimensions.keys() {
             match key {
-                hh_ontology::dimensions::DimensionKey::Primary(d) => {
+                hharness_ontology::dimensions::DimensionKey::Primary(d) => {
                     accounted_dimensions.insert(*d);
                 }
-                hh_ontology::dimensions::DimensionKey::Derived(d) => {
+                hharness_ontology::dimensions::DimensionKey::Derived(d) => {
                     for c in d.components() {
                         accounted_dimensions.insert(*c);
                     }
@@ -161,10 +161,10 @@ pub fn fold_arm_usage(
         let Some(report_ref) = e.payload.get("merge_report_ref").and_then(Json::as_str) else {
             continue;
         };
-        let Ok(parsed) = hh_identity::idp::parse_id(report_ref) else {
+        let Ok(parsed) = hharness_identity::idp::parse_id(report_ref) else {
             continue;
         };
-        let Ok(bytes) = store.get_blob(&hh_identity::idp::ContentAddress {
+        let Ok(bytes) = store.get_blob(&hharness_identity::idp::ContentAddress {
             idp: "idp/1",
             algorithm: "sha256",
             digest: parsed.digest_hex,
@@ -176,7 +176,7 @@ pub fn fold_arm_usage(
         let Ok(text) = String::from_utf8(bytes) else {
             continue;
         };
-        let Ok(report) = hh_wire::json::parse(&text) else {
+        let Ok(report) = hharness_wire::json::parse(&text) else {
             continue;
         };
         lost_write_count += report
@@ -199,9 +199,10 @@ pub fn fold_arm_usage(
                     if let Some(Json::Obj(amounts)) = p.get("usage").and_then(|u| u.get("amounts"))
                     {
                         for (d, a) in amounts {
-                            if let (Some(dim), Some(v)) =
-                                (hh_ontology::dimensions::DimensionId::parse(d), a.as_int())
-                            {
+                            if let (Some(dim), Some(v)) = (
+                                hharness_ontology::dimensions::DimensionId::parse(d),
+                                a.as_int(),
+                            ) {
                                 usage.add(dim, v);
                             }
                         }
@@ -228,7 +229,7 @@ pub fn fold_arm_usage(
 /// arm's recorded usage (an absent dimension reads as missing, never
 /// zero). Returns the comparison evidence payload — `budget_match` +
 /// per-arm usage — the `ComparisonReport`'s input (the statistical fold
-/// is hh-lab's; the orchestrator reports only what matched accounting
+/// is hharness-lab's; the orchestrator reports only what matched accounting
 /// permits).
 pub fn match_report(arms: &[(&ArmExecution, Option<&MatchSpec>)]) -> Result<Json, LabRefusal> {
     let mut arm_rows = Vec::new();
@@ -290,8 +291,8 @@ pub fn match_report(arms: &[(&ArmExecution, Option<&MatchSpec>)]) -> Result<Json
 
 fn match_mode_str(spec: &MatchSpec) -> &'static str {
     match spec.mode {
-        hh_budget::matchspec::MatchMode::MatchedTotal => "matched_total",
-        hh_budget::matchspec::MatchMode::MatchedCap => "matched_cap",
+        hharness_budget::matchspec::MatchMode::MatchedTotal => "matched_total",
+        hharness_budget::matchspec::MatchMode::MatchedCap => "matched_cap",
         _ => "other",
     }
 }

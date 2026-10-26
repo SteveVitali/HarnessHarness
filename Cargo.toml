@@ -2,10 +2,10 @@
 # CC4: the spec/contracts name no language; this workspace is the *build* binding of the E1
 # candidate (compiled, memory-safe systems ecosystem) and is the one place, alongside the
 # build ADRs, that names it concretely. Hermetic modulo the ADR-admitted deps: the workspace's
-# external crates are the `tempfile` dev-dependency of `hh-varhost`, the `ring =0.17.14`
-# dependency of `hh-secrets` admitted by ADR-0359 (the DPoP-verifier scope plus `ring::aead`
+# external crates are the `tempfile` dev-dependency of `hharness-varhost`, the `ring =0.17.14`
+# dependency of `hharness-secrets` admitted by ADR-0359 (the DPoP-verifier scope plus `ring::aead`
 # + `ring::rand`, consumed by R3.8's blob-pool AEAD under ADR-0361 — nothing else imports the
-# crate), and the rustls graph of `hh-tls` admitted by ADR-0365
+# crate), and the rustls graph of `hharness-tls` admitted by ADR-0365
 # (`rustls =0.23.46` on the ADR-0359 `ring` provider + `rustls-webpki =0.103.16`
 # + `webpki-roots =1.0.10`, default features off — the closed
 # HTTPS-client / TLS-server / mTLS scope; nothing else imports them).
@@ -39,7 +39,7 @@ members = [
     # PERSISTENT workspace member: the ONE canonical ProvenanceRecord + Label lattice, the
     # seven-class AuthorityClass order, default_authority (conferred, never read — CC1/CC2),
     # join/meet/leq, R-TEXT, ledger stamping, propagation P1/P6/P7 + RP, the seal/endorse/
-    # declassify basis, and monitor checks 1/2/5/7. hh-identity consumes the canonical record
+    # declassify basis, and monitor checks 1/2/5/7. hharness-identity consumes the canonical record
     # (DF-S1.2-1); the single schema source for provenance (CC7).
     "crates/hh-provenance",
     # The C0/Stage-1 Harness IR (spec §3.1, R-2.1.2; ticket S1.4). A PERSISTENT workspace
@@ -55,8 +55,8 @@ members = [
     # persistence-policy table), the content-addressed blob store, the immutable run
     # manifest, the single fenced writer, durable-before-visible commits, verify →
     # Tampered, and the rebuildable context_view/run_summary projections. Sits above
-    # ontology/identity/provenance/wire; hashing through hh-identity (CC1), provenance
-    # through hh-provenance, home planes through hh-ontology (CC10).
+    # ontology/identity/provenance/wire; hashing through hharness-identity (CC1), provenance
+    # through hharness-provenance, home planes through hharness-ontology (CC10).
     "crates/hh-ledger",
     # The C0/Stage-1 resource-economics & accounting model (spec §8.2, R-2.1.6; ticket S1.6).
     # A PERSISTENT workspace member: the single schema source for resource quantities /
@@ -64,7 +64,7 @@ members = [
     # `measurement.cost.attributed` payload builders, the budget-tree projection (dynamic
     # containment, slice/pool, reservations, E1–E5), `cost_totals`, `MatchSpec` /
     # `search_budget` / `eval_budget` and the budget_delta governance gate. The closed
-    # `DimensionId` registry itself lives in hh-ontology (the vocabulary crate) so hh-hir
+    # `DimensionId` registry itself lives in hharness-ontology (the vocabulary crate) so hharness-hir
     # can check bound keys — this crate is the accounting layer over it (CC7).
     "crates/hh-budget",
     # The C0/Stage-1 control plane (spec §5e.1/§5e.2, R-2.6.1/R-2.6.2; ticket
@@ -76,7 +76,7 @@ members = [
     # loop_detector ladder + strict output validation), and the cue-inbox
     # driver that emits the full `control.decision` row with `checkpoint_ref`
     # and resumes by leaf. The control-plane `StopReason` sum is owned by
-    # `hh_ontology::control` (ADR-0106 D6; CC7).
+    # `hharness_ontology::control` (ADR-0106 D6; CC7).
     "crates/hh-control",
     # The C0/Stage-1 component-variation registry *store* (spec §6.2, R-2.10.2⁰;
     # ticket S1.8). A PERSISTENT workspace member: the closed registry/1 record
@@ -85,16 +85,16 @@ members = [
     # deterministic query/slot_choices/substitutable projections AC-1 names), the
     # two Stage-1 ClassRecords + ConformanceSuites, and the lifecycle.registry.*
     # event classes. The store reuses the ONE identity/namespace scheme
-    # (hh-identity, CC1) and appends through the run's single fenced writer
-    # (hh-ledger). The C1 registry *service* is S4.1 — never this crate.
+    # (hharness-identity, CC1) and appends through the run's single fenced writer
+    # (hharness-ledger). The C1 registry *service* is S4.1 — never this crate.
     "crates/hh-registry",
     # The C0/Stage-1 configuration & composition model (spec §3.3, R-2.1.4; ticket S1.9).
     # A PERSISTENT workspace member: the assembly grammar in the HIR/1 schema, the class
     # catalog for the two Stage-1 classes over the registry's ClassRecord/VariantRecord,
     # load / validate_assembly (stages 1–5, 7 — complete reports) / resolve (the ONE
-    # resolver feeding hh-hir's seal — CF-056) / identity / diff-via-HirDiff / in-process
+    # resolver feeding hharness-hir's seal — CF-056) / identity / diff-via-HirDiff / in-process
     # instantiate / verify_resume, and the closed AssemblyDiagnostic taxonomy. Sits above
-    # hh-hir, hh-registry and hh-ledger; compose/space/enumerate are Stage 3.
+    # hharness-hir, hharness-registry and hharness-ledger; compose/space/enumerate are Stage 3.
     "crates/hh-assembly",
     # The C0/Stage-1 compilation model (spec §3.2, R-2.1.3; ticket S1.10). A PERSISTENT
     # workspace member: the pure, content-addressed pipeline — stage 0 accept (calls
@@ -123,7 +123,7 @@ members = [
     # layered meet `effective()` with ContainmentWidening, the `admits` floor,
     # the ContainmentReport/evidence model, the EP2 model backend + probe
     # battery, and `attach`'s fail-closed / warn_and_degrade paths. Identity
-    # through hh-identity (CC1); no second canonicalization scheme.
+    # through hharness-identity (CC1); no second canonicalization scheme.
     "crates/hh-containment",
     # The C0/Stage-1 credential broker — secret channels, binding & redaction
     # (spec §5g.3, R-2.8.3; ticket S1.13). A PERSISTENT workspace member: the
@@ -148,13 +148,13 @@ members = [
     # `TelemetryLossReport`, `PropagationContext` at the subprocess seam, the
     # process-metric catalogue + `registry_check` (the DF-S1.5-2 consumer), and
     # the `measurement.export.delivered`/`measurement.metric.emitted` payload
-    # builders. Views stamp through `hh-ledger`'s `View` (one shape, CC7).
+    # builders. Views stamp through `hharness-ledger`'s `View` (one shape, CC7).
     "crates/hh-telemetry",
     # The C0/Stage-1 execution-environment abstraction + sandboxed tool
     # execution (spec §5a.5/§5d.5, R-2.2.5/R-2.5.5; ticket S1.16). A PERSISTENT
     # workspace member: `EnvironmentRecord` under idp/1 (pinned image digest /
     # foreign_digest / UnresolvedRef on tags), the `EnvHandle` declared→ready→
-    # torn_down machine, fail-closed `attach` through hh-containment (the
+    # torn_down machine, fail-closed `attach` through hharness-containment (the
     # DF-S1.12-3 seam), `env_apply` placeholders, the fs.*/upload/download/
     # path_baseline effect surface under R-NOSIDE/R-NONET, the three kernel-
     # clock counters, the seven-stage dispatcher (resolve→authorize→prepare→
@@ -162,13 +162,13 @@ members = [
     # in-process LocalExecutor + helper-protocol schema, CaptureItem +
     # content-addressed manifest, AttributionToken mint/resolve/hash, the
     # closed ErrorClass sum with the three-origin rule + kernel-derived
-    # retryability. The integration layer above hh-hir/hh-containment/
-    # hh-monitor/hh-ledger/hh-secrets/hh-budget — the cycle-safe seam (CC7).
+    # retryability. The integration layer above hharness-hir/hharness-containment/
+    # hharness-monitor/hharness-ledger/hharness-secrets/hharness-budget — the cycle-safe seam (CC7).
     "crates/hh-env",
     # The Stage-2 out-of-process helper binary + the `hh-helper/1` wire
     # codec (spec §5d.5 §4 helper row; ticket S2.1; ADR-0050 helper layer;
     # R-2.5.5/R-2.2.5). A PERSISTENT workspace member: the single schema
-    # source for the kernel↔helper protocol (CC7 — hh-env consumes it, never
+    # source for the kernel↔helper protocol (CC7 — hharness-env consumes it, never
     # redefines), the exec journal `read`/`probe`/`dedup` consult, helper-
     # enforced deadlines (term→kill on the process group), pgrp-leader
     # spawn + detached-group detection, the fs.* gate over the attached
@@ -186,13 +186,13 @@ members = [
     # (debt-recorded rules), the normalized ModelEvent grammar (G1–G7) +
     # ModelMessage (T1–T7), closed StopReason/ModelErrorClass with kernel
     # retry_class defaults, AttemptPolicy as data + R-RT-1…6, usage on
-    # model.call.completed through hh-telemetry's TokenVector, kernel-held
+    # model.call.completed through hharness-telemetry's TokenVector, kernel-held
     # credentials (provided: yes/no only), the H4 endpoint allow-list refusal;
     # the C0 static router slice (ModelRoleTable, RoutingPolicy{static,
     # role_table}, guards G-1/G-2/G-4, the closed RoutingRefusal sum,
     # model.route.decided); the §5b.4⁰ slice — CacheSemantics as data,
     # LC-1…LC-9 layout invariants, the affinity key, expected/observed state,
-    # model.cache.resolved. Consumes hh-compiler's ModelProfile/1 (CC1 — never
+    # model.cache.resolved. Consumes hharness-compiler's ModelProfile/1 (CC1 — never
     # a duplicate record) and appends through the run's fenced writer.
     "crates/hh-gateway",
     # The C0/Stage-1 context builder / policy engine + C0 memory slices (spec
@@ -206,11 +206,11 @@ members = [
     # emission; the C0 `MemoryStore` (`put`/`bind`/`revoke`/`resolve`/`manifest`/
     # `enumerate`/`stale_candidates`) over immutable memory versions with
     # scope-lease fencing, `lexical_index` + `memory_stale_index` materialized
-    # views stamped through `hh-ledger`'s `View` (one shape, CC7), deterministic
+    # views stamped through `hharness-ledger`'s `View` (one shape, CC7), deterministic
     # `retrieve` under the fixed validity→authority→readers→rank order; the
     # R-2.4.4⁰ lifecycle pure functions E1–E4 (`lifecycle_state`,
     # `check_contract`, `filter_for_slot`, `write`), deterministic conflict sets,
-    # `promote`/`revalidate`. Consumes `hh-hir`'s `ContextItem`/`Memory`/
+    # `promote`/`revalidate`. Consumes `hharness-hir`'s `ContextItem`/`Memory`/
     # `Artifact` records (never duplicated — CC7) and appends through the run's
     # fenced writer.
     "crates/hh-context",
@@ -252,7 +252,7 @@ members = [
     # encode/decode over directory + HHB1 container transports (layer A), the staged
     # validate_bundle / check_completeness (S1-S8, no fail-fast), the shared closed
     # B-R* basis evaluator, and the import lift (authority = unverified, MappingReport +
-    # ImportRecord). Reads hh-ledger/hh-secrets/hh-lab records; owns no store.
+    # ImportRecord). Reads hharness-ledger/hharness-secrets/hharness-lab records; owns no store.
     "crates/hh-bundle",
     # The Stage-3 fixture MCP plane (spec section 7.3, R-2.11.3^0; ticket S3.1;
     # ADR-0097 D7/ADR-0173/0174). A PERSISTENT workspace member: the
@@ -271,12 +271,12 @@ members = [
     # `CallerBinding`s, the `run_kind = surface` surface-session ledger,
     # charges against `binding.budget_node`, `ExposurePolicy` sink reads,
     # supply-surface Π evaluation for hosted participants, and the
-    # `surface_ids` handle carrier. Sits above hh-mcp (protocol edge) +
-    # hh-embed (the binding-(a) dispatch + the narrow surface_* write
-    # seam) — the direction never inverts (hh-mcp stays ledger-free).
+    # `surface_ids` handle carrier. Sits above hharness-mcp (protocol edge) +
+    # hharness-embed (the binding-(a) dispatch + the narrow surface_* write
+    # seam) — the direction never inverts (hharness-mcp stays ledger-free).
     "crates/hh-mcp-lab",
     # The ACP session boundary (spec §5d.4, R-2.5.4 C1; ticket S4.5b) — the
-    # hh-acp-target/1 session artefact consumed from hh-compiler (v2 pin + v1
+    # hh-acp-target/1 session artefact consumed from hharness-compiler (v2 pin + v1
     # compatibility profile), render_session over the single-source lowering
     # table, permission transport through the kernel's Π seam, the _hh/*
     # method surface, session/resume replay, the binding-(c) attach_session
@@ -324,7 +324,7 @@ members = [
     "crates/hh-compact-evict-oldest",
     # The packaged `memory_store` variant (spec §5c.3, R-2.4.3¹; ADR-0078 d2;
     # ticket S4.16b) — a deterministic `MemoryStore` served out of process over
-    # `plugin_abi/1` through the ONE `hh_context::memory_abi` codec; shipped as a
+    # `plugin_abi/1` through the ONE `hharness_context::memory_abi` codec; shipped as a
     # `subprocess_confined` plugin under `plugins/hh-memory-store`.
     "crates/hh-memory-store",
     "crates/hh-codegen",
@@ -339,7 +339,7 @@ members = [
     # boundary operation sequence.
     "crates/hh-cli",
     # The C1 read-only web instrument (spec §7.2, R-2.11.2¹; ticket S4.10;
-    # ADR-0301/0302). A PERSISTENT workspace member: the `hh-web` surface —
+    # ADR-0301/0302). A PERSISTENT workspace member: the `hharness-web` surface —
     # a pure projection client over binding (c) (`local_network` JSON-RPC)
     # with the P1–P13 security posture, the declared SinkPolicy (P8), the
     # V1–V11 view catalogue, and zero state of record. Every consequential
@@ -349,7 +349,7 @@ members = [
     # The C0/Stage-3 evaluation-first slice (spec §5h.2, R-2.9.2; ticket S3.3). A
     # PERSISTENT workspace member: the metric catalogue as distributions over the
     # typed n/a{reason} lattice, the compliance-chain metrics, the loss-report
-    # export, matched-budget-or-refuse `compare` (hh-budget is the single matching
+    # export, matched-budget-or-refuse `compare` (hharness-budget is the single matching
     # source — CC1), the three benefit kinds, `equivalence_run`, deterministic
     # `render_scorecard`, the deterministic-oracle boundary (in-process reference
     # + the `hh-eval-oracle` out-of-process conformance binary), pass^k/pass@k,
@@ -376,7 +376,7 @@ members = [
     # `ExperimentView` fold (S-1 — every view is project(run, events)), and the
     # engine verbs register/expand/open/next/claim/launch/settle/pause/resume/
     # close/restore over the experiment run's fenced writer (S-2..S-6, KP-E1..E5
-    # exactly-once). Reads hh-lab records + hh-ledger/hh-budget primitives;
+    # exactly-once). Reads hharness-lab records + hharness-ledger/hharness-budget primitives;
     # registry facts arrive through the context (plane separation — CC10).
     "crates/hh-experiment",
     # The C3/Stage-4 sub-agent orchestrator class (spec §5e.3, R-2.6.3;
@@ -384,7 +384,7 @@ members = [
     # closed `TopologyPreset` catalogue (T0 `single`; T1 `orchestrator_worker`;
     # T2 `pipeline`; T6 `background_detached`; T3/T4/T5/T7 declared, bound by
     # their own tickets), the runtime that executes admitted `delegate`
-    # decisions through `hh-subagent`'s `spawn`, wait policies
+    # decisions through `hharness-subagent`'s `spawn`, wait policies
     # `{all, any, quorum(k)}`, tree-local peer messaging under the sealed
     # `MessagingPolicy`, `detach_to_child` + goal-inbox completion delivery,
     # the mandatory typed `delegation_reason`, and the `lab/delegation-v1`
@@ -402,7 +402,7 @@ members = [
     # lab-internal `leaderboard()` with L1–L5 (no publication — ADR-0163).
     # A projection layer, never a store of record: everything it holds is
     # project()-pure at a recorded watermark set, view-hashed, and rebuilds
-    # to equal bytes. Reads hh-ledger/hh-experiment/hh-eval/hh-bundle
+    # to equal bytes. Reads hharness-ledger/hharness-experiment/hharness-eval/hharness-bundle
     # records; owns no authoritative state.
     "crates/hh-results",
     # The C0/Stage-3 §6.4 estimator kernel (R-2.10.4⁰ᵇ; ticket S3.4c;
@@ -418,8 +418,8 @@ members = [
     # pairing key and resampling unit throughout; every interval carries an
     # `EstimatorSelection` with labelled substitutions (T_clt = 100,
     # T_bca = 30, draws 2000/200 — ADR-0158 placeholders). Reuses
-    # `hh-eval`'s compare/stats/benefits machinery (one implementation —
-    # CC1) and `hh-results`' rows/reads; owns no store, no scheduler, no
+    # `hharness-eval`'s compare/stats/benefits machinery (one implementation —
+    # CC1) and `hharness-results`' rows/reads; owns no store, no scheduler, no
     # oracle. The C1 surfaces (A4/A5-full/A6/A7/A9/A10/A11/A13/A14/A15/A16)
     # land at S4.3+.
     "crates/hh-analysis",
@@ -427,7 +427,7 @@ members = [
     # S3.4d; ADR-0164/0165/0166 (e)). A PERSISTENT workspace member: the
     # `HostedEvent` envelope + closed kind vocabulary with I-1…I-5 validation,
     # `proj_ABI` (the native-ledger → hosted-presentation projection driven by
-    # `hh-ledger`'s `hosted_lowering` column) + `lift` (hosted → lifted rows)
+    # `hharness-ledger`'s `hosted_lowering` column) + `lift` (hosted → lifted rows)
     # + the `LoweringLossReport`, the `ParticipantRecord`/`AdapterRecord`
     # schemas (`hh.hosting/1` ext block), and adapter zero — the deterministic
     # reference-harness fixture. NO hosted runtime, handshake, probes or
@@ -445,12 +445,12 @@ members = [
     # and the matched-budget accountability record. A projection/consumer
     # layer: no second store, no second authority path — every decision folds
     # from the durable prefix (CC3) and the whole tier is removable (CC6:
-    # nothing below C4 depends on this crate; `hh-embed` serves it under the
+    # nothing below C4 depends on this crate; `hharness-embed` serves it under the
     # optional `tier-c4` feature only).
     "crates/hh-fleet",
     # `crates/hh-fleet-adapter` — S5.6's `work_source_adapter` L5 plugin
     # boundary (the class codec, `PluginSourceAdapter`, `TrackerLogic`);
-    # removable with the C4 tier like `hh-fleet` itself (CC6).
+    # removable with the C4 tier like `hharness-fleet` itself (CC6).
     "crates/hh-fleet-adapter",
     # `crates/hh-tracker-fixture` — the packaged `work_source_adapter`
     # reference variant binary (the L5 lane's fixture half; S5.6).
@@ -465,7 +465,7 @@ members = [
     # producer, `run_kind = experiment`), the campaign spec/records
     # (hypothesis, screen/search/held-out/transfer/security/acceptance
     # reports), the typed refusals, and the campaign engine. A
-    # projection/consumer layer like `hh-fleet`: no second store, no
+    # projection/consumer layer like `hharness-fleet`: no second store, no
     # second authority path — every decision folds from the durable
     # prefix (CC3) and the pipeline evaluates nothing itself (the
     # experiment engine is the sole substrate; §05h §4). Removable
@@ -476,16 +476,16 @@ members = [
     # `DebtManagerRecord` service record (maturity + the home-16 reflexive
     # debt + `DebtPolicy.schedule`), the durable-prefix `ManagerView` fold
     # over `lifecycle.debt.*` rows (probation book, scheduled/settled
-    # tests, sweep watermarks — kernel producer `hh-debt`, one authority
+    # tests, sweep watermarks — kernel producer `hharness-debt`, one authority
     # path through `commit_kernel_row_for`), `schedule_removal_test`
     # under `DebtPolicy` (priority, `max_open_removal_tests`,
     # instrument-budget reservation, `Deferred{reason}`), the
     # `retirement_batch` design, the reflexive `no_dead_weight_found`
     # evaluation, `propose_retirement` + the human-sealed retirement gate,
     # and the ledgered probation trigger (DF-S5.4-1's append→consume
-    # seam). A projection/consumer layer like `hh-evolution`: the manager
+    # seam). A projection/consumer layer like `hharness-evolution`: the manager
     # never opens a run and never applies a diff to a subject (D-2) — it
-    # authors specs and proposals. Removable (CC6: only `hh-embed`
+    # authors specs and proposals. Removable (CC6: only `hharness-embed`
     # consumes it, under `tier-c4`).
     "crates/hh-debt",
     # `crates/hh-xcheck` — the cross-implementation replay/checker packaging
@@ -501,7 +501,7 @@ members = [
     # is made or minted here.
     "crates/hh-xcheck",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
-    # was deleted at S1.20 — the canonical `hh-control` lands the full control
+    # was deleted at S1.20 — the canonical `hharness-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired
     # with it (CC1; nothing persistent depended on it).
 ]

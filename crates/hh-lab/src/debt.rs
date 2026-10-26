@@ -21,11 +21,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::debt::{
+use hharness_ontology::debt::{
     DebtHome, DebtPolicy, DebtStatus, EvidenceRef, ExpiryCondition, ExpiryKind, OwnerRef,
     RemovalTestKind, RemovalVerdict, Verdict, DEBT_HOMES,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::json_util::*;
 
@@ -106,11 +106,11 @@ pub struct DebtIndexRow {
     /// `debt_ref.version_id` — the registry record version the debt rides.
     pub version_id: Option<String>,
     /// `debt_class`.
-    pub debt_class: Option<hh_ontology::debt::DebtClass>,
+    pub debt_class: Option<hharness_ontology::debt::DebtClass>,
     /// The status stored at seal/registration (before the event fold).
     pub stored_status: Option<DebtStatus>,
     /// `evidence_grade` — derived, never stored (ADR-0197 D3).
-    pub evidence_grade: Option<hh_ontology::debt::EvidenceGrade>,
+    pub evidence_grade: Option<hharness_ontology::debt::EvidenceGrade>,
     /// `deficiency_class` (the `hypothesis_typed.deficiency_class`
     /// spelling, when the record carries one).
     pub deficiency_class: Option<String>,
@@ -278,7 +278,7 @@ impl DebtIndexRow {
             version_id,
             debt_class: opt_str_at(m, "debt_class")?
                 .map(|s| {
-                    hh_ontology::debt::DebtClass::parse(s)
+                    hharness_ontology::debt::DebtClass::parse(s)
                         .ok_or_else(|| SchemaError::v("debt_class", format!("unknown `{s}`")))
                 })
                 .transpose()?,
@@ -291,9 +291,11 @@ impl DebtIndexRow {
             evidence_grade: opt_str_at(m, "evidence_grade")?
                 .map(|s| {
                     match s {
-                        "hypothesized" => Some(hh_ontology::debt::EvidenceGrade::Hypothesized),
-                        "evidenced" => Some(hh_ontology::debt::EvidenceGrade::Evidenced),
-                        "confirmed" => Some(hh_ontology::debt::EvidenceGrade::Confirmed),
+                        "hypothesized" => {
+                            Some(hharness_ontology::debt::EvidenceGrade::Hypothesized)
+                        }
+                        "evidenced" => Some(hharness_ontology::debt::EvidenceGrade::Evidenced),
+                        "confirmed" => Some(hharness_ontology::debt::EvidenceGrade::Confirmed),
                         _ => None,
                     }
                     .ok_or_else(|| SchemaError::v("evidence_grade", format!("unknown `{s}`")))
@@ -650,7 +652,7 @@ pub fn dated_expiry(kind: ExpiryKind) -> bool {
 /// The `DebtHome` for `(record_kind, field)` — `None` = `UnknownDebtHome`
 /// (the record does not live on the `DebtHomes/1` inventory).
 pub fn home_for(record_kind: &str, field: &str) -> Option<&'static DebtHome> {
-    hh_ontology::debt::DEBT_HOMES
+    hharness_ontology::debt::DEBT_HOMES
         .iter()
         .find(|h| h.record_kind == record_kind && h.field == field)
 }
@@ -828,7 +830,7 @@ pub fn retire(
     debt_ref: &str,
     status: DebtStatus,
     verdicts: &[RemovalVerdict],
-    record: &hh_hir::debt::RetirementRecord,
+    record: &hharness_hir::debt::RetirementRecord,
 ) -> Result<RetirementOutcome, RetireError> {
     if status == DebtStatus::Retired {
         return Err(RetireError::AlreadyRetired {
@@ -837,7 +839,7 @@ pub fn retire(
     }
     if !matches!(
         record.decided_by.origin,
-        hh_provenance::Origin::Human { .. }
+        hharness_provenance::Origin::Human { .. }
     ) {
         return Err(RetireError::NotHumanSealed {
             debt_ref: debt_ref.to_string(),
@@ -869,7 +871,7 @@ pub fn retire(
 /// bundle compiled under an `expired` record appends (§5h.6 §3's event
 /// row; `classes.rs` registers the class). `intent_ref` names the recorded
 /// intent that admitted the compile (`compile_for_expired` in
-/// `hh_compiler::link` — absent intent refuses `link` outright).
+/// `hharness_compiler::link` — absent intent refuses `link` outright).
 pub fn expired_used_payload(debt_ref: &str, intent_ref: &str) -> Json {
     Json::obj([
         ("debt_ref", Json::str(debt_ref)),
@@ -969,7 +971,7 @@ pub struct LedgeredProbation {
 
 /// `DebtObservables` — the closed observable set `evaluate_debt` reads
 /// (§5h.6 §2). The per-home *beneficiary* observables ride
-/// [`hh_compiler::expiry::ExpiryObservables`] (one source — CC1); the
+/// [`hharness_compiler::expiry::ExpiryObservables`] (one source — CC1); the
 /// manager-level families (profile-change, evidence-supersession, probation)
 /// are the additional members here.
 #[derive(Debug, Clone, Default)]
@@ -979,7 +981,7 @@ pub struct DebtObservables {
     /// `unresolved_beyond_grace`, `retirement_at_passed`, `probe_records`,
     /// `max_evidence_age_ms`, `experiment_non_inferior`, `revalidation`,
     /// `regression_drifted_rules`).
-    pub expiry: hh_compiler::expiry::ExpiryObservables,
+    pub expiry: hharness_compiler::expiry::ExpiryObservables,
     /// `profile_change` — `None` when no profile lifecycle event fired.
     pub profile_change: Option<ProfileChange>,
     /// `evidence_superseded[]` — the evidence refs that resolved as
@@ -989,7 +991,7 @@ pub struct DebtObservables {
     /// The grade of `expiry.revalidation`'s fresh evidence (the caller
     /// grades it — `revalidated` on a `model_conditioned` record requires
     /// ≥ `evidenced`, §5h.6 §2's revalidation rule).
-    pub revalidation_grade: Option<hh_ontology::debt::EvidenceGrade>,
+    pub revalidation_grade: Option<hharness_ontology::debt::EvidenceGrade>,
     /// `probation` — the ledgered probation entry for this debt (S6.1b;
     /// DF-S5.4-1). When present it is the probation book of record: the
     /// `probation_overrun` leg fires on `due_at_ms <= now` and cites the
@@ -1009,7 +1011,7 @@ pub struct DebtObservables {
 /// Semantics (§5h.6 §2's evaluation block):
 /// - `retired` is terminal — no transitions out.
 /// - per-home triggers delegate to
-///   [`hh_compiler::expiry::evaluate_debt_record`] (the §05b evaluator —
+///   [`hharness_compiler::expiry::evaluate_debt_record`] (the §05b evaluator —
 ///   kinds `date`/`evidence_refresh_due`/`experiment_ref`/
 ///   `model_version_change`/`probe_failure` + the `revalidation` leg).
 /// - the manager-level families merge in: `profile_change` (homes 1/8/10 and
@@ -1026,7 +1028,7 @@ pub struct DebtObservables {
 ///   suppressed.
 pub fn evaluate_debt(
     debt_ref: &str,
-    record: &hh_hir::records::AssumptionDebtRecord,
+    record: &hharness_hir::records::AssumptionDebtRecord,
     home_id: Option<u8>,
     obs: &DebtObservables,
     now_ms: u64,
@@ -1043,7 +1045,7 @@ pub fn evaluate_debt(
 
     // ── (1) the delegated §05b half ─────────────────────────────────────────
     let view = profile_debt_view(record);
-    for t in hh_compiler::expiry::evaluate_debt_record(
+    for t in hharness_compiler::expiry::evaluate_debt_record(
         &view,
         Some(&record.rule_id),
         None,
@@ -1058,13 +1060,13 @@ pub fn evaluate_debt(
                 // evidence's grade (§5h.6 §2).
                 let model_conditioned = matches!(
                     record.debt_class,
-                    Some(hh_ontology::debt::DebtClass::ModelConditioned)
+                    Some(hharness_ontology::debt::DebtClass::ModelConditioned)
                 );
                 let grade_ok = !model_conditioned
                     || matches!(
                         obs.revalidation_grade,
-                        Some(hh_ontology::debt::EvidenceGrade::Evidenced)
-                            | Some(hh_ontology::debt::EvidenceGrade::Confirmed)
+                        Some(hharness_ontology::debt::EvidenceGrade::Evidenced)
+                            | Some(hharness_ontology::debt::EvidenceGrade::Confirmed)
                     );
                 if grade_ok {
                     revalidated = t
@@ -1127,7 +1129,7 @@ pub fn evaluate_debt(
     // transition cites the ledgered row as its evidence so a downstream
     // (§5h.7 removal/attribution) gate resolves the durable record. Without
     // a ledgered entry the record-derived bound is the fallback.
-    if record.evidence_grade() == hh_ontology::debt::EvidenceGrade::Hypothesized {
+    if record.evidence_grade() == hharness_ontology::debt::EvidenceGrade::Hypothesized {
         match &obs.probation {
             Some(p) if p.debt_ref == debt_ref => {
                 if p.due_at_ms <= now_ms {
@@ -1213,9 +1215,9 @@ pub fn evaluate_debt(
 /// shapes are the `/1` vocabulary (CC1: one record family); the spellings
 /// differ where the profile home records principal ids plainly.
 fn profile_debt_view(
-    r: &hh_hir::records::AssumptionDebtRecord,
-) -> hh_compiler::profile::ProfileDebtRecord {
-    hh_compiler::profile::ProfileDebtRecord {
+    r: &hharness_hir::records::AssumptionDebtRecord,
+) -> hharness_compiler::profile::ProfileDebtRecord {
+    hharness_compiler::profile::ProfileDebtRecord {
         rule_id: r.rule_id.clone(),
         hypothesis: r
             .hypothesis
@@ -1242,10 +1244,10 @@ fn profile_debt_view(
 
 /// `debt_incomplete` — the record-level required-members check against the
 /// home's `required_fields` (§5h.6 §2's seal-time check; the record's own
-/// `hh_hir::debt::validate_for_home` covers the `/1` required set — this
+/// `hharness_hir::debt::validate_for_home` covers the `/1` required set — this
 /// projects the *missing* list the refusal carries).
 pub fn missing_required_fields(
-    record: &hh_hir::records::AssumptionDebtRecord,
+    record: &hharness_hir::records::AssumptionDebtRecord,
     home_id: Option<u8>,
     policy: &DebtPolicy,
 ) -> Vec<String> {
@@ -1253,7 +1255,7 @@ pub fn missing_required_fields(
         Some(h) => h,
         None => return Vec::new(),
     };
-    let mut missing: Vec<String> = hh_ontology::debt::required_fields(home, policy)
+    let mut missing: Vec<String> = hharness_ontology::debt::required_fields(home, policy)
         .iter()
         .filter(|f| !record.has_field(f))
         .cloned()
@@ -1273,7 +1275,7 @@ pub struct DebtIndexEntry {
     /// `debt_ref.version_id` — the registry record version the debt rides.
     pub version_id: Option<String>,
     /// The registered `AssumptionDebtRecord` (status = stored status at seal).
-    pub record: hh_hir::records::AssumptionDebtRecord,
+    pub record: hharness_hir::records::AssumptionDebtRecord,
     /// The `lifecycle.debt.status.changed` transitions for this `debt_ref`,
     /// in ledger order (the fold — CF-423).
     pub transitions: Vec<DebtTransition>,

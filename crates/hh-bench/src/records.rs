@@ -1,16 +1,16 @@
-//! The `hh-bench` records — the adapter lifecycle's value types
+//! The `hharness-bench` records — the adapter lifecycle's value types
 //! (R-2.9.4⁰ᵇ; ADR-0142/0143/0144; spec §5h.4). The task/suite schemas live
-//! in `hh_lab::bench` (CC7 — one schema source); this module carries only
+//! in `hharness_lab::bench` (CC7 — one schema source); this module carries only
 //! the *runtime* records the out-of-process contract needs.
 
 use std::collections::BTreeMap;
 
-use hh_lab::bench::{EnvironmentSpec, TaskRecord};
-use hh_ontology::lab::{BenchmarkNetworkMode, EnvironmentFamily};
-use hh_wire::Json;
+use hharness_lab::bench::{EnvironmentSpec, TaskRecord};
+use hharness_ontology::lab::{BenchmarkNetworkMode, EnvironmentFamily};
+use hharness_wire::Json;
 
 /// A `BenchTask` is the imported `TaskRecord` (the schema half is
-/// `hh_lab::bench::TaskRecord`; the name here marks the adapter's view).
+/// `hharness_lab::bench::TaskRecord`; the name here marks the adapter's view).
 pub type BenchTask = TaskRecord;
 
 /// `environment_handle/1` — the materialized-environment handle an adapter
@@ -122,7 +122,7 @@ impl Submission {
         if let Json::Obj(ref mut m) = j {
             m.remove("submission_id");
         }
-        hh_identity::idp_id("bench.submission", j.to_canonical_string().as_bytes())
+        hharness_identity::idp_id("bench.submission", j.to_canonical_string().as_bytes())
     }
 
     /// The canonical JSON.

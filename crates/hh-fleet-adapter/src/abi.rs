@@ -4,9 +4,9 @@
 //! carry `label`/`provenance.authority` members the variant host's V1
 //! inbound screen forbids as *envelope* members; inside the canonical
 //! string they are the data they always were (the `memory_store` rule —
-//! see `hh_context::memory_abi::wrap_output`).
+//! see `hharness_context::memory_abi::wrap_output`).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The class id the contract binds under (`plugin_abi/1` `class_contract`).
 pub const WORK_SOURCE_CLASS: &str = "work_source_adapter";
@@ -50,7 +50,7 @@ pub fn unwrap_output(env: &Json) -> Result<Json, AbiCodecError> {
             detail: "output envelope requires result:string".into(),
         });
     };
-    hh_wire::json::parse(s).map_err(|_| AbiCodecError::Malformed {
+    hharness_wire::json::parse(s).map_err(|_| AbiCodecError::Malformed {
         detail: "result is not canonical JSON".into(),
     })
 }

@@ -1,27 +1,27 @@
-//! hh-eval acceptance tests — `compare`, benefits, `equivalence_run`,
+//! hharness-eval acceptance tests — `compare`, benefits, `equivalence_run`,
 //! `render_scorecard`, the out-of-process oracle (AC-R-2.9.2-{4–13}).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use hh_budget::matchspec::{ArmSpec, MatchMode, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::benefits::{artifact_benefit, equivalence_run, split_hash_agrees, BenefitError};
-use hh_eval::compare::{compare, CompareError, CompareInput};
-use hh_eval::runs::{CacheState, EvalRun, TaskContext};
-use hh_eval::scorecard::{render_cell, render_scorecard, ScorecardError, ScorecardInput};
-use hh_eval::{catalogue, stats};
-use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_budget::matchspec::{ArmSpec, MatchMode, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::benefits::{artifact_benefit, equivalence_run, split_hash_agrees, BenefitError};
+use hharness_eval::compare::{compare, CompareError, CompareInput};
+use hharness_eval::runs::{CacheState, EvalRun, TaskContext};
+use hharness_eval::scorecard::{render_cell, render_scorecard, ScorecardError, ScorecardInput};
+use hharness_eval::{catalogue, stats};
+use hharness_ontology::compliance::{Detector, MetricDeclaration, NaReason};
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, MediationChannel, MetricValue, MetricValueKind, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
-use hh_wire::Json;
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
+use hharness_wire::Json;
 
 const ORACLE_BIN: &str = env!("CARGO_BIN_EXE_hh-eval-oracle");
 
@@ -160,10 +160,10 @@ fn input<'a>(
         arm_specs: arms,
         varied_factor: Some("model"),
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     }
 }
 
@@ -199,7 +199,7 @@ fn compare_produces_paired_report() {
     assert_eq!(r.pairing, "by_task_and_replicate");
     assert_eq!(
         r.budget_match.status,
-        hh_lab::analysis::BudgetMatchStatus::Matched
+        hharness_lab::analysis::BudgetMatchStatus::Matched
     );
     // A passes everywhere; B fails t2 → delta = 500_000 ppm (a − b).
     assert_eq!(
@@ -207,7 +207,7 @@ fn compare_produces_paired_report() {
         Some(500_000)
     );
     assert!(r.held_out);
-    assert_eq!(r.label, hh_lab::analysis::ReportLabelKind::Headlined);
+    assert_eq!(r.label, hharness_lab::analysis::ReportLabelKind::Headlined);
     // Per-task effects carry (c, n) for both arms.
     let t2 = out.per_task[0].iter().find(|t| t.task_id == "t2").unwrap();
     assert_eq!(t2.counts, ((2, 2), (0, 2)));
@@ -253,8 +253,8 @@ fn compare_refuses_exploratory_and_unmatched() {
     match err {
         CompareError::Match(e) => assert_eq!(
             e.refusal,
-            hh_budget::MatchRefusal::IncommensurableMatch {
-                reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+            hharness_budget::MatchRefusal::IncommensurableMatch {
+                reason: hharness_budget::RefusalReason::ExploratoryNoMatch,
                 dimension: None,
                 enforceability: None,
             }
@@ -411,7 +411,7 @@ fn equivalence_run_three_valued() {
     // Identical arms, margin ±900_000 ppm → equivalent.
     assert_eq!(
         rep.verdict,
-        hh_eval::benefits::EquivalenceVerdict::Equivalent
+        hharness_eval::benefits::EquivalenceVerdict::Equivalent
     );
     // Caller-supplied margins refuse (OQ-113 — margins come only from prereg).
     let err = equivalence_run(
@@ -435,7 +435,7 @@ fn scorecard_renders_and_refuses_unannotated_pooling() {
         runs.push(run("A", "t1", rep, 1, &name));
     }
     let ts = tasks();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -494,16 +494,16 @@ fn out_of_process_oracle_matches_in_process() {
     let decls = catalogue::oracle_declarations();
     let oracle = decls
         .iter()
-        .find(|o| o.class == hh_ontology::eval::OracleClass::OutputCheck)
+        .find(|o| o.class == hharness_ontology::eval::OracleClass::OutputCheck)
         .unwrap();
-    let req = hh_eval::oracle::OracleRequest {
+    let req = hharness_eval::oracle::OracleRequest {
         oracle: oracle.clone(),
         criterion: "exact".into(),
         expected: Some(b"hello".to_vec()),
         actual: b"hello".to_vec(),
         transcript: None,
     };
-    let in_proc = hh_eval::oracle::run_oracle(&req).unwrap();
+    let in_proc = hharness_eval::oracle::run_oracle(&req).unwrap();
 
     let mut child = Command::new(ORACLE_BIN)
         .stdin(Stdio::piped())
@@ -519,8 +519,8 @@ fn out_of_process_oracle_matches_in_process() {
     let out = child.wait_with_output().unwrap();
     assert_eq!(out.status.code(), Some(0));
     let text = String::from_utf8_lossy(&out.stdout);
-    let j = hh_wire::parse(&text).unwrap();
-    let verdict = hh_eval::oracle::OracleVerdict::from_json(&j).unwrap();
+    let j = hharness_wire::parse(&text).unwrap();
+    let verdict = hharness_eval::oracle::OracleVerdict::from_json(&j).unwrap();
     assert_eq!(verdict, in_proc);
 }
 
@@ -539,7 +539,7 @@ fn pass_k_catalogue_metric_renders() {
 /// interval, and a metric absent from an outcome refuses typed.
 #[test]
 fn contrast_interaction_estimate() {
-    use hh_eval::compare::contrast;
+    use hharness_eval::compare::contrast;
     let name = "task_success".to_string();
     let decls = vec![metric(&name)];
     let ts: Vec<TaskContext> = ["t1", "t2", "t3"]
@@ -601,7 +601,7 @@ fn portability_cell_gates_on_snapshots_families_held_out() {
     let name = "task_success".to_string();
     let decls = vec![metric(&name)];
     let ts = tasks();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -659,7 +659,7 @@ fn outcome_classes_counted_beside_headline() {
     let name = "task_success".to_string();
     let decls = vec![metric(&name)];
     let ts = tasks();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -709,7 +709,7 @@ fn vetoed_success_excluded_from_headline() {
     let name = "task_success".to_string();
     let decls = vec![metric(&name)];
     let ts = tasks();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -748,7 +748,7 @@ fn judged_values_never_enter_the_headline() {
     let name = "task_success".to_string();
     let decls = vec![metric(&name)];
     let ts = tasks();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-test".into(),
         retired_for_headline: false,
         family: EnvironmentFamily::CodingTerminal,
@@ -795,7 +795,7 @@ fn stratum_c_renders_labelled_and_retired() {
             stratum: ContaminationStratum::ContaminatedPublic,
         })
         .collect();
-    let suites = vec![hh_eval::runs::SuiteContext {
+    let suites = vec![hharness_eval::runs::SuiteContext {
         suite_id: "suite-c".into(),
         retired_for_headline: true,
         family: EnvironmentFamily::CodingTerminal,
@@ -827,7 +827,7 @@ fn stratum_c_renders_labelled_and_retired() {
     );
     assert_eq!(
         report.label,
-        hh_lab::analysis::ReportLabelKind::Guarded,
+        hharness_lab::analysis::ReportLabelKind::Guarded,
         "a retired suite guards the report"
     );
 }
@@ -844,7 +844,7 @@ fn compare_refuses_cross_mode_match() {
     let mut iso = arm_spec(DimensionId::ModelCalls);
     iso.match_spec.as_mut().unwrap().mode = MatchMode::IsoCost;
     iso.match_spec.as_mut().unwrap().pricing_table_ref =
-        Some(hh_budget::pricing::PricingTableRef {
+        Some(hharness_budget::pricing::PricingTableRef {
             table_id: "pricing:t".to_string(),
             version: "1".to_string(),
             pin: Some("sha256:p".to_string()),
@@ -854,8 +854,8 @@ fn compare_refuses_cross_mode_match() {
     match err {
         CompareError::Match(e) => assert!(matches!(
             e.refusal,
-            hh_budget::MatchRefusal::IncommensurableMatch {
-                reason: hh_budget::RefusalReason::MixedMatchModes,
+            hharness_budget::MatchRefusal::IncommensurableMatch {
+                reason: hharness_budget::RefusalReason::MixedMatchModes,
                 ..
             }
         )),
@@ -946,8 +946,8 @@ fn hosted_applicability_mediation_and_capability_na() {
 // ── AC-R-2.3.1-10 / AC-R-2.3.2-3 / AC-R-2.3.4-6 — model-plane fact
 // projection (`from_envelopes`) and `model_accounting` (S3.7) ──────────────
 
-use hh_eval::accounting::{model_accounting, AccountingViolation};
-use hh_eval::facts::LedgerFacts;
+use hharness_eval::accounting::{model_accounting, AccountingViolation};
+use hharness_eval::facts::LedgerFacts;
 
 fn ev(seq: u64, id: &str, class: &str, payload: Json) -> (u64, String, String, Json) {
     (seq, id.to_string(), class.to_string(), payload)
@@ -1242,8 +1242,8 @@ fn model_accounting_flags_every_violation_kind() {
 
 #[test]
 fn deviation_policy_gates_pooling() {
-    use hh_eval::compare::RemovalOutcome;
-    use hh_ontology::eval::DeviationPolicy;
+    use hharness_eval::compare::RemovalOutcome;
+    use hharness_ontology::eval::DeviationPolicy;
     let name = "task_success".to_string();
     let decls = vec![metric("task_success")];
     let ts = tasks();
@@ -1394,7 +1394,7 @@ fn deviation_policy_gates_pooling() {
 
 #[test]
 fn removal_verdict_pass_fail_inconclusive() {
-    use hh_eval::compare::{removal_verdict, RemovalOutcome};
+    use hharness_eval::compare::{removal_verdict, RemovalOutcome};
     let name = "task_success".to_string();
     let decls = vec![metric("task_success")];
     let ts = tasks();
@@ -1480,7 +1480,7 @@ fn removal_verdict_pass_fail_inconclusive() {
 
 #[test]
 fn critic_experiment_reports_five_deltas_under_matchspec() {
-    use hh_eval::critic_experiment::{
+    use hharness_eval::critic_experiment::{
         critic_experiment, CriticExperimentInput, ARM_OFF, ARM_ON, CRITIC_EXPERIMENT_METRICS,
     };
     let decls: Vec<MetricDeclaration> = CRITIC_EXPERIMENT_METRICS
@@ -1530,7 +1530,7 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
         tasks: &ts,
         declarations: &decls,
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
     })
     .unwrap();
@@ -1579,7 +1579,7 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
         tasks: &ts,
         declarations: &decls,
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
     })
     .unwrap();
@@ -1594,7 +1594,7 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
         tasks: &ts,
         declarations: &decls[..3],
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
     })
     .unwrap_err();
@@ -1610,7 +1610,7 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
 
 #[test]
 fn critic_experiment_placement_row_folds_the_value_of_compute_row() {
-    use hh_eval::critic_experiment::{
+    use hharness_eval::critic_experiment::{
         critic_experiment, placement_row, CriticExperimentInput, ARM_OFF, ARM_ON,
         CRITIC_EXPERIMENT_METRICS,
     };
@@ -1658,7 +1658,7 @@ fn critic_experiment_placement_row_folds_the_value_of_compute_row() {
         tasks: &ts,
         declarations: &decls,
         confidence_ppm: 950_000,
-        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        benefit_kind: hharness_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
     })
     .unwrap();

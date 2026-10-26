@@ -13,12 +13,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use hh_identity::idp::{address, identify_text, idp_id};
-use hh_ledger::ids::GENESIS_HASH;
-use hh_ledger::schema::event_hash;
-use hh_registry::extension::plugin::{resolve_plugin_candidate, AdmissionContext, Requests};
-use hh_wire::json::{parse, Json};
-use hh_wire::sha256_hex;
+use hharness_identity::idp::{address, identify_text, idp_id};
+use hharness_ledger::ids::GENESIS_HASH;
+use hharness_ledger::schema::event_hash;
+use hharness_registry::extension::plugin::{resolve_plugin_candidate, AdmissionContext, Requests};
+use hharness_wire::json::{parse, Json};
+use hharness_wire::sha256_hex;
 
 use crate::trees::manifest_to_tree;
 use crate::XcheckError;
@@ -467,9 +467,9 @@ fn check_registry_snapshot(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), 
                 fs::read(dir.join(arm).join("registry.json")).map_err(|e| format!("{e}"))?,
             )
             .map_err(|e| format!("{e}"))?;
-            let store = hh_registry::store::RegistryStore::open(
+            let store = hharness_registry::store::RegistryStore::open(
                 &tmp,
-                &hh_registry::corpus::kernel_registrar(),
+                &hharness_registry::corpus::kernel_registrar(),
             )
             .map_err(|e| format!("{e:?}"))?;
             let scenario = parse(&String::from_utf8_lossy(
@@ -488,8 +488,8 @@ fn check_registry_snapshot(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), 
                     .collect(),
                 _ => Vec::new(),
             };
-            let outputs =
-                hh_registry::corpus::outputs(&store, &snap, &vids).map_err(|e| format!("{e:?}"))?;
+            let outputs = hharness_registry::corpus::outputs(&store, &snap, &vids)
+                .map_err(|e| format!("{e:?}"))?;
             let committed = fs::read(dir.join(arm).join("expected-outputs.json"))
                 .map_err(|e| format!("{e}"))?;
             if outputs != committed {
@@ -514,13 +514,16 @@ fn check_registry_snapshot(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), 
 fn check_plugin_manifests(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), XcheckError> {
     let arm = "arms/plugin-manifests";
     let expected = expect_map(dir, arm)?;
-    let res = (|| -> Result<hh_registry::store::RegistryStore, String> {
+    let res = (|| -> Result<hharness_registry::store::RegistryStore, String> {
         let tmp = std::env::temp_dir().join(format!("hh-xcheck-plug-{}", std::process::id()));
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).map_err(|e| format!("{e}"))?;
-        hh_registry::corpus::build(&tmp).map_err(|e| format!("{e:?}"))?;
-        hh_registry::store::RegistryStore::open(&tmp, &hh_registry::corpus::kernel_registrar())
-            .map_err(|e| format!("{e:?}"))
+        hharness_registry::corpus::build(&tmp).map_err(|e| format!("{e:?}"))?;
+        hharness_registry::store::RegistryStore::open(
+            &tmp,
+            &hharness_registry::corpus::kernel_registrar(),
+        )
+        .map_err(|e| format!("{e:?}"))
         // NB: the tempdir intentionally persists for the store's lifetime —
         // cleaned by the OS; a fresh export never reads it.
     })();
@@ -533,7 +536,7 @@ fn check_plugin_manifests(dir: &Path, out: &mut Vec<CaseResult>) -> Result<(), X
     };
     let ctx = AdmissionContext {
         first_party: true,
-        now: hh_plugin::EvalPoint::kernel(),
+        now: hharness_plugin::EvalPoint::kernel(),
         requests_cap: Some(Requests::default()),
     };
     for (rel, want) in &expected {

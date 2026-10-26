@@ -50,9 +50,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::idp::idp_id;
-use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility};
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility};
+use hharness_wire::json::Json;
 
 use crate::errors::LedgerError;
 use crate::event::{Event, EventEnvelope, Scope};
@@ -1584,7 +1584,7 @@ impl Store {
             refs: Vec::new(),
             ir_refs: Vec::new(),
             surface_ids: BTreeMap::new(),
-            provenance: Some(hh_provenance::ProvenanceRecord::kernel(
+            provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
                 crate::store::KERNEL_EFFECT,
                 self.now_ms(),
             )),
@@ -1737,7 +1737,7 @@ mod tests {
         f.risk_class = RiskClass {
             reversibility: RiskReversibility::Compensable,
             repeat_safety: RepeatSafety::NonIdempotent,
-            scope: hh_ontology::risk::RiskScope::External,
+            scope: hharness_ontology::risk::RiskScope::External,
         };
         f.last_probe_verdict = Some(ProbeVerdict::NotApplied);
         let na = Json::obj([("outcome", Json::str("not_applied"))]);

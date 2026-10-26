@@ -2,7 +2,7 @@
 //! `benchset.stage3.v1` recorded-`model_io` corpus, honestly labelled.
 //!
 //! Each leg iterates the corpus members (suite × task) and runs the real
-//! `hh-context` machinery — never a test-double memory plane:
+//! `hharness-context` machinery — never a test-double memory plane:
 //!
 //! - **labelled corpora** (`AC-R-2.4.3-*`): every member is written as a
 //!   `session`-scoped memory row carrying its own authority label; the
@@ -33,24 +33,24 @@
 //! `crates/hh-control/tests/r2_5.rs` (`judged_verify_mints_*`,
 //! `human_artefact_mark_mints_activated`).
 
-use hh_bench::benchset::Benchset;
-use hh_context::events::CollectSink;
-use hh_context::lifecycle;
-use hh_context::memory::{
+use hharness_bench::benchset::Benchset;
+use hharness_context::events::CollectSink;
+use hharness_context::lifecycle;
+use hharness_context::memory::{
     DependencyStamp, InvalidationContract, MemoryDraft, MemoryStore, WriteContext,
 };
-use hh_context::plan::ValidityPolicy;
-use hh_context::retrieve::{self, RetrievalBudget, RetrievalRequest, SlotConstraints};
-use hh_context::vocab::{
+use hharness_context::plan::ValidityPolicy;
+use hharness_context::retrieve::{self, RetrievalBudget, RetrievalRequest, SlotConstraints};
+use hharness_context::vocab::{
     CacheHint, ConflictResolution, DependencyKind, Granularity, Layer, LifecycleState,
     LifecycleStateKind, MemoryContent, MemoryKind, RetrievalQuery, Revalidation, SubjectKey,
 };
-use hh_context::vocab::{ConflictPolicy, InvalidationCondition};
-use hh_identity::names::ResolveMode;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_context::vocab::{ConflictPolicy, InvalidationCondition};
+use hharness_identity::names::ResolveMode;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 /// Per-suite provenance: strata a/b read as `delegate` (model-derived
 /// rows), the rest `external` (tool-recorded) — a member's label follows
@@ -67,7 +67,7 @@ fn member_prov(suite_key: &str, task: &str) -> ProvenanceRecord {
 
 fn wctx(store: &MemoryStore, scope: PersistenceScope, seq: u64) -> WriteContext {
     WriteContext {
-        context_label: hh_provenance::label::Label::top(),
+        context_label: hharness_provenance::label::Label::top(),
         lease_generation: store.lease(scope),
         at_seq: seq,
         run_id: "corpus".into(),
@@ -225,7 +225,7 @@ fn labelled_corpora_retrieval_over_benchset() {
                 None,
                 ResolveMode::Audit,
             ) {
-                Ok(hh_context::memory::ResolveOutcome::Annotated {
+                Ok(hharness_context::memory::ResolveOutcome::Annotated {
                     state: LifecycleStateKind::Valid,
                     ..
                 }) => {}
@@ -318,7 +318,7 @@ fn resume_set_members_resolve_over_benchset() {
                     .ok()
             });
             match resolved {
-                Some(hh_context::memory::ResolveOutcome::Annotated {
+                Some(hharness_context::memory::ResolveOutcome::Annotated {
                     state: LifecycleStateKind::Valid,
                     ..
                 }) => members += 1,

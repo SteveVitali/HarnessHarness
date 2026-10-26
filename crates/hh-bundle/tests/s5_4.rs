@@ -8,13 +8,13 @@
 
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::levels;
-use hh_bundle::manifest::{BasisSatisfaction, BundlePolicy, ReproLevel};
-use hh_ledger::manifest::{ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::levels;
+use hharness_bundle::manifest::{BasisSatisfaction, BundlePolicy, ReproLevel};
+use hharness_ledger::manifest::{ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -46,7 +46,7 @@ fn native_rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     m.participant_class = ParticipantClass::Native;
@@ -89,7 +89,10 @@ fn inputs<'a>(rig: &'a Rig, profile_refs: Vec<Json>, images: Vec<Json>) -> Assem
     }
 }
 
-fn basis<'a>(entries: &'a [hh_bundle::manifest::LevelBasis], id: &str) -> &'a BasisSatisfaction {
+fn basis<'a>(
+    entries: &'a [hharness_bundle::manifest::LevelBasis],
+    id: &str,
+) -> &'a BasisSatisfaction {
     &entries
         .iter()
         .find(|e| e.requirement_id == id)

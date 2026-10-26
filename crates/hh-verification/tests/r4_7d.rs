@@ -4,57 +4,57 @@
 //! reference corpus under `tests/fixtures/refcorpus/` — hermetically (R4.7e
 //! adds live judge consumption; no live plumbing lands here).
 //!
-//! The semantic legs these cells exercise are landed in `hh-verification`
+//! The semantic legs these cells exercise are landed in `hharness-verification`
 //! (`bind`/`claims`/`gate`/`evidence`/`validators`/`critics`/`critic_rt`/
 //! `evalfold`/`reconciler`/`followed`/`events`); this battery is the corpus
 //! half the deferral row names — fixtures, not inline constructions.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_ontology::participant::Observability as SurfaceObs;
-use hh_provenance::authority::{AuthorityClass, PersistenceScope};
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::bind::{bind_claim, RowView};
-use hh_verification::claims::{reconcile_ledger_only, severity_for, Claim, CriterionState};
-use hh_verification::critic_rt::{
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_ontology::participant::Observability as SurfaceObs;
+use hharness_provenance::authority::{AuthorityClass, PersistenceScope};
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::bind::{bind_claim, RowView};
+use hharness_verification::claims::{reconcile_ledger_only, severity_for, Claim, CriterionState};
+use hharness_verification::critic_rt::{
     admit_probe, admit_quarantined, calibration_status_at, check_bundle_frozen,
     check_critic_isolation, judge_comparative, panel_reduce, pi_admission, probe_refusal_payload,
     verdict_taint, CalibrationContext, PiAdmission, ProbeDomain, ProbeRequest,
 };
-use hh_verification::critics::{
+use hharness_verification::critics::{
     check_independence, consume, declare_critic, AgreementCounts, CalibrationAgreement,
     CalibrationRecord, ConsumeUse, CriticDeclaration, CriticError, CriticSubject, CriticVerdict,
     IndependenceVector, ProbeCapability,
 };
-use hh_verification::evalfold::{
+use hharness_verification::evalfold::{
     completion_decision, compute, na_observability, reward_hacking_gap, MetricValue,
     Observability as FoldObs,
 };
-use hh_verification::events;
-use hh_verification::evidence::{
+use hharness_verification::events;
+use hharness_verification::evidence::{
     admit_items, pin_check, BundleError, EvidenceBundle, EvidenceItem, OmissionReason,
 };
-use hh_verification::followed::{deterministic_detector, FollowedResolution, NO_DETECTOR};
-use hh_verification::gate::{
+use hharness_verification::followed::{deterministic_detector, FollowedResolution, NO_DETECTOR};
+use hharness_verification::gate::{
     decision_stratum, evaluate_gate, hold_admissible, may_cause_hold, summarize,
     AcceptanceCriterion, ContractError, GateCriterion, GateFacts, HeldOutStatus, OpenEffect,
     TaskContract,
 };
-use hh_verification::reconciler::{
+use hharness_verification::reconciler::{
     evaluate_gate_hosted, na_classes, EndStateAssertion, HostedGateFacts,
 };
-use hh_verification::validators::{Finding, Verdict};
-use hh_verification::vocab::{
+use hharness_verification::validators::{Finding, Verdict};
+use hharness_verification::vocab::{
     AdmissionMode, Agreement, CalibrationStatus, ChargedTo, ClaimKind, CompletionPolicy,
     ContextIndependence, CriterionRole, CriticKind, CriticUse, Detector, DivergenceClass,
     EvidenceClass, EvidenceMode, ExtractedBy, GateVerdict, Grounding, OracleCause, OracleClass,
     Site, SnapshotIndependence, SubjectRef, VerdictPhase, VerdictStatus, VerdictType, VerdictValue,
     Visibility,
 };
-use hh_wire::json::{parse, Json};
+use hharness_wire::json::{parse, Json};
 
 // ── corpus + builders ────────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ fn criterion_of(c: &Json) -> AcceptanceCriterion {
     AcceptanceCriterion {
         criterion_id: s(c, "criterion_id").into(),
         validator_ref: s(c, "validator_ref").into(),
-        record: hh_verification::gate::ValidatesRecord {
+        record: hharness_verification::gate::ValidatesRecord {
             role: CriterionRole::Acceptance,
             phase: VerdictPhase::Completion,
             required: c
@@ -311,7 +311,7 @@ fn gate_facts_of(f: &Json) -> GateFacts {
     }
 }
 
-fn assert_gate_expect(cell: &Json, result: &hh_verification::gate::GateResult) {
+fn assert_gate_expect(cell: &Json, result: &hharness_verification::gate::GateResult) {
     let expect = cell.get("expect").expect("expect member");
     match s(expect, "verdict") {
         "pass" => assert_eq!(result.verdict, GateVerdict::Pass, "{}", s(cell, "name")),
@@ -431,9 +431,13 @@ fn decl_of(cell: &Json) -> CriticDeclaration {
         }
         if let Some(cp) = o.get("capability").and_then(Json::as_str) {
             d.independence.capability = match cp {
-                "shared_mutable" => hh_verification::vocab::CapabilityIndependence::SharedMutable,
-                "shared_readonly" => hh_verification::vocab::CapabilityIndependence::SharedReadonly,
-                _ => hh_verification::vocab::CapabilityIndependence::IsolatedReadonly,
+                "shared_mutable" => {
+                    hharness_verification::vocab::CapabilityIndependence::SharedMutable
+                }
+                "shared_readonly" => {
+                    hharness_verification::vocab::CapabilityIndependence::SharedReadonly
+                }
+                _ => hharness_verification::vocab::CapabilityIndependence::IsolatedReadonly,
             };
         }
         if let Some(p) = o.get("placement").and_then(Json::as_str) {
@@ -647,7 +651,7 @@ fn ac_r_2_7_1_7_completion_gate_decisions_over_corpus() {
     // `succeeded_unverified` is the canonical terminal spelling the corpus
     // folds (the contract's call — never `succeeded`).
     assert_eq!(
-        hh_verification::vocab::STATUS_SUCCEEDED_UNVERIFIED,
+        hharness_verification::vocab::STATUS_SUCCEEDED_UNVERIFIED,
         "succeeded_unverified"
     );
     let m = doc(METRIC);
@@ -816,7 +820,7 @@ fn ac_r_2_7_1_10_hosted_end_state_same_verdicts() {
 
 // ── AC-R-2.7.2a-* — claims, reconciliation, the gate ─────────────────────────
 
-fn reconcile_cell(cell: &Json) -> hh_verification::claims::ReconciliationRecord {
+fn reconcile_cell(cell: &Json) -> hharness_verification::claims::ReconciliationRecord {
     let claim = claim_of(cell);
     let contract = contract_of(cell);
     let rows = rows_of(cell.get("rows").expect("rows"));
@@ -939,13 +943,14 @@ fn ac_r_2_7_2a_4_kill_resume_gate_reentry() {
     let r = reconcile_cell(c);
     let mut delivered = BTreeSet::new();
     let claims = [claim];
-    let notices = hh_verification::reconciler::feed_back_notices(
+    let notices = hharness_verification::reconciler::feed_back_notices(
         std::slice::from_ref(&r),
         claims.iter(),
         &mut delivered,
     );
     assert_eq!(notices.len(), 1);
-    let again = hh_verification::reconciler::feed_back_notices(&[r], claims.iter(), &mut delivered);
+    let again =
+        hharness_verification::reconciler::feed_back_notices(&[r], claims.iter(), &mut delivered);
     assert!(
         again.is_empty(),
         "the notice fires once per record per turn"
@@ -962,14 +967,14 @@ fn ac_r_2_7_2a_5_holds_budget_exhaustion_strata() {
     assert!(result.holds_exhausted);
     assert_eq!(
         decision_stratum(&result),
-        Some(hh_verification::vocab::STRATUM_UNRECONCILED_CLAIMS)
+        Some(hharness_verification::vocab::STRATUM_UNRECONCILED_CLAIMS)
     );
     let c = cell(&d, "cells", "honest_failure_unachievable");
     let result = evaluate_gate(&gate_facts_of(c.get("facts").unwrap()));
     assert!(result.honest_failure);
     assert_eq!(
         decision_stratum(&result),
-        Some(hh_verification::vocab::STRATUM_FAILED_HONESTLY)
+        Some(hharness_verification::vocab::STRATUM_FAILED_HONESTLY)
     );
 }
 
@@ -1106,7 +1111,7 @@ fn ac_r_2_7_3_2_uncited_finding_dropped_counted() {
         .iter()
         .map(|f| Finding {
             code: s(f, "code").into(),
-            severity: hh_verification::vocab::SeverityLevel::Low,
+            severity: hharness_verification::vocab::SeverityLevel::Low,
             location: None,
             message: s(f, "message").into(),
             evidence_ref: f
@@ -1384,7 +1389,7 @@ fn ac_r_2_7_3_8_calibration_status_folds() {
         judge_snapshot_fingerprint: s(r, "judge_snapshot_fingerprint").into(),
         labelled_set_ref: s(r, "labelled_set_ref").into(),
         n_per_verdict_class: 10,
-        reference_oracle: hh_verification::vocab::ReferenceOracle::EndState,
+        reference_oracle: hharness_verification::vocab::ReferenceOracle::EndState,
         agreement: CalibrationAgreement {
             statistic: "cohen_kappa".into(),
             value_ppm: 800_000,
@@ -1560,7 +1565,7 @@ fn ac_r_2_7_3_11_admission_omitted_quarantine_raise_only() {
             .filter_map(Json::as_str)
             .map(|r| Finding {
                 code: "f".into(),
-                severity: hh_verification::vocab::SeverityLevel::Low,
+                severity: hharness_verification::vocab::SeverityLevel::Low,
                 location: None,
                 message: "cites".into(),
                 evidence_ref: Some(r.into()),

@@ -1,4 +1,4 @@
-//! `hh-telemetry` R3.5 acceptance — `surface_rejection_rate` computation
+//! `hharness-telemetry` R3.5 acceptance — `surface_rejection_rate` computation
 //! (ticket R3.5; BL-16 / DF-S1.17-1; AC-R-2.5.2-12's computation half):
 //!
 //! * The fold reads `action.tool.proposed` ∪ `action.tool.surface_rejected`
@@ -16,13 +16,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::participant::{Observability, ParticipantClass};
-use hh_telemetry::views::{metric_view, metric_view_scoped};
-use hh_wire::json::Json;
+use hharness_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::participant::{Observability, ParticipantClass};
+use hharness_telemetry::views::{metric_view, metric_view_scoped};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 const PPM: i64 = 1_000_000;
@@ -75,7 +75,10 @@ fn ev(id: &str, class: &str, scope: Scope, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -162,7 +165,7 @@ fn surface_rejected(id: &str, mc: &str, tc: &str, family: Option<&str>) -> Event
     )
 }
 
-fn metric_cell<'a>(v: &'a hh_ledger::views::View, name: &str) -> &'a Json {
+fn metric_cell<'a>(v: &'a hharness_ledger::views::View, name: &str) -> &'a Json {
     v.payload
         .get("metrics")
         .and_then(|m| m.get(name))

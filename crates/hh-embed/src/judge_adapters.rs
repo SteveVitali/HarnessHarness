@@ -7,7 +7,7 @@
 //! replay binding: every live consult buffers the durable trail the
 //! caller's fenced writer lands — `verification.validator.invoked` +
 //! `verification.validator.verdict` rows in the canonical
-//! `hh_verification::events` shape (the `RecordedJudge` fold reads
+//! `hharness_verification::events` shape (the `RecordedJudge` fold reads
 //! `detector: "judged"`/`validator_ref`/the graded `value` verbatim) plus
 //! the `hh.model_io/1` blobs they cite. The port computes; the caller
 //! appends — durable-before-visible stays the fence owner's job (the
@@ -49,28 +49,28 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hh_control::loops::{JudgePort, JudgedConsult};
-use hh_control::policy::JudgedSpec;
-use hh_identity::idp::{address, idp_id};
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_verification::claims::Claim;
-use hh_verification::critic_rt::{calibration_status_at, CalibrationContext};
-use hh_verification::critics::{
+use hharness_control::loops::{JudgePort, JudgedConsult};
+use hharness_control::policy::JudgedSpec;
+use hharness_identity::idp::{address, idp_id};
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_verification::claims::Claim;
+use hharness_verification::critic_rt::{calibration_status_at, CalibrationContext};
+use hharness_verification::critics::{
     declare_critic, CalibrationAgreement, CalibrationRecord, CriticDeclaration,
 };
-use hh_verification::reconciler::JudgedAssessment;
-use hh_verification::validators::{Finding, Verdict};
-use hh_verification::vocab::{
+use hharness_verification::reconciler::JudgedAssessment;
+use hharness_verification::validators::{Finding, Verdict};
+use hharness_verification::vocab::{
     CalibrationStatus, ChargedTo, CriterionRole, Detector, DivergenceClass, Isolation, OracleCause,
     OracleClass, SeverityLevel, SnapshotIndependence, VerdictPhase, VerdictStatus,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 use crate::context_adapters::AdapterLane;
 use crate::gateway_model::GatewayModel;
@@ -171,7 +171,7 @@ fn derive_snapshot_axis(family: &str, beneficiaries: &[String]) -> SnapshotIndep
 
 /// `critic_refusal(e)` — the critic checks' typed refusal rendering (a
 /// `CriticError` is a policy refusal — `Refused`, never `InvalidDefinition`).
-fn critic_refusal(e: hh_verification::critics::CriticError) -> EmbedError {
+fn critic_refusal(e: hharness_verification::critics::CriticError) -> EmbedError {
     EmbedError::Refused {
         reason: format!("judge link: declare_critic: {e}"),
     }
@@ -185,7 +185,7 @@ fn critic_refusal(e: hh_verification::critics::CriticError) -> EmbedError {
 /// coordinate resolved at link — a missing `env:NAME` is a typed
 /// refusal here, never a mid-call surprise).
 pub fn link_judge(mut spec: JudgeBindSpec) -> Result<LiveJudge, EmbedError> {
-    if spec.declaration.critic_kind != hh_verification::vocab::CriticKind::Judge {
+    if spec.declaration.critic_kind != hharness_verification::vocab::CriticKind::Judge {
         return Err(EmbedError::InvalidDefinition {
             diagnostics: vec![format!(
                 "judge link: critic_kind `{}` is not `judge`",
@@ -342,7 +342,7 @@ fn parse_judge_json(text: &str) -> Option<Json> {
     if end <= start {
         return None;
     }
-    hh_wire::json::parse(&text[start..=end]).ok()
+    hharness_wire::json::parse(&text[start..=end]).ok()
 }
 
 /// `error_to_oracle_cause(class)` — the wire error class mapped onto the
@@ -370,7 +370,7 @@ fn mint_verdict(
     validator_ref: &VersionedRef,
     target: &str,
     phase: VerdictPhase,
-    value: hh_verification::vocab::VerdictValue,
+    value: hharness_verification::vocab::VerdictValue,
     status: VerdictStatus,
     findings: Vec<Finding>,
     evidence_refs: Vec<String>,
@@ -383,7 +383,7 @@ fn mint_verdict(
     evidence_head_seq: u64,
 ) -> Verdict {
     let inputs_digest =
-        hh_verification::evidence::inputs_digest(io_refs, target, &validator_ref.version_id);
+        hharness_verification::evidence::inputs_digest(io_refs, target, &validator_ref.version_id);
     let bundle_id = idp_id(
         "verification.bundle",
         Json::obj([
@@ -515,7 +515,7 @@ impl LiveJudge {
         shot: JudgeShot,
         target: &str,
         phase: VerdictPhase,
-        value: hh_verification::vocab::VerdictValue,
+        value: hharness_verification::vocab::VerdictValue,
         status: VerdictStatus,
         findings: Vec<Finding>,
         evidence_refs: Vec<String>,
@@ -564,7 +564,7 @@ impl LiveJudge {
             now,
             evidence_head_seq,
         );
-        let mut verdict_payload = hh_verification::events::validator_verdict(&verdict);
+        let mut verdict_payload = hharness_verification::events::validator_verdict(&verdict);
         if self.exploratory {
             if let Json::Obj(m) = &mut verdict_payload {
                 m.insert("exploratory".to_string(), Json::Bool(true));
@@ -573,7 +573,7 @@ impl LiveJudge {
         self.pending_io.lock().unwrap().extend(shot.model_io);
         self.pending.lock().unwrap().push((
             "verification.validator.invoked".to_string(),
-            hh_verification::events::validator_invoked(&verdict, &Isolation::External),
+            hharness_verification::events::validator_invoked(&verdict, &Isolation::External),
             verdict.provenance.clone(),
         ));
         self.pending.lock().unwrap().push((
@@ -653,7 +653,7 @@ impl JudgePort for LiveJudge {
             Ok(shot) => {
                 let (value, status, ppm) = match &shot.error_class {
                     Some(class) => (
-                        hh_verification::vocab::VerdictValue::Graded(0),
+                        hharness_verification::vocab::VerdictValue::Graded(0),
                         VerdictStatus::OracleFailure(error_to_oracle_cause(class)),
                         0,
                     ),
@@ -661,12 +661,12 @@ impl JudgePort for LiveJudge {
                         .and_then(|d| d.get("confidence_ppm").and_then(Json::as_int))
                     {
                         Some(c) if (0..=1_000_000).contains(&c) => (
-                            hh_verification::vocab::VerdictValue::Graded(c.max(0) as u64),
+                            hharness_verification::vocab::VerdictValue::Graded(c.max(0) as u64),
                             VerdictStatus::Decided,
                             c.max(0) as u64,
                         ),
                         _ => (
-                            hh_verification::vocab::VerdictValue::Graded(0),
+                            hharness_verification::vocab::VerdictValue::Graded(0),
                             VerdictStatus::OracleFailure(OracleCause::Unparseable),
                             0,
                         ),
@@ -705,7 +705,7 @@ impl JudgePort for LiveJudge {
                     },
                     &spec.validator_ref.clone(),
                     VerdictPhase::Instrument,
-                    hh_verification::vocab::VerdictValue::Graded(0),
+                    hharness_verification::vocab::VerdictValue::Graded(0),
                     VerdictStatus::OracleFailure(OracleCause::Crash),
                     vec![],
                     evidence_refs,
@@ -791,7 +791,7 @@ impl JudgePort for LiveJudge {
             shot,
             &claim.claim_id,
             VerdictPhase::Completion,
-            hh_verification::vocab::VerdictValue::Graded(confidence),
+            hharness_verification::vocab::VerdictValue::Graded(confidence),
             status_for_buffer,
             findings,
             evidence
@@ -938,7 +938,7 @@ impl JudgePort for PanelJudge {
             &vref,
             &spec.validator_ref,
             VerdictPhase::Instrument,
-            hh_verification::vocab::VerdictValue::Graded(panel_ppm),
+            hharness_verification::vocab::VerdictValue::Graded(panel_ppm),
             status,
             vec![],
             window
@@ -962,7 +962,7 @@ impl JudgePort for PanelJudge {
                 .unwrap_or(0)
                 .max(0) as u64,
         );
-        let mut payload = hh_verification::events::validator_verdict(&verdict);
+        let mut payload = hharness_verification::events::validator_verdict(&verdict);
         if let Json::Obj(m) = &mut payload {
             m.insert(
                 "panel".to_string(),
@@ -1174,7 +1174,7 @@ pub fn calibrate(
         judge_snapshot_fingerprint: judge_fingerprint(lane),
         labelled_set_ref: labelled_set_ref.to_string(),
         n_per_verdict_class: class_counts.values().copied().min().unwrap_or(0),
-        reference_oracle: hh_verification::vocab::ReferenceOracle::Executable,
+        reference_oracle: hharness_verification::vocab::ReferenceOracle::Executable,
         agreement: CalibrationAgreement {
             statistic: statistic.to_string(),
             value_ppm,

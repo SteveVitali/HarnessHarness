@@ -4,9 +4,9 @@
 //! failure surfaces as typed `C-LOAD-*` diagnostics — never a bare `Err` string
 //! (ADR-0148; `C-INT-1` stays reserved).
 
-use hh_hir::document::{parse_document, HirDocument};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_hir::document::{parse_document, HirDocument};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
 use crate::grammar::{Assembly, ASSEMBLY_DIALECT};
@@ -49,7 +49,7 @@ pub fn load(
             owner_adr: "ADR-0148".into(),
         }]
     })?;
-    let expected = expected_dialect.unwrap_or(hh_hir::DIALECT);
+    let expected = expected_dialect.unwrap_or(hharness_hir::DIALECT);
     let mut diags = Vec::new();
     if doc.hir_version != expected {
         diags.push(AssemblyDiagnostic {

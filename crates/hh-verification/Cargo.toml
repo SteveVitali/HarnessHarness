@@ -1,5 +1,5 @@
 [package]
-name = "hh-verification"
+name = "hharness-verification"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,12 +10,12 @@ description = "The C0/Stage-1 verification-plane substrate (spec §5f, R-2.7.2a,
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-identity = { path = "../hh-identity" }
-hh-provenance = { path = "../hh-provenance" }
-hh-ontology = { path = "../hh-ontology" }
-hh-hir = { path = "../hh-hir" }
+hharness-wire = { path = "../hh-wire" }
+hharness-identity = { path = "../hh-identity" }
+hharness-provenance = { path = "../hh-provenance" }
+hharness-ontology = { path = "../hh-ontology" }
+hharness-hir = { path = "../hh-hir" }
 
 [dev-dependencies]
-hh-telemetry = { path = "../hh-telemetry" }
-hh-compiler = { path = "../hh-compiler" }
+hharness-telemetry = { path = "../hh-telemetry" }
+hharness-compiler = { path = "../hh-compiler" }

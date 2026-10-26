@@ -19,16 +19,16 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::types::AttendanceDeclaration;
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_embed_schema::types::AttendanceDeclaration;
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 // ── fixture: the conformance document + a bound `router` slot ───────────────
 
@@ -56,14 +56,14 @@ fn node(kind: EntityKind, rec: KindRecord, seq: u64) -> Node {
 /// The registered `ModelProfile` — the scripted candidate's coordinate
 /// `hh-embed/kernel-scripted@1` resolves to it (the selector's exact
 /// match; `max_output` declared so the reservation sizes honestly).
-fn scripted_profile() -> hh_compiler::profile::ModelProfile {
-    use hh_compiler::profile::*;
+fn scripted_profile() -> hharness_compiler::profile::ModelProfile {
+    use hharness_compiler::profile::*;
     let mut p = ModelProfile {
         profile_id: "prof.r27".into(),
         version: "1".into(),
         content_hash: String::new(),
         selector: ProfileSelector {
-            provider_api_family: "hh-embed".into(),
+            provider_api_family: "hharness-embed".into(),
             model_family: "kernel-scripted".into(),
             version_pattern: VersionPattern::Exact("1".into()),
             precedence: 0,
@@ -107,7 +107,7 @@ fn scripted_profile() -> hh_compiler::profile::ModelProfile {
         },
         tests: Json::Null,
     };
-    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p.content_hash = hharness_compiler::profile::profile_identity(&p);
     p
 }
 
@@ -116,7 +116,7 @@ fn scripted_profile() -> hh_compiler::profile::ModelProfile {
 /// reads it — `server_error → retry_same{2} → reroute`,
 /// `auth → reroute`).
 fn policy_doc() -> Json {
-    use hh_gateway::router::*;
+    use hharness_gateway::router::*;
     let policy = RoutingPolicy {
         policy_id: "policy.r27".into(),
         version: "1".into(),
@@ -136,7 +136,7 @@ fn policy_doc() -> Json {
                 (
                     "coordinate",
                     Json::obj([
-                        ("provider_api_family", Json::str("hh-embed")),
+                        ("provider_api_family", Json::str("hharness-embed")),
                         ("model_family", Json::str("kernel-scripted")),
                         ("model_version", Json::str("1")),
                     ]),
@@ -330,7 +330,7 @@ fn service_at(root: &std::path::Path, now_ms: u64) -> EmbedService {
             workspace_root: root.join("ws"),
             holder: "r2.7".into(),
         },
-        Box::new(hh_ledger::ids::ManualClock::at(now_ms)),
+        Box::new(hharness_ledger::ids::ManualClock::at(now_ms)),
         None,
     )
     .unwrap()
@@ -452,7 +452,7 @@ fn spec_for(doc: Json) -> Json {
 }
 
 fn registrar() -> Json {
-    ProvenanceRecord::kernel("hh-embed", 0).to_json()
+    ProvenanceRecord::kernel("hharness-embed", 0).to_json()
 }
 
 /// Register the scripted-lane profile so `resolve_profile` binds it (the
@@ -470,7 +470,7 @@ fn register_profile(svc: &mut EmbedService) {
                     ("kind", Json::str("model_profile")),
                     (
                         "profile",
-                        hh_compiler::schema::profile_to_json(&scripted_profile()),
+                        hharness_compiler::schema::profile_to_json(&scripted_profile()),
                     ),
                 ]),
             ),

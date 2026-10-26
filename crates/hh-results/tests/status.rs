@@ -1,17 +1,17 @@
-//! `hh-results` S4.2 tests — the bundle status vocabulary (the
+//! `hharness-results` S4.2 tests — the bundle status vocabulary (the
 //! eight-member ladder), `set_status`'s evidence gates, the
 //! ledger-folded status book, and the lifecycle terminals' annotation
 //! flags (§5h.3 §2; AC-R-2.9.3-11).
 
 use std::path::PathBuf;
 
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_results::catalogue::BundleStatus;
-use hh_results::error::ResultsError;
-use hh_results::status::{fold, load_book, set_status, STATUS_EVENT};
-use hh_results::store::ResultsStore;
-use hh_wire::json::Json;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_results::catalogue::BundleStatus;
+use hharness_results::error::ResultsError;
+use hharness_results::status::{fold, load_book, set_status, STATUS_EVENT};
+use hharness_results::store::ResultsStore;
+use hharness_wire::json::Json;
 
 fn tmp(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};

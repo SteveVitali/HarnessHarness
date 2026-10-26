@@ -11,8 +11,8 @@
 //!   both `unknown_domain` spellings land on `{irreversible, non_idempotent,
 //!   external}`).
 
-use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
-use hh_provenance::AuthorityClass;
+use hharness_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hharness_provenance::AuthorityClass;
 
 use crate::kinds::{EffectAttributes, Mutability, Reversibility, ToolEffects, World};
 use crate::records::ToolCapabilityRecord;
@@ -72,7 +72,7 @@ pub fn capability_risk(rec: &ToolCapabilityRecord, authority: AuthorityClass) ->
 mod tests {
     use super::*;
     use crate::kinds::RepeatSafety;
-    use hh_ontology::risk::RepeatSafety as OntologyRepeatSafety;
+    use hharness_ontology::risk::RepeatSafety as OntologyRepeatSafety;
 
     #[test]
     fn absent_attributes_project_to_unknown() {
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn repeat_safety_is_the_one_ontology_sum() {
-        // CC1: `hh_hir::kinds::RepeatSafety` IS `hh_ontology::risk::RepeatSafety`.
+        // CC1: `hharness_hir::kinds::RepeatSafety` IS `hharness_ontology::risk::RepeatSafety`.
         let a: RepeatSafety = OntologyRepeatSafety::Idempotent;
         assert_eq!(a.name(), "idempotent");
     }

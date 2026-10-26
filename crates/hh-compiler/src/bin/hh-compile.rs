@@ -5,19 +5,19 @@
 
 use std::io::{Read, Write};
 
-use hh_compiler::profile::ProfileView;
-use hh_compiler::schema::{bundle_to_json, compile_inputs_from_json};
-use hh_compiler::{CompileError, CompileInputs};
-use hh_wire::json::Json;
+use hharness_compiler::profile::ProfileView;
+use hharness_compiler::schema::{bundle_to_json, compile_inputs_from_json};
+use hharness_compiler::{CompileError, CompileInputs};
+use hharness_wire::json::Json;
 
 /// The in-binary `ProfileView` over the carried profile records.
 struct CarriedProfiles {
-    profiles: std::collections::BTreeMap<String, hh_compiler::profile::ModelProfile>,
-    reports: std::collections::BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+    profiles: std::collections::BTreeMap<String, hharness_compiler::profile::ModelProfile>,
+    reports: std::collections::BTreeMap<String, hharness_compiler::profile_test::ProfileTestReport>,
 }
 
 impl ProfileView for CarriedProfiles {
-    fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
+    fn profile(&self, coordinate: &str) -> Option<hharness_compiler::profile::ModelProfile> {
         self.profiles.get(coordinate).cloned().or_else(|| {
             self.profiles
                 .values()
@@ -29,7 +29,7 @@ impl ProfileView for CarriedProfiles {
     fn test_report(
         &self,
         coordinate: &str,
-    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+    ) -> Option<hharness_compiler::profile_test::ProfileTestReport> {
         self.reports.get(coordinate).cloned().or_else(|| {
             self.reports
                 .values()
@@ -40,20 +40,22 @@ impl ProfileView for CarriedProfiles {
 }
 
 /// The in-binary `VariantView` over the carried variant records.
-struct CarriedVariants(std::collections::BTreeMap<String, hh_registry::records::VariantRecord>);
+struct CarriedVariants(
+    std::collections::BTreeMap<String, hharness_registry::records::VariantRecord>,
+);
 
-impl hh_compiler::link::VariantView for CarriedVariants {
-    fn variant(&self, version_id: &str) -> Option<hh_registry::records::VariantRecord> {
+impl hharness_compiler::link::VariantView for CarriedVariants {
+    fn variant(&self, version_id: &str) -> Option<hharness_registry::records::VariantRecord> {
         self.0.get(version_id).cloned()
     }
 }
 
 /// The stage-1 class catalog — the fixed `Stage1Catalog` (the binary is catalog-pinned;
 /// the catalog's contents are data, not a resolution input).
-struct PinnedCatalog(hh_assembly::Stage1Catalog);
+struct PinnedCatalog(hharness_assembly::Stage1Catalog);
 
-impl hh_assembly::ClassCatalog for PinnedCatalog {
-    fn class(&self, class_id: &str) -> Option<hh_registry::records::ClassRecord> {
+impl hharness_assembly::ClassCatalog for PinnedCatalog {
+    fn class(&self, class_id: &str) -> Option<hharness_registry::records::ClassRecord> {
         self.0.class(class_id)
     }
 
@@ -61,7 +63,7 @@ impl hh_assembly::ClassCatalog for PinnedCatalog {
         self.0.class_ids()
     }
 
-    fn variant(&self, version_id: &str) -> Option<hh_registry::records::VariantRecord> {
+    fn variant(&self, version_id: &str) -> Option<hharness_registry::records::VariantRecord> {
         self.0.variant(version_id)
     }
 }
@@ -81,14 +83,16 @@ fn error_json(e: &CompileError) -> Json {
             diagnostics,
         } => (
             match kind {
-                hh_compiler::LinkErrorKind::UnboundSlot => "LinkError{unbound_slot}",
-                hh_compiler::LinkErrorKind::VersionConflict => "LinkError{version_conflict}",
-                hh_compiler::LinkErrorKind::MissingDebtRecord => "LinkError{missing_debt_record}",
-                hh_compiler::LinkErrorKind::UnknownTarget => "LinkError{unknown_target}",
-                hh_compiler::LinkErrorKind::ProfileUntested => "LinkError{profile_untested}",
-                hh_compiler::LinkErrorKind::ProfileInvalid => "LinkError{profile_invalid}",
-                hh_compiler::LinkErrorKind::CapabilityDrift => "LinkError{capability_drift}",
-                hh_compiler::LinkErrorKind::ExpiredWithoutIntent => {
+                hharness_compiler::LinkErrorKind::UnboundSlot => "LinkError{unbound_slot}",
+                hharness_compiler::LinkErrorKind::VersionConflict => "LinkError{version_conflict}",
+                hharness_compiler::LinkErrorKind::MissingDebtRecord => {
+                    "LinkError{missing_debt_record}"
+                }
+                hharness_compiler::LinkErrorKind::UnknownTarget => "LinkError{unknown_target}",
+                hharness_compiler::LinkErrorKind::ProfileUntested => "LinkError{profile_untested}",
+                hharness_compiler::LinkErrorKind::ProfileInvalid => "LinkError{profile_invalid}",
+                hharness_compiler::LinkErrorKind::CapabilityDrift => "LinkError{capability_drift}",
+                hharness_compiler::LinkErrorKind::ExpiredWithoutIntent => {
                     "LinkError{expired_without_intent}"
                 }
             },
@@ -139,7 +143,7 @@ fn error_json(e: &CompileError) -> Json {
             Json::Arr(
                 diagnostics
                     .iter()
-                    .map(hh_assembly::diagnostic_json)
+                    .map(hharness_assembly::diagnostic_json)
                     .collect(),
             ),
         ),
@@ -155,7 +159,7 @@ fn run() -> Result<Json, CompileError> {
         .map_err(|e| CompileError::NonCanonicalInput {
             detail: format!("stdin: {e}"),
         })?;
-    let json = hh_wire::canonical::parse_canonical(&input).map_err(|e| {
+    let json = hharness_wire::canonical::parse_canonical(&input).map_err(|e| {
         CompileError::NonCanonicalInput {
             detail: format!("inputs: {e}"),
         }
@@ -164,14 +168,14 @@ fn run() -> Result<Json, CompileError> {
 
     // Rebuild the sealed definition from the carried document — `accept` re-asserts the
     // markers, the canonical hash, and `validate_assembly` (stage 0 owns admission).
-    let doc = hh_hir::wire::document_from_json(&inputs.document).map_err(|e| {
+    let doc = hharness_hir::wire::document_from_json(&inputs.document).map_err(|e| {
         CompileError::NonCanonicalInput {
             detail: format!("document: {e}"),
         }
     })?;
-    let sealed = hh_hir::SealedDefinition {
-        closed_world_tools: hh_hir::closed_world_tools(&doc),
-        definition_ref: hh_hir::document_identity(&doc).ok_or_else(|| {
+    let sealed = hharness_hir::SealedDefinition {
+        closed_world_tools: hharness_hir::closed_world_tools(&doc),
+        definition_ref: hharness_hir::document_identity(&doc).ok_or_else(|| {
             CompileError::NonCanonicalInput {
                 detail: "document root is not a node".to_string(),
             }
@@ -181,7 +185,7 @@ fn run() -> Result<Json, CompileError> {
 
     let mut report_map: std::collections::BTreeMap<
         String,
-        hh_compiler::profile_test::ProfileTestReport,
+        hharness_compiler::profile_test::ProfileTestReport,
     > = std::collections::BTreeMap::new();
     for r in &inputs.test_reports {
         report_map.insert(r.profile_ref.clone(), r.clone());
@@ -192,14 +196,14 @@ fn run() -> Result<Json, CompileError> {
         profiles: inputs
             .profiles
             .iter()
-            .map(|p| (hh_compiler::profile::profile_coordinate(p), p.clone()))
+            .map(|p| (hharness_compiler::profile::profile_coordinate(p), p.clone()))
             .collect(),
     };
     let variants = CarriedVariants(inputs.variants.iter().cloned().collect());
-    let catalog = PinnedCatalog(hh_assembly::Stage1Catalog::stage1());
+    let catalog = PinnedCatalog(hharness_assembly::Stage1Catalog::stage1());
     let kernel = kernel_provenance();
 
-    let bundle = hh_compiler::compile(
+    let bundle = hharness_compiler::compile(
         &CompileInputs {
             sealed,
             profile_refs: inputs.profile_refs,
@@ -218,10 +222,10 @@ fn run() -> Result<Json, CompileError> {
 
 /// The binary's kernel provenance — a fixed, kernel-origin record (no env read; the
 /// record is a minting context, not a secret).
-fn kernel_provenance() -> hh_provenance::ProvenanceRecord {
+fn kernel_provenance() -> hharness_provenance::ProvenanceRecord {
     // `created_at` is a ledger seq, not a wall clock — a fixed `0` keeps the binary
     // byte-for-byte reproducible (the record is a minting context, never a secret).
-    hh_provenance::ProvenanceRecord::kernel("hh-compile", 0)
+    hharness_provenance::ProvenanceRecord::kernel("hh-compile", 0)
 }
 
 fn main() {

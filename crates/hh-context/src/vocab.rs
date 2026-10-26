@@ -5,8 +5,8 @@
 //! `RevocationReason`) and the `RetrievalQuery` sum. Every sum is closed —
 //! growth is a dialect bump, never an ad-hoc string (CC7/CC8).
 
-use hh_provenance::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_provenance::PersistenceScope;
+use hharness_wire::json::Json;
 
 use crate::codec::{arr_at, expect_obj, int_at, reject_unknown, str_at, str_set_at};
 use crate::CodecError;
@@ -783,11 +783,11 @@ impl RevocationReason {
         .find(|r| r.as_str() == s)
     }
 
-    /// The `hh-identity` `SupersedeReason` this revocation maps to in the
+    /// The `hharness-identity` `SupersedeReason` this revocation maps to in the
     /// lineage machine (the coarse §8.3 sum — the precise `RevocationReason`
     /// lives on the memory record and the `context.memory.invalidated` row).
-    pub fn lineage_reason(self) -> hh_identity::supersede::SupersedeReason {
-        use hh_identity::supersede::SupersedeReason as S;
+    pub fn lineage_reason(self) -> hharness_identity::supersede::SupersedeReason {
+        use hharness_identity::supersede::SupersedeReason as S;
         match self {
             RevocationReason::Expired => S::Expiry,
             RevocationReason::Migrated => S::Migration,
@@ -801,9 +801,9 @@ impl RevocationReason {
 /// endorsed by a `kernel` validator caps at `environment`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryContent {
-    /// A `Text` leaf (`hh-hir`'s — the one prose type, CC7). Boxed: the
+    /// A `Text` leaf (`hharness-hir`'s — the one prose type, CC7). Boxed: the
     /// leaf is the large variant.
-    Text(Box<hh_hir::leaves::Text>),
+    Text(Box<hharness_hir::leaves::Text>),
     /// A closed-schema structured value.
     Structured(Json),
 }

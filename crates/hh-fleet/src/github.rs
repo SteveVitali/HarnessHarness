@@ -19,8 +19,8 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256_hex;
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256_hex;
 
 use crate::errors::FleetError;
 use crate::ingress::{constant_time_eq, IngressError};

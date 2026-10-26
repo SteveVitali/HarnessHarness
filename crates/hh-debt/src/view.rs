@@ -10,15 +10,15 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::debt::{DebtStatus, RemovalTestKind, RemovalVerdict, Verdict};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::debt::{DebtStatus, RemovalTestKind, RemovalVerdict, Verdict};
+use hharness_wire::json::Json;
 
 use crate::errors::DebtManagerError;
 
 /// The `lifecycle.debt.status.changed` cause spellings that count as a
 /// `model_version_change` window tick for `no_dead_weight_found{window}`
-/// (the §05b ADR-0126 observable family — `hh_compiler::expiry::cause`'s
+/// (the §05b ADR-0126 observable family — `hharness_compiler::expiry::cause`'s
 /// spellings; one closed set, CC1).
 pub const MODEL_VERSION_CAUSES: &[&str] = &[
     "served_model_mismatch",
@@ -202,10 +202,13 @@ impl ManagerView {
 
     /// The `LifecycleProbation` observable `evaluate_debt` reads for
     /// `debt_ref` (the book-of-record projection).
-    pub fn ledgered_probation(&self, debt_ref: &str) -> Option<hh_lab::debt::LedgeredProbation> {
+    pub fn ledgered_probation(
+        &self,
+        debt_ref: &str,
+    ) -> Option<hharness_lab::debt::LedgeredProbation> {
         self.probation
             .get(debt_ref)
-            .map(|p| hh_lab::debt::LedgeredProbation {
+            .map(|p| hharness_lab::debt::LedgeredProbation {
                 debt_ref: p.debt_ref.clone(),
                 opened_at_ms: p.opened_at_ms,
                 due_at_ms: p.due_at_ms,

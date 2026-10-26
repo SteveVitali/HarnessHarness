@@ -12,8 +12,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_identity::idp::ContentAddress;
-use hh_wire::json::Json;
+use hharness_identity::idp::ContentAddress;
+use hharness_wire::json::Json;
 
 use crate::classes::{self, ScopeKind};
 use crate::effect::{self, EffectFold, EffectPhase, ObservedOutcome};
@@ -305,7 +305,7 @@ impl ReplayMode {
 }
 
 /// `ForkOpts` — the fork parameters the ledger records verbatim (the caller —
-/// `hh-embed`'s `fork` op — computes `effective_replay`/`downgrade_reason` from
+/// `hharness-embed`'s `fork` op — computes `effective_replay`/`downgrade_reason` from
 /// the source's observability; the ledger stores what it is given, never
 /// invents a downgrade explanation).
 #[derive(Debug, Clone, Default)]
@@ -549,7 +549,7 @@ pub struct RollbackRecord {
     /// Applied-after-`to_seq` effects whose class is not compensable —
     /// `uncompensable`, named, never silently kept.
     pub uncompensable: Vec<String>,
-    /// Side-effect domains the env restore could not recapture (hh-env fills).
+    /// Side-effect domains the env restore could not recapture (hharness-env fills).
     pub uncaptured: Vec<String>,
     /// Compensators that failed (a `compensation_list` subset + escalations).
     pub failed_compensations: Vec<CompensationEntry>,
@@ -770,7 +770,7 @@ impl Store {
         let pin_refs: Vec<ContentAddress> = pin_ids
             .iter()
             .filter_map(|id| {
-                let parsed = hh_identity::idp::parse_id(id).ok()?;
+                let parsed = hharness_identity::idp::parse_id(id).ok()?;
                 Some(ContentAddress {
                     idp: "idp/1",
                     algorithm: "sha256",
@@ -941,7 +941,8 @@ impl Store {
             if !applied {
                 continue;
             }
-            if f.risk_class.reversibility == hh_ontology::risk::RiskReversibility::Compensable {
+            if f.risk_class.reversibility == hharness_ontology::risk::RiskReversibility::Compensable
+            {
                 compensable.push((commit_seq, f.effect_id.clone()));
             } else {
                 uncompensable.push(f.effect_id.clone());

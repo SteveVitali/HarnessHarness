@@ -26,17 +26,19 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::branch_ops::{IntraBranchState, OpenBranchSpec};
-use hh_ledger::event::{Cursor, Direction, Event, Producer, ReadFilter, Scope};
-use hh_ledger::goal::ContinueCarried;
-use hh_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
-use hh_ledger::manifest::{AttendanceSource, AttendanceValue, EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{
+use hharness_ledger::branch_ops::{IntraBranchState, OpenBranchSpec};
+use hharness_ledger::event::{Cursor, Direction, Event, Producer, ReadFilter, Scope};
+use hharness_ledger::goal::ContinueCarried;
+use hharness_ledger::ids::{ManualClock, SeqIds, ROOT_EVENT};
+use hharness_ledger::manifest::{
+    AttendanceSource, AttendanceValue, EventRef, RunKind, RunManifest,
+};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{
     Coalesce, DeliveryMode, OccurOutcome, ScheduleKind, Trigger, WakeupPolicy,
 };
-use hh_ledger::LedgerError;
-use hh_wire::json::Json;
+use hharness_ledger::LedgerError;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -99,7 +101,10 @@ fn row(id: &str, class: &str, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
@@ -300,7 +305,7 @@ fn ac_r_2_2_1_16_index_survives_rebuild_identically() {
 /// *shape*; OQ-388's numeric value is ADR-0214-deferred and the
 /// measurement is recorded in the run ledger, not asserted by wall clock
 /// here — a debug-profile hard bound would flake). Run with:
-/// `cargo test -p hh-ledger --test s4_13 latency_1e5 -- --ignored`.
+/// `cargo test -p hharness-ledger --test s4_13 latency_1e5 -- --ignored`.
 #[test]
 #[ignore]
 fn ac_r_2_2_1_16_latency_1e5_fixture() {

@@ -6,19 +6,19 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::attribution::{Attribution, ModelRef};
-use hh_budget::pricing::{CostProvenance, Derivation, ProvenanceClass, SpendRow};
-use hh_budget::quantity::Money;
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::codec::Decoded;
-use hh_bundle::export::{export_target, PublicationPolicy};
-use hh_bundle::manifest::BundlePolicy;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{EventRef, ParticipantClass, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_budget::attribution::{Attribution, ModelRef};
+use hharness_budget::pricing::{CostProvenance, Derivation, ProvenanceClass, SpendRow};
+use hharness_budget::quantity::Money;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::codec::Decoded;
+use hharness_bundle::export::{export_target, PublicationPolicy};
+use hharness_bundle::manifest::BundlePolicy;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{EventRef, ParticipantClass, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -56,8 +56,8 @@ fn ev(id: &str, class: &str, payload: Json) -> Event {
 }
 
 fn spend_payload(run: &str, src_event: &str, micro: i64) -> Json {
-    hh_budget::events::cost_attributed_payload(&SpendRow {
-        resource: hh_ontology::dimensions::DimensionId::Spend,
+    hharness_budget::events::cost_attributed_payload(&SpendRow {
+        resource: hharness_ontology::dimensions::DimensionId::Spend,
         money: Money {
             micro_units: micro,
             currency: "USD".into(),
@@ -68,8 +68,8 @@ fn spend_payload(run: &str, src_event: &str, micro: i64) -> Json {
             unit: "call".into(),
             rate_ref: None,
         },
-        confidence: hh_budget::pricing::Confidence::Estimate,
-        coverage_ppm: hh_budget::quantity::PPM_SCALE,
+        confidence: hharness_budget::pricing::Confidence::Estimate,
+        coverage_ppm: hharness_budget::quantity::PPM_SCALE,
         pricing_ref: None,
         source_event: EventRef {
             run_id: run.into(),
@@ -101,7 +101,7 @@ fn hosted_rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     m.participant_class = ParticipantClass::Hosted;
@@ -269,7 +269,7 @@ fn interchange_exports_cost_view_fields_with_declared_unit_loss() {
     .unwrap();
     assert_eq!(out.granularity_ceiling, "product");
     let header_text = String::from_utf8(out.files["interchange.json"].clone()).unwrap();
-    let header = hh_wire::json::parse(&header_text).unwrap();
+    let header = hharness_wire::json::parse(&header_text).unwrap();
     let cv = header
         .get("cost_views")
         .and_then(|c| c.get(&rig.run))
@@ -317,7 +317,7 @@ fn harbor_export_carries_lineage_prefixes_and_audit_head() {
     };
     let out = export_target(&decoded, "harbor_job_dir", &PublicationPolicy::default()).unwrap();
     let job_text = String::from_utf8(out.files["job.json"].clone()).unwrap();
-    let job = hh_wire::json::parse(&job_text).unwrap();
+    let job = hharness_wire::json::parse(&job_text).unwrap();
     let run_row: Json = match job.get("runs") {
         Some(Json::Arr(r)) => r.first().cloned().expect("one run row"),
         _ => panic!("job.json carries no runs[]"),

@@ -27,16 +27,18 @@
 
 use std::collections::BTreeSet;
 
-use hh_containment::egress::EgressRequest;
-use hh_containment::policy::EgressProtocol;
-use hh_env::egress::{EgressError, EgressMediator, MediatedOutcome};
-use hh_env::events::ScopeChain;
-use hh_ledger::event::{Cursor, Direction, EventEnvelope};
-use hh_telemetry::events::{export_delivered_payload, ExportDelivered};
-use hh_telemetry::export::{cap_strings, export_events, sampled_keep, ExportBatch, LossEntry};
-use hh_telemetry::sinks::{ContentClass, SamplingMode, SinkPolicy};
-use hh_telemetry::{genai, otlp};
-use hh_wire::json::Json;
+use hharness_containment::egress::EgressRequest;
+use hharness_containment::policy::EgressProtocol;
+use hharness_env::egress::{EgressError, EgressMediator, MediatedOutcome};
+use hharness_env::events::ScopeChain;
+use hharness_ledger::event::{Cursor, Direction, EventEnvelope};
+use hharness_telemetry::events::{export_delivered_payload, ExportDelivered};
+use hharness_telemetry::export::{
+    cap_strings, export_events, sampled_keep, ExportBatch, LossEntry,
+};
+use hharness_telemetry::sinks::{ContentClass, SamplingMode, SinkPolicy};
+use hharness_telemetry::{genai, otlp};
+use hharness_wire::json::Json;
 
 /// The sink's wire coordinate — `net_egress` destination triple plus the
 /// dialect the body is spelled in.
@@ -414,7 +416,7 @@ impl ExportSubscriber {
                     let mut s = s.clone();
                     let event_id = s
                         .get("attributes")
-                        .and_then(|a| a.get(hh_telemetry::lift::hh_attr::EVENT_ID))
+                        .and_then(|a| a.get(hharness_telemetry::lift::hh_attr::EVENT_ID))
                         .and_then(Json::as_str)
                         .unwrap_or("span")
                         .to_string();

@@ -1,6 +1,6 @@
 //! `hh-codegen` — the schema-export → codegen pipeline (ADR-0050 (e); CC7).
 //!
-//! Reads the single schema source ([`hh_embed_schema`]) and emits the checked-in artifacts:
+//! Reads the single schema source ([`hharness_embed_schema`]) and emits the checked-in artifacts:
 //!   1. `schema/hh-embed-1.schema.json` — the canonical schema export.
 //!   2. `crates/hh-embed-client-generated/src/generated.rs` — the generated client bindings
 //!      (typed structs + the `hello` negotiation glue), asserting `(contract_major,
@@ -19,8 +19,8 @@
 
 use std::path::{Path, PathBuf};
 
-use hh_embed_schema as embed;
-use hh_wire::json::Json;
+use hharness_embed_schema as embed;
+use hharness_wire::json::Json;
 
 mod emit;
 mod emit_ts;

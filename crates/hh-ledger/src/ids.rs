@@ -1,6 +1,6 @@
 //! The allocated-id model (ADR-0027 §1–§2): opaque, unique, **creation-time-sortable**
 //! ids, minted under the one identity scheme (`idp/1` domain separation lives in
-//! `hh-identity`; allocated ids are `{kind}-{ms}-{counter}-{tag}` strings — sortable by
+//! `hharness-identity`; allocated ids are `{kind}-{ms}-{counter}-{tag}` strings — sortable by
 //! construction, never content addresses).
 //!
 //! - `RunId` — allocated by `open_run`; globally unique via the store tag.
@@ -17,8 +17,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use hh_identity::idp::idp_id;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_wire::json::Json;
 
 /// The reserved root sentinel for `parent_event_id` (§5a.1 §3: "the root sentinel").
 pub const ROOT_EVENT: &str = "root";
@@ -188,7 +188,7 @@ pub fn valid_ts(ts: &str) -> bool {
 /// Whether `id` is a pinned identity id (`<algo>:<hex>` under `idp/1`) — the
 /// `UnresolvedRef`/`ConfigurationUnresolvable` gate's check (a mutable tag fails it).
 pub fn is_pinned_id(id: &str) -> bool {
-    hh_identity::idp::parse_id(id).is_ok()
+    hharness_identity::idp::parse_id(id).is_ok()
 }
 
 #[cfg(test)]

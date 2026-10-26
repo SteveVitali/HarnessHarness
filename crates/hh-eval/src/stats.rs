@@ -34,7 +34,7 @@ pub struct EstimatorChoice {
     /// The canonical method spelling (`IntervalMethod::as_str` / reducer name).
     pub method: String,
     /// The parameter record (`{confidence_ppm, resamples, prior, cluster}`).
-    pub params: hh_wire::Json,
+    pub params: hharness_wire::Json,
     /// The seed material for resampling estimators (empty when none).
     pub seed: String,
 }
@@ -207,9 +207,9 @@ pub struct XorShift64(u64);
 
 impl XorShift64 {
     /// Seed from arbitrary material via the canonical hash (CC1 — one hashing
-    /// scheme; `hh_wire::sha256` is the primitive `idp/1` binds).
+    /// scheme; `hharness_wire::sha256` is the primitive `idp/1` binds).
     pub fn seeded(material: &str) -> XorShift64 {
-        let h = hh_wire::sha256::sha256_bytes(material.as_bytes());
+        let h = hharness_wire::sha256::sha256_bytes(material.as_bytes());
         let mut s = u64::from_le_bytes(h[..8].try_into().expect("8 bytes"));
         if s == 0 {
             s = 0x9E37_79B9_7F4A_7C15;

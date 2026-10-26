@@ -1,5 +1,5 @@
 //! §5g.7 C0 unit tests — every gating behavior gets a removal-sensitive test
-//! (AC-R-2.8.7-1/-3/-6/-7/-14 land here and in the hh-ledger/hh-env seams).
+//! (AC-R-2.8.7-1/-3/-6/-7/-14 land here and in the hharness-ledger/hharness-env seams).
 
 use super::*;
 
@@ -142,7 +142,7 @@ fn ac_14_irreversible_never_coalesces() {
 /// mint upstream, so a batch id only ever attaches to a batchable ask).
 #[test]
 fn batch_id_groups_one_risk_class_reviewer_scope() {
-    use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+    use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
     let a = RiskClass {
         reversibility: RiskReversibility::Reversible,
         repeat_safety: RepeatSafety::Idempotent,
@@ -273,7 +273,7 @@ fn ac_3_delegate_endorser_illegitimate() {
             grantor: "principal-1".to_string(),
             grantee: "reviewer-1".to_string(),
             capability_prefixes: vec!["cap:fs".to_string()],
-            max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+            max_risk: hharness_ontology::risk::RiskClass::UNKNOWN,
             expires_at: None,
             revoked_at: None,
         }],
@@ -360,8 +360,8 @@ fn allow_lease_mints_exact_hash_lease() {
         capability_ref: cap(),
         args_canonical_hash: "h1".to_string(),
         pattern_keys: Vec::new(),
-        domain: hh_hir::kinds::EffectDomain::FsWrite,
-        risk: hh_ontology::risk::RiskClass::READ_ONLY,
+        domain: hharness_hir::kinds::EffectDomain::FsWrite,
+        risk: hharness_ontology::risk::RiskClass::READ_ONLY,
         eff: AuthorityClass::Principal,
         holder: "agent-1".to_string(),
         irreversible: false,
@@ -469,8 +469,8 @@ fn input(mode: Mode) -> EscalationInput {
         capability_ref: cap(),
         args_canonical_hash: "h1".to_string(),
         pattern_keys: Vec::new(),
-        domain: hh_hir::kinds::EffectDomain::FsWrite,
-        risk: hh_ontology::risk::RiskClass::READ_ONLY,
+        domain: hharness_hir::kinds::EffectDomain::FsWrite,
+        risk: hharness_ontology::risk::RiskClass::READ_ONLY,
         eff: AuthorityClass::Principal,
         holder: "agent-1".to_string(),
         irreversible: false,
@@ -533,7 +533,7 @@ fn no_lease_hit_escalates_to_human() {
 
 #[test]
 fn never_auto_set() {
-    use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+    use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
     assert!(never_auto(RiskClass::UNKNOWN));
     assert!(never_auto(RiskClass {
         reversibility: RiskReversibility::Irreversible,
@@ -688,7 +688,7 @@ fn chain_hook_allow_never_endorses_without_rule() {
     let rules = vec![AutoReviewRule {
         rule_ref: "rule-1".to_string(),
         domains: Vec::new(),
-        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        max_risk: hharness_ontology::risk::RiskClass::UNKNOWN,
         eff_at_most: None,
         verdict: ReviewVerdictKind::Allow,
     }];
@@ -760,7 +760,7 @@ fn chain_never_auto_skips_nonhuman_stages() {
     // lease/hook/auto_reviewer stages are recorded `pass` with the member tag
     // and the human stage gets the ask (AC-R-2.8.7-2).
     let mut i = input(Mode::Attended);
-    i.domain = hh_hir::kinds::EffectDomain::PermissionRequest;
+    i.domain = hharness_hir::kinds::EffectDomain::PermissionRequest;
     let hooks = vec![HookReport {
         hook_ref: "hook-1".to_string(),
         attestation_ref: "att-1".to_string(),
@@ -769,7 +769,7 @@ fn chain_never_auto_skips_nonhuman_stages() {
     let rules = vec![AutoReviewRule {
         rule_ref: "rule-1".to_string(),
         domains: Vec::new(),
-        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        max_risk: hharness_ontology::risk::RiskClass::UNKNOWN,
         eff_at_most: None,
         verdict: ReviewVerdictKind::Allow,
     }];
@@ -799,7 +799,7 @@ fn chain_unattended_auto_review_resolves_or_denies() {
     let rules = vec![AutoReviewRule {
         rule_ref: "rule-1".to_string(),
         domains: Vec::new(),
-        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        max_risk: hharness_ontology::risk::RiskClass::UNKNOWN,
         eff_at_most: None,
         verdict: ReviewVerdictKind::Allow,
     }];
@@ -907,23 +907,23 @@ fn repeated_denial_fires_typed_fallback() {
 
 // ── ApprovalState::project — the CC1 trail fold ───────────────────────────────
 
-fn env(seq: u64, class: &str, payload: Json) -> hh_ledger::event::EventEnvelope {
-    hh_ledger::event::EventEnvelope {
+fn env(seq: u64, class: &str, payload: Json) -> hharness_ledger::event::EventEnvelope {
+    hharness_ledger::event::EventEnvelope {
         event_id: format!("evt-{seq:04}"),
         run_id: "run-1".into(),
         seq,
         ts: "2026-09-15T00:00:00.000Z".into(),
         hlc: None,
-        plane: hh_ledger::event::EventPlane::Security,
+        plane: hharness_ledger::event::EventPlane::Security,
         class: class.into(),
         schema_version: 1,
-        producer: hh_ledger::event::Producer::kernel("kernel:test"),
-        participant_class: hh_ledger::manifest::ParticipantClass::Native,
+        producer: hharness_ledger::event::Producer::kernel("kernel:test"),
+        participant_class: hharness_ledger::manifest::ParticipantClass::Native,
         observability_level: std::collections::BTreeSet::from([
-            hh_ledger::manifest::ObservabilityLevel::Ledger,
+            hharness_ledger::manifest::ObservabilityLevel::Ledger,
         ]),
-        durability: hh_ledger::classes::Durability::Ledger,
-        scope: hh_ledger::event::Scope::default(),
+        durability: hharness_ledger::classes::Durability::Ledger,
+        scope: hharness_ledger::event::Scope::default(),
         lease_generation: 1,
         parent_event_id: "root".into(),
         causes: vec![],
@@ -942,7 +942,7 @@ fn pending_row(
     pid: &str,
     args_hash: &str,
     effect_id: &str,
-) -> hh_ledger::event::EventEnvelope {
+) -> hharness_ledger::event::EventEnvelope {
     env(
         seq,
         "security.permission.pending",
@@ -1033,7 +1033,7 @@ fn fold_exactly_one_decided_and_lease_lifecycle() {
         basis: LeaseBasis::Human,
         origin_permission_id: "perm-1".into(),
         policy_fingerprint: "fp".into(),
-        risk_ceiling: hh_ontology::risk::RiskClass::UNKNOWN,
+        risk_ceiling: hharness_ontology::risk::RiskClass::UNKNOWN,
         grant_authority: AuthorityClass::Principal,
         max_uses: Some(3),
         uses: 0,
@@ -1135,12 +1135,12 @@ fn fold_deny_counts_repeated_denials() {
 // ── sealed-extraction (§5g.1 §9 — `auto_review_rules(sealed)` is the chain's
 // `auto_reviewer` leg; only sealed records confer) ─────────────────────────
 
-fn sealed_with_rule(action: hh_hir::records::RuleAction) -> hh_hir::SealedDefinition {
-    use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-    use hh_hir::records::{HarnessRuleRecord, KindRecord};
-    use hh_hir::refs::Ref;
+fn sealed_with_rule(action: hharness_hir::records::RuleAction) -> hharness_hir::SealedDefinition {
+    use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+    use hharness_hir::records::{HarnessRuleRecord, KindRecord};
+    use hharness_hir::refs::Ref;
     let mut n = Node::new(
-        hh_hir::kinds::EntityKind::HarnessRule,
+        hharness_hir::kinds::EntityKind::HarnessRule,
         KindRecord::HarnessRule(HarnessRuleRecord {
             rule_id: "test:rule.auto".to_string(),
             trigger: Json::Null,
@@ -1149,12 +1149,12 @@ fn sealed_with_rule(action: hh_hir::records::RuleAction) -> hh_hir::SealedDefini
             conditioned_on: None,
             assumption_debt: None,
         }),
-        hh_provenance::ProvenanceRecord::kernel("test", 0),
+        hharness_provenance::ProvenanceRecord::kernel("test", 0),
     );
     n.version.semantic_id = Some("test:rule.auto".to_string());
     let mut doc = HirDocument::new(Ref::selected("test:agent", "latest"));
     doc.nodes = vec![n];
-    hh_hir::SealedDefinition {
+    hharness_hir::SealedDefinition {
         document: doc,
         definition_ref: DefinitionVersionRef {
             semantic_id: "test:agent".into(),
@@ -1169,22 +1169,27 @@ fn auto_review_rules_extracts_sealed_legs() {
     let spec = Json::obj([
         ("verdict", Json::str("allow")),
         ("domains", Json::Arr(vec![Json::str("fs_write")])),
-        ("max_risk", hh_ontology::risk::RiskClass::UNKNOWN.to_json()),
+        (
+            "max_risk",
+            hharness_ontology::risk::RiskClass::UNKNOWN.to_json(),
+        ),
         ("eff_at_most", Json::str("delegate")),
     ]);
-    let sealed = sealed_with_rule(hh_hir::records::RuleAction::AutoReview(spec));
+    let sealed = sealed_with_rule(hharness_hir::records::RuleAction::AutoReview(spec));
     let rules = auto_review_rules(&sealed);
     assert_eq!(rules.len(), 1);
     assert_eq!(rules[0].rule_ref, "test:rule.auto");
     assert_eq!(rules[0].verdict, ReviewVerdictKind::Allow);
-    assert_eq!(rules[0].domains, vec![hh_hir::kinds::EffectDomain::FsWrite]);
+    assert_eq!(
+        rules[0].domains,
+        vec![hharness_hir::kinds::EffectDomain::FsWrite]
+    );
     assert_eq!(rules[0].eff_at_most, Some(AuthorityClass::Delegate));
     // A malformed spec (unknown verdict) extracts nothing — the extractor
     // never guesses.
-    let bad = sealed_with_rule(hh_hir::records::RuleAction::AutoReview(Json::obj([(
-        "verdict",
-        Json::str("widen"),
-    )])));
+    let bad = sealed_with_rule(hharness_hir::records::RuleAction::AutoReview(Json::obj([
+        ("verdict", Json::str("widen")),
+    ])));
     assert!(auto_review_rules(&bad).is_empty());
 }
 
@@ -1194,24 +1199,26 @@ fn auto_review_rules_extracts_sealed_legs() {
 /// authority bounds the mint even with no caps.
 #[test]
 fn pre_authorize_mint_clamps_to_caps_and_issuer() {
-    use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-    use hh_hir::records::{HarnessRuleRecord, KindRecord, RuleAction};
-    use hh_hir::refs::Ref;
-    use hh_provenance::AuthorityClass;
-    let grant = hh_hir::records::Grant {
-        effect: hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::FsRead),
+    use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+    use hharness_hir::records::{HarnessRuleRecord, KindRecord, RuleAction};
+    use hharness_hir::refs::Ref;
+    use hharness_provenance::AuthorityClass;
+    let grant = hharness_hir::records::Grant {
+        effect: hharness_hir::kinds::EffectClass::domain_only(
+            hharness_hir::kinds::EffectDomain::FsRead,
+        ),
         scope: "workspace/**".to_string(),
-        constraints: hh_hir::records::GrantConstraints {
+        constraints: hharness_hir::records::GrantConstraints {
             budget: None,
             time: None,
             count: None,
         },
         delegable: false,
     };
-    let grants_json = Json::Arr(vec![hh_hir::grant_json(&grant, false)]);
+    let grants_json = Json::Arr(vec![hharness_hir::grant_json(&grant, false)]);
     let node = |rule_id: &str| {
         let mut n = Node::new(
-            hh_hir::kinds::EntityKind::HarnessRule,
+            hharness_hir::kinds::EntityKind::HarnessRule,
             KindRecord::HarnessRule(HarnessRuleRecord {
                 rule_id: rule_id.to_string(),
                 trigger: Json::Null,
@@ -1220,7 +1227,7 @@ fn pre_authorize_mint_clamps_to_caps_and_issuer() {
                 conditioned_on: None,
                 assumption_debt: None,
             }),
-            hh_provenance::ProvenanceRecord::kernel("test", 0),
+            hharness_provenance::ProvenanceRecord::kernel("test", 0),
         );
         n.version.semantic_id = Some(rule_id.to_string());
         n
@@ -1234,7 +1241,7 @@ fn pre_authorize_mint_clamps_to_caps_and_issuer() {
             ),
         ])
     };
-    let sealed = |nodes: Vec<Node>, constraints: Vec<Json>| hh_hir::SealedDefinition {
+    let sealed = |nodes: Vec<Node>, constraints: Vec<Json>| hharness_hir::SealedDefinition {
         document: HirDocument {
             nodes,
             assembly: Some(Json::obj([("constraints", Json::Arr(constraints))])),
@@ -1247,7 +1254,7 @@ fn pre_authorize_mint_clamps_to_caps_and_issuer() {
         closed_world_tools: Default::default(),
     };
     let holder = Ref::selected("agent-1", "latest");
-    let kernel = hh_provenance::ProvenanceRecord::kernel("test", 0);
+    let kernel = hharness_provenance::ProvenanceRecord::kernel("test", 0);
     let mut n = 0u64;
     let mut alloc = move |k: &str| {
         n += 1;
@@ -1274,9 +1281,9 @@ fn pre_authorize_mint_clamps_to_caps_and_issuer() {
     assert_eq!(out[0].0.ceiling, AuthorityClass::Definition);
 
     // The issuer's own authority bounds the mint with no caps at all.
-    let delegate = hh_provenance::ProvenanceRecord {
+    let delegate = hharness_provenance::ProvenanceRecord {
         authority: AuthorityClass::Delegate,
-        ..hh_provenance::ProvenanceRecord::kernel("test", 0)
+        ..hharness_provenance::ProvenanceRecord::kernel("test", 0)
     };
     let doc = sealed(vec![node("test:rule.a")], vec![]);
     let out =
@@ -1286,14 +1293,14 @@ fn pre_authorize_mint_clamps_to_caps_and_issuer() {
 
 #[test]
 fn pre_authorize_mint_skips_grantless_rules() {
-    use hh_hir::records::RuleAction;
+    use hharness_hir::records::RuleAction;
     // A `pre_authorize` rule with no decodable `grants` mints nothing.
     let sealed = sealed_with_rule(RuleAction::PreAuthorize(Json::obj([(
         "scope",
         Json::str("run"),
     )])));
-    let holder = hh_hir::refs::Ref::selected("agent-1", "latest");
-    let issuer = hh_provenance::ProvenanceRecord::kernel("test", 0);
+    let holder = hharness_hir::refs::Ref::selected("agent-1", "latest");
+    let issuer = hharness_provenance::ProvenanceRecord::kernel("test", 0);
     let mut n = 0u64;
     let mut alloc = move |k: &str| {
         n += 1;

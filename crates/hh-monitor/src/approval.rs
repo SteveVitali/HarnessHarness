@@ -11,7 +11,7 @@
 //! legitimacy check (AC-R-2.8.7-3).
 //!
 //! Stage-2 additions (S2.6): `async`/`defer` request admission (the suspend/
-//! wakeup append side is the dispatcher's — hh-env), `ActionPattern` leases
+//! wakeup append side is the dispatcher's — hharness-env), `ActionPattern` leases
 //! with `policy_fingerprint`/`risk_ceiling`/`origin_permission_id`, the hook
 //! and `auto_reviewer` chain stages, `batch_id` grouping, the denial-ceiling
 //! fallback, and the `ApproverGrant` record's legitimacy gate.
@@ -24,11 +24,11 @@
 
 use std::collections::BTreeMap;
 
-use hh_compiler::plan::PinnedRef;
-use hh_identity::idp;
-use hh_provenance::authority::AuthorityClass;
-use hh_provenance::flow::Remedy;
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_identity::idp;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_provenance::flow::Remedy;
+use hharness_wire::json::Json;
 
 use crate::decision::{CheckRecord, Decision, DecisionScope, DenyReason};
 use crate::policy::Mode;
@@ -176,7 +176,7 @@ pub struct PermissionRequest {
     /// The grants the proposer asked for (a `permission_request` proposal's
     /// `requested` leg — empty for an ordinary effect ask; the approval-basis
     /// mint intersects them with `authority_cap`, never widens).
-    pub requested_grants: Vec<hh_hir::records::Grant>,
+    pub requested_grants: Vec<hharness_hir::records::Grant>,
 }
 
 /// `ApprovalRequest` (§5g.7 §3) — the monitor→surface form:
@@ -207,7 +207,7 @@ pub struct ApprovalRequest {
     /// `decided` row can echo them verbatim — the R-2.12 consume path
     /// (`remedies.taken`, remedy re-dispatch) reads the durable record,
     /// never a session cache.
-    pub remedies: Vec<hh_provenance::flow::Remedy>,
+    pub remedies: Vec<hharness_provenance::flow::Remedy>,
 }
 
 /// `ResponseChoice` — `allow_once | allow_lease | deny | more_info |
@@ -350,8 +350,8 @@ pub struct ApprovalResponse {
 /// `unknown` is covered twice: `RiskClass::UNKNOWN` *is* `irreversible`
 /// (ADR-0031 §2's most-dangerous class), so the check is the reversibility
 /// member plus the explicit `UNKNOWN` equality for audit clarity.
-pub fn never_auto(risk_class: hh_ontology::risk::RiskClass) -> bool {
-    use hh_ontology::risk::{RiskClass, RiskReversibility};
+pub fn never_auto(risk_class: hharness_ontology::risk::RiskClass) -> bool {
+    use hharness_ontology::risk::{RiskClass, RiskReversibility};
     risk_class.reversibility == RiskReversibility::Irreversible || risk_class == RiskClass::UNKNOWN
 }
 
@@ -361,7 +361,7 @@ pub fn never_auto(risk_class: hh_ontology::risk::RiskClass) -> bool {
 /// `PersistenceScope` is the one lattice (CC1); `Definition`/`User`/`Project`
 /// are refused at mint (`LeaseScopeViolation` — a persisted lease is a
 /// `lifecycle.definition.changed` widening, never a lease).
-pub type LeaseScope = hh_provenance::PersistenceScope;
+pub type LeaseScope = hharness_provenance::PersistenceScope;
 
 /// `lease_scope_rank` — the looseness order over the admissible members
 /// (`turn < run < session`); `PersistenceScope`'s derived `Ord` is the
@@ -369,9 +369,9 @@ pub type LeaseScope = hh_provenance::PersistenceScope;
 /// the "scope ≤ run" test's basis.
 pub fn lease_scope_rank(s: LeaseScope) -> u8 {
     match s {
-        hh_provenance::PersistenceScope::Turn => 0,
-        hh_provenance::PersistenceScope::Run => 1,
-        hh_provenance::PersistenceScope::Session => 2,
+        hharness_provenance::PersistenceScope::Turn => 0,
+        hharness_provenance::PersistenceScope::Run => 1,
+        hharness_provenance::PersistenceScope::Session => 2,
         _ => 3,
     }
 }
@@ -521,7 +521,7 @@ pub struct ApprovalLease {
     pub policy_fingerprint: String,
     /// The `effective_risk_class` ceiling the lease serves — a hit requires
     /// `risk.leq_danger(risk_ceiling)` (AC-R-2.8.7-4).
-    pub risk_ceiling: hh_ontology::risk::RiskClass,
+    pub risk_ceiling: hharness_ontology::risk::RiskClass,
     /// The `context_label.authority` at grant — `scope = external` leases are
     /// re-validated: a per-call authority below this misses the lease.
     pub grant_authority: AuthorityClass,
@@ -607,7 +607,7 @@ pub fn mint_permission_id(
 /// non-batchable ask carries no batch (`EscalationInput.batchable` gates the
 /// call site). Deterministic.
 pub fn mint_batch_id(
-    risk: &hh_ontology::risk::RiskClass,
+    risk: &hharness_ontology::risk::RiskClass,
     requested_of: &str,
     scope_ref: &str,
 ) -> String {
@@ -660,9 +660,9 @@ pub struct EscalationInput {
     /// lease stage's pattern legs.
     pub pattern_keys: Vec<String>,
     /// The effect domain (never-auto: Π-8 reads it).
-    pub domain: hh_hir::kinds::EffectDomain,
+    pub domain: hharness_hir::kinds::EffectDomain,
     /// The effective risk class (lease `risk_ceiling`; never-auto Π-7).
-    pub risk: hh_ontology::risk::RiskClass,
+    pub risk: hharness_ontology::risk::RiskClass,
     /// `min(authority(proposer), context_label.authority)` — Π-7's never-auto
     /// leg and the `scope = external` lease re-validation read it.
     pub eff: AuthorityClass,
@@ -771,8 +771,8 @@ pub struct EscalationDecision {
 /// `message_human`, `scope = user` persistence endorsements. A `Some` result
 /// skips every non-human stage (AC-R-2.8.7-2).
 pub fn never_auto_member(input: &EscalationInput) -> Option<&'static str> {
-    use hh_hir::kinds::EffectDomain;
-    use hh_ontology::risk::RiskScope;
+    use hharness_hir::kinds::EffectDomain;
+    use hharness_ontology::risk::RiskScope;
     if input.domain == EffectDomain::PermissionRequest {
         return Some("pi_8");
     }
@@ -907,9 +907,9 @@ pub struct AutoReviewRule {
     /// The sealed rule's coordinate (`basis_ref`'s rule leg).
     pub rule_ref: String,
     /// The domains the rule covers (empty = every domain below the ceilings).
-    pub domains: Vec<hh_hir::kinds::EffectDomain>,
+    pub domains: Vec<hharness_hir::kinds::EffectDomain>,
     /// The risk ceiling the rule serves (`risk.leq_danger(max_risk)`).
-    pub max_risk: hh_ontology::risk::RiskClass,
+    pub max_risk: hharness_ontology::risk::RiskClass,
     /// The authority bound the rule serves (`eff ≤` it when declared).
     pub eff_at_most: Option<AuthorityClass>,
     /// The conditioned verdict the rule carries.
@@ -991,7 +991,7 @@ pub fn lease_serves(lease: &ApprovalLease, input: &EscalationInput) -> bool {
     }
     // The scope = external re-validation (ADR-0071 D1): a per-call context
     // authority below the grant-time value misses the lease.
-    if input.risk.scope == hh_ontology::risk::RiskScope::External
+    if input.risk.scope == hharness_ontology::risk::RiskScope::External
         && input.context_authority < lease.grant_authority
     {
         return false;
@@ -1045,7 +1045,7 @@ pub fn run_chain(
     rules: &[AutoReviewRule],
     lease_scope: LeaseScope,
 ) -> ChainOutcome {
-    use hh_ontology::risk::RiskReversibility;
+    use hharness_ontology::risk::RiskReversibility;
     let mut stages: Vec<StageOutput> = Vec::new();
     let mut escalations: Vec<(ReviewStage, ReviewStage, String)> = Vec::new();
 
@@ -1565,7 +1565,7 @@ pub struct ApproverGrant {
     /// The capability `semantic_id` prefixes the grant covers (empty = all).
     pub capability_prefixes: Vec<String>,
     /// The risk ceiling the grant covers (`risk.leq_danger(max_risk)`).
-    pub max_risk: hh_ontology::risk::RiskClass,
+    pub max_risk: hharness_ontology::risk::RiskClass,
     /// When the grant expires (logical time; `None` = the run).
     pub expires_at: Option<u64>,
     /// When the grant was revoked, if it was.
@@ -1578,7 +1578,7 @@ impl ApproverGrant {
     pub fn covers(
         &self,
         capability_semantic_id: &str,
-        risk: &hh_ontology::risk::RiskClass,
+        risk: &hharness_ontology::risk::RiskClass,
         now: u64,
     ) -> bool {
         if self.revoked_at.is_some() || self.expires_at.map(|e| now > e).unwrap_or(false) {
@@ -1660,7 +1660,7 @@ impl ApproverGrant {
             grantor: j.get("grantor")?.as_str()?.to_string(),
             grantee: j.get("grantee")?.as_str()?.to_string(),
             capability_prefixes: prefixes,
-            max_risk: hh_ontology::risk::RiskClass::from_json(j.get("max_risk")?)?,
+            max_risk: hharness_ontology::risk::RiskClass::from_json(j.get("max_risk")?)?,
             expires_at: match j.get("expires_at") {
                 Some(Json::Int(e)) => Some(*e as u64),
                 Some(Json::Null) | None => None,
@@ -1677,8 +1677,8 @@ impl ApproverGrant {
 
 /// The `ProvenanceRecord` origin rendered as an identity coordinate (the
 /// grant's `grantor`/`grantee` spellings — `human:<ref>`, `model:<ref>`, …).
-fn origin_coordinate(o: &hh_provenance::Origin) -> String {
-    use hh_provenance::Origin;
+fn origin_coordinate(o: &hharness_provenance::Origin) -> String {
+    use hharness_provenance::Origin;
     match o {
         Origin::Human { author_ref, .. } => format!("human:{author_ref}"),
         Origin::Model { model_ref, .. } => format!("model:{model_ref}"),
@@ -1711,10 +1711,10 @@ fn origin_coordinate(o: &hh_provenance::Origin) -> String {
 /// `IllegitimateGrant` otherwise — never a silent narrowing to the grantor's
 /// ceiling.
 pub fn grant_approver(
-    grantor: &hh_provenance::ProvenanceRecord,
+    grantor: &hharness_provenance::ProvenanceRecord,
     grantee: &str,
     capability_prefixes: Vec<String>,
-    max_risk: hh_ontology::risk::RiskClass,
+    max_risk: hharness_ontology::risk::RiskClass,
     expires_at: Option<u64>,
     now: u64,
     live_grants: &[ApproverGrant],
@@ -1783,7 +1783,7 @@ pub fn grant_approver(
 /// `security.permission.grant_revoked` payload; `ApprovalState` folds it.
 pub fn revoke_approver(
     grant_ref: &str,
-    revoker: &hh_provenance::ProvenanceRecord,
+    revoker: &hharness_provenance::ProvenanceRecord,
     live_grants: &[ApproverGrant],
     now: u64,
 ) -> Result<Json, ApprovalError> {
@@ -1917,8 +1917,8 @@ pub fn reviewed_payload(
 /// AC-R-2.8.7-8's failure rule: a reviewer *failure* resolves `deny` for
 /// risk classes above `reversible` (read-only/reversible failures fall back
 /// to the chain's `pass` — the human stage still sees the ask).
-pub fn auto_review_failure_denies(risk: &hh_ontology::risk::RiskClass) -> bool {
-    risk.reversibility > hh_ontology::risk::RiskReversibility::Reversible
+pub fn auto_review_failure_denies(risk: &hharness_ontology::risk::RiskClass) -> bool {
+    risk.reversibility > hharness_ontology::risk::RiskReversibility::Reversible
 }
 
 /// `DenialFallback` — the closed repeated-denial fallback set (§5g.7 §5's
@@ -1972,7 +1972,7 @@ pub struct RespondCtx {
     /// The run's scope coordinate (the lease `scope_ref`).
     pub scope_ref: String,
     /// The decided effect's `effective_risk_class` (the lease `risk_ceiling`).
-    pub risk_ceiling: hh_ontology::risk::RiskClass,
+    pub risk_ceiling: hharness_ontology::risk::RiskClass,
     /// `context_label.authority` at grant (the `scope = external`
     /// re-validation baseline).
     pub grant_authority: AuthorityClass,
@@ -1992,7 +1992,7 @@ impl RespondCtx {
         RespondCtx {
             policy_fingerprint: "policy".to_string(),
             scope_ref: "run".to_string(),
-            risk_ceiling: hh_ontology::risk::RiskClass::UNKNOWN,
+            risk_ceiling: hharness_ontology::risk::RiskClass::UNKNOWN,
             grant_authority: AuthorityClass::Principal,
             grants: Vec::new(),
             denial_policy: None,
@@ -2450,7 +2450,10 @@ impl ApprovalState {
     /// derived view; CC1: the trail is the one truth, the fold a pure
     /// derivation). A malformed row is skipped — the durable form was
     /// validated at append; `project` never guesses.
-    pub fn project(events: &[hh_ledger::event::EventEnvelope], until_seq: u64) -> ApprovalState {
+    pub fn project(
+        events: &[hharness_ledger::event::EventEnvelope],
+        until_seq: u64,
+    ) -> ApprovalState {
         let mut st = ApprovalState::default();
         for env in events.iter().filter(|e| e.seq <= until_seq) {
             st.fold(env);
@@ -2466,7 +2469,7 @@ impl ApprovalState {
     /// drive the lease lifecycle. The I-P5 counters fold in spec order:
     /// `requested` counts pending rows, `granted` counts `decided{allow}`,
     /// `human_wait_ms` sums the human-decided `wait_ms`.
-    pub fn fold(&mut self, env: &hh_ledger::event::EventEnvelope) {
+    pub fn fold(&mut self, env: &hharness_ledger::event::EventEnvelope) {
         let p = &env.payload;
         match env.class.as_str() {
             "security.permission.pending" => {
@@ -2510,8 +2513,11 @@ impl ApprovalState {
                                 .iter()
                                 .enumerate()
                                 .map(|(i, r)| {
-                                    hh_hir::grant_from_json(r, &format!("requested_grants[{i}]"))
-                                        .ok()
+                                    hharness_hir::grant_from_json(
+                                        r,
+                                        &format!("requested_grants[{i}]"),
+                                    )
+                                    .ok()
                                 })
                                 .collect::<Option<Vec<_>>>(),
                             _ => None,
@@ -2583,7 +2589,7 @@ impl ApprovalState {
                                                 .iter()
                                                 .enumerate()
                                                 .map(|(i, r)| {
-                                                    hh_provenance::flow::Remedy::from_json(
+                                                    hharness_provenance::flow::Remedy::from_json(
                                                         r,
                                                         &format!("remedies[{i}]"),
                                                     )
@@ -2883,8 +2889,8 @@ pub fn lease_from_granted(p: &Json) -> Option<ApprovalLease> {
             .to_string(),
         risk_ceiling: p
             .get("risk_ceiling")
-            .and_then(hh_ontology::risk::RiskClass::from_json)
-            .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            .and_then(hharness_ontology::risk::RiskClass::from_json)
+            .unwrap_or(hharness_ontology::risk::RiskClass::UNKNOWN),
         grant_authority: p
             .get("grant_authority")
             .and_then(Json::as_str)
@@ -3186,7 +3192,7 @@ pub fn pending_payload(r: &ApprovalRequest, effect_id: &str, requested_at: u64) 
                         r.request
                             .requested_grants
                             .iter()
-                            .map(|g| hh_hir::grant_json(g, false))
+                            .map(|g| hharness_hir::grant_json(g, false))
                             .collect(),
                     ),
                 ),
@@ -3320,7 +3326,7 @@ pub fn request_payload(r: &ApprovalRequest) -> Json {
                 r.request
                     .requested_grants
                     .iter()
-                    .map(|g| hh_hir::grant_json(g, false))
+                    .map(|g| hharness_hir::grant_json(g, false))
                     .collect(),
             ),
         ),
@@ -3409,8 +3415,8 @@ pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, Str
                     enforcement: c
                         .get("enforcement")
                         .and_then(Json::as_str)
-                        .and_then(hh_provenance::flow::EnforcementClass::parse)
-                        .unwrap_or(hh_provenance::flow::EnforcementClass::Deterministic),
+                        .and_then(hharness_provenance::flow::EnforcementClass::parse)
+                        .unwrap_or(hharness_provenance::flow::EnforcementClass::Deterministic),
                     step: u8::try_from(step)
                         .map_err(|_| format!("{path}.explanation.rows[{i}].step overflow"))?,
                     outcome: match c.get("outcome").and_then(Json::as_str) {
@@ -3469,7 +3475,7 @@ pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, Str
                     .iter()
                     .enumerate()
                     .map(|(i, g)| {
-                        hh_hir::grant_from_json(g, &format!("{path}.requested_grants[{i}]"))
+                        hharness_hir::grant_from_json(g, &format!("{path}.requested_grants[{i}]"))
                             .map_err(|e| format!("{path}.requested_grants[{i}]: {e}"))
                     })
                     .collect::<Result<Vec<_>, String>>()?,
@@ -3503,8 +3509,11 @@ pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, Str
                 .iter()
                 .enumerate()
                 .map(|(i, r)| {
-                    hh_provenance::flow::Remedy::from_json(r, &format!("{path}.remedies[{i}]"))
-                        .map_err(|e| format!("{path}.remedies[{i}]: {}", e.detail))
+                    hharness_provenance::flow::Remedy::from_json(
+                        r,
+                        &format!("{path}.remedies[{i}]"),
+                    )
+                    .map_err(|e| format!("{path}.remedies[{i}]: {}", e.detail))
                 })
                 .collect::<Result<Vec<_>, String>>()?,
             _ => Vec::new(),
@@ -3556,13 +3565,13 @@ mod tests;
 /// deny, never widen past the pending's ceiling). A malformed member skips
 /// the rule — the sealed definition validated it, the extractor never
 /// guesses.
-pub fn auto_review_rules(sealed: &hh_hir::SealedDefinition) -> Vec<AutoReviewRule> {
+pub fn auto_review_rules(sealed: &hharness_hir::SealedDefinition) -> Vec<AutoReviewRule> {
     let mut out = Vec::new();
     for node in &sealed.document.nodes {
-        let hh_hir::records::KindRecord::HarnessRule(rule) = &node.semantic else {
+        let hharness_hir::records::KindRecord::HarnessRule(rule) = &node.semantic else {
             continue;
         };
-        let hh_hir::records::RuleAction::AutoReview(spec) = &rule.action else {
+        let hharness_hir::records::RuleAction::AutoReview(spec) = &rule.action else {
             continue;
         };
         let Some(verdict) = spec
@@ -3579,7 +3588,7 @@ pub fn auto_review_rules(sealed: &hh_hir::SealedDefinition) -> Vec<AutoReviewRul
         };
         let Some(max_risk) = spec
             .get("max_risk")
-            .and_then(hh_ontology::risk::RiskClass::from_json)
+            .and_then(hharness_ontology::risk::RiskClass::from_json)
         else {
             continue;
         };
@@ -3588,7 +3597,7 @@ pub fn auto_review_rules(sealed: &hh_hir::SealedDefinition) -> Vec<AutoReviewRul
                 .iter()
                 .filter_map(|d| {
                     d.as_str()
-                        .and_then(|s| hh_hir::kinds::EffectDomain::parse(s).ok())
+                        .and_then(|s| hharness_hir::kinds::EffectDomain::parse(s).ok())
                 })
                 .collect(),
             _ => Vec::new(),

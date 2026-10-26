@@ -1,49 +1,49 @@
-//! `hh-analysis` acceptance + unit tests — the S3.4c estimator kernel
+//! `hharness-analysis` acceptance + unit tests — the S3.4c estimator kernel
 //! (R-2.10.4⁰ᵇ; §6.4; KA-1/-2/-5/-6/-8/-9/-12/-13).
 //!
 //! The fixtures build `ResultsRow`s directly (the kernel's input record —
 //! `project_row` is S3.4b's seam, exercised in `hh-results/tests`); the
-//! row → `EvalRun` projection is `hh_analysis::project::eval_run`. The
+//! row → `EvalRun` projection is `hharness_analysis::project::eval_run`. The
 //! coverage sims drive the *estimator* layer the kernel delegates to —
-//! `hh_eval::compare::contrast` over fabricated per-task delta tables and
-//! `hh_eval::stats::{wilson, bayesian_beta, bootstrap_paired}` — plus the
+//! `hharness_eval::compare::contrast` over fabricated per-task delta tables and
+//! `hharness_eval::stats::{wilson, bayesian_beta, bootstrap_paired}` — plus the
 //! full `analyze` path for every kind.
 
 use std::collections::BTreeMap;
 
-use hh_analysis::{
+use hharness_analysis::{
     analyze, analyze_and_record, eval_run as project_eval_run, AnalysisError, AnalysisInput,
 };
-use hh_budget::matchspec::{ArmSpec, MatchSpec};
-use hh_budget::spec::{BudgetMode, BudgetSpec};
-use hh_eval::compare::{contrast, CompareOutcome, TaskEffect};
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{SuiteContext, TaskContext};
-use hh_eval::{catalogue, stats};
-use hh_experiment::docs::LabDocs;
-use hh_lab::analysis::{
+use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+use hharness_budget::spec::{BudgetMode, BudgetSpec};
+use hharness_eval::compare::{contrast, CompareOutcome, TaskEffect};
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{SuiteContext, TaskContext};
+use hharness_eval::{catalogue, stats};
+use hharness_experiment::docs::LabDocs;
+use hharness_lab::analysis::{
     AnalysisSpec, BenefitKind, BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity,
     OutcomeBounds, OutcomeBoundsVerdict, PairedEffect, QuerySpec, ReportLabelKind, SignProfile,
     TailEffects, TestKind, TestRecord,
 };
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ontology::compliance::MetricDeclaration;
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_ontology::eval::{
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ontology::compliance::MetricDeclaration;
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorDeclaration, FactorKind, FactorLevel,
     IntervalMethod, MetricValueKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::ParticipantClass;
-use hh_results::audit::AuditRef;
-use hh_results::row::{
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::ParticipantClass;
+use hharness_results::audit::AuditRef;
+use hharness_results::row::{
     AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection, ResultsRow,
     RowKey,
 };
-use hh_results::scoring::ScoringContext;
-use hh_results::watermark::WatermarkSet;
-use hh_wire::Json;
+use hharness_results::scoring::ScoringContext;
+use hharness_results::watermark::WatermarkSet;
+use hharness_wire::Json;
 
 // ── fixture plumbing ────────────────────────────────────────────────────────
 
@@ -425,7 +425,7 @@ fn stub_report(metric: &str, a: &str, b: &str) -> ComparisonReport {
             point: None,
             interval: None,
             method: IntervalMethod::BootstrapPaired(
-                hh_ontology::eval::BootstrapPairedMethod::Percentile,
+                hharness_ontology::eval::BootstrapPairedMethod::Percentile,
             ),
         },
         per_task_effects_ref: None,
@@ -485,7 +485,7 @@ fn outcome_from_deltas(metric: &str, a: &str, b: &str, deltas: &[(String, i64)])
                 counts: ((0, 0), (0, 0)),
             })
             .collect()],
-        deviation: hh_eval::compare::DeviationReport::default(),
+        deviation: hharness_eval::compare::DeviationReport::default(),
         outcome_counts: Default::default(),
     }
 }
@@ -1178,7 +1178,13 @@ fn multiplicity_null_fwer_and_labels() {
             })
             .collect();
         let mut rs = reports.clone();
-        hh_analysis::multiplicity::apply_multiplicity(&mut rs, &delta_sets, Some(&preg), 2000, 7);
+        hharness_analysis::multiplicity::apply_multiplicity(
+            &mut rs,
+            &delta_sets,
+            Some(&preg),
+            2000,
+            7,
+        );
         // FWER: any primary comparison's Holm-adjusted p < 50_000 ppm.
         let primary_hit = rs.iter().take(5).any(|r| {
             r.multiplicity
@@ -1421,7 +1427,7 @@ fn ka1_bernoulli_factorial_coverage() {
     let mut d = decl("task_success");
     d.interval_method = IntervalMethod::ClusteredClt;
     let (interval, selection) =
-        hh_eval::scorecard::cell_interval(&d, &task_values, &cn, 950_000, "seed-ka1");
+        hharness_eval::scorecard::cell_interval(&d, &task_values, &cn, 950_000, "seed-ka1");
     assert!(interval.is_some());
     let sub = selection.substituted.expect("substitution recorded");
     assert_eq!(sub.from, IntervalMethod::ClusteredClt);
@@ -1492,7 +1498,7 @@ fn ka2_heavy_tail_coverage_and_clt_substitution() {
     let mut d = decl("cost_spend_total");
     d.interval_method = IntervalMethod::Clt;
     let (_interval, selection) =
-        hh_eval::scorecard::cell_interval(&d, &task_values, &cn, 950_000, "seed-ka2");
+        hharness_eval::scorecard::cell_interval(&d, &task_values, &cn, 950_000, "seed-ka2");
     let sub = selection
         .substituted
         .expect("clt on money is substituted + labelled");
@@ -1663,11 +1669,11 @@ fn clustered_clt_finite_cluster_correction() {
 fn spend_row(
     seq: u64,
     class: &str,
-    conf: hh_budget::pricing::Confidence,
+    conf: hharness_budget::pricing::Confidence,
     cov: i64,
     micros: i64,
-) -> hh_eval::facts::SpendRowFact {
-    hh_eval::facts::SpendRowFact {
+) -> hharness_eval::facts::SpendRowFact {
+    hharness_eval::facts::SpendRowFact {
         seq,
         subject_ref: None,
         model_ref: None,
@@ -1688,7 +1694,7 @@ fn spend_row(
 /// present in `points` (nothing suppressed).
 #[test]
 fn s312_frontier_per_class_frontiers_bands_and_combined() {
-    use hh_budget::pricing::Confidence;
+    use hharness_budget::pricing::Confidence;
     let metric = "task_success";
     // a/c at 500_000 ppm capability, b at 1_000_000.
     let mut rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
@@ -1875,19 +1881,19 @@ fn s312_frontier_refuses_exploratory_match_mode() {
                 &[(DimensionKey::Primary(DimensionId::ModelCalls), 100)],
             );
             let mut ms = MatchSpec::matched_cap(&[DimensionId::ModelCalls]);
-            ms.mode = hh_budget::matchspec::MatchMode::None;
+            ms.mode = hharness_budget::matchspec::MatchMode::None;
             (id.to_string(), ArmSpec::native(caps.clone(), caps, ms))
         })
         .collect();
     let f = Fixture::new(rows, &["t1"], exploratory, vec![decl(metric)], None);
     let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
     match analyze(&s, &f.input()) {
-        Err(AnalysisError::Compare(hh_eval::compare::CompareError::Match(e))) => {
+        Err(AnalysisError::Compare(hharness_eval::compare::CompareError::Match(e))) => {
             assert!(
                 matches!(
                     e.refusal,
-                    hh_budget::MatchRefusal::IncommensurableMatch {
-                        reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+                    hharness_budget::MatchRefusal::IncommensurableMatch {
+                        reason: hharness_budget::RefusalReason::ExploratoryNoMatch,
                         ..
                     }
                 ),
@@ -1909,9 +1915,9 @@ fn s312_frontier_refuses_missing_match_spec() {
     let f = Fixture::new(rows, &["t1"], specd, vec![decl(metric)], None);
     let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
     match analyze(&s, &f.input()) {
-        Err(AnalysisError::Compare(hh_eval::compare::CompareError::Match(e))) => {
+        Err(AnalysisError::Compare(hharness_eval::compare::CompareError::Match(e))) => {
             assert!(
-                matches!(e.refusal, hh_budget::MatchRefusal::MissingMatchSpec),
+                matches!(e.refusal, hharness_budget::MatchRefusal::MissingMatchSpec),
                 "{e:?}"
             );
         }
@@ -1923,7 +1929,7 @@ fn s312_frontier_refuses_missing_match_spec() {
 /// currency pair stays on the combined frontier as separate points.
 #[test]
 fn s312_frontier_never_dominates_across_currencies() {
-    use hh_budget::pricing::Confidence;
+    use hharness_budget::pricing::Confidence;
     let metric = "task_success";
     let rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
     let mut f = Fixture::new(
@@ -1949,7 +1955,7 @@ fn s312_frontier_never_dominates_across_currencies() {
             .get_mut(rid)
             .unwrap()
             .spend_rows
-            .push(hh_eval::facts::SpendRowFact {
+            .push(hharness_eval::facts::SpendRowFact {
                 currency: Some("eur".into()),
                 ..spend_row(10, "measured", Confidence::Exact, 1_000_000, 999)
             });

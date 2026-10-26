@@ -7,9 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 use crate::manifest::{BlobIndexEntry, LedgerExport};
@@ -24,7 +24,7 @@ pub type MemberBytes = BTreeMap<String, Vec<u8>>;
 
 /// Content-address `bytes` and record them in `members`.
 pub fn add_member(members: &mut MemberBytes, bytes: Vec<u8>, media_type: &str) -> (String, u64) {
-    let addr = hh_identity::address(&bytes, media_type);
+    let addr = hharness_identity::address(&bytes, media_type);
     let size = bytes.len() as u64;
     members.insert(addr.id(), bytes);
     (addr.id(), size)
@@ -55,7 +55,7 @@ pub fn decode_page(bytes: &[u8]) -> Result<Vec<EventEnvelope>, BundleError> {
     let text = String::from_utf8(bytes.to_vec()).map_err(|_| BundleError::Malformed {
         detail: "ledger page is not utf-8".into(),
     })?;
-    let doc = hh_wire::json::parse(&text).map_err(|e| BundleError::Malformed {
+    let doc = hharness_wire::json::parse(&text).map_err(|e| BundleError::Malformed {
         detail: format!("ledger page parse: {e}"),
     })?;
     match doc.get("events") {
@@ -174,7 +174,7 @@ pub fn build_ledger_export(
         .rev()
         .filter(|e| e.class == "security.audit.checkpoint")
         .find_map(|e| {
-            let claim = hh_ledger::tree::parse_checkpoint(&e.payload)?;
+            let claim = hharness_ledger::tree::parse_checkpoint(&e.payload)?;
             if claim.signatures.is_empty() {
                 return None;
             }
@@ -551,7 +551,7 @@ pub fn export_target(
             // declared per run in the loss report, never silent (CC3).
             let mut cost_views = BTreeMap::new();
             for (run, events) in &run_events {
-                let cv = hh_telemetry::views::cost_view(run, run, events, None);
+                let cv = hharness_telemetry::views::cost_view(run, run, events, None);
                 let micro = cv
                     .payload
                     .get("total_spend_micro")
@@ -674,7 +674,7 @@ pub fn export_target(
             }
         },
     }
-    let artefact = hh_identity::idp_id(
+    let artefact = hharness_identity::idp_id(
         "bundle.export",
         Json::Obj(
             crate::fetch::digest_index(&files)
@@ -708,11 +708,11 @@ pub fn export_target(
 
 // ── training_export/1 (S6.4; §5h.8 §2.1; ADR-0325) ────────────────────────────
 
-/// A `hh_lab::coevolution::CoEvolutionError` → the boundary's typed
+/// A `hharness_lab::coevolution::CoEvolutionError` → the boundary's typed
 /// refusal (`CoevolutionRefused` carries the closed code verbatim —
 /// `HeldOutInExport`, `InadmissibleRewardSource`, `ReaderViolation`,
 /// `BundleNotValid`, …).
-fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> BundleError {
+fn coe_err(e: hharness_lab::coevolution::CoEvolutionError) -> BundleError {
     BundleError::CoevolutionRefused { reason: e.code() }
 }
 
@@ -739,10 +739,10 @@ fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> BundleError {
 /// (the caller mints `measurement.export.delivered` per subject run).
 pub fn export_training(
     decoded: &crate::codec::Decoded,
-    policy: &hh_lab::coevolution::TrainingExportPolicy,
-    ctx: &hh_lab::coevolution::TrainingExportCtx,
+    policy: &hharness_lab::coevolution::TrainingExportPolicy,
+    ctx: &hharness_lab::coevolution::TrainingExportCtx,
 ) -> Result<ExportOutcome, BundleError> {
-    use hh_lab::coevolution as coe;
+    use hharness_lab::coevolution as coe;
 
     let mut samples = Vec::new();
     let mut loss: Vec<coe::ExportLossEntry> = Vec::new();
@@ -819,7 +819,7 @@ pub fn export_training(
         "loss_report.json".into(),
         loss_report.to_canonical_string().into_bytes(),
     );
-    let artefact = hh_identity::idp_id(
+    let artefact = hharness_identity::idp_id(
         "bundle.export",
         Json::Obj(
             crate::fetch::digest_index(&files)

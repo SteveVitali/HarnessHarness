@@ -13,11 +13,11 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_containment::policy::IsolationClass;
-use hh_identity::idp::ContentAddress;
-use hh_identity::kinds::RecordKind;
-use hh_identity::record::{identify, Identity, Record, Reference};
-use hh_wire::json::Json;
+use hharness_containment::policy::IsolationClass;
+use hharness_identity::idp::ContentAddress;
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::record::{identify, Identity, Record, Reference};
+use hharness_wire::json::Json;
 
 use crate::errors::EnvError;
 
@@ -282,7 +282,7 @@ pub struct CanaryChannel {
     pub channel_id: String,
     /// The channel spec — must carry `canary: true` (the broker never
     /// injects it; any use attempt is `leak_detected` + `Refused{canary}`).
-    pub spec: hh_secrets::SecretChannelSpec,
+    pub spec: hharness_secrets::SecretChannelSpec,
 }
 
 /// `EnvironmentRecord` — the definition record (ADR-0136 §3). `identify()`
@@ -308,7 +308,7 @@ pub struct EnvironmentRecord {
     pub containment_policy_ref: (String, String),
     /// The declared resource bounds (the policy's `resources` member —
     /// re-recorded here so the definition's claim is self-contained).
-    pub limits: hh_containment::policy::ResourceLimits,
+    pub limits: hharness_containment::policy::ResourceLimits,
     /// The image attestation (S5.8; R-2.2.5²) — `Some` only when the
     /// binding declared `substrate_attestation`; an attesting isolation
     /// class without one refuses at `verify_attested` (the resolve-time
@@ -415,7 +415,7 @@ impl EnvironmentRecord {
             r = r.semantic("build_context", Json::str(bc.id()));
         }
         // The limits member is the policy's own canonical form (one schema —
-        // the ResourceLimits member spelling is hh-containment's).
+        // the ResourceLimits member spelling is hharness-containment's).
         r = r.semantic("limits", self.limits_json());
         if let Some(a) = &self.image_attestation {
             r = r.semantic("image_attestation", a.to_json());
@@ -473,12 +473,12 @@ impl EnvironmentRecord {
     /// recorded claim, not a requirement.
     pub fn verify_attested(
         &self,
-        isolation: hh_containment::policy::IsolationClass,
+        isolation: hharness_containment::policy::IsolationClass,
     ) -> Result<(), EnvError> {
         let attesting = matches!(
             isolation,
-            hh_containment::policy::IsolationClass::UserSpaceKernel
-                | hh_containment::policy::IsolationClass::Microvm
+            hharness_containment::policy::IsolationClass::UserSpaceKernel
+                | hharness_containment::policy::IsolationClass::Microvm
         );
         if !attesting {
             return Ok(());

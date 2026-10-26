@@ -11,10 +11,10 @@
 
 use std::fs;
 
-use hh_identity::idp::idp_id;
-use hh_ledger::manifest::RunKind;
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_ledger::manifest::RunKind;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::catalogue::BundleStatus;
 use crate::error::ResultsError;
@@ -122,7 +122,7 @@ pub fn load(results: &ResultsStore) -> Result<AnnotationIndex, ResultsError> {
     let text = fs::read_to_string(&path).map_err(|e| ResultsError::Store {
         detail: format!("read annotations: {e}"),
     })?;
-    let j = hh_wire::json::parse(&text).map_err(|e| ResultsError::Store {
+    let j = hharness_wire::json::parse(&text).map_err(|e| ResultsError::Store {
         detail: format!("parse annotations: {e:?}"),
     })?;
     let Json::Obj(m) = &j else {
@@ -192,7 +192,7 @@ fn experiment_flags(store: &Store, row: &ResultsRow) -> (Vec<String>, WatermarkS
         let Ok(events) = store.envelopes(&run_id) else {
             continue;
         };
-        let view = hh_experiment::view::ExperimentView::fold(events);
+        let view = hharness_experiment::view::ExperimentView::fold(events);
         let mut touched = false;
         for plan in view.plans.values() {
             for attempt in &plan.attempts {

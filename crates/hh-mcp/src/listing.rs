@@ -10,7 +10,7 @@
 //! decides what to do with it (`supersedes{reason: edit}`, lineage,
 //! classification); this layer only reports *what* changed.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The lifted-listing document schema id.
 pub const LISTING_SCHEMA: &str = "hh-mcp-listing/1";
@@ -42,14 +42,14 @@ pub fn import_listing(server_ref: &str, tools: &[Json]) -> Json {
 /// `idp` over one wire `Tool`'s canonical bytes — the per-surface
 /// `pin`/`refresh` subject.
 pub fn tool_listing_hash(tool: &Json) -> String {
-    hh_identity::idp_id("mcp.listing.tool", tool.to_canonical_string().as_bytes())
+    hharness_identity::idp_id("mcp.listing.tool", tool.to_canonical_string().as_bytes())
 }
 
 /// `idp` over the canonical tool array — the whole-listing hash the
 /// `refresh` no-op rule compares (unchanged hash ⇒ no-op).
 pub fn listing_hash(tools: &[Json]) -> String {
     let doc = Json::Arr(tools.to_vec());
-    hh_identity::idp_id("mcp.listing", doc.to_canonical_string().as_bytes())
+    hharness_identity::idp_id("mcp.listing", doc.to_canonical_string().as_bytes())
 }
 
 /// Read a `hh-mcp-listing/1` document back to `(server_ref, tools)` —

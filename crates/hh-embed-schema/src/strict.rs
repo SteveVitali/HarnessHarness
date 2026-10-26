@@ -5,7 +5,7 @@
 //! byte-for-byte, never deciding).
 
 use crate::errors::EmbedError;
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeSet;
 
 /// A decoding cursor over one JSON object. `take*` marks a declared member

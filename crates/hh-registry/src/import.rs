@@ -4,7 +4,7 @@
 //! `import_listing(server_ref, listing)` lifts a `hh-mcp-listing/1`
 //! document into one `ToolCapabilityRecord` per wire tool:
 //!
-//! - A tool carrying the `dev.cognition/hir` `_meta` block (an own
+//! - A tool carrying the `hharness/hir` `_meta` block (an own
 //!   export) recovers `semantic_id`, the declared `effects` (full
 //!   `EffectClass` vectors ride the carried set), `permission_class`,
 //!   the provenance pointer and `budget_ref`; `scope_bindings`,
@@ -39,13 +39,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::document::Node;
-use hh_hir::kinds::{EffectClass, EffectDomain, EntityKind, ToolEffects, EFFECT_DOMAINS};
-use hh_hir::leaves::Text;
-use hh_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_identity::refs::VersionedRef;
-use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_hir::document::Node;
+use hharness_hir::kinds::{EffectClass, EffectDomain, EntityKind, ToolEffects, EFFECT_DOMAINS};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::{Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::errors::RegistryError;
 use crate::identity;
@@ -53,12 +53,12 @@ use crate::records::{CapabilityRecord, RegistryRecord};
 use crate::store::RegistryStore;
 
 /// The `_meta` key the carried HIR block rides under — the wire
-/// spelling `hh-mcp`'s artifact module owns (one document, two readers:
+/// spelling `hharness-mcp`'s artifact module owns (one document, two readers:
 /// the served surface and this lift; the key is data, not a type —
 /// the dependency-direction invariant is unaffected).
-pub const HH_META_KEY: &str = "dev.cognition/hir";
+pub const HH_META_KEY: &str = "hharness/hir";
 
-/// The listing document schema this module consumes (the `hh-mcp`
+/// The listing document schema this module consumes (the `hharness-mcp`
 /// `hh-mcp-listing/1` projection — a wire shape, kept as data).
 pub const LISTING_SCHEMA: &str = "hh-mcp-listing/1";
 
@@ -214,7 +214,7 @@ pub(crate) fn lift_tool(server_ref: &str, wire: &Json, seq: u64) -> (ToolCapabil
         claims.insert("annotations".to_string(), a.clone());
     }
     let listing_hash =
-        hh_identity::idp_id("mcp.listing.tool", wire.to_canonical_string().as_bytes());
+        hharness_identity::idp_id("mcp.listing.tool", wire.to_canonical_string().as_bytes());
     let mut source = vec![
         ("kind".to_string(), Json::str("mcp_listing")),
         ("server_ref".to_string(), Json::str(server_ref.to_string())),
@@ -307,7 +307,7 @@ pub(crate) fn listing_delta_names(
 ) -> (Vec<String>, Vec<String>, Vec<String>) {
     let hashes = |doc: &Json| -> BTreeMap<String, String> {
         // `tools[]` entries are `{name, listing_hash, tool}` (the served
-        // shape); a bare `tool` object also parses (`hh-mcp`'s projection
+        // shape); a bare `tool` object also parses (`hharness-mcp`'s projection
         // omits nothing).
         match doc.get("tools") {
             Some(Json::Arr(entries)) => entries
@@ -325,7 +325,7 @@ pub(crate) fn listing_delta_names(
                         .and_then(Json::as_str)
                         .map(|s| s.to_string())
                         .unwrap_or_else(|| {
-                            hh_identity::idp_id(
+                            hharness_identity::idp_id(
                                 "mcp.listing.tool",
                                 tool.to_canonical_string().as_bytes(),
                             )
@@ -435,7 +435,7 @@ fn semantic_id_excl_source(rec: &RegistryRecord) -> Option<String> {
     if let KindRecord::ToolCapability(t) = &mut node.semantic {
         t.source = Json::Null;
     }
-    Some(hh_hir::identity::semantic_id(&node))
+    Some(hharness_hir::identity::semantic_id(&node))
 }
 
 /// The `source` member's identity key — `(server_ref, tool_name)`.
@@ -519,7 +519,8 @@ pub fn refresh(
             .to_string();
         seen.insert(name.clone());
         let (rec, _carried) = lift_tool(&server_ref, wire, i as u64);
-        let hash = hh_identity::idp_id("mcp.listing.tool", wire.to_canonical_string().as_bytes());
+        let hash =
+            hharness_identity::idp_id("mcp.listing.tool", wire.to_canonical_string().as_bytes());
         match current.get(&name) {
             Some((_, old_hash, _, _)) if *old_hash == hash => {
                 out.unchanged.push(name);

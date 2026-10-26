@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::error::BundleError;
 use crate::export::MemberBytes;
@@ -76,7 +76,7 @@ pub fn decode_dir(dir: &Path) -> Result<Decoded, BundleError> {
         detail: format!("{}: {e}", dir.display()),
     };
     let text = std::fs::read_to_string(dir.join(MANIFEST_NAME)).map_err(io)?;
-    let doc = hh_wire::json::parse(&text).map_err(|e| BundleError::Malformed {
+    let doc = hharness_wire::json::parse(&text).map_err(|e| BundleError::Malformed {
         detail: format!("{MANIFEST_NAME}: {e}"),
     })?;
     let manifest = BundleManifest::from_json(&doc)?;
@@ -122,7 +122,7 @@ pub fn decode_container(bytes: &[u8]) -> Result<Decoded, BundleError> {
             detail: "HHB1 body is not utf-8".into(),
         }
     })?;
-    let doc = hh_wire::json::parse(text).map_err(|e| BundleError::Malformed {
+    let doc = hharness_wire::json::parse(text).map_err(|e| BundleError::Malformed {
         detail: format!("HHB1 body: {e}"),
     })?;
     let manifest =

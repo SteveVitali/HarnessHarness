@@ -4,17 +4,17 @@
 //! Binding (a) drives `EmbedService::handle` in-process. The participant
 //! record registers as an opaque `participant` body (records-in); probe
 //! reports pin a `conformance_suite` + a durable run; `drive` exercises the
-//! removable `HostingPlane` seam (a stub closure — `hh-embed` never names
-//! `hh-hosting`; a `hosting_plane_absent` refusal is the honest-tier
+//! removable `HostingPlane` seam (a stub closure — `hharness-embed` never names
+//! `hharness-hosting`; a `hosting_plane_absent` refusal is the honest-tier
 //! contract, AC-R-2.10.6-5).
 
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
 
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> std::path::PathBuf {
     let p = std::env::temp_dir().join(format!("hh-embed-hosting-{tag}-{}", std::process::id()));
@@ -65,7 +65,7 @@ fn is_err(resp: &Json) -> bool {
 /// The kernel registrar — register/quarantine are ≥-principal acts
 /// (the conformance suite uses the same provenance helper).
 fn registrar() -> Json {
-    hh_provenance::ProvenanceRecord::kernel("hh-embed/hosting-test", 0).to_json()
+    hharness_provenance::ProvenanceRecord::kernel("hh-embed/hosting-test", 0).to_json()
 }
 
 /// `hello` — the service refuses ops until the handshake initializes it.
@@ -152,9 +152,9 @@ fn register_participant(svc: &mut EmbedService, identity: &str, decl: &[(&str, &
 
 /// A `class` body (the conformance suite's pin target).
 fn class_body(class_id: &str) -> Json {
-    use hh_registry::kinds::Cardinality;
-    use hh_registry::records::{ClassRecord, ContractOperation, RegistryRecord};
-    hh_registry::schema::body_json(
+    use hharness_registry::kinds::Cardinality;
+    use hharness_registry::records::{ClassRecord, ContractOperation, RegistryRecord};
+    hharness_registry::schema::body_json(
         &RegistryRecord::Class(ClassRecord {
             class_id: class_id.to_string(),
             contract: vec![ContractOperation {
@@ -198,22 +198,24 @@ fn register_suite(svc: &mut EmbedService) -> String {
         ]),
     ));
     let class_vid = cv.get("version_id").and_then(Json::as_str).unwrap();
-    let suite_body = hh_registry::schema::body_json(
-        &hh_registry::records::RegistryRecord::Suite(hh_registry::records::ConformanceSuite {
-            suite_id: "suite:hosting-probe".to_string(),
-            class_ref: class_vid.to_string(),
-            contract_version: "1.0".to_string(),
-            tests: vec![hh_registry::records::SuiteTest {
-                test_id: "t-hosted".to_string(),
-                kind: hh_registry::kinds::TestKind::Static,
-                fixture_ref: None,
-                driver: hh_registry::kinds::TestDriver::InProcess,
-                oracle_class: hh_registry::kinds::OracleClass::Deterministic,
-                budget: Json::obj([("max_ms", Json::Int(100))]),
-                verdict_rule: "entries land".to_string(),
-            }],
-            required_for_status: ["t-hosted".to_string()].into_iter().collect(),
-        }),
+    let suite_body = hharness_registry::schema::body_json(
+        &hharness_registry::records::RegistryRecord::Suite(
+            hharness_registry::records::ConformanceSuite {
+                suite_id: "suite:hosting-probe".to_string(),
+                class_ref: class_vid.to_string(),
+                contract_version: "1.0".to_string(),
+                tests: vec![hharness_registry::records::SuiteTest {
+                    test_id: "t-hosted".to_string(),
+                    kind: hharness_registry::kinds::TestKind::Static,
+                    fixture_ref: None,
+                    driver: hharness_registry::kinds::TestDriver::InProcess,
+                    oracle_class: hharness_registry::kinds::OracleClass::Deterministic,
+                    budget: Json::obj([("max_ms", Json::Int(100))]),
+                    verdict_rule: "entries land".to_string(),
+                }],
+                required_for_status: ["t-hosted".to_string()].into_iter().collect(),
+            },
+        ),
         false,
     );
     let sv = ok(&call(
@@ -234,9 +236,10 @@ fn register_suite(svc: &mut EmbedService) -> String {
 /// Seed a finished run + a live writer lease on `root` before the service
 /// opens (the folded state is shared — the lease rows replay).
 fn seed_runs(root: &std::path::Path) -> (String, Json, String, Json, String) {
-    let mut store = hh_ledger::store::Store::open(root.join("store")).unwrap();
-    let manifest =
-        || hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+    let mut store = hharness_ledger::store::Store::open(root.join("store")).unwrap();
+    let manifest = || {
+        hharness_ledger::manifest::RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent)
+    };
     let (durable_run, _) = store.open_run(manifest(), "seed").unwrap();
     let durable_run2 = durable_run.clone();
     store
@@ -308,7 +311,7 @@ fn entry(
     observed: &str,
     at: i64,
 ) -> Json {
-    let verdict = hh_registry::records::ConformanceRecord::derive_verdict(
+    let verdict = hharness_registry::records::ConformanceRecord::derive_verdict(
         &Json::str(declared),
         &Json::str(observed),
     )

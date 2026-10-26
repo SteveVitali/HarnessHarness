@@ -169,7 +169,7 @@ pub enum RegistryError {
     /// (§5d.1 §3; ADR-0088 D1 — `ValidationErrors`, collected not fail-fast).
     CapabilityValidation {
         /// Every violated V-E1 check.
-        violations: Vec<hh_hir::errors::HirError>,
+        violations: Vec<hharness_hir::errors::HirError>,
     },
     /// An operation on a record the store does not hold.
     UnknownVersion {

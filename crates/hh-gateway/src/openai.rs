@@ -4,7 +4,7 @@
 //!
 //! - **Request render** — [`chat_request_body`] assembles the
 //!   `chat/completions` request JSON from the plan's lowered messages +
-//!   tool entries (the kernel's transcript render lives in `hh-embed`'s
+//!   tool entries (the kernel's transcript render lives in `hharness-embed`'s
 //!   `GatewayModel`; this module owns only the wire shape).
 //! - **Response translate** — [`SseDecoder`] splits `text/event-stream`
 //!   bytes into events; [`ChunkTranslator`] folds `chat.completion.chunk`s
@@ -22,7 +22,7 @@
 
 use crate::codec::WireFrame;
 use crate::vocab::{ModelError, ModelErrorClass};
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── request render ───────────────────────────────────────────────────────────
 

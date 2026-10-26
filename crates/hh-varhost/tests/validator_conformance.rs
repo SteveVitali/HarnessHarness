@@ -3,7 +3,7 @@
 //! stub spawned *for real* through `hh-helper`, driven over
 //! `plugin_abi/1` `invoke` ops through the generic
 //! `declare`/`bind`/`collect`/`check` contract battery. The fixture runs
-//! the canonical `hh-verification` semantics — `validators::declare`/
+//! the canonical `hharness-verification` semantics — `validators::declare`/
 //! `bind`, `build_bundle`, the `Verdict` contract and the
 //! `verification.validator.*` codecs — so what the suite asserts is the
 //! contract itself crossing the process boundary, never a re-spelling
@@ -27,13 +27,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{AbiError, BindParams};
-use hh_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
-use hh_varhost::{
+use hharness_embed_schema::plugin_abi::{AbiError, BindParams};
+use hharness_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
+use hharness_varhost::{
     spawn, InvokeOutcome, RecordingPorts, SpawnSpec, VariantHost, VariantPackage, VariantSession,
     VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -93,14 +93,14 @@ fn spec(pkg: VariantPackage, exec_args: Vec<String>) -> SpawnSpec {
         package: pkg,
         session_id: format!("val-{}", std::process::id()),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: dir,
         exec_args: pinned_args,
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:local/fixture-validator", "pin:fixture"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:local/fixture-validator", "pin:fixture"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -137,7 +137,7 @@ struct Rig {
 /// lane — absence is a loud skip, never a fabricated pass).
 fn rig(exec_args: Vec<String>) -> Option<Rig> {
     let bin = fixture_bin()?;
-    if hh_env::helper::helper_binary().is_none() {
+    if hharness_env::helper::helper_binary().is_none() {
         eprintln!("validator conformance: hh-helper binary not found — skipped");
         return None;
     }

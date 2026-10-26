@@ -9,15 +9,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_identity::rotation::{migrate_id, MigrationMethod, RotationPlan};
-use hh_ledger::audit::{Auditor, FixedSigner, KeyTable};
-use hh_ledger::event::{Event, EventEnvelope, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{LineageLink, RunKind, RunManifest};
-use hh_ledger::rotation::{self, rotate_corpus};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::tree;
-use hh_wire::json::Json;
+use hharness_identity::rotation::{migrate_id, MigrationMethod, RotationPlan};
+use hharness_ledger::audit::{Auditor, FixedSigner, KeyTable};
+use hharness_ledger::event::{Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{LineageLink, RunKind, RunManifest};
+use hharness_ledger::rotation::{self, rotate_corpus};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::tree;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -147,7 +147,7 @@ fn ac_r_2_12_1_6_rotate_corpus_over_chained_runs() {
     let receipts = rotate_corpus(&mut s, &runs, &mut signer(), &plan).unwrap();
     assert_eq!(receipts.len(), 4);
 
-    let p1 = hh_identity::idp::profile_for("idp/1").unwrap();
+    let p1 = hharness_identity::idp::profile_for("idp/1").unwrap();
     let corpus_ids: Vec<String> = run_ids.iter().cloned().collect();
 
     for (run_id, receipt) in run_ids.iter().zip(&receipts) {
@@ -194,8 +194,10 @@ fn ac_r_2_12_1_6_rotate_corpus_over_chained_runs() {
             bridge.links_run_ids, corpus_ids,
             "the bridge names every corpus member"
         );
-        let leaves2 =
-            rotation::rehashed_leaves(hh_identity::idp::profile_for("idp/2").unwrap(), covered);
+        let leaves2 = rotation::rehashed_leaves(
+            hharness_identity::idp::profile_for("idp/2").unwrap(),
+            covered,
+        );
         for (ev, new_hash) in before[run_id].iter().zip(&leaves2) {
             let m = bridge
                 .resolve(&ev.1)
@@ -215,7 +217,7 @@ fn ac_r_2_12_1_6_rotate_corpus_over_chained_runs() {
     // ── migrate_id round-trips for every corpus record ────────────────
     // The bridge records are themselves content ids — forward under idp/2
     // then back under idp/1 recovers the stored id.
-    let p2 = hh_identity::idp::profile_for("idp/2").unwrap();
+    let p2 = hharness_identity::idp::profile_for("idp/2").unwrap();
     for receipt in &receipts {
         let b = receipt.bridge.as_ref().unwrap();
         // The `bridge_id` preimage is the unsigned body — `to_json` minus

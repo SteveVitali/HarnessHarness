@@ -33,14 +33,14 @@
 
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
-use hh_ontology::eval::{
+use hharness_ontology::compliance::{Detector, MetricDeclaration, NaReason};
+use hharness_ontology::eval::{
     ChargedTo, EvidenceKind, MetricValue, MetricValueKind, OracleClass, OracleDeclaration,
     OracleError,
 };
-use hh_verification::critic_rt::{calibration_status_at, CalibrationContext};
-use hh_verification::critics::{CalibrationRecord, IndependenceVector};
-use hh_verification::vocab::{
+use hharness_verification::critic_rt::{calibration_status_at, CalibrationContext};
+use hharness_verification::critics::{CalibrationRecord, IndependenceVector};
+use hharness_verification::vocab::{
     CalibrationStatus, CapabilityIndependence, ContextIndependence, CriticUse, Optimization,
     ProvenanceIndependence, SnapshotIndependence,
 };

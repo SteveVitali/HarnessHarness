@@ -1,7 +1,7 @@
 //! `R-2.4.3⁰` — the C0 `MemoryStore` (§5c.3; ADR-0077…0080): writes are
 //! immutable [`MemoryVersion`]s, never in-place mutation; `bind`/`manifest`
 //! are name-history bindings (`NameBindingRecord`-shaped, version-only);
-//! `revoke` is hash-chained through `hh-identity`'s `Lineage`; `resolve` under
+//! `revoke` is hash-chained through `hharness-identity`'s `Lineage`; `resolve` under
 //! `ResolveMode::Execute` never serves a revoked/stale/superseded head;
 //! per-scope writer leases fence every write; the `delegate` write ceiling
 //! and `external` free-text cap apply to delegate-class writers (R-TEXT).
@@ -9,7 +9,7 @@
 //! The store is runtime-owned infrastructure: callers hand `put`/`bind`/
 //! `revoke` a [`WriteContext`] carrying `context_label` + `lease_generation`
 //! and the store emits ledger payload rows ([`crate::events`]) for the caller
-//! to append — the store itself never touches `hh-ledger`'s `Store` (the
+//! to append — the store itself never touches `hharness-ledger`'s `Store` (the
 //! kernel owns append; the payloads are the contract).
 //!
 //! `enumerate`/`retrieve`/`lexical_index`/`stale_index`/`memory_usage` are
@@ -18,16 +18,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::records::Validity;
-use hh_identity::idp::{identify_bytes, idp_id};
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_identity::supersede::{Lineage, SupersedeReason, SupersedesEdge};
-use hh_provenance::label::Label;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::PersistenceScope;
-use hh_wire::json::Json;
+use hharness_hir::records::Validity;
+use hharness_identity::idp::{identify_bytes, idp_id};
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_identity::supersede::{Lineage, SupersedeReason, SupersedesEdge};
+use hharness_provenance::label::Label;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::PersistenceScope;
+use hharness_wire::json::Json;
 
 use crate::codec::label_json;
 use crate::events;
@@ -201,7 +201,7 @@ pub struct Justification {
     /// The `VersionedRef` this write rested on.
     pub ref_: VersionedRef,
     /// The `EventRef` of the delivery/expand/read (`run_id:event_id`).
-    pub at: hh_ledger::manifest::EventRef,
+    pub at: hharness_ledger::manifest::EventRef,
 }
 
 /// `SupersedeClaim` — a `put`'s declared supersession intent (§5c.3).
@@ -215,7 +215,7 @@ pub struct SupersedeClaim {
 
 /// `SupersedeClaimReason` — `correction | replacement | compaction |
 /// migration | consolidation` (§5c.3; the write-side reasons — the
-/// lineage-side `SupersedeReason` is `hh-identity`'s).
+/// lineage-side `SupersedeReason` is `hharness-identity`'s).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SupersedeClaimReason {
     /// A correction.
@@ -441,7 +441,7 @@ pub(crate) fn contract_json(c: &InvalidationContract) -> Json {
 }
 
 /// `Artifact` — the layer-A record (§5c.3): content-addressed, file-shaped.
-/// The `content_address` is the `hh-ledger` blob id / `context_offload` id.
+/// The `content_address` is the `hharness-ledger` blob id / `context_offload` id.
 #[derive(Debug, Clone)]
 pub struct ArtifactVersion {
     /// `artifact_id` — the content address.
@@ -552,7 +552,7 @@ pub enum JustificationScope {
 #[derive(Debug, Clone)]
 pub struct MemoryPolicy {
     /// The write ceiling for delegate-class writers (`delegate` per §5c.3).
-    pub write_ceiling: hh_provenance::AuthorityClass,
+    pub write_ceiling: hharness_provenance::AuthorityClass,
     /// `kind → {default_contract, allowed_scopes, granularity_allowed,
     /// min_authority_for_storage}` — the per-kind write defaults the ticket
     /// makes *declared data* (never silent defaults — a kind with no entry
@@ -578,13 +578,13 @@ pub struct KindPolicy {
     /// Whether `table`-granularity stamps are legal for the kind.
     pub granularity_allowed: bool,
     /// The minimum authority a stored version may carry for this kind.
-    pub min_authority_for_storage: hh_provenance::AuthorityClass,
+    pub min_authority_for_storage: hharness_provenance::AuthorityClass,
 }
 
 impl Default for MemoryPolicy {
     fn default() -> Self {
         MemoryPolicy {
-            write_ceiling: hh_provenance::AuthorityClass::Delegate,
+            write_ceiling: hharness_provenance::AuthorityClass::Delegate,
             per_kind_defaults: BTreeMap::new(),
             escalate_on_unresolved: true,
             escalation_principal: "principal".to_string(),
@@ -799,7 +799,7 @@ pub struct MemoryStore {
     order: Vec<String>,
     /// `"scope:name" → binding history`.
     names: BTreeMap<String, Vec<NameBinding>>,
-    /// The shared lineage machine (`hh-identity`'s — supersession edges,
+    /// The shared lineage machine (`hharness-identity`'s — supersession edges,
     /// revocation records, direct stale index).
     lineage: Lineage,
     /// Memory-reason revocations (the `RevocationReason`-precise rows — the
@@ -1001,7 +1001,7 @@ impl MemoryStore {
         // (2) Scope ceiling — `definition` is `seal`-only at C0; `user` needs
         // approval the delegate-class writer cannot supply.
         // The write ceiling binds agent-authored writes: `model`/`evolution`/
-        // `participant` origins are delegate-class (hh-provenance's
+        // `participant` origins are delegate-class (hharness-provenance's
         // `is_delegate_class`), and `tool` results write at `delegate` too.
         let delegate_class_writer = provenance.origin.is_delegate_class()
             || matches!(provenance.origin, Origin::Tool { .. });
@@ -1103,11 +1103,11 @@ impl MemoryStore {
             label.authority = self.policy.write_ceiling;
         }
         let text_cap = if draft.content.is_text() && !draft.validator_endorsed {
-            hh_provenance::AuthorityClass::External
+            hharness_provenance::AuthorityClass::External
         } else if draft.validator_endorsed {
-            hh_provenance::AuthorityClass::Environment
+            hharness_provenance::AuthorityClass::Environment
         } else {
-            hh_provenance::AuthorityClass::Kernel
+            hharness_provenance::AuthorityClass::Kernel
         };
         if delegate_class_writer && label.authority > text_cap {
             label.authority = text_cap;
@@ -1196,10 +1196,11 @@ impl MemoryStore {
                     ancestor_or_sibling || claim.reason == SupersedeClaimReason::Migration,
                 )
                 .map_err(|e| match e {
-                    hh_identity::supersede::SupersedeError::CycleDetected { newer, older } => {
-                        MemoryError::CycleDetected { newer, older }
-                    }
-                    hh_identity::supersede::SupersedeError::NotAncestorOrSibling => {
+                    hharness_identity::supersede::SupersedeError::CycleDetected {
+                        newer,
+                        older,
+                    } => MemoryError::CycleDetected { newer, older },
+                    hharness_identity::supersede::SupersedeError::NotAncestorOrSibling => {
                         MemoryError::CycleDetected {
                             newer: version.version_id.clone(),
                             older: claim.version_id.clone(),
@@ -1353,9 +1354,10 @@ impl MemoryStore {
                     true, // name-history bindings are siblings on the line
                 )
                 .map_err(|e| match e {
-                    hh_identity::supersede::SupersedeError::CycleDetected { newer, older } => {
-                        MemoryError::CycleDetected { newer, older }
-                    }
+                    hharness_identity::supersede::SupersedeError::CycleDetected {
+                        newer,
+                        older,
+                    } => MemoryError::CycleDetected { newer, older },
                     _ => MemoryError::CycleDetected {
                         newer: version_id.to_string(),
                         older: s.to_string(),
@@ -1441,7 +1443,7 @@ impl MemoryStore {
         scope: PersistenceScope,
         name: Option<&str>,
         version_id: Option<&str>,
-        mode: hh_identity::names::ResolveMode,
+        mode: hharness_identity::names::ResolveMode,
     ) -> Result<ResolveOutcome, MemoryError> {
         let id = match (name, version_id) {
             (Some(n), _) => self
@@ -1468,7 +1470,7 @@ impl MemoryStore {
                 version_id: id.clone(),
             })?;
         let state = crate::lifecycle::lifecycle_state(self, &id, self.applied_seq);
-        use hh_identity::names::ResolveMode;
+        use hharness_identity::names::ResolveMode;
         match mode {
             ResolveMode::Execute => {
                 // Execute never serves revoked/stale/superseded heads
@@ -1729,7 +1731,7 @@ pub trait MemoryStorePort {
         revoker: &ProvenanceRecord,
         replacement: Option<String>,
         at_seq: u64,
-    ) -> Result<hh_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError>;
+    ) -> Result<hharness_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError>;
     /// `resolve(scope, name?, version_id?, mode)` — `Execute` refuses
     /// revoked/stale/superseded heads; `Audit` annotates.
     fn resolve(
@@ -1737,7 +1739,7 @@ pub trait MemoryStorePort {
         scope: PersistenceScope,
         name: Option<&str>,
         version_id: Option<&str>,
-        mode: hh_identity::names::ResolveMode,
+        mode: hharness_identity::names::ResolveMode,
     ) -> Result<ResolveOutcome, MemoryError>;
     /// `manifest(scope, at)` — the folded name history.
     fn manifest(&self, scope: PersistenceScope, at: u64) -> MemoryManifest;
@@ -1806,7 +1808,8 @@ impl MemoryStorePort for MemoryStore {
         revoker: &ProvenanceRecord,
         replacement: Option<String>,
         at_seq: u64,
-    ) -> Result<hh_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError> {
+    ) -> Result<hharness_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError>
+    {
         crate::lifecycle::revoke(self, version_id, reason, revoker, replacement, at_seq)
     }
 
@@ -1815,7 +1818,7 @@ impl MemoryStorePort for MemoryStore {
         scope: PersistenceScope,
         name: Option<&str>,
         version_id: Option<&str>,
-        mode: hh_identity::names::ResolveMode,
+        mode: hharness_identity::names::ResolveMode,
     ) -> Result<ResolveOutcome, MemoryError> {
         MemoryStore::resolve(self, scope, name, version_id, mode)
     }

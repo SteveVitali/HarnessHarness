@@ -9,13 +9,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{AbiError, BindParams};
-use hh_registry::extension::plugin::{manifest_from_json, manifest_to_json};
-use hh_varhost::{
+use hharness_embed_schema::plugin_abi::{AbiError, BindParams};
+use hharness_registry::extension::plugin::{manifest_from_json, manifest_to_json};
+use hharness_varhost::{
     load_package, seal_package, spawn, variant_class, HostError, InvokeOutcome, RecordingPorts,
     SpawnSpec, VariantHost, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -41,7 +41,7 @@ fn packaged_manifest_decodes_and_declares() {
         repo_root().join("plugins/hh-compact-evict-oldest/plugin.manifest.json"),
     )
     .expect("packaged manifest readable");
-    let j = hh_wire::json::parse(&text).expect("manifest json");
+    let j = hharness_wire::json::parse(&text).expect("manifest json");
     let m = manifest_from_json(&j, "plugin.manifest.json").expect("manifest decodes");
     assert_eq!(m.identity.id(), "hh/hh-compact-evict-oldest");
     // The variant contribution declares the compaction_strategy class.
@@ -53,13 +53,13 @@ fn packaged_manifest_decodes_and_declares() {
     let exe = c.unwrap().executable.as_ref().expect("executable");
     assert_eq!(
         exe.isolation,
-        hh_registry::extension::IsolationClass::SubprocessConfined
+        hharness_registry::extension::IsolationClass::SubprocessConfined
     );
 }
 
 /// Materialize the package: manifest + `bin/` copy of the built variant
 /// binary, `seal` (real code_pointer pins), write, `load` (verify).
-fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
+fn materialize() -> Option<(tempfile::TempDir, hharness_varhost::VariantPackage)> {
     let bin = compact_bin()?;
     let dir = tempfile::tempdir().ok()?;
     let root = dir.path();
@@ -69,7 +69,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
         repo_root().join("plugins/hh-compact-evict-oldest/plugin.manifest.json"),
     )
     .unwrap();
-    let j = hh_wire::json::parse(&text).unwrap();
+    let j = hharness_wire::json::parse(&text).unwrap();
     let m = manifest_from_json(&j, "plugin.manifest.json").unwrap();
     let sealed = seal_package(root, &m).expect("seal");
     // The zero-pin template came back with a real code_pointer.
@@ -79,7 +79,7 @@ fn materialize() -> Option<(tempfile::TempDir, hh_varhost::VariantPackage)> {
     Some((dir, pkg))
 }
 
-fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
+fn spec(pkg: hharness_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
     let exec_args = vec![
         "--version-id".into(),
         pkg.version_id().to_string(),
@@ -93,14 +93,14 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
         package: pkg,
         session_id: "pkg-1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir,
         exec_args,
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:hh/hh-compact-evict-oldest", "pin:sealed"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:hh/hh-compact-evict-oldest", "pin:sealed"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -134,7 +134,7 @@ fn packaged_variant_runs_end_to_end() {
         eprintln!("hh-compact-evict-oldest binary not built — skipped");
         return;
     };
-    if hh_env::helper::helper_binary().is_none() {
+    if hharness_env::helper::helper_binary().is_none() {
         eprintln!("hh-helper binary not found — skipped");
         return;
     }
@@ -270,7 +270,7 @@ fn wrong_manifest_pin_is_refused() {
     // manifest — the loader's recomputation disagrees: `PinMismatch`.
     let mp = dir.path().join("plugin.manifest.json");
     let text = std::fs::read_to_string(&mp).unwrap();
-    let mut j = hh_wire::json::parse(&text).unwrap();
+    let mut j = hharness_wire::json::parse(&text).unwrap();
     // contributions[0].executable.code_pointer.digest ← 64×'f'
     let Json::Obj(m) = &mut j else { panic!() };
     let Json::Arr(contribs) = m.get_mut("contributions").unwrap() else {

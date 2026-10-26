@@ -21,10 +21,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_lab::coevolution::{
+use hharness_lab::coevolution::{
     ConsolidationCandidate, ConsolidationInput, ConsolidationPolicy, LessonFact, NeverConsolidate,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::errors::{EvolutionError, Refusal};
 use crate::view::CampaignView;
@@ -72,7 +72,7 @@ pub fn consolidation_candidates(
             terminal,
         });
     }
-    hh_lab::coevolution::consolidation_candidates(&inputs, debt_complete, policy)
+    hharness_lab::coevolution::consolidation_candidates(&inputs, debt_complete, policy)
 }
 
 /// `check_retrained_pin_scope(touched_rules, conditioned_debts,
@@ -96,7 +96,7 @@ pub fn consolidation_candidates(
 pub fn check_retrained_pin_scope(
     touched_rules: &[String],
     conditioned_debts: &[Json],
-    pinned_claim: Option<&hh_lab::model::SnapshotClaim>,
+    pinned_claim: Option<&hharness_lab::model::SnapshotClaim>,
 ) -> Result<(), EvolutionError> {
     let Some(claim) = pinned_claim else {
         return Ok(());
@@ -126,8 +126,8 @@ pub fn check_retrained_pin_scope(
             .and_then(|s| s.get("model_selectors"))
             .and_then(|ms| match ms {
                 Json::Arr(v) => Some(v.iter().any(|sel| {
-                    hh_ontology::debt::ModelSelector::from_json(sel, "model_selectors")
-                        .map(|m| hh_lab::coevolution::selector_covers_claim(&m, claim))
+                    hharness_ontology::debt::ModelSelector::from_json(sel, "model_selectors")
+                        .map(|m| hharness_lab::coevolution::selector_covers_claim(&m, claim))
                         .unwrap_or(false)
                 })),
                 _ => None,

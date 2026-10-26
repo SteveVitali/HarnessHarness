@@ -28,8 +28,8 @@
 //! both derive identically (see `compact_range_is_derived` in tests), so no
 //! mutable frontier is load-bearing for correctness.
 
-use hh_identity::idp::{idp_digest_in, idp_id_in, raw_digest, IdentityProfile, IDP_1};
-use hh_wire::json::Json;
+use hharness_identity::idp::{idp_digest_in, idp_id_in, raw_digest, IdentityProfile, IDP_1};
+use hharness_wire::json::Json;
 
 /// The idp tag anchoring every interior-node digest in the audit tree.
 const TREE_TAG: &str = "idp:ledger-tree/1";

@@ -11,7 +11,7 @@
 //! replay/drop on re-lowering); the codec emits them byte-for-byte, never
 //! fabricates them.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 use crate::vocab::{BlockKind, StopDetails, StopReason};
@@ -117,7 +117,7 @@ pub struct OpaqueLeaf {
 impl OpaqueLeaf {
     /// `bytes_hash` — the content address (the ledgered form).
     pub fn bytes_hash(&self) -> String {
-        hh_identity::idp_id("opaque_leaf.1", &self.bytes)
+        hharness_identity::idp_id("opaque_leaf.1", &self.bytes)
     }
 }
 
@@ -245,7 +245,7 @@ pub struct ModelMessage {
     pub raw_stop_reason: Option<String>,
     /// `usage` — the terminal `UsageRecord` (absent ⇒ `available = false` on
     /// the event payload; never a silent zero — I3).
-    pub usage: Option<hh_telemetry::TokenVector>,
+    pub usage: Option<hharness_telemetry::TokenVector>,
     /// `served_model?` — the drift fact.
     pub served_model: Option<String>,
     /// `snapshot_id?` — the provider's snapshot id, when exposed.
@@ -319,13 +319,13 @@ pub fn parse_tool_call_args(raw: &str) -> ToolArgs {
             reason: UnparseableReason::Empty,
         };
     }
-    // The strict parse is `hh_wire`'s canonical JSON — integers only, sorted
+    // The strict parse is `hharness_wire`'s canonical JSON — integers only, sorted
     // members. A non-canonical fragment is `invalid_json` (T2's strictness:
     // canonical form or nothing — the provider's arg bytes may be valid JSON
     // yet non-canonical; the strict gate is the kernel's own parser).
-    match hh_wire::canonical::parse_canonical(raw.as_bytes()) {
+    match hharness_wire::canonical::parse_canonical(raw.as_bytes()) {
         Ok(Json::Obj(_)) => ToolArgs::Parsed(
-            hh_wire::canonical::parse_canonical(raw.as_bytes()).unwrap_or(Json::Null),
+            hharness_wire::canonical::parse_canonical(raw.as_bytes()).unwrap_or(Json::Null),
         ),
         Ok(Json::Null) => ToolArgs::Parsed(Json::Null),
         _ => ToolArgs::Unparseable {

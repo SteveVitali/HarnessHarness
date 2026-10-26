@@ -25,8 +25,8 @@
 //! - `variant_declaration` — `{deterministic: true, op_kinds: ["evict"],
 //!   model_call: false}`.
 
-use hh_embed_schema::plugin_abi::AbiError;
-use hh_wire::json::Json;
+use hharness_embed_schema::plugin_abi::AbiError;
+use hharness_wire::json::Json;
 
 /// The variant's declaration (conformance `static.*` checks it).
 pub fn declaration() -> Json {

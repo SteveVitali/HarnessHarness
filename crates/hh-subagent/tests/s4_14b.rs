@@ -18,31 +18,33 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_env::handle::OnParentEnd;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::leaves::Text;
-use hh_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_provenance::endorse::{endorse, ContentKind, EndorsementBasis, EndorsementError};
-use hh_provenance::{
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_env::handle::OnParentEnd;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{GoalOrigin, GoalRecord, Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_provenance::endorse::{endorse, ContentKind, EndorsementBasis, EndorsementError};
+use hharness_provenance::{
     AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord, ReaderSet, Remedy, TaintTag,
 };
-use hh_subagent::branch::{
+use hharness_subagent::branch::{
     consume_branch_remedy, return_from_branch, spawn_branch, BranchError, BranchExit,
 };
-use hh_subagent::ownership::OwnershipTable;
-use hh_subagent::spawn::SpawnCtx;
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_subagent::ownership::OwnershipTable;
+use hharness_subagent::spawn::SpawnCtx;
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -99,13 +101,13 @@ fn open_parent(tag: &str) -> Parent {
         tools: Vec::new(),
     };
     // The delegate decision the spawn hangs from.
-    let ev = hh_ledger::event::Event {
+    let ev = hharness_ledger::event::Event {
         event_id: p.store.alloc_id("evt"),
         class: "control.decision".to_string(),
         ts: p.store.ts_now(),
         hlc: None,
-        producer: hh_ledger::event::Producer::kernel("kernel:test"),
-        scope: hh_ledger::event::Scope::default(),
+        producer: hharness_ledger::event::Producer::kernel("kernel:test"),
+        scope: hharness_ledger::event::Scope::default(),
         parent_event_id: p.store.head_event_id(&p.run_id).unwrap(),
         causes: Vec::new(),
         refs: Vec::new(),
@@ -146,7 +148,7 @@ fn open_parent(tag: &str) -> Parent {
         .unwrap();
     let handle = AuthorityHandle {
         handle_id: p.handle_id.clone(),
-        permission_ref: hh_compiler::plan::PinnedRef {
+        permission_ref: hharness_compiler::plan::PinnedRef {
             semantic_id: "perm:root".to_string(),
             version_id: "v1".to_string(),
         },
@@ -289,20 +291,20 @@ fn tainted_subject(tags: &[&str]) -> ProvenanceRecord {
 /// Commit the branch's returned record as a parent-run event (the
 /// `subject_ref` `check_endorsement` resolves at append).
 fn commit_subject(p: &mut Parent, subject: &ProvenanceRecord) -> String {
-    let ev = hh_ledger::event::Event {
+    let ev = hharness_ledger::event::Event {
         event_id: p.store.alloc_id("evt"),
         class: "context.observation.recorded".to_string(),
         ts: p.store.ts_now(),
         hlc: None,
-        producer: hh_ledger::event::Producer::kernel("kernel:test"),
-        scope: hh_ledger::event::Scope::default(),
+        producer: hharness_ledger::event::Producer::kernel("kernel:test"),
+        scope: hharness_ledger::event::Scope::default(),
         parent_event_id: p.store.head_event_id(&p.run_id).unwrap(),
         causes: Vec::new(),
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: Default::default(),
         provenance: Some(subject.clone()),
-        content_kind: Some(hh_provenance::ContentKind::ClosedSchemaValue),
+        content_kind: Some(hharness_provenance::ContentKind::ClosedSchemaValue),
         payload: Json::obj([("admission", Json::str("as_declared"))]),
     };
     let id = ev.event_id.clone();
@@ -390,8 +392,9 @@ fn labeled_return_reenters_at_external_with_union_taint() {
     // union taint (ctx0's `cap:web` ∪ subject's `cap:email`).
     let applied = events_of(&p, "security.label.applied");
     assert_eq!(applied.len(), 1);
-    let label = hh_provenance::label_from_json(applied[0].get("label").expect("label member"))
-        .expect("label decodes");
+    let label =
+        hharness_provenance::label_from_json(applied[0].get("label").expect("label member"))
+            .expect("label decodes");
     assert_eq!(label.authority, AuthorityClass::External);
     let taints: BTreeSet<String> = label.taint.iter().map(|t| t.as_string()).collect();
     assert!(
@@ -526,7 +529,7 @@ fn abandon_records_the_exit_without_reentry() {
 fn return_from_a_non_branch_child_is_refused() {
     let mut p = open_parent("nonbranch");
     // An ordinary `fresh` spawn — `isolation ≠ label_branch`.
-    let spawned = hh_subagent::spawn::spawn(&mut ctx(&mut p), &spec()).unwrap();
+    let spawned = hharness_subagent::spawn::spawn(&mut ctx(&mut p), &spec()).unwrap();
     match return_from_branch(
         &mut p.store,
         &p.run_id,
@@ -604,8 +607,8 @@ fn child_side_approval_never_authorizes_the_parents_effect() {
 
 // ── hosted children (§5e.3 T7; C-10; AC-R-2.8.1-4 / AC-R-2.1.5-6) ─────────
 
-use hh_subagent::hosted::{HostedOpen, HostedPlane, HostedPlaneError};
-use hh_subagent::spawn::spawn;
+use hharness_subagent::hosted::{HostedOpen, HostedPlane, HostedPlaneError};
+use hharness_subagent::spawn::spawn;
 
 /// A test-double plane: records `open_child` specs, admits only the verbs
 /// the (pretend) participant's capability vector declares (`submit`,
@@ -723,7 +726,7 @@ fn hosted_child_composes_through_the_plane_with_hosted_manifest() {
     let m = p.store.manifest(&spawned.child_run_id).unwrap();
     assert_eq!(
         m.participant_class,
-        hh_ledger::manifest::ParticipantClass::Hosted
+        hharness_ledger::manifest::ParticipantClass::Hosted
     );
     assert_eq!(m.hosting_mechanism.as_deref(), Some("session_abi"));
     assert_eq!(m.capability_declaration_ref, None);

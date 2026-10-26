@@ -13,11 +13,11 @@
 use std::io::BufReader;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 
-use hh_embed::net::{rpc_once, serve_net_n};
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::http::read_response;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_embed::net::{rpc_once, serve_net_n};
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_wire::http::read_response;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn dir(tag: &str) -> std::path::PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -180,8 +180,8 @@ fn net_post_parity_with_handle() {
     let (status, wire) = client.join().unwrap();
     assert_eq!(status, 200);
     // The result member is byte-equal to the binding-(a) response's.
-    let wa = hh_wire::json::parse(&direct).unwrap();
-    let wb = hh_wire::json::parse(&wire).unwrap();
+    let wa = hharness_wire::json::parse(&direct).unwrap();
+    let wb = hharness_wire::json::parse(&wire).unwrap();
     assert_eq!(
         wa.get("result").map(Json::to_canonical_string),
         wb.get("result").map(Json::to_canonical_string),
@@ -194,7 +194,8 @@ fn net_post_parity_with_handle() {
 fn net_events_drain() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let client = std::thread::spawn(move || hh_embed::net::drain_events(&addr, TOK, 0).unwrap());
+    let client =
+        std::thread::spawn(move || hharness_embed::net::drain_events(&addr, TOK, 0).unwrap());
     let handled = serve_net_n(listener, &mut svc("ev"), TOK, 1).unwrap();
     assert_eq!(handled, 1);
     let (status, body) = client.join().unwrap();
@@ -211,9 +212,11 @@ fn net_events_drain() {
 fn net_open_attach_with_full_web_client_decl() {
     let root = dir("client-decl");
     let run_id = {
-        let mut st = hh_ledger::store::Store::open(root.join("s")).unwrap();
+        let mut st = hharness_ledger::store::Store::open(root.join("s")).unwrap();
         st.open_run(
-            hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+            hharness_ledger::manifest::RunManifest::minimal(
+                hharness_ledger::manifest::RunKind::Agent,
+            ),
             "holder-a",
         )
         .unwrap()
@@ -311,7 +314,7 @@ fn net_open_attach_with_full_web_client_decl() {
     assert_eq!(handled, 2);
     let (status, wire) = client.join().unwrap();
     assert_eq!(status, 200, "{wire}");
-    let j = hh_wire::json::parse(&wire).unwrap();
+    let j = hharness_wire::json::parse(&wire).unwrap();
     assert!(
         j.get("result")
             .and_then(|r| r.get("session_id"))
@@ -340,7 +343,7 @@ fn net_open_attach_with_full_web_client_decl() {
 /// `token_matches` — the constant-time compare's truth table.
 #[test]
 fn net_token_match_truth_table() {
-    use hh_embed::net::token_matches;
+    use hharness_embed::net::token_matches;
     assert!(token_matches("abc", "abc"));
     assert!(!token_matches("abc", "abd"));
     assert!(!token_matches("abc", "ab"));

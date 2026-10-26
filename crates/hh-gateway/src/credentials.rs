@@ -20,8 +20,8 @@
 
 use crate::errors::GatewayError;
 use crate::gateway::{CredentialHandle, CredentialPort};
-use hh_secrets::channel::SecretSource;
-use hh_secrets::{coord_key, CompositeResolver, SecretSourceResolver};
+use hharness_secrets::channel::SecretSource;
+use hharness_secrets::{coord_key, CompositeResolver, SecretSourceResolver};
 
 /// `BrokerCredentialPort` — the live `CredentialPort` over a
 /// [`SecretSourceResolver`]. Bind-time resolution proves the coordinate

@@ -13,7 +13,7 @@
 //! (`approval`-basis handles S2.6, `pin` via `TrustRootPolicy` C2, `policy_rule` declassify
 //! C2). Every refusal below is a typed error — never a warning (ADR-0033 D7).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::authority::{AuthorityClass, ReaderSet};
 use crate::label::{classify_label_delta, Label, LabelDelta};
@@ -141,7 +141,7 @@ pub struct LabelApplied {
 }
 
 impl LabelEndorsed {
-    /// Canonical JSON (one canonicalizer — `hh-wire` sorted-key compact).
+    /// Canonical JSON (one canonicalizer — `hharness-wire` sorted-key compact).
     /// `capacity_bits`/`sanitizer_ref`/`robustness_inputs` are honestly
     /// absent unless the endorsement ran under the shape/sanitizer bound.
     pub fn to_json(&self) -> Json {

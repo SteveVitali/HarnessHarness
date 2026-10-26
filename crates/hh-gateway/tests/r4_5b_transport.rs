@@ -1,7 +1,7 @@
 //! R4.5b — `HttpModelTransport` over loopback (AC2; DF-S1.18-1;
 //! ADR-0364 D3; R4.5c TLS mount). A `TcpListener` fixture answers the
 //! transport's POST / GET legs — no live service anywhere; the cells pin
-//! the wire codec's single home (`hh_wire::http`), the typed scheme
+//! the wire codec's single home (`hharness_wire::http`), the typed scheme
 //! refusals, streaming frame translation, and the dialect's error
 //! classification.
 
@@ -11,14 +11,14 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use hh_gateway::codec::WireFrame;
-use hh_gateway::dialects;
-use hh_gateway::gateway::{CredentialHandle, Transport};
-use hh_gateway::http_transport::HttpModelTransport;
-use hh_gateway::openai;
-use hh_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
-use hh_gateway::vocab::ModelErrorClass;
-use hh_wire::json::Json;
+use hharness_gateway::codec::WireFrame;
+use hharness_gateway::dialects;
+use hharness_gateway::gateway::{CredentialHandle, Transport};
+use hharness_gateway::http_transport::HttpModelTransport;
+use hharness_gateway::openai;
+use hharness_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
+use hharness_gateway::vocab::ModelErrorClass;
+use hharness_wire::json::Json;
 
 // ── loopback fixture ─────────────────────────────────────────────────────────
 
@@ -143,7 +143,7 @@ fn https_dials_tls_foreign_scheme_refuses() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d.clone());
     let p = plan("https://127.0.0.1:1", true);
-    let bytes = hh_gateway::codec::serialize(&p);
+    let bytes = hharness_gateway::codec::serialize(&p);
     let err = t.send(&bytes, &anon(), "https://127.0.0.1:1").unwrap_err();
     assert_eq!(err.class, ModelErrorClass::Network);
     let err = t.discover(&anon(), "https://127.0.0.1:1").unwrap_err();
@@ -174,12 +174,12 @@ fn send_streams_sse_frames() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
     let p = plan(&endpoint, true);
-    let bytes = hh_gateway::codec::serialize(&p);
+    let bytes = hharness_gateway::codec::serialize(&p);
     let frames = t.send(&bytes, &anon(), &endpoint).unwrap();
     let (method, target, req_body) = join.join().unwrap();
     assert_eq!(method, "POST");
     assert_eq!(target, "/chat/completions");
-    let sent: Json = hh_wire::json::parse(&String::from_utf8_lossy(&req_body)).unwrap();
+    let sent: Json = hharness_wire::json::parse(&String::from_utf8_lossy(&req_body)).unwrap();
     assert_eq!(
         sent.get("model").and_then(Json::as_str),
         Some("fixture-model")
@@ -219,7 +219,7 @@ fn send_non_streaming_completion_folds() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
     let p = plan(&endpoint, false);
-    let bytes = hh_gateway::codec::serialize(&p);
+    let bytes = hharness_gateway::codec::serialize(&p);
     let frames = t.send(&bytes, &anon(), &endpoint).unwrap();
     let (method, target, _) = join.join().unwrap();
     assert_eq!(method, "POST");
@@ -244,7 +244,7 @@ fn http_429_classifies_rate_limited_with_retry_after() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
     let p = plan(&endpoint, true);
-    let bytes = hh_gateway::codec::serialize(&p);
+    let bytes = hharness_gateway::codec::serialize(&p);
     let err = t.send(&bytes, &anon(), &endpoint).unwrap_err();
     assert_eq!(err.class, ModelErrorClass::RateLimited, "{err:?}");
     assert_eq!(err.retry_after_ms, Some(2_000));
@@ -287,7 +287,7 @@ fn connection_refused_is_network_error() {
     let d = dialects::openai_compatible();
     let mut t = HttpModelTransport::new(d);
     let p = plan("http://127.0.0.1:1", true);
-    let bytes = hh_gateway::codec::serialize(&p);
+    let bytes = hharness_gateway::codec::serialize(&p);
     let err = t.send(&bytes, &anon(), "http://127.0.0.1:1").unwrap_err();
     assert!(matches!(
         err.class,
@@ -296,7 +296,7 @@ fn connection_refused_is_network_error() {
 }
 
 /// The wire stays the one codec home — the request head the transport
-/// wrote parses clean through `hh_wire::http`'s server half.
+/// wrote parses clean through `hharness_wire::http`'s server half.
 #[test]
 fn written_request_is_wire_parseable() {
     let body = "{\"object\":\"list\",\"data\":[]}";

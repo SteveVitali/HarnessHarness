@@ -68,18 +68,18 @@ pub struct OpDeprecation {
 
 impl OpDeprecation {
     /// The canonical member form — `stability` map + schema export share it.
-    pub fn to_json(&self) -> hh_wire::json::Json {
-        hh_wire::json::Json::obj([
-            ("since", hh_wire::json::Json::str(self.since)),
+    pub fn to_json(&self) -> hharness_wire::json::Json {
+        hharness_wire::json::Json::obj([
+            ("since", hharness_wire::json::Json::str(self.since)),
             (
                 "removal_major",
-                hh_wire::json::Json::Int(self.removal_major),
+                hharness_wire::json::Json::Int(self.removal_major),
             ),
             (
                 "replacement",
                 match self.replacement {
-                    Some(r) => hh_wire::json::Json::str(r),
-                    None => hh_wire::json::Json::Null,
+                    Some(r) => hharness_wire::json::Json::str(r),
+                    None => hharness_wire::json::Json::Null,
                 },
             ),
         ])
@@ -169,7 +169,7 @@ const EVO_ERR: &[&str] = FLEET_ERR;
 /// The `lab.debt.{register,sweep,settle,retire,propose,manager_open}` op
 /// set's declared errors (S6.1b; §5h.6 R-2.9.6) — the fleet set verbatim
 /// (the manager surfaces the same store/refusal shape; `Refused{reason}`
-/// carries the closed `hh_debt::errors::Refusal` codes;
+/// carries the closed `hharness_debt::errors::Refusal` codes;
 /// `Unsupported{by}` covers the `tier-c4`-absent build).
 const DEBTMGR_ERR: &[&str] = FLEET_ERR;
 
@@ -255,7 +255,7 @@ const fn lab(
     }
 }
 
-/// A Group L op whose dispatch is live in `hh-embed` (S2.12) — `import`/`export`
+/// A Group L op whose dispatch is live in `hharness-embed` (S2.12) — `import`/`export`
 /// stay `lab(...)` (StagePending) until their slice lands.
 const fn labi(
     name: &'static str,
@@ -376,7 +376,7 @@ pub fn registry() -> Vec<OpSpec> {
             debt: Some(OpDebt {
                 assumption_id: "A-embed-permission-bridge",
                 debt_id: "D-embed-permission-resume",
-                owner_layer: "hh-embed",
+                owner_layer: "hharness-embed",
                 stage_gate: "S2.6",
                 detail: "the human decision is recorded (pending → decided); \
                          the blocked dispatch is not retried — the live \
@@ -1271,13 +1271,13 @@ pub fn registry() -> Vec<OpSpec> {
         // M2–M5 fold over Group W `counterfactual` arms — `open_arms`
         // mints the real instrument-charged branches), `locus` and
         // `quality` (the report projections). `Refused{reason}` carries
-        // the closed `hh_analysis::attribution` refusal codes.
+        // the closed `hharness_analysis::attribution` refusal codes.
         labi("lab.attribution.design", "L", "json", "json"),
         labi("lab.attribution.attribute", "L", "json", "json"),
         labi("lab.attribution.locus", "L", "json", "json"),
         labi("lab.attribution.quality", "L", "json", "json"),
         // ── S6.1b (§5h.6 R-2.9.6): the assumption-debt *manager*
-        // service — `hh-debt` over the registry run's `lifecycle.debt.*`
+        // service — `hharness-debt` over the registry run's `lifecycle.debt.*`
         // book of record (records-in/records-out; C4-tier — a
         // `--no-default-features` build answers
         // `Unsupported{by: "tier-c4"}`).
@@ -1372,7 +1372,7 @@ pub fn registry() -> Vec<OpSpec> {
         },
         // ── S6.1a (§05h R-2.9.5): the evolution-pipeline surface —
         // `lab.evolution.*` drives the S0–S10 campaign driver
-        // (`hh-evolution`; records-in/records-out like `lab.experiment.*`,
+        // (`hharness-evolution`; records-in/records-out like `lab.experiment.*`,
         // C4-tier — a `--no-default-features` build answers
         // `Unsupported{by: "tier-c4"}`).
         OpSpec {
@@ -1901,7 +1901,7 @@ pub fn registry() -> Vec<OpSpec> {
         // organizational layer (C4; ADR-0205 D8's record family +
         // ADR-0206 D1's reconciliation family, Groups S/W/R,
         // records-in/records-out). `implemented` — the dispatch lands
-        // in `hh-embed`'s `tier-c4` feature; a `--no-default-features`
+        // in `hharness-embed`'s `tier-c4` feature; a `--no-default-features`
         // build answers `Unsupported{by: "tier-c4"}` (typed refusal,
         // never silent degrade — CC6).
         OpSpec {
@@ -2344,22 +2344,22 @@ pub fn lookup(name: &str) -> Option<OpSpec> {
 /// `method → {tier, deprecated?, debt?}` (§7.4 §2.3, §7.4 §6; `deprecated`
 /// emits `{since, removal_major, replacement}` — nothing in this contract is
 /// deprecated today, so no entry carries the member).
-pub fn stability_map() -> hh_wire::json::Json {
+pub fn stability_map() -> hharness_wire::json::Json {
     let mut m = std::collections::BTreeMap::new();
     for op in registry() {
         m.insert(op.name.to_string(), stability_entry(&op));
     }
-    hh_wire::json::Json::Obj(m)
+    hharness_wire::json::Json::Obj(m)
 }
 
 /// One op's stability-map entry — `{tier, deprecated?, debt?}`. Factored out
 /// so a fabricated `OpSpec` (a test's deprecation fixture) exercises the same
 /// emission path the registry iterates.
-pub fn stability_entry(op: &OpSpec) -> hh_wire::json::Json {
+pub fn stability_entry(op: &OpSpec) -> hharness_wire::json::Json {
     let mut entry = std::collections::BTreeMap::new();
     entry.insert(
         "tier".to_string(),
-        hh_wire::json::Json::str(op.tier.as_str()),
+        hharness_wire::json::Json::str(op.tier.as_str()),
     );
     if let Some(dep) = &op.deprecated {
         entry.insert("deprecated".to_string(), dep.to_json());
@@ -2367,15 +2367,18 @@ pub fn stability_entry(op: &OpSpec) -> hh_wire::json::Json {
     if let Some(d) = &op.debt {
         entry.insert(
             "debt".to_string(),
-            hh_wire::json::Json::obj([
-                ("assumption_id", hh_wire::json::Json::str(d.assumption_id)),
-                ("debt_id", hh_wire::json::Json::str(d.debt_id)),
-                ("owner_layer", hh_wire::json::Json::str(d.owner_layer)),
-                ("stage_gate", hh_wire::json::Json::str(d.stage_gate)),
-                ("status", hh_wire::json::Json::str("open")),
-                ("detail", hh_wire::json::Json::str(d.detail)),
+            hharness_wire::json::Json::obj([
+                (
+                    "assumption_id",
+                    hharness_wire::json::Json::str(d.assumption_id),
+                ),
+                ("debt_id", hharness_wire::json::Json::str(d.debt_id)),
+                ("owner_layer", hharness_wire::json::Json::str(d.owner_layer)),
+                ("stage_gate", hharness_wire::json::Json::str(d.stage_gate)),
+                ("status", hharness_wire::json::Json::str("open")),
+                ("detail", hharness_wire::json::Json::str(d.detail)),
             ]),
         );
     }
-    hh_wire::json::Json::Obj(entry)
+    hharness_wire::json::Json::Obj(entry)
 }

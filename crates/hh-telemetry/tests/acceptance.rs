@@ -10,26 +10,28 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_budget::attribution::{Attribution, ModelRef};
-use hh_budget::pricing::{CostProvenance, Derivation, ProvenanceClass, SpendRow};
-use hh_budget::quantity::Money;
-use hh_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::participant::Observability;
-use hh_telemetry::catalogue::{self, check_catalogue};
-use hh_telemetry::clocks::{skewed, DEFAULT_CLOCK_TOLERANCE_MS};
-use hh_telemetry::events::{export_delivered_from_json, Timing};
-use hh_telemetry::export::{deliver, export_events, export_view};
-use hh_telemetry::propagation::{outbound_context, propagation_unsupported_loss, subprocess_env};
-use hh_telemetry::sinks::{ContentClass, Sampling, SamplingMode, SinkPolicy};
-use hh_telemetry::tokens::{normalize_usage, ProviderUsage, TokenVector};
-use hh_telemetry::views::{
+use hharness_budget::attribution::{Attribution, ModelRef};
+use hharness_budget::pricing::{CostProvenance, Derivation, ProvenanceClass, SpendRow};
+use hharness_budget::quantity::Money;
+use hharness_ledger::event::{Cursor, Direction, Event, EventEnvelope, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::participant::Observability;
+use hharness_telemetry::catalogue::{self, check_catalogue};
+use hharness_telemetry::clocks::{skewed, DEFAULT_CLOCK_TOLERANCE_MS};
+use hharness_telemetry::events::{export_delivered_from_json, Timing};
+use hharness_telemetry::export::{deliver, export_events, export_view};
+use hharness_telemetry::propagation::{
+    outbound_context, propagation_unsupported_loss, subprocess_env,
+};
+use hharness_telemetry::sinks::{ContentClass, Sampling, SamplingMode, SinkPolicy};
+use hharness_telemetry::tokens::{normalize_usage, ProviderUsage, TokenVector};
+use hharness_telemetry::views::{
     cost_view, cost_view_run_tree, metric_view, sink_deliveries, trace_view, CostTreeError,
     RunTreeSlice,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -70,15 +72,18 @@ fn ev(id: &str, class: &str, ts: &str, scope: Scope, payload: Json) -> Event {
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0)),
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
+            "kernel:test",
+            0,
+        )),
         content_kind: None,
         payload,
     }
 }
 
 fn spend_row(run: &str, src_event: &str, micro: i64) -> Json {
-    hh_budget::events::cost_attributed_payload(&SpendRow {
-        resource: hh_ontology::dimensions::DimensionId::Spend,
+    hharness_budget::events::cost_attributed_payload(&SpendRow {
+        resource: hharness_ontology::dimensions::DimensionId::Spend,
         money: Money {
             micro_units: micro,
             currency: "USD".into(),
@@ -89,8 +94,8 @@ fn spend_row(run: &str, src_event: &str, micro: i64) -> Json {
             unit: "call".into(),
             rate_ref: None,
         },
-        confidence: hh_budget::pricing::Confidence::Exact,
-        coverage_ppm: hh_budget::quantity::PPM_SCALE,
+        confidence: hharness_budget::pricing::Confidence::Exact,
+        coverage_ppm: hharness_budget::quantity::PPM_SCALE,
         pricing_ref: None,
         source_event: EventRef {
             run_id: run.into(),
@@ -120,7 +125,7 @@ fn model_call(tag: &str, scope_turn: &str, timing: (i64, i64, i64, i64)) -> Vec<
         output_total: 40,
         output_reasoning: 10,
         output_text: None,
-        convention: hh_telemetry::tokens::TOKEN_CONVENTION.into(),
+        convention: hharness_telemetry::tokens::TOKEN_CONVENTION.into(),
         normalizer_ref: "norm:test".into(),
     };
     let (rs, fb, ft, lb) = timing;
@@ -276,7 +281,7 @@ fn ac_r_2_9_1_8_accounting_sinks_never_receive_content_and_content_needs_consent
     content.requires_consent = false;
     assert!(matches!(
         content.validate(),
-        Err(hh_telemetry::TelemetryError::ContentRequiresConsent { .. })
+        Err(hharness_telemetry::TelemetryError::ContentRequiresConsent { .. })
     ));
     // A content sink that *declares* consent still needs the manifest's grant.
     content.requires_consent = true;
@@ -291,7 +296,7 @@ fn ac_r_2_9_1_8_accounting_sinks_never_receive_content_and_content_needs_consent
             "event_batch",
             &b
         ),
-        Err(hh_telemetry::TelemetryError::ConsentMissing { .. })
+        Err(hharness_telemetry::TelemetryError::ConsentMissing { .. })
     ));
     // Granted ⇒ the delivery appends `measurement.export.delivered`, readable
     // back from the ledger (the only ledger write an exporter may make).
@@ -353,7 +358,7 @@ fn ac_r_2_9_1_11_sampling_never_touches_the_ledger_and_views_ignore_sinks() {
     };
     assert!(matches!(
         export_view(&mp, &v1),
-        Err(hh_telemetry::TelemetryError::SamplingForbidden { .. })
+        Err(hharness_telemetry::TelemetryError::SamplingForbidden { .. })
     ));
     let m = v1.payload.get("metrics").unwrap();
     assert_eq!(m.get("model_calls"), Some(&Json::Int(1)));
@@ -573,7 +578,7 @@ fn token_normalization_converges_provider_shapes() {
     // The vector projects onto the primary §08 dimensions.
     let rv = a.to_resource_vector();
     assert_eq!(
-        rv.get(hh_ontology::dimensions::DimensionId::TokensInputUncached),
+        rv.get(hharness_ontology::dimensions::DimensionId::TokensInputUncached),
         100
     );
 }
@@ -634,7 +639,7 @@ fn ac_e2_12_surface_rejection_rate_is_registered() {
     let m = catalogue::metric("surface_rejection_rate").expect("registered");
     assert_eq!(
         m.applies_to,
-        &[hh_ontology::participant::ParticipantClass::Native]
+        &[hharness_ontology::participant::ParticipantClass::Native]
     );
     assert!(m.requires_observability.contains(&Observability::Ledger));
     assert_eq!(m.unit, catalogue::MetricUnit::Ppm);
@@ -852,7 +857,7 @@ fn ac_r_2_2_3_12_recovery_metrics_fold_the_recovery_rows() {
 
 // ── AC-R-2.3.4-13 — the GenAI semantic-convention lowering (S3.7) ──────────
 
-use hh_telemetry::genai::{attr, lower_run};
+use hharness_telemetry::genai::{attr, lower_run};
 
 fn completed_payload() -> Json {
     Json::obj([
@@ -1050,7 +1055,7 @@ fn genai_lowering_failed_call_and_empty_run() {
 
 #[test]
 fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
-    use hh_telemetry::genai::lower_verdict;
+    use hharness_telemetry::genai::lower_verdict;
     let verdict = Json::obj([
         ("verdict_id", Json::str("v-9")),
         ("validator_ref", Json::str("critic:reconciliation@1")),

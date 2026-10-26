@@ -28,7 +28,7 @@ BUNDLE="$ROOT/crates/hh-xcheck/fixtures/cross-impl"
 XCHECK="${HH_XCHECK_BIN:-$ROOT/target/debug/hh-xcheck}"
 
 if [ ! -x "$XCHECK" ]; then
-  echo "xcheck-foreign: $XCHECK missing — run 'cargo build -p hh-xcheck' first" >&2
+  echo "xcheck-foreign: $XCHECK missing — run 'cargo build -p hharness-xcheck' first" >&2
   exit 2
 fi
 

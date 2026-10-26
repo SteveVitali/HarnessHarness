@@ -1,6 +1,6 @@
 //! The OQ-170 signer-custody wiring (R4.15e; ADR-0376): the kernel-held
 //! Ed25519 ledger signer — file-backed under `<store_root>/secrets/` by
-//! `hh-secrets`, provisioned at `open` through
+//! `hharness-secrets`, provisioned at `open` through
 //! `CredentialBroker::kernel_use(KernelPurpose::LedgerSigning)`, consumed
 //! by the audit surface (`signer_key_ids` on every manifest the kernel
 //! stamps, `kind = final` checkpoints at `lifecycle.run.finished`, the
@@ -11,11 +11,11 @@
 //! an *absent* custody is the honest unprovisioned posture (the run stays
 //! unsigned, `audit_view` reports its `n/a` reason).
 
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::audit::{AuditSigner, CheckpointKind};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Lease;
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::audit::{AuditSigner, CheckpointKind};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Lease;
+use hharness_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService, LEASE_TTL_MS};
 
@@ -28,7 +28,7 @@ impl EmbedService {
     pub(crate) fn install_signer_custody(&mut self) -> Result<(), EmbedError> {
         let dir = self.store.root().join("secrets");
         let custody =
-            hh_secrets::LedgerSignerCustody::open(&dir).map_err(|e| EmbedError::Refused {
+            hharness_secrets::LedgerSignerCustody::open(&dir).map_err(|e| EmbedError::Refused {
                 reason: format!("signer_custody: {e}"),
             })?;
         let Some(custody) = custody else {
@@ -37,8 +37,10 @@ impl EmbedService {
         // The broker's resolver must serve the custody coordinate — the
         // `CustodySourceResolver` wraps the (default deny-all) vault layer;
         // a host `set_credential_resolver` later composes the same way.
-        self.credential_broker = hh_secrets::CredentialBroker::new(
-            Box::new(custody.source_resolver(None::<Box<dyn hh_secrets::SecretSourceResolver>>)),
+        self.credential_broker = hharness_secrets::CredentialBroker::new(
+            Box::new(
+                custody.source_resolver(None::<Box<dyn hharness_secrets::SecretSourceResolver>>),
+            ),
             "hh-embed/credentials",
         );
         self.signer_ids = custody.key_ids();

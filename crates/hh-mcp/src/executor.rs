@@ -30,14 +30,14 @@
 //! `probe` is honest: `Undeterminable` — the MCP result channel does not
 //! admit an application-verdict recheck.
 
-use hh_env::capture::CaptureKind;
-use hh_env::errors::EnvError;
-use hh_env::executor::{
+use hharness_env::capture::CaptureKind;
+use hharness_env::errors::EnvError;
+use hharness_env::executor::{
     DedupSupport, ExecutorDeclaration, ExecutorSignal, InterruptSupport, ProbeSupport,
     ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
-use hh_hir::kinds::EffectDomain;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectDomain;
+use hharness_wire::json::Json;
 
 use crate::client::{ClientError, McpClient, ToolOutcome, Transport};
 
@@ -50,7 +50,7 @@ use crate::client::{ClientError, McpClient, ToolOutcome, Transport};
 fn mcp_declaration() -> ExecutorDeclaration {
     ExecutorDeclaration {
         executor_id: "mcp/1".to_string(),
-        isolation_support: hh_containment::policy::IsolationClass::ProcessSandbox,
+        isolation_support: hharness_containment::policy::IsolationClass::ProcessSandbox,
         dedup_support: DedupSupport::Durable,
         probe_support: ProbeSupport::None,
         interrupt: InterruptSupport::Unknown,
@@ -85,10 +85,10 @@ pub struct McpExecutor<T: Transport> {
     client: McpClient<T>,
     declaration: ExecutorDeclaration,
     /// R2.14 — when set, `execute`'s `tools/call` carries the
-    /// propagation context in `params._meta["dev.cognition/propagation"]`
+    /// propagation context in `params._meta["hharness/propagation"]`
     /// (§5h.1 §2.3). `None` is the uninstrumented leg — absent, not
     /// dropped (no loss is owed for a member that was never produced).
-    propagation: Option<hh_telemetry::propagation::PropagationContext>,
+    propagation: Option<hharness_telemetry::propagation::PropagationContext>,
 }
 
 impl<T: Transport> McpExecutor<T> {
@@ -116,7 +116,10 @@ impl<T: Transport> McpExecutor<T> {
     /// context the driver stamps (run/event coordinates in the `hh`
     /// tracestate member) rides every subsequent `tools/call` until
     /// cleared — a *new* context replaces, `None` clears.
-    pub fn set_propagation(&mut self, ctx: Option<hh_telemetry::propagation::PropagationContext>) {
+    pub fn set_propagation(
+        &mut self,
+        ctx: Option<hharness_telemetry::propagation::PropagationContext>,
+    ) {
         self.propagation = ctx;
     }
 
@@ -142,7 +145,7 @@ impl<T: Transport> ToolExecutor for McpExecutor<T> {
 
     fn execute(
         &mut self,
-        request: &hh_env::executor::ExecutionRequest,
+        request: &hharness_env::executor::ExecutionRequest,
         sink: &mut dyn FnMut(ExecutorSignal),
     ) -> Result<TerminalReport, EnvError> {
         // `capability_ref.semantic_id` is the canonical tool name the
@@ -192,7 +195,7 @@ impl<T: Transport> ToolExecutor for McpExecutor<T> {
                 });
                 Ok(Self::report(
                     TerminalStatus::ToolError {
-                        class: hh_env::observe::ErrorClass::ExecutorError,
+                        class: hharness_env::observe::ErrorClass::ExecutorError,
                     },
                     "not_applied",
                 ))
@@ -233,8 +236,8 @@ impl<T: Transport> ToolExecutor for McpExecutor<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_env::deadline::DeadlineLadder;
-    use hh_env::executor::ExecutionRequest;
+    use hharness_env::deadline::DeadlineLadder;
+    use hharness_env::executor::ExecutionRequest;
     use std::collections::VecDeque;
 
     /// A scripted line transport — the connect handshake + `tools/call`
@@ -322,7 +325,7 @@ mod tests {
             effect_id: "eff-1".to_string(),
             attempt_no: 1,
             capability_ref: ("fs_read".to_string(), "v1".to_string()),
-            effect: hh_hir::kinds::EffectClass::domain_only(EffectDomain::NetEgress),
+            effect: hharness_hir::kinds::EffectClass::domain_only(EffectDomain::NetEgress),
             args: Json::obj([("path", Json::str("/tmp/x"))]),
             env_handle_id: "env-1".to_string(),
             attribution_token: "tok-1".to_string(),
@@ -335,7 +338,7 @@ mod tests {
             },
             retain_bytes_cap: 1 << 20,
             idempotency_key: "idem-key-77".to_string(),
-            commit_evidence: hh_env::helper::CommitEvidence::ReadOnly,
+            commit_evidence: hharness_env::helper::CommitEvidence::ReadOnly,
             request_state,
         }
     }
@@ -373,7 +376,7 @@ mod tests {
         assert_eq!(signals.len(), 1);
         // `params.target` = the kernel's idempotency_key on the wire.
         let sent = sent.lock().unwrap();
-        let wire: Json = hh_wire::json::parse(&sent[2]).unwrap();
+        let wire: Json = hharness_wire::json::parse(&sent[2]).unwrap();
         let params = wire.get("params").unwrap();
         assert_eq!(
             params.get("target"),
@@ -440,7 +443,7 @@ mod tests {
         let req = request(Some(Json::obj([("blob", Json::str("opaque-9"))])));
         exec.execute(&req, &mut |_| {}).expect("execute");
         let sent = sent.lock().unwrap();
-        let wire: Json = hh_wire::json::parse(&sent[2]).unwrap();
+        let wire: Json = hharness_wire::json::parse(&sent[2]).unwrap();
         let params = wire.get("params").unwrap();
         // `requestState` echoes byte-for-byte (D3 — the kernel never
         // parses it); `target` carries the idempotency key.

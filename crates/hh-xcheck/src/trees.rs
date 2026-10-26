@@ -1,5 +1,5 @@
 //! The tree-manifest codec — the language-neutral encoding of a
-//! `hh_identity::tree::Tree` the replay bundle carries as the *input* a
+//! `hharness_identity::tree::Tree` the replay bundle carries as the *input* a
 //! foreign implementation addresses (DF-S1.2-2).
 //!
 //! Manifest form (canonical JSON):
@@ -9,8 +9,8 @@
 //!
 //! File bytes ride `bytes_hex` so a manifest is pure canonical JSON.
 
-use hh_identity::tree::{Entry, Tree};
-use hh_wire::json::Json;
+use hharness_identity::tree::{Entry, Tree};
+use hharness_wire::json::Json;
 
 /// `Tree → manifest Json` (the bundle's `<name>.input.json` member).
 pub fn tree_manifest(tree: &Tree) -> Json {

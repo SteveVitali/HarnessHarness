@@ -25,11 +25,11 @@
 //!   membership check cannot run ⇒ `refused{unverifiable}` or the matching
 //!   `amendable`.
 
-use hh_hir::kinds::EffectDomain;
-use hh_hir::records::{Grant, ScopeBindings};
-use hh_monitor::args::{self, ScopeKind};
-use hh_monitor::assess::Tri;
-use hh_monitor::monitor::ContainmentGate;
+use hharness_hir::kinds::EffectDomain;
+use hharness_hir::records::{Grant, ScopeBindings};
+use hharness_monitor::args::{self, ScopeKind};
+use hharness_monitor::assess::Tri;
+use hharness_monitor::monitor::ContainmentGate;
 
 use crate::paths;
 use crate::policy::{ContainmentPolicy, ExecPolicy, NetMode, ReadMode, RuleDecision};
@@ -582,7 +582,7 @@ pub fn admit_input(
             let Some(v) = canonical
                 .scoped
                 .get(&b.param_path)
-                .and_then(hh_wire::json::Json::as_str)
+                .and_then(hharness_wire::json::Json::as_str)
             else {
                 continue;
             };

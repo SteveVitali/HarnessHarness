@@ -24,10 +24,10 @@
 
 use std::collections::BTreeSet;
 
-use hh_budget::attribution::ChargedTo;
-use hh_ontology::compliance::{Detector, NaReason};
-use hh_ontology::eval::MetricValueKind;
-use hh_ontology::participant::ParticipantClass;
+use hharness_budget::attribution::ChargedTo;
+use hharness_ontology::compliance::{Detector, NaReason};
+use hharness_ontology::eval::MetricValueKind;
+use hharness_ontology::participant::ParticipantClass;
 
 use crate::facts::LedgerFacts;
 use crate::stats::PPM;
@@ -230,10 +230,12 @@ pub fn taint_precision(f: &LedgerFacts, detectors: &BTreeSet<String>) -> RatePar
 
 /// A verdict value reads "influenced" — `{value: true}` in the
 /// `{kind, value}` form or a bare boolean.
-fn verdict_true(v: &hh_wire::Json) -> bool {
+fn verdict_true(v: &hharness_wire::Json) -> bool {
     match v {
-        hh_wire::Json::Bool(b) => *b,
-        hh_wire::Json::Obj(m) => matches!(m.get("value"), Some(hh_wire::Json::Bool(true))),
+        hharness_wire::Json::Bool(b) => *b,
+        hharness_wire::Json::Obj(m) => {
+            matches!(m.get("value"), Some(hharness_wire::Json::Bool(true)))
+        }
         _ => false,
     }
 }
@@ -252,7 +254,7 @@ pub fn intervention_rate(f: &LedgerFacts) -> RateParts {
 
 /// One declared profile-rule detector: the per-rule denominator's
 /// `n/a{no_detector}`/`n/a{class}` disposition (AC-R-2.3.3-6). Mirrors the
-/// compiler's `ComplianceDetector` at the projection boundary — hh-eval does
+/// compiler's `ComplianceDetector` at the projection boundary — hharness-eval does
 /// not depend on hh-compiler.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleDetector {
@@ -509,7 +511,7 @@ mod tests {
             validator_ref: None,
             oracle_class: Some("judge".into()),
             status: "decided".into(),
-            value: hh_wire::Json::obj([("value", hh_wire::Json::Bool(influenced))]),
+            value: hharness_wire::Json::obj([("value", hharness_wire::Json::Bool(influenced))]),
             detector: Some(detector.into()),
             isolation: None,
             inputs_digest: None,

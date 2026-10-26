@@ -27,7 +27,7 @@
 use std::collections::BTreeMap;
 use std::process::Command;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::LedgerError;
 use crate::event::Scope;

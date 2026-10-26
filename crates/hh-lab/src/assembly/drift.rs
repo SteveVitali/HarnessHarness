@@ -10,11 +10,11 @@
 //! `derived-from{hypothesis: "snapshot adoption"}` under ADR-0017's widening
 //! rule — `origin = evolution` may never adopt L3 drift.
 
-use hh_assembly::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
-use hh_hir::diff::DiffOp;
-use hh_identity::sameness::SamenessLevel;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_assembly::diagnostics::{detail_text, AssemblyDiagnostic, Code, Severity, Stage};
+use hharness_hir::diff::DiffOp;
+use hharness_identity::sameness::SamenessLevel;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::assembly::diff_view::{flatten, project, sameness_name, AssemblyDiff};
 
@@ -121,7 +121,7 @@ pub fn drift_json(r: &DriftReport) -> Json {
             Json::Arr(
                 r.diagnostics
                     .iter()
-                    .map(hh_assembly::diagnostics::diagnostic_json)
+                    .map(hharness_assembly::diagnostics::diagnostic_json)
                     .collect(),
             ),
         ),
@@ -133,7 +133,7 @@ pub fn drift_json(r: &DriftReport) -> Json {
 /// ops (the caller runs the two resolves; this is the pure projection step).
 pub fn project_drift(
     ops: Vec<DiffOp>,
-    classification: hh_hir::diff::DiffClassification,
+    classification: hharness_hir::diff::DiffClassification,
     sameness: Option<SamenessLevel>,
 ) -> AssemblyDiff {
     pin_ops_only(&project(ops, classification, sameness))

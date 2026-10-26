@@ -11,7 +11,7 @@
 //! representable as a factor; "does variant V help M₁ more than M₂?" is expressible against this
 //! data model (a V×M interaction over the [`Factor`] space).
 
-use hh_wire::sha256::sha256_hex;
+use hharness_wire::sha256::sha256_hex;
 
 /// A pinned reference: the semantic coordinate (`semantic_id`, seedless-stable) and the
 /// exact-bytes `version_id` (ADR-0036). `configuration_id` reads the former; the version id the
@@ -34,17 +34,17 @@ impl Ref {
     }
 
     /// The canonical JSON form `{semantic_id, version_id}`.
-    pub fn to_json(&self) -> hh_wire::Json {
-        hh_wire::Json::obj([
-            ("semantic_id", hh_wire::Json::str(&self.semantic_id)),
-            ("version_id", hh_wire::Json::str(&self.version_id)),
+    pub fn to_json(&self) -> hharness_wire::Json {
+        hharness_wire::Json::obj([
+            ("semantic_id", hharness_wire::Json::str(&self.semantic_id)),
+            ("version_id", hharness_wire::Json::str(&self.version_id)),
         ])
     }
 
     /// Strict decode of `{semantic_id, version_id}`.
-    pub fn from_json(j: &hh_wire::Json) -> Option<Ref> {
+    pub fn from_json(j: &hharness_wire::Json) -> Option<Ref> {
         let m = match j {
-            hh_wire::Json::Obj(m) => m,
+            hharness_wire::Json::Obj(m) => m,
             _ => return None,
         };
         if m.len() != 2 {
@@ -191,22 +191,22 @@ impl Configuration {
 
     /// The canonical JSON form `{m_set, h, p, e, b, seed}` — every factor a
     /// pinned [`Ref`] (AC-A2-5).
-    pub fn to_json(&self) -> hh_wire::Json {
-        hh_wire::Json::obj([
+    pub fn to_json(&self) -> hharness_wire::Json {
+        hharness_wire::Json::obj([
             ("m_set", self.m_set.to_json()),
             ("h", self.h.to_json()),
             ("p", self.p.to_json()),
             ("e", self.e.to_json()),
             ("b", self.b.to_json()),
-            ("seed", hh_wire::Json::str(&self.seed)),
+            ("seed", hharness_wire::Json::str(&self.seed)),
         ])
     }
 
     /// Strict decode of `{m_set, h, p, e, b, seed}`; `None` on any malformed
     /// member.
-    pub fn from_json(j: &hh_wire::Json) -> Option<Configuration> {
+    pub fn from_json(j: &hharness_wire::Json) -> Option<Configuration> {
         let m = match j {
-            hh_wire::Json::Obj(m) => m,
+            hharness_wire::Json::Obj(m) => m,
             _ => return None,
         };
         if m.len() != 6 {

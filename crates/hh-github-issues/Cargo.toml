@@ -1,18 +1,18 @@
 [package]
-name = "hh-github-issues"
+name = "hharness-github-issues"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The packaged `work_source_adapter` GitHub Issues variant (§5i.1, R-2.12.6/AC-9; R4.7; DF-S5.6-1; HUMAN-H2 GitHub Issues + tunnel) — a `hh_fleet_adapter::github::GithubTracker` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. The `hh.fleet.github_source/1` document arrives as the `bind` parameter `github_doc` (records-in/records-out — T-LCD-12; the confined child has no network egress, so the host pins the live issue snapshot and verified deliveries into the document; credentials never reach the plugin). Every op dispatches through the ONE canonical codec in `hh_fleet_adapter::tracker::dispatch` (CC7). Packaged at `plugins/hh-github-issues`."
+description = "The packaged `work_source_adapter` GitHub Issues variant (§5i.1, R-2.12.6/AC-9; R4.7; DF-S5.6-1; HUMAN-H2 GitHub Issues + tunnel) — a `hharness_fleet_adapter::github::GithubTracker` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. The `hh.fleet.github_source/1` document arrives as the `bind` parameter `github_doc` (records-in/records-out — T-LCD-12; the confined child has no network egress, so the host pins the live issue snapshot and verified deliveries into the document; credentials never reach the plugin). Every op dispatches through the ONE canonical codec in `hharness_fleet_adapter::tracker::dispatch` (CC7). Packaged at `plugins/hh-github-issues`."
 
 [[bin]]
 name = "hh-github-issues"
 path = "src/main.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
-hh-embed-schema = { path = "../hh-embed-schema" }
-hh-plugin-fixture = { path = "../hh-plugin-fixture" }
-hh-varhost = { path = "../hh-varhost" }
-hh-fleet-adapter = { path = "../hh-fleet-adapter" }
+hharness-wire = { path = "../hh-wire" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-plugin-fixture = { path = "../hh-plugin-fixture" }
+hharness-varhost = { path = "../hh-varhost" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter" }

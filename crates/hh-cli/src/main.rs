@@ -1,11 +1,11 @@
 //! The `hh` binary — thin `main`: gather the process facts (`argv`,
 //! TTY-ness, piped stdin, env, the prompt channel), hand them to
-//! `hh_cli::cli::run`, and exit with the authoritative class's numeral.
+//! `hharness_cli::cli::run`, and exit with the authoritative class's numeral.
 
 use std::io::{IsTerminal, Read, Write};
 
-use hh_cli::cli::{run, Io, PromptFn};
-use hh_cli::invocation::Tty;
+use hharness_cli::cli::{run, Io, PromptFn};
+use hharness_cli::invocation::Tty;
 
 fn main() {
     let argv: Vec<String> = std::env::args().collect();

@@ -36,9 +36,9 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 
-use hh_identity::idp::idp_id;
-use hh_provenance::authority::ReaderSet;
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_id;
+use hharness_provenance::authority::ReaderSet;
+use hharness_wire::json::Json;
 
 use crate::policy::{
     normalize_host, ContainmentPolicy, DnsResolver, EgressProtocol, EgressRule, HostPattern,

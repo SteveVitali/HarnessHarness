@@ -6,29 +6,31 @@
 //! consumes it with Π's attenuation, and the child's return re-enters at
 //! `authority ≤ delegate` with `derived_from.kind = subagent_result`.
 
-use hh_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_compiler::plan::PinnedRef;
-use hh_env::handle::OnParentEnd;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::records::{Grant, GrantConstraints};
-use hh_hir::refs::Ref;
-use hh_ledger::audit::{CheckpointKind, FixedSigner};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_monitor::decision::DecisionScope;
-use hh_monitor::delegate::LiveCoords;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::table::HandleTable;
-use hh_ontology::control::Owner;
-use hh_ontology::dimensions::{DimensionId, DimensionKey};
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::ownership::OwnershipTable;
-use hh_subagent::result::{child_terminal_view, record_child_result};
-use hh_subagent::spawn::{spawn, SpawnCtx};
-use hh_subagent::task::{spec_for_procedure, TaskSpecError, TaskSpecInputs};
-use hh_subagent::types::*;
-use hh_wire::json::Json;
+use hharness_budget::{Account, BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
+use hharness_compiler::plan::PinnedRef;
+use hharness_env::handle::OnParentEnd;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::records::{Grant, GrantConstraints};
+use hharness_hir::refs::Ref;
+use hharness_ledger::audit::{CheckpointKind, FixedSigner};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_monitor::decision::DecisionScope;
+use hharness_monitor::delegate::LiveCoords;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::control::Owner;
+use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_subagent::ownership::OwnershipTable;
+use hharness_subagent::result::{child_terminal_view, record_child_result};
+use hharness_subagent::spawn::{spawn, SpawnCtx};
+use hharness_subagent::task::{spec_for_procedure, TaskSpecError, TaskSpecInputs};
+use hharness_subagent::types::*;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -258,7 +260,10 @@ fn ac_r_2_4_5_8_spec_for_procedure_shape() {
     // and as the goal's success criterion.
     assert_eq!(spec.supplies.procedures, vec![inputs.procedure.clone()]);
     assert_eq!(spec.goal.success_criteria, vec![inputs.procedure.clone()]);
-    assert_eq!(spec.goal.origin, hh_hir::records::GoalOrigin::Delegated);
+    assert_eq!(
+        spec.goal.origin,
+        hharness_hir::records::GoalOrigin::Delegated
+    );
     assert_eq!(spec.goal.parent, inputs.parent_goal);
     // The statement names the task + bound params — never procedure prose.
     let stmt = spec.goal.statement.content.as_deref().unwrap();

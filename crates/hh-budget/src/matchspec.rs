@@ -30,9 +30,9 @@
 //! `MatchSpec{mode: none}` but never report a comparison — `validate_match`
 //! refuses `none` arms for reporting.
 
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::participant::Granularity;
-use hh_wire::json::Json;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::participant::Granularity;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 use crate::errors::{EnforcementLevel, MatchError, MatchRefusal, RefusalReason};
@@ -839,7 +839,7 @@ pub struct ResultsSpend {
 mod tests {
     use super::*;
     use crate::pricing::Confidence;
-    use hh_ontology::dimensions::DimensionKey;
+    use hharness_ontology::dimensions::DimensionKey;
 
     fn caps(caps: &[(DimensionId, i64)]) -> BudgetSpec {
         BudgetSpec::hard_caps(

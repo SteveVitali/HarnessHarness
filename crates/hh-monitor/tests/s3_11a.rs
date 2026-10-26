@@ -60,47 +60,51 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::equiv::bind_surface;
-use hh_compiler::plan::PinnedRef;
-use hh_eval::catalogue::{metric, scorecard_metrics};
-use hh_eval::compare::{compare, CompareInput};
-use hh_eval::compliance;
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{EvalRun, TaskContext};
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node, SealedDefinition};
-use hh_hir::kinds::{
+use hharness_compiler::equiv::bind_surface;
+use hharness_compiler::plan::PinnedRef;
+use hharness_eval::catalogue::{metric, scorecard_metrics};
+use hharness_eval::compare::{compare, CompareInput};
+use hharness_eval::compliance;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{EvalRun, TaskContext};
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node, SealedDefinition};
+use hharness_hir::kinds::{
     EffectAttributes, EffectDomain, Mutability, RepeatSafety, Reversibility, ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
     Grant, GrantConstraints, Issuer, KindRecord, PermissionRecord, Resources, ScopeBindings,
     SurfaceRecord, ToolCapabilityRecord, ToolSurface, Validity,
 };
-use hh_hir::refs::Ref;
-use hh_hir::EffectClass;
-use hh_ledger::classes::Durability;
-use hh_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
-use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-use hh_monitor::approval::{
+use hharness_hir::refs::Ref;
+use hharness_hir::EffectClass;
+use hharness_ledger::classes::Durability;
+use hharness_ledger::event::{EventEnvelope, EventPlane, Producer, Scope};
+use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+use hharness_monitor::approval::{
     self, ApprovalLease, ApprovalMode, ApprovalRequest, ApprovalResponse, ApprovalState,
     AutoReviewRule, ChainDecision, EndorserRef, EscalationInput, LeaseBasis, LeaseScope,
     PermissionRequest, ResponseChoice, ReviewVerdictKind,
 };
-use hh_monitor::assess::{AssessmentInputs, ParseOutcome, Tri};
-use hh_monitor::decision::{Decision, DenyReason};
-use hh_monitor::events as mev;
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::mint::{self, MintError};
-use hh_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
-use hh_monitor::policy::{default_table, Mode, PolicyTable, UnattendedPolicy};
-use hh_monitor::table::HandleTable;
-use hh_ontology::risk::RiskClass;
-use hh_provenance::flow::{self, FlowContract, SanitizerBounds, TaintTagPattern};
-use hh_provenance::flow_policy::{self, FlowPolicy, PolicyEditError, PolicyPoint, ProposalSpace};
-use hh_provenance::{
+use hharness_monitor::assess::{AssessmentInputs, ParseOutcome, Tri};
+use hharness_monitor::decision::{Decision, DenyReason};
+use hharness_monitor::events as mev;
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::mint::{self, MintError};
+use hharness_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
+use hharness_monitor::policy::{default_table, Mode, PolicyTable, UnattendedPolicy};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::risk::RiskClass;
+use hharness_provenance::flow::{self, FlowContract, SanitizerBounds, TaintTagPattern};
+use hharness_provenance::flow_policy::{
+    self, FlowPolicy, PolicyEditError, PolicyPoint, ProposalSpace,
+};
+use hharness_provenance::{
     AuthorityClass, HumanRole, Label, Origin, PersistenceScope, ProvenanceRecord, TaintTag,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 // ── fixtures (mirroring the acceptance.rs builders — each test binary is its
 // own crate) ─────────────────────────────────────────────────────────────────
@@ -147,7 +151,7 @@ fn evolution_args() -> ProvenanceRecord {
     )
 }
 
-fn node(kind: hh_hir::kinds::EntityKind, rec: KindRecord, id: &str, seq: u64) -> Node {
+fn node(kind: hharness_hir::kinds::EntityKind, rec: KindRecord, id: &str, seq: u64) -> Node {
     let mut n = Node::new(kind, rec, prov(seq));
     n.version.semantic_id = Some(id.into());
     n
@@ -201,7 +205,7 @@ fn tool_node_scoped(
     seq: u64,
 ) -> Node {
     let mut n = node(
-        hh_hir::kinds::EntityKind::ToolCapability,
+        hharness_hir::kinds::EntityKind::ToolCapability,
         KindRecord::ToolCapability(ToolCapabilityRecord {
             purpose: Text::new("a test tool", "test:owner", prov(seq)),
             input_schema: Json::obj([(
@@ -262,7 +266,7 @@ fn bound_paths(paths: &[&str]) -> ScopeBindings {
 
 fn perm_node(id: &str, holder: &str, grants: Vec<Grant>, seq: u64) -> Node {
     node(
-        hh_hir::kinds::EntityKind::Permission,
+        hharness_hir::kinds::EntityKind::Permission,
         KindRecord::Permission(PermissionRecord {
             holder: Ref::selected(holder, "latest"),
             grants,
@@ -352,7 +356,7 @@ fn root_handle(id: &str, grants: Vec<Grant>, ceiling: AuthorityClass) -> Authori
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -419,7 +423,8 @@ fn is_deny(d: &Decision, reason: DenyReason) -> bool {
 
 fn restricted(l: AuthorityClass, rs: &[&str]) -> Label {
     let mut l = Label::at(l);
-    l.readers = hh_provenance::ReaderSet::Restricted(rs.iter().map(|s| s.to_string()).collect());
+    l.readers =
+        hharness_provenance::ReaderSet::Restricted(rs.iter().map(|s| s.to_string()).collect());
     l
 }
 
@@ -531,7 +536,7 @@ fn at_h1_01_injected_context_never_allows() {
         options: vec![],
         mode: ApprovalMode::Sync,
         timeout: None,
-        explanation: hh_monitor::approval::Explanation {
+        explanation: hharness_monitor::approval::Explanation {
             display: "ask".into(),
             rows: vec![],
             model_justification: None,
@@ -543,7 +548,7 @@ fn at_h1_01_injected_context_never_allows() {
     let resp = ApprovalResponse {
         permission_id: req.permission_id.clone(),
         choice: ResponseChoice::AllowOnce,
-        scope: hh_monitor::decision::DecisionScope::Once,
+        scope: hharness_monitor::decision::DecisionScope::Once,
         max_uses: None,
         justification: None,
         decided_by: EndorserRef::Human {
@@ -645,7 +650,7 @@ fn at_h1_03_escalated_context_gated_and_scope_ceiling() {
     // `dom_mem_session` asks, then check 6 denies `session:eff<delegate`
     // under the external context — `ScopeCeilingExceeded` (a `user` write is
     // refused identically, one rung up).
-    mp.inputs.memory_scope = Some(hh_monitor::assess::MemoryScope::Session);
+    mp.inputs.memory_scope = Some(hharness_monitor::assess::MemoryScope::Session);
     let d = m.authorize(&mp).unwrap();
     assert!(
         is_deny(&d.decision, DenyReason::ScopeCeilingExceeded),
@@ -793,20 +798,20 @@ fn at_h1_05_evolution_is_delegate_class_everywhere() {
     );
     let mut to = subject.label();
     to.authority = AuthorityClass::Principal;
-    let e = hh_provenance::endorse::endorse(
+    let e = hharness_provenance::endorse::endorse(
         &subject,
         "subj-1",
         &to,
         &delegate_endorser,
-        hh_provenance::endorse::EndorsementBasis::Promotion,
+        hharness_provenance::endorse::EndorsementBasis::Promotion,
         None,
-        hh_provenance::ContentKind::FreeText,
+        hharness_provenance::ContentKind::FreeText,
     )
     .unwrap_err();
     assert!(
         matches!(
             e,
-            hh_provenance::endorse::EndorsementError::IllegitimateEndorsement { .. }
+            hharness_provenance::endorse::EndorsementError::IllegitimateEndorsement { .. }
         ),
         "{e:?}"
     );
@@ -837,7 +842,7 @@ fn at_h1_05_evolution_is_delegate_class_everywhere() {
 
 // ── AC-R-2.8.1-6 (AT-H1-06) — complete mediation under kills ─────────────────
 
-/// The offline ordering check (`hh_ledger::effect::check_mediation` — the
+/// The offline ordering check (`hharness_ledger::effect::check_mediation` — the
 /// same predicate the append gate raises, CC1): under worker kills between
 /// `decided`/`committed` and `intended`/`decided`, no `committed` exists
 /// without a preceding `decided{allow}` after resume.
@@ -862,7 +867,7 @@ fn at_h1_06_no_committed_without_decided_allow() {
         env(2, "security.permission.decided", decided("allow")),
         env(3, "action.effect.committed", effect("y").1),
     ];
-    assert!(hh_ledger::effect::check_mediation(&ok).is_ok());
+    assert!(hharness_ledger::effect::check_mediation(&ok).is_ok());
     // Kill between intended and decided: resume replays a committed with no
     // decided — refused `Undecided` (the effect re-enters at intended).
     let killed = vec![
@@ -878,8 +883,8 @@ fn at_h1_06_no_committed_without_decided_allow() {
         ),
     ];
     assert!(matches!(
-        hh_ledger::effect::check_mediation(&killed),
-        Err(hh_ledger::errors::LedgerError::Undecided { .. })
+        hharness_ledger::effect::check_mediation(&killed),
+        Err(hharness_ledger::errors::LedgerError::Undecided { .. })
     ));
     // A final `deny` vetoes the commit outright.
     let denied = vec![
@@ -895,10 +900,10 @@ fn at_h1_06_no_committed_without_decided_allow() {
             Json::obj([("effect_id", Json::str("e1"))]),
         ),
     ];
-    assert!(hh_ledger::effect::check_mediation(&denied).is_err());
+    assert!(hharness_ledger::effect::check_mediation(&denied).is_err());
     // A duplicate `decided` for the same attempt cycle is refused
     // (`DuplicateDecision` — the append rule's second half).
-    let dec_event = |id: &str, decision: &str| hh_ledger::event::Event {
+    let dec_event = |id: &str, decision: &str| hharness_ledger::event::Event {
         event_id: id.to_string(),
         class: "security.permission.decided".into(),
         ts: "2026-09-24T00:00:00.000Z".into(),
@@ -914,14 +919,14 @@ fn at_h1_06_no_committed_without_decided_allow() {
         content_kind: None,
         payload: decided(decision),
     };
-    let mut folds = hh_ledger::effect::DecisionFolds::new();
+    let mut folds = hharness_ledger::effect::DecisionFolds::new();
     let effects = BTreeMap::new();
     let e1 = dec_event("evt-d1", "allow");
-    hh_ledger::effect::validate_decision(&e1, &mut folds, &effects).unwrap();
+    hharness_ledger::effect::validate_decision(&e1, &mut folds, &effects).unwrap();
     let e2 = dec_event("evt-d2", "deny");
     assert!(matches!(
-        hh_ledger::effect::validate_decision(&e2, &mut folds, &effects),
-        Err(hh_ledger::errors::LedgerError::DuplicateDecision { .. })
+        hharness_ledger::effect::validate_decision(&e2, &mut folds, &effects),
+        Err(hharness_ledger::errors::LedgerError::DuplicateDecision { .. })
     ));
 }
 
@@ -1396,20 +1401,20 @@ mod compare_fixtures {
     //! Minimal `compare` input builders — the matched-budget conditional
     //! ACs (AT-H1-15, AC-H2-10, AC-L3-10) drive the *real* monitor under
     //! each arm's configuration and feed the recorded outcomes to
-    //! `hh_eval::compare` as `task_success` values.
+    //! `hharness_eval::compare` as `task_success` values.
     use super::*;
-    use hh_budget::matchspec::{ArmSpec, MatchSpec};
-    use hh_budget::spec::{BudgetMode, BudgetSpec};
-    use hh_eval::runs::CacheState;
-    use hh_ontology::compliance::{Detector, MetricDeclaration};
-    use hh_ontology::control::OutcomeClass;
-    use hh_ontology::dimensions::{DimensionId, DimensionKey};
-    use hh_ontology::eval::{
+    use hharness_budget::matchspec::{ArmSpec, MatchSpec};
+    use hharness_budget::spec::{BudgetMode, BudgetSpec};
+    use hharness_eval::runs::CacheState;
+    use hharness_ontology::compliance::{Detector, MetricDeclaration};
+    use hharness_ontology::control::OutcomeClass;
+    use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+    use hharness_ontology::eval::{
         Design, DesignKind, MediationChannel, MetricValue, MetricValueKind, Pairing,
         PreRegistration, RoutingPolicy, SeedPolicy,
     };
-    use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-    use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
+    use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+    use hharness_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
 
     pub fn arm_spec(dim: DimensionId) -> ArmSpec {
         let caps = BudgetSpec::hard_caps(BudgetMode::Pool, &[(DimensionKey::Primary(dim), 100)]);
@@ -1532,8 +1537,8 @@ mod compare_fixtures {
 #[test]
 fn at_h1_15_pi_experiment_reports_matched_comparison() {
     use compare_fixtures::*;
-    use hh_budget::DimensionId;
-    use hh_lab::analysis::{BenefitKind, BudgetMatchStatus};
+    use hharness_budget::DimensionId;
+    use hharness_lab::analysis::{BenefitKind, BudgetMatchStatus};
 
     // The fixture suite: one open-world egress task under a *tainted*
     // principal context — `taint(ctx) ≠ ∅` fires the Π gate while
@@ -1563,14 +1568,14 @@ fn at_h1_15_pi_experiment_reports_matched_comparison() {
     let mut narrowed = default_table("pol-v1", Mode::Attended);
     narrowed
         .rows
-        .retain(|r| matches!(r.verdict, hh_monitor::policy::PiVerdict::Deny));
+        .retain(|r| matches!(r.verdict, hharness_monitor::policy::PiVerdict::Deny));
     let gate_off = PolicyTable {
         version_id: "off".into(),
         mode: Mode::Attended,
-        rows: vec![hh_monitor::policy::PolicyRow {
+        rows: vec![hharness_monitor::policy::PolicyRow {
             id: "allow_all".into(),
             conditions: vec![],
-            verdict: hh_monitor::policy::PiVerdict::Allow,
+            verdict: hharness_monitor::policy::PiVerdict::Allow,
         }],
         unattended_policy: UnattendedPolicy::Deny,
     };
@@ -1624,7 +1629,7 @@ fn at_h1_15_pi_experiment_reports_matched_comparison() {
             benefit_kind: BenefitKind::ArtifactBenefit,
             held_out: true,
             family_size: None,
-            granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+            granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
         })
         .unwrap();
         assert_eq!(out.reports.len(), 1);
@@ -1712,7 +1717,7 @@ fn ac_h2_4_prospective_label_binds() {
 #[test]
 fn ac_h2_7_sanitizer_bound_exceeded_and_compliant_endorsement() {
     let mut bounds_to = Label::at(AuthorityClass::External);
-    bounds_to.readers = hh_provenance::ReaderSet::Public;
+    bounds_to.readers = hharness_provenance::ReaderSet::Public;
     let bounds = SanitizerBounds {
         to: bounds_to,
         removes: vec![TaintTagPattern::Prefix("import".into())],
@@ -1735,7 +1740,7 @@ fn ac_h2_7_sanitizer_bound_exceeded_and_compliant_endorsement() {
     leaked.taint.insert(TaintTag::Import {
         source_system: "secret-store".into(),
     });
-    let e = hh_provenance::endorse::sanitize_endorse(
+    let e = hharness_provenance::endorse::sanitize_endorse(
         &source,
         "src-1",
         "out-1",
@@ -1751,7 +1756,7 @@ fn ac_h2_7_sanitizer_bound_exceeded_and_compliant_endorsement() {
     assert!(
         matches!(
             e,
-            hh_provenance::endorse::EndorsementError::SanitizerBoundExceeded { .. }
+            hharness_provenance::endorse::EndorsementError::SanitizerBoundExceeded { .. }
         ),
         "{e:?}"
     );
@@ -1760,7 +1765,7 @@ fn ac_h2_7_sanitizer_bound_exceeded_and_compliant_endorsement() {
     // `policy_rule` at `bounds.to` in the same append; `derived_from`
     // records the source (non-occlusion, I-F3).
     let clean = Label::at(AuthorityClass::External);
-    let (event, projected) = hh_provenance::endorse::sanitize_endorse(
+    let (event, projected) = hharness_provenance::endorse::sanitize_endorse(
         &source,
         "src-1",
         "out-1",
@@ -1775,10 +1780,10 @@ fn ac_h2_7_sanitizer_bound_exceeded_and_compliant_endorsement() {
     .unwrap();
     assert_eq!(
         event.basis,
-        hh_provenance::endorse::EndorsementBasis::PolicyRule
+        hharness_provenance::endorse::EndorsementBasis::PolicyRule
     );
     assert_eq!(event.sanitizer_ref.as_deref(), Some("san:redact"));
-    assert_eq!(event.to.readers, hh_provenance::ReaderSet::Public);
+    assert_eq!(event.to.readers, hharness_provenance::ReaderSet::Public);
     // `derived_from` → the source, recorded on the projection.
     assert!(projected
         .derived_from
@@ -2335,8 +2340,8 @@ fn at_h1_07_replay_matched_over_battery() {
 #[test]
 fn ac_h2_10_taint_gate_experiment_reports_and_decides_default() {
     use compare_fixtures::*;
-    use hh_budget::DimensionId;
-    use hh_lab::analysis::{BenefitKind, BudgetMatchStatus};
+    use hharness_budget::DimensionId;
+    use hharness_lab::analysis::{BenefitKind, BudgetMatchStatus};
 
     // One arm = one enforcement class on the same contract. `off` is the
     // reactive path (no contract). `advisory` carries the same rules at
@@ -2482,7 +2487,7 @@ fn ac_h2_10_taint_gate_experiment_reports_and_decides_default() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     })
     .unwrap();
     let r = &out.reports[0];
@@ -2520,7 +2525,7 @@ fn ac_h2_11_taint_precision_reported_never_enforced() {
     let m = metric("taint_precision").expect("catalogue row");
     assert_eq!(
         m.oracle_classes_allowed,
-        [hh_ontology::eval::OracleClass::Judge]
+        [hharness_ontology::eval::OracleClass::Judge]
             .into_iter()
             .collect()
     );
@@ -2530,7 +2535,7 @@ fn ac_h2_11_taint_precision_reported_never_enforced() {
     let facts = LedgerFacts {
         permission_denials: ["e1", "e2"].iter().map(|s| s.to_string()).collect(),
         verdicts: vec![
-            hh_eval::facts::VerdictRow {
+            hharness_eval::facts::VerdictRow {
                 validator_ref: Some("val:taint".into()),
                 oracle_class: Some("judge".into()),
                 status: "decided".into(),
@@ -2544,7 +2549,7 @@ fn ac_h2_11_taint_precision_reported_never_enforced() {
                 charged_to: Some("instrument".into()),
                 effect_id: Some("e1".into()),
             },
-            hh_eval::facts::VerdictRow {
+            hharness_eval::facts::VerdictRow {
                 validator_ref: Some("val:taint".into()),
                 oracle_class: Some("judge".into()),
                 status: "decided".into(),
@@ -2586,7 +2591,7 @@ fn ac_h2_11_taint_precision_reported_never_enforced() {
 /// collapse is reported.
 #[test]
 fn ac_h2_13_and_ac_r_2_1_5_7_meta_round_trip() {
-    use hh_provenance::lower::{
+    use hharness_provenance::lower::{
         lift_provenance_meta, lower_provenance_meta, role_map_collapse, MetaLiftSource,
         META_PROVENANCE_KEY,
     };
@@ -2601,7 +2606,7 @@ fn ac_h2_13_and_ac_r_2_1_5_7_meta_round_trip() {
         capability: "test:fetch".into(),
         inner_source: None,
     }]);
-    rec.readers = hh_provenance::ReaderSet::Restricted(
+    rec.readers = hharness_provenance::ReaderSet::Restricted(
         ["alice", "bob"].iter().map(|s| s.to_string()).collect(),
     );
     let meta = lower_provenance_meta(&rec);
@@ -2641,7 +2646,7 @@ fn ac_h2_13_and_ac_r_2_1_5_7_meta_round_trip() {
         .any(|t| matches!(t, TaintTag::Import { source_system } if source_system == "lift:mcp")));
     assert_eq!(
         lift.record.readers,
-        hh_provenance::ReaderSet::Restricted(
+        hharness_provenance::ReaderSet::Restricted(
             ["alice", "bob"].iter().map(|s| s.to_string()).collect()
         )
     );
@@ -2696,8 +2701,8 @@ fn ac_h2_13_and_ac_r_2_1_5_7_meta_round_trip() {
 #[test]
 fn ac_r_2_1_5_10_utility_measurement_is_matched() {
     use compare_fixtures::*;
-    use hh_budget::DimensionId;
-    use hh_lab::analysis::{BenefitKind, BudgetMatchStatus};
+    use hharness_budget::DimensionId;
+    use hharness_lab::analysis::{BenefitKind, BudgetMatchStatus};
 
     // Gate on: the IFC contract enforces; gate off: reactive only. Same
     // fixture proposal (tainted body), same matched cap.
@@ -2795,7 +2800,7 @@ fn ac_r_2_1_5_10_utility_measurement_is_matched() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
-        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
+        granularity: hharness_ontology::participant::Granularity::ConfigurationLevel,
     })
     .unwrap();
     assert_eq!(
@@ -2811,7 +2816,7 @@ fn ac_r_2_1_5_10_utility_measurement_is_matched() {
 /// with the observability reason on arms they don't apply to.
 #[test]
 fn ac_r_2_1_5_11_hosted_rows_are_class_gated() {
-    use hh_ontology::participant::ParticipantClass as PC;
+    use hharness_ontology::participant::ParticipantClass as PC;
     let hosted_rows = [
         "hosted_observation_completeness",
         "mediation_coverage",
@@ -2910,9 +2915,9 @@ fn flow_policies_evaluate_alongside_contract_rules() {
         .iter()
         .any(|c| c.detail == "flow_deny:def-deny-egress"));
     // The OOP half decides identically — the policies ride the wire form.
-    let input = hh_monitor::wire::AuthorizeInput::capture(&m, &p, None);
+    let input = hharness_monitor::wire::AuthorizeInput::capture(&m, &p, None);
     let wire = input.to_json();
-    let back = hh_monitor::wire::AuthorizeInput::from_json(&wire).unwrap();
+    let back = hharness_monitor::wire::AuthorizeInput::from_json(&wire).unwrap();
     assert_eq!(back.flow_policies.len(), 1);
     assert_eq!(back.monitor().authorize(&back.proposal).unwrap(), d);
 }
@@ -2938,17 +2943,17 @@ fn remedy_taken_wire_round_trip() {
     };
     let mut p = egress_proposal("x", Label::at(AuthorityClass::Principal), model_args());
     p.remedy_taken = Some(remedy.clone());
-    let input = hh_monitor::wire::AuthorizeInput::capture(&m, &p, None);
-    let back = hh_monitor::wire::AuthorizeInput::from_json(&input.to_json()).unwrap();
+    let input = hharness_monitor::wire::AuthorizeInput::capture(&m, &p, None);
+    let back = hharness_monitor::wire::AuthorizeInput::from_json(&input.to_json()).unwrap();
     assert_eq!(back.proposal.remedy_taken, Some(remedy));
     // Absent and `null` both decode `None` (I-P4's absent-member rule).
     p.remedy_taken = None;
-    let input = hh_monitor::wire::AuthorizeInput::capture(&m, &p, None);
+    let input = hharness_monitor::wire::AuthorizeInput::capture(&m, &p, None);
     let mut wire = match input.to_json() {
         Json::Obj(o) => o,
         _ => unreachable!(),
     };
-    let back = hh_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire.clone())).unwrap();
+    let back = hharness_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire.clone())).unwrap();
     assert_eq!(back.proposal.remedy_taken, None);
     wire.insert("proposal".into(), {
         let mut pj = match input.to_json().get("proposal").cloned().unwrap() {
@@ -2958,7 +2963,7 @@ fn remedy_taken_wire_round_trip() {
         pj.insert("remedy_taken".into(), Json::Null);
         Json::Obj(pj)
     });
-    let back = hh_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire.clone())).unwrap();
+    let back = hharness_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire.clone())).unwrap();
     assert_eq!(back.proposal.remedy_taken, None);
     // A malformed remedy fails closed — never coerced to `None`.
     wire.insert("proposal".into(), {
@@ -2973,5 +2978,5 @@ fn remedy_taken_wire_round_trip() {
         );
         Json::Obj(pj)
     });
-    assert!(hh_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire)).is_err());
+    assert!(hharness_monitor::wire::AuthorizeInput::from_json(&Json::Obj(wire)).is_err());
 }

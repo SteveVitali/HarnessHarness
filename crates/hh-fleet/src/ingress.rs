@@ -34,8 +34,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256_hex;
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256_hex;
 
 use crate::capabilities::AdapterCapabilities;
 use crate::errors::FleetError;
@@ -203,8 +203,10 @@ pub fn push_occurrence_id(
         Some(id) => format!("push:{source_ref}:{id}"),
         None => {
             let stripped = strip_volatile(payload, volatile_fields);
-            let h =
-                hh_identity::idp::idp_id("hh.webhook", stripped.to_canonical_string().as_bytes());
+            let h = hharness_identity::idp::idp_id(
+                "hh.webhook",
+                stripped.to_canonical_string().as_bytes(),
+            );
             format!("push:{source_ref}:{h}")
         }
     }
@@ -223,7 +225,7 @@ pub fn poll_occurrence_id(
     format!(
         "poll:{}:{}",
         source_ref,
-        hh_identity::idp::idp_id(
+        hharness_identity::idp::idp_id(
             "hh.webhook_poll",
             format!("{native_id}\u{0}{normalized}\u{0}{updated_at}").as_bytes(),
         )
@@ -380,7 +382,7 @@ impl SignedWebhookIngress {
         // The content-hash idempotency key — a stale re-delivery under a
         // *fresh* delivery id but unchanged content still lands `Known`
         // at admit (the spec_hash no-op, OQ-313's outside-window leg).
-        let content_hash = hh_identity::idp::idp_id(
+        let content_hash = hharness_identity::idp::idp_id(
             "hh.fleet_idem",
             strip_volatile(item_json, &self.policy.volatile_fields)
                 .to_canonical_string()
@@ -603,7 +605,7 @@ impl WebhookAdapter {
         };
         crate::github::verify_sig256(raw_body, signature, key)?;
         let payload =
-            hh_wire::json::parse(raw_body).map_err(|_| IngressError::MalformedPayload {
+            hharness_wire::json::parse(raw_body).map_err(|_| IngressError::MalformedPayload {
                 detail: "github raw body is not JSON".into(),
             })?;
         let item_json = crate::github::event_item(event, &payload, cfg)?;

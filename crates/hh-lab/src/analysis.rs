@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_identity::idp::identify_bytes;
-use hh_identity::kinds::RecordKind;
-use hh_ontology::eval::{EstimatorSelection, IntervalMethod};
-use hh_wire::Json;
+use hharness_identity::idp::identify_bytes;
+use hharness_identity::kinds::RecordKind;
+use hharness_ontology::eval::{EstimatorSelection, IntervalMethod};
+use hharness_wire::Json;
 
 use crate::json_util::*;
 
@@ -607,7 +607,7 @@ impl AnalysisReport {
 }
 
 /// `Cell/1` — the store's analysis cell record (§6.4; the results-store
-/// cell, distinct from `hh_ontology::eval::Cell`'s `(Arm, Configuration,
+/// cell, distinct from `hharness_ontology::eval::Cell`'s `(Arm, Configuration,
 /// Task)` triple).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CellRecord {
@@ -987,34 +987,40 @@ pub struct ComparisonReport {
 ///
 /// The `disagreement_weighted` stamp — `{estimator, ref}` over the
 /// recorded inclusion table.
-pub fn estimated_disagreement(estimator: &str, record_ref: &str) -> hh_wire::json::Json {
-    hh_wire::json::Json::obj([
-        ("estimator", hh_wire::json::Json::str(estimator)),
-        ("ref", hh_wire::json::Json::str(record_ref)),
+pub fn estimated_disagreement(estimator: &str, record_ref: &str) -> hharness_wire::json::Json {
+    hharness_wire::json::Json::obj([
+        ("estimator", hharness_wire::json::Json::str(estimator)),
+        ("ref", hharness_wire::json::Json::str(record_ref)),
         (
             "strategy",
-            hh_wire::json::Json::str("disagreement_weighted"),
+            hharness_wire::json::Json::str("disagreement_weighted"),
         ),
     ])
 }
 
 /// The `successive_halving` stamp — `{estimator: successive_halving,
 /// ref}` over the recorded bracket row.
-pub fn estimated_halving(record_ref: &str) -> hh_wire::json::Json {
-    hh_wire::json::Json::obj([
-        ("estimator", hh_wire::json::Json::str("successive_halving")),
-        ("ref", hh_wire::json::Json::str(record_ref)),
-        ("strategy", hh_wire::json::Json::str("successive_halving")),
+pub fn estimated_halving(record_ref: &str) -> hharness_wire::json::Json {
+    hharness_wire::json::Json::obj([
+        (
+            "estimator",
+            hharness_wire::json::Json::str("successive_halving"),
+        ),
+        ("ref", hharness_wire::json::Json::str(record_ref)),
+        (
+            "strategy",
+            hharness_wire::json::Json::str("successive_halving"),
+        ),
     ])
 }
 
 /// The `voi_weighted` stamp — `{estimator, ref}` over the recorded
 /// inclusion table.
-pub fn estimated_voi(estimator: &str, record_ref: &str) -> hh_wire::json::Json {
-    hh_wire::json::Json::obj([
-        ("estimator", hh_wire::json::Json::str(estimator)),
-        ("ref", hh_wire::json::Json::str(record_ref)),
-        ("strategy", hh_wire::json::Json::str("voi_weighted")),
+pub fn estimated_voi(estimator: &str, record_ref: &str) -> hharness_wire::json::Json {
+    hharness_wire::json::Json::obj([
+        ("estimator", hharness_wire::json::Json::str(estimator)),
+        ("ref", hharness_wire::json::Json::str(record_ref)),
+        ("strategy", hharness_wire::json::Json::str("voi_weighted")),
     ])
 }
 
@@ -1363,7 +1369,7 @@ pub struct MetricCell {
     pub metric: String,
     /// The point estimate — `MetricValueKind` (`n/a{reason}` typed; never a
     /// coerced 0).
-    pub point: hh_ontology::eval::MetricValueKind,
+    pub point: hharness_ontology::eval::MetricValueKind,
     /// The interval `[lo, hi]` in the metric's unit, when defined.
     pub interval: Option<(i64, i64)>,
     /// The `EstimatorSelection` the interval ran under.
@@ -1450,7 +1456,7 @@ pub struct ConfigurationSummary {
     /// the configuration's runs evidence ≥ 2 distinct model snapshots across
     /// ≥ 2 declared families and ≥ 1 held-out level; `n/a{not_run}`
     /// otherwise — a portability claim is never fabricated.
-    pub portability: hh_ontology::eval::MetricValueKind,
+    pub portability: hharness_ontology::eval::MetricValueKind,
 }
 
 /// `ScorecardReport/1` — the `render_scorecard` output.
@@ -1614,7 +1620,7 @@ impl MetricCell {
         }
         Ok(MetricCell {
             metric: str_at(m, "metric", REC)?.to_string(),
-            point: hh_ontology::eval::MetricValueKind::from_json(member_at(m, "point", REC)?)
+            point: hharness_ontology::eval::MetricValueKind::from_json(member_at(m, "point", REC)?)
                 .ok_or_else(|| SchemaError::v("point", "unknown value kind"))?,
             interval,
             estimator: m
@@ -1694,7 +1700,7 @@ impl ConfigurationSummary {
                 .map(MetricCell::from_json)
                 .collect::<Result<Vec<_>, _>>()?,
             vetoed_successes: int_at(m, "vetoed_successes", REC)? as u64,
-            portability: hh_ontology::eval::MetricValueKind::from_json(
+            portability: hharness_ontology::eval::MetricValueKind::from_json(
                 m.get("portability")
                     .ok_or_else(|| SchemaError::v("portability", "missing member"))?,
             )
@@ -1711,7 +1717,7 @@ impl ScorecardReport {
         if let Json::Obj(ref mut m) = j {
             m.remove("scorecard_id");
         }
-        hh_identity::idp::idp_id("eval.scorecard", j.to_canonical_string().as_bytes())
+        hharness_identity::idp::idp_id("eval.scorecard", j.to_canonical_string().as_bytes())
     }
 
     /// The canonical JSON.

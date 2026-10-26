@@ -19,10 +19,10 @@
 
 use std::path::{Path, PathBuf};
 
-use hh_registry::extension::plugin::{
+use hharness_registry::extension::plugin::{
     manifest_from_json, ContributionKind, PathOrLocator, PluginManifest,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::HostError;
 
@@ -89,11 +89,11 @@ pub fn load(root: &Path) -> Result<VariantPackage, HostError> {
     let manifest_path = root.join(MANIFEST_PATH);
     let text = std::fs::read_to_string(&manifest_path)
         .map_err(|e| HostError::Package(format!("read {}: {e}", manifest_path.display())))?;
-    let j = hh_wire::json::parse(&text)
+    let j = hharness_wire::json::parse(&text)
         .map_err(|e| HostError::Package(format!("manifest parse: {e}")))?;
     let manifest = manifest_from_json(&j, MANIFEST_PATH)
         .map_err(|e| HostError::Package(format!("manifest decode: {e}")))?;
-    let content = hh_identity::address(text.as_bytes(), "application/json").id();
+    let content = hharness_identity::address(text.as_bytes(), "application/json").id();
     verify(root, &manifest, &content)
 }
 
@@ -121,10 +121,10 @@ pub fn verify(
         };
         let bytes = std::fs::read(&path)
             .map_err(|e| HostError::Package(format!("exec {} unreadable: {e}", path.display())))?;
-        let actual = hh_identity::address(&bytes, "application/octet-stream");
+        let actual = hharness_identity::address(&bytes, "application/octet-stream");
         if actual != exe.code_pointer {
             return Err(HostError::Abi(
-                hh_embed_schema::plugin_abi::AbiError::PinMismatch,
+                hharness_embed_schema::plugin_abi::AbiError::PinMismatch,
             ));
         }
         execs.push(path);
@@ -154,7 +154,7 @@ pub fn seal(root: &Path, manifest: &PluginManifest) -> Result<PluginManifest, Ho
         let path = root.join(p);
         let bytes = std::fs::read(&path)
             .map_err(|e| HostError::Package(format!("exec {} unreadable: {e}", path.display())))?;
-        exe.code_pointer = hh_identity::address(&bytes, "application/octet-stream");
+        exe.code_pointer = hharness_identity::address(&bytes, "application/octet-stream");
     }
     Ok(m)
 }
@@ -188,7 +188,7 @@ pub fn materialize(
     let manifest_path = src_root.join(MANIFEST_PATH);
     let text = std::fs::read_to_string(&manifest_path)
         .map_err(|e| HostError::Package(format!("read {}: {e}", manifest_path.display())))?;
-    let j = hh_wire::json::parse(&text)
+    let j = hharness_wire::json::parse(&text)
         .map_err(|e| HostError::Package(format!("manifest parse: {e}")))?;
     let manifest = manifest_from_json(&j, MANIFEST_PATH)
         .map_err(|e| HostError::Package(format!("manifest decode: {e}")))?;
@@ -222,7 +222,7 @@ pub fn materialize(
     }
     let sealed = seal(dst_root, &manifest)?;
     let sealed_json =
-        hh_registry::extension::plugin::manifest_to_json(&sealed).to_canonical_string();
+        hharness_registry::extension::plugin::manifest_to_json(&sealed).to_canonical_string();
     std::fs::write(dst_root.join(MANIFEST_PATH), &sealed_json)
         .map_err(|e| HostError::Io(e.to_string()))?;
     load(dst_root)

@@ -4,18 +4,18 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::ContentAddress;
-use hh_identity::rowkeys::IrRef;
-use hh_ontology::planes::EventFamily;
-use hh_provenance::{ContentKind, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_identity::idp::ContentAddress;
+use hharness_identity::rowkeys::IrRef;
+use hharness_ontology::planes::EventFamily;
+use hharness_provenance::{ContentKind, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::classes::Durability;
 use crate::manifest::{EventRef, ObservabilityLevel, ParticipantClass};
 
 /// `plane` — the §5a.1 envelope vocabulary `{observation, action, control,
 /// verification, security, measurement, model, lifecycle}`; derived from the class
-/// through `hh-ontology`'s prefix→family→home rule (CC10 — the mapping lives at the
+/// through `hharness-ontology`'s prefix→family→home rule (CC10 — the mapping lives at the
 /// ontology; this is its §5a.1 spelling).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EventPlane {

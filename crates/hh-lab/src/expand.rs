@@ -22,12 +22,12 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::{idp_digest, idp_id};
-use hh_ontology::compliance::NaReason;
-use hh_ontology::eval::DesignKind;
-use hh_ontology::lab::SplitLabel;
-use hh_ontology::FactorKind;
-use hh_wire::Json;
+use hharness_identity::idp::{idp_digest, idp_id};
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::eval::DesignKind;
+use hharness_ontology::lab::SplitLabel;
+use hharness_ontology::FactorKind;
+use hharness_wire::Json;
 
 use crate::experiment::{
     run_plan_id, ArmSpec, CellPlan, EnvironmentDerivation, ExperimentRefusal, ExperimentSpec,
@@ -567,7 +567,7 @@ pub fn expand(
                     // default.
                     let derivation = match spec.ext.get("environment_derivation") {
                         None => EnvironmentDerivation::FreshFromImage,
-                        Some(hh_wire::json::Json::Str(v)) => EnvironmentDerivation::parse(v)
+                        Some(hharness_wire::json::Json::Str(v)) => EnvironmentDerivation::parse(v)
                             .ok_or_else(|| {
                                 ExpandError::Refusal(ExperimentRefusal::Schema(SchemaError::v(
                                     "environment_derivation",

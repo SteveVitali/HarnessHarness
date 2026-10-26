@@ -40,7 +40,7 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   exit 3
 fi
 if [ ! -x "$XCHECK" ]; then
-  echo "xcheck-e3: $XCHECK missing — run 'cargo build -p hh-xcheck' first" >&2
+  echo "xcheck-e3: $XCHECK missing — run 'cargo build -p hharness-xcheck' first" >&2
   exit 2
 fi
 

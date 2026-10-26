@@ -5,7 +5,7 @@
 //! - `POST /api` — the one API route: `{op, params}` where `op` is an
 //!   admitted canonical op ([`crate::ops`]) or `view.<id>`; the gate
 //!   ([`crate::gate`]) runs before routing, the sink policy + scrub
-//!   ([`crate::sink`] + `hh_secrets::redact`) before responding.
+//!   ([`crate::sink`] + `hharness_secrets::redact`) before responding.
 //!
 //! Serial by construction — one connection at a time (the instrument's
 //! human is its only caller).
@@ -14,10 +14,10 @@ use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::net::{TcpListener, TcpStream};
 
-use hh_embed_client_generated::{ClientError, NetClient};
-use hh_secrets::DetectorSet;
-use hh_wire::http::{read_request, split_target, write_response, RequestHead};
-use hh_wire::json::Json;
+use hharness_embed_client_generated::{ClientError, NetClient};
+use hharness_secrets::DetectorSet;
+use hharness_wire::http::{read_request, split_target, write_response, RequestHead};
+use hharness_wire::json::Json;
 
 use crate::gate::{hardened_headers, GateConfig};
 use crate::ops;
@@ -64,7 +64,7 @@ fn write_served(served: Served, stream: &mut TcpStream) {
 /// value it replaced).
 fn js(status: u16, payload: Json, detectors: &DetectorSet) -> Served {
     let text = payload.to_canonical_string();
-    let (scrubbed, _hits) = hh_secrets::redact(&text, detectors);
+    let (scrubbed, _hits) = hharness_secrets::redact(&text, detectors);
     Served::Json(status, scrubbed)
 }
 
@@ -75,7 +75,7 @@ fn bare(s: u16) -> Served {
 /// Route + serve one parsed request — the full gate→route→sink pipeline
 /// on a parsed head/body (the battery tests call this directly, no
 /// socket needed). `detectors` is the surface's scrub set — every served
-/// payload's canonical text sweeps `hh_secrets::redact` before leaving
+/// payload's canonical text sweeps `hharness_secrets::redact` before leaving
 /// (the kernel masks at source, the surface sweeps at the wire — SV-3
 /// defence in depth).
 pub fn serve_request(
@@ -145,7 +145,7 @@ pub fn serve_request(
     // Decode the envelope so the gate's write legs fire on the *declared
     // op's* class — a write op in a read-shaped request still runs the
     // mutation checks (never trust the method alone).
-    let payload: Json = match hh_wire::json::parse(&String::from_utf8_lossy(body)) {
+    let payload: Json = match hharness_wire::json::parse(&String::from_utf8_lossy(body)) {
         Ok(j) => j,
         Err(_) => {
             return js(

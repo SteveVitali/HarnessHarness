@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::policy::OutputValidationPolicy;
 
@@ -126,7 +126,7 @@ pub struct SurfaceSpec {
     /// undeclared is the most dangerous point, never a guessed-safe
     /// class). The member rides the surface record so `leaf.arm`
     /// persistence re-arms the same classes on resume.
-    pub risk_class: Option<hh_ontology::risk::RiskClass>,
+    pub risk_class: Option<hharness_ontology::risk::RiskClass>,
     /// The surface's shape family (the binding's `family_id` —
     /// `surface_rejection_rate`'s per-(profile, family) stratum; R3.5).
     /// `None` on an unshaped primitive — `unknown`, never guessed.
@@ -197,7 +197,7 @@ pub struct ValidationState {
 }
 
 /// Fold `validation_state` from the durable prefix.
-pub fn fold(events: &[hh_ledger::event::EventEnvelope]) -> ValidationState {
+pub fn fold(events: &[hharness_ledger::event::EventEnvelope]) -> ValidationState {
     let mut st = ValidationState::default();
     for ev in events {
         match ev.class.as_str() {
@@ -234,11 +234,11 @@ pub fn fold(events: &[hh_ledger::event::EventEnvelope]) -> ValidationState {
 pub fn validate(
     policy: &OutputValidationPolicy,
     surfaces: &[SurfaceSpec],
-    stop_reason: hh_gateway::vocab::StopReason,
+    stop_reason: hharness_gateway::vocab::StopReason,
     text_empty: bool,
     calls: &[ParsedCall],
 ) -> ValidationVerdict {
-    use hh_gateway::vocab::StopReason as Gw;
+    use hharness_gateway::vocab::StopReason as Gw;
     let _ = policy; // `strict` behaviour is unconditional at C0; the mode is
                     // the policy's record, the pipeline is fixed.
     match stop_reason {
@@ -271,7 +271,7 @@ pub fn validate(
         let args = if c.args_raw.is_empty() {
             Json::Obj(BTreeMap::new())
         } else {
-            match hh_wire::json::parse(&c.args_raw) {
+            match hharness_wire::json::parse(&c.args_raw) {
                 Ok(j) => j,
                 Err(_) => {
                     return ValidationVerdict::Reject {
@@ -384,7 +384,7 @@ pub fn exhaustion_trips(policy: &OutputValidationPolicy, running: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_gateway::vocab::StopReason as Gw;
+    use hharness_gateway::vocab::StopReason as Gw;
 
     fn spec() -> SurfaceSpec {
         SurfaceSpec {

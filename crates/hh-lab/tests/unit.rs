@@ -1,4 +1,4 @@
-//! `hh-lab` deterministic test suite — the S1.24 test matrix (R-2.9.4⁰ᵃ /
+//! `hharness-lab` deterministic test suite — the S1.24 test matrix (R-2.9.4⁰ᵃ /
 //! R-2.9.8⁰ / R-2.10.3⁰ᵃ / R-2.10.4⁰ᵃ / R-2.10.5⁰ row-key fields):
 //! closed-sum parse/refuse, canonical JSON round-trips, content-derived ids
 //! (`task_id` semantic projection, `experiment_id`, `suite_id`, `split_hash`,
@@ -7,27 +7,27 @@
 
 use std::collections::BTreeMap;
 
-use hh_budget::matchspec::MatchSpec;
-use hh_hir::leaves::Text;
-use hh_ontology::config::Ref;
-use hh_ontology::debt::ExpiryCondition;
-use hh_ontology::eval::{
+use hharness_budget::matchspec::MatchSpec;
+use hharness_hir::leaves::Text;
+use hharness_ontology::config::Ref;
+use hharness_ontology::debt::ExpiryCondition;
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorKind, IntervalMethod, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{
+use hharness_ontology::lab::{
     BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, EnvironmentFamilyRecord,
     EpisodeModel, SplitLabel, SubmissionKind, TaskValidityState, VerifierIsolation,
 };
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
-use hh_lab::analysis::*;
-use hh_lab::bench::*;
-use hh_lab::debt::*;
-use hh_lab::experiment::*;
-use hh_lab::model::*;
+use hharness_lab::analysis::*;
+use hharness_lab::bench::*;
+use hharness_lab::debt::*;
+use hharness_lab::experiment::*;
+use hharness_lab::model::*;
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -708,7 +708,7 @@ fn snapshot_claim_and_compatibility_round_trip() {
         regression_suite_ref: Some("suite:reg".into()),
         created_at: 9,
         expiry_condition: Some(ExpiryCondition {
-            kind: hh_ontology::debt::ExpiryKind::ModelVersionChange,
+            kind: hharness_ontology::debt::ExpiryKind::ModelVersionChange,
             value: None,
         }),
         provenance: kernel(),
@@ -1127,11 +1127,11 @@ fn estimator_selection_bump_decodes_legacy_and_refuses_unknown_methods() {
 fn debt_views_round_trip_and_project() {
     let row = DebtIndexRow {
         rule_id: "rule:1".into(),
-        owner: hh_ontology::debt::OwnerRef::principal("test:owner"),
-        status: hh_ontology::debt::DebtStatus::Active,
-        removal_test_kind: Some(hh_ontology::debt::RemovalTestKind::RetirementExperiment),
-        expiry_condition: hh_ontology::debt::ExpiryCondition {
-            kind: hh_ontology::debt::ExpiryKind::Date,
+        owner: hharness_ontology::debt::OwnerRef::principal("test:owner"),
+        status: hharness_ontology::debt::DebtStatus::Active,
+        removal_test_kind: Some(hharness_ontology::debt::RemovalTestKind::RetirementExperiment),
+        expiry_condition: hharness_ontology::debt::ExpiryCondition {
+            kind: hharness_ontology::debt::ExpiryKind::Date,
             value: Some("2099-01-01".into()),
         },
         created_at: 0,
@@ -1181,7 +1181,7 @@ fn environment_family_record_round_trips() {
 
 #[test]
 fn register_refuses_match_spec_omitting_differing_budget_relevant_param() {
-    use hh_ontology::dimensions::DimensionId;
+    use hharness_ontology::dimensions::DimensionId;
     // The arms' levels bind `max_output_tokens` to different values and the
     // parameter drives `tokens.output.visible` — a `budget_relevant`
     // parameter differing across arms must be covered by every arm's
@@ -1207,23 +1207,23 @@ fn register_refuses_match_spec_omitting_differing_budget_relevant_param() {
             },
         )])
     };
-    let budgets: BTreeMap<String, hh_budget::BudgetSpec> = BTreeMap::from([
+    let budgets: BTreeMap<String, hharness_budget::BudgetSpec> = BTreeMap::from([
         (
             "budget:eval".to_string(),
-            hh_budget::BudgetSpec::hard_caps(
-                hh_budget::BudgetMode::Pool,
+            hharness_budget::BudgetSpec::hard_caps(
+                hharness_budget::BudgetMode::Pool,
                 &[(
-                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    hharness_budget::DimensionKey::Primary(DimensionId::ModelCalls),
                     100,
                 )],
             ),
         ),
         (
             "budget:search".to_string(),
-            hh_budget::BudgetSpec::hard_caps(
-                hh_budget::BudgetMode::Pool,
+            hharness_budget::BudgetSpec::hard_caps(
+                hharness_budget::BudgetMode::Pool,
                 &[(
-                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    hharness_budget::DimensionKey::Primary(DimensionId::ModelCalls),
                     10,
                 )],
             ),
@@ -1272,7 +1272,7 @@ fn register_refuses_match_spec_omitting_differing_budget_relevant_param() {
 
 #[test]
 fn register_refuses_matched_cap_dim_not_enforced_on_every_arm() {
-    use hh_ontology::dimensions::DimensionId;
+    use hharness_ontology::dimensions::DimensionId;
     // E-1 (§6.3 §2.4): a `matched_cap` dimension not `enforced` on every arm
     // is `IncommensurableMatch` — surfaced through the SpecContext's
     // `budget_enforcement` resolver (ADR-0165 D3; CF-350).
@@ -1281,33 +1281,33 @@ fn register_refuses_matched_cap_dim_not_enforced_on_every_arm() {
         a.match_spec = Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls]));
     }
     s.experiment_id = s.experiment_id();
-    let enforce = |a: &ArmSpec| -> hh_budget::BudgetEnforcement {
+    let enforce = |a: &ArmSpec| -> hharness_budget::BudgetEnforcement {
         if a.arm_id == "b" {
-            hh_budget::BudgetEnforcement::hosted(&[(
+            hharness_budget::BudgetEnforcement::hosted(&[(
                 DimensionId::ModelCalls,
-                hh_budget::EnforcementLevel::Advisory,
+                hharness_budget::EnforcementLevel::Advisory,
             )])
         } else {
-            hh_budget::BudgetEnforcement::native()
+            hharness_budget::BudgetEnforcement::native()
         }
     };
-    let budgets: BTreeMap<String, hh_budget::BudgetSpec> = BTreeMap::from([
+    let budgets: BTreeMap<String, hharness_budget::BudgetSpec> = BTreeMap::from([
         (
             "budget:eval".to_string(),
-            hh_budget::BudgetSpec::hard_caps(
-                hh_budget::BudgetMode::Pool,
+            hharness_budget::BudgetSpec::hard_caps(
+                hharness_budget::BudgetMode::Pool,
                 &[(
-                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    hharness_budget::DimensionKey::Primary(DimensionId::ModelCalls),
                     100,
                 )],
             ),
         ),
         (
             "budget:search".to_string(),
-            hh_budget::BudgetSpec::hard_caps(
-                hh_budget::BudgetMode::Pool,
+            hharness_budget::BudgetSpec::hard_caps(
+                hharness_budget::BudgetMode::Pool,
                 &[(
-                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    hharness_budget::DimensionKey::Primary(DimensionId::ModelCalls),
                     10,
                 )],
             ),
@@ -1329,7 +1329,7 @@ fn register_refuses_matched_cap_dim_not_enforced_on_every_arm() {
 
 #[test]
 fn arm_response_cache_decl_codec_round_trips_and_refuses_unknown() {
-    use hh_lab::experiment::ResponseCacheDecl;
+    use hharness_lab::experiment::ResponseCacheDecl;
     let mut a = arm("a", "l1");
     a.response_cache = Some(ResponseCacheDecl::K5);
     let j = a.to_json();
@@ -1352,7 +1352,7 @@ fn arm_response_cache_decl_codec_round_trips_and_refuses_unknown() {
 
 #[test]
 fn register_natural_cache_requires_visibility_or_na_stratification() {
-    use hh_budget::matchspec::CachePolicy;
+    use hharness_budget::matchspec::CachePolicy;
     let mut s = spec();
     for a in &mut s.arms {
         a.match_spec.as_mut().unwrap().cache_policy = CachePolicy::Natural;
@@ -1389,7 +1389,7 @@ fn register_natural_cache_requires_visibility_or_na_stratification() {
 
 #[test]
 fn register_k5_arm_requires_declared_cache_factor() {
-    use hh_lab::experiment::ResponseCacheDecl;
+    use hharness_lab::experiment::ResponseCacheDecl;
     let mut s = spec();
     s.arms[0].response_cache = Some(ResponseCacheDecl::K5);
     s.experiment_id = s.experiment_id();
@@ -1419,7 +1419,7 @@ fn register_k5_arm_requires_declared_cache_factor() {
 
 #[test]
 fn register_retirement_requires_match_shape_and_removal_diff() {
-    use hh_budget::matchspec::CachePolicy;
+    use hharness_budget::matchspec::CachePolicy;
     let mut s = spec();
     s.kind = ExperimentKind::Retirement;
     s.experiment_id = s.experiment_id();

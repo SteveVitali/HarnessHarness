@@ -19,9 +19,9 @@
 
 use std::collections::BTreeMap;
 
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{CancelledBy, ControlBoundary, DecisionPoint, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::{CancelledBy, ControlBoundary, DecisionPoint, Owner, StopReason};
+use hharness_wire::json::Json;
 
 use crate::state::{ControlState, PlanCursor};
 use crate::strategy::{
@@ -70,7 +70,7 @@ pub fn plan_validate(
     args_raw: &str,
     declared_surfaces: &[crate::output::SurfaceSpec],
 ) -> Result<Vec<Json>, &'static str> {
-    let j = hh_wire::json::parse(args_raw).map_err(|_| "unparseable")?;
+    let j = hharness_wire::json::parse(args_raw).map_err(|_| "unparseable")?;
     let steps_j = match j.get("steps") {
         Some(Json::Arr(a)) => a.clone(),
         _ => return Err("no_steps"),
@@ -512,7 +512,7 @@ impl ControlStrategy for PlanExecute {
             }
 
             Cue::ModelCompleted { stop_reason, .. } => {
-                use hh_gateway::vocab::StopReason as Gw;
+                use hharness_gateway::vocab::StopReason as Gw;
                 match Self::ext_str(state, ext::PHASE) {
                     Some("awaiting_plan") => {
                         if !Self::steps(state).is_empty() {
@@ -659,7 +659,7 @@ impl ControlStrategy for PlanExecute {
         _ctx: &ControlContext,
     ) -> Result<ControlState, RestoreError> {
         let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
-        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let j = hharness_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
         if j.get("dialect").and_then(Json::as_str).unwrap_or("")
             != crate::state::CONTROL_STATE_DIALECT
         {

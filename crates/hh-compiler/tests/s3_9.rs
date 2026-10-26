@@ -1,4 +1,4 @@
-//! `hh-compiler` S3.9 acceptance — the protocol-edge slices (§5d.3 §2;
+//! `hharness-compiler` S3.9 acceptance — the protocol-edge slices (§5d.3 §2;
 //! ticket S3.9; R-2.5.4⁰, R-2.5.2⁰, R-2.5.3⁰):
 //!
 //! * `sync_source` — all six `SyncTrigger`s drive the same
@@ -21,27 +21,29 @@ mod common;
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::*;
-use hh_compiler::compiler::compile;
-use hh_compiler::equiv::{self, ArgTransform, EvidenceVerdict};
-use hh_compiler::exposure::{
+use hharness_compiler::compiler::compile;
+use hharness_compiler::equiv::{self, ArgTransform, EvidenceVerdict};
+use hharness_compiler::exposure::{
     adopt, build_catalog, catalog_delta, sync_source, AdoptOutcome, Availability, Catalog,
     CatalogEntry, CatalogSource, DriftPolicy, SourceState, SyncTrigger,
 };
-use hh_compiler::profile::{minimal_profiles, profile_coordinate, profile_identity, ModelProfile};
-use hh_compiler::seal::ModelSurfaceState;
-use hh_compiler::surface::{
+use hharness_compiler::profile::{
+    minimal_profiles, profile_coordinate, profile_identity, ModelProfile,
+};
+use hharness_compiler::seal::ModelSurfaceState;
+use hharness_compiler::surface::{
     check_distinguishable, Distinguishability, ErrorFormatSpec, SurfaceFailure,
 };
-use hh_compiler::CompileInputs;
-use hh_hir::records::{AgentProcessBody, KindRecord, ProcedureStep};
-use hh_hir::refs::ProfileRef;
-use hh_wire::json::Json;
+use hharness_compiler::CompileInputs;
+use hharness_hir::records::{AgentProcessBody, KindRecord, ProcedureStep};
+use hharness_hir::refs::ProfileRef;
+use hharness_wire::json::Json;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
 /// A doc carrying `edit_file` ({path, edits}) — the capability the two
 /// minimal profiles shape differently.
-fn edit_doc() -> hh_hir::document::HirDocument {
+fn edit_doc() -> hharness_hir::document::HirDocument {
     let mut doc = doc_with(&stage1_assembly());
     // Re-pin the agent's profile — the bound profile is named in the
     // compile inputs, not the doc.
@@ -178,7 +180,7 @@ fn with_suite(profile: &ModelProfile, suite: Json) -> ModelProfile {
     p
 }
 
-fn edit_binding(bundle: &hh_compiler::seal::CompiledBundle) -> equiv::SurfaceBinding {
+fn edit_binding(bundle: &hharness_compiler::seal::CompiledBundle) -> equiv::SurfaceBinding {
     let ModelSurfaceState::Lowered(s) = &bundle.model_surface else {
         panic!("stage 3 lowers the surface")
     };
@@ -190,7 +192,7 @@ fn edit_binding(bundle: &hh_compiler::seal::CompiledBundle) -> equiv::SurfaceBin
 }
 
 /// The capability node as sealed — `check_equivalence`'s `capability`.
-fn edit_node(sealed: &hh_hir::SealedDefinition) -> hh_hir::Node {
+fn edit_node(sealed: &hharness_hir::SealedDefinition) -> hharness_hir::Node {
     sealed
         .document
         .nodes
@@ -210,7 +212,7 @@ fn ac_e1_4_edit_file_shapes_are_total_and_sound() {
 
     let (store, sealed, _v) = sealed_doc_with("e14", edit_doc(), vec![], vec![]);
     let cap = edit_node(&sealed);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let mut bindings = Vec::new();
     for profile in [&patch, &replace] {
         let profiles = MapProfileView::of(vec![(*profile).clone()]);
@@ -268,7 +270,7 @@ fn ac_e1_4_edit_file_shapes_are_total_and_sound() {
 fn ac_e2_7_all_surface_failures_distinguishable() {
     // A minimal `error_format` rendering covering all eight
     // `SurfaceFailure` classes pairwise-distinguishably → `verified`.
-    let renderings: BTreeMap<String, hh_hir::leaves::Text> = SurfaceFailure::ALL
+    let renderings: BTreeMap<String, hharness_hir::leaves::Text> = SurfaceFailure::ALL
         .iter()
         .map(|f| {
             (
@@ -327,7 +329,7 @@ fn ac_e3_sync_source_all_triggers_emit_delta() {
     let _ = &sealed;
     let profile = with_suite(&minimal_profiles().0, patch_suite());
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed,
@@ -398,7 +400,7 @@ fn ac_e3_freeze_marks_removed_unavailable_keeps_catalog_id() {
     let (store, sealed, _v) = sealed_doc_with("freeze", edit_doc(), vec![], vec![]);
     let profile = with_suite(&minimal_profiles().0, patch_suite());
     let profiles = MapProfileView::of(vec![profile.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed,
@@ -488,7 +490,7 @@ fn ac_e3_freeze_marks_removed_unavailable_keeps_catalog_id() {
 
 /// `edit_doc` plus a schema `Validator` bound to `edit_file`, so the MCP
 /// loss report's `validators` entry has a bound validator to declare.
-fn doc_with_bound_validator() -> hh_hir::document::HirDocument {
+fn doc_with_bound_validator() -> hharness_hir::document::HirDocument {
     let mut doc = edit_doc();
     let mut v = validator_node("test:validator", 7);
     if let KindRecord::Validator(vr) = &mut v.semantic {
@@ -504,7 +506,7 @@ fn ac_e4_1_lift_lower_round_trip_both_profiles_exact_no_slot() {
     let (patch, replace) = minimal_profiles();
     let patch = with_suite(&patch, patch_suite());
     let replace = with_suite(&replace, replace_suite());
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
 
     for profile in [&patch, &replace] {
         let profiles = MapProfileView::of(vec![(*profile).clone()]);
@@ -526,7 +528,8 @@ fn ac_e4_1_lift_lower_round_trip_both_profiles_exact_no_slot() {
 
         // lift∘lower ∪ loss_report = x: every runtime-plan tool is either
         // recovered by `lift` or named in the loss report.
-        let lifted = hh_compiler::lift(&bundle.target_artefacts["mcp"], "mcp").expect("mcp lifts");
+        let lifted =
+            hharness_compiler::lift(&bundle.target_artefacts["mcp"], "mcp").expect("mcp lifts");
         let recovered: BTreeSet<String> = lifted
             .recovered
             .iter()
@@ -565,10 +568,9 @@ fn ac_e4_1_lift_lower_round_trip_both_profiles_exact_no_slot() {
         // members, still `no_slot`).
         for field in ["permission.enforcement", "budgets", "validators"] {
             assert!(
-                report
-                    .entries
-                    .iter()
-                    .any(|e| { e.field == field && e.class == hh_compiler::lcd::LossKind::NoSlot }),
+                report.entries.iter().any(|e| {
+                    e.field == field && e.class == hharness_compiler::lcd::LossKind::NoSlot
+                }),
                 "{field}: no_slot declared for profile {}",
                 profile.profile_id
             );
@@ -576,7 +578,7 @@ fn ac_e4_1_lift_lower_round_trip_both_profiles_exact_no_slot() {
         assert!(report
             .entries
             .iter()
-            .all(|e| e.class == hh_compiler::lcd::LossKind::NoSlot));
+            .all(|e| e.class == hharness_compiler::lcd::LossKind::NoSlot));
     }
 }
 
@@ -589,7 +591,7 @@ fn render_profile(reads: &[&str], retained: &[&str]) -> ModelProfile {
     let mut p = with_suite(&minimal_profiles().0, patch_suite());
     p.rules.push(rule(
         "r-render",
-        hh_compiler::profile::ProfileRuleKind::ResultRender,
+        hharness_compiler::profile::ProfileRuleKind::ResultRender,
         &["tools/*/result_render"],
         Json::obj([
             ("mode", Json::str("truncate")),
@@ -603,7 +605,7 @@ fn render_profile(reads: &[&str], retained: &[&str]) -> ModelProfile {
                 Json::Arr(reads.iter().map(|f| Json::str(*f)).collect()),
             ),
         ]),
-        hh_compiler::profile::DebtStatus::Active,
+        hharness_compiler::profile::DebtStatus::Active,
     ));
     p.content_hash = profile_identity(&p);
     p
@@ -612,7 +614,7 @@ fn render_profile(reads: &[&str], retained: &[&str]) -> ModelProfile {
 #[test]
 fn ac_e2_6_validator_reads_must_be_retained() {
     let (store, sealed, _v) = sealed_doc_with("e26", doc_with_bound_validator(), vec![], vec![]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let compile_with = |profile: &ModelProfile| {
         compile(
             &CompileInputs {
@@ -637,7 +639,7 @@ fn ac_e2_6_validator_reads_must_be_retained() {
     assert!(
         matches!(
             err,
-            hh_compiler::errors::CompileError::UnexpressibleSurface { .. }
+            hharness_compiler::errors::CompileError::UnexpressibleSurface { .. }
         ),
         "{err:?}"
     );
@@ -660,11 +662,11 @@ fn ac_e2_6_validator_reads_must_be_retained() {
 // proxy.
 #[test]
 fn ac_e3_4_prior_order_is_prefix_extended_on_reveal() {
-    use hh_compiler::exposure::{
+    use hharness_compiler::exposure::{
         select_surfaces, ExposurePolicy, ExposurePolicyParams, Retention, RevealCause,
         RevealedEntry, RevealedSet, TurnState,
     };
-    use hh_hir::tools::ExposureMode;
+    use hharness_hir::tools::ExposureMode;
 
     // Doc: `edit_file` (deferrable) + `discover_surfaces` (I-DISCOVERY: a
     // deferred surface needs a discovery capability in the catalog).
@@ -672,7 +674,7 @@ fn ac_e3_4_prior_order_is_prefix_extended_on_reveal() {
     // `edit_file` must admit `deferred` (the profile/policy meet would
     // otherwise narrow it out — I-NARROW refuses on `PolicyViolation`).
     for n in doc.nodes.iter_mut() {
-        if let Some(hh_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
+        if let Some(hharness_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
             if n.version.semantic_id.as_deref() == Some("test:edit_file") {
                 ts.exposure_mode = Json::obj([(
                     "admitted_modes",
@@ -689,7 +691,7 @@ fn ac_e3_4_prior_order_is_prefix_extended_on_reveal() {
     let (store, sealed, _vids) = sealed_doc_with("e3-4", doc, vec![], vec![]);
     let p = with_suite(&minimal_profiles().0, patch_suite());
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed: sealed.clone(),
@@ -836,7 +838,7 @@ fn ac_e3_4_prior_order_is_prefix_extended_on_reveal() {
 fn ac_e3_6_revealable_deferred_surface_lowers_to_provider() {
     let mut doc = edit_doc();
     for n in doc.nodes.iter_mut() {
-        if let Some(hh_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
+        if let Some(hharness_hir::records::SurfaceRecord::Tool(ts)) = n.surface.as_mut() {
             if n.version.semantic_id.as_deref() == Some("test:edit_file") {
                 ts.exposure_mode = Json::obj([(
                     "admitted_modes",
@@ -855,14 +857,14 @@ fn ac_e3_6_revealable_deferred_surface_lowers_to_provider() {
     let (store, sealed, _vids) = sealed_doc_with("e3-6", doc, vec![], vec![]);
     let p = with_suite(&minimal_profiles().0, patch_suite());
     let profiles = MapProfileView::of(vec![p.clone()]);
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
     let bundle = compile(
         &CompileInputs {
             sealed: sealed.clone(),
             profile_refs: vec![profile_coordinate(&p)],
             fallback_profile: None,
             targets: vec![
-                hh_compiler::link::TargetSpec {
+                hharness_compiler::link::TargetSpec {
                     target_id: "provider_tool_api".to_string(),
                     spec_version: "1.0".to_string(),
                     content_hash: "sha256:target-provider".to_string(),
@@ -902,11 +904,11 @@ fn ac_e3_6_revealable_deferred_surface_lowers_to_provider() {
 
     // And lift on the provider artefact is still the typed refusal — the
     // round-trip arm lives on `mcp` (see ac_e4_1_lift_lower_round_trip…).
-    let err = hh_compiler::target::lift(artefact, "provider_tool_api")
+    let err = hharness_compiler::target::lift(artefact, "provider_tool_api")
         .expect_err("provider target declares no lifting contract");
     assert!(matches!(
         err,
-        hh_compiler::errors::CompileError::TargetError { .. }
+        hharness_compiler::errors::CompileError::TargetError { .. }
     ));
 }
 
@@ -933,7 +935,7 @@ fn ac_e3_5_discovery_capability_two_profiles_profile_owned_only() {
     let (patch, replace) = minimal_profiles();
     let patch = with_suite(&patch, patch_suite());
     let replace = with_suite(&replace, replace_suite());
-    let cat = hh_assembly::Stage1Catalog::stage1();
+    let cat = hharness_assembly::Stage1Catalog::stage1();
 
     let mut bindings = Vec::new();
     let mut evidences = Vec::new();

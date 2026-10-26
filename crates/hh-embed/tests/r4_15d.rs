@@ -4,9 +4,9 @@
 //!
 //! The remote seam is the ticket's one path: the declared
 //! `FetchTrustPolicy` (`trust` MUST-data) admits each location, the
-//! `hh_env` `EgressMediator` mediates every admitted GET
+//! `hharness_env` `EgressMediator` mediates every admitted GET
 //! (`security.egress.{requested,decided}` land durable-before-wire on the
-//! kernel's fetch run), `hh_tls` terminates TLS with verification on
+//! kernel's fetch run), `hharness_tls` terminates TLS with verification on
 //! (the hermetic leg dials the committed test-CA fixture through
 //! `tls_extra_roots_file` — verification stays on; a private issuer is
 //! a declared root, never an insecure skip), and every remote attempt
@@ -24,15 +24,15 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
-use hh_bundle::trust::FetchTrustPolicy;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::manifest::{BundlePolicy, FetchEntry, MemberStatus};
+use hharness_bundle::trust::FetchTrustPolicy;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request;
 
 fn dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -110,7 +110,7 @@ fn fixture_bytes() -> Vec<u8> {
 }
 
 fn fixture_addr() -> String {
-    hh_identity::idp_id("blob", &fixture_bytes())
+    hharness_identity::idp_id("blob", &fixture_bytes())
 }
 
 /// A bundle dir whose `members[0]` is `status = fetch` at `address =
@@ -121,7 +121,7 @@ fn fetch_bundle_dir(root: &Path, locations: &[String], expires: Option<&str>) ->
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     let (run, _l) = store.open_run(m, "r415d.test").unwrap();
@@ -165,7 +165,7 @@ fn fetch_bundle_dir(root: &Path, locations: &[String], expires: Option<&str>) ->
     let mut members = a.members.clone();
     members.remove(&a.manifest.members[0].address);
     let dir = dir("bundle");
-    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+    hharness_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
     dir
 }
 
@@ -367,7 +367,7 @@ fn kernel_fetch_expired_and_offlist_and_ipfs_refuse_typed() {
 
 /// One-shot TLS fixture: accept, drain the request, answer the body.
 fn serve_once(body: Vec<u8>) -> (u16, std::thread::JoinHandle<()>) {
-    let tls = hh_tls::ServerTls::new(
+    let tls = hharness_tls::ServerTls::new(
         &std::fs::read_to_string(pki("server.pem")).unwrap(),
         &std::fs::read_to_string(pki("server-key.pem")).unwrap(),
     )
@@ -380,8 +380,8 @@ fn serve_once(body: Vec<u8>) -> (u16, std::thread::JoinHandle<()>) {
             sock.set_write_timeout(Some(Duration::from_secs(15))).ok();
             if let Ok(mut s) = tls.accept(sock) {
                 let mut r = BufReader::new(&mut s);
-                let _ = hh_wire::http::read_request(&mut r, 64 * 1024);
-                let _ = hh_wire::http::write_response(&mut s, 200, &[], &body);
+                let _ = hharness_wire::http::read_request(&mut r, 64 * 1024);
+                let _ = hharness_wire::http::write_response(&mut s, 200, &[], &body);
                 let _ = s.flush();
             }
         }
@@ -466,8 +466,8 @@ fn kernel_fetch_materializes_over_tls_through_the_mediator() {
     // Durable-before-visible, the other direction: the deposit's bytes
     // are the verified fixture — the blob pool holds them under their
     // recomputed address (S3).
-    let parsed = hh_identity::idp::parse_id(&fixture_addr()).unwrap();
-    let ca = hh_identity::idp::ContentAddress {
+    let parsed = hharness_identity::idp::parse_id(&fixture_addr()).unwrap();
+    let ca = hharness_identity::idp::ContentAddress {
         idp: "idp/1",
         algorithm: "sha256",
         digest: parsed.digest_hex,
@@ -504,8 +504,8 @@ fn kernel_fetch_digest_mismatch_deposits_nothing() {
     assert_eq!(failed_reason(outcome), "digest_mismatch");
     join.join().unwrap();
     // The mismatched attempt is ledgered; the blob never deposits.
-    let parsed = hh_identity::idp::parse_id(&fixture_addr()).unwrap();
-    let ca = hh_identity::idp::ContentAddress {
+    let parsed = hharness_identity::idp::parse_id(&fixture_addr()).unwrap();
+    let ca = hharness_identity::idp::ContentAddress {
         idp: "idp/1",
         algorithm: "sha256",
         digest: parsed.digest_hex,

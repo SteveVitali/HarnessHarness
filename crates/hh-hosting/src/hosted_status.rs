@@ -29,7 +29,7 @@
 //! (`hosting_ops`'s observational-class gate holds: the participant's
 //! claim is lifted, its authority never widens — CC2).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The lifecycle target one hosted status maps to (the closed sum —
 /// `unknown` covers every undeclared spelling).

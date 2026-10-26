@@ -1,5 +1,5 @@
 //! R2.8 / DF-S1.17-1 — the §5d.3 corpus leg over `benchset.stage3.v1`: the
-//! exposure-metric *computations* run the real `hh_compiler::exposure`
+//! exposure-metric *computations* run the real `hharness_compiler::exposure`
 //! machinery over the recorded corpus.
 //!
 //! The labelling protocol follows OQ-237 / the ToolRet shape (`{query,
@@ -20,17 +20,17 @@
 //!
 //! Fixture-verified only: the corpus is committed and hermetic; nothing
 //! here touches a live provider (the executor-leg arms live in
-//! `hh-compiler`'s `exposure_c1` battery).
+//! `hharness-compiler`'s `exposure_c1` battery).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_bench::benchset::Benchset;
-use hh_compiler::exposure::{
+use hharness_bench::benchset::Benchset;
+use hharness_compiler::exposure::{
     catalog_id_of, Availability, Catalog, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm,
     DiscoveryQuery, IndexForm, IndexGranularity, PermissionCoverage, SearchTextField,
 };
-use hh_compiler::retrieval::{retrieval_eval, LabelledQuery};
-use hh_hir::tools::ExposureMode;
+use hharness_compiler::retrieval::{retrieval_eval, LabelledQuery};
+use hharness_hir::tools::ExposureMode;
 
 /// A catalog entry whose `name` is the corpus's recorded surface spelling
 /// (`fs.write`, `hh.submit`, …) — `exact_name` queries match it verbatim.

@@ -9,9 +9,9 @@ mod common;
 use std::net::TcpListener;
 
 use common::*;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_web::server::{serve_request, Served};
-use hh_wire::json::Json;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_web::server::{serve_request, Served};
+use hharness_wire::json::Json;
 
 fn test_dir(tag: &str) -> std::path::PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -59,11 +59,11 @@ fn e2e_run_index_over_binding_c() {
     });
     // hello + run_index — two connections (one per call, `Connection:
     // close`).
-    let handled = hh_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 2).unwrap();
+    let handled = hharness_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 2).unwrap();
     assert_eq!(handled, 2);
     let (code, body) = surface.join().unwrap();
     assert_eq!(code, 200, "{body}");
-    let j = hh_wire::json::parse(&body).unwrap();
+    let j = hharness_wire::json::parse(&body).unwrap();
     assert_eq!(
         j.get("view").and_then(Json::as_str),
         Some("v1_runs"),
@@ -86,9 +86,11 @@ fn e2e_v11_run_over_binding_c() {
     let root = test_dir("v11");
     let store_root = root.join("store");
     let run_id = {
-        let mut st = hh_ledger::store::Store::open(&store_root).unwrap();
+        let mut st = hharness_ledger::store::Store::open(&store_root).unwrap();
         st.open_run(
-            hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+            hharness_ledger::manifest::RunManifest::minimal(
+                hharness_ledger::manifest::RunKind::Agent,
+            ),
             "holder-a",
         )
         .unwrap()
@@ -124,11 +126,11 @@ fn e2e_v11_run_over_binding_c() {
     });
     // hello + open_session + project + account + head + describe +
     // list_leases — seven connections.
-    let handled = hh_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 7).unwrap();
+    let handled = hharness_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 7).unwrap();
     assert_eq!(handled, 7);
     let (code, body) = surface.join().unwrap();
     assert_eq!(code, 200, "{body}");
-    let j = hh_wire::json::parse(&body).unwrap();
+    let j = hharness_wire::json::parse(&body).unwrap();
     assert_eq!(
         j.get("view").and_then(Json::as_str),
         Some("v11_run"),
@@ -185,7 +187,7 @@ fn e2e_gate_refusal_never_dispatches() {
         svc.call("run_index", Json::Obj(Default::default()))
             .unwrap()
     });
-    let handled = hh_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 2).unwrap();
+    let handled = hharness_embed::net::serve_net_n(listener, &mut kernel, KERNEL_TOKEN, 2).unwrap();
     assert_eq!(handled, 2);
     let j = probe.join().unwrap();
     assert!(

@@ -6,16 +6,16 @@ mod common;
 
 use common::*;
 
-use hh_hir::diff::{apply, diff, invert};
-use hh_hir::document::parse_document;
-use hh_hir::ops::canonicalize;
-use hh_hir::records::*;
-use hh_provenance::Origin;
-use hh_wire::json::Json;
+use hharness_hir::diff::{apply, diff, invert};
+use hharness_hir::document::parse_document;
+use hharness_hir::ops::canonicalize;
+use hharness_hir::records::*;
+use hharness_provenance::Origin;
+use hharness_wire::json::Json;
 
 /// The i-th corpus definition — deterministic in `i`.
-fn corpus_doc(i: usize) -> hh_hir::document::HirDocument {
-    let mut doc = hh_hir::document::HirDocument::new(sel("c:agent"));
+fn corpus_doc(i: usize) -> hharness_hir::document::HirDocument {
+    let mut doc = hharness_hir::document::HirDocument::new(sel("c:agent"));
     doc.nodes.push(rule_node("c:rule", 1));
     doc.nodes.push(budget_node(
         "c:budget",
@@ -46,7 +46,7 @@ fn corpus_doc(i: usize) -> hh_hir::document::HirDocument {
 }
 
 /// A mutation of corpus_doc(i): tightened budget, a surface rename, one extra node.
-fn corpus_target(i: usize) -> hh_hir::document::HirDocument {
+fn corpus_target(i: usize) -> hharness_hir::document::HirDocument {
     let mut doc = corpus_doc(i);
     if let KindRecord::Budget(b) = &mut doc.nodes[1].semantic {
         b.dimensions.insert(
@@ -82,7 +82,8 @@ fn corpus_has_at_least_100_definitions() {
     const { assert!(CORPUS >= 100) }
     for i in 0..CORPUS {
         let doc = corpus_doc(i);
-        hh_hir::validate(&doc).unwrap_or_else(|e| panic!("corpus doc {i} must validate: {e:?}"));
+        hharness_hir::validate(&doc)
+            .unwrap_or_else(|e| panic!("corpus doc {i} must validate: {e:?}"));
     }
 }
 
@@ -131,15 +132,15 @@ fn apply_and_invert_round_trip_over_the_corpus() {
 }
 
 /// A human-origin diff provenance (empty `derived-from` is legal for human).
-fn prov_human_diff() -> hh_provenance::ProvenanceRecord {
+fn prov_human_diff() -> hharness_provenance::ProvenanceRecord {
     ProvenanceRecord::minted(
-        Origin::human("test:author", hh_provenance::HumanRole::Author),
+        Origin::human("test:author", hharness_provenance::HumanRole::Author),
         PersistenceScope::Run,
         1,
     )
 }
 
-use hh_provenance::{PersistenceScope, ProvenanceRecord};
+use hharness_provenance::{PersistenceScope, ProvenanceRecord};
 
 #[test]
 fn surface_only_edits_classify_as_surface_and_keep_semantic_id() {
@@ -181,7 +182,7 @@ fn diff_carries_derivation_unless_human_or_migration() {
         .expect_err("model diff without derived-from");
     assert!(es
         .iter()
-        .any(|e| matches!(e, hh_hir::errors::HirError::SchemaViolation { .. })));
+        .any(|e| matches!(e, hharness_hir::errors::HirError::SchemaViolation { .. })));
 }
 
 #[test]
@@ -193,7 +194,7 @@ fn conditioned_rule_edit_without_debt_fails_diff() {
         7,
         Some(debt_record("test:crule.rule", 7)),
     ));
-    hh_hir::validate(&base).unwrap();
+    hharness_hir::validate(&base).unwrap();
     let mut target = base.clone();
     // Touch the conditioned rule: change its trigger.
     if let KindRecord::HarnessRule(r) = &mut target.nodes.last_mut().unwrap().semantic {
@@ -203,7 +204,7 @@ fn conditioned_rule_edit_without_debt_fails_diff() {
         .expect_err("conditioned-rule touch without debt update");
     assert!(es.iter().any(|e| matches!(
         e,
-        hh_hir::errors::HirError::ConditionedRuleIncomplete { .. }
+        hharness_hir::errors::HirError::ConditionedRuleIncomplete { .. }
     )));
 }
 
@@ -237,6 +238,6 @@ fn two_profiles_of_one_tool_differ_only_in_surface() {
     assert_eq!(patch.semantic, string_replace.semantic);
 }
 
-fn patch_surface_differs(a: &hh_hir::document::Node, b: &hh_hir::document::Node) {
+fn patch_surface_differs(a: &hharness_hir::document::Node, b: &hharness_hir::document::Node) {
     assert_ne!(a.surface, b.surface, "the two profiles render differently");
 }

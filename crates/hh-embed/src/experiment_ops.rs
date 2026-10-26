@@ -19,24 +19,24 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::spec::BudgetSpec;
-use hh_budget::{BudgetEnforcement, DimensionId, EnforcementLevel};
-use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_experiment::engine::{
+use hharness_budget::spec::BudgetSpec;
+use hharness_budget::{BudgetEnforcement, DimensionId, EnforcementLevel};
+use hharness_experiment::docs::{kind as doc_kind, LabDocs};
+use hharness_experiment::engine::{
     ClaimTicket, EngineContext, ExperimentEngine, HostedLaunchOutcome, HostedLaunchRequest,
     NextVerdict,
 };
-use hh_experiment::errors::ExperimentError;
-use hh_experiment::events::PauseReason;
-use hh_lab::expand::{ArmConfiguration, ExpandError, ExpandTask};
-use hh_lab::experiment::{ArmSpec, BudgetRelevantParam, ExperimentSpec, RetirementDiffView};
-use hh_ledger::store::{Lease, Store};
-use hh_ontology::compliance::NaReason;
-use hh_ontology::lab::SplitLabel;
-use hh_wire::json::Json;
+use hharness_experiment::errors::ExperimentError;
+use hharness_experiment::events::PauseReason;
+use hharness_lab::expand::{ArmConfiguration, ExpandError, ExpandTask};
+use hharness_lab::experiment::{ArmSpec, BudgetRelevantParam, ExperimentSpec, RetirementDiffView};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ontology::compliance::NaReason;
+use hharness_ontology::lab::SplitLabel;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 fn bad(path: &str, code: &str) -> EmbedError {
     EmbedError::SchemaViolation {

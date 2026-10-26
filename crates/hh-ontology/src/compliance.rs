@@ -18,7 +18,7 @@ use crate::eval::{
 use crate::lab::EnvironmentFamily;
 use crate::participant::CapabilityVerdict;
 use crate::participant::{Granularity, Observability, ParticipantClass, ParticipantDescriptor};
-use hh_wire::Json;
+use hharness_wire::Json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 

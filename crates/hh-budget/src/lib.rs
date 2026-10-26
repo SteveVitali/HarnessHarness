@@ -1,8 +1,8 @@
-//! `hh-budget` — the C0/Stage-1 resource-economics & accounting model
+//! `hharness-budget` — the C0/Stage-1 resource-economics & accounting model
 //! (spec §8.2, scope item **R-2.1.6**; ADR-0039/0040/0041 as amended; ADR-0043 for the
 //! measurement stamps). The single canonical schema + accounting substrate for:
 //!
-//! - the **closed kernel dimension registry** ([`hh_ontology::dimensions`], re-exported)
+//! - the **closed kernel dimension registry** ([`hharness_ontology::dimensions`], re-exported)
 //!   — 24 counters + 3 gauges + 5 registered `ext`/`hh` names, plus the three derived
 //!   bound names (`tokens.input.total`, `tokens.output.total`, `tokens.blended`);
 //! - **quantities and vectors** — [`quantity::ResourceQuantity`],
@@ -68,7 +68,7 @@ pub mod spec;
 pub mod tree;
 pub mod usage;
 
-pub use hh_ontology::dimensions::{
+pub use hharness_ontology::dimensions::{
     DerivedDimension, DimensionClass, DimensionId, DimensionKey, RegisteredDimension,
 };
 

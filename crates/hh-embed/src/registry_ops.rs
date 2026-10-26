@@ -3,7 +3,7 @@
 //! Json results out (records-in/records-out — §6.2 R3/R8; contract-only reach,
 //! CC5). Mutating ops drain the store's `lifecycle.registry.*` audit rows into
 //! a kernel-internal ledger run (`registry_events`) through the one fenced
-//! writer (`hh_registry::events::emit`) — the rows are ledgered, never dropped.
+//! writer (`hharness_registry::events::emit`) — the rows are ledgered, never dropped.
 //!
 //! `registrar` is the caller-supplied canonical `ProvenanceRecord` — the store
 //! re-derives its authority class from the origin (CC2; `validate` inside
@@ -13,25 +13,25 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::names::{NameStatus, ResolveMode};
-use hh_identity::refs::VersionedRef;
-use hh_identity::supersede::SupersedeReason;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Lease;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::kinds::{ProducedBy, RecordKind, RequireConformance};
-use hh_registry::records::RegistryRecord;
-use hh_registry::schema;
-use hh_registry::store::{
+use hharness_identity::names::{NameStatus, ResolveMode};
+use hharness_identity::refs::VersionedRef;
+use hharness_identity::supersede::SupersedeReason;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Lease;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::kinds::{ProducedBy, RecordKind, RequireConformance};
+use hharness_registry::records::RegistryRecord;
+use hharness_registry::schema;
+use hharness_registry::store::{
     CatalogEntry, QueryClause, QueryOp, QueryPredicate, ResolveInput, ResolveRequest,
     ResolvedRecord, SlotConstraints,
 };
-use hh_registry::RegistryError;
-use hh_wire::json::Json;
+use hharness_registry::RegistryError;
+use hharness_wire::json::Json;
 
 use crate::service::ledger_err;
 use crate::service::{EmbedService, LEASE_TTL_MS};
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 /// The internal ledger run's name — registry lifecycle rows append here.
 const REGISTRY_RUN_LABEL: &str = "registry-events";
@@ -116,7 +116,7 @@ fn parse_floor(j: &Json, k: &str) -> Result<Option<RequireConformance>, EmbedErr
 /// The `lab.registry.import` result — refs, the D6 name map, the
 /// recovered/declared-unverified split, the exact loss list and the
 /// preserved foreign `_meta` members.
-fn import_outcome_json(out: &hh_registry::import::ImportOutcome) -> Json {
+fn import_outcome_json(out: &hharness_registry::import::ImportOutcome) -> Json {
     Json::obj([
         ("refs", Json::Arr(out.refs.iter().map(vref_json).collect())),
         (
@@ -330,7 +330,7 @@ impl EmbedService {
         }
         let (run_id, lease) = self.ensure_registry_run()?;
         let kernel = self.kernel_prov.clone();
-        hh_registry::events::emit(&mut self.store, &run_id, &lease, &kernel, events)
+        hharness_registry::events::emit(&mut self.store, &run_id, &lease, &kernel, events)
             .map_err(ledger_err)
     }
 
@@ -370,7 +370,7 @@ impl EmbedService {
                 let transitions = match opt_str(params, "supersedes") {
                     Some(sup) => self.evaluate_debt_on_lifecycle(
                         &sup,
-                        hh_lab::debt::ProfileChangeKind::SupersededL2,
+                        hharness_lab::debt::ProfileChangeKind::SupersededL2,
                     )?,
                     None => Vec::new(),
                 };
@@ -628,8 +628,8 @@ impl EmbedService {
             .ok()
             .or_else(|| opt_str(params, "version_id"));
         if let Some(vid) = retired_target {
-            transitions =
-                self.evaluate_debt_on_lifecycle(&vid, hh_lab::debt::ProfileChangeKind::Retired)?;
+            transitions = self
+                .evaluate_debt_on_lifecycle(&vid, hharness_lab::debt::ProfileChangeKind::Retired)?;
         }
         let mut out = BTreeMap::new();
         out.insert("ok".into(), Json::Bool(true));
@@ -757,10 +757,11 @@ impl EmbedService {
     pub(crate) fn lab_registry_import(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let registrar = registrar_of(params)?;
         if params.get("foreign_ref").is_some() {
-            let fref = hh_registry::foreign::ForeignRef::from_json(req(params, "foreign_ref")?)
-                .map_err(reg_err)?;
+            let fref =
+                hharness_registry::foreign::ForeignRef::from_json(req(params, "foreign_ref")?)
+                    .map_err(reg_err)?;
             let document = req(params, "document")?;
-            let out = hh_registry::foreign::import_foreign(
+            let out = hharness_registry::foreign::import_foreign(
                 &mut self.registry,
                 &fref,
                 document,
@@ -776,8 +777,9 @@ impl EmbedService {
             ]));
         }
         let listing = req(params, "listing")?;
-        let out = hh_registry::import::import_listing(&mut self.registry, listing, &registrar)
-            .map_err(reg_err)?;
+        let out =
+            hharness_registry::import::import_listing(&mut self.registry, listing, &registrar)
+                .map_err(reg_err)?;
         self.flush_registry_events()?;
         Ok(import_outcome_json(&out))
     }
@@ -800,7 +802,8 @@ impl EmbedService {
                 .collect::<Result<Vec<String>, EmbedError>>()?,
             _ => return Err(bad("/refs", "type_mismatch")),
         };
-        let out = hh_registry::foreign::export(&self.registry, &refs, &target).map_err(reg_err)?;
+        let out =
+            hharness_registry::foreign::export(&self.registry, &refs, &target).map_err(reg_err)?;
         Ok(Json::obj([
             ("target", Json::str(out.target.clone())),
             (
@@ -879,7 +882,7 @@ impl EmbedService {
     pub(crate) fn lab_registry_refresh(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let listing = req(params, "listing")?;
         let registrar = registrar_of(params)?;
-        let out = hh_registry::import::refresh(&mut self.registry, listing, &registrar)
+        let out = hharness_registry::import::refresh(&mut self.registry, listing, &registrar)
             .map_err(reg_err)?;
         self.flush_registry_events()?;
         Ok(Json::obj([

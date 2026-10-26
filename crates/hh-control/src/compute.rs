@@ -31,9 +31,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_budget::quantity::ResourceVector;
-use hh_ontology::control::DecisionPoint;
-use hh_wire::json::Json;
+use hharness_budget::quantity::ResourceVector;
+use hharness_ontology::control::DecisionPoint;
+use hharness_wire::json::Json;
 
 use crate::vocab::{ControlDecision, DecisionKind};
 
@@ -275,7 +275,7 @@ pub struct PlacementFact {
     /// The critic/placement ref.
     pub critic_ref: String,
     /// The calibration status — `≠ active` ⇒ `infeasible{calibration_inactive}`.
-    pub calibration_status: hh_verification::vocab::CalibrationStatus,
+    pub calibration_status: hharness_verification::vocab::CalibrationStatus,
     /// `missed_failure_rate` (ppm — the critic misses this share of real failures).
     pub missed_failure_rate_ppm: i64,
     /// `false_stop_rate` (ppm — the critic halts good work this share).
@@ -423,7 +423,7 @@ pub struct ComputeContext {
     pub cost_model: Option<ResourceVector>,
     /// The health view.
     pub health: HealthView,
-    /// The `TaskValue` (body from `hh_verification::gate::TaskValue`; the
+    /// The `TaskValue` (body from `hharness_verification::gate::TaskValue`; the
     /// fact here names the contract ref it was projected from).
     pub task_value: Option<TaskValueFact>,
     /// The `context_label` (the assembled context's provenance label —
@@ -539,11 +539,11 @@ impl TaskValueFact {
         })
     }
 
-    /// Project a sealed `hh_verification::gate::TaskValue` into the ctx
+    /// Project a sealed `hharness_verification::gate::TaskValue` into the ctx
     /// fact — the contract is the authority; `contract_ref` names it.
     pub fn from_task_value(
         contract_ref: &str,
-        tv: &hh_verification::gate::TaskValue,
+        tv: &hharness_verification::gate::TaskValue,
     ) -> TaskValueFact {
         TaskValueFact {
             contract_ref: contract_ref.to_string(),
@@ -1192,8 +1192,8 @@ impl ComputeDecisionRecord {
         if let Json::Obj(ref mut m) = j {
             m.remove("record_id");
         }
-        hh_identity::idp::identify_bytes(
-            hh_identity::kinds::RecordKind::ComputeDecisionRecord,
+        hharness_identity::idp::identify_bytes(
+            hharness_identity::kinds::RecordKind::ComputeDecisionRecord,
             j.to_canonical_string().as_bytes(),
         )
     }
@@ -1303,8 +1303,8 @@ impl ComputeDecisionRecord {
 /// `ComputeAdvice` — the typed payload `advise` hands to the context
 /// builder, lowered there into a `ContextItem{kind: compute_advice}` and
 /// rendered through the Model Profile by a `definition`-authority
-/// `HarnessRule` (ADR-0188 D5; T-LCD-02). hh-control does not depend on
-/// hh-context — the `compute_advice` candidate kind is a dialect-bump
+/// `HarnessRule` (ADR-0188 D5; T-LCD-02). hharness-control does not depend on
+/// hharness-context — the `compute_advice` candidate kind is a dialect-bump
 /// member of the closed `CandidateKind` sum (§5c.1) — so advice travels
 /// as this typed record. Delivery is measured via
 /// `context.artefact.delivered/activated` +
@@ -1402,7 +1402,7 @@ pub trait ComputePolicy {
     }
     /// `observe(events[])` — durable-ledger-only prior updates (ADR-0189 D4;
     /// `rules` reads no priors — the default is a no-op).
-    fn observe(&mut self, _events: &[hh_ledger::event::EventEnvelope]) {}
+    fn observe(&mut self, _events: &[hharness_ledger::event::EventEnvelope]) {}
 }
 
 /// `policy_for(variant_ref)` — the link-time resolver (§5e.4: a fixture
@@ -1604,7 +1604,7 @@ fn ln_milli(n: u64) -> u64 {
 /// `cleared_seq` is the AC-F4-9 boundary: rows at or before it never
 /// contribute — the reset hides cells wholesale, no cross-window pooling.
 pub fn prior_cells(
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
     cleared_seq: u64,
 ) -> BTreeMap<String, PriorCell> {
     let mut cells: BTreeMap<String, PriorCell> = BTreeMap::new();
@@ -1627,7 +1627,7 @@ pub fn prior_cells(
             .find(|f| f.class == "verification.validator.verdict")
             .and_then(|f| f.payload.get("verdict"))
             .map(|v| {
-                if hh_verification::bind::verdict_affirmative(v) {
+                if hharness_verification::bind::verdict_affirmative(v) {
                     1_000_000u128
                 } else {
                     0
@@ -1707,7 +1707,8 @@ impl UniformPolicy {
                     .placements
                     .iter()
                     .filter(|p| {
-                        p.calibration_status == hh_verification::vocab::CalibrationStatus::Active
+                        p.calibration_status
+                            == hharness_verification::vocab::CalibrationStatus::Active
                     })
                     .collect();
                 if !active.is_empty() {
@@ -2170,7 +2171,7 @@ impl ComputePolicy for PredictorPolicy {
     /// predictor-scored cell accumulates `(claimed, realized, n)`; a
     /// cell whose mean |claimed − realized| exceeds `drift_reset_ppm`
     /// lands in `reset_cells` — the next `bind` scores it `rules`.
-    fn observe(&mut self, events: &[hh_ledger::event::EventEnvelope]) {
+    fn observe(&mut self, events: &[hharness_ledger::event::EventEnvelope]) {
         for row in compute_decision_outcome(events) {
             if row.record.estimator_ref.variant_ref != "predictor" {
                 continue;
@@ -2773,7 +2774,7 @@ fn sample_cost(ctx: &ComputeContext) -> ResourceVector {
         return c.clone();
     }
     let mut v = ResourceVector::zero();
-    v.add(hh_ontology::dimensions::DimensionId::ModelCalls, 1);
+    v.add(hharness_ontology::dimensions::DimensionId::ModelCalls, 1);
     // `max_output` reserve: the profile's declared bound lands on
     // `tokens.output.visible` when no finer view exists.
     if let Some(b) = ctx
@@ -2781,7 +2782,10 @@ fn sample_cost(ctx: &ComputeContext) -> ResourceVector {
         .get("max_output")
         .and_then(Json::as_int)
     {
-        v.add(hh_ontology::dimensions::DimensionId::TokensOutputVisible, b);
+        v.add(
+            hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
+            b,
+        );
     }
     v
 }
@@ -3016,7 +3020,9 @@ fn finish_rows(
                 // never a silently-skipped row (B-4).
                 let mut any_admissible = false;
                 for p in &ctx.placements {
-                    if p.calibration_status != hh_verification::vocab::CalibrationStatus::Active {
+                    if p.calibration_status
+                        != hharness_verification::vocab::CalibrationStatus::Active
+                    {
                         continue;
                     }
                     any_admissible = true;
@@ -3035,7 +3041,7 @@ fn finish_rows(
                             DeltaP::rule(ev.min(1_000_000)),
                             {
                                 let mut v = ResourceVector::zero();
-                                v.add(hh_ontology::dimensions::DimensionId::ModelCalls, 1);
+                                v.add(hharness_ontology::dimensions::DimensionId::ModelCalls, 1);
                                 v
                             },
                             Coordination::None,
@@ -3522,7 +3528,7 @@ fn inputs_read(ctx: &ComputeContext) -> Vec<String> {
 fn inputs_digest(ctx: &ComputeContext) -> String {
     format!(
         "sha256:{}",
-        hh_wire::sha256::sha256_hex(ctx_json(ctx).to_canonical_string().as_bytes())
+        hharness_wire::sha256::sha256_hex(ctx_json(ctx).to_canonical_string().as_bytes())
     )
 }
 
@@ -3799,13 +3805,13 @@ fn invalid(param: &str, reason: &str) -> ComputeError {
     }
 }
 
-fn parse_stop_reason(j: &Json) -> Option<hh_ontology::control::StopReason> {
+fn parse_stop_reason(j: &Json) -> Option<hharness_ontology::control::StopReason> {
     // The scheduler binds only the closed `completed`/`cancelled` spellings —
     // envelope-owned reasons are never synthesised here.
     match j.as_str()? {
-        "completed" => Some(hh_ontology::control::StopReason::Completed),
-        "cancelled" => Some(hh_ontology::control::StopReason::Cancelled {
-            by: hh_ontology::control::CancelledBy::Principal,
+        "completed" => Some(hharness_ontology::control::StopReason::Completed),
+        "cancelled" => Some(hharness_ontology::control::StopReason::Cancelled {
+            by: hharness_ontology::control::CancelledBy::Principal,
         }),
         _ => None,
     }
@@ -4054,7 +4060,7 @@ pub struct ComputeOutcomeRow {
 /// `control.compute.decided` joined to its linked `control.decision`, the
 /// run outcome and the verdicts/consumption that followed (AC-F4-4).
 pub fn compute_decision_outcome(
-    events: &[hh_ledger::event::EventEnvelope],
+    events: &[hharness_ledger::event::EventEnvelope],
 ) -> Vec<ComputeOutcomeRow> {
     let decisions: BTreeMap<String, (u64, Json)> = events
         .iter()
@@ -4140,7 +4146,7 @@ mod tests {
     use super::*;
     use crate::vocab::{DecisionKind, DecisionStamp};
 
-    fn rv(pairs: &[(hh_ontology::dimensions::DimensionId, i64)]) -> ResourceVector {
+    fn rv(pairs: &[(hharness_ontology::dimensions::DimensionId, i64)]) -> ResourceVector {
         let mut v = ResourceVector::zero();
         for (d, a) in pairs {
             v.add(*d, *a);
@@ -4153,10 +4159,10 @@ mod tests {
             budget: BudgetView {
                 remaining: rv(&[
                     (
-                        hh_ontology::dimensions::DimensionId::TokensOutputVisible,
+                        hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
                         1_000_000,
                     ),
-                    (hh_ontology::dimensions::DimensionId::ModelCalls, 8),
+                    (hharness_ontology::dimensions::DimensionId::ModelCalls, 8),
                 ]),
                 reserved: ResourceVector::zero(),
                 live_fan_out: 0,
@@ -4190,7 +4196,7 @@ mod tests {
         ControlDecision {
             stamp: DecisionStamp {
                 decision_point: DecisionPoint::Plan,
-                owner: hh_ontology::control::Owner::Model,
+                owner: hharness_ontology::control::Owner::Model,
                 rationale_ref: None,
             },
             kind: DecisionKind::Propose {
@@ -4205,7 +4211,7 @@ mod tests {
         ControlDecision {
             stamp: DecisionStamp {
                 decision_point: DecisionPoint::Delegate,
-                owner: hh_ontology::control::Owner::Model,
+                owner: hharness_ontology::control::Owner::Model,
                 rationale_ref: None,
             },
             kind: DecisionKind::Delegate {
@@ -4221,7 +4227,7 @@ mod tests {
         ControlDecision {
             stamp: DecisionStamp {
                 decision_point: DecisionPoint::Verify,
-                owner: hh_ontology::control::Owner::Model,
+                owner: hharness_ontology::control::Owner::Model,
                 rationale_ref: None,
             },
             kind: DecisionKind::Verify {
@@ -4390,7 +4396,8 @@ mod tests {
                         .unwrap();
                 // ≤ remaining ÷ (steps + 1) = 1_000_000/3.
                 assert!(
-                    bound.get(hh_ontology::dimensions::DimensionId::TokensOutputVisible) <= 333_333
+                    bound.get(hharness_ontology::dimensions::DimensionId::TokensOutputVisible)
+                        <= 333_333
                 );
                 if let DecisionKind::Delegate {
                     budget_slice,
@@ -4414,7 +4421,7 @@ mod tests {
         let mut ctx = ctx_base();
         ctx.placements = vec![PlacementFact {
             critic_ref: "critic/1".into(),
-            calibration_status: hh_verification::vocab::CalibrationStatus::Expired,
+            calibration_status: hharness_verification::vocab::CalibrationStatus::Expired,
             missed_failure_rate_ppm: 100_000,
             false_stop_rate_ppm: 10_000,
             verification_overhead: 10,
@@ -4442,7 +4449,7 @@ mod tests {
         let mut ctx = ctx_base();
         ctx.placements = vec![PlacementFact {
             critic_ref: "critic/1".into(),
-            calibration_status: hh_verification::vocab::CalibrationStatus::Active,
+            calibration_status: hharness_verification::vocab::CalibrationStatus::Active,
             missed_failure_rate_ppm: 900_000,
             false_stop_rate_ppm: 1_000,
             verification_overhead: 1,
@@ -4504,15 +4511,18 @@ mod tests {
         }
         let mut wide = d.clone();
         if let DecisionKind::Delegate { budget_slice, .. } = &mut wide.kind {
-            *budget_slice =
-                rv(&[(hh_ontology::dimensions::DimensionId::TokensOutputVisible, 5)]).to_json();
+            *budget_slice = rv(&[(
+                hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
+                5,
+            )])
+            .to_json();
         }
         // Unbound (null) → bound is admissible (it binds, doesn't widen).
         assert!(check_bound(&d, &wide, &ctx_base()).is_ok());
         let mut narrow_src = wide.clone();
         if let DecisionKind::Delegate { budget_slice, .. } = &mut narrow_src.kind {
             *budget_slice = rv(&[(
-                hh_ontology::dimensions::DimensionId::TokensOutputVisible,
+                hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
                 10,
             )])
             .to_json();
@@ -4715,11 +4725,11 @@ mod tests {
         seq: u64,
         cell: &str,
         _verdict: Option<bool>,
-    ) -> hh_ledger::event::EventEnvelope {
-        use hh_ledger::classes::Durability;
-        use hh_ledger::event::{EventPlane, Producer, Scope};
-        use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
-        hh_ledger::event::EventEnvelope {
+    ) -> hharness_ledger::event::EventEnvelope {
+        use hharness_ledger::classes::Durability;
+        use hharness_ledger::event::{EventPlane, Producer, Scope};
+        use hharness_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+        hharness_ledger::event::EventEnvelope {
             event_id: format!("e{seq}"),
             run_id: "r".into(),
             seq,
@@ -4754,7 +4764,7 @@ mod tests {
         }
     }
 
-    fn verdict_row(seq: u64, ok: bool) -> hh_ledger::event::EventEnvelope {
+    fn verdict_row(seq: u64, ok: bool) -> hharness_ledger::event::EventEnvelope {
         let mut e = decided_row(seq, "-", None);
         e.class = "verification.validator.verdict".into();
         e.payload = Json::obj([("verdict", Json::str(if ok { "pass" } else { "fail" }))]);

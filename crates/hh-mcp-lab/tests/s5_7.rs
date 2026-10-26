@@ -29,19 +29,19 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::grammar::Assembly;
-use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_hir::document::{HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_mcp_lab::binding::{
+use hharness_assembly::grammar::Assembly;
+use hharness_embed::service::{EmbedService, ServiceConfig};
+use hharness_hir::document::{HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_mcp_lab::binding::{
     stdio_launch_binding, CallerBinding, CallerCredential, CallerKind, SubjectKind,
 };
-use hh_mcp_lab::exposure;
-use hh_mcp_lab::server::LabServer;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_mcp_lab::exposure;
+use hharness_mcp_lab::server::LabServer;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixtures (same shape as the s4_11 battery) ─────────────────────
 
@@ -1011,7 +1011,7 @@ fn subscription_dies_with_binding() {
         .insert("hh://run/x/ledger".to_string());
     let _ = request(&mut srv, &b, 40, "ping", Json::obj([]));
     assert!(
-        hh_mcp_lab::resources::subscriptions_of(&srv, &b.binding_id).is_empty(),
+        hharness_mcp_lab::resources::subscriptions_of(&srv, &b.binding_id).is_empty(),
         "expired binding ⇒ cancelled subscriptions"
     );
 }

@@ -27,7 +27,7 @@
 
 use std::collections::BTreeSet;
 
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
 
 use crate::paths;
 use crate::policy::{

@@ -10,14 +10,14 @@
 
 use std::path::PathBuf;
 
-use hh_hir::kinds::{ToolEffects, EFFECT_DOMAINS};
-use hh_hir::KindRecord;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::import::{import_listing, refresh, HH_META_KEY};
-use hh_registry::kinds::Admission;
-use hh_registry::records::RegistryRecord;
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
+use hharness_hir::kinds::{ToolEffects, EFFECT_DOMAINS};
+use hharness_hir::KindRecord;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::import::{import_listing, refresh, HH_META_KEY};
+use hharness_registry::kinds::Admission;
+use hharness_registry::records::RegistryRecord;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-s39-import-{}-{}", std::process::id(), tag));
@@ -61,7 +61,7 @@ fn listing(server_ref: &str, tools: &[Json]) -> Json {
         ("server_ref", Json::str(server_ref)),
         (
             "listing_hash",
-            Json::str(hh_identity::idp_id(
+            Json::str(hharness_identity::idp_id(
                 "mcp.listing",
                 Json::Arr(tools.to_vec()).to_canonical_string().as_bytes(),
             )),
@@ -79,7 +79,7 @@ fn listing(server_ref: &str, tools: &[Json]) -> Json {
 }
 
 /// The carried HIR block an own export rides under
-/// `dev.cognition/hir`.
+/// `hharness/hir`.
 fn carried(effects: Json) -> Json {
     Json::obj([(
         HH_META_KEY,
@@ -93,7 +93,7 @@ fn carried(effects: Json) -> Json {
     )])
 }
 
-fn capability_of(store: &RegistryStore, vid: &str) -> hh_hir::records::ToolCapabilityRecord {
+fn capability_of(store: &RegistryStore, vid: &str) -> hharness_hir::records::ToolCapabilityRecord {
     let (_, rec) = store.get(vid).expect("registered");
     let RegistryRecord::Capability(c) = rec else {
         panic!("not a capability");
@@ -191,7 +191,7 @@ fn ac_e1_5_foreign_listing_registers_unverified_quarantined() {
     };
     assert_eq!(
         c.node.provenance.authority,
-        hh_provenance::AuthorityClass::Unverified
+        hharness_provenance::AuthorityClass::Unverified
     );
 }
 
@@ -237,7 +237,7 @@ fn ac_e1_5_listing_claiming_pin_stays_unverified() {
     };
     assert_eq!(
         c.node.provenance.authority,
-        hh_provenance::AuthorityClass::Unverified,
+        hharness_provenance::AuthorityClass::Unverified,
         "a listing's self-claim never raises authority"
     );
 }
@@ -378,10 +378,10 @@ fn ac_e1_9_e4_3_hostile_hint_records_claim_never_lowers_risk() {
     );
     // The effective class is computed from `effects`, never the hint —
     // `unknown_domain` projects the most dangerous class (ADR-0031 §2).
-    let risk = hh_registry::capability::project_risk(&store, vid).unwrap();
-    assert_eq!(risk, hh_ontology::risk::RiskClass::UNKNOWN);
+    let risk = hharness_registry::capability::project_risk(&store, vid).unwrap();
+    assert_eq!(risk, hharness_ontology::risk::RiskClass::UNKNOWN);
     // Cost is advisory: no carried `cost_model` ⇒ `unknown` everywhere.
-    let est = hh_registry::capability::estimate(&store, vid, None).unwrap();
+    let est = hharness_registry::capability::estimate(&store, vid, None).unwrap();
     assert!(est.per_dimension.values().all(|d| d.value.is_none()));
     // Quarantined until `seal` — the hint buys nothing.
     let (env, _) = store.get(vid).unwrap();
@@ -401,25 +401,25 @@ fn ac_e1_12_quarantined_absent_from_execute_resolution() {
     let out = import_listing(&mut store, &doc, &kernel()).unwrap();
     let vid = out.refs[0].version_id.clone();
 
-    use hh_identity::names::ResolveMode;
-    let req = hh_registry::ResolveRequest::default();
+    use hharness_identity::names::ResolveMode;
+    let req = hharness_registry::ResolveRequest::default();
     // Execute-mode resolution — the path exposure planning resolves under —
     // refuses the quarantined record.
     let err = store
         .resolve(
-            &hh_registry::ResolveInput::Version(vid.clone()),
+            &hharness_registry::ResolveInput::Version(vid.clone()),
             ResolveMode::Execute,
             &req,
         )
         .unwrap_err();
     assert!(
-        matches!(err, hh_registry::RegistryError::Unresolved { .. }),
+        matches!(err, hharness_registry::RegistryError::Unresolved { .. }),
         "quarantined ⇒ execute-resolve refuses, got {err:?}"
     );
     // The published name line refuses too — the surface is never planned.
     let err = store
         .resolve(
-            &hh_registry::ResolveInput::Selector {
+            &hharness_registry::ResolveInput::Selector {
                 namespace: "local".into(),
                 name: "mcp/srv:q/t".into(),
                 label: None,
@@ -431,12 +431,13 @@ fn ac_e1_12_quarantined_absent_from_execute_resolution() {
         .unwrap_err();
     assert!(matches!(
         err,
-        hh_registry::RegistryError::Unresolved { .. } | hh_registry::RegistryError::Revoked { .. }
+        hharness_registry::RegistryError::Unresolved { .. }
+            | hharness_registry::RegistryError::Revoked { .. }
     ));
     // Audit-mode still returns it — addressable with the admission attached.
     let r = store
         .resolve(
-            &hh_registry::ResolveInput::Version(vid),
+            &hharness_registry::ResolveInput::Version(vid),
             ResolveMode::Audit,
             &req,
         )

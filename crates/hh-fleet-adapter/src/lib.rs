@@ -1,4 +1,4 @@
-//! `hh-fleet-adapter` — the `work_source_adapter` plugin class (S5.6;
+//! `hharness-fleet-adapter` — the `work_source_adapter` plugin class (S5.6;
 //! §5i.1; ADR-0205 D4, ADR-0180/0181). One crate, three halves:
 //!
 //! - [`abi`] — the class contract: op names, the `{result:

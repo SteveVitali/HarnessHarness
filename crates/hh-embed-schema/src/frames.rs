@@ -28,7 +28,7 @@
 
 use crate::errors::EmbedError;
 use crate::strict::{closed_str, StrictObj};
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 use std::collections::BTreeMap;
 
 /// A stream frame — the tagged sum (§7.4 §5).

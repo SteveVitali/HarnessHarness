@@ -1,4 +1,4 @@
-//! Canonical-JSON codec helpers shared by the `hh-lab` record codecs.
+//! Canonical-JSON codec helpers shared by the `hharness-lab` record codecs.
 //!
 //! The helpers mirror `hh-ontology::eval`'s private `str_at`/`expect_obj`/
 //! `reject_unknown` surface (they are `pub(crate)` there) — one shape, one
@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// One typed schema error shared by the Lab codecs — `{member, detail}` with
 /// the record name embedded in `detail` (the same idiom as `EvalError::

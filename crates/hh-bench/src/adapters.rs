@@ -16,17 +16,17 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use hh_lab::bench::{
+use hharness_lab::bench::{
     AdapterGraderSpec, EnvironmentSpec, ForeignTaskId, GraderKind, TaskContamination, TaskHeldOut,
     TaskInstrument, TaskRecord, TaskValidity, TaskVisible,
 };
-use hh_lab::model::ForeignRef;
-use hh_ontology::lab::{
+use hharness_lab::model::ForeignRef;
+use hharness_ontology::lab::{
     BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, SplitLabel, SubmissionKind,
     TaskValidityState, VerifierIsolation,
 };
-use hh_provenance::ProvenanceRecord;
-use hh_wire::Json;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::Json;
 
 use crate::adapter::{AdapterError, BenchmarkAdapter, ExportFormat, HostingSurface};
 use crate::env::FsEnv;
@@ -55,7 +55,7 @@ pub struct FixtureAdapter {
     family: EnvironmentFamily,
     /// The family's `HandleRequirements` (`EnvironmentFamilyRecord.requires`
     /// — the `materialize` gate, AC-R-2.9.4-12).
-    requires: BTreeMap<hh_ontology::lab::HandleCapability, hh_ontology::lab::Support>,
+    requires: BTreeMap<hharness_ontology::lab::HandleCapability, hharness_ontology::lab::Support>,
     /// The fixture suite (`task_id` order — deterministic).
     tasks: BTreeMap<String, FixtureTask>,
 }
@@ -73,7 +73,7 @@ pub fn fixture_task(
     instruction: &str,
     expected: &[u8],
     isolation: Option<VerifierIsolation>,
-    episode_model: Option<hh_ontology::lab::EpisodeModel>,
+    episode_model: Option<hharness_ontology::lab::EpisodeModel>,
 ) -> FixtureTask {
     let prov = || ProvenanceRecord::kernel(format!("hh-bench/{adapter_id}"), 0);
     let mut rec = TaskRecord {
@@ -84,7 +84,7 @@ pub fn fixture_task(
             source_ref: format!("fixture://{adapter_id}"),
             digest_claim: ForeignRef {
                 system: "fixture".into(),
-                digest: hh_identity::idp_digest("bench.foreign", expected),
+                digest: hharness_identity::idp_digest("bench.foreign", expected),
                 label: Some(format!("{adapter_id}:{name}")),
                 provenance: prov(),
             },
@@ -94,7 +94,7 @@ pub fn fixture_task(
         split_label: split,
         environment: EnvironmentSpec {
             image_ref: format!("fixture/{adapter_id}/{name}"),
-            image_digest: hh_identity::idp_digest("bench.image", name.as_bytes()),
+            image_digest: hharness_identity::idp_digest("bench.image", name.as_bytes()),
             runtime: None,
             network_mode: BenchmarkNetworkMode::None,
             limits: None,
@@ -104,7 +104,11 @@ pub fn fixture_task(
             ext: BTreeMap::new(),
         },
         visible: TaskVisible {
-            instruction: hh_hir::Text::new(instruction, format!("suite/{adapter_id}"), prov()),
+            instruction: hharness_hir::Text::new(
+                instruction,
+                format!("suite/{adapter_id}"),
+                prov(),
+            ),
             attachments: vec![],
             task_metadata_scope: Json::obj([("fields", Json::Arr(vec![]))]),
         },
@@ -196,12 +200,12 @@ impl FixtureAdapter {
             family: EnvironmentFamily::CodingTerminal,
             requires: [
                 (
-                    hh_ontology::lab::HandleCapability::Bash,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::Bash,
+                    hharness_ontology::lab::Support::Required,
                 ),
                 (
-                    hh_ontology::lab::HandleCapability::File,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::File,
+                    hharness_ontology::lab::Support::Required,
                 ),
             ]
             .into_iter()
@@ -244,8 +248,8 @@ impl FixtureAdapter {
             adapter_id: "adapter_c",
             family: EnvironmentFamily::SearchResearch,
             requires: [(
-                hh_ontology::lab::HandleCapability::File,
-                hh_ontology::lab::Support::Required,
+                hharness_ontology::lab::HandleCapability::File,
+                hharness_ontology::lab::Support::Required,
             )]
             .into_iter()
             .collect(),
@@ -290,8 +294,8 @@ impl FixtureAdapter {
             // kernel-internal file handle suffices (AC-R-2.9.4-12's second
             // half).
             requires: [(
-                hh_ontology::lab::HandleCapability::File,
-                hh_ontology::lab::Support::Required,
+                hharness_ontology::lab::HandleCapability::File,
+                hharness_ontology::lab::Support::Required,
             )]
             .into_iter()
             .collect(),
@@ -325,7 +329,7 @@ impl FixtureAdapter {
                 instruction,
                 expected,
                 Some(VerifierIsolation::Separate),
-                Some(hh_ontology::lab::EpisodeModel::Persistent),
+                Some(hharness_ontology::lab::EpisodeModel::Persistent),
             );
             tasks.insert(t.record.task_id.clone(), t);
         }
@@ -334,12 +338,12 @@ impl FixtureAdapter {
             family: EnvironmentFamily::PersistentMultiEpisode,
             requires: [
                 (
-                    hh_ontology::lab::HandleCapability::File,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::File,
+                    hharness_ontology::lab::Support::Required,
                 ),
                 (
-                    hh_ontology::lab::HandleCapability::LongRunning,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::LongRunning,
+                    hharness_ontology::lab::Support::Required,
                 ),
             ]
             .into_iter()
@@ -372,12 +376,12 @@ impl FixtureAdapter {
             family: EnvironmentFamily::CodingTerminal,
             requires: [
                 (
-                    hh_ontology::lab::HandleCapability::Bash,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::Bash,
+                    hharness_ontology::lab::Support::Required,
                 ),
                 (
-                    hh_ontology::lab::HandleCapability::File,
-                    hh_ontology::lab::Support::Required,
+                    hharness_ontology::lab::HandleCapability::File,
+                    hharness_ontology::lab::Support::Required,
                 ),
             ]
             .into_iter()
@@ -408,8 +412,8 @@ impl FixtureAdapter {
             adapter_id: "adapter_g",
             family: EnvironmentFamily::CodingTerminal,
             requires: [(
-                hh_ontology::lab::HandleCapability::File,
-                hh_ontology::lab::Support::Required,
+                hharness_ontology::lab::HandleCapability::File,
+                hharness_ontology::lab::Support::Required,
             )]
             .into_iter()
             .collect(),
@@ -441,7 +445,10 @@ impl FixtureAdapter {
     pub fn from_parts(
         adapter_id: &'static str,
         family: EnvironmentFamily,
-        requires: BTreeMap<hh_ontology::lab::HandleCapability, hh_ontology::lab::Support>,
+        requires: BTreeMap<
+            hharness_ontology::lab::HandleCapability,
+            hharness_ontology::lab::Support,
+        >,
         tasks: Vec<FixtureTask>,
     ) -> FixtureAdapter {
         FixtureAdapter {
@@ -537,7 +544,7 @@ impl BenchmarkAdapter for FixtureAdapter {
                 Surface::Search
             },
         };
-        h.handle_id = hh_identity::idp_id(
+        h.handle_id = hharness_identity::idp_id(
             "bench.env_handle",
             h.to_json().to_canonical_string().as_bytes(),
         );
@@ -597,11 +604,14 @@ impl BenchmarkAdapter for FixtureAdapter {
             .map_err(|e| AdapterError::EnvironmentUnusable(e.to_string()))?;
         let mut s = match payload {
             Some(bytes) => {
-                let applied = hh_wire::parse(&String::from_utf8_lossy(&bytes)).is_ok();
+                let applied = hharness_wire::parse(&String::from_utf8_lossy(&bytes)).is_ok();
                 Submission {
                     submission_id: String::new(),
                     task_id: env.task_id.clone(),
-                    artifact_refs: vec![hh_identity::idp_id("bench.submission_bytes", &bytes)],
+                    artifact_refs: vec![hharness_identity::idp_id(
+                        "bench.submission_bytes",
+                        &bytes,
+                    )],
                     payload_hex: hex(&bytes),
                     applied,
                     apply_error: if applied {

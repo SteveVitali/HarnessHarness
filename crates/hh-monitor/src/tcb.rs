@@ -6,7 +6,7 @@
 //! runs over this crate's sources: the authorize path must reference no
 //! model-call operation and no `Text` reader. The check is a *token scan* —
 //! the type system already guarantees no `Text` appears in a signature (the
-//! crate has no `hh_hir::leaves::Text` in any public type); the scan is the
+//! crate has no `hharness_hir::leaves::Text` in any public type); the scan is the
 //! belt over that construction — it fails on the *tokens* a violation would
 //! introduce (`Text` type references, model-client calls, `ModelCall`
 //! *effect-domain* evaluation is allowed — deciding on a `model_call` effect
@@ -44,7 +44,7 @@ pub const TCB_OUTSIDE: &[&str] = &[
 /// A static violation — a forbidden token in a scanned source file.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StaticViolation {
-    /// A `Text`-leaf reference (`hh_hir::leaves::Text`, `Text` as a type name
+    /// A `Text`-leaf reference (`hharness_hir::leaves::Text`, `Text` as a type name
     /// on a path that would read model-facing prose). The `/*` comment /
     /// doc-comment exemption is exact-token: `a Text leaf` in prose is fine;
     /// `: Text`, `<Text`, `Text,` in a type position are not.

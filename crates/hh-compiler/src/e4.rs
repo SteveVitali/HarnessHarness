@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::equiv::{ArgTransform, EvidenceVerdict, SurfaceArgMap, SurfaceBinding};
 

@@ -24,10 +24,10 @@
 //! discovery/expiry observable, the gateway never decides the verdict's
 //! consequence (I-NOAUTH — the router/registry owns the gate).
 
-use hh_identity::idp::{identify_bytes, idp_digest};
-use hh_identity::kinds::RecordKind;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_identity::idp::{identify_bytes, idp_digest};
+use hharness_identity::kinds::RecordKind;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 /// The canonical probe request (ADR-0120 (e) — the fingerprint probe is a
 /// declared probe, instrument-charged, never a hidden side-channel). A fixed

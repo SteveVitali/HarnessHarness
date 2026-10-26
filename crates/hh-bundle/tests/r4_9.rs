@@ -11,17 +11,17 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::codec::Decoded;
-use hh_bundle::error::BundleError;
-use hh_bundle::export::{export_target, PublicationPolicy};
-use hh_bundle::import::lift_foreign;
-use hh_bundle::manifest::BundlePolicy;
-use hh_bundle::ForeignFormat;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::Store;
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::codec::Decoded;
+use hharness_bundle::error::BundleError;
+use hharness_bundle::export::{export_target, PublicationPolicy};
+use hharness_bundle::import::lift_foreign;
+use hharness_bundle::manifest::BundlePolicy;
+use hharness_bundle::ForeignFormat;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::Store;
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -70,7 +70,7 @@ fn rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("r4.9"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     let (run, _l) = store.open_run(m, "r49.test").unwrap();
@@ -122,7 +122,7 @@ fn lift(
     rig: &Rig,
     format: ForeignFormat,
     files: &BTreeMap<String, Vec<u8>>,
-) -> hh_bundle::import::ForeignLift {
+) -> hharness_bundle::import::ForeignLift {
     lift_foreign(
         &rig.store,
         &rig.carrier,
@@ -143,7 +143,7 @@ fn arr<'a>(j: &'a Json, key: &str) -> &'a [Json] {
     }
 }
 
-fn roles(m: &hh_bundle::manifest::BundleManifest) -> Vec<&str> {
+fn roles(m: &hharness_bundle::manifest::BundleManifest) -> Vec<&str> {
     m.claims.iter().map(|c| c.role.as_str()).collect()
 }
 
@@ -160,7 +160,7 @@ fn loss_entries(report: &Json) -> &[Json] {
 
 /// The hosted/unverified/R0 invariants every foreign lift must carry
 /// (§5h.3 §2; AC-R-2.9.3-9) — asserted on every lift below.
-fn assert_hosted_unverified(l: &hh_bundle::import::ForeignLift, format: ForeignFormat) {
+fn assert_hosted_unverified(l: &hharness_bundle::import::ForeignLift, format: ForeignFormat) {
     let m = &l.bundle.manifest;
     assert_eq!(m.participant_class, "hosted");
     assert_eq!(
@@ -445,8 +445,8 @@ fn assert_roundtrip(
     rig: &Rig,
     format: ForeignFormat,
 ) -> (
-    hh_bundle::export::ExportOutcome,
-    hh_bundle::import::ForeignLift,
+    hharness_bundle::export::ExportOutcome,
+    hharness_bundle::import::ForeignLift,
 ) {
     let d = decoded(rig);
     let out = export_target(&d, format.as_str(), &PublicationPolicy::default()).unwrap();
@@ -454,7 +454,7 @@ fn assert_roundtrip(
     let l = lift(rig, format, &out.files);
     assert_hosted_unverified(&l, format);
     for (path, bytes) in &out.files {
-        let addr = hh_identity::address(bytes, "application/octet-stream").id();
+        let addr = hharness_identity::address(bytes, "application/octet-stream").id();
         assert!(
             l.bundle
                 .manifest
@@ -498,8 +498,8 @@ fn swebench_submission_round_trips() {
 fn inspect_eval_log_round_trips() {
     let rig = rig("ins-rt");
     let (out, l) = assert_roundtrip(&rig, ForeignFormat::InspectEvalLog);
-    let doc =
-        hh_wire::json::parse(std::str::from_utf8(&out.files["eval_log.json"]).unwrap()).unwrap();
+    let doc = hharness_wire::json::parse(std::str::from_utf8(&out.files["eval_log.json"]).unwrap())
+        .unwrap();
     assert_eq!(doc.get("version").and_then(Json::as_int), Some(2));
     // The subject run is open in the rig — `started`, the honest map.
     assert_eq!(doc.get("status").and_then(Json::as_str), Some("started"));
@@ -522,7 +522,7 @@ fn in_toto_bundle_round_trips_unsigned() {
     let rig = rig("int-rt");
     let (out, l) = assert_roundtrip(&rig, ForeignFormat::InTotoBundle);
     let line = std::str::from_utf8(&out.files["attestation.intoto.jsonl"]).unwrap();
-    let env = hh_wire::json::parse(line.trim()).unwrap();
+    let env = hharness_wire::json::parse(line.trim()).unwrap();
     // Unsigned by construction — signing is attest()'s claim, never a
     // lowering's; the asymmetry is the named loss row.
     assert_eq!(arr(&env, "signatures").len(), 0);
@@ -543,8 +543,8 @@ fn in_toto_bundle_round_trips_unsigned() {
 fn telemetry_trace_round_trips() {
     let rig = rig("otl-rt");
     let (out, l) = assert_roundtrip(&rig, ForeignFormat::TelemetryTrace);
-    let doc =
-        hh_wire::json::parse(std::str::from_utf8(&out.files["traces.json"]).unwrap()).unwrap();
+    let doc = hharness_wire::json::parse(std::str::from_utf8(&out.files["traces.json"]).unwrap())
+        .unwrap();
     let rspans = arr(&doc, "resourceSpans");
     assert_eq!(rspans.len(), 1);
     let span_count: i64 = rspans

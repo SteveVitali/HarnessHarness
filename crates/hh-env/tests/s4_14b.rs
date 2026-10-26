@@ -9,19 +9,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, NetMode, WritableRoot};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::handle::{OnLoss, Roots, Tri};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_identity::idp::address;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{kernel_default, NetMode, WritableRoot};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::handle::{OnLoss, Roots, Tri};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_identity::idp::address;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -54,7 +54,7 @@ fn test_record() -> EnvironmentRecord {
         platform: "test-platform".to_string(),
         provisioning: ProvisioningRecipe::default(),
         containment_policy_ref: ("test:policy".to_string(), "v-pol".to_string()),
-        limits: hh_containment::policy::ResourceLimits::default(),
+        limits: hharness_containment::policy::ResourceLimits::default(),
         nondeterminism: vec![],
         unpinned: BTreeSet::new(),
         image_attestation: None,
@@ -68,7 +68,7 @@ fn scheduled_policy(
     ws: &std::path::Path,
     base_mode: NetMode,
     schedule: Json,
-) -> hh_containment::policy::ContainmentPolicy {
+) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     p.provenance.authority = AuthorityClass::Kernel;
     p.net.mode = base_mode;
@@ -89,7 +89,7 @@ fn ready_env(
     lease: &Lease,
     driver: &mut EnvDriver,
     ws: &std::path::Path,
-    policy: hh_containment::policy::ContainmentPolicy,
+    policy: hharness_containment::policy::ContainmentPolicy,
 ) -> String {
     let record = test_record();
     let roots = Roots {
@@ -229,7 +229,7 @@ fn set_phase_unentitled_loosening_is_containment_widening() {
     // is `principal`-entitled, which `definition` outranks).
     let mut layer = kernel_default(0);
     layer.provenance.authority = AuthorityClass::Definition;
-    layer.fs.exec = hh_containment::policy::ExecPolicy::Any;
+    layer.fs.exec = hharness_containment::policy::ExecPolicy::Any;
     layer.compute_ids();
     let schedule = Json::obj([("agent", Json::obj([("layer", layer.to_json())]))]);
     let mut driver = EnvDriver::new(&run);

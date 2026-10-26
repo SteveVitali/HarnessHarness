@@ -2,9 +2,9 @@
 //! (R4.5b; ADR-0364 D1/D3; DF-S1.18-1's local-family leg; R4.5c TLS).
 //!
 //! HTTP/1.1 over `TcpStream` — plain or TLS-terminated — through the
-//! **one** codec home `hh_wire::http` (CC1; the `hh-env` egress leg and
-//! `hh-mcp` boundary ride the same module). An `https` endpoint_ref
-//! rides a `hh_tls::ClientTls` session beneath the same codec
+//! **one** codec home `hharness_wire::http` (CC1; the `hharness-env` egress leg and
+//! `hharness-mcp` boundary ride the same module). An `https` endpoint_ref
+//! rides a `hharness_tls::ClientTls` session beneath the same codec
 //! (R4.5c/ADR-0365 — webpki verification always on, extra roots only
 //! via the lane's explicit file); `tls_pending` is retired — the lane
 //! never downgrades.
@@ -21,9 +21,9 @@
 
 use std::io::{BufReader, Read, Write};
 
-use hh_tls::{ClientTls, TlsError};
-use hh_wire::http::{self, BodyReader, HttpError, Scheme};
-use hh_wire::json::Json;
+use hharness_tls::{ClientTls, TlsError};
+use hharness_wire::http::{self, BodyReader, HttpError, Scheme};
+use hharness_wire::json::Json;
 
 use crate::anthropic::{self, MessagesTranslator};
 use crate::codec::{self, WireFrame};
@@ -32,7 +32,7 @@ use crate::dialect::WireDialect;
 use crate::gateway::{CredentialHandle, Transport};
 use crate::openai::{self, ChunkTranslator, SseDecoder, SseEvent};
 use crate::vocab::{ModelError, ModelErrorClass, TimeoutKind};
-use hh_secrets::{CompositeResolver, SecretSourceResolver};
+use hharness_secrets::{CompositeResolver, SecretSourceResolver};
 
 /// The request-path join for the family's operations — `endpoint_ref`'s
 /// path is the API base (`/v1`, or `/`); the operation path appends.
@@ -148,7 +148,7 @@ fn map_tls(e: TlsError) -> ModelError {
 }
 
 /// `ReadWrite` — the trait object the codec's stream halves ride:
-/// `TcpStream` on `http`, `hh_tls::TlsStream` on `https` (one codec,
+/// `TcpStream` on `http`, `hharness_tls::TlsStream` on `https` (one codec,
 /// streams beneath it — ADR-0364 D1).
 trait ReadWrite: Read + Write {}
 impl<T: Read + Write> ReadWrite for T {}
@@ -313,8 +313,8 @@ impl HttpModelTransport {
     /// probe request reuses (the provider's error envelope → the typed
     /// `ModelError`, never a fabricated probe value).
     fn error_reply(&self, head: &http::ResponseHead, raw: &[u8]) -> ModelError {
-        let body_j =
-            hh_wire::json::parse_provider(&String::from_utf8_lossy(raw)).unwrap_or_else(|_| {
+        let body_j = hharness_wire::json::parse_provider(&String::from_utf8_lossy(raw))
+            .unwrap_or_else(|_| {
                 Json::obj([(
                     "error",
                     Json::obj([(
@@ -458,7 +458,7 @@ impl HttpModelTransport {
         if !(200..300).contains(&head.status) {
             return Err(self.error_reply(&head, &raw));
         }
-        hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+        hharness_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
             .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))
     }
 
@@ -556,7 +556,7 @@ impl HttpModelTransport {
                     Ok(Some(bytes)) => {
                         for ev in sse.push(&bytes)? {
                             if let SseEvent::Data(data) = ev {
-                                if let Ok(doc) = hh_wire::json::parse_provider(&data) {
+                                if let Ok(doc) = hharness_wire::json::parse_provider(&data) {
                                     probe_observe(&doc, &mut o);
                                 }
                             }
@@ -572,7 +572,7 @@ impl HttpModelTransport {
         } else {
             let raw = http::read_body(&mut r, &head, self.max_body)
                 .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
-            let doc = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+            let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
                 .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
             probe_observe(&doc, &mut o);
         }
@@ -591,7 +591,7 @@ impl Transport for HttpModelTransport {
         // (`plan.body` — the dialect's canonical render; `capabilities.
         // streaming` selects SSE handling).
         let plan =
-            hh_wire::json::parse(std::str::from_utf8(bytes).map_err(|_| {
+            hharness_wire::json::parse(std::str::from_utf8(bytes).map_err(|_| {
                 ModelError::new(ModelErrorClass::StreamDecode, "plan bytes not utf8")
             })?)
             .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("plan: {e}")))?;
@@ -647,7 +647,7 @@ impl Transport for HttpModelTransport {
             // Error path — the body is the provider's error envelope.
             let raw = http::read_body(&mut r, &head, self.max_body)
                 .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
-            let body_j = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+            let body_j = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
                 .unwrap_or_else(|_| {
                     Json::obj([(
                         "error",
@@ -696,8 +696,8 @@ impl Transport for HttpModelTransport {
                         for ev in sse.push(&bytes)? {
                             match ev {
                                 SseEvent::Data(data) => {
-                                    let chunk =
-                                        hh_wire::json::parse_provider(&data).map_err(|e| {
+                                    let chunk = hharness_wire::json::parse_provider(&data)
+                                        .map_err(|e| {
                                             ModelError::new(
                                                 ModelErrorClass::StreamDecode,
                                                 format!("sse chunk: {e}"),
@@ -734,7 +734,7 @@ impl Transport for HttpModelTransport {
             // content-type, never by assumption).
             let raw = http::read_body(&mut r, &head, self.max_body)
                 .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
-            let doc = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+            let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
                 .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
             let stamp = at();
             for f in match self.family {
@@ -782,7 +782,7 @@ impl Transport for HttpModelTransport {
         let head = http::read_response_head(&mut r).map_err(|e| map_io(e, TimeoutKind::Attempt))?;
         let raw = http::read_body(&mut r, &head, self.max_body)
             .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
-        let doc = hh_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
+        let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&raw))
             .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
         if !(200..300).contains(&head.status) {
             return Err(codec::classify_http_error(

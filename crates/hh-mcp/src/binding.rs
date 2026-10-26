@@ -4,7 +4,7 @@
 //! ADR-0174 D5). OAuth bindings through the H3 broker are a C1/Stage-4
 //! kind and deliberately absent.
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// The Stage-3 fixed principal — `stdio_launch` binds every caller to
 /// it (the fixture's conformance identity; a second "client" is the

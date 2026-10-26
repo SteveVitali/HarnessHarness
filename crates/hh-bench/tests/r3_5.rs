@@ -18,13 +18,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_bench::benchset::Benchset;
-use hh_compiler::exposure::{
+use hharness_bench::benchset::Benchset;
+use hharness_compiler::exposure::{
     catalog_id_of, Availability, Catalog, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm,
     DiscoveryQuery, IndexForm, IndexGranularity, PermissionCoverage, SearchTextField,
 };
-use hh_compiler::retrieval::{retrieval_eval, LabelledQuery, RetrievalReport};
-use hh_hir::tools::ExposureMode;
+use hharness_compiler::retrieval::{retrieval_eval, LabelledQuery, RetrievalReport};
+use hharness_hir::tools::ExposureMode;
 
 /// A catalog entry whose `name` is the corpus's recorded surface spelling
 /// (`fs.write`, `hh.submit`, …) — `exact_name` queries match it verbatim.

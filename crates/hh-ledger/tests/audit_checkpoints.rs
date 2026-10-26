@@ -10,16 +10,16 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::audit::{AuditFault, Auditor, CheckpointKind, FixedSigner, KeyTable};
-use hh_ledger::errors::{LedgerError, MissingReason, TamperedKind};
-use hh_ledger::event::{Event, EventFrame, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, RedactTarget, Store};
-use hh_ledger::tree;
-use hh_ledger::views::ViewKind;
-use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::audit::{AuditFault, Auditor, CheckpointKind, FixedSigner, KeyTable};
+use hharness_ledger::errors::{LedgerError, MissingReason, TamperedKind};
+use hharness_ledger::event::{Event, EventFrame, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, RedactTarget, Store};
+use hharness_ledger::tree;
+use hharness_ledger::views::ViewKind;
+use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -524,7 +524,7 @@ fn forked_signed_head_is_fork_equivocation() {
     // Re-sign the forged claim so the signature check itself passes and the
     // *head* is what fails.
     let preimage = tree::checkpoint_sig_preimage(&payload);
-    let sig = hh_wire::sha256::hmac_sha256(b"s2.5-test-signing-key", &preimage);
+    let sig = hharness_wire::sha256::hmac_sha256(b"s2.5-test-signing-key", &preimage);
     let mut sig_obj = match payload.get("signatures").unwrap() {
         Json::Arr(a) => match &a[0] {
             Json::Obj(m) => m.clone(),
@@ -594,7 +594,7 @@ fn bad_signature_detected() {
     };
     let preimage = tree::checkpoint_sig_preimage(&Json::Obj(payload.clone()));
     // Sign with the WRONG key bytes under the registered key_id.
-    let wrong = hh_wire::sha256::hmac_sha256(b"not-the-key", &preimage);
+    let wrong = hharness_wire::sha256::hmac_sha256(b"not-the-key", &preimage);
     sig_obj.insert("sig".into(), Json::str(hex(&wrong)));
     payload.insert("signatures".into(), Json::Arr(vec![Json::Obj(sig_obj)]));
     let mut env = cp.clone();
@@ -925,8 +925,8 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
-    hh_ledger::retention::RetentionPolicy {
+fn gc_policy(policy_ref: &str) -> hharness_ledger::retention::RetentionPolicy {
+    hharness_ledger::retention::RetentionPolicy {
         policy_ref: policy_ref.to_string(),
         blob_residency_ms: 0,
         bundle_retention_ms: 0,

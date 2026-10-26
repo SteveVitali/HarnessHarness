@@ -1,5 +1,5 @@
 [package]
-name = "hh-identity"
+name = "hharness-identity"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ description = "The C0/Stage-1 identity, versioning & artifact-identity model (sp
 path = "src/lib.rs"
 
 [dependencies]
-hh-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire" }
 # The canonical §8.1 provenance/authority record this crate carries on every VersionedRef
 # and name-history entry (DF-S1.2-1; CC1 — identity never defines a second record).
-hh-provenance = { path = "../hh-provenance" }
+hharness-provenance = { path = "../hh-provenance" }

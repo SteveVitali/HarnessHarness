@@ -4,20 +4,20 @@
 //! (the root carries the point — ADR-0240), `AddNode`/`RemoveNode` for entities;
 //! constraints live in the assembly section and diff as leaf-granular `ReplaceField`s
 //! at `assembly.constraints[i]…` (HIR/1 has no constraint node kind — recorded in
-//! ADR-0240). `classification.authority_delta` is `hh-hir`'s.
+//! ADR-0240). `classification.authority_delta` is `hharness-hir`'s.
 //!
-//! The §3.1.7 gates run inside `hh_hir::diff` — a refusal is mirrored into the closed
+//! The §3.1.7 gates run inside `hharness_hir::diff` — a refusal is mirrored into the closed
 //! assembly taxonomy as `C-KERN-*` ([`kern_code`]), never a bare `HirError` leak
 //! (`C-INT-1`: an uncoded rejection is a defect).
 
-use hh_hir::diff::{DiffDerivation, HirDiff};
-use hh_hir::document::SealedDefinition;
-use hh_provenance::ProvenanceRecord;
+use hharness_hir::diff::{DiffDerivation, HirDiff};
+use hharness_hir::document::SealedDefinition;
+use hharness_provenance::ProvenanceRecord;
 
 use crate::diagnostics::{detail_text, kern_code, AssemblyDiagnostic, Severity, Stage};
 
 /// `diff(sealed_a, sealed_b, provenance, derivation) → HirDiff`. Failures are the
-/// `hh-hir` gates (`AuthorityWidening`, `ConditionedRuleIncomplete`, the schema
+/// `hharness-hir` gates (`AuthorityWidening`, `ConditionedRuleIncomplete`, the schema
 /// violations) — mirrored as `C-KERN-*` diagnostics.
 pub fn diff(
     a: &SealedDefinition,
@@ -26,7 +26,7 @@ pub fn diff(
     derivation: DiffDerivation,
 ) -> Result<HirDiff, Vec<AssemblyDiagnostic>> {
     let kernel = ProvenanceRecord::kernel("kernel:assembly:diff", 0);
-    hh_hir::diff::diff(&a.document, &b.document, provenance, derivation).map_err(|es| {
+    hharness_hir::diff::diff(&a.document, &b.document, provenance, derivation).map_err(|es| {
         es.iter()
             .map(|e| AssemblyDiagnostic {
                 code: kern_code(e),

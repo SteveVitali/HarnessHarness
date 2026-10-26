@@ -31,43 +31,47 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
-use hh_env::capture::OutputPolicy;
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::events::EventMinter;
-use hh_env::executor::{
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
+use hharness_env::capture::OutputPolicy;
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::events::EventMinter;
+use hharness_env::executor::{
     DedupSupport, ExecutionRequest, ExecutorDeclaration, ExecutorSignal, InterruptSupport,
     ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
-use hh_env::handle::{OnLoss, Roots};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::kinds::{
+use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_ledger::event::{Cursor, Direction, Scope};
-use hh_ledger::fault::KillPoint;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::policy::{Cond, Mode, PiVerdict, PolicyRow};
-use hh_monitor::table::HandleTable;
-use hh_ontology::risk::{RiskReversibility, RiskScope};
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::DetectorSet;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_ledger::event::{Cursor, Direction, Scope};
+use hharness_ledger::fault::KillPoint;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::policy::{Cond, Mode, PiVerdict, PolicyRow};
+use hharness_monitor::table::HandleTable;
+use hharness_ontology::risk::{RiskReversibility, RiskScope};
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::DetectorSet;
+use hharness_wire::json::Json;
 
 const TTL_MS: u64 = 60_000;
 
@@ -139,7 +143,7 @@ fn workspace(tag: &str) -> PathBuf {
     p
 }
 
-fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &std::path::Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -147,7 +151,7 @@ fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolic
         read_only_subpaths: vec![],
         protected_metadata_names: vec![],
     });
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
     p.net.mode = NetMode::None;
     p.compute_ids();
     p
@@ -156,7 +160,7 @@ fn test_policy(ws: &std::path::Path) -> hh_containment::policy::ContainmentPolic
 fn test_record() -> EnvironmentRecord {
     EnvironmentRecord {
         class: EnvironmentClass::LocalHost,
-        image: ImageRef::ContentAddress(hh_identity::idp::address(
+        image: ImageRef::ContentAddress(hharness_identity::idp::address(
             b"battery-image",
             "application/octet-stream",
         )),
@@ -210,7 +214,7 @@ fn ready_env(
     h.env_handle_id
 }
 
-fn read_all(store: &Store, run: &str) -> Vec<hh_ledger::event::EventEnvelope> {
+fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelope> {
     store
         .read(run, Cursor::Seq(0), None, Direction::Fwd, usize::MAX)
         .unwrap()
@@ -372,7 +376,7 @@ impl BatteryExecutor {
         BatteryExecutor {
             decl: ExecutorDeclaration {
                 executor_id: format!("battery/{}", tool.name()),
-                isolation_support: hh_containment::policy::IsolationClass::None,
+                isolation_support: hharness_containment::policy::IsolationClass::None,
                 dedup_support: dedup,
                 probe_support: ProbeSupport::Check,
                 interrupt: InterruptSupport::Supported,
@@ -419,7 +423,7 @@ impl ToolExecutor for BatteryExecutor {
         }
         sink(ExecutorSignal {
             token: request.attribution_token.clone(),
-            kind: hh_env::capture::CaptureKind::OutputChunk {
+            kind: hharness_env::capture::CaptureKind::OutputChunk {
                 stream: "stdout".to_string(),
                 data: "tick".to_string(),
             },
@@ -527,16 +531,18 @@ fn binding() -> SurfaceBinding {
             .collect(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:battery_tool".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     }
@@ -582,7 +588,7 @@ fn root_handle() -> AuthorityHandle {
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -594,7 +600,7 @@ fn battery_monitor(cap: &ToolCapabilityRecord) -> Monitor {
     let mut table = HandleTable::default();
     let h = root_handle();
     table.handles.insert(h.handle_id.clone(), h);
-    let mut pol = hh_monitor::policy::default_table("pol-v1", Mode::Attended);
+    let mut pol = hharness_monitor::policy::default_table("pol-v1", Mode::Attended);
     for rev in [
         RiskReversibility::ReadOnly,
         RiskReversibility::Reversible,
@@ -637,7 +643,7 @@ fn input<'a>(
     tool: ProbeTool,
 ) -> DispatchInput<'a> {
     DispatchInput {
-        chain: hh_env::events::ScopeChain {
+        chain: hharness_env::events::ScopeChain {
             turn_id: "turn-1".to_string(),
             model_call_id: "mc-1".to_string(),
             tool_call_id: tc.to_string(),
@@ -998,8 +1004,8 @@ fn ac_r_2_2_3_1_kp9_batch_absent_as_unit() {
             matches!(
                 r,
                 Err(EnvError::Ledger(
-                    hh_ledger::errors::LedgerError::Durability { .. }
-                        | hh_ledger::errors::LedgerError::FaultInjected { .. }
+                    hharness_ledger::errors::LedgerError::Durability { .. }
+                        | hharness_ledger::errors::LedgerError::FaultInjected { .. }
                 )) | Err(EnvError::FaultInjected { .. })
             ),
             "kp-9 expected a durability fault, got {r:?}"
@@ -1078,7 +1084,7 @@ fn ac_r_2_2_3_4_kp13_restore_is_idempotent() {
         assert!(
             matches!(
                 r1,
-                Err(hh_ledger::errors::LedgerError::FaultInjected { .. })
+                Err(hharness_ledger::errors::LedgerError::FaultInjected { .. })
             ),
             "kp-13 restore must tear, got {r1:?}"
         );
@@ -1181,7 +1187,7 @@ fn ac_r_2_2_3_1_kp15_helper_death_runtime_alive() {
                 &lease,
                 &effect_id,
                 1,
-                &hh_env::events::ScopeChain {
+                &hharness_env::events::ScopeChain {
                     turn_id: "turn-1".to_string(),
                     model_call_id: "mc-1".to_string(),
                     tool_call_id: "tc-1".to_string(),
@@ -1255,7 +1261,7 @@ fn ac_r_2_2_2_1_duplicate_veto_survives_restart() {
     // `effects_by_key` rebuilt from the durable fold — the projection
     // survives the restart.
     let evs = read_all(&store2, &run);
-    let view = hh_ledger::views::effects_by_key_view(&run, &evs, None);
+    let view = hharness_ledger::views::effects_by_key_view(&run, &evs, None);
     let Json::Obj(effects_obj) = view.payload.get("effects").unwrap() else {
         panic!("effects_by_key payload malformed")
     };

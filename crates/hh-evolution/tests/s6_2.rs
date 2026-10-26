@@ -12,54 +12,54 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_budget::matchspec::{MatchMode, MatchSpec};
-use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
-use hh_evolution::errors::{EvolutionError, Refusal};
-use hh_evolution::proposer::{
+use hharness_budget::matchspec::{MatchMode, MatchSpec};
+use hharness_evolution::campaign::{doc_kind, EvolutionCampaign};
+use hharness_evolution::errors::{EvolutionError, Refusal};
+use hharness_evolution::proposer::{
     AheProposer, CorpusRow, EvidenceCorpus, EvolutionProposer, LineageEntry, ProposalConstraints,
 };
-use hh_evolution::proposer_conformance::{
+use hharness_evolution::proposer_conformance::{
     run_proposer_suite, InProcessPort, ProposerPort, SuiteDrive,
 };
-use hh_evolution::records::{
+use hharness_evolution::records::{
     AcceptanceItem, EvolutionAcceptanceReport, ItemStatus, PortabilityLabel,
     SecurityInvarianceReport, TransferRow,
 };
-use hh_evolution::records::{
+use hharness_evolution::records::{
     CandidateProposal, CorpusSpec, EvolutionCampaignSpec, FailureHypothesis, JudgePolicy,
     ParentSelectionPolicy, PredictedDelta, PredictedEffect, ProposerDeclaration, ProposerOutcome,
     RolloutPolicy, ScreenReport, SelectorDeclaration, SlotAllocation, StopRule, Tri,
 };
-use hh_experiment::docs::LabDocs;
-use hh_hir::diff::{self, Delta, DiffDerivation, HirDiff};
-use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
-use hh_hir::kinds::EntityKind;
-use hh_hir::records::*;
-use hh_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
-use hh_identity::idp::idp_id;
-use hh_lab::analysis::{
+use hharness_experiment::docs::LabDocs;
+use hharness_hir::diff::{self, Delta, DiffDerivation, HirDiff};
+use hharness_hir::document::{DefinitionVersionRef, HirDocument, Node};
+use hharness_hir::kinds::EntityKind;
+use hharness_hir::records::*;
+use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
+use hharness_identity::idp::idp_id;
+use hharness_lab::analysis::{
     BenefitKind, BudgetMatch, BudgetMatchStatus, ComparisonReport, Multiplicity, OutcomeBounds,
     OutcomeBoundsVerdict, PairedEffect, ReportLabelKind, SignProfile, TailEffects, TestKind,
     TestRecord,
 };
-use hh_lab::bench::SplitAssignmentRecord;
-use hh_lab::experiment::{
+use hharness_lab::bench::SplitAssignmentRecord;
+use hharness_lab::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
     ExperimentSpec, FactorSpec, LevelSpec, OrderKind, ReattemptPolicy, SchedulingPolicy,
     SuiteBinding, ValidationStrategy,
 };
-use hh_lab::model::{CompatibilityRecord, CompatibilityStatus};
-use hh_ledger::ids::ManualClock;
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ontology::debt::ExpiryCondition;
-use hh_ontology::eval::{
+use hharness_lab::model::{CompatibilityRecord, CompatibilityStatus};
+use hharness_ledger::ids::ManualClock;
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ontology::debt::ExpiryCondition;
+use hharness_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorKind, IntervalMethod, Pairing, PreRegistration,
     RoutingPolicy, SeedPolicy,
 };
-use hh_ontology::lab::{EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::ParticipantClass;
-use hh_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ontology::lab::{EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::ParticipantClass;
+use hharness_provenance::{AuthorityClass, HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 // ── fixture plumbing (the s6_1a shape — same store/docs/doc machinery) ──
 
@@ -272,7 +272,7 @@ fn deposit_split(docs: &LabDocs, splits: &[(&str, SplitLabel)]) -> String {
 
 /// A complete `SearchBudgetRecord` — `proposer` slice included when the
 /// family is automated (G8's named-facet rule).
-fn search_budget_doc(automated: bool) -> hh_ontology::eval::SearchBudgetRecord {
+fn search_budget_doc(automated: bool) -> hharness_ontology::eval::SearchBudgetRecord {
     let allocation = if automated {
         BTreeMap::from([
             ("proposer".to_string(), 500_000u64),
@@ -281,7 +281,7 @@ fn search_budget_doc(automated: bool) -> hh_ontology::eval::SearchBudgetRecord {
     } else {
         BTreeMap::from([("search".to_string(), 1_000_000u64)])
     };
-    hh_ontology::eval::SearchBudgetRecord {
+    hharness_ontology::eval::SearchBudgetRecord {
         rollouts: 4,
         model_calls: 4,
         tokens: 8_000,
@@ -542,7 +542,7 @@ fn ahe_returns_typed_no_addressable_failure() {
 
 #[test]
 fn ahe_refuses_second_class_and_unsatisfiable_constraints() {
-    use hh_evolution::records::ProposerFailure;
+    use hharness_evolution::records::ProposerFailure;
     let mut p = AheProposer::new("guideline");
     let base = base_doc();
     // Two classes — the 6b one-class rule.
@@ -574,7 +574,7 @@ fn ahe_refuses_second_class_and_unsatisfiable_constraints() {
 
 #[test]
 fn ahe_budget_slice_exhausts() {
-    use hh_evolution::records::ProposerFailure;
+    use hharness_evolution::records::ProposerFailure;
     let mut p = AheProposer::new("guideline");
     let base = base_doc();
     let corpus = golden_corpus();
@@ -644,8 +644,8 @@ fn ahe_corpus_carries_memory_lineage() {
     // R-2.4.4⁴ — `memory_lineage` is a first-class corpus layer: the
     // links ride `EvidenceCorpus` into `propose`; a forbidden layer
     // name is `CorpusUnreadable` at the proposer's own gate too.
-    use hh_evolution::proposer::LineageLink;
-    use hh_evolution::records::ProposerFailure;
+    use hharness_evolution::proposer::LineageLink;
+    use hharness_evolution::records::ProposerFailure;
     let mut corpus = golden_corpus();
     corpus.memory_lineage = vec![
         LineageLink {
@@ -730,7 +730,7 @@ fn ahe_select_parent_policies() {
 
 #[test]
 fn proposer_suite_in_process_passes() {
-    use hh_registry::kinds::ConformanceVerdict::*;
+    use hharness_registry::kinds::ConformanceVerdict::*;
     let mut p = AheProposer::new("guideline");
     let base = base_doc();
     let corpus = golden_corpus();
@@ -787,7 +787,7 @@ impl ProposerPort for DriftyPort {
 
 #[test]
 fn proposer_suite_flags_drift_and_foreign_reads() {
-    use hh_registry::kinds::ConformanceVerdict::*;
+    use hharness_registry::kinds::ConformanceVerdict::*;
     let mut port = DriftyPort;
     let drive = SuiteDrive {
         corpus: golden_corpus(),
@@ -837,7 +837,7 @@ impl ProposerPort for BadDeclPort {
 
 #[test]
 fn proposer_suite_fails_bad_declaration() {
-    use hh_registry::kinds::ConformanceVerdict::*;
+    use hharness_registry::kinds::ConformanceVerdict::*;
     let mut port = BadDeclPort;
     let drive = SuiteDrive {
         corpus: golden_corpus(),
@@ -1157,7 +1157,7 @@ fn g8_unresolved_or_incomplete_search_budget_refuses() {
     docs.put_named(
         doc_kind::SEARCH_BUDGET,
         "budget:search",
-        &hh_ontology::eval::SearchBudgetRecord {
+        &hharness_ontology::eval::SearchBudgetRecord {
             rollouts: 4,
             model_calls: 4,
             tokens: 8_000,
@@ -1349,24 +1349,26 @@ fn debt_manager_covers_layout_rules() {
     // Layout rules are `harness_rule` records — the debt manager's
     // `home_for` resolves their `assumption_debt` field (R-2.4.1⁴'s
     // debt-coverage leg).
-    let home = hh_lab::debt::home_for("harness_rule", "assumption_debt");
+    let home = hharness_lab::debt::home_for("harness_rule", "assumption_debt");
     assert!(
         home.is_some(),
         "no debt home for harness_rule.assumption_debt"
     );
-    assert!(hh_lab::debt::home_for("bogus_kind", "assumption_debt").is_none());
+    assert!(hharness_lab::debt::home_for("bogus_kind", "assumption_debt").is_none());
 }
 
 // ── 7. The registry class + suite are in the corpus ──────────────────
 
 #[test]
 fn registry_registers_class_and_suite() {
-    use hh_registry::records::RegistryRecord;
+    use hharness_registry::records::RegistryRecord;
     let dir = tmp("regcorpus");
-    let (_root_v, _variants_a) = hh_registry::corpus::build(&dir).unwrap();
-    let store =
-        hh_registry::store::RegistryStore::open(&dir, &hh_registry::corpus::kernel_registrar())
-            .unwrap();
+    let (_root_v, _variants_a) = hharness_registry::corpus::build(&dir).unwrap();
+    let store = hharness_registry::store::RegistryStore::open(
+        &dir,
+        &hharness_registry::corpus::kernel_registrar(),
+    )
+    .unwrap();
     let vids_a: Vec<String> = store.version_ids().cloned().collect();
     // Walk the registered records — the class lands with its
     // `conformance_suite_ref` back-patched onto a registered suite
@@ -1396,20 +1398,22 @@ fn registry_registers_class_and_suite() {
     assert!(class_found, "evolution_proposer class not registered");
     assert!(suite_ref_found, "conformance_suite_ref never back-patched");
     for k in [
-        hh_registry::kinds::TestKind::Static,
-        hh_registry::kinds::TestKind::Contract,
-        hh_registry::kinds::TestKind::Executable,
-        hh_registry::kinds::TestKind::Property,
+        hharness_registry::kinds::TestKind::Static,
+        hharness_registry::kinds::TestKind::Contract,
+        hharness_registry::kinds::TestKind::Executable,
+        hharness_registry::kinds::TestKind::Property,
     ] {
         assert!(kinds_seen.contains(&k), "suite missing kind {k:?}");
     }
     // Deterministic registration — a second corpus build yields the
     // identical version-id set (content-addressed ids).
     let dir2 = tmp("regcorpus2");
-    let (_r2, _v2) = hh_registry::corpus::build(&dir2).unwrap();
-    let store2 =
-        hh_registry::store::RegistryStore::open(&dir2, &hh_registry::corpus::kernel_registrar())
-            .unwrap();
+    let (_r2, _v2) = hharness_registry::corpus::build(&dir2).unwrap();
+    let store2 = hharness_registry::store::RegistryStore::open(
+        &dir2,
+        &hharness_registry::corpus::kernel_registrar(),
+    )
+    .unwrap();
     let vids_b: Vec<String> = store2.version_ids().cloned().collect();
     assert_eq!(vids_a, vids_b, "corpus build is not deterministic");
 }
@@ -1418,7 +1422,7 @@ fn registry_registers_class_and_suite() {
 
 #[test]
 fn disagreement_weighted_allocator_replays() {
-    let params = hh_lab::adaptive::DisagreementParams {
+    let params = hharness_lab::adaptive::DisagreementParams {
         estimator: "hajek",
         lambda: 100_000,
         min_inclusion_fraction_ppm: 1_000,
@@ -1427,25 +1431,35 @@ fn disagreement_weighted_allocator_replays() {
     let candidates: Vec<(String, String)> = (0..6)
         .map(|i| (format!("plan:{i}"), format!("cell:{}", i % 3)))
         .collect();
-    let stats = |cell: &str| -> hh_lab::adaptive::CellStats {
+    let stats = |cell: &str| -> hharness_lab::adaptive::CellStats {
         match cell {
-            "cell:0" => hh_lab::adaptive::CellStats {
+            "cell:0" => hharness_lab::adaptive::CellStats {
                 completed: 4,
                 scored: 1,
             },
-            "cell:1" => hh_lab::adaptive::CellStats {
+            "cell:1" => hharness_lab::adaptive::CellStats {
                 completed: 4,
                 scored: 3,
             },
-            _ => hh_lab::adaptive::CellStats::default(),
+            _ => hharness_lab::adaptive::CellStats::default(),
         }
     };
-    let a =
-        hh_lab::adaptive::disagreement_weighted_allocate(&params, &candidates, &stats, "seed", 0)
-            .unwrap();
-    let b =
-        hh_lab::adaptive::disagreement_weighted_allocate(&params, &candidates, &stats, "seed", 0)
-            .unwrap();
+    let a = hharness_lab::adaptive::disagreement_weighted_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        0,
+    )
+    .unwrap();
+    let b = hharness_lab::adaptive::disagreement_weighted_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        0,
+    )
+    .unwrap();
     assert_eq!(a, b, "the draw must replay deterministically");
     assert_eq!(a.strategy, "disagreement_weighted");
     assert_eq!(a.estimator, "hajek");
@@ -1455,7 +1469,7 @@ fn disagreement_weighted_allocator_replays() {
 
 #[test]
 fn successive_halving_brackets_prune() {
-    let params = hh_lab::adaptive::HalvingParams {
+    let params = hharness_lab::adaptive::HalvingParams {
         eta: 2,
         min_budget: 1_000,
         brackets: 3,
@@ -1463,32 +1477,55 @@ fn successive_halving_brackets_prune() {
     let candidates: Vec<(String, String)> = (0..8)
         .map(|i| (format!("plan:{i}"), format!("cell:{i}")))
         .collect();
-    let stats = |cell: &str| -> hh_lab::adaptive::CellStats {
+    let stats = |cell: &str| -> hharness_lab::adaptive::CellStats {
         let i: u64 = cell["cell:".len()..].parse().unwrap();
-        hh_lab::adaptive::CellStats {
+        hharness_lab::adaptive::CellStats {
             completed: 8,
             scored: (8 - i) as u32,
         }
     };
-    let b0 = hh_lab::adaptive::successive_halving_allocate(&params, &candidates, &stats, "seed", 0)
-        .unwrap();
+    let b0 = hharness_lab::adaptive::successive_halving_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        0,
+    )
+    .unwrap();
     // Bracket 0's live set is the whole pool (nothing dropped yet);
     // the record's `per_plan` carries each plan's last-surviving bracket.
     assert_eq!(b0.kept.len(), 8);
     assert_eq!(b0.dropped.len(), 0);
     // Bracket 1 keeps the top ⌈8/2⌉ = 4 ranks… whose last-bracket ≥ 1 is
     // the top ⌈8/4⌉ = 2 (rank < ⌈8/2²⌉).
-    let b1 = hh_lab::adaptive::successive_halving_allocate(&params, &candidates, &stats, "seed", 1)
-        .unwrap();
+    let b1 = hharness_lab::adaptive::successive_halving_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        1,
+    )
+    .unwrap();
     assert_eq!(b1.kept.len(), 2);
     assert_eq!(b1.dropped.len(), 6);
-    let b0b =
-        hh_lab::adaptive::successive_halving_allocate(&params, &candidates, &stats, "seed", 0)
-            .unwrap();
+    let b0b = hharness_lab::adaptive::successive_halving_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        0,
+    )
+    .unwrap();
     assert_eq!(b0, b0b);
     // Bracket 2 — the live set is the top ⌈8/8⌉ = 1.
-    let b2 = hh_lab::adaptive::successive_halving_allocate(&params, &candidates, &stats, "seed", 2)
-        .unwrap();
+    let b2 = hharness_lab::adaptive::successive_halving_allocate(
+        &params,
+        &candidates,
+        &stats,
+        "seed",
+        2,
+    )
+    .unwrap();
     assert_eq!(b2.kept.len(), 1);
     assert_eq!(b2.kept[0], "plan:0");
     assert_eq!(b2.eta, 2);
@@ -1501,8 +1538,8 @@ fn successive_halving_brackets_prune() {
 #[test]
 fn predictor_is_admitted_and_inert_without_a_budget_slice() {
     // The registered variant resolves — no more VariantNotAdmitted.
-    let p =
-        hh_control::compute::policy_for("predictor").unwrap_or_else(|e| panic!("predictor: {e}"));
+    let p = hharness_control::compute::policy_for("predictor")
+        .unwrap_or_else(|e| panic!("predictor: {e}"));
     assert_eq!(p.variant_ref(), "predictor");
     let caps = p.capabilities();
     assert_eq!(caps.estimator_ref.as_deref(), Some("predictor"));
@@ -1515,20 +1552,20 @@ fn predictor_is_admitted_and_inert_without_a_budget_slice() {
     let out = p.bind(&decision, &ctx).unwrap();
     assert!(matches!(
         out,
-        hh_control::compute::BindOutcome::Unchanged { .. }
+        hharness_control::compute::BindOutcome::Unchanged { .. }
     ));
     // With the slice declared, a cold-start bind runs the rules fallback.
-    use hh_control::compute::ComputePolicy;
-    let p2 = hh_control::compute::PredictorPolicy {
-        config: hh_control::compute::PredictorConfig {
+    use hharness_control::compute::ComputePolicy;
+    let p2 = hharness_control::compute::PredictorPolicy {
+        config: hharness_control::compute::PredictorConfig {
             search_budget_ref: Some("sbr:predictor".into()),
-            ..hh_control::compute::PredictorConfig::default()
+            ..hharness_control::compute::PredictorConfig::default()
         },
     };
     let out = p2.bind(&decision, &ctx).unwrap();
     let record = match out {
-        hh_control::compute::BindOutcome::Unchanged { record } => record,
-        hh_control::compute::BindOutcome::Bound { record, .. } => record,
+        hharness_control::compute::BindOutcome::Unchanged { record } => record,
+        hharness_control::compute::BindOutcome::Bound { record, .. } => record,
     };
     // Cold start — the rules fallback is stamped, never silent.
     assert!(record
@@ -1538,14 +1575,18 @@ fn predictor_is_admitted_and_inert_without_a_budget_slice() {
     drop(ctx);
     // Tightening-only scheduling targets.
     assert!(matches!(
-        hh_control::compute::classify_compute_rule_delta("budget_share_cap_ppm", 500_000, 600_000),
-        hh_control::compute::BudgetDelta::Loosening
+        hharness_control::compute::classify_compute_rule_delta(
+            "budget_share_cap_ppm",
+            500_000,
+            600_000
+        ),
+        hharness_control::compute::BudgetDelta::Loosening
     ));
     assert!(matches!(
-        hh_control::compute::classify_compute_rule_delta("drift_reset_ppm", 300_000, 200_000),
-        hh_control::compute::BudgetDelta::Loosening
+        hharness_control::compute::classify_compute_rule_delta("drift_reset_ppm", 300_000, 200_000),
+        hharness_control::compute::BudgetDelta::Loosening
     ));
-    assert!(hh_control::compute::compute_rule_delta_admissible(
+    assert!(hharness_control::compute::compute_rule_delta_admissible(
         "budget_share_cap_ppm",
         600_000,
         500_000
@@ -1554,18 +1595,18 @@ fn predictor_is_admitted_and_inert_without_a_budget_slice() {
 }
 
 /// A minimal `ComputeContext` (typed facts only — B-5).
-fn predictor_ctx() -> hh_control::compute::ComputeContext {
-    use hh_control::compute::*;
-    let mut remaining = hh_budget::quantity::ResourceVector::zero();
+fn predictor_ctx() -> hharness_control::compute::ComputeContext {
+    use hharness_control::compute::*;
+    let mut remaining = hharness_budget::quantity::ResourceVector::zero();
     remaining.add(
-        hh_ontology::dimensions::DimensionId::TokensOutputVisible,
+        hharness_ontology::dimensions::DimensionId::TokensOutputVisible,
         1_000_000,
     );
-    remaining.add(hh_ontology::dimensions::DimensionId::ModelCalls, 8);
+    remaining.add(hharness_ontology::dimensions::DimensionId::ModelCalls, 8);
     ComputeContext {
         budget: BudgetView {
             remaining,
-            reserved: hh_budget::quantity::ResourceVector::zero(),
+            reserved: hharness_budget::quantity::ResourceVector::zero(),
             live_fan_out: 0,
             fan_out_cap: 8,
             delegation_depth: 0,
@@ -1593,17 +1634,17 @@ fn predictor_ctx() -> hh_control::compute::ComputeContext {
     }
 }
 
-fn predictor_decision() -> hh_control::vocab::ControlDecision {
-    hh_control::vocab::ControlDecision {
-        stamp: hh_control::vocab::DecisionStamp {
-            decision_point: hh_ontology::control::DecisionPoint::Plan,
-            owner: hh_ontology::control::Owner::Model,
+fn predictor_decision() -> hharness_control::vocab::ControlDecision {
+    hharness_control::vocab::ControlDecision {
+        stamp: hharness_control::vocab::DecisionStamp {
+            decision_point: hharness_ontology::control::DecisionPoint::Plan,
+            owner: hharness_ontology::control::Owner::Model,
             rationale_ref: None,
         },
-        kind: hh_control::vocab::DecisionKind::Propose {
-            decision_point: hh_ontology::control::DecisionPoint::Plan,
+        kind: hharness_control::vocab::DecisionKind::Propose {
+            decision_point: hharness_ontology::control::DecisionPoint::Plan,
             context_request: Json::obj([]),
-            expected_output: hh_control::vocab::ExpectedOutput::Free,
+            expected_output: hharness_control::vocab::ExpectedOutput::Free,
         },
     }
 }
@@ -1656,7 +1697,7 @@ fn stage_arm(id: &str, lid: &str, mode: MatchMode) -> ArmSpec {
             mode,
             ..MatchSpec::matched_cap(&[])
         }),
-        artifact_ref: hh_ontology::config::Ref::new("def:x", "sha256:ee55"),
+        artifact_ref: hharness_ontology::config::Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,

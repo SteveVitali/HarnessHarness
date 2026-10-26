@@ -23,16 +23,16 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
-use hh_ontology::eval::{
+use hharness_ontology::compliance::{Detector, MetricDeclaration, NaReason};
+use hharness_ontology::eval::{
     BootstrapPairedMethod, EstimatorSelection, IntervalMethod, MetricValueKind, OutcomePolicy,
     ReplicateReducer, Substitution,
 };
-use hh_ontology::participant::ParticipantDescriptor;
-use hh_ontology::MetricValueType;
-use hh_wire::Json;
+use hharness_ontology::participant::ParticipantDescriptor;
+use hharness_ontology::MetricValueType;
+use hharness_wire::Json;
 
-use hh_lab::analysis::{
+use hharness_lab::analysis::{
     ConfigurationSummary, MetricCell, ReportLabelKind, ScorecardReport, Tails, TaskCount,
 };
 
@@ -104,7 +104,7 @@ pub struct ScorecardInput<'a> {
 }
 
 /// A run → `ParticipantDescriptor` for `MetricDeclaration::applicability`.
-/// Public for the §6.4 kernel (`hh-analysis`) — one applicability
+/// Public for the §6.4 kernel (`hharness-analysis`) — one applicability
 /// reconstruction, never two (CC1).
 pub fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
     // A run's descriptor is already validated at bind time; reconstruct it
@@ -113,11 +113,11 @@ pub fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
     ParticipantDescriptor {
         class: run.participant_class,
         hosting_mechanism: if run.participant_class
-            == hh_ontology::participant::ParticipantClass::Native
+            == hharness_ontology::participant::ParticipantClass::Native
         {
-            hh_ontology::participant::HostingMechanism::None
+            hharness_ontology::participant::HostingMechanism::None
         } else {
-            hh_ontology::participant::HostingMechanism::SessionAbi
+            hharness_ontology::participant::HostingMechanism::SessionAbi
         },
         observability_level: run.observability_level.clone(),
         capability_vector: run.capability_vector.clone(),
@@ -126,7 +126,7 @@ pub fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
 
 /// The per-run numeric value under the declaration's outcome policy — `None`
 /// for `n/a`/excluded/non-numeric (never coerced). Public for the §6.4
-/// kernel (`hh-analysis`) — the same denominator rule drives A1.
+/// kernel (`hharness-analysis`) — the same denominator rule drives A1.
 pub fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
     if !decl.outcome_class_policy.in_denominator(run.outcome_class) {
         return None;
@@ -142,15 +142,15 @@ pub fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
     match run.value_for(&decl.name) {
         MetricValueKind::Bool(b) => Some(if b { stats::PPM } else { 0 }),
         MetricValueKind::Decimal(d) => Some(d),
-        MetricValueKind::Verdict(hh_ontology::eval::LatticeValue::N) => Some(stats::PPM),
-        MetricValueKind::Verdict(hh_ontology::eval::LatticeValue::P) => Some(stats::PPM / 2),
+        MetricValueKind::Verdict(hharness_ontology::eval::LatticeValue::N) => Some(stats::PPM),
+        MetricValueKind::Verdict(hharness_ontology::eval::LatticeValue::P) => Some(stats::PPM / 2),
         MetricValueKind::Na(_) => {
             // A denominator run with no emitted value contributes 0 when the
             // policy counts it as failure (budget_exhausted under the
             // capability policy); otherwise it is a genuine non-value.
             if decl.outcome_class_policy.policy_for(run.outcome_class)
                 == OutcomePolicy::CountAsFailure
-                && run.outcome_class != hh_ontology::control::OutcomeClass::Scored
+                && run.outcome_class != hharness_ontology::control::OutcomeClass::Scored
             {
                 Some(0)
             } else {
@@ -163,7 +163,7 @@ pub fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
 
 /// The interval for one cell under the declaration's `interval_method`,
 /// applying the ADR-0158 floors (with `substituted` recorded). Public for
-/// the §6.4 kernel (`hh-analysis`) — the selection rule has one home.
+/// the §6.4 kernel (`hharness-analysis`) — the selection rule has one home.
 pub fn cell_interval(
     decl: &MetricDeclaration,
     task_values: &[(String, i64)],
@@ -368,7 +368,8 @@ pub fn render_scorecard(input: &ScorecardInput) -> Result<ScorecardReport, Score
         let held_out = runs.iter().any(|r| {
             matches!(
                 r.split_label,
-                hh_ontology::lab::SplitLabel::HeldOut | hh_ontology::lab::SplitLabel::Private
+                hharness_ontology::lab::SplitLabel::HeldOut
+                    | hharness_ontology::lab::SplitLabel::Private
             )
         });
         let portability = if snapshots.len() >= 2 && families.len() >= 2 && held_out {
@@ -407,7 +408,7 @@ pub fn render_scorecard(input: &ScorecardInput) -> Result<ScorecardReport, Score
 }
 
 /// Render one `(configuration, stratum, metric)` cell — the scorecard's A1
-/// primitive, reused by `hh-analysis` (`summarize`) so the cell estimator
+/// primitive, reused by `hharness-analysis` (`summarize`) so the cell estimator
 /// has exactly one implementation (CC1; ADR-0158).
 pub fn render_cell(
     decl: &MetricDeclaration,
@@ -550,7 +551,7 @@ pub fn render_cell(
     }
 
     let flat: Vec<i64> = task_values.iter().map(|(_, v)| *v).collect();
-    let seed = hh_identity::idp_digest(
+    let seed = hharness_identity::idp_digest(
         "eval.scorecard",
         format!("{config_id}|{}", decl.name).as_bytes(),
     );
@@ -559,7 +560,7 @@ pub fn render_cell(
     let distribution_ref = if flat.is_empty() {
         None
     } else {
-        Some(hh_identity::idp_id(
+        Some(hharness_identity::idp_id(
             "eval.distribution",
             Json::Arr(flat.iter().map(|v| Json::Int(*v)).collect())
                 .to_canonical_string()
@@ -572,8 +573,8 @@ pub fn render_cell(
         let catastrophic = flat
             .iter()
             .filter(|&&v| match decl.direction {
-                hh_ontology::Direction::Higher => v <= 0,
-                hh_ontology::Direction::Lower => v >= stats::PPM,
+                hharness_ontology::Direction::Higher => v <= 0,
+                hharness_ontology::Direction::Lower => v >= stats::PPM,
             })
             .count();
         Some(Tails {
@@ -603,7 +604,7 @@ pub fn render_cell(
             }
         }
     }
-    let judged = saw_judged.then(|| hh_lab::analysis::JudgedCellLabel {
+    let judged = saw_judged.then(|| hharness_lab::analysis::JudgedCellLabel {
         calibration_refs: calibration_refs.into_iter().collect(),
         exploratory,
     });

@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::dimensions::DimensionId;
 
@@ -127,7 +127,7 @@ impl ControlBoundary {
 // ─────────────────────────────────────────────────────────────────────────────
 // The control-plane `StopReason` sum (spec §5e.2 data model; ADR-0106 D6 —
 // "owned here"). Distinct from the *gateway* `StopReason` (R-2.3.1, ADR-0119
-// D1) that lives in `hh_gateway::vocab` and spells the model-boundary
+// D1) that lives in `hharness_gateway::vocab` and spells the model-boundary
 // `{end_turn, tool_use, …}` sum — no cue or envelope record carries a third
 // spelling, and neither sum is read against the other.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ impl StopKind {
 }
 
 /// `cancelled{by ∈ {principal, parent, hosting, operator}}` — who initiated the
-/// cancel (§5e.2). Distinct from `hh_env::observe::CancelBy` (the effect-level
+/// cancel (§5e.2). Distinct from `hharness_env::observe::CancelBy` (the effect-level
 /// `cancelled{by}` of `ErrorClass`), which spells a different closed set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum CancelledBy {
@@ -492,7 +492,7 @@ impl KernelInfraCause {
 
 /// Which of the CF-470 sums (or the kernel-internal set) an
 /// `infrastructure_failure{error_class}` value is drawn from. The typed sums
-/// live in `hh_gateway::vocab::ModelErrorClass` and `hh_env::observe::ErrorClass`
+/// live in `hharness_gateway::vocab::ModelErrorClass` and `hharness_env::observe::ErrorClass`
 /// — downstream of this crate — so the value is carried as
 /// `{family, class}` and validated against the registered sums by the control
 /// crate (the only constructor surface for typed values).
@@ -537,7 +537,7 @@ impl InfraErrorFamily {
 /// `infrastructure_failure{error_class}` — a value of the two CF-470 sums or a
 /// [`KernelInfraCause`], carried as `{family, class}` where `class` is the
 /// spelling's canonical form (validated against the registered sum at
-/// construction in `hh-control`).
+/// construction in `hharness-control`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct InfraError {
     /// The sum this value is drawn from.

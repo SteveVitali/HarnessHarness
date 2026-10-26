@@ -10,30 +10,30 @@ use std::path::PathBuf;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::BindParams;
-use hh_identity::idp::address;
-use hh_identity::repro::InstrumentRecord;
-use hh_plugin_fixture::fixture::FixtureLogic;
-use hh_plugin_fixture::PluginRuntime;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::extension::plugin::{
+use hharness_embed_schema::plugin_abi::BindParams;
+use hharness_identity::idp::address;
+use hharness_identity::repro::InstrumentRecord;
+use hharness_plugin_fixture::fixture::FixtureLogic;
+use hharness_plugin_fixture::PluginRuntime;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::extension::plugin::{
     PinnedRecordRef, PluginIdentity, PluginManifest, Requests, Requires,
 };
-use hh_registry::kinds::{
+use hharness_registry::kinds::{
     Cardinality, ConformanceVerdict, Placement, ProducedBy, RequireConformance, SubjectKind,
 };
-use hh_registry::records::{
+use hharness_registry::records::{
     AppliesTo, ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, Implementation,
     RegistryRecord, ReportHost, ReportResult, SuiteTest, VariantRecord,
 };
-use hh_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
-use hh_registry::RegistryError;
-use hh_varhost::channel::MemIo;
-use hh_varhost::{
+use hharness_registry::store::{RegistryStore, ResolveInput, ResolveRequest};
+use hharness_registry::RegistryError;
+use hharness_varhost::channel::MemIo;
+use hharness_varhost::{
     attach, run_kit, KitRequest, RecordingPorts, SpawnSpec, VariantHost, VariantPackage,
     VariantSession, VecEvents, LAYERS,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -50,7 +50,7 @@ fn test_manifest(id: &str) -> PluginManifest {
             hir_dialect: "1.0".into(),
             registry_dialect: "1.0".into(),
             plugin_abi: "1.0".into(),
-            contracts: vec![hh_plugin::ContractRef::class_contract(
+            contracts: vec![hharness_plugin::ContractRef::class_contract(
                 "compaction_strategy",
                 "1.0",
             )],
@@ -85,7 +85,7 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         package: pkg,
         session_id: "kit-s1".into(),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: {
             static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -99,7 +99,7 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         cap,
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:test", "v1"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:test", "v1"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -188,7 +188,7 @@ fn kit_req(binding: &str, subject_ref: &str, suite_ref: &str, run_id: &str) -> K
 }
 
 fn layer_verdict(
-    report: &hh_registry::records::ConformanceReport,
+    report: &hharness_registry::records::ConformanceReport,
     layer: &str,
 ) -> ConformanceVerdict {
     report
@@ -376,7 +376,7 @@ fn variant(class_ref: &str, tag: &str, placement: Placement) -> VariantRecord {
             families: vec![],
         },
         declared_costs: None,
-        summary: hh_hir::leaves::Text::new(format!("v {tag}"), "test", kernel()),
+        summary: hharness_hir::leaves::Text::new(format!("v {tag}"), "test", kernel()),
         dialect_range: "registry/1".to_string(),
     }
 }
@@ -388,10 +388,10 @@ fn suite(class_ref: &str, contract_version: &str) -> ConformanceSuite {
         contract_version: contract_version.to_string(),
         tests: vec![SuiteTest {
             test_id: "t1".to_string(),
-            kind: hh_registry::kinds::TestKind::Static,
+            kind: hharness_registry::kinds::TestKind::Static,
             fixture_ref: None,
-            driver: hh_registry::kinds::TestDriver::InProcess,
-            oracle_class: hh_registry::kinds::OracleClass::Deterministic,
+            driver: hharness_registry::kinds::TestDriver::InProcess,
+            oracle_class: hharness_registry::kinds::OracleClass::Deterministic,
             budget: Json::Null,
             verdict_rule: "all".to_string(),
         }],
@@ -430,7 +430,7 @@ fn declared_and_probed_floors_gate_on_the_kit_report() {
     let resolved = store
         .resolve(
             &ResolveInput::Version(v.version_id.clone()),
-            hh_identity::names::ResolveMode::Execute,
+            hharness_identity::names::ResolveMode::Execute,
             &ResolveRequest::default(),
         )
         .unwrap();
@@ -443,7 +443,7 @@ fn declared_and_probed_floors_gate_on_the_kit_report() {
     let e = store
         .resolve(
             &ResolveInput::Version(v.version_id.clone()),
-            hh_identity::names::ResolveMode::Execute,
+            hharness_identity::names::ResolveMode::Execute,
             &ResolveRequest {
                 conformance_floor: Some(RequireConformance::Probed),
                 ..Default::default()
@@ -489,7 +489,7 @@ fn declared_and_probed_floors_gate_on_the_kit_report() {
     let e = store
         .resolve(
             &ResolveInput::Version(v.version_id.clone()),
-            hh_identity::names::ResolveMode::Execute,
+            hharness_identity::names::ResolveMode::Execute,
             &ResolveRequest {
                 conformance_floor: Some(RequireConformance::Probed),
                 ..Default::default()
@@ -532,7 +532,7 @@ fn declared_and_probed_floors_gate_on_the_kit_report() {
     let resolved = store
         .resolve(
             &ResolveInput::Version(v.version_id.clone()),
-            hh_identity::names::ResolveMode::Execute,
+            hharness_identity::names::ResolveMode::Execute,
             &ResolveRequest {
                 conformance_floor: Some(RequireConformance::Probed),
                 ..Default::default()

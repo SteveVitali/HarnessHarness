@@ -2,7 +2,7 @@
 //! (S6.3b; §5h.7; R-2.9.7 6c): records-in/records-out like
 //! `lab.debt.*`. `design` validates + content-addresses an
 //! `hh-attribution-design/1`; `attribute` desugars it into
-//! `hh_analysis::attribution`'s arm plan and folds caller-supplied
+//! `hharness_analysis::attribution`'s arm plan and folds caller-supplied
 //! `ArmOutcome` records into `AttributionReport/1` — with
 //! `open_arms: true` every distinct `(target, fork_point)` cell is
 //! *first* opened through the real Group W `counterfactual` path
@@ -12,8 +12,8 @@
 //! projections. The estimator stays pure; the typed refusals render as
 //! `Refused{reason: <code>}` (T-LCD-14).
 
-use hh_embed_schema::errors::EmbedError;
-use hh_wire::json::Json;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
 
@@ -29,13 +29,17 @@ fn req<'a>(j: &'a Json, k: &str) -> Result<&'a Json, EmbedError> {
         .ok_or_else(|| bad(&format!("/{k}"), "missing_field"))
 }
 
-fn attr_err(e: hh_analysis::attribution::AttributionError) -> EmbedError {
+fn attr_err(e: hharness_analysis::attribution::AttributionError) -> EmbedError {
     match e {
-        hh_analysis::attribution::AttributionError::Schema(d) => EmbedError::SchemaViolation {
-            path: "/attribution".to_string(),
-            code: d,
-        },
-        hh_analysis::attribution::AttributionError::UnbudgetedArm => EmbedError::UnbudgetedArm,
+        hharness_analysis::attribution::AttributionError::Schema(d) => {
+            EmbedError::SchemaViolation {
+                path: "/attribution".to_string(),
+                code: d,
+            }
+        }
+        hharness_analysis::attribution::AttributionError::UnbudgetedArm => {
+            EmbedError::UnbudgetedArm
+        }
         other => EmbedError::Refused {
             reason: other.code().to_string(),
         },
@@ -49,21 +53,22 @@ impl EmbedService {
     /// scheduler's rollout price *before* any reservation (§05e;
     /// AC-R-2.9.7-14).
     pub(crate) fn lab_attribution_design(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let design = hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
-            .map_err(attr_err)?;
-        hh_analysis::attribution::validate_design(&design).map_err(attr_err)?;
+        let design =
+            hharness_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
+                .map_err(attr_err)?;
+        hharness_analysis::attribution::validate_design(&design).map_err(attr_err)?;
         let n_fp = params
             .get("n_fork_points")
             .and_then(Json::as_int)
             .unwrap_or(1) as usize;
         let mut dj = design.to_json();
         let design_ref =
-            hh_identity::idp_id("attribution.design", dj.to_canonical_string().as_bytes());
+            hharness_identity::idp_id("attribution.design", dj.to_canonical_string().as_bytes());
         if let Json::Obj(m) = &mut dj {
             m.insert("design_ref".into(), Json::str(&design_ref));
         }
         let design =
-            hh_analysis::attribution::AttributionDesign::from_json(&dj).map_err(attr_err)?;
+            hharness_analysis::attribution::AttributionDesign::from_json(&dj).map_err(attr_err)?;
         let fps: Vec<i64> = params
             .get("fork_points")
             .and_then(|f| match f {
@@ -71,13 +76,16 @@ impl EmbedService {
                 _ => None,
             })
             .unwrap_or_default();
-        let plan = hh_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
+        let plan =
+            hharness_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
         Ok(Json::obj([
             ("design_ref", Json::str(&design_ref)),
             ("design", dj),
             (
                 "estimate_rollouts",
-                Json::Int(hh_analysis::attribution::estimate_rollouts(&design, n_fp)),
+                Json::Int(hharness_analysis::attribution::estimate_rollouts(
+                    &design, n_fp,
+                )),
             ),
             (
                 "plan",
@@ -94,8 +102,9 @@ impl EmbedService {
     /// `ArmOutcome` records. Unexecuted cells report `n.not_run`
     /// honestly (V6's cousin — never a fabricated outcome).
     pub(crate) fn lab_attribution_attribute(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let design = hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
-            .map_err(attr_err)?;
+        let design =
+            hharness_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
+                .map_err(attr_err)?;
         let fps: Vec<i64> = params
             .get("fork_points")
             .and_then(|f| match f {
@@ -103,7 +112,8 @@ impl EmbedService {
                 _ => None,
             })
             .unwrap_or_default();
-        let plan = hh_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
+        let plan =
+            hharness_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
         // `open_arms` — the real Group W execution half: one
         // `counterfactual` call per distinct (target, fork_point) with
         // the design's replicate count and noise coupling; the arm
@@ -192,16 +202,17 @@ impl EmbedService {
                 }
             }
         }
-        let outcomes: Vec<hh_analysis::attribution::ArmOutcome> = match req(params, "outcomes")? {
-            Json::Arr(a) => a
-                .iter()
-                .map(hh_analysis::attribution::ArmOutcome::from_json)
-                .collect::<Result<_, _>>()
-                .map_err(attr_err)?,
-            _ => return Err(bad("/outcomes", "type_mismatch")),
-        };
-        let report =
-            hh_analysis::attribution::attribute(&design, &outcomes, &plan).map_err(attr_err)?;
+        let outcomes: Vec<hharness_analysis::attribution::ArmOutcome> =
+            match req(params, "outcomes")? {
+                Json::Arr(a) => a
+                    .iter()
+                    .map(hharness_analysis::attribution::ArmOutcome::from_json)
+                    .collect::<Result<_, _>>()
+                    .map_err(attr_err)?,
+                _ => return Err(bad("/outcomes", "type_mismatch")),
+            };
+        let report = hharness_analysis::attribution::attribute(&design, &outcomes, &plan)
+            .map_err(attr_err)?;
         let mut out = Json::obj([("report", report)]);
         if !arm_records.is_empty() {
             if let Json::Obj(m) = &mut out {
@@ -218,7 +229,7 @@ impl EmbedService {
         let report = req(params, "report")?;
         Ok(Json::obj([(
             "locus",
-            hh_analysis::attribution::locus(report).unwrap_or(Json::Null),
+            hharness_analysis::attribution::locus(report).unwrap_or(Json::Null),
         )]))
     }
 
@@ -241,7 +252,7 @@ impl EmbedService {
             .unwrap_or(false);
         Ok(Json::obj([(
             "metric",
-            hh_analysis::attribution::attribution_quality(delta, &reports, hosted),
+            hharness_analysis::attribution::attribution_quality(delta, &reports, hosted),
         )]))
     }
 }

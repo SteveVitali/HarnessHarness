@@ -26,7 +26,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::codec::Decoded;
 use crate::error::BundleError;
@@ -91,7 +91,7 @@ impl FetchOutcome {
 pub type Fetcher<'a> = dyn Fn(&crate::manifest::FetchEntry) -> Result<Vec<u8>, String> + 'a;
 
 /// The remote-location seam — `location URI → bytes` (the `https:` TLS
-/// GET; `hh-embed`'s `fetch_transport` drives it over the `hh_env`
+/// GET; `hharness-embed`'s `fetch_transport` drives it over the `hharness_env`
 /// egress wire). `FnMut` — a mediated wire is stateful (each attempt
 /// appends its own durable rows).
 pub type LocationFetcher<'a> = dyn FnMut(&str) -> Result<Vec<u8>, String> + 'a;
@@ -151,7 +151,7 @@ pub fn fetch(
                 Ok(LocationLeg::Pool) => match pool {
                     Some(p) => match p(entry) {
                         Ok(bytes) => {
-                            let recomputed = hh_identity::idp_id("blob", &bytes);
+                            let recomputed = hharness_identity::idp_id("blob", &bytes);
                             if recomputed != *addr {
                                 last_reason = "digest_mismatch".to_string();
                             } else {
@@ -174,7 +174,7 @@ pub fn fetch(
                     match remote.as_deref_mut() {
                         Some(r) => match r(&url) {
                             Ok(bytes) => {
-                                let recomputed = hh_identity::idp_id("blob", &bytes);
+                                let recomputed = hharness_identity::idp_id("blob", &bytes);
                                 if recomputed != *addr {
                                     out.records.push(trust::member_fetched_payload(
                                         addr,
@@ -316,6 +316,6 @@ pub fn integrity_conflict(name: &str, declared: &str, recomputed: &str) -> Json 
 pub fn digest_index(files: &BTreeMap<String, Vec<u8>>) -> BTreeMap<String, String> {
     files
         .iter()
-        .map(|(n, b)| (n.clone(), hh_identity::idp_id("blob", b)))
+        .map(|(n, b)| (n.clone(), hharness_identity::idp_id("blob", b)))
         .collect()
 }

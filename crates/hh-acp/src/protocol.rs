@@ -1,11 +1,11 @@
 //! The ACP edge's pin set + era negotiation + binding record (§5d.4
-//! D2/D4 — `ProtocolBinding` machinery is shared with `hh-mcp`; only
+//! D2/D4 — `ProtocolBinding` machinery is shared with `hharness-mcp`; only
 //! the pin *contents* are ACP's).
 
 use std::collections::BTreeMap;
 
-use hh_mcp::protocol::{NegotiateError, ProtocolBinding};
-use hh_wire::json::Json;
+use hharness_mcp::protocol::{NegotiateError, ProtocolBinding};
+use hharness_wire::json::Json;
 
 /// The pinned ACP dialect version (v2).
 pub const ACP_VERSION: &str = "0.1.0";
@@ -18,7 +18,7 @@ pub const SUPPORTED_VERSIONS: [&str; 2] = [ACP_VERSION, ACP_LEGACY_LABEL];
 /// `ACP_PIN_SET` — the schema-family pin digest (`spec_pin.
 /// schema_content_hash` for protocol `acp` — derivation-key input).
 pub fn acp_pin_set() -> String {
-    hh_mcp::protocol::schema_content_hash("acp", &SUPPORTED_VERSIONS)
+    hharness_mcp::protocol::schema_content_hash("acp", &SUPPORTED_VERSIONS)
 }
 
 /// The digest as a `&'static`-style constant — computed lazily by
@@ -46,10 +46,10 @@ impl AcpEra {
     }
 
     /// The compiler-side dialect view (the artefact's projection).
-    pub fn dialect(self) -> hh_compiler::acp::AcpDialect {
+    pub fn dialect(self) -> hharness_compiler::acp::AcpDialect {
         match self {
-            AcpEra::V2 => hh_compiler::acp::AcpDialect::V2,
-            AcpEra::V1 => hh_compiler::acp::AcpDialect::V1,
+            AcpEra::V2 => hharness_compiler::acp::AcpDialect::V2,
+            AcpEra::V1 => hharness_compiler::acp::AcpDialect::V1,
         }
     }
 }
@@ -80,7 +80,7 @@ pub fn acp_binding(
     transport: &str,
     peer_info: Json,
     capabilities_declared: Json,
-    capabilities_observed: BTreeMap<String, hh_mcp::protocol::CapabilitySupport>,
+    capabilities_observed: BTreeMap<String, hharness_mcp::protocol::CapabilitySupport>,
     request_target: Option<String>,
 ) -> ProtocolBinding {
     ProtocolBinding {
@@ -89,8 +89,8 @@ pub fn acp_binding(
         spec_version_label: "acp".to_string(),
         spec_schema_content_hash: acp_pin_set(),
         era: match era {
-            AcpEra::V2 => hh_mcp::protocol::Era::Modern,
-            AcpEra::V1 => hh_mcp::protocol::Era::Legacy,
+            AcpEra::V2 => hharness_mcp::protocol::Era::Modern,
+            AcpEra::V1 => hharness_mcp::protocol::Era::Legacy,
         },
         negotiated_version: match era {
             AcpEra::V2 => ACP_VERSION.to_string(),

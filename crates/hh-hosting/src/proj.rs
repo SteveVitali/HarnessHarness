@@ -4,7 +4,7 @@
 //!
 //! * [`project`] consumes `EventEnvelope`s (the adapter-zero path — the
 //!   reference runtime presented through its own ABI) and emits
-//!   `HostedEvent`s. The per-class disposition comes from `hh-ledger`'s
+//!   `HostedEvent`s. The per-class disposition comes from `hharness-ledger`'s
 //!   `hosted_lowering` column — the class registry is the one class list
 //!   (CC7); `"none"` rows never cross and are *declared* in the
 //!   [`LoweringLossReport`], `"hint"` rows travel through `ext`/`raw_ref`
@@ -23,12 +23,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ledger::classes;
-use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::StopReason;
-use hh_ontology::dimensions::DimensionId;
-use hh_provenance::AuthorityClass;
-use hh_wire::Json;
+use hharness_ledger::classes;
+use hharness_ledger::event::EventEnvelope;
+use hharness_ontology::control::StopReason;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::Json;
 
 use crate::events::{
     participant_unclassified, EventChannel, HostedEvent, HostedOrigin, HostedProvenance, Mediation,
@@ -246,12 +246,12 @@ fn dropped_members(e: &EventEnvelope, keep: &[&str]) -> Vec<String> {
 /// class lands a declared [`LossEntry`].
 pub fn project(
     events: &[EventEnvelope],
-    observability: &BTreeSet<hh_ontology::participant::Observability>,
+    observability: &BTreeSet<hharness_ontology::participant::Observability>,
 ) -> Projection {
     let session = events.first().map(|e| e.run_id.clone()).unwrap_or_default();
     let mut out = Vec::new();
     let mut loss: BTreeMap<String, (LossClass, LossSeverity, BTreeSet<String>)> = BTreeMap::new();
-    let model_io = observability.contains(&hh_ontology::participant::Observability::ModelIo);
+    let model_io = observability.contains(&hharness_ontology::participant::Observability::ModelIo);
     for e in events {
         let lowering = classes::hosted_lowering(&e.class);
         // The model-I/O surface is observable only through interception
@@ -573,7 +573,7 @@ pub fn lift_stop_reason(raw: &str) -> StopReason {
             blocking_effect_id: String::new(),
         },
         "cancelled" => StopReason::Cancelled {
-            by: hh_ontology::control::CancelledBy::Hosting,
+            by: hharness_ontology::control::CancelledBy::Hosting,
         },
         // `other` / `_vendor` / anything unparseable — the participant's own
         // word is preserved in `error_class.class` (and `stop_reason_raw` on

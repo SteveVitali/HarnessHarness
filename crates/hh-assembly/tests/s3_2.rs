@@ -1,4 +1,4 @@
-//! `hh-assembly` S3.2 acceptance suite (spec §3.3.3/§3.3.4; ticket S3.2;
+//! `hharness-assembly` S3.2 acceptance suite (spec §3.3.3/§3.3.4; ticket S3.2;
 //! R-2.1.4, R-2.1.4¹ᵃ): `compose` with layers + monotone `authority_cap`
 //! (AC-CC-05/T-LCD-14 half), `space`/`enumerate` with the ADR-0025 override
 //! grammar and unfilled budget placeholders (AC-CC-08/T-LCD-14 half), and
@@ -9,20 +9,20 @@ mod common;
 use std::collections::BTreeMap;
 
 use common::*;
-use hh_assembly::catalog::ClassCatalog;
-use hh_assembly::compose::{compose, Layer};
-use hh_assembly::diagnostics::{Code, ReportStatus, Stage};
-use hh_assembly::grammar::{
+use hharness_assembly::catalog::ClassCatalog;
+use hharness_assembly::compose::{compose, Layer};
+use hharness_assembly::diagnostics::{Code, ReportStatus, Stage};
+use hharness_assembly::grammar::{
     Assembly, Constraint, ConstraintKind, LayerProvenance, LayerSourceKind, ParamRequirement,
     ParamType, ParameterSpec, ProfileBinding,
 };
-use hh_assembly::space::{enumerate, space, Override, OverrideOp, SweepDesign};
-use hh_assembly::Stage1Catalog;
-use hh_hir::records::SlotBindings;
-use hh_hir::refs::{ComponentVariantRef, ProfileRef};
-use hh_identity::names::ResolveMode;
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_assembly::space::{enumerate, space, Override, OverrideOp, SweepDesign};
+use hharness_assembly::Stage1Catalog;
+use hharness_hir::records::SlotBindings;
+use hharness_hir::refs::{ComponentVariantRef, ProfileRef};
+use hharness_identity::names::ResolveMode;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
 fn layer(kind: LayerSourceKind, id: &str, precedence: i64, fragment: Assembly) -> Layer {
     Layer {
@@ -45,10 +45,10 @@ fn cap(of: &str, ceiling: &str) -> Constraint {
 }
 
 fn resolve_env<'a>(
-    store: &'a mut hh_registry::store::RegistryStore,
+    store: &'a mut hharness_registry::store::RegistryStore,
     catalog: &'a dyn ClassCatalog,
-) -> hh_assembly::resolve::ResolveEnv<'a> {
-    hh_assembly::resolve::ResolveEnv {
+) -> hharness_assembly::resolve::ResolveEnv<'a> {
+    hharness_assembly::resolve::ResolveEnv {
         registry: store,
         catalog,
         snapshot_id: None,
@@ -118,7 +118,7 @@ fn compose_disablement_from_any_layer_wins() {
     // StricterWins on `/slots/*/enabled`: the lower-precedence layer's
     // `enabled = false` survives the higher layer's `enabled = true`.
     let mut low = Assembly::empty();
-    let mut disabled = hh_hir::records::SlotBinding::of(ComponentVariantRef::selected(
+    let mut disabled = hharness_hir::records::SlotBinding::of(ComponentVariantRef::selected(
         "control_strategy",
         "hh/round_robin",
         "latest",
@@ -229,8 +229,8 @@ fn override_grammar_parses_all_five_forms() {
 fn sealed_with_param(
     tag: &str,
 ) -> (
-    hh_registry::store::RegistryStore,
-    hh_hir::document::SealedDefinition,
+    hharness_registry::store::RegistryStore,
+    hharness_hir::document::SealedDefinition,
 ) {
     let (mut store, _vids) = seeded_store(tag);
     let cat = Stage1Catalog::stage1();
@@ -257,7 +257,7 @@ fn sealed_with_param(
     let doc = doc_with(&a);
     let sealed = {
         let mut env = resolve_env(&mut store, &cat);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     (store, sealed)
 }
@@ -330,7 +330,7 @@ fn enumerate_override_list_and_group_override() {
 /// A `ProfileView` over raw record JSON (stage 6a's read seam).
 struct JsonProfiles(BTreeMap<String, Json>);
 
-impl hh_assembly::validate::ProfileView for JsonProfiles {
+impl hharness_assembly::validate::ProfileView for JsonProfiles {
     fn profile(&self, coordinate: &str) -> Option<Json> {
         self.0.get(coordinate).cloned()
     }
@@ -351,7 +351,7 @@ fn stage_6a_refuses_a_variant_requirement_the_profile_does_not_support() {
     let mut v = variant_record(
         &c.version_id,
         "hh/cap_test",
-        hh_registry::kinds::Placement::InProcess,
+        hharness_registry::kinds::Placement::InProcess,
     );
     // `deterministic` is the class `declaration_schema`'s admitted key — the
     // variant *requires* it.
@@ -369,7 +369,7 @@ fn stage_6a_refuses_a_variant_requirement_the_profile_does_not_support() {
     let mut a = stage1_assembly();
     a.slots.insert(
         "control_strategy".into(),
-        SlotBindings::One(hh_hir::records::SlotBinding::of(
+        SlotBindings::One(hharness_hir::records::SlotBinding::of(
             ComponentVariantRef::selected("control_strategy", "hh/cap_test", "latest"),
         )),
     );
@@ -380,7 +380,7 @@ fn stage_6a_refuses_a_variant_requirement_the_profile_does_not_support() {
     let doc = doc_with(&a);
     let sealed = {
         let mut env = resolve_env(&mut store, &cat);
-        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+        hharness_assembly::resolve(&doc, &mut env).expect("resolve")
     };
     assert!(sealed
         .document
@@ -393,13 +393,13 @@ fn stage_6a_refuses_a_variant_requirement_the_profile_does_not_support() {
     // A profile record that does NOT declare `deterministic` supported. The
     // catalog is the registry-backed view — stage 6a reads `VariantRecord`s
     // through it.
-    let regcat = hh_assembly::catalog::RegistryCatalog::new(&store, None);
+    let regcat = hharness_assembly::catalog::RegistryCatalog::new(&store, None);
     let empty_caps = Json::obj([("capabilities", Json::obj([]))]);
     let mut no_caps = BTreeMap::new();
     no_caps.insert("sha256:profile".to_string(), empty_caps);
     let profiles = JsonProfiles(no_caps);
-    let r = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&sealed),
+    let r = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&sealed),
         &regcat,
         Some(&profiles),
         &kernel(),
@@ -425,8 +425,8 @@ fn stage_6a_refuses_a_variant_requirement_the_profile_does_not_support() {
         )]),
     );
     let ok_profiles = JsonProfiles(with_caps);
-    let r2 = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Sealed(&sealed),
+    let r2 = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Sealed(&sealed),
         &regcat,
         Some(&ok_profiles),
         &kernel(),
@@ -450,8 +450,8 @@ fn stage_6a_compatible_profile_and_declarations_pass() {
     let mut m = BTreeMap::new();
     m.insert("sha256:profile".to_string(), empty_caps);
     let profiles = JsonProfiles(m);
-    let r = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Authored(&doc),
+    let r = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Authored(&doc),
         &cat,
         Some(&profiles),
         &kernel(),
@@ -473,15 +473,15 @@ fn stage_6a_compatible_profile_and_declarations_pass() {
 fn registry_operation_bound_as_tool_capability_refuses() {
     let mut doc = doc_with(&stage1_assembly());
     let mut n = tool_node("test:regtool", 5);
-    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
+    if let hharness_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
         t.source = Json::obj([
             ("kind", Json::str("registry")),
             ("operation", Json::str("lab.registry.query")),
         ]);
     }
     doc.nodes.push(n);
-    let r = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Authored(&doc),
+    let r = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Authored(&doc),
         &Stage1Catalog::stage1(),
         None,
         &kernel(),
@@ -500,15 +500,15 @@ fn registry_operation_bound_as_tool_capability_refuses() {
     // A catalog-bound tool stays silent — the check is source-scoped.
     let mut doc2 = doc_with(&stage1_assembly());
     let mut n2 = tool_node("test:tool", 5);
-    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n2.semantic {
+    if let hharness_hir::records::KindRecord::ToolCapability(t) = &mut n2.semantic {
         t.source = Json::obj([
             ("kind", Json::str("catalog_tool")),
             ("name", Json::str("grep")),
         ]);
     }
     doc2.nodes.push(n2);
-    let r2 = hh_assembly::validate_assembly(
-        hh_assembly::Subject::Authored(&doc2),
+    let r2 = hharness_assembly::validate_assembly(
+        hharness_assembly::Subject::Authored(&doc2),
         &Stage1Catalog::stage1(),
         None,
         &kernel(),

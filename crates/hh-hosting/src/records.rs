@@ -2,7 +2,7 @@
 //! `participant`/`adapter`; §6.6 §3; ADR-0166 D2/D3; R-2.10.6⁰) and the
 //! `hh.hosting/1` extension block (`HostingExt`).
 //!
-//! Layering (CC7): this crate owns the schemas; `hh-registry` stores the
+//! Layering (CC7): this crate owns the schemas; `hharness-registry` stores the
 //! canonical bodies verbatim behind the `kind` tag gate (the same layering as
 //! `environment_record`). `version_identity` on a participant record is the
 //! derived coordinate `idp("hh.hosting.participant", canonical{declaration,
@@ -13,13 +13,13 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt;
 
-use hh_budget::errors::EnforcementLevel;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_identity::idp::idp_id;
-use hh_ontology::participant::{
+use hharness_budget::errors::EnforcementLevel;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_identity::idp::idp_id;
+use hharness_ontology::participant::{
     CapabilityVerdict, HostingMechanism, Observability, ParticipantClass, ParticipantDescriptor,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 use crate::events::EventChannel;
 
@@ -592,17 +592,18 @@ impl ParticipantRecord {
         // The §2.7 rules are the one validation (CC1 — `describe`, never a
         // second implementation): class declared, `ledger` is native-entailed,
         // `none` mechanism is native-only.
-        let descriptor =
-            hh_ontology::participant::describe(hh_ontology::participant::RawDescriptor {
+        let descriptor = hharness_ontology::participant::describe(
+            hharness_ontology::participant::RawDescriptor {
                 class: Some(class),
                 hosting_mechanism: mechanism,
                 observability_level: observability,
                 capability_vector,
-            })
-            .map_err(|e| RecordError::Member {
-                path: "descriptor".into(),
-                detail: format!("{e:?}"),
-            })?;
+            },
+        )
+        .map_err(|e| RecordError::Member {
+            path: "descriptor".into(),
+            detail: format!("{e:?}"),
+        })?;
         if descriptor.class != ParticipantClass::Hosted {
             return Err(RecordError::ClassNotHosted);
         }
@@ -725,7 +726,7 @@ impl AdapterRecord {
         if let Some(r) = &self.loss_report_ref {
             m.insert("loss_report_ref".into(), Json::str(r));
         }
-        m.insert("debt".into(), hh_hir::debt_json(&self.debt, false));
+        m.insert("debt".into(), hharness_hir::debt_json(&self.debt, false));
         m.insert(
             "ext".into(),
             Json::Obj(
@@ -776,11 +777,12 @@ impl AdapterRecord {
                 }
             })?);
         }
-        let debt = hh_hir::debt_from_json(req(j, "debt", path)?, "adapter.debt").map_err(|e| {
-            RecordError::DebtSchema {
-                detail: format!("{e:?}"),
-            }
-        })?;
+        let debt =
+            hharness_hir::debt_from_json(req(j, "debt", path)?, "adapter.debt").map_err(|e| {
+                RecordError::DebtSchema {
+                    detail: format!("{e:?}"),
+                }
+            })?;
         let declaration_defaults = match req(j, "declaration_defaults", path)? {
             Json::Obj(m) => m.clone(),
             _ => return Err(bad("adapter.declaration_defaults", "expected object")),

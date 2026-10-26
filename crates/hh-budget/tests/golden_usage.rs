@@ -4,17 +4,17 @@
 //! exclusive decomposition with `input.total = uncached + cache_read +
 //! cache_write` under the declared `usage_mapping`; and the same decomposition
 //! priced by two independent implementations of the spend derivation agrees to
-//! the micro-unit — `hh_budget::price`/`attribute_spend` vs the reference
+//! the micro-unit — `hharness_budget::price`/`attribute_spend` vs the reference
 //! pricer written from §8.2 §3 in this file (the within-E1 half; the
 //! cross-candidate half is DF-S1.2-2's corpus extension, Stage 3).
 
 use std::collections::BTreeMap;
 
-use hh_budget::{
+use hharness_budget::{
     attribute_spend, decompose, price, Attribution, ModelRef, PricingRow, PricingTable, RawUsage,
     ReasoningSource, SpendSource, UsageMapping,
 };
-use hh_ledger::manifest::EventRef;
+use hharness_ledger::manifest::EventRef;
 
 fn raw(
     input: i64,
@@ -43,7 +43,7 @@ fn golden() -> (i64, i64, i64, i64, i64) {
 fn exclusive_dialect_lowers_to_the_canonical_roles() {
     // Anthropic-style: `input` already excludes cached tokens.
     let m = UsageMapping {
-        dialect: hh_budget::UsageDialect::InputExclusive,
+        dialect: hharness_budget::UsageDialect::InputExclusive,
         cache_write_ttl_classes: vec!["5m".into()],
         reasoning_source: ReasoningSource::WithinOutput,
     };
@@ -80,7 +80,7 @@ fn separate_reasoning_source_does_not_subtract() {
     // A provider reporting reasoning beside output (not inside it): `output` is
     // all visible; reasoning rides its own role.
     let m = UsageMapping {
-        dialect: hh_budget::UsageDialect::InputExclusive,
+        dialect: hharness_budget::UsageDialect::InputExclusive,
         cache_write_ttl_classes: vec![],
         reasoning_source: ReasoningSource::Separate,
     };
@@ -105,7 +105,7 @@ fn a_payload_inconsistent_with_its_dialect_is_refused_never_clamped() {
 /// micro-unit rate, summed in the row's currency"), independently of
 /// `pricing.rs`'s `Role`/`rate`/`add` machinery: different traversal (field
 /// order, no role enum, zero-quantity roles included in the sum).
-fn reference_price_micro(d: &hh_budget::TokenDecomposition, row: &PricingRow) -> i64 {
+fn reference_price_micro(d: &hharness_budget::TokenDecomposition, row: &PricingRow) -> i64 {
     let mut sum = 0i64;
     sum += d.input_uncached * row.input_uncached;
     sum += d.cache_read * row.input_cache_read;
@@ -148,7 +148,7 @@ fn model() -> ModelRef {
 #[test]
 fn two_implementations_agree_to_the_micro_unit() {
     let m = UsageMapping {
-        dialect: hh_budget::UsageDialect::InputExclusive,
+        dialect: hharness_budget::UsageDialect::InputExclusive,
         cache_write_ttl_classes: vec!["5m".into()],
         reasoning_source: ReasoningSource::WithinOutput,
     };
@@ -195,5 +195,5 @@ fn a_model_with_no_pricing_row_is_no_price_not_zero() {
     let mut mr = model();
     mr.provider_model_id = "unpriced".into();
     let e = price(&d, &mr, &table()).unwrap_err();
-    assert!(matches!(e, hh_budget::SpendError::NoPrice { .. }));
+    assert!(matches!(e, hharness_budget::SpendError::NoPrice { .. }));
 }

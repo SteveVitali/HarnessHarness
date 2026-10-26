@@ -5,10 +5,10 @@
 //! the declared strata/retirement labels survive into the adapter inputs,
 //! and a corrupted member refuses typed rather than loading partially.
 
-use hh_bench::adapter::BenchmarkAdapter;
-use hh_bench::benchset::{Benchset, BenchsetError, BENCHSET_ID};
-use hh_bench::grade::GradeRequest;
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_bench::adapter::BenchmarkAdapter;
+use hharness_bench::benchset::{Benchset, BenchsetError, BENCHSET_ID};
+use hharness_bench::grade::GradeRequest;
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
 
 fn tmp(tag: &str) -> std::path::PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -184,7 +184,7 @@ fn adapter_lifecycle_over_corpus_task() {
         .grade(&GradeRequest {
             task: task.record().clone(),
             submission: sub,
-            isolation: hh_ontology::lab::VerifierIsolation::Separate,
+            isolation: hharness_ontology::lab::VerifierIsolation::Separate,
         })
         .unwrap();
     assert_eq!(

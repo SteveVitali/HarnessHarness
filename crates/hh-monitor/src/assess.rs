@@ -1,6 +1,6 @@
 //! The deterministic risk assessors (§5g.1 §2.3; ADR-0052 D4): `kernel_assessed`
 //! is the max over, in order, (i) the static `EffectAttributes` of the
-//! capability — [`hh_hir::risk::project_risk`], (ii) deterministic argument
+//! capability — [`hharness_hir::risk::project_risk`], (ii) deterministic argument
 //! analysis over the recorded [`AssessmentInputs`], (iv) a model `self_report` —
 //! **raise-only** (a "LOW" claim never lowers a kernel "HIGH"; ADR-0031 §2).
 //! (iii) hook admission is R-2.8.5's Stage-2 seam — hooks may only raise or
@@ -12,9 +12,9 @@
 //! assessor therefore takes the *classification result* as a recorded input and
 //! never parses shell text itself).
 
-use hh_hir::kinds::EffectAttributes;
-use hh_ontology::risk::RiskClass;
-use hh_wire::json::Json;
+use hharness_hir::kinds::EffectAttributes;
+use hharness_ontology::risk::RiskClass;
+use hharness_wire::json::Json;
 
 /// `Tri` — the honest three-valued assessor input: `yes`, `no`, `unknown`.
 /// `Unknown` never satisfies a `yes`-condition of any Π row — an unverifiable
@@ -176,7 +176,7 @@ pub fn kernel_assessed(
     domain_is_fs_write: bool,
     inputs: &AssessmentInputs,
 ) -> RiskClass {
-    let mut rc = hh_hir::risk::project_risk(declared);
+    let mut rc = hharness_hir::risk::project_risk(declared);
     // (ii) argument analysis — raise only.
     if matches!(
         inputs.command_parse,
@@ -192,7 +192,7 @@ pub fn kernel_assessed(
             RiskClass {
                 reversibility: rc.reversibility,
                 repeat_safety: rc.repeat_safety,
-                scope: hh_ontology::risk::RiskScope::External,
+                scope: hharness_ontology::risk::RiskScope::External,
             },
         );
     }

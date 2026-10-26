@@ -4,12 +4,12 @@
 //!
 //! Every sum here is closed at the HIR/1 dialect — growth is a dialect bump,
 //! never an open string. `DecisionPoint`/`Owner`/`StopReason` are reused from
-//! `hh_ontology::control` (CC7); `model_completed.stop_reason` is the
+//! `hharness_ontology::control` (CC7); `model_completed.stop_reason` is the
 //! *gateway's* closed sum (R-2.3.1, ADR-0119 D1) — no cue carries a third
 //! spelling.
 
-use hh_ontology::control::{DecisionPoint, OutcomeClass, Owner, StopReason};
-use hh_wire::json::Json;
+use hharness_ontology::control::{DecisionPoint, OutcomeClass, Owner, StopReason};
+use hharness_wire::json::Json;
 
 /// `Cue` — the closed 13-member sum (§5e.1; ADR-0103 Phase 2/4 logs, CF-281,
 /// CF-395, CF-450). `woken` carries every wakeup incl. peer messages — there
@@ -40,7 +40,7 @@ pub enum Cue {
         /// The response blob ref.
         response_ref: String,
         /// The gateway stop reason.
-        stop_reason: hh_gateway::vocab::StopReason,
+        stop_reason: hharness_gateway::vocab::StopReason,
     },
     /// `effects_settled{[{effect_id, outcome}], all_terminal, submission_ref?}`
     /// — every open effect reached a terminal/`unknown`/`refused`/`abandoned`.
@@ -803,8 +803,8 @@ impl DeltaKind {
 }
 
 // Re-exports for ergonomic call sites — the canonical sums stay owned by
-// `hh_ontology::control` (CC7); this module only re-exports.
-pub use hh_ontology::control::{
+// `hharness_ontology::control` (CC7); this module only re-exports.
+pub use hharness_ontology::control::{
     CancelledBy, InfraError, InfraErrorFamily, InvariantId, KernelInfraCause, LoopPattern,
 };
 
@@ -828,7 +828,7 @@ mod tests {
             Cue::ModelCompleted {
                 model_call_id: "m".into(),
                 response_ref: "r".into(),
-                stop_reason: hh_gateway::vocab::StopReason::EndTurn,
+                stop_reason: hharness_gateway::vocab::StopReason::EndTurn,
             }
             .kind(),
             Cue::EffectsSettled {

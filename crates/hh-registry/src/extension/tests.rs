@@ -1,8 +1,8 @@
 //! §5g.5 C0 unit tests — every gating behavior gets a removal-sensitive test
-//! (AC-R-2.8.5-1/-2/-11 land here; L4's sealed-form walk lands in hh-assembly).
+//! (AC-R-2.8.5-1/-2/-11 land here; L4's sealed-form walk lands in hharness-assembly).
 
 use super::*;
-use hh_provenance::origin::{HumanRole, Origin};
+use hharness_provenance::origin::{HumanRole, Origin};
 
 fn human() -> Origin {
     Origin::Human {

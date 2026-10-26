@@ -1,4 +1,4 @@
-//! `hh-bundle` S6.4 coverage — R-2.9.8 §2.1 (§5h.8; ADR-0325;
+//! `hharness-bundle` S6.4 coverage — R-2.9.8 §2.1 (§5h.8; ADR-0325;
 //! AC-R-2.9.8-{1,2}): the `training_export/1` lowering target —
 //! `export_training` projects a real run bundle's ledger pages into
 //! the typed `TrainingExport` + `samples.jsonl` +
@@ -10,16 +10,16 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use hh_bundle::assemble::{assemble, AssembleInputs};
-use hh_bundle::export::export_training;
-use hh_bundle::manifest::BundlePolicy;
-use hh_lab::coevolution::{SampleUnit, TrainingExportCtx, TrainingExportPolicy};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::ids::ROOT_EVENT;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_bundle::assemble::{assemble, AssembleInputs};
+use hharness_bundle::export::export_training;
+use hharness_bundle::manifest::BundlePolicy;
+use hharness_lab::coevolution::{SampleUnit, TrainingExportCtx, TrainingExportPolicy};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::ids::ROOT_EVENT;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -75,7 +75,7 @@ fn run_rig(tag: &str) -> Rig {
     let def_bytes = Json::obj([("sealed", Json::str("definition"))])
         .to_canonical_string()
         .into_bytes();
-    let def_addr = hh_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
+    let def_addr = hharness_identity::address(&def_bytes, "application/vnd.hh.sealed+json").id();
     let mut m = RunManifest::minimal(RunKind::Agent);
     m.harness_def_ref = Some(def_addr.clone());
     let (run, lease) = store.open_run(m, "s64.test").unwrap();
@@ -182,9 +182,9 @@ fn ctx() -> TrainingExportCtx {
     }
 }
 
-fn decoded(rig: &Rig) -> hh_bundle::codec::Decoded {
+fn decoded(rig: &Rig) -> hharness_bundle::codec::Decoded {
     let a = assemble(&inputs(rig)).unwrap();
-    hh_bundle::codec::Decoded {
+    hharness_bundle::codec::Decoded {
         manifest: a.manifest,
         members: a.members,
     }
@@ -217,9 +217,10 @@ fn training_export_lowers_the_bundle_deterministically() {
 
     // The typed record round-trips: two samples; the reward binds the
     // task:a sample.
-    let rec =
-        hh_wire::json::parse(std::str::from_utf8(&out.files["training_export.json"]).unwrap())
-            .unwrap();
+    let rec = hharness_wire::json::parse(
+        std::str::from_utf8(&out.files["training_export.json"]).unwrap(),
+    )
+    .unwrap();
     let samples = rec
         .get("samples")
         .and_then(|s| match s {
@@ -253,7 +254,10 @@ fn training_export_lowers_the_bundle_deterministically() {
 fn training_export_refusals_ride_the_typed_boundary() {
     let rig = run_rig("refusal");
     let a = decoded(&rig);
-    let err = |r: Result<hh_bundle::export::ExportOutcome, hh_bundle::error::BundleError>| match r {
+    let err = |r: Result<
+        hharness_bundle::export::ExportOutcome,
+        hharness_bundle::error::BundleError,
+    >| match r {
         Err(e) => e,
         Ok(_) => panic!("expected a typed refusal"),
     };

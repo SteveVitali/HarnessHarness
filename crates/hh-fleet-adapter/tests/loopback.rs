@@ -4,11 +4,11 @@
 //! process needed. The out-of-process leg is
 //! `crates/hh-varhost/tests/tracker_plugin.rs`.
 
-use hh_fleet::capabilities::CapState;
-use hh_fleet::source::WorkSourceAdapter;
-use hh_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
-use hh_fleet_adapter::tracker::{self, FixtureTracker, TrackerLogic};
-use hh_wire::json::Json;
+use hharness_fleet::capabilities::CapState;
+use hharness_fleet::source::WorkSourceAdapter;
+use hharness_fleet_adapter::adapter::{PluginSourceAdapter, SourceChannel, SourceFault};
+use hharness_fleet_adapter::tracker::{self, FixtureTracker, TrackerLogic};
+use hharness_wire::json::Json;
 
 /// The in-process channel: `invoke` = `tracker::dispatch` over the
 /// logic, verbatim envelopes both ways.

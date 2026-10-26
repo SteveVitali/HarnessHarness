@@ -6,9 +6,9 @@
 //! error variant beyond what the contract already names.
 
 use crate::service::{EmbedService, ServiceConfig};
-use hh_embed_schema::errors::EmbedError;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::{err_response, parse_request, write_message};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::{err_response, parse_request, write_message};
 use std::io::{BufRead, BufReader, Write};
 
 /// Serve `hh-embed/1` over stdin/stdout until clean EOF — the kernel

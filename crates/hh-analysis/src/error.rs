@@ -1,10 +1,10 @@
 //! The estimator kernel's typed refusal set (never warnings — CC9 /
 //! T-LCD-14; §6.4 §2.1–§2.2).
 
-use hh_eval::benefits::BenefitError;
-use hh_eval::compare::CompareError;
-use hh_experiment::errors::ExperimentError;
-use hh_results::error::ResultsError;
+use hharness_eval::benefits::BenefitError;
+use hharness_eval::compare::CompareError;
+use hharness_experiment::errors::ExperimentError;
+use hharness_results::error::ResultsError;
 
 /// `AnalysisError` — the closed refusal set the kernel and its engine
 /// return. Every variant is a typed fact; nothing is a warning.
@@ -50,10 +50,10 @@ pub enum AnalysisError {
         /// The metric name.
         name: String,
     },
-    /// `hh_eval::compare` refused (match/comparability/contrast typed
+    /// `hharness_eval::compare` refused (match/comparability/contrast typed
     /// refusals pass through verbatim — one refusal vocabulary).
     Compare(CompareError),
-    /// `hh_eval::benefits` refused (`MarginNotPreRegistered`,
+    /// `hharness_eval::benefits` refused (`MarginNotPreRegistered`,
     /// `BadTransferFactor`, `UnmatchedSearchBudget`, …).
     Benefit(BenefitError),
     /// The results store refused (query/watermark/store errors).
@@ -81,7 +81,7 @@ pub enum AnalysisError {
     },
     /// A14 asked for an aggregate-without-annotation (`filters.aggregate
     /// = pooled`) — strata are never silently pooled (ADR-0012 D6; the
-    /// same refusal name `hh_eval::scorecard` raises on the scorecard
+    /// same refusal name `hharness_eval::scorecard` raises on the scorecard
     /// side).
     StrataPooledUnannotated {
         /// The detail.

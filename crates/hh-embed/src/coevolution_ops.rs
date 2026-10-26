@@ -5,7 +5,7 @@
 //! exports, sidecar records and typed refusals, never weights.
 //!
 //! - `export_training` lowers `training_export/1` through
-//!   `hh_bundle::export::export_training` with the typed loss report;
+//!   `hharness_bundle::export::export_training` with the typed loss report;
 //!   `measurement.export.delivered{TrainingExposureRecord}` lands on
 //!   each subject run (CF-460).
 //! - `import_snapshot` is claims-only (I-1..I-4): `pinned = false`,
@@ -17,7 +17,7 @@
 //!   carry the proposal → human-seal path (the retirement gate is
 //!   `lab.debt.retire` — no second authority path).
 //! - `cycle_*` drives the `CoEvolutionCycleRecord` sidecar
-//!   (`hh_evolution::cycle::CycleDriver` — a LabDocs sidecar, no new
+//!   (`hharness_evolution::cycle::CycleDriver` — a LabDocs sidecar, no new
 //!   run kind).
 //! - `lab.org_policy.*` lands §5i.1 6d: the `lab/org-policy-v1` recipe
 //!   and the fleet defaults' removal-test debt records.
@@ -26,10 +26,10 @@
 //! — the ops stay in the schema (CC7) and the tier is removable (CC6;
 //! AC-R-2.9.8-11).
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::service::EmbedService;
-use hh_embed_schema::errors::EmbedError;
+use hharness_embed_schema::errors::EmbedError;
 
 #[cfg(feature = "tier-c4")]
 fn bad(path: &str, code: &str) -> EmbedError {
@@ -58,18 +58,18 @@ fn opt_str(j: &Json, k: &str) -> Option<String> {
 }
 
 #[cfg(feature = "tier-c4")]
-fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> EmbedError {
+fn coe_err(e: hharness_lab::coevolution::CoEvolutionError) -> EmbedError {
     EmbedError::Refused { reason: e.code() }
 }
 
 #[cfg(feature = "tier-c4")]
 mod imp {
     use super::{bad, coe_err, opt_str, req, req_str};
-    use hh_embed_schema::errors::EmbedError;
-    use hh_evolution::cycle::CycleDriver;
-    use hh_lab::coevolution as coe;
-    use hh_lab::model::{CompatibilityRecord, SnapshotClaim};
-    use hh_wire::json::Json;
+    use hharness_embed_schema::errors::EmbedError;
+    use hharness_evolution::cycle::CycleDriver;
+    use hharness_lab::coevolution as coe;
+    use hharness_lab::model::{CompatibilityRecord, SnapshotClaim};
+    use hharness_wire::json::Json;
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::Path;
 
@@ -79,7 +79,9 @@ mod imp {
 
     /// `debts[]` → `AssumptionDebtRecord`s (the `lab.debt.*` decoder —
     /// one codec, CC1/CC7).
-    fn debts(j: Option<&Json>) -> Result<Vec<hh_hir::records::AssumptionDebtRecord>, EmbedError> {
+    fn debts(
+        j: Option<&Json>,
+    ) -> Result<Vec<hharness_hir::records::AssumptionDebtRecord>, EmbedError> {
         match j {
             Some(Json::Arr(a)) => a
                 .iter()
@@ -194,7 +196,7 @@ mod imp {
     /// caller-fetched so `driver`'s borrow of `coevolution_cycles`
     /// never overlaps a `svc` borrow.
     fn deposited(
-        docs: &hh_experiment::docs::LabDocs,
+        docs: &hharness_experiment::docs::LabDocs,
         key: &str,
         driver: &mut CycleDriver,
     ) -> Result<Json, EmbedError> {
@@ -254,7 +256,7 @@ mod imp {
                         .unwrap_or(Json::obj([])),
                     provenance: ctx_j.get("provenance").cloned(),
                 };
-                let out = hh_bundle::export::export_training(&decoded, &policy, &ctx)
+                let out = hharness_bundle::export::export_training(&decoded, &policy, &ctx)
                     .map_err(crate::bundle_ops::bundle_err)?;
                 if let Some(dir) = params.get("dir").and_then(Json::as_str) {
                     let root = Path::new(dir);
@@ -278,7 +280,9 @@ mod imp {
                 let exposure = out
                     .files
                     .get("exposure_record.json")
-                    .and_then(|b| hh_wire::json::parse(std::str::from_utf8(b).unwrap_or("")).ok())
+                    .and_then(|b| {
+                        hharness_wire::json::parse(std::str::from_utf8(b).unwrap_or("")).ok()
+                    })
                     .unwrap_or(Json::Null);
                 for run in &out.delivered_runs {
                     let _ = svc.store.commit_kernel_row_for(
@@ -317,7 +321,7 @@ mod imp {
             // factor with the unbound `snapshot_out` level).
             "lab.coevolution.export_regression_suite" => {
                 let template =
-                    hh_lab::experiment::ExperimentSpec::from_json(req(params, "template")?)
+                    hharness_lab::experiment::ExperimentSpec::from_json(req(params, "template")?)
                         .map_err(|e| bad("/template", &format!("{e:?}")))?;
                 let pricing = template
                     .arms
@@ -439,8 +443,10 @@ mod imp {
                         _ => Vec::new(),
                     }
                 };
-                let provenance =
-                    hh_provenance::ProvenanceRecord::kernel(COE_COMPONENT, svc.store.now_ms());
+                let provenance = hharness_provenance::ProvenanceRecord::kernel(
+                    COE_COMPONENT,
+                    svc.store.now_ms(),
+                );
                 let outcome = coe::import_snapshot(
                     &claim,
                     &sealed,
@@ -596,13 +602,14 @@ mod imp {
                 let view = eng
                     .candidate_view(&svc.store, None)
                     .map_err(crate::evolution_ops::imp::evo_err)?;
-                let (candidates, refused) = hh_evolution::consolidation::consolidation_candidates(
-                    &view,
-                    &lessons,
-                    &economics,
-                    &|r: &str| debt_ok.contains(r),
-                    &policy,
-                );
+                let (candidates, refused) =
+                    hharness_evolution::consolidation::consolidation_candidates(
+                        &view,
+                        &lessons,
+                        &economics,
+                        &|r: &str| debt_ok.contains(r),
+                        &policy,
+                    );
                 Ok(Json::obj([
                     (
                         "candidates",
@@ -670,7 +677,7 @@ mod imp {
             "lab.coevolution.consolidation_retirement_record" => {
                 let report = consolidation_report(req(params, "report")?)?;
                 let decided_by =
-                    hh_provenance::ProvenanceRecord::from_json(req(params, "decided_by")?)
+                    hharness_provenance::ProvenanceRecord::from_json(req(params, "decided_by")?)
                         .map_err(|e| bad("/decided_by", &format!("{e:?}")))?;
                 let rec = coe::consolidation_retirement_record(
                     &report,
@@ -784,7 +791,7 @@ mod imp {
             "lab.org_policy.recipe" => {
                 let pj = req(params, "pins")?;
                 let s = |k: &str| req_str(pj, k).map(str::to_string);
-                let pins = hh_lab::exemplars::ExemplarPins {
+                let pins = hharness_lab::exemplars::ExemplarPins {
                     suite_ref: s("suite_ref")?,
                     held_out_split_ref: s("held_out_split_ref")?,
                     split_assignment_ref: s("split_assignment_ref")?,
@@ -797,12 +804,12 @@ mod imp {
                     task_split_hash: s("task_split_hash")?,
                 };
                 let oj = req(params, "own")?;
-                let pricing = hh_budget::pricing::PricingTableRef::from_json(
+                let pricing = hharness_budget::pricing::PricingTableRef::from_json(
                     oj.get("pricing_table_ref")
                         .ok_or_else(|| bad("/own/pricing_table_ref", "missing"))?,
                 )
                 .ok_or_else(|| bad("/own/pricing_table_ref", "malformed"))?;
-                let factors: Vec<(String, Vec<hh_lab::exemplars::OrgPolicyLevel>)> =
+                let factors: Vec<(String, Vec<hharness_lab::exemplars::OrgPolicyLevel>)> =
                     match oj.get("factors") {
                         Some(Json::Arr(fa)) => fa
                             .iter()
@@ -816,7 +823,7 @@ mod imp {
                                     Some(Json::Arr(la)) => la
                                         .iter()
                                         .map(|l| {
-                                            Ok(hh_lab::exemplars::OrgPolicyLevel {
+                                            Ok(hharness_lab::exemplars::OrgPolicyLevel {
                                                 level_id: l
                                                     .get("level_id")
                                                     .and_then(Json::as_str)
@@ -849,7 +856,7 @@ mod imp {
                             .collect::<Result<Vec<_>, EmbedError>>()?,
                         _ => Vec::new(),
                     };
-                let arms: Vec<hh_lab::exemplars::OrgPolicyArmPins> = match oj.get("arms") {
+                let arms: Vec<hharness_lab::exemplars::OrgPolicyArmPins> = match oj.get("arms") {
                     Some(Json::Arr(aa)) => aa
                         .iter()
                         .map(|a| {
@@ -871,7 +878,7 @@ mod imp {
                                     .collect(),
                                 _ => Vec::new(),
                             };
-                            Ok(hh_lab::exemplars::OrgPolicyArmPins {
+                            Ok(hharness_lab::exemplars::OrgPolicyArmPins {
                                 arm_id: a
                                     .get("arm_id")
                                     .and_then(Json::as_str)
@@ -883,7 +890,7 @@ mod imp {
                                     .unwrap_or("")
                                     .to_string(),
                                 levels,
-                                artifact: hh_ontology::config::Ref::from_json(
+                                artifact: hharness_ontology::config::Ref::from_json(
                                     a.get("artifact")
                                         .ok_or_else(|| bad("/own/arms/artifact", "missing"))?,
                                 )
@@ -902,9 +909,9 @@ mod imp {
                     .and_then(Json::as_int)
                     .map(|v| v as u64)
                     .unwrap_or_else(|| svc.store.now_ms());
-                let spec = hh_lab::exemplars::org_policy_v1(
+                let spec = hharness_lab::exemplars::org_policy_v1(
                     &pins,
-                    &hh_lab::exemplars::OrgPolicyPins {
+                    &hharness_lab::exemplars::OrgPolicyPins {
                         factors,
                         arms,
                         pricing_table_ref: pricing,
@@ -920,7 +927,7 @@ mod imp {
             // ADR-0207 D6; T-LCD-05).
             "lab.org_policy.default_removal_tests" => {
                 let oj = req(params, "owner")?;
-                let owner = hh_ontology::debt::OwnerRef {
+                let owner = hharness_ontology::debt::OwnerRef {
                     team: matches!(oj.get("team"), Some(Json::Bool(true))),
                     id: oj
                         .get("id")
@@ -936,9 +943,11 @@ mod imp {
                         _ => Vec::new(),
                     },
                 };
-                let prov =
-                    hh_provenance::ProvenanceRecord::kernel(COE_COMPONENT, svc.store.now_ms());
-                let records = hh_fleet::org_policy::fleet_default_debt_records(
+                let prov = hharness_provenance::ProvenanceRecord::kernel(
+                    COE_COMPONENT,
+                    svc.store.now_ms(),
+                );
+                let records = hharness_fleet::org_policy::fleet_default_debt_records(
                     req_str(params, "fleet")?,
                     &owner,
                     req_str(params, "recipe_spec_ref")?,
@@ -954,7 +963,7 @@ mod imp {
                     Json::Arr(
                         records
                             .iter()
-                            .map(|r| hh_hir::debt_json(r, false))
+                            .map(|r| hharness_hir::debt_json(r, false))
                             .collect(),
                     ),
                 )]))

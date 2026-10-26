@@ -5,18 +5,18 @@
 //! `OffloadHandle` machinery (excerpt + read-capability, `HandleUnreadable`).
 //!
 //! Records not redefined here (CC7): `Label`/`ProvenanceRecord`/
-//! `AuthorityClass`/`PersistenceScope` (`hh-provenance`), `EventRef`
+//! `AuthorityClass`/`PersistenceScope` (`hharness-provenance`), `EventRef`
 //! (`hh-ledger::manifest`), `Validity` (`hh-hir::records`).
 
 use std::collections::BTreeSet;
 
-use hh_hir::records::Validity;
-use hh_identity::idp::idp_id;
-use hh_ledger::manifest::EventRef;
-use hh_provenance::label::Label;
-use hh_provenance::record::ProvenanceRecord;
-use hh_provenance::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_hir::records::Validity;
+use hharness_identity::idp::idp_id;
+use hharness_ledger::manifest::EventRef;
+use hharness_provenance::label::Label;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_provenance::AuthorityClass;
+use hharness_wire::json::Json;
 
 use crate::vocab::{
     CacheTier, CandidateKind, CandidateState, ConflictPolicy, LifecycleStateKind, OmissionReason,
@@ -91,13 +91,13 @@ pub struct Candidate {
     pub label: Label,
     /// `provenance: ProvenanceRecord` — mandatory.
     pub provenance: ProvenanceRecord,
-    /// The item's validity window (the `Validity` of `hh-hir` — evaluated at
+    /// The item's validity window (the `Validity` of `hharness-hir` — evaluated at
     /// the request's `at_seq` for I-ORDER).
     pub validity: Validity,
     /// `readers?` — carried at C0 (enforced at the slot boundary C2). When
     /// present it narrows the effective reader set; when absent the label's
     /// readers carry.
-    pub readers: Option<hh_provenance::authority::ReaderSet>,
+    pub readers: Option<hharness_provenance::authority::ReaderSet>,
     /// `slot_hint?` — advisory only (§5c.1); the slot decision is
     /// authority/lifecycle-driven. Never binding.
     pub slot_hint: Option<String>,

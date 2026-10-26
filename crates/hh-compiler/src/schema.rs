@@ -1,12 +1,12 @@
-//! The `hh-compiler` canonical schema (CC7 — the one source for both directions of every
-//! record this crate owns). Everything is `hh_wire::json::Json`; the canonicalizer is
+//! The `hharness-compiler` canonical schema (CC7 — the one source for both directions of every
+//! record this crate owns). Everything is `hharness_wire::json::Json`; the canonicalizer is
 //! `Json::to_canonical_string` (sorted keys, integers only — no float ambiguity in a
 //! content address).
 
 use std::collections::BTreeMap;
 
-use hh_hir::records::ScopeBindings;
-use hh_wire::json::Json;
+use hharness_hir::records::ScopeBindings;
+use hharness_wire::json::Json;
 
 use crate::equiv::{
     ArgTransform, EquivalenceEvidence, EvidenceVerdict, SurfaceArgMap, SurfaceBinding,
@@ -28,7 +28,7 @@ use crate::profile::{
 };
 use crate::seal::{CompiledBundle, ModelSurface, ModelSurfaceState};
 use crate::trace::{TraceEntry, TraceMap};
-use hh_ontology::control::StopKind;
+use hharness_ontology::control::StopKind;
 
 fn schema_err(path: &str, what: impl Into<String>) -> CompileError {
     CompileError::InvalidModelProfile {
@@ -93,7 +93,7 @@ fn str_arr(j: &Json, path: &str) -> Result<Vec<String>, CompileError> {
 /// `debt_from_json`'s pair — the full `ProfileDebtRecord` spelling
 /// (R-2.7; the router's sealed `RoutingPolicy` codec round-trips debt
 /// records through this spelling — the event-payload projection
-/// `hh_gateway::events::debt_json` is a separate, narrower contract).
+/// `hharness_gateway::events::debt_json` is a separate, narrower contract).
 pub fn debt_to_json(d: &ProfileDebtRecord) -> Json {
     let mut expiry = vec![("kind", Json::str(d.expiry_condition.kind.name()))];
     if let Some(v) = &d.expiry_condition.value {
@@ -109,7 +109,7 @@ pub fn debt_to_json(d: &ProfileDebtRecord) -> Json {
             d.evidence_refs
                 .iter()
                 .map(|r| {
-                    if r.kind == hh_ontology::debt::EvidenceKind::Source
+                    if r.kind == hharness_ontology::debt::EvidenceKind::Source
                         && r.observed_at.is_none()
                         && r.tier.is_none()
                         && !r.provisional
@@ -168,7 +168,7 @@ pub fn debt_to_json(d: &ProfileDebtRecord) -> Json {
     Json::Obj(m)
 }
 
-fn debt_member_err(path: &str, e: hh_ontology::debt::DebtSchemaError) -> CompileError {
+fn debt_member_err(path: &str, e: hharness_ontology::debt::DebtSchemaError) -> CompileError {
     schema_err(path, e.detail)
 }
 
@@ -177,22 +177,27 @@ fn debt_member_err(path: &str, e: hh_ontology::debt::DebtSchemaError) -> Compile
 /// through this decoder; pub so the gateway tier can read the spellings).
 pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, CompileError> {
     let expiry = req(j, "expiry_condition", path)?;
-    let expiry_condition =
-        hh_ontology::debt::ExpiryCondition::from_json(expiry, &format!("{path}.expiry_condition"))
-            .map_err(|e| debt_member_err(path, e))?;
+    let expiry_condition = hharness_ontology::debt::ExpiryCondition::from_json(
+        expiry,
+        &format!("{path}.expiry_condition"),
+    )
+    .map_err(|e| debt_member_err(path, e))?;
     let mut evidence_refs = Vec::new();
     if let Some(Json::Arr(items)) = j.get("evidence_refs") {
         for (i, v) in items.iter().enumerate() {
             evidence_refs.push(
-                hh_ontology::debt::EvidenceRef::from_json(v, &format!("{path}.evidence_refs[{i}]"))
-                    .map_err(|e| debt_member_err(path, e))?,
+                hharness_ontology::debt::EvidenceRef::from_json(
+                    v,
+                    &format!("{path}.evidence_refs[{i}]"),
+                )
+                .map_err(|e| debt_member_err(path, e))?,
             );
         }
     }
     let debt_class = match opt_str(j, "debt_class") {
         None => None,
         Some(s) => Some(
-            hh_ontology::debt::DebtClass::parse(&s)
+            hharness_ontology::debt::DebtClass::parse(&s)
                 .ok_or_else(|| schema_err(path, "debt_class: bad DebtClass"))?,
         ),
     };
@@ -207,7 +212,7 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, Compile
         removal_test: match j.get("removal_test") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
+                hharness_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
                     .map_err(|e| debt_member_err(path, e))?,
             ),
         },
@@ -217,7 +222,7 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, Compile
         hypothesis_typed: match j.get("hypothesis_typed") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::HypothesisTyped::from_json(
+                hharness_ontology::debt::HypothesisTyped::from_json(
                     v,
                     &format!("{path}.hypothesis_typed"),
                 )
@@ -227,14 +232,14 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, Compile
         scope: match j.get("scope") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
+                hharness_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
                     .map_err(|e| debt_member_err(path, e))?,
             ),
         },
         expiry: match j.get("expiry") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
+                hharness_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
                     .map_err(|e| debt_member_err(path, e))?,
             ),
         },
@@ -249,8 +254,11 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, Compile
         revalidation: match j.get("revalidation") {
             None | Some(Json::Null) => None,
             Some(v) => Some(
-                hh_ontology::debt::Revalidation::from_json(v, &format!("{path}.revalidation"))
-                    .map_err(|e| debt_member_err(path, e))?,
+                hharness_ontology::debt::Revalidation::from_json(
+                    v,
+                    &format!("{path}.revalidation"),
+                )
+                .map_err(|e| debt_member_err(path, e))?,
             ),
         },
         created_at: match j.get("created_at") {
@@ -296,11 +304,11 @@ fn selector_json(s: &ProfileSelector) -> Json {
 /// The one `version_pattern` codec lives in `hh-ontology::eval` (R2.18 — the
 /// document-side `ProfileConstraint` spells the same grammar; CC7).
 fn version_pattern_json(p: &VersionPattern) -> Json {
-    hh_ontology::eval::version_pattern_json(p)
+    hharness_ontology::eval::version_pattern_json(p)
 }
 
 fn version_pattern_from_json(j: &Json, path: &str) -> Result<VersionPattern, CompileError> {
-    hh_ontology::eval::version_pattern_from_json(j, path).map_err(|e| schema_err(path, e))
+    hharness_ontology::eval::version_pattern_from_json(j, path).map_err(|e| schema_err(path, e))
 }
 
 fn selector_from_json(j: &Json, path: &str) -> Result<ProfileSelector, CompileError> {
@@ -649,7 +657,7 @@ fn pinned_ref_from_json(j: &Json, path: &str) -> Result<PinnedRef, CompileError>
 
 /// The canonical JSON of a `Grant` (the plan's policy-row payload — the record's own
 /// shape, encoded here because no other crate encodes a bare `Grant` yet).
-pub fn grant_json(g: &hh_hir::records::Grant) -> Json {
+pub fn grant_json(g: &hharness_hir::records::Grant) -> Json {
     let mut pairs = vec![
         ("delegable", Json::Bool(g.delegable)),
         ("effect", g.effect.to_json()),
@@ -965,7 +973,7 @@ fn arg_map_from_json(j: &Json, path: &str) -> Result<SurfaceArgMap, CompileError
 }
 
 /// The canonical JSON of a `SurfaceBinding` (the codec's write direction —
-/// consumed by `hh-monitor`'s `authorize-input/1` capability rows; CC7).
+/// consumed by `hharness-monitor`'s `authorize-input/1` capability rows; CC7).
 pub fn surface_binding_json(b: &SurfaceBinding) -> Json {
     Json::obj([
         ("arg_map", arg_map_json(&b.arg_map)),
@@ -1039,7 +1047,7 @@ pub fn surface_binding_json(b: &SurfaceBinding) -> Json {
 }
 
 /// Parse a `SurfaceBinding` from its canonical JSON (the codec's read
-/// direction — consumed by `hh-monitor`'s out-of-process `authorize`).
+/// direction — consumed by `hharness-monitor`'s out-of-process `authorize`).
 pub fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding, CompileError> {
     let mapping = match j.get("mapping") {
         Some(m) => match m.get("kind").and_then(Json::as_str) {
@@ -1069,7 +1077,7 @@ pub fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding,
                 let sp = m.as_str().ok_or_else(|| {
                     schema_err(&format!("{path}.admitted_modes"), "mode must be a string")
                 })?;
-                set.insert(hh_hir::tools::ExposureMode::parse(sp).ok_or_else(|| {
+                set.insert(hharness_hir::tools::ExposureMode::parse(sp).ok_or_else(|| {
                     schema_err(&format!("{path}.admitted_modes"), format!("mode {sp}"))
                 })?);
             }
@@ -1081,7 +1089,9 @@ pub fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding,
                 "must be an array",
             ))
         }
-        None => [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        None => [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
     };
     let str_list = |k: &str| -> Result<Vec<String>, CompileError> {
         match j.get(k) {
@@ -1188,7 +1198,7 @@ fn tool_binding_from_json(j: &Json, path: &str) -> Result<ToolBinding, CompileEr
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                hh_hir::EffectClass::from_json(e, &format!("{path}.effects[{i}]"))
+                hharness_hir::EffectClass::from_json(e, &format!("{path}.effects[{i}]"))
                     .map_err(|e| schema_err(path, format!("{e}")))
             })
             .collect::<Result<Vec<_>, _>>()?,
@@ -1210,7 +1220,7 @@ fn tool_binding_from_json(j: &Json, path: &str) -> Result<ToolBinding, CompileEr
     })
 }
 
-fn dimensions_json(d: &BTreeMap<String, hh_hir::records::DimensionBound>) -> Json {
+fn dimensions_json(d: &BTreeMap<String, hharness_hir::records::DimensionBound>) -> Json {
     Json::Obj(
         d.iter()
             .map(|(k, v)| {
@@ -1229,14 +1239,14 @@ fn dimensions_json(d: &BTreeMap<String, hh_hir::records::DimensionBound>) -> Jso
 fn dimensions_from_json(
     j: &Json,
     path: &str,
-) -> Result<BTreeMap<String, hh_hir::records::DimensionBound>, CompileError> {
+) -> Result<BTreeMap<String, hharness_hir::records::DimensionBound>, CompileError> {
     match j {
         Json::Obj(m) => m
             .iter()
             .map(|(k, v)| {
                 Ok((
                     k.clone(),
-                    hh_hir::records::DimensionBound {
+                    hharness_hir::records::DimensionBound {
                         hard: v.get("hard").and_then(Json::as_int).map(|x| x as u64),
                         soft: v.get("soft").and_then(Json::as_int).map(|x| x as u64),
                     },
@@ -1336,7 +1346,7 @@ fn policies_from_json(j: &Json, path: &str) -> Result<PolicyTables, CompileError
                 let p = format!("{path}.effect_classes[{i}]");
                 Ok(EffectRow {
                     capability: str_at(r, "capability", &p)?,
-                    effect_class: hh_hir::EffectClass::from_json(
+                    effect_class: hharness_hir::EffectClass::from_json(
                         req(r, "effect_class", &p)?,
                         &format!("{p}.effect_class"),
                     )
@@ -1438,7 +1448,7 @@ fn budget_envelope_json(b: &BudgetEnvelope) -> Json {
         ("budget", pinned_ref_json(&b.budget)),
         (
             "control_boundary",
-            hh_hir::wire::boundary_json(&b.control_boundary),
+            hharness_hir::wire::boundary_json(&b.control_boundary),
         ),
         ("dimensions", dimensions_json(&b.dimensions)),
         (
@@ -1455,7 +1465,7 @@ fn budget_envelope_from_json(j: &Json, path: &str) -> Result<BudgetEnvelope, Com
             req(j, "dimensions", path)?,
             &format!("{path}.dimensions"),
         )?,
-        control_boundary: hh_hir::wire::boundary_from_json(
+        control_boundary: hharness_hir::wire::boundary_from_json(
             req(j, "control_boundary", path)?,
             &format!("{path}.control_boundary"),
         )
@@ -1577,7 +1587,7 @@ pub fn plan_from_json(j: &Json, path: &str) -> Result<RuntimePlan, CompileError>
             .map(|(i, v)| validator_binding_from_json(v, &format!("{path}.validators[{i}]")))
             .collect::<Result<Vec<_>, _>>()?,
         ids: PlanIds {
-            definition_ref: hh_hir::DefinitionVersionRef {
+            definition_ref: hharness_hir::DefinitionVersionRef {
                 semantic_id: str_at(dref, "semantic_id", &format!("{path}.ids.definition_ref"))?,
                 version_id: str_at(dref, "version_id", &format!("{path}.ids.definition_ref"))?,
             },
@@ -1928,7 +1938,7 @@ fn error_spec_from_json(
         Json::Obj(m) => m
             .iter()
             .map(|(k, v)| {
-                hh_hir::leaves::Text::from_json(v, &format!("{path}.renderings.{k}"))
+                hharness_hir::leaves::Text::from_json(v, &format!("{path}.renderings.{k}"))
                     .map(|t| (k.clone(), t))
                     .map_err(|e| schema_err(&format!("{path}.renderings.{k}"), format!("{e}")))
             })
@@ -2143,7 +2153,7 @@ pub fn bundle_to_json(b: &CompiledBundle) -> Json {
             Json::Arr(
                 b.diagnostics
                     .iter()
-                    .map(hh_assembly::diagnostic_json)
+                    .map(hharness_assembly::diagnostic_json)
                     .collect(),
             ),
         ),
@@ -2240,7 +2250,7 @@ pub fn bundle_from_json(j: &Json) -> Result<CompiledBundle, CompileError> {
             _ => return Err(schema_err(path, "loss_reports must be an array")),
         },
         opacity_report: match j.get("opacity_report") {
-            Some(Json::Obj(o)) => Some(hh_assembly::OpacitySummary {
+            Some(Json::Obj(o)) => Some(hharness_assembly::OpacitySummary {
                 by_class: match o.get("by_class") {
                     Some(Json::Obj(m)) => m
                         .iter()
@@ -2268,7 +2278,7 @@ pub fn bundle_from_json(j: &Json) -> Result<CompiledBundle, CompileError> {
             Json::Arr(items) => items
                 .iter()
                 .map(|d| {
-                    hh_assembly::diagnostic_from_json(d, "bundle.diagnostics")
+                    hharness_assembly::diagnostic_from_json(d, "bundle.diagnostics")
                         .map_err(|e| schema_err(path, format!("{e}")))
                 })
                 .collect::<Result<Vec<_>, _>>()?,
@@ -2322,8 +2332,8 @@ pub struct WireCompileInputs {
     pub fallback_profile: Option<String>,
     /// The profile records the view serves (the bound view, carried).
     pub profiles: Vec<ModelProfile>,
-    /// The variant records (as `hh_registry` record bodies).
-    pub variants: Vec<(String, hh_registry::records::VariantRecord)>,
+    /// The variant records (as `hharness_registry` record bodies).
+    pub variants: Vec<(String, hharness_registry::records::VariantRecord)>,
     /// The target specs.
     pub targets: Vec<TargetSpec>,
     /// The recorded intent flag.
@@ -2372,8 +2382,8 @@ pub fn compile_inputs_json(i: &WireCompileInputs) -> Json {
                         Json::obj([
                             (
                                 "record",
-                                hh_registry::schema::body_json(
-                                    &hh_registry::records::RegistryRecord::Variant(v.clone()),
+                                hharness_registry::schema::body_json(
+                                    &hharness_registry::records::RegistryRecord::Variant(v.clone()),
                                     false,
                                 ),
                             ),
@@ -2411,13 +2421,13 @@ pub fn compile_inputs_from_json(j: &Json) -> Result<WireCompileInputs, CompileEr
             .map(|(i, v)| {
                 let p = format!("{path}.variants[{i}]");
                 let vid = str_at(v, "version_id", &p)?;
-                let rec = hh_registry::schema::record_from_json(
-                    hh_registry::kinds::RecordKind::Variant,
+                let rec = hharness_registry::schema::record_from_json(
+                    hharness_registry::kinds::RecordKind::Variant,
                     req(v, "record", &p)?,
                 )
                 .map_err(|e| schema_err(&p, format!("{e}")))?;
                 match rec {
-                    hh_registry::records::RegistryRecord::Variant(vr) => Ok((vid, vr)),
+                    hharness_registry::records::RegistryRecord::Variant(vr) => Ok((vid, vr)),
                     _ => Err(schema_err(&p, "record is not a VariantRecord")),
                 }
             })

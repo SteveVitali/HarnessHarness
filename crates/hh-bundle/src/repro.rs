@@ -1,5 +1,5 @@
 //! `ReproReport` — the `reproduce(bundle_ref, level, {seed, eval_budget})`
-//! output record (§5h.3 §2/§4). The driver lives in `hh-embed` (it owns
+//! output record (§5h.3 §2/§4). The driver lives in `hharness-embed` (it owns
 //! replay machinery); this module owns the record shape and the pure
 //! compares the driver calls: `budget_limits_equal` (the `UnmatchedBudget`
 //! refusal, T-LCD-14) and `model_fingerprint`/`fingerprint_drift` (the
@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::manifest::{BundleManifest, ReproLevel};
 
@@ -175,7 +175,7 @@ impl ReproReport {
             _ => unreachable!(),
         };
         doc.remove("report_id");
-        self.report_id = hh_identity::idp_id(
+        self.report_id = hharness_identity::idp_id(
             "bundle.repro",
             Json::Obj(doc).to_canonical_string().as_bytes(),
         );
@@ -302,7 +302,7 @@ pub fn snapshot_fingerprint(snapshot: &Json) -> Option<String> {
                 ),
             ]);
             if material.to_canonical_string().contains("sha256:") {
-                Some(hh_identity::idp_id(
+                Some(hharness_identity::idp_id(
                     "model.fingerprint",
                     material.to_canonical_string().as_bytes(),
                 ))

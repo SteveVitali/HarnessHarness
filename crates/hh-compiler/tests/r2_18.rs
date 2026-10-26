@@ -1,4 +1,4 @@
-//! `hh-compiler` R2.18 acceptance suite (spec §3.2.2/§3.3.2, §5b; ticket
+//! `hharness-compiler` R2.18 acceptance suite (spec §3.2.2/§3.3.2, §5b; ticket
 //! R2.18; R-2.1.3, R-2.3.3): the link-stage half of the document-side
 //! `profile_binding` `ProfileConstraint` — the bound profile must satisfy
 //! every declared narrowing member (`C-LINK-4 VersionConflict` when it does
@@ -8,11 +8,11 @@
 mod common;
 
 use common::*;
-use hh_assembly::grammar::{ConstraintSelector, ProfileBinding, ProfileConstraint};
-use hh_compiler::errors::{CompileError, LinkErrorKind};
-use hh_compiler::link::{link, LinkedGraph};
-use hh_compiler::profile::{profile_coordinate, profile_identity, CapabilityState};
-use hh_ontology::eval::{ModelRole, VersionPattern};
+use hharness_assembly::grammar::{ConstraintSelector, ProfileBinding, ProfileConstraint};
+use hharness_compiler::errors::{CompileError, LinkErrorKind};
+use hharness_compiler::link::{link, LinkedGraph};
+use hharness_compiler::profile::{profile_coordinate, profile_identity, CapabilityState};
+use hharness_ontology::eval::{ModelRole, VersionPattern};
 
 /// A sealed doc whose `assembly.profile_binding` is `Constraint(c)` — the
 /// grammar decode/encode path is exercised by `resolve` re-materialising the
@@ -21,8 +21,8 @@ fn constrained_doc(
     tag: &str,
     c: ProfileConstraint,
 ) -> (
-    hh_registry::store::RegistryStore,
-    hh_hir::document::SealedDefinition,
+    hharness_registry::store::RegistryStore,
+    hharness_hir::document::SealedDefinition,
     std::collections::BTreeMap<String, String>,
 ) {
     let mut a = stage1_assembly();
@@ -31,9 +31,9 @@ fn constrained_doc(
 }
 
 fn link_with(
-    sealed: &hh_hir::document::SealedDefinition,
-    store: &dyn hh_compiler::link::VariantView,
-    profile: &hh_compiler::profile::ModelProfile,
+    sealed: &hharness_hir::document::SealedDefinition,
+    store: &dyn hharness_compiler::link::VariantView,
+    profile: &hharness_compiler::profile::ModelProfile,
 ) -> Result<LinkedGraph, CompileError> {
     let profiles = MapProfileView::of(vec![profile.clone()]);
     link(
@@ -52,8 +52,8 @@ fn link_with(
 /// definition's pin still binds it; the closure re-shapes the selector /
 /// capabilities and the `content_hash` is recomputed.
 fn reshaped(
-    f: impl Fn(&mut hh_compiler::profile::ModelProfile),
-) -> hh_compiler::profile::ModelProfile {
+    f: impl Fn(&mut hharness_compiler::profile::ModelProfile),
+) -> hharness_compiler::profile::ModelProfile {
     let mut p = test_profile();
     f(&mut p);
     p.content_hash = profile_identity(&p);
@@ -73,7 +73,8 @@ fn expect_version_conflict(r: Result<LinkedGraph, CompileError>, what: &str) {
             assert!(
                 diagnostics
                     .iter()
-                    .any(|d| d.code.code() == "C-LINK-4" && d.stage == hh_assembly::Stage::Link),
+                    .any(|d| d.code.code() == "C-LINK-4"
+                        && d.stage == hharness_assembly::Stage::Link),
                 "{what}: the typed C-LINK-4 diagnostic rides the refusal: {diagnostics:?}"
             );
         }
@@ -274,8 +275,8 @@ fn link_constraint_fallback_must_carry_a_dated_hypothesis() {
     // The ADR-0124 §5 rule applies to the document-side spelling too — an
     // undated fallback is `NoProfile`, never a silent bind.
     let mut undated = test_profile();
-    undated.expiry.expiry_condition = hh_compiler::profile::ExpiryCondition {
-        kind: hh_compiler::profile::ExpiryKind::ProbeFailure,
+    undated.expiry.expiry_condition = hharness_compiler::profile::ExpiryCondition {
+        kind: hharness_compiler::profile::ExpiryKind::ProbeFailure,
         value: None,
     };
     undated.content_hash = profile_identity(&undated);

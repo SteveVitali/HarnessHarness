@@ -2,13 +2,13 @@
 //! bridged `AF_UNIX` channel (OQ-161). Canonical JSON never embeds a raw
 //! `\n` inside a string (escaped), so one line is one object — no length
 //! prefix needed, and a truncated final line is a clean EOF signal. Decode
-//! is `hh_wire::json::parse` — the one canonicalizer (CC1, never a second
+//! is `hharness_wire::json::parse` — the one canonicalizer (CC1, never a second
 //! JSON reader).
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 
-use hh_wire::json::{self, Json};
+use hharness_wire::json::{self, Json};
 
 /// A wire I/O failure (the transport plane).
 #[derive(Debug)]

@@ -20,11 +20,11 @@
 //! 7. handles resolve through [`crate::handles::HandleTable`] —
 //!    `surface_ids` names, typed refusals on misuse.
 
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::manifest::EventRef;
-use hh_ontology::dimensions::DimensionId;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::Request as RpcRequest;
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::manifest::EventRef;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::Request as RpcRequest;
 
 use crate::binding::CallerBinding;
 use crate::effects::EffectCtx;
@@ -635,7 +635,11 @@ fn run_tool_body(
 /// op's typed refusal, surfaced verbatim (`surface_error`); a
 /// `result` is the payload. `hello` is issued on demand (the embed
 /// service gates every op on it).
-pub fn op_call(svc: &mut hh_embed::service::EmbedService, op: &str, params: &Json) -> ToolOutcome {
+pub fn op_call(
+    svc: &mut hharness_embed::service::EmbedService,
+    op: &str,
+    params: &Json,
+) -> ToolOutcome {
     let req = RpcRequest {
         id: Json::Int(1),
         method: op.to_string(),
@@ -676,7 +680,7 @@ pub fn op_call(svc: &mut hh_embed::service::EmbedService, op: &str, params: &Jso
                 (
                     "client",
                     Json::obj(vec![
-                        ("name", Json::str("hh-mcp-lab")),
+                        ("name", Json::str("hharness-mcp-lab")),
                         ("version", Json::str("1")),
                         ("kind", Json::str("mcp_server")),
                     ]),
@@ -721,7 +725,7 @@ pub fn op_call(svc: &mut hh_embed::service::EmbedService, op: &str, params: &Jso
 /// becomes `session_id`/`run_id`/`experiment_id`/`row_key` per the
 /// `arg_map`).
 fn resolve_handle_args(
-    svc: &mut hh_embed::service::EmbedService,
+    svc: &mut hharness_embed::service::EmbedService,
     session: &SurfaceSession,
     tool: &ExposureTool,
     arguments: &Json,
@@ -799,14 +803,14 @@ impl WithExtras for Json {
 
 /// An `EventRef`'s canonical string — `run_id/event_id` (the
 /// `spawn_event_ref`/`handle_ref` spellings in payloads).
-pub fn event_ref_str(r: &hh_ledger::manifest::EventRef) -> String {
+pub fn event_ref_str(r: &hharness_ledger::manifest::EventRef) -> String {
     format!("{}/{}", r.run_id, r.event_id)
 }
 
 /// The supply path's effect context — `session.rs`'s own shape (the
 /// same chain, minted under the hosted binding's surface session).
 pub fn effect_ctx_for(
-    svc: &mut hh_embed::service::EmbedService,
+    svc: &mut hharness_embed::service::EmbedService,
     exposure_version_id: &str,
     session: &SurfaceSession,
     tool: &ExposureTool,

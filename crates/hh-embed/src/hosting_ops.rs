@@ -2,7 +2,7 @@
 //! R-2.10.6; ADR-0164/0165/0166 (e)).
 //!
 //! The boundary is **records-in/records-out** over the registry and the run
-//! ledger — it never loads a `hh-hosting` implementation (`hosting_edges =
+//! ledger — it never loads a `hharness-hosting` implementation (`hosting_edges =
 //! []`, CC5/CC6):
 //!
 //! - `describe` reads the `participant` record and reconciles the declared
@@ -24,33 +24,33 @@
 //!   seven hosted metric folds as `measurement.metric.emitted` rows.
 //!
 //! [`HostingPlane`]: the removable seam (design ruling D2): a pure-Json
-//! driver the caller wires (`hh_hosting::Service::handle` satisfies it in
+//! driver the caller wires (`hharness_hosting::Service::handle` satisfies it in
 //! tests). When a call needs the plane and none is wired the op refuses
 //! `hosting_plane_absent` — honest tier absence, never a faked report.
 
 use std::collections::BTreeMap;
 
-use hh_embed_schema::errors::EmbedError;
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::store::Lease;
-use hh_provenance::{
+use hharness_embed_schema::errors::EmbedError;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::store::Lease;
+use hharness_provenance::{
     Attestation, AttestationAnchor, AttestationKind, AuthorityClass, MintingContext, Origin,
     PersistenceScope, ProvenanceRecord,
 };
-use hh_registry::hosted::reconcile_capability_vector;
-use hh_registry::kinds::{RecordKind, SubjectKind};
-use hh_registry::records::{ConformanceRecord, RegistryRecord};
-use hh_registry::schema;
-use hh_wire::json::Json;
+use hharness_registry::hosted::reconcile_capability_vector;
+use hharness_registry::kinds::{RecordKind, SubjectKind};
+use hharness_registry::records::{ConformanceRecord, RegistryRecord};
+use hharness_registry::schema;
+use hharness_wire::json::Json;
 
 use crate::registry_ops::{bad, opt_str, reg_err, registrar_of, req, req_str};
 use crate::service::{ledger_err, EmbedService};
 
 /// The removable Hosting Plane seam (D2): `plane(verb, params) -> Result<Json>`.
 /// Verbs today: `"drive_probe"` — everything else is the boundary's own
-/// records work. A wired `hh_hosting::Service` satisfies this in-process;
+/// records work. A wired `hharness_hosting::Service` satisfies this in-process;
 /// a hosted-service client satisfies it over the wire. The seam keeps
-/// `hosting_edges = []` (no crate names `hh-hosting` as a dependency).
+/// `hosting_edges = []` (no crate names `hharness-hosting` as a dependency).
 pub type HostingPlane = Box<dyn FnMut(&str, &Json) -> Result<Json, String>>;
 
 /// The observational native classes a hosted `rows[]` entry may claim —
@@ -95,7 +95,7 @@ const COMPONENT: &str = "hh-embed/hosting";
 
 /// The participant record's decoded boundary facts — the opaque body read
 /// only for the members the ops need (records-in/records-out: the body is
-/// `hh-hosting`'s schema; the boundary reads, never re-derives it).
+/// `hharness-hosting`'s schema; the boundary reads, never re-derives it).
 struct ParticipantFacts {
     /// The registry `version_id` (envelope coordinate).
     version_id: String,
@@ -122,7 +122,7 @@ fn participant_facts(svc: &EmbedService, params: &Json) -> Result<ParticipantFac
             .get(&vid)
             .ok_or_else(|| bad("/participant_ref", "unknown_participant"))?
     } else {
-        let input = hh_registry::store::ResolveInput::Selector {
+        let input = hharness_registry::store::ResolveInput::Selector {
             namespace: req_str(params, "namespace")?.to_string(),
             name: req_str(params, "name")?.to_string(),
             label: opt_str(params, "label"),
@@ -132,7 +132,7 @@ fn participant_facts(svc: &EmbedService, params: &Json) -> Result<ParticipantFac
             .registry
             .resolve(
                 &input,
-                hh_identity::names::ResolveMode::Execute,
+                hharness_identity::names::ResolveMode::Execute,
                 &Default::default(),
             )
             .map_err(reg_err)?;
@@ -191,7 +191,7 @@ fn participant_facts(svc: &EmbedService, params: &Json) -> Result<ParticipantFac
         abi_versions,
         declaration,
         observability_level,
-        quarantined: env.admission == hh_registry::kinds::Admission::Quarantined,
+        quarantined: env.admission == hharness_registry::kinds::Admission::Quarantined,
     })
 }
 
@@ -200,7 +200,7 @@ fn participant_facts(svc: &EmbedService, params: &Json) -> Result<ParticipantFac
 fn reconciled(
     svc: &EmbedService,
     facts: &ParticipantFacts,
-) -> hh_registry::hosted::CapabilityVector {
+) -> hharness_registry::hosted::CapabilityVector {
     let entries: Vec<ConformanceRecord> = svc
         .registry
         .hosted_conformance_entries(&facts.version_id)
@@ -210,7 +210,7 @@ fn reconciled(
     reconcile_capability_vector(&facts.declaration, &entries, &facts.version_identity)
 }
 
-fn vector_json(v: &hh_registry::hosted::CapabilityVector) -> Json {
+fn vector_json(v: &hharness_registry::hosted::CapabilityVector) -> Json {
     Json::obj([
         (
             "vector",
@@ -303,7 +303,7 @@ impl EmbedService {
             .registry
             .hosted_conformance_entries(&facts.version_id)
             .iter()
-            .map(|e| hh_registry::schema::hosted_entry_json(e))
+            .map(|e| hharness_registry::schema::hosted_entry_json(e))
             .collect();
         Ok(Json::obj([
             ("version_id", Json::str(facts.version_id)),
@@ -332,7 +332,7 @@ impl EmbedService {
     ///   into the caller's `report_base` scaffolding and take the same path.
     ///   Absent plane → `Refused{hosting_plane_absent}`.
     ///
-    /// Either way: a DRIFT on a P0 dimension (`hh_ledger::hosted::is_p0`)
+    /// Either way: a DRIFT on a P0 dimension (`hharness_ledger::hosted::is_p0`)
     /// quarantines the participant version; `skipped`/`unknown` never
     /// establish DRIFT (`ConformanceRecord::derive_verdict` is the rule —
     /// the boundary never coerces).
@@ -451,7 +451,8 @@ impl EmbedService {
         // enters `hosted_conformance_entries`.
         if matches!(
             report.produced_by,
-            hh_registry::kinds::ProducedBy::RegistryCi | hh_registry::kinds::ProducedBy::Lab
+            hharness_registry::kinds::ProducedBy::RegistryCi
+                | hharness_registry::kinds::ProducedBy::Lab
         ) {
             let durable = self
                 .store
@@ -469,8 +470,8 @@ impl EmbedService {
             .hosted_entries
             .iter()
             .filter(|e| {
-                e.verdict == hh_registry::kinds::ConformanceVerdict::Drift
-                    && hh_ledger::hosted::is_p0(&e.dimension)
+                e.verdict == hharness_registry::kinds::ConformanceVerdict::Drift
+                    && hharness_ledger::hosted::is_p0(&e.dimension)
             })
             .map(|e| e.dimension.clone())
             .collect();
@@ -478,8 +479,8 @@ impl EmbedService {
             .hosted_entries
             .iter()
             .filter(|e| {
-                e.verdict == hh_registry::kinds::ConformanceVerdict::Drift
-                    && !hh_ledger::hosted::is_p0(&e.dimension)
+                e.verdict == hharness_registry::kinds::ConformanceVerdict::Drift
+                    && !hharness_ledger::hosted::is_p0(&e.dimension)
             })
             .map(|e| e.dimension.clone())
             .collect();
@@ -687,7 +688,7 @@ impl EmbedService {
                     .and_then(Json::as_str)
                     .ok_or_else(|| bad(&format!("/rows[{i}]/class"), "missing_field"))?;
                 let payload = r.get("payload").cloned().unwrap_or(Json::obj([]));
-                let spec = hh_ledger::classes::lookup(class);
+                let spec = hharness_ledger::classes::lookup(class);
                 // The mint rule (D3/CC2): a class the table marks
                 // participant-writable (`!kernel_origin && !audit_grade`)
                 // takes the participant's own provenance — `delegate` when
@@ -810,13 +811,13 @@ impl EmbedService {
         // reads payloads, the same truth a rebuild sees), fold, and emit one
         // `measurement.metric.emitted` per produced value. `None` members
         // stay unemitted — the cell renders `n/a{not_run}`, never 0.
-        let rows: Vec<hh_eval::facts::FactRow> = self
+        let rows: Vec<hharness_eval::facts::FactRow> = self
             .store
             .events(&run_id)
             .map(|evs| {
                 evs.iter()
                     .enumerate()
-                    .map(|(i, e)| hh_eval::facts::FactRow {
+                    .map(|(i, e)| hharness_eval::facts::FactRow {
                         seq: i as u64,
                         event_id: Some(e.event_id.clone()),
                         class: e.class.clone(),
@@ -825,10 +826,10 @@ impl EmbedService {
                     .collect()
             })
             .unwrap_or_default();
-        let folded = hh_eval::hosted_metrics::fold(&rows);
+        let folded = hharness_eval::hosted_metrics::fold(&rows);
         let mut emitted = 0u64;
         let mut metric_batch = Vec::new();
-        for (name, value) in hh_eval::hosted_metrics::emit(&folded) {
+        for (name, value) in hharness_eval::hosted_metrics::emit(&folded) {
             let Some(v) = value else { continue };
             metric_batch.push(mint_with_provenance(
                 self,

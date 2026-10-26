@@ -1,4 +1,4 @@
-//! `hh-plugin` — the C0/Stage-1 extensibility / plugin-architecture contract
+//! `hharness-plugin` — the C0/Stage-1 extensibility / plugin-architecture contract
 //! surface (spec §8.4, R-2.12.2; ticket S1.27; ADR-0180…0182).
 //!
 //! What lives here (the kernel's plugin machinery that is *not* the manifest
@@ -9,19 +9,19 @@
 //!   contract-defining-tier table (ADR-0180 D3; ADR-0182 D1/D2).
 //! - [`dag`] — `spec_dag_check(sections, class_records, plugins)`: the §4.4
 //!   tables parsed as data, the graph checked for X2 tier monotonicity +
-//!   acyclicity via `hh_ontology::dag` (AC-8; T-LCD-06's generalisation).
+//!   acyclicity via `hharness_ontology::dag` (AC-8; T-LCD-06's generalisation).
 //! - [`lint`] — the module-graph lint for first-party in-process variants
 //!   (X1's in-crate form; AC-9).
 //! - [`corpus`] — the golden-manifest corpus driver (the naive second
 //!   implementation — the registry supplies the checker).
 //!
 //! The `PluginManifest/1` codec + `admit_plugin`/`resolve_plugin_candidate`
-//! live in `hh_registry::extension::plugin` (the manifest is an
+//! live in `hharness_registry::extension::plugin` (the manifest is an
 //! `ExtensionRecord{kind: plugin}` payload — its record home is the extension
 //! store, and `registry/1`'s closed `RecordKind` list must not grow — a
 //! dedicated `contract_version_policy` record *kind* would be a `registry/2`
 //! bump, so the policies ride on `RegistryPolicy` — ADR-0262). The
-//! `plugin_abi/1` schema lives in `hh_embed_schema::plugin_abi` (one schema
+//! `plugin_abi/1` schema lives in `hharness_embed_schema::plugin_abi` (one schema
 //! source — V6/CC7).
 //!
 //! Design rules this crate encodes:

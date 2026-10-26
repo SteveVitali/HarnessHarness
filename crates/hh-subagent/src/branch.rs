@@ -20,7 +20,7 @@
 //!   stamps `security.label.applied` with `derived_from` = the branch.
 //! - `attested_return(validator_ref)` — the `validator` endorsement: a
 //!   capacity-bounded schema raises the record `external → environment`,
-//!   `taint → ∅` (`hh_provenance::endorse::shape_endorse`); a free string
+//!   `taint → ∅` (`hharness_provenance::endorse::shape_endorse`); a free string
 //!   is `BasisNotAllowed` and an over-capacity schema is
 //!   `ShapeCapacityExceeded`.
 //!
@@ -29,12 +29,12 @@
 //! path exists here; a delegate-class endorser is `IllegitimateEndorsement`
 //! at `endorse`, ADR-0034 P2).
 
-use hh_ledger::manifest::EventRef;
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::endorse::{self, EndorsementError};
-use hh_provenance::flow::Remedy;
-use hh_provenance::{AuthorityClass, Label, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_ledger::manifest::EventRef;
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::endorse::{self, EndorsementError};
+use hharness_provenance::flow::Remedy;
+use hharness_provenance::{AuthorityClass, Label, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::spawn::{fold_children, kernel_ev_pub, BranchCtx, SpawnCtx};
 use crate::types::{ContextIsolation, SpawnError, SpawnRefused, Spawned, SubagentSpec};
@@ -78,7 +78,7 @@ pub fn consume_branch_remedy(
             detail: format!("remedy.kind = {} is not branch", remedy.kind()),
         }));
     };
-    let j = hh_wire::json::parse(spec).map_err(|_| {
+    let j = hharness_wire::json::parse(spec).map_err(|_| {
         SpawnError::Refused(SpawnRefused::DefinitionUnresolvable {
             detail: "branch remedy spec is not canonical JSON".into(),
         })
@@ -260,7 +260,10 @@ pub fn return_from_branch(
                 "security.label.applied",
                 Json::obj([
                     ("subject_ref", Json::str(applied.subject_ref.clone())),
-                    ("label", hh_provenance::label_json_full(&applied.label)),
+                    (
+                        "label",
+                        hharness_provenance::label_json_full(&applied.label),
+                    ),
                 ]),
                 vec![branch_ref.clone()],
                 None,
@@ -312,7 +315,7 @@ pub fn return_from_branch(
             // `validator` applies only to closed-schema values — the stamp
             // the append-time check re-reads (`content_kind` on the event,
             // never a payload claim).
-            ev.content_kind = Some(hh_provenance::ContentKind::ClosedSchemaValue);
+            ev.content_kind = Some(hharness_provenance::ContentKind::ClosedSchemaValue);
             batch.push(ev);
             exit_members.push(("subject_ref", Json::str(subject_ref.clone())));
             exit_members.push(("validator_ref", Json::str(validator_ref.clone())));

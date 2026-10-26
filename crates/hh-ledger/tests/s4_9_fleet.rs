@@ -7,12 +7,12 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::errors::LedgerError;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
-use hh_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
-use hh_wire::json::Json;
+use hharness_ledger::errors::LedgerError;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{EventRef, RunKind, RunManifest};
+use hharness_ledger::store::{Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_ledger::wakeup::{Trigger, WakeupPolicy};
+use hharness_wire::json::Json;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -100,7 +100,7 @@ fn fleet_boundary_trigger_admissibility() {
     // Unsupported variants refuse even at the fleet boundary — the
     // fleet's declared set is closed (`external`/`manual`/`timer`; the
     // fleet SPEC layer refuses every other variant at `open` — see the
-    // hh-fleet `unsupported_trigger_variants_refuse` test;
+    // hharness-fleet `unsupported_trigger_variants_refuse` test;
     // `environment_ready` keeps its kernel-level refusal everywhere).
     match s.wakeup_subscribe(
         &fleet_run,

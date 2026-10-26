@@ -374,7 +374,7 @@ mod tests {
                     continue;
                 }
                 assert!(
-                    hh_ledger::classes::lookup(c).is_some(),
+                    hharness_ledger::classes::lookup(c).is_some(),
                     "{} names unregistered class {c}",
                     p.id
                 );

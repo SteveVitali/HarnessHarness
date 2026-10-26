@@ -1,4 +1,4 @@
-//! `hh-results` — the Stage-3 results store (spec §6.5, R-2.10.5⁰; ticket
+//! `hharness-results` — the Stage-3 results store (spec §6.5, R-2.10.5⁰; ticket
 //! S3.4b; ADR-0161/0162/0163).
 //!
 //! The results store is a **projection layer, never a store of record**

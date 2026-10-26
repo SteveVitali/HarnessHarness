@@ -5,18 +5,18 @@
 //! closer (the R-2.8.2 reader-set check on a declared residual — AC-H4-05
 //! (iv); ADR-0341 D4–D6).
 
-use hh_containment::egress::{
+use hharness_containment::egress::{
     approved_host_body_check, decide_egress, ApprovalCache, CacheScope, EgressReason,
     EgressRequest, EgressSource, EgressVerdict,
 };
-use hh_containment::policy::{
+use hharness_containment::policy::{
     kernel_default, ContainmentPolicy, DefaultUnmatched, DnsPolicy, DnsResolver, EgressProtocol,
     EgressRule, HostPattern, NetMode, NetPolicy, NonPublic, ResidualChannel, ResidualKind,
     RuleDecision, TlsPolicy, UnixSocketMode, UnixSockets,
 };
-use hh_containment::{ContainmentBackend, Ep2Model, LossConsequence, LossKind};
-use hh_provenance::authority::ReaderSet;
-use hh_provenance::ProvenanceRecord;
+use hharness_containment::{ContainmentBackend, Ep2Model, LossConsequence, LossKind};
+use hharness_provenance::authority::ReaderSet;
+use hharness_provenance::ProvenanceRecord;
 
 fn policy_with(net: NetPolicy) -> ContainmentPolicy {
     let mut p = kernel_default(0);
@@ -65,7 +65,7 @@ fn allow_rule(host: &str) -> EgressRule {
 fn residual_body() -> ResidualChannel {
     ResidualChannel {
         kind: ResidualKind::ApprovedHostBody,
-        statement: hh_hir::leaves::Text::new(
+        statement: hharness_hir::leaves::Text::new(
             "bodies to the approved host",
             "test",
             ProvenanceRecord::kernel("t", 0),
@@ -175,14 +175,14 @@ fn proxy_env_surface_under_mediated_is_a_stratified_loss() {
     // `include_only` naming no proxy variable closes the surface even
     // under `inherit = all` — every ambient proxy name is unadmitted.
     let mut q = policy_with(mediated_net(vec![]));
-    q.proc.env.inherit = hh_containment::policy::EnvInherit::All;
+    q.proc.env.inherit = hharness_containment::policy::EnvInherit::All;
     q.proc.env.include_only = vec!["PATH".into()];
     let loss2 = Ep2Model::reference().lowering_loss(&q);
     assert!(!loss2.iter().any(|l| l.declared_field == "proc.env"));
     // And `inherit = all` alone (no `include_only`, no `exclude`) leaves
     // the ambient surface open.
     let mut r = policy_with(mediated_net(vec![]));
-    r.proc.env.inherit = hh_containment::policy::EnvInherit::All;
+    r.proc.env.inherit = hharness_containment::policy::EnvInherit::All;
     let loss3 = Ep2Model::reference().lowering_loss(&r);
     assert!(loss3.iter().any(|l| l.declared_field == "proc.env"));
 }

@@ -1,7 +1,7 @@
 # HarnessHarness cargo-deny config — L4.3 (R-2.12.4 supply-chain half).
-# The workspace is hermetic modulo ADR-0359 (`ring` in `hh-secrets`),
+# The workspace is hermetic modulo ADR-0359 (`ring` in `hharness-secrets`),
 # ADR-0361 (`ring::aead`/`rand` for the blob-pool AEAD), ADR-0365 (the
-# `hh-tls` rustls/webpki graph) and `hh-varhost`'s `tempfile` dev-dep —
+# `hharness-tls` rustls/webpki graph) and `hharness-varhost`'s `tempfile` dev-dep —
 # a new dependency, source or license outside this contract is an ADR
 # first, not an allow-list edit.
 

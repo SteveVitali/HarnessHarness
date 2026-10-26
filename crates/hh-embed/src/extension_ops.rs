@@ -1,7 +1,7 @@
 //! The `lab.extension.*` + `lab.permission.{grant,revoke}_approver` boundary
 //! ops (S4.14a — §5g.5/§6.2/§5g.7; R-2.8.5 C1, R-2.8.7 C1, R-2.12.2¹). Thin
-//! records-in/records-out wrappers over `hh_registry::extension::lifecycle`
-//! and `hh_registry::extension::foreign_plugin`: the boundary passes records
+//! records-in/records-out wrappers over `hharness_registry::extension::lifecycle`
+//! and `hharness_registry::extension::foreign_plugin`: the boundary passes records
 //! and parameters, the lifecycle layer runs the pure gates (TrustView source
 //! allowlists, attestation verification, the signature-required quarantine,
 //! surface drift, widening/label-regression assessment, the model-install
@@ -16,18 +16,18 @@
 
 use std::collections::BTreeSet;
 
-use hh_embed_schema::errors::EmbedError;
-use hh_provenance::{Attestation, ProvenanceRecord};
-use hh_registry::extension::foreign_plugin::{self, ForeignPluginFormat};
-use hh_registry::extension::lifecycle::{
+use hharness_embed_schema::errors::EmbedError;
+use hharness_provenance::{Attestation, ProvenanceRecord};
+use hharness_registry::extension::foreign_plugin::{self, ForeignPluginFormat};
+use hharness_registry::extension::lifecycle::{
     self, ProposerContext, RunExtensionView, ScanEntry, SurfaceDriftPolicy,
 };
-use hh_registry::extension::{
+use hharness_registry::extension::{
     declared_source_from_json, extension_ref_json, Candidate, ExtensionKind, ExtensionRecord,
     FetchOutcome, MergePolicy, SourceLocator,
 };
-use hh_registry::records::RegistryRecord;
-use hh_wire::json::Json;
+use hharness_registry::records::RegistryRecord;
+use hharness_wire::json::Json;
 
 use crate::registry_ops::{bad, opt_str, parse_reason, reg_err, registrar_of, req, req_str};
 use crate::service::EmbedService;
@@ -55,12 +55,15 @@ fn candidate_from_params(j: &Json) -> Result<Candidate, EmbedError> {
 
 /// Decode a `ContentAddress` — `"sha256:<hex>"` shorthand or the full member
 /// set `{digest, media_type?, size?}` under `idp/1`+`sha256`.
-fn content_addr(j: &Json, path: &str) -> Result<hh_identity::idp::ContentAddress, EmbedError> {
+fn content_addr(
+    j: &Json,
+    path: &str,
+) -> Result<hharness_identity::idp::ContentAddress, EmbedError> {
     match j {
         Json::Str(s) => {
-            let parsed =
-                hh_identity::idp::parse_id(s).map_err(|_| bad(path, "bad_content_address"))?;
-            Ok(hh_identity::idp::ContentAddress {
+            let parsed = hharness_identity::idp::parse_id(s)
+                .map_err(|_| bad(path, "bad_content_address"))?;
+            Ok(hharness_identity::idp::ContentAddress {
                 idp: "idp/1",
                 algorithm: "sha256",
                 digest: parsed.digest_hex,
@@ -73,7 +76,7 @@ fn content_addr(j: &Json, path: &str) -> Result<hh_identity::idp::ContentAddress
                 .get("digest")
                 .and_then(Json::as_str)
                 .ok_or_else(|| bad(path, "missing digest"))?;
-            Ok(hh_identity::idp::ContentAddress {
+            Ok(hharness_identity::idp::ContentAddress {
                 idp: "idp/1",
                 algorithm: "sha256",
                 digest: digest.strip_prefix("sha256:").unwrap_or(digest).to_string(),
@@ -588,7 +591,7 @@ impl EmbedService {
     /// `extensions.refs[]` by the author — scanning never grows the
     /// surface implicitly (CF-079).
     pub(crate) fn lab_extension_scan(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let scans: Vec<(hh_registry::extension::DeclaredSource, Vec<ScanEntry>)> =
+        let scans: Vec<(hharness_registry::extension::DeclaredSource, Vec<ScanEntry>)> =
             match req(params, "scans")? {
                 Json::Arr(items) => items
                     .iter()
@@ -786,7 +789,7 @@ impl EmbedService {
             ("admission", Json::str(out.admission.as_str())),
             (
                 "loss_report",
-                hh_registry::schema::loss_report_json(&out.loss_report),
+                hharness_registry::schema::loss_report_json(&out.loss_report),
             ),
         ]))
     }
@@ -805,7 +808,10 @@ impl EmbedService {
             foreign_plugin::export_foreign_plugin(format, &record).map_err(reg_err)?;
         Ok(Json::obj([
             ("document", doc),
-            ("loss_report", hh_registry::schema::loss_report_json(&loss)),
+            (
+                "loss_report",
+                hharness_registry::schema::loss_report_json(&loss),
+            ),
         ]))
     }
 
@@ -830,7 +836,7 @@ impl EmbedService {
                 .collect(),
             _ => Vec::new(),
         };
-        let max_risk = hh_ontology::risk::RiskClass::from_json(req(params, "max_risk")?)
+        let max_risk = hharness_ontology::risk::RiskClass::from_json(req(params, "max_risk")?)
             .ok_or_else(|| bad("/max_risk", "malformed_risk_class"))?;
         let expires_at = params
             .get("expires_at")
@@ -845,10 +851,10 @@ impl EmbedService {
             .map_err(crate::service::ledger_err)?
             .to_vec();
         let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
-        let approvals = hh_monitor::approval::ApprovalState::project(&events, head_seq);
-        let live: Vec<hh_monitor::approval::ApproverGrant> =
+        let approvals = hharness_monitor::approval::ApprovalState::project(&events, head_seq);
+        let live: Vec<hharness_monitor::approval::ApproverGrant> =
             approvals.grants.values().cloned().collect();
-        let (grant, payload) = hh_monitor::approval::grant_approver(
+        let (grant, payload) = hharness_monitor::approval::grant_approver(
             &grantor,
             &grantee,
             capability_prefixes,
@@ -890,10 +896,10 @@ impl EmbedService {
             .map_err(crate::service::ledger_err)?
             .to_vec();
         let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
-        let approvals = hh_monitor::approval::ApprovalState::project(&events, head_seq);
-        let live: Vec<hh_monitor::approval::ApproverGrant> =
+        let approvals = hharness_monitor::approval::ApprovalState::project(&events, head_seq);
+        let live: Vec<hharness_monitor::approval::ApproverGrant> =
             approvals.grants.values().cloned().collect();
-        let payload = hh_monitor::approval::revoke_approver(&grant_ref, &revoker, &live, now)
+        let payload = hharness_monitor::approval::revoke_approver(&grant_ref, &revoker, &live, now)
             .map_err(|e| EmbedError::Refused {
                 reason: format!("{e:?}"),
             })?;

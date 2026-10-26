@@ -9,13 +9,13 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
-use hh_secrets::*;
+use hharness_secrets::*;
 
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -76,7 +76,7 @@ fn spec() -> SecretChannelSpec {
             },
         }],
         allowed_env_names: Some(["GH_API_TOKEN".into()].into_iter().collect()),
-        delivery_modes: [hh_monitor::assess::SecretTransport::ProxyInjected]
+        delivery_modes: [hharness_monitor::assess::SecretTransport::ProxyInjected]
             .into_iter()
             .collect(),
         max_lifetime_ms: None,

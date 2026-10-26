@@ -12,11 +12,11 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_identity::idp::idp_digest;
-use hh_ledger::event::{Event, EventEnvelope, Producer, SeqRange};
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::views::{View, ViewKind};
-use hh_wire::json::Json;
+use hharness_identity::idp::idp_digest;
+use hharness_ledger::event::{Event, EventEnvelope, Producer, SeqRange};
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::views::{View, ViewKind};
+use hharness_wire::json::Json;
 
 use crate::errors::TelemetryError;
 use crate::events::{export_delivered_payload, ExportDelivered};
@@ -91,7 +91,8 @@ pub fn sampled_keep(mode: SamplingMode, ratio_ppm: i64, event_id: &str, run_id: 
         SamplingMode::All => return true,
     };
     let h = idp_digest(SAMPLE_DOMAIN, key.as_bytes());
-    let v = u32::from_str_radix(&h[..8], 16).unwrap_or(0) % hh_budget::quantity::PPM_SCALE as u32;
+    let v =
+        u32::from_str_radix(&h[..8], 16).unwrap_or(0) % hharness_budget::quantity::PPM_SCALE as u32;
     (v as i64) < ratio_ppm
 }
 
@@ -468,12 +469,12 @@ pub fn deliver(
         scope: Default::default(),
         parent_event_id: store
             .head_event_id(run_id)
-            .unwrap_or_else(|_| hh_ledger::ids::ROOT_EVENT.to_string()),
+            .unwrap_or_else(|_| hharness_ledger::ids::ROOT_EVENT.to_string()),
         causes: Vec::new(),
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(hh_provenance::ProvenanceRecord::kernel(
+        provenance: Some(hharness_provenance::ProvenanceRecord::kernel(
             "kernel:exporter",
             0,
         )),
@@ -500,24 +501,24 @@ mod tests {
             seq,
             ts: "2026-01-01T00:00:00.000Z".into(),
             hlc: None,
-            plane: hh_ledger::event::EventPlane::Lifecycle,
+            plane: hharness_ledger::event::EventPlane::Lifecycle,
             class: class.into(),
             schema_version: 1,
             producer: Producer::kernel("kernel:test"),
-            participant_class: hh_ledger::manifest::ParticipantClass::Native,
-            observability_level: [hh_ledger::manifest::ObservabilityLevel::Ledger]
+            participant_class: hharness_ledger::manifest::ParticipantClass::Native,
+            observability_level: [hharness_ledger::manifest::ObservabilityLevel::Ledger]
                 .into_iter()
                 .collect(),
-            durability: hh_ledger::classes::Durability::Ledger,
+            durability: hharness_ledger::classes::Durability::Ledger,
             scope: Default::default(),
             lease_generation: 0,
-            parent_event_id: hh_ledger::ids::ROOT_EVENT.into(),
+            parent_event_id: hharness_ledger::ids::ROOT_EVENT.into(),
             causes: Vec::new(),
             refs: Vec::new(),
             ir_refs: Vec::new(),
             surface_ids: BTreeMap::new(),
             provenance: None,
-            prev_hash: hh_ledger::ids::GENESIS_HASH.into(),
+            prev_hash: hharness_ledger::ids::GENESIS_HASH.into(),
             payload,
             hash: format!("h{seq}"),
         }
@@ -591,7 +592,9 @@ mod tests {
         let mut s = Store::open_test(&dir, 1_000).unwrap();
         let (run, lease) = s
             .open_run(
-                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+                hharness_ledger::manifest::RunManifest::minimal(
+                    hharness_ledger::manifest::RunKind::Agent,
+                ),
                 "writer",
             )
             .unwrap();
@@ -612,9 +615,9 @@ mod tests {
         let readback = crate::views::sink_deliveries(
             &s.read(
                 &run,
-                hh_ledger::event::Cursor::Seq(0),
+                hharness_ledger::event::Cursor::Seq(0),
                 None,
-                hh_ledger::event::Direction::Fwd,
+                hharness_ledger::event::Direction::Fwd,
                 1000,
             )
             .unwrap()

@@ -1,5 +1,5 @@
 //! `assembly` — the assembly service (§6.1; R-2.10.1; ADR-0147/0148/0149/0150):
-//! `AssemblySource` + D1–D5 desugar over the existing `hh-assembly` kernel
+//! `AssemblySource` + D1–D5 desugar over the existing `hharness-assembly` kernel
 //! (`compose → resolve(snapshot) → validate_assembly → seal`). The service is
 //! a semantics-free orchestration layer: every sealable judgement stays in
 //! the kernel; this crate only records sources, desugars them, sequences the

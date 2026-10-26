@@ -3,15 +3,15 @@
 //! a *proposal* — the gate demands a `pass` verdict on the debt, a diff
 //! that removes exactly the debt's rule and widens nothing — and returns
 //! a `RetirementProposal` the caller deposits; actual retirement is the
-//! human-sealed `hh_lab::debt::retire` half (`retire` in `manager.rs`).
+//! human-sealed `hharness_lab::debt::retire` half (`retire` in `manager.rs`).
 //! Proposal and deployment are structurally separated: a proposal carries
 //! provenance and is auditable, and it never mutates a status.
 
 use std::collections::BTreeSet;
 
-use hh_ontology::debt::{RemovalVerdict, Verdict};
-use hh_provenance::ProvenanceRecord;
-use hh_wire::json::Json;
+use hharness_ontology::debt::{RemovalVerdict, Verdict};
+use hharness_provenance::ProvenanceRecord;
+use hharness_wire::json::Json;
 
 use crate::errors::{DebtManagerError, Refusal};
 

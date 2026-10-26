@@ -6,19 +6,19 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use hh_ledger::errors::{LedgerError, MissingReason, TamperedKind};
-use hh_ledger::event::{
+use hharness_ledger::errors::{LedgerError, MissingReason, TamperedKind};
+use hharness_ledger::event::{
     CloseReason, Cursor, Direction, Event, EventFrame, EventPlane, Producer, ReadFilter, Scope,
 };
-use hh_ledger::ids::{ManualClock, SeqIds, GENESIS_HASH, ROOT_EVENT};
-use hh_ledger::manifest::{EventRef, LineageLink, RunKind, RunManifest};
-use hh_ledger::schema::SCHEMA_VERSION;
-use hh_ledger::store::{Lease, Store};
-use hh_ledger::views::ViewKind;
-use hh_provenance::{
+use hharness_ledger::ids::{ManualClock, SeqIds, GENESIS_HASH, ROOT_EVENT};
+use hharness_ledger::manifest::{EventRef, LineageLink, RunKind, RunManifest};
+use hharness_ledger::schema::SCHEMA_VERSION;
+use hharness_ledger::store::{Lease, Store};
+use hharness_ledger::views::ViewKind;
+use hharness_provenance::{
     AuthorityClass, ContentKind, Origin, PersistenceScope, ProvenanceRecord, TaintTag,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
 
@@ -236,7 +236,7 @@ fn ac7_one_writer_lease_takeover_fences_the_stale_holder() {
         &d,
         Box::new(clock.clone()),
         Some(Box::new(SeqIds::new())),
-        hh_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+        hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
     )
     .unwrap();
     let mut m = manifest();
@@ -1049,7 +1049,7 @@ fn golden_transcript_is_byte_stable() {
 
 #[test]
 fn ac8_newer_schema_versions_refuse_at_decode() {
-    use hh_ledger::event::EventEnvelope;
+    use hharness_ledger::event::EventEnvelope;
     let (mut s, run, lease) = open("gate");
     s.append(
         &run,
@@ -1178,11 +1178,11 @@ fn ac_r_2_8_6_12_audit_fields_over_the_threshold_are_a_schema_error() {
 #[test]
 fn no_audit_grade_class_is_ephemeral() {
     // AC-R-2.8.6-12, second half — the catalogue-level invariant.
-    for spec in hh_ledger::classes::CLASS_TABLE {
+    for spec in hharness_ledger::classes::CLASS_TABLE {
         if spec.audit_grade {
             assert_eq!(
                 spec.durability,
-                hh_ledger::classes::Durability::Ledger,
+                hharness_ledger::classes::Durability::Ledger,
                 "{}",
                 spec.class
             );
@@ -1192,7 +1192,7 @@ fn no_audit_grade_class_is_ephemeral() {
             assert!(
                 spec.producers
                     .iter()
-                    .all(|p| *p == hh_ledger::event::KERNEL_COMPONENT),
+                    .all(|p| *p == hharness_ledger::event::KERNEL_COMPONENT),
                 "{}",
                 spec.class
             );
@@ -1290,7 +1290,7 @@ fn no_audit_grade_class_is_ephemeral() {
         "verification.gate.evaluated",
         "verification.completion.decided",
     ] {
-        let spec = hh_ledger::classes::lookup(class)
+        let spec = hharness_ledger::classes::lookup(class)
             .unwrap_or_else(|| panic!("{class} missing from the class table"));
         assert!(spec.audit_grade, "{class} must be audit-grade");
     }
@@ -1363,7 +1363,7 @@ fn verify_is_byte_exact_over_the_committed_prefix() {
         .iter()
         .position(|l| l.contains("\"k\":\"e\"") && l.contains("security.permission.decided"))
         .unwrap();
-    let mut j = hh_wire::json::parse(&lines[pos]).unwrap();
+    let mut j = hharness_wire::json::parse(&lines[pos]).unwrap();
     if let Json::Obj(m) = &mut j {
         if let Some(Json::Obj(v)) = m.get_mut("v") {
             v.insert(

@@ -6,13 +6,13 @@
 //!
 //! Exposure **never grants or widens authority** (I-NOAUTH): `callable ⇔
 //! revealed` is checked before the monitor, which runs unchanged afterwards.
-//! The run-time mode sum itself is [`hh_hir::tools::ExposureMode`] (one
+//! The run-time mode sum itself is [`hharness_hir::tools::ExposureMode`] (one
 //! spelling source — CC7).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::tools::ExposureMode;
-use hh_wire::json::Json;
+use hharness_hir::tools::ExposureMode;
+use hharness_wire::json::Json;
 
 use crate::equiv::SurfaceBinding;
 use crate::seal::CompiledBundle;
@@ -338,8 +338,9 @@ pub fn index_decl_json(d: &IndexDecl) -> Json {
 /// the build's instrument stamp, ADR-0094 D4).
 pub fn bind_indexes(catalog: &mut Catalog, decls: Vec<IndexDecl>) {
     let body = Json::Arr(decls.iter().map(index_decl_json).collect());
-    catalog.index_ref = (!decls.is_empty())
-        .then(|| hh_identity::idp::idp_id("catalog_index", body.to_canonical_string().as_bytes()));
+    catalog.index_ref = (!decls.is_empty()).then(|| {
+        hharness_identity::idp::idp_id("catalog_index", body.to_canonical_string().as_bytes())
+    });
     catalog.indexes = decls;
 }
 
@@ -863,7 +864,7 @@ pub fn index_json(index: &CatalogIndex) -> Json {
 /// The content-addressed index ref (`charged instrument` — the ref is
 /// `H(canonical index form)`).
 pub fn index_ref(index: &CatalogIndex) -> String {
-    hh_identity::idp::idp_id(
+    hharness_identity::idp::idp_id(
         "catalog_index",
         index_json(index).to_canonical_string().as_bytes(),
     )
@@ -1723,7 +1724,7 @@ impl CatalogDelta {
                 ("name", Json::str(e.name.clone())),
                 ("authority", Json::str("unverified")),
                 // The full descriptor rides beside the projection — the
-                // durable-fold rebuild (`hh_control`'s resume fold) reads
+                // durable-fold rebuild (`hharness_control`'s resume fold) reads
                 // `entry`, the spec's member minimum stays.
                 ("entry", catalog_entry_json(e)),
             ])
@@ -2070,7 +2071,7 @@ pub struct SyncOutcome {
 /// the same path — `catalog_delta` against the source's current entries,
 /// then `adopt`/`freeze`. The listing arrives already lowered to
 /// `CatalogEntry`s (the MCP edge's `import_listing`/`lift` half is
-/// R-2.5.4/S3.9's `hh-mcp` + `hh-registry` work). `source_state` is the
+/// R-2.5.4/S3.9's `hharness-mcp` + `hharness-registry` work). `source_state` is the
 /// post-refresh row (`snapshot_hash` = the new `listing_hash`).
 ///
 /// Every call emits `action.tool.catalog.delta` — including the empty
@@ -2338,7 +2339,7 @@ fn entry_from_binding(
     binding: &SurfaceBinding,
     sources_state: &BTreeMap<String, CatalogSource>,
 ) -> CatalogEntry {
-    let summary_ref = hh_identity::idp::idp_id(
+    let summary_ref = hharness_identity::idp::idp_id(
         "hir.text",
         format!("summary of {}", binding.surface_name).as_bytes(),
     );
@@ -2422,7 +2423,7 @@ pub fn catalog_id_of(entries: &[CatalogEntry], epoch: u64, bundle_id: &str) -> S
         ("entries", Json::Arr(ids)),
         ("epoch", Json::Int(epoch as i64)),
     ]);
-    hh_identity::idp::idp_id("catalog", body.to_canonical_string().as_bytes())
+    hharness_identity::idp::idp_id("catalog", body.to_canonical_string().as_bytes())
 }
 
 // ── select_surfaces (ADR-0093 D3/D4/D8) ──────────────────────────────────────
@@ -2820,7 +2821,7 @@ pub fn plan_id_of(p: &ExposurePlan) -> String {
             Json::Arr(p.order.iter().map(|s| Json::str(s.clone())).collect()),
         ),
     ]);
-    hh_identity::idp::idp_id("exposure_plan", body.to_canonical_string().as_bytes())
+    hharness_identity::idp::idp_id("exposure_plan", body.to_canonical_string().as_bytes())
 }
 
 // ── check_callable / reveal / evict (ADR-0093 D6/D7) ─────────────────────────
@@ -3413,7 +3414,7 @@ pub fn discovery_searched_payload(
     index: &CatalogIndex,
     result: &DiscoveryResult,
 ) -> Json {
-    let query_hash = hh_identity::idp::idp_id(
+    let query_hash = hharness_identity::idp::idp_id(
         "discovery_query",
         format!(
             "{}\n{}\n{}",

@@ -19,14 +19,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_containment::policy::IsolationClass;
-use hh_hir::kinds::{EffectClass, EffectDomain};
-use hh_hir::records::{Grant, Issuer};
-use hh_ledger::event::{Event, Producer, Scope};
-use hh_ledger::store::{rfc3339_ms, Lease, Store};
-use hh_monitor::assess::SecretTransport;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_wire::json::Json;
+use hharness_containment::policy::IsolationClass;
+use hharness_hir::kinds::{EffectClass, EffectDomain};
+use hharness_hir::records::{Grant, Issuer};
+use hharness_ledger::event::{Event, Producer, Scope};
+use hharness_ledger::store::{rfc3339_ms, Lease, Store};
+use hharness_monitor::assess::SecretTransport;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_wire::json::Json;
 
 use crate::channel::{SecretChannel, SecretChannelSpec, SecretSource, SenderConstraint};
 use crate::decisions;
@@ -42,14 +42,14 @@ use crate::types::{
 };
 
 /// The kernel component tag for this crate's audit rows.
-pub const COMPONENT: &str = "hh-secrets";
+pub const COMPONENT: &str = "hharness-secrets";
 
 /// The `mh_mint:` token MAC — `idp_digest("secret.minted", secret_key ∥
 /// binding_id ∥ audience ∥ expires_ms)` truncated to 32 hex (kernel-keyed —
 /// unforgeable off-broker; the token carries no secret material).
 fn minted_mac(secret_key: &str, binding_id: &str, audience: &str, expires_at_ms: u64) -> String {
     let material = format!("{secret_key}\u{1f}{binding_id}\u{1f}{audience}\u{1f}{expires_at_ms}");
-    hh_identity::idp::idp_digest("secret.minted", material.as_bytes())[..32].to_string()
+    hharness_identity::idp::idp_digest("secret.minted", material.as_bytes())[..32].to_string()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,8 +259,8 @@ impl CredentialBinding {
 
     /// The `idp/1` version id of the binding row (`RecordKind::CredentialBinding`).
     pub fn version_id(&self) -> String {
-        hh_identity::idp::identify_bytes(
-            hh_identity::RecordKind::CredentialBinding,
+        hharness_identity::idp::identify_bytes(
+            hharness_identity::RecordKind::CredentialBinding,
             &self.to_json().to_canonical_string().into_bytes(),
         )
     }
@@ -545,7 +545,7 @@ pub struct WrappedDelivery {
 /// dead (the registered compensating revocation has run — `revoke`'s
 /// destination intents are its dispatch half, LT-05), `undeterminable`
 /// when no wrap was ever delivered on the binding. The verdict spellings
-/// mirror `hh-ledger`'s `ProbeVerdict` (`applied | not_applied |
+/// mirror `hharness-ledger`'s `ProbeVerdict` (`applied | not_applied |
 /// undeterminable`) — the probe is honest as a kernel-state verdict, not
 /// a live destination query.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -762,7 +762,7 @@ impl CredentialBroker {
         holder: &str,
         channel_id: &str,
         scope: &BTreeSet<String>,
-        constraints: hh_hir::records::GrantConstraints,
+        constraints: hharness_hir::records::GrantConstraints,
         issuer: &Issuer,
     ) -> Result<Grant, BrokerError> {
         if issuer.authority < AuthorityClass::Principal {
@@ -1812,7 +1812,7 @@ impl CredentialBroker {
             material.push('\u{1f}');
         }
         let compensation_plan_id =
-            hh_identity::idp::idp_id("credential.wrap.compensation", material.as_bytes());
+            hharness_identity::idp::idp_id("credential.wrap.compensation", material.as_bytes());
         let wrap_id = self.alloc("wrap");
         let wrapped_event_id = store.alloc_id("evt");
         let used_event_id = store.alloc_id("evt");
@@ -2261,8 +2261,9 @@ impl CredentialBroker {
             "{}\u{1f}{}\u{1f}{}\u{1f}{}",
             self.secret_key, channel_id, revision, value
         );
-        let digest =
-            hh_wire::sha256::sha256_hex(format!("secret.fingerprint\u{1f}{material}").as_bytes());
+        let digest = hharness_wire::sha256::sha256_hex(
+            format!("secret.fingerprint\u{1f}{material}").as_bytes(),
+        );
         SecretFingerprint {
             channel_id: channel_id.into(),
             revision,
@@ -2376,7 +2377,7 @@ impl CredentialBroker {
         // The blob pool — every pool object the store holds (content is
         // arbitrary bytes; the detectors run over the lossy text form).
         for digest in store.blob_digests() {
-            let addr = hh_identity::idp::ContentAddress {
+            let addr = hharness_identity::idp::ContentAddress {
                 idp: "idp/1",
                 algorithm: "sha256",
                 digest: digest.clone(),
@@ -2456,7 +2457,7 @@ impl CredentialBroker {
     // ── internals ────────────────────────────────────────────────────────
 
     /// Build a kernel `Event` for this run (producer/provenance stamped
-    /// `hh-secrets`; parent = current head).
+    /// `hharness-secrets`; parent = current head).
     fn kernel_event(
         &self,
         store: &Store,

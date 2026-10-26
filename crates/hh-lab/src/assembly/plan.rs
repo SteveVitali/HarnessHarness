@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use hh_assembly::diagnostics::AssemblyDiagnostic;
-use hh_assembly::grammar::{Assembly, LayerProvenance};
-use hh_identity::sameness::SamenessLevel;
-use hh_wire::json::Json;
+use hharness_assembly::diagnostics::AssemblyDiagnostic;
+use hharness_assembly::grammar::{Assembly, LayerProvenance};
+use hharness_identity::sameness::SamenessLevel;
+use hharness_wire::json::Json;
 
 use crate::assembly::desugar::{Desugared, ExperimentLayer};
 use crate::assembly::diff_view::{diff_json, sameness_name, AssemblyDiff};
@@ -103,7 +103,7 @@ impl AssemblyPlan {
                 Json::Obj(
                     self.layer_map
                         .iter()
-                        .map(|(k, v)| (k.clone(), hh_assembly::grammar::layer_json(v)))
+                        .map(|(k, v)| (k.clone(), hharness_assembly::grammar::layer_json(v)))
                         .collect(),
                 ),
             ),
@@ -124,7 +124,7 @@ impl AssemblyPlan {
                 Json::Arr(
                     self.diagnostics
                         .iter()
-                        .map(hh_assembly::diagnostics::diagnostic_json)
+                        .map(hharness_assembly::diagnostics::diagnostic_json)
                         .collect(),
                 ),
             ),
@@ -150,7 +150,7 @@ pub fn fragment_paths(a: &Assembly) -> Vec<String> {
     }
     if !matches!(
         a.profile_binding,
-        hh_assembly::grammar::ProfileBinding::Unbound
+        hharness_assembly::grammar::ProfileBinding::Unbound
     ) {
         out.push("profile_binding".to_string());
     }
@@ -166,7 +166,7 @@ pub fn fragment_paths(a: &Assembly) -> Vec<String> {
 /// `layer_map` — ascending precedence, last writer wins per path; the
 /// experiment layer's touched paths join at top precedence.
 pub fn layer_map(d: &Desugared) -> BTreeMap<String, LayerProvenance> {
-    let mut order: Vec<&hh_assembly::compose::Layer> = d.layers.iter().collect();
+    let mut order: Vec<&hharness_assembly::compose::Layer> = d.layers.iter().collect();
     order.sort_by_key(|l| l.provenance.precedence);
     let mut map = BTreeMap::new();
     for l in order {

@@ -7,8 +7,8 @@
 //! surface — consumers treat a stale row as inadmissible, never as silently
 //! absent.
 
-use hh_ledger::store::Store;
-use hh_wire::json::Json;
+use hharness_ledger::store::Store;
+use hharness_wire::json::Json;
 
 use crate::audit::{self, CitationVerdict};
 use crate::error::ResultsError;
@@ -91,7 +91,7 @@ pub fn stale(selector: &str, report: &VerifyReport) -> ResultsError {
 pub fn verify_row(
     results: &ResultsStore,
     store: &Store,
-    docs: Option<&hh_experiment::docs::LabDocs>,
+    docs: Option<&hharness_experiment::docs::LabDocs>,
     version_id: &str,
 ) -> Result<VerifyReport, ResultsError> {
     let row = results.get_version(version_id)?;

@@ -21,7 +21,7 @@
 //!   `security.permission.requested{decider:human}` ask / the run
 //!   finishes. `TurnDrive.events` are the `(seq, class, payload)`
 //!   triples of the durable envelopes verbatim — the serve loop's
-//!   `_meta.hh.source_seq` trace mapping needs nothing else.
+//!   `_meta.hharness.source_seq` trace mapping needs nothing else.
 //! - [`SessionDriver::permission_decision`] → `respond_permission`
 //!   against the `permission_id` the driver queued when the durable
 //!   `requested`/`pending` row crossed the watermark (the serve
@@ -47,7 +47,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::driver::{SessionDriver, SessionInfo, TurnDrive};
 
@@ -66,8 +66,8 @@ pub trait EmbedCall {
 
 /// `FnMut` adapter — binding (a) tests wrap `EmbedService::handle`'s
 /// request build + response decode; binding (b) wraps
-/// `Boundary::call` (the CLI provides that adapter — `hh-acp` never
-/// names `hh-cli`, CC5).
+/// `Boundary::call` (the CLI provides that adapter — `hharness-acp` never
+/// names `hharness-cli`, CC5).
 pub struct FnEmbedCall<F: FnMut(&str, Json) -> Result<Json, Json>> {
     f: F,
 }

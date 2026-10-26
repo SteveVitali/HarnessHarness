@@ -16,40 +16,44 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use hh_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
-use hh_compiler::plan::PinnedRef;
-use hh_containment::attach::{AttachMode, PolicySlot};
-use hh_containment::backend::Ep2Model;
-use hh_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
-use hh_env::capture::OutputPolicy;
-use hh_env::deadline::DeadlineLadder;
-use hh_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
-use hh_env::driver::EnvDriver;
-use hh_env::errors::EnvError;
-use hh_env::events::{EventMinter, ScopeChain};
-use hh_env::handle::{DeriveMode, HandleState, OnLoss, OnParentEnd, Roots};
-use hh_env::helper::{helper_binary, HelperClient};
-use hh_env::observe::{EffectOutcome, ObservedStatus};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
-use hh_hir::kinds::{
+use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
+use hharness_compiler::plan::PinnedRef;
+use hharness_containment::attach::{AttachMode, PolicySlot};
+use hharness_containment::backend::Ep2Model;
+use hharness_containment::policy::{kernel_default, NetMode, ResourceLimits, WritableRoot};
+use hharness_env::capture::OutputPolicy;
+use hharness_env::deadline::DeadlineLadder;
+use hharness_env::dispatch::{DispatchInput, DispatchOutcome, Dispatcher};
+use hharness_env::driver::EnvDriver;
+use hharness_env::errors::EnvError;
+use hharness_env::events::{EventMinter, ScopeChain};
+use hharness_env::handle::{DeriveMode, HandleState, OnLoss, OnParentEnd, Roots};
+use hharness_env::helper::{helper_binary, HelperClient};
+use hharness_env::observe::{EffectOutcome, ObservedStatus};
+use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
     ToolEffects, World,
 };
-use hh_hir::leaves::Text;
-use hh_hir::records::{Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord};
-use hh_hir::refs::Ref;
-use hh_identity::idp::address;
-use hh_ledger::event::Scope;
-use hh_ledger::ids::{ManualClock, SeqIds};
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
-use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-use hh_monitor::monitor::{CapabilityEntry, Monitor};
-use hh_monitor::policy::{default_table, Mode};
-use hh_monitor::table::HandleTable;
-use hh_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
-use hh_secrets::redact::DetectorSet;
-use hh_wire::json::Json;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::{
+    Grant, GrantConstraints, Resources, ScopeBindings, ToolCapabilityRecord,
+};
+use hharness_hir::refs::Ref;
+use hharness_identity::idp::address;
+use hharness_ledger::event::Scope;
+use hharness_ledger::ids::{ManualClock, SeqIds};
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
+use hharness_monitor::handle::{
+    AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis,
+};
+use hharness_monitor::monitor::{CapabilityEntry, Monitor};
+use hharness_monitor::policy::{default_table, Mode};
+use hharness_monitor::table::HandleTable;
+use hharness_provenance::{AuthorityClass, Label, Origin, PersistenceScope, ProvenanceRecord};
+use hharness_secrets::redact::DetectorSet;
+use hharness_wire::json::Json;
 
 // ── scaffold (mirrors acceptance.rs) ────────────────────────────────────────
 
@@ -98,7 +102,7 @@ fn workspace(tag: &str) -> PathBuf {
     std::fs::canonicalize(&p).unwrap()
 }
 
-fn test_policy(ws: &Path) -> hh_containment::policy::ContainmentPolicy {
+fn test_policy(ws: &Path) -> hharness_containment::policy::ContainmentPolicy {
     let mut p = kernel_default(0);
     let root = ws.display().to_string();
     p.fs.write.allow.push(WritableRoot {
@@ -107,7 +111,7 @@ fn test_policy(ws: &Path) -> hh_containment::policy::ContainmentPolicy {
         protected_metadata_names: vec![],
     });
     // Exec is scoped to `/bin` (the test workloads run `sh`/`echo`/`sleep`).
-    p.fs.exec = hh_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
+    p.fs.exec = hharness_containment::policy::ExecPolicy::Allow(vec!["/bin".to_string()]);
     p.net.mode = NetMode::None;
     p.compute_ids();
     p
@@ -130,7 +134,7 @@ fn test_record(class: EnvironmentClass, image: ImageRef) -> EnvironmentRecord {
     }
 }
 
-fn test_ca() -> hh_identity::idp::ContentAddress {
+fn test_ca() -> hharness_identity::idp::ContentAddress {
     address(b"test-image-bytes", "application/octet-stream")
 }
 
@@ -277,16 +281,18 @@ fn binding() -> SurfaceBinding {
             .collect(),
         dialect: "json-schema-2020-12".to_string(),
         surface_id: String::new(),
-        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        exposure_mode: hharness_compiler::surface::CompileExposureMode::Primitive,
         capability_refs: vec!["test:write_file".to_string()],
-        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        mapping: hharness_compiler::surface::BindingMapping::SurfaceArgMap,
         rule_ids: vec![],
         evidence_ref: None,
         safety_ref: None,
         effects_bound: vec![],
         family_id: None,
         variant_id: None,
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     }
@@ -344,7 +350,7 @@ fn root_handle() -> AuthorityHandle {
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
-        scope: hh_monitor::decision::DecisionScope::Session,
+        scope: hharness_monitor::decision::DecisionScope::Session,
     }
 }
 
@@ -462,7 +468,7 @@ fn sandboxed_env(
 /// maps to `observed{applied}`.
 #[test]
 fn ac_s2_live_exec_streams_and_settles_observed() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -526,7 +532,7 @@ fn ac_s2_live_exec_streams_and_settles_observed() {
 /// `observed{error{timeout}}` fast (no kernel-side timer needed).
 #[test]
 fn ac_s2_deadline_is_helper_enforced() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -594,7 +600,7 @@ fn ac_s2_exec_without_commit_is_refused() {
     let mut client = HelperClient::spawn(&sock_dir, "direct", &[]).unwrap();
     client
         .hello(
-            hh_helper::protocol::OnKernelLoss::Terminate,
+            hharness_helper::protocol::OnKernelLoss::Terminate,
             "nonce-1",
             None,
             None,
@@ -604,7 +610,7 @@ fn ac_s2_exec_without_commit_is_refused() {
         .unwrap();
     // Forged proof — never committed.
     let err = client
-        .request(&hh_helper::protocol::HelperRequest::Exec {
+        .request(&hharness_helper::protocol::HelperRequest::Exec {
             execution_id: "exec-x".into(),
             effect_id: "e-x".into(),
             attempt_no: 1,
@@ -615,7 +621,7 @@ fn ac_s2_exec_without_commit_is_refused() {
             deadline_ms: None,
             retain_bytes_cap: 1 << 20,
             attribution_token: "tok-x".into(),
-            commit_proof: hh_helper::protocol::CommitProof::Token {
+            commit_proof: hharness_helper::protocol::CommitProof::Token {
                 proof: "sha256:forged".into(),
                 effect_id: "e-x".into(),
                 attempt_no: 1,
@@ -644,7 +650,7 @@ fn ac_s2_token_echo_is_verbatim() {
     let mut client = HelperClient::spawn(&sock_dir, "direct", &[]).unwrap();
     client
         .hello(
-            hh_helper::protocol::OnKernelLoss::Terminate,
+            hharness_helper::protocol::OnKernelLoss::Terminate,
             "nonce-1",
             None,
             None,
@@ -653,7 +659,7 @@ fn ac_s2_token_echo_is_verbatim() {
         )
         .unwrap();
     let r = client
-        .request(&hh_helper::protocol::HelperRequest::Exec {
+        .request(&hharness_helper::protocol::HelperRequest::Exec {
             execution_id: "exec-tok".into(),
             effect_id: "e-tok".into(),
             attempt_no: 1,
@@ -664,7 +670,7 @@ fn ac_s2_token_echo_is_verbatim() {
             deadline_ms: Some(10_000),
             retain_bytes_cap: 1 << 20,
             attribution_token: "att-token-xyz".into(),
-            commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
+            commit_proof: hharness_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
             env_clear: false,
         })
@@ -678,7 +684,7 @@ fn ac_s2_token_echo_is_verbatim() {
     let mut polls_after_exit = 0;
     loop {
         let r = client
-            .request(&hh_helper::protocol::HelperRequest::Read {
+            .request(&hharness_helper::protocol::HelperRequest::Read {
                 execution_id: "exec-tok".into(),
                 after_seq: 0,
                 max_bytes: 0,
@@ -687,16 +693,18 @@ fn ac_s2_token_echo_is_verbatim() {
             .unwrap();
         if let Json::Arr(chunks) = r.get("chunks").cloned().unwrap_or(Json::Arr(vec![])) {
             for c in &chunks {
-                let f = hh_helper::protocol::HelperFrame::from_json(c).unwrap();
+                let f = hharness_helper::protocol::HelperFrame::from_json(c).unwrap();
                 let tok = match &f {
-                    hh_helper::protocol::HelperFrame::Chunk { token, .. }
-                    | hh_helper::protocol::HelperFrame::Progress { token, .. }
-                    | hh_helper::protocol::HelperFrame::Process { token, .. } => token.clone(),
+                    hharness_helper::protocol::HelperFrame::Chunk { token, .. }
+                    | hharness_helper::protocol::HelperFrame::Progress { token, .. }
+                    | hharness_helper::protocol::HelperFrame::Process { token, .. } => {
+                        token.clone()
+                    }
                     // `terminal` members ride on the `read` reply, not a frame.
-                    hh_helper::protocol::HelperFrame::Terminal { .. } => continue,
+                    hharness_helper::protocol::HelperFrame::Terminal { .. } => continue,
                 };
                 assert_eq!(tok, "att-token-xyz", "frame echoed a foreign token");
-                if matches!(f, hh_helper::protocol::HelperFrame::Chunk { .. }) {
+                if matches!(f, hharness_helper::protocol::HelperFrame::Chunk { .. }) {
                     saw_chunk = true;
                 }
             }
@@ -727,7 +735,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
     let mut client = HelperClient::spawn(&sock_dir, "direct", &[]).unwrap();
     client
         .hello(
-            hh_helper::protocol::OnKernelLoss::PreserveUntil { ttl_ms: 60_000 },
+            hharness_helper::protocol::OnKernelLoss::PreserveUntil { ttl_ms: 60_000 },
             "nonce-1",
             Some(60_000),
             None,
@@ -737,7 +745,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
         .unwrap();
     let marker = sock_dir.join("dedup-marker");
     let cmd = format!("echo run >> {}", marker.display());
-    let mk_exec = |exec_id: &str| hh_helper::protocol::HelperRequest::Exec {
+    let mk_exec = |exec_id: &str| hharness_helper::protocol::HelperRequest::Exec {
         execution_id: exec_id.into(),
         effect_id: "e-dedup".into(),
         attempt_no: 1,
@@ -748,7 +756,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
         deadline_ms: Some(10_000),
         retain_bytes_cap: 1 << 20,
         attribution_token: "tok-dedup".into(),
-        commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
+        commit_proof: hharness_helper::protocol::CommitProof::ReadOnly,
         idempotency_key: Some("dedup-key-1".into()),
         env_clear: false,
     };
@@ -756,7 +764,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
     // Drain to terminal — the verdict binds the key.
     loop {
         let r = client
-            .request(&hh_helper::protocol::HelperRequest::Read {
+            .request(&hharness_helper::protocol::HelperRequest::Read {
                 execution_id: "exec-d1".into(),
                 after_seq: 0,
                 max_bytes: 0,
@@ -814,7 +822,7 @@ fn ac_s2_malformed_frame_is_protocol_error() {
 /// never a silent redispatch (AC-R-2.2.5-8's lapsed-window honesty).
 #[test]
 fn ac_s2_helper_crash_lands_unknown() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -869,7 +877,7 @@ fn ac_s2_helper_crash_lands_unknown() {
 /// serving execs after reattach.
 #[test]
 fn ac_s2_unreachable_heal_live_reattaches() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -921,7 +929,7 @@ fn ac_s2_unreachable_heal_live_reattaches() {
 /// terminal `replaced` (AC-R-2.2.5-8's replace rung).
 #[test]
 fn ac_s2_replace_lands_successor() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -971,7 +979,7 @@ fn ac_s2_replace_lands_successor() {
 /// the parent's files; the subtree child is narrowed to the scope.
 #[test]
 fn ac_s2_derive_modes() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -1045,7 +1053,7 @@ fn ac_s2_derive_modes() {
 /// `diff` is deterministic (AC-R-2.2.5-10's tree identity).
 #[test]
 fn ac_s2_fs_tree_snapshot_verify_restore() {
-    if !hh_helper::seatbelt::is_available() {
+    if !hharness_helper::seatbelt::is_available() {
         eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
@@ -1070,9 +1078,9 @@ fn ac_s2_fs_tree_snapshot_verify_restore() {
         .unwrap();
     assert!(!driver.fs_tree_verify(&env_id, &snap).unwrap());
     // The diff is deterministic.
-    let now = hh_helper::fstree::walk(&snap.roots).unwrap();
-    let d1 = hh_helper::fstree::diff(&snap, &now);
-    let d2 = hh_helper::fstree::diff(&snap, &now);
+    let now = hharness_helper::fstree::walk(&snap.roots).unwrap();
+    let d1 = hharness_helper::fstree::diff(&snap, &now);
+    let d2 = hharness_helper::fstree::diff(&snap, &now);
     assert_eq!(d1, d2);
     assert!(d1
         .iter()
@@ -1098,7 +1106,7 @@ fn ac_s2_detached_child_is_detected() {
     let mut client = HelperClient::spawn(&sock_dir, "direct", &[]).unwrap();
     client
         .hello(
-            hh_helper::protocol::OnKernelLoss::Terminate,
+            hharness_helper::protocol::OnKernelLoss::Terminate,
             "nonce-1",
             None,
             None,
@@ -1107,7 +1115,7 @@ fn ac_s2_detached_child_is_detected() {
         )
         .unwrap();
     client
-        .request(&hh_helper::protocol::HelperRequest::Exec {
+        .request(&hharness_helper::protocol::HelperRequest::Exec {
             execution_id: "exec-det".into(),
             effect_id: "e-det".into(),
             attempt_no: 1,
@@ -1118,7 +1126,7 @@ fn ac_s2_detached_child_is_detected() {
             deadline_ms: Some(10_000),
             retain_bytes_cap: 1 << 20,
             attribution_token: "tok-det".into(),
-            commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
+            commit_proof: hharness_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
             env_clear: false,
         })
@@ -1126,7 +1134,7 @@ fn ac_s2_detached_child_is_detected() {
     let mut detached = Vec::new();
     loop {
         let r = client
-            .request(&hh_helper::protocol::HelperRequest::Read {
+            .request(&hharness_helper::protocol::HelperRequest::Read {
                 execution_id: "exec-det".into(),
                 after_seq: 0,
                 max_bytes: 0,
@@ -1156,7 +1164,7 @@ fn ac_s2_detached_child_is_detected() {
 /// without it this test reports a skip rather than a false pass).
 #[test]
 fn ac_s2_local_container_exec_runs_inside_podman() {
-    if !hh_helper::podman::is_available() {
+    if !hharness_helper::podman::is_available() {
         eprintln!("SKIP: podman unavailable (no reachable engine)");
         return;
     }
@@ -1168,11 +1176,11 @@ fn ac_s2_local_container_exec_runs_inside_podman() {
     // (the run records `unpinned_tag`, honestly R0).
     let mut record = test_record(
         EnvironmentClass::LocalContainer,
-        ImageRef::Tag(hh_helper::podman::PodmanBackend::DEFAULT_IMAGE.to_string()),
+        ImageRef::Tag(hharness_helper::podman::PodmanBackend::DEFAULT_IMAGE.to_string()),
     );
     record
         .unpinned
-        .insert(hh_helper::podman::PodmanBackend::DEFAULT_IMAGE.to_string());
+        .insert(hharness_helper::podman::PodmanBackend::DEFAULT_IMAGE.to_string());
     let roots = Roots {
         workspace_roots: vec![ws.display().to_string()],
         writable_roots: vec![ws.display().to_string()],
@@ -1272,7 +1280,7 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
     // A plain tier-0 hello still opens the session.
     client
         .hello(
-            hh_helper::protocol::OnKernelLoss::Terminate,
+            hharness_helper::protocol::OnKernelLoss::Terminate,
             "nonce-1",
             None,
             None,
@@ -1282,10 +1290,10 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
         .unwrap();
     // `preserve_until` — refused, honestly.
     let err = client
-        .request(&hh_helper::protocol::HelperRequest::Hello {
+        .request(&hharness_helper::protocol::HelperRequest::Hello {
             client: "hh-kernel".into(),
             resume_session_id: None,
-            on_kernel_loss: hh_helper::protocol::OnKernelLoss::PreserveUntil { ttl_ms: 1000 },
+            on_kernel_loss: hharness_helper::protocol::OnKernelLoss::PreserveUntil { ttl_ms: 1000 },
             session_nonce: "nonce-1".into(),
             dedup_window_ms: None,
             policy: None,
@@ -1298,10 +1306,10 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
     }
     // `dedup_window` — refused, honestly.
     let err = client
-        .request(&hh_helper::protocol::HelperRequest::Hello {
+        .request(&hharness_helper::protocol::HelperRequest::Hello {
             client: "hh-kernel".into(),
             resume_session_id: None,
-            on_kernel_loss: hh_helper::protocol::OnKernelLoss::Terminate,
+            on_kernel_loss: hharness_helper::protocol::OnKernelLoss::Terminate,
             session_nonce: "nonce-1".into(),
             dedup_window_ms: Some(1000),
             policy: None,
@@ -1314,7 +1322,7 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
     }
     // Tier-0 exec still runs on the same binary.
     client
-        .request(&hh_helper::protocol::HelperRequest::Exec {
+        .request(&hharness_helper::protocol::HelperRequest::Exec {
             execution_id: "exec-r0".into(),
             effect_id: "e-r0".into(),
             attempt_no: 1,
@@ -1325,14 +1333,14 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
             deadline_ms: Some(10_000),
             retain_bytes_cap: 1 << 20,
             attribution_token: "tok-r0".into(),
-            commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
+            commit_proof: hharness_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
             env_clear: false,
         })
         .unwrap();
     loop {
         let r = client
-            .request(&hh_helper::protocol::HelperRequest::Read {
+            .request(&hharness_helper::protocol::HelperRequest::Read {
                 execution_id: "exec-r0".into(),
                 after_seq: 0,
                 max_bytes: 0,

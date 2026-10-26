@@ -18,12 +18,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::document::{HirDocument, SealedDefinition};
-use hh_hir::records::{AgentProcessBody, KindRecord, SlotBinding, SlotBindings};
-use hh_hir::refs::RefVersion;
-use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_registry::kinds::Cardinality;
-use hh_wire::json::Json;
+use hharness_hir::document::{HirDocument, SealedDefinition};
+use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBinding, SlotBindings};
+use hharness_hir::refs::RefVersion;
+use hharness_provenance::{AuthorityClass, ProvenanceRecord};
+use hharness_registry::kinds::Cardinality;
+use hharness_wire::json::Json;
 
 use crate::catalog::ClassCatalog;
 use crate::diagnostics::{
@@ -251,7 +251,7 @@ pub fn validate_assembly(
     // ── Stage 5 — the HIR kernel's validate over the materialised document ────────
     report.stages.push(StageOutcome::ran(5));
     let materialised = materialise(doc, assembly.as_ref());
-    if let Err(errs) = hh_hir::validate(&materialised).map(|_| ()) {
+    if let Err(errs) = hharness_hir::validate(&materialised).map(|_| ()) {
         for e in errs {
             diags.push(AssemblyDiagnostic {
                 code: kern_code(&e),
@@ -362,7 +362,7 @@ fn root_is_hosted(doc: &HirDocument) -> bool {
 /// the declaration the R-2.10.1² parameter-space admissibility check reads.
 fn root_declared_capabilities(
     doc: &HirDocument,
-) -> Option<&hh_hir::records::CapabilityDeclarationRecord> {
+) -> Option<&hharness_hir::records::CapabilityDeclarationRecord> {
     doc.node(&doc.root.semantic_id)
         .and_then(|n| match &n.semantic {
             KindRecord::AgentProcess(a) => match &a.body {
@@ -548,7 +548,7 @@ fn stage2_class_conformance(
 fn class_for_slot(
     catalog: &dyn ClassCatalog,
     slot: &str,
-) -> Option<hh_registry::records::ClassRecord> {
+) -> Option<hharness_registry::records::ClassRecord> {
     for id in catalog.class_ids() {
         if let Some(c) = catalog.class(&id) {
             if c.slot_key == slot || c.class_id == slot {
@@ -563,7 +563,7 @@ fn class_for_slot(
 
 fn stage3_parameters(
     a: &Assembly,
-    hosted_caps: Option<&hh_hir::records::CapabilityDeclarationRecord>,
+    hosted_caps: Option<&hharness_hir::records::CapabilityDeclarationRecord>,
     diags: &mut Vec<AssemblyDiagnostic>,
     kernel: &ProvenanceRecord,
 ) {
@@ -632,7 +632,7 @@ fn stage3_parameters(
             }
             if spec.sweepable {
                 if let Some(state) = caps.get(id) {
-                    if state != hh_hir::records::CapabilityState::Supported {
+                    if state != hharness_hir::records::CapabilityState::Supported {
                         diags.push(diag(
                             Code::ParamHostedInadmissible,
                             &format!("/assembly/parameters/{id}/sweepable"),
@@ -652,7 +652,7 @@ fn stage3_parameters(
     }
     // `$param:`/`$entity:` markers — used set vs declared set, both directions.
     let mut markers: Vec<(String, String)> = Vec::new();
-    let slots_json = hh_hir::wire::slots_json(&a.slots, false);
+    let slots_json = hharness_hir::wire::slots_json(&a.slots, false);
     markers_in_json(&slots_json, "/assembly/slots", &mut markers);
     let entities_json = Json::Obj(
         a.entities
@@ -895,7 +895,7 @@ fn stage4_constraints(
 // ── Stage 6a — declaration-level profile compatibility (C-PROF-1) ─────────────
 
 /// Whether a `dialect_range` admits a document-dialect version — the one range
-/// checker (`hh_plugin::contract::range_covers`, CC1). A range scoped to another
+/// checker (`hharness_plugin::contract::range_covers`, CC1). A range scoped to another
 /// family (`registry/1`, `profile/1`, …) declares the *record's* dialect axis —
 /// `register` owns that check; stage 6a constrains only `hir/`…-scoped or
 /// family-free ranges against the document dialect (`hir/1` → version `1`).
@@ -906,7 +906,7 @@ fn dialect_range_covers_document(range: &str) -> bool {
         Some(_) => return true, // a different family's range — not this axis
         None => r.to_string(),
     };
-    hh_plugin::contract::range_covers(&normalized, "1")
+    hharness_plugin::contract::range_covers(&normalized, "1")
 }
 
 /// Whether the profile's `capabilities` member declares `cap` supported — an
@@ -1044,7 +1044,7 @@ fn stage6a_profile_compat(
                     let want = pr.trim().rsplit('/').next().unwrap_or(pr.trim());
                     let vr = variant.dialect_range.trim();
                     let vr_norm = vr.rsplit('/').next().unwrap_or(vr);
-                    if !hh_plugin::contract::range_covers(vr_norm, want) {
+                    if !hharness_plugin::contract::range_covers(vr_norm, want) {
                         diags.push(diag(
                             Code::ProfIncompatible,
                             &path,
@@ -1093,9 +1093,9 @@ fn stage7_lcd(
     // 7-O — the opacity report over the document's leaves (n/a{class} on hosted roots —
     // a hosted participant has no visible leaf content at the object level).
     if !hosted {
-        // CF-050 / CC1 — `hh_hir::ops::opacity` is the single producer; the summary
+        // CF-050 / CC1 — `hharness_hir::ops::opacity` is the single producer; the summary
         // here is a *view* of it, never a recomputation.
-        let rep = hh_hir::ops::opacity(doc, None);
+        let rep = hharness_hir::ops::opacity(doc, None);
         let opaque = rep.by_class.count(AuthorityClass::Unverified)
             + rep.by_class.count(AuthorityClass::External);
         derived.opacity = Some(OpacitySummary {
@@ -1115,7 +1115,7 @@ fn stage7_lcd(
     // recorded coordinate.
     let mut includes_surface = false;
     for n in &doc.nodes {
-        let sj = hh_hir::wire::node_semantic_projection(n);
+        let sj = hharness_hir::wire::node_semantic_projection(n);
         if contains_member(&sj, &["surface", "provenance", "version"]) {
             includes_surface = true;
         }
@@ -1170,7 +1170,7 @@ fn stage7_lcd(
     // ext/assembly members for `inherits`/`extends`-shaped keys.
     let mut scan_targets = Vec::new();
     for n in &doc.nodes {
-        scan_targets.push(hh_hir::wire::node_to_json(n));
+        scan_targets.push(hharness_hir::wire::node_to_json(n));
     }
     if let Some(a) = assembly {
         scan_targets.push(a.to_json());
@@ -1323,7 +1323,7 @@ fn contains_member(j: &Json, keys: &[&str]) -> bool {
 pub fn benchmark_hits(doc: &HirDocument, assembly: Option<&Assembly>) -> Vec<String> {
     let mut hits = Vec::new();
     for n in &doc.nodes {
-        let j = hh_hir::wire::node_to_json(n);
+        let j = hharness_hir::wire::node_to_json(n);
         bench_keys(&j, &format!("/nodes/{}", n.semantic_id()), &mut hits);
         bench_text(&j, &format!("/nodes/{}", n.semantic_id()), &mut hits);
     }

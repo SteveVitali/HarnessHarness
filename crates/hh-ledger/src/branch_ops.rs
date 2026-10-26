@@ -30,8 +30,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::risk::{RiskReversibility, RiskScope};
-use hh_wire::json::Json;
+use hharness_ontology::risk::{RiskReversibility, RiskScope};
+use hharness_wire::json::Json;
 
 use crate::effect::{EffectFold, EffectPhase, ObservedOutcome};
 use crate::errors::LedgerError;

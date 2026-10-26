@@ -8,23 +8,23 @@
 
 use crate::frames::FrameAdapter;
 use crate::runtime::{EmbedGate, EmbedModel, KernelAssembler, KernelSink};
-use hh_control::driver::{Driver, DriverError};
-use hh_control::strategy::{ConcurrentInput, ControlStrategy, SteerMode};
-use hh_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
-use hh_embed_schema::errors::EmbedError;
-use hh_embed_schema::frames::StreamNotification;
-use hh_embed_schema::negotiate;
-use hh_embed_schema::ops::{self, Direction, Tier};
-use hh_embed_schema::types::*;
-use hh_env::driver::EnvDriver;
-use hh_env::events::EventMinter;
-use hh_ledger::manifest::{RunKind, RunManifest};
-use hh_ledger::store::{rfc3339_ms, Lease, Store, Subscription};
-use hh_ledger::wakeup::{Trigger as LedgerTrigger, WokenDelivery};
-use hh_provenance::ProvenanceRecord;
-use hh_registry::store::RegistryStore;
-use hh_wire::json::Json;
-use hh_wire::jsonrpc::{err_response, ok_response, Request};
+use hharness_control::driver::{Driver, DriverError};
+use hharness_control::strategy::{ConcurrentInput, ControlStrategy, SteerMode};
+use hharness_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
+use hharness_embed_schema::errors::EmbedError;
+use hharness_embed_schema::frames::StreamNotification;
+use hharness_embed_schema::negotiate;
+use hharness_embed_schema::ops::{self, Direction, Tier};
+use hharness_embed_schema::types::*;
+use hharness_env::driver::EnvDriver;
+use hharness_env::events::EventMinter;
+use hharness_ledger::manifest::{RunKind, RunManifest};
+use hharness_ledger::store::{rfc3339_ms, Lease, Store, Subscription};
+use hharness_ledger::wakeup::{Trigger as LedgerTrigger, WokenDelivery};
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::store::RegistryStore;
+use hharness_wire::json::Json;
+use hharness_wire::jsonrpc::{err_response, ok_response, Request};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -52,7 +52,7 @@ pub struct EmbedService {
     pub(crate) kernel_prov: ProvenanceRecord,
     pub(crate) store: Store,
     pub(crate) registry: RegistryStore,
-    pub(crate) catalog: hh_assembly::catalog::Stage1Catalog,
+    pub(crate) catalog: hharness_assembly::catalog::Stage1Catalog,
     pub(crate) env_drivers: BTreeMap<String, EnvDriver>,
     /// The kernel-held credential broker custody (R2.9a; DF-S2.4-1c) —
     /// owns the binding table a fork's `rebind_credentials_for_fork`
@@ -60,7 +60,7 @@ pub struct EmbedService {
     /// by default (`DenyAllResolver`) — a composed host installs its
     /// resolver through `set_credential_resolver`; a sentinel never
     /// resolves against an absent source.
-    pub(crate) credential_broker: hh_secrets::CredentialBroker,
+    pub(crate) credential_broker: hharness_secrets::CredentialBroker,
     /// `audience → CredentialBinding id` for caller-auth tokens minted
     /// by `surface_mint_caller_token` (R2.19; DF-S4.11-2 — the kernel's
     /// authorization-server arm: one `bound` row per audience, one
@@ -108,9 +108,9 @@ pub struct EmbedService {
     /// `None` is the honest unprovisioned posture: `signer_key_ids` stays
     /// empty and `audit_view` reports `n/a{no signer_key_ids declared}` —
     /// never a fabricated signer.
-    pub(crate) signer_custody: Option<hh_secrets::LedgerSignerCustody>,
+    pub(crate) signer_custody: Option<hharness_secrets::LedgerSignerCustody>,
     /// The provisioned signer (built from the `kernel_use` value).
-    pub(crate) signer: Option<hh_secrets::LedgerSignerKey>,
+    pub(crate) signer: Option<hharness_secrets::LedgerSignerKey>,
     /// Every custody key id — active + retired (manifest `signer_key_ids`
     /// accumulates them).
     pub(crate) signer_ids: std::collections::BTreeSet<String>,
@@ -126,32 +126,34 @@ pub struct EmbedService {
     /// `lab.results.subscribe` pull surfaces — `subscription_id →
     /// JournalSubscription` (the results-store post-durability journal;
     /// S4.3/R-2.10.5).
-    pub(crate) results_subscriptions: BTreeMap<String, hh_results::journal::JournalSubscription>,
+    pub(crate) results_subscriptions:
+        BTreeMap<String, hharness_results::journal::JournalSubscription>,
     /// Fleet-activation engines held across `fleet.*` calls (S4.9;
     /// `fleet_run → FleetEngine` — the writer lease persists like
     /// `experiment_engines`; the fence still lives in the ledger). The
     /// field itself is tier-gated: `--no-default-features` compiles the
     /// refusal-only `fleet_dispatch` in `fleet_ops`.
     #[cfg(feature = "tier-c4")]
-    pub(crate) fleet_engines: BTreeMap<String, hh_fleet::engine::FleetEngine>,
+    pub(crate) fleet_engines: BTreeMap<String, hharness_fleet::engine::FleetEngine>,
     /// Evolution-campaign engines held across `lab.evolution.*` calls
     /// (S6.1a; `campaign_run → EvolutionCampaign` — the writer lease
     /// persists like `experiment_engines`; the fence still lives in the
     /// ledger). Tier-gated like `fleet_engines` (CC6).
     #[cfg(feature = "tier-c4")]
-    pub(crate) evolution_campaigns: BTreeMap<String, hh_evolution::campaign::EvolutionCampaign>,
+    pub(crate) evolution_campaigns:
+        BTreeMap<String, hharness_evolution::campaign::EvolutionCampaign>,
     /// Debt-manager services held across `lab.debt.{register,sweep,
     /// settle,retire,propose,manager_open}` calls (S6.1b; `registry_run →
     /// DebtManager` — the fold rebuilds from the durable prefix on `open`,
     /// CC3). Tier-gated like `evolution_campaigns` (CC6).
     #[cfg(feature = "tier-c4")]
-    pub(crate) debt_managers: BTreeMap<String, hh_debt::manager::DebtManager>,
+    pub(crate) debt_managers: BTreeMap<String, hharness_debt::manager::DebtManager>,
     /// Co-evolution cycle drivers held across `lab.coevolution.cycle_*`
     /// calls (S6.4; `cycle_key → CycleDriver` — the LabDocs sidecar
     /// re-folds from the deposit ref on `restore_ref`, CC3). Tier-gated
     /// like `debt_managers` (CC6; AC-R-2.9.8-11).
     #[cfg(feature = "tier-c4")]
-    pub(crate) coevolution_cycles: BTreeMap<String, hh_evolution::cycle::CycleDriver>,
+    pub(crate) coevolution_cycles: BTreeMap<String, hharness_evolution::cycle::CycleDriver>,
     /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
@@ -179,7 +181,7 @@ pub(crate) struct HostCap {
     /// reads as `RiskClass::UNKNOWN` at the ask gate — undeclared is
     /// never-auto (ADR-0031 §2), so `bypass` cannot silently skip it
     /// (AC-R-2.11.1-7).
-    pub risk_class: Option<hh_ontology::risk::RiskClass>,
+    pub risk_class: Option<hharness_ontology::risk::RiskClass>,
 }
 
 /// A live permission ask (`security.permission.pending`).
@@ -202,7 +204,7 @@ pub(crate) struct PendingAsk {
     /// The `permission_request` proposal's `requested: [Grant]` leg — the
     /// approval mint's `requested ⊓ authority_cap` input (never fabricated;
     /// empty on an ordinary ask).
-    pub requested_grants: Vec<hh_hir::records::Grant>,
+    pub requested_grants: Vec<hharness_hir::records::Grant>,
     /// The ask's deadline (`requested_at + timeout` when the pending row
     /// declared one; `None` = no deadline). Past it the sweep resolves the
     /// ask `timed_out` — a refusal record, never `unknown` (§5g recovery).
@@ -212,12 +214,12 @@ pub(crate) struct PendingAsk {
 /// Decode the `request.requested_grants` member of a durable `pending` row —
 /// absent/malformed decodes to `[]` (a row the fold can't read confers
 /// nothing; the mint never guesses).
-pub(crate) fn decode_requested_grants(req: &Json) -> Vec<hh_hir::records::Grant> {
+pub(crate) fn decode_requested_grants(req: &Json) -> Vec<hharness_hir::records::Grant> {
     match req.get("requested_grants") {
         Some(Json::Arr(items)) => items
             .iter()
             .enumerate()
-            .map(|(i, g)| hh_hir::grant_from_json(g, &format!("requested_grants[{i}]")).ok())
+            .map(|(i, g)| hharness_hir::grant_from_json(g, &format!("requested_grants[{i}]")).ok())
             .collect::<Option<Vec<_>>>()
             .unwrap_or_default(),
         _ => Vec::new(),
@@ -259,7 +261,7 @@ pub(crate) struct SessionState {
     /// The sealed definition's `authority_cap` rows (ADR-0240) — the
     /// approval mint's `requested ⊓ authority_cap` ceiling leg; computed at
     /// `open` from the sealed document (never re-resolved at respond).
-    pub authority_caps: Vec<hh_monitor::mint::AuthorityCap>,
+    pub authority_caps: Vec<hharness_monitor::mint::AuthorityCap>,
     /// The declared Π narrowing-leaf ids (the surface preset's —
     /// ADR-0168 D3): folded into `policy_fingerprint` at every lease
     /// touch so a leaf change revokes by key construction (ADR-0071 D1).
@@ -303,7 +305,7 @@ pub(crate) struct SessionState {
     /// every surface-declared session (`client{kind:"web", sink}`); the
     /// kernel gates `measurement.export.delivered` minting + session-row
     /// stamping on it. `None` for legacy/CLI attaches.
-    pub client: Option<hh_embed_schema::ClientDecl>,
+    pub client: Option<hharness_embed_schema::ClientDecl>,
     /// `contract_json` — the contract-carried surface descriptor the
     /// `open_session` params declared (AC-R-2.11.4-15; ADR-0304 D2):
     /// recorded verbatim, surfaced on `describe`'s session row, never
@@ -340,14 +342,14 @@ impl EmbedService {
     /// and the golden corpus drive. `None` ids = `TimeIds` (production).
     pub fn open_with(
         config: ServiceConfig,
-        clock: Box<dyn hh_ledger::ids::Clock>,
-        ids: Option<Box<dyn hh_ledger::ids::IdSource>>,
+        clock: Box<dyn hharness_ledger::ids::Clock>,
+        ids: Option<Box<dyn hharness_ledger::ids::IdSource>>,
     ) -> Result<Self, EmbedError> {
         let store = Store::open_with(
             &config.store_root,
             clock,
             ids,
-            hh_ledger::DEFAULT_BLOB_MAX_BYTES,
+            hharness_ledger::DEFAULT_BLOB_MAX_BYTES,
         )
         .map_err(|e| EmbedError::Refused {
             reason: format!("store_open: {e:?}"),
@@ -360,7 +362,7 @@ impl EmbedService {
     fn build(config: ServiceConfig, store: Store) -> Result<Self, EmbedError> {
         let mut registry = RegistryStore::open(
             config.store_root.join("registry"),
-            &ProvenanceRecord::kernel("hh-embed", 0),
+            &ProvenanceRecord::kernel("hharness-embed", 0),
         )
         .map_err(|e| EmbedError::Refused {
             reason: format!("registry_open: {e:?}"),
@@ -370,16 +372,16 @@ impl EmbedService {
         // `kernel_version_id` tail through the one canonical spelling
         // (ADR-0332 D1 — DF-DOC.1-1).
         let kernel_version =
-            hh_embed_schema::kernel_version_label(&config.kernel_version_id).to_string();
+            hharness_embed_schema::kernel_version_label(&config.kernel_version_id).to_string();
         let svc = EmbedService {
             kernel_version,
-            kernel_prov: ProvenanceRecord::kernel("hh-embed", 0),
+            kernel_prov: ProvenanceRecord::kernel("hharness-embed", 0),
             store,
             registry,
-            catalog: hh_assembly::catalog::Stage1Catalog::stage1(),
+            catalog: hharness_assembly::catalog::Stage1Catalog::stage1(),
             env_drivers: BTreeMap::new(),
-            credential_broker: hh_secrets::CredentialBroker::new(
-                Box::new(hh_secrets::DenyAllResolver),
+            credential_broker: hharness_secrets::CredentialBroker::new(
+                Box::new(hharness_secrets::DenyAllResolver),
                 "hh-embed/credentials",
             ),
             caller_auth_bindings: BTreeMap::new(),
@@ -437,17 +439,20 @@ impl EmbedService {
     /// swap (R4.15e): the custody source composes in front of the host's
     /// resolver and the `kernel_only` channel is redeclared, so
     /// `kernel_use(LedgerSigning)` keeps resolving after the swap.
-    pub fn set_credential_resolver(&mut self, resolver: Box<dyn hh_secrets::SecretSourceResolver>) {
-        let resolver: Box<dyn hh_secrets::SecretSourceResolver> = match &self.signer_custody {
+    pub fn set_credential_resolver(
+        &mut self,
+        resolver: Box<dyn hharness_secrets::SecretSourceResolver>,
+    ) {
+        let resolver: Box<dyn hharness_secrets::SecretSourceResolver> = match &self.signer_custody {
             Some(custody) => Box::new(custody.source_resolver(Some(resolver))),
             None => resolver,
         };
         self.credential_broker =
-            hh_secrets::CredentialBroker::new(resolver, "hh-embed/credentials");
+            hharness_secrets::CredentialBroker::new(resolver, "hh-embed/credentials");
         if self.signer_custody.is_some() {
             let _ = self.credential_broker.register_channel(
-                hh_secrets::SIGNER_CHANNEL_ID,
-                hh_secrets::LedgerSignerCustody::channel_spec(),
+                hharness_secrets::SIGNER_CHANNEL_ID,
+                hharness_secrets::LedgerSignerCustody::channel_spec(),
                 self.kernel_prov.clone(),
             );
         }
@@ -460,18 +465,20 @@ impl EmbedService {
     /// left alone (the check is the deterministic `version_id`, never a
     /// name probe).
     fn seed_registry(registry: &mut RegistryStore) {
-        use hh_identity::idp::address;
-        use hh_registry::kinds::Placement;
-        use hh_registry::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
-        let prov = ProvenanceRecord::kernel("hh-embed", 0);
+        use hharness_identity::idp::address;
+        use hharness_registry::kinds::Placement;
+        use hharness_registry::records::{
+            AppliesTo, Implementation, RegistryRecord, VariantRecord,
+        };
+        let prov = ProvenanceRecord::kernel("hharness-embed", 0);
         for (class, name, extra_decl) in [
             (
-                hh_registry::suites::control_strategy_class(),
+                hharness_registry::suites::control_strategy_class(),
                 "round_robin",
                 BTreeMap::new(),
             ),
             (
-                hh_registry::suites::control_strategy_class(),
+                hharness_registry::suites::control_strategy_class(),
                 "react-steerable",
                 BTreeMap::from([
                     (
@@ -482,7 +489,7 @@ impl EmbedService {
                 ]),
             ),
             (
-                hh_registry::suites::control_strategy_class(),
+                hharness_registry::suites::control_strategy_class(),
                 // R2.6: the `queue_next_turn` declaration — the same
                 // `ReactSteerable` interpreter (`variant_for`), a
                 // different steer-mode declaration (the durable wakeup
@@ -494,7 +501,7 @@ impl EmbedService {
                 ]),
             ),
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "full_window",
                 BTreeMap::new(),
             ),
@@ -505,27 +512,27 @@ impl EmbedService {
             // (`hh/<name>` → the kernel's first-party `ContextPolicy` —
             // `full_window`/`default` stay the C0 floor).
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "priority_eviction",
                 BTreeMap::new(),
             ),
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "world_state_diff",
                 BTreeMap::new(),
             ),
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "jit_handles",
                 BTreeMap::new(),
             ),
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "recency_plus_pins",
                 BTreeMap::new(),
             ),
             (
-                hh_registry::suites::context_policy_class(),
+                hharness_registry::suites::context_policy_class(),
                 "retrieval_augmented",
                 BTreeMap::new(),
             ),
@@ -533,7 +540,7 @@ impl EmbedService {
                 // R-2.7 — the `router` slot's scripted-lane variant: the
                 // arm decodes the slot's sealed `policy` document and
                 // runs the offline-decidable policy arms (DF-S1.18-1).
-                hh_registry::suites::routing_policy_class(),
+                hharness_registry::suites::routing_policy_class(),
                 "router_static",
                 BTreeMap::new(),
             ),
@@ -542,13 +549,13 @@ impl EmbedService {
                 // decodes `dialect`/`endpoint`/`model` (+ optional
                 // `provider_params`/`substitution_allowed`) into the
                 // gateway-backed `GatewayModel` (DF-S1.18-1; ADR-0364).
-                hh_registry::suites::model_port_class(),
+                hharness_registry::suites::model_port_class(),
                 "gateway_http",
                 BTreeMap::new(),
             ),
         ] {
             let class_rec = RegistryRecord::Class(class);
-            let class_vid = hh_registry::identity::version_id(&class_rec);
+            let class_vid = hharness_registry::identity::version_id(&class_rec);
             if registry.get(&class_vid).is_none() {
                 let _ = registry.register(class_rec, &prov, None);
             }
@@ -577,7 +584,7 @@ impl EmbedService {
                     families: vec![],
                 },
                 declared_costs: None,
-                summary: hh_hir::leaves::Text::new(
+                summary: hharness_hir::leaves::Text::new(
                     format!("kernel {name} variant"),
                     "hh-kernel",
                     prov.clone(),
@@ -585,7 +592,7 @@ impl EmbedService {
                 dialect_range: "registry/1".to_string(),
             };
             let variant_rec = RegistryRecord::Variant(variant);
-            let variant_vid = hh_registry::identity::version_id(&variant_rec);
+            let variant_vid = hharness_registry::identity::version_id(&variant_rec);
             if registry.get(&variant_vid).is_none() {
                 let _ = registry.register(variant_rec, &prov, None);
             }
@@ -828,11 +835,14 @@ impl EmbedService {
             "lab.registry.substitutable" => self.lab_registry_substitutable(&req.params),
             "lab.registry.snapshot" => self.lab_registry_snapshot(&req.params),
             "lab.registry.record_conformance" => self.lab_registry_record_conformance(&req.params),
-            "lab.registry.deprecate" => self
-                .lab_registry_name_status(&req.params, hh_identity::names::NameStatus::Deprecated),
-            "lab.registry.yank" => {
-                self.lab_registry_name_status(&req.params, hh_identity::names::NameStatus::Yanked)
-            }
+            "lab.registry.deprecate" => self.lab_registry_name_status(
+                &req.params,
+                hharness_identity::names::NameStatus::Deprecated,
+            ),
+            "lab.registry.yank" => self.lab_registry_name_status(
+                &req.params,
+                hharness_identity::names::NameStatus::Yanked,
+            ),
             "lab.registry.revoke" => self.lab_registry_revoke(&req.params),
             "lab.registry.export" => self.lab_registry_export(&req.params),
             "lab.registry.pin" => self.lab_registry_pin(&req.params),
@@ -970,7 +980,7 @@ impl EmbedService {
             "lab.debt.index" => self.lab_debt_index(&req.params),
             "lab.debt.report" => self.lab_debt_report(&req.params),
             // ── S6.1b: the §5h.6 assumption-debt *manager* service ops
-            // (C4-tier — `hh-debt`; records-in/records-out; a
+            // (C4-tier — `hharness-debt`; records-in/records-out; a
             // `--no-default-features` build answers
             // `Unsupported{by: "tier-c4"}` — CC6).
             "lab.debt.manager_open"
@@ -996,7 +1006,7 @@ impl EmbedService {
             "lab.attribution.quality" => self.lab_attribution_quality(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
-            // the one kernel resolver via `hh_lab::assembly`.
+            // the one kernel resolver via `hharness_lab::assembly`.
             "lab.assembly.assemble" => self.lab_assembly_assemble(&req.params),
             // S4.12 — `lab.assembly.compile` runs the full §3.2
             // pipeline (R-2.11.4; records-in/records-out).
@@ -1095,7 +1105,7 @@ impl EmbedService {
     pub(crate) fn note_deprecated_use(
         &mut self,
         req: &Request,
-        op: &hh_embed_schema::ops::OpSpec,
+        op: &hharness_embed_schema::ops::OpSpec,
     ) -> Result<(), EmbedError> {
         let dep = op
             .deprecated
@@ -1235,9 +1245,9 @@ impl EmbedService {
         // bundle-fetch} → effect{bundle-fetch}` once, before any wire
         // (the same openers an agent run's dispatch chain carries).
         {
-            use hh_ledger::event::Scope;
-            use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
-            let m = hh_env::events::EventMinter::new(&self.store, &run_id);
+            use hharness_ledger::event::Scope;
+            use hharness_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+            let m = hharness_env::events::EventMinter::new(&self.store, &run_id);
             let mut t = m
                 .mint("lifecycle.turn.started", Json::obj([]))
                 .map_err(ledger_err)?;
@@ -1268,7 +1278,7 @@ impl EmbedService {
             let e = m
                 .mint_effect(
                     "action.effect.intended",
-                    hh_env::events::intended_payload(
+                    hharness_env::events::intended_payload(
                         &risk,
                         Some(&risk),
                         "kernel.fetch",
@@ -1276,7 +1286,7 @@ impl EmbedService {
                         0,
                     ),
                     &eid,
-                    &hh_env::events::ScopeChain {
+                    &hharness_env::events::ScopeChain {
                         turn_id: "kernel-fetch-turn".into(),
                         model_call_id: "kernel-fetch-mc".into(),
                         tool_call_id: "kernel-fetch-tc".into(),
@@ -1305,7 +1315,7 @@ impl EmbedService {
         turn_id: &str,
         model_call_id: &str,
     ) -> Result<(), EmbedError> {
-        let chain = hh_env::events::ScopeChain {
+        let chain = hharness_env::events::ScopeChain {
             turn_id: turn_id.to_string(),
             model_call_id: model_call_id.to_string(),
             tool_call_id: String::new(),
@@ -1399,12 +1409,12 @@ impl EmbedService {
                 .map_err(ledger_err)?
                 .iter()
                 .any(|s| {
-                    s.state != hh_ledger::wakeup::SubscriptionState::Cancelled
+                    s.state != hharness_ledger::wakeup::SubscriptionState::Cancelled
                         && s.policy.expires_at_ms.is_none_or(|e| now < e)
                         && s.trigger == (LedgerTrigger::Timer { at_ms: deadline_ms })
                 });
             if !covered {
-                let created_by = hh_ledger::manifest::EventRef {
+                let created_by = hharness_ledger::manifest::EventRef {
                     run_id: run_id.clone(),
                     event_id: self.store.head(&run_id).map_err(ledger_err)?.event_id,
                 };
@@ -1413,7 +1423,7 @@ impl EmbedService {
                         &run_id,
                         &lease,
                         LedgerTrigger::Timer { at_ms: deadline_ms },
-                        hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                        hharness_ledger::wakeup::WakeupPolicy::default_policy(),
                         &created_by,
                     )
                     .map_err(ledger_err)?;
@@ -1660,7 +1670,7 @@ impl EmbedService {
             )?),
             None => None,
         };
-        let model: &mut dyn hh_control::driver::ModelPort = match live.as_mut() {
+        let model: &mut dyn hharness_control::driver::ModelPort = match live.as_mut() {
             Some(g) => g,
             None => &mut scripted,
         };
@@ -1729,7 +1739,7 @@ impl EmbedService {
                     &mut self.store,
                     &lease,
                     env_id,
-                    hh_env::driver::SnapshotTrigger::Idle,
+                    hharness_env::driver::SnapshotTrigger::Idle,
                 )
                 .map_err(crate::open::env_err)?;
             }
@@ -2031,8 +2041,8 @@ fn woken_cue(w: &WokenDelivery) -> Cue {
         trigger,
         payload_ref: w.payload_ref.clone().unwrap_or_default(),
         delivery_mode: match w.delivery_mode {
-            hh_ledger::DeliveryMode::Steer => DeliveryMode::Steer,
-            hh_ledger::DeliveryMode::FollowUp => DeliveryMode::FollowUp,
+            hharness_ledger::DeliveryMode::Steer => DeliveryMode::Steer,
+            hharness_ledger::DeliveryMode::FollowUp => DeliveryMode::FollowUp,
         },
     }
 }
@@ -2040,7 +2050,7 @@ fn woken_cue(w: &WokenDelivery) -> Cue {
 // ═══════════════════════════════════════════════════════════════════════
 //  S4.11 — the `surface_*` seam (ADR-0303; R-2.11.3¹).
 //
-//  The MCP lab instrument (`hh-mcp-lab`) is a surface: it owns no ledger
+//  The MCP lab instrument (`hharness-mcp-lab`) is a surface: it owns no ledger
 //  internals. Every durable write it needs lands through this narrow
 //  seam — `surface_open_run`/`surface_append`/`surface_commit_row` are
 //  the ONLY ledger entry points — plus the handful of read helpers the
@@ -2056,8 +2066,8 @@ impl EmbedService {
     /// open exactly like a session-opened run (a dangling ref refuses).
     pub fn surface_open_run(
         &mut self,
-        mut manifest: hh_ledger::manifest::RunManifest,
-    ) -> Result<(String, hh_ledger::store::Lease), EmbedError> {
+        mut manifest: hharness_ledger::manifest::RunManifest,
+    ) -> Result<(String, hharness_ledger::store::Lease), EmbedError> {
         // R4.15e (OQ-170) — union the kernel-held custody key ids into the
         // surface-declared set (conferred facts are additive; a surface
         // cannot subtract the kernel's signer set).
@@ -2078,7 +2088,7 @@ impl EmbedService {
         &mut self,
         run_id: &str,
         ttl_ms: u64,
-    ) -> Result<hh_ledger::store::Lease, EmbedError> {
+    ) -> Result<hharness_ledger::store::Lease, EmbedError> {
         let holder = self.holder.clone();
         self.store
             .acquire_writer(&holder, run_id, ttl_ms)
@@ -2090,9 +2100,9 @@ impl EmbedService {
     pub fn surface_append(
         &mut self,
         run_id: &str,
-        lease: &hh_ledger::store::Lease,
-        events: Vec<hh_ledger::event::Event>,
-    ) -> Result<hh_ledger::event::SeqRange, EmbedError> {
+        lease: &hharness_ledger::store::Lease,
+        events: Vec<hharness_ledger::event::Event>,
+    ) -> Result<hharness_ledger::event::SeqRange, EmbedError> {
         self.store.append(run_id, lease, events).map_err(ledger_err)
     }
 
@@ -2104,10 +2114,10 @@ impl EmbedService {
         producer: &str,
         run_id: &str,
         class: &str,
-        payload: hh_wire::json::Json,
-        refs: Vec<hh_identity::ContentAddress>,
-        causes: Vec<hh_ledger::manifest::EventRef>,
-    ) -> Result<hh_ledger::event::EventEnvelope, EmbedError> {
+        payload: hharness_wire::json::Json,
+        refs: Vec<hharness_identity::ContentAddress>,
+        causes: Vec<hharness_ledger::manifest::EventRef>,
+    ) -> Result<hharness_ledger::event::EventEnvelope, EmbedError> {
         self.store
             .commit_kernel_row_for(producer, run_id, class, payload, refs, causes)
             .map_err(ledger_err)
@@ -2118,7 +2128,7 @@ impl EmbedService {
     pub fn surface_events(
         &self,
         run_id: &str,
-    ) -> Result<&[hh_ledger::event::EventEnvelope], EmbedError> {
+    ) -> Result<&[hharness_ledger::event::EventEnvelope], EmbedError> {
         self.store.events(run_id).map_err(ledger_err)
     }
 
@@ -2126,7 +2136,7 @@ impl EmbedService {
     pub fn surface_manifest(
         &self,
         run_id: &str,
-    ) -> Result<&hh_ledger::manifest::RunManifest, EmbedError> {
+    ) -> Result<&hharness_ledger::manifest::RunManifest, EmbedError> {
         self.store.manifest(run_id).map_err(ledger_err)
     }
 
@@ -2147,8 +2157,8 @@ impl EmbedService {
     pub fn surface_account(
         &mut self,
         run_id: &str,
-    ) -> Result<hh_budget::account::Account<'_>, EmbedError> {
-        hh_budget::account::Account::open(&mut self.store, run_id).map_err(|e| {
+    ) -> Result<hharness_budget::account::Account<'_>, EmbedError> {
+        hharness_budget::account::Account::open(&mut self.store, run_id).map_err(|e| {
             EmbedError::Refused {
                 reason: format!("budget account: {e}"),
             }
@@ -2212,8 +2222,8 @@ impl EmbedService {
         audience: &str,
         ttl_ms: u64,
     ) -> Result<String, EmbedError> {
-        use hh_monitor::assess::SecretTransport;
-        use hh_secrets::{
+        use hharness_monitor::assess::SecretTransport;
+        use hharness_secrets::{
             AccessClass, AuthCarrier, BindRequest, CredentialKind, DestinationBinding,
             SecretChannelSpec, SecretSource, SenderConstraint,
         };
@@ -2253,7 +2263,7 @@ impl EmbedService {
             description: "surface caller-auth tokens (the kernel's own AS leg)".to_string(),
         };
         match self.credential_broker.register_channel(CHANNEL, spec, prov) {
-            Ok(_) | Err(hh_secrets::BrokerError::ChannelExists { .. }) => {}
+            Ok(_) | Err(hharness_secrets::BrokerError::ChannelExists { .. }) => {}
             Err(e) => {
                 return Err(EmbedError::Refused {
                     reason: format!("caller_auth_channel: {e:?}"),
@@ -2346,7 +2356,7 @@ impl EmbedService {
                         channel_id: CHANNEL.to_string(),
                         holder,
                         env_handle_ref: "caller-surface".to_string(),
-                        env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
+                        env_isolation: hharness_containment::policy::IsolationClass::ProcessSandbox,
                         mode: SecretTransport::MintedScoped,
                         monitor_decision_ref: decided_id,
                         destinations: [audience.to_string()].into_iter().collect(),
@@ -2378,25 +2388,25 @@ impl EmbedService {
 }
 
 /// The caller-token verdict the surface seam answers — re-exported
-/// through the kernel boundary so a surface (`hh-mcp-lab`) consumes the
-/// broker's own closed sum without a direct `hh-secrets` edge
+/// through the kernel boundary so a surface (`hharness-mcp-lab`) consumes the
+/// broker's own closed sum without a direct `hharness-secrets` edge
 /// (removability: surfaces reach the kernel only; R2.19/DF-S4.11-2).
-pub use hh_secrets::MintedVerdict;
+pub use hharness_secrets::MintedVerdict;
 
 /// The one TLS home's surface set — re-exported through the kernel
-/// boundary so the surface consumes it without a `hh-mcp-lab → hh-tls`
-/// edge: ADR-0365 D3's admitted consumer set (`hh-gateway`, `hh-env`,
-/// `hh-embed`) stays closed while the R4.7a credential mediator gains
+/// boundary so the surface consumes it without a `hharness-mcp-lab → hharness-tls`
+/// edge: ADR-0365 D3's admitted consumer set (`hharness-gateway`, `hharness-env`,
+/// `hharness-embed`) stays closed while the R4.7a credential mediator gains
 /// the HTTPS client (the OAuth provider exchange) and the mTLS
 /// terminating half (`ServerTls`/`PeerIdentity`) it was chartered for
 /// (the `MintedVerdict` precedent, one level up — R4.7a/DF-S4.11-2).
-pub use hh_tls::{ClientTls, PeerIdentity, ServerTls, ServerTlsStream, TlsError, TlsStream};
+pub use hharness_tls::{ClientTls, PeerIdentity, ServerTls, ServerTlsStream, TlsError, TlsStream};
 
 /// Map a `LedgerError` to the contract's typed surface — the ledger's
 /// words, never a stringy catch-all (I-H7: `Fenced` on a writer
 /// surfaces only as `SessionDetached`; `RunFinished` as `Draining`).
-pub(crate) fn ledger_err(e: hh_ledger::errors::LedgerError) -> EmbedError {
-    use hh_ledger::errors::LedgerError as L;
+pub(crate) fn ledger_err(e: hharness_ledger::errors::LedgerError) -> EmbedError {
+    use hharness_ledger::errors::LedgerError as L;
     match e {
         L::UnknownRun { run_id } => EmbedError::UnknownRun { run_id },
         L::WouldBlock { active_holder } => EmbedError::WouldBlock { active_holder },
@@ -2462,7 +2472,7 @@ pub(crate) fn ledger_err(e: hh_ledger::errors::LedgerError) -> EmbedError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hh_embed_schema::ops::{registry, OpDeprecation};
+    use hharness_embed_schema::ops::{registry, OpDeprecation};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -2490,7 +2500,7 @@ mod tests {
 
     /// A deprecated `OpSpec` fabricated off a live registry row — the same
     /// members `deprecated{…}` would carry on a real declaration.
-    fn deprecated_spec() -> hh_embed_schema::ops::OpSpec {
+    fn deprecated_spec() -> hharness_embed_schema::ops::OpSpec {
         let mut op = registry()
             .into_iter()
             .find(|o| o.name == "env.resume")
@@ -2596,20 +2606,20 @@ mod tests {
         // The map entry and the schema export share `deprecated` member
         // form via `OpDeprecation::to_json` — assert both carriers here.
         let op = deprecated_spec();
-        let entry = hh_embed_schema::ops::stability_entry(&op);
+        let entry = hharness_embed_schema::ops::stability_entry(&op);
         let dep = entry.get("deprecated").expect("deprecated member");
         assert_eq!(dep.get("since"), Some(&Json::str("1.0")));
         assert_eq!(dep.get("removal_major"), Some(&Json::Int(2)));
         assert_eq!(dep.get("replacement"), Some(&Json::str("read")));
         // Live contract: nothing deprecated today — no stability entry and
         // no exported method carries the member (CC8 additive discipline).
-        let map = hh_embed_schema::ops::stability_map();
+        let map = hharness_embed_schema::ops::stability_map();
         if let Json::Obj(m) = &map {
             assert!(m.values().all(|e| e.get("deprecated").is_none()));
         } else {
             panic!("stability_map is not an object");
         }
-        let schema = hh_embed_schema::export_schema();
+        let schema = hharness_embed_schema::export_schema();
         let Json::Obj(methods) = schema.get("methods").unwrap() else {
             panic!("methods member is not an object");
         };

@@ -8,23 +8,23 @@
 //! The fixture document arrives in `BindParams.parameters` under
 //! `fixture_doc` — records-in (the bind carries the doc; the process
 //! never reads ambient state). Every `invoke` lowers to
-//! `hh_fleet_adapter::tracker::dispatch` — the ONE wire codec (CC7).
+//! `hharness_fleet_adapter::tracker::dispatch` — the ONE wire codec (CC7).
 //! A decode fault is `AbiError::SchemaViolation`; domain data never
 //! leaves the typed envelope.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use hh_embed_schema::plugin_abi::{
+use hharness_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, StreamParams, TriState,
 };
-use hh_fleet_adapter::tracker::{self, FixtureTracker};
-use hh_fleet_adapter::WORK_SOURCE_CLASS;
-use hh_fleet_adapter::WORK_SOURCE_CONTRACT;
-use hh_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
-use hh_varhost::channel::SocketIo;
-use hh_wire::json::Json;
+use hharness_fleet_adapter::tracker::{self, FixtureTracker};
+use hharness_fleet_adapter::WORK_SOURCE_CLASS;
+use hharness_fleet_adapter::WORK_SOURCE_CONTRACT;
+use hharness_plugin_fixture::{PluginCtx, PluginRuntime, VariantLogic};
+use hharness_varhost::channel::SocketIo;
+use hharness_wire::json::Json;
 
 /// The variant logic — a `TrackerLogic` behind the contract's op
 /// surface. The fixture document is bind-supplied (`records-in`); the
@@ -49,7 +49,7 @@ impl VariantLogic for TrackerFixtureLogic {
         HelloParams {
             plugin_abi_version: format!(
                 "plugin_abi/{}",
-                hh_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
+                hharness_embed_schema::plugin_abi::PLUGIN_ABI_MAJOR
             ),
             plugin_version_id: self.version_id.clone(),
             plugin_content: self.content.clone(),

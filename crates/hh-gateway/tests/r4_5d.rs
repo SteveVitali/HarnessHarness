@@ -12,20 +12,20 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
-use hh_gateway::codec::{self, WireFrame};
-use hh_gateway::credentials::{
+use hharness_gateway::codec::{self, WireFrame};
+use hharness_gateway::credentials::{
     header_secret, source_from_binding, source_from_ref, BrokerCredentialPort,
 };
-use hh_gateway::dialects;
-use hh_gateway::gateway::{CredentialHandle, CredentialPort, Transport};
-use hh_gateway::grammar::{decode_frame, DecodeState, ModelEvent, ModelEventKind};
-use hh_gateway::http_transport::HttpModelTransport;
-use hh_gateway::plan::{CachePlan, Capabilities, Extensions, ProviderRequestPlan};
-use hh_gateway::vocab::{ModelErrorClass, StopReason};
-use hh_gateway::{anthropic, openai};
-use hh_secrets::channel::SecretSource;
-use hh_secrets::StaticVault;
-use hh_wire::json::Json;
+use hharness_gateway::dialects;
+use hharness_gateway::gateway::{CredentialHandle, CredentialPort, Transport};
+use hharness_gateway::grammar::{decode_frame, DecodeState, ModelEvent, ModelEventKind};
+use hharness_gateway::http_transport::HttpModelTransport;
+use hharness_gateway::plan::{CachePlan, Capabilities, Extensions, ProviderRequestPlan};
+use hharness_gateway::vocab::{ModelErrorClass, StopReason};
+use hharness_gateway::{anthropic, openai};
+use hharness_secrets::channel::SecretSource;
+use hharness_secrets::StaticVault;
+use hharness_wire::json::Json;
 
 const NORM: &str = "test#usage_mapping";
 
@@ -90,7 +90,7 @@ fn content_length(head: &str) -> usize {
     0
 }
 
-fn plan(endpoint: &str, dialect: &hh_gateway::WireDialect, body: Json) -> Vec<u8> {
+fn plan(endpoint: &str, dialect: &hharness_gateway::WireDialect, body: Json) -> Vec<u8> {
     let p = ProviderRequestPlan {
         dialect_id: dialect.dialect_id.clone(),
         dialect_version: dialect.version.clone(),
@@ -112,7 +112,7 @@ fn plan(endpoint: &str, dialect: &hh_gateway::WireDialect, body: Json) -> Vec<u8
 }
 
 fn decode_all(
-    dialect: &hh_gateway::WireDialect,
+    dialect: &hharness_gateway::WireDialect,
     frames: &[(u64, WireFrame)],
 ) -> (Vec<ModelEvent>, DecodeState) {
     let mut state = DecodeState {
@@ -127,7 +127,7 @@ fn decode_all(
     (events, state)
 }
 
-fn completed(events: &[ModelEvent]) -> &hh_gateway::message::ModelMessage {
+fn completed(events: &[ModelEvent]) -> &hharness_gateway::message::ModelMessage {
     events
         .iter()
         .find_map(|e| match &e.kind {
@@ -137,7 +137,7 @@ fn completed(events: &[ModelEvent]) -> &hh_gateway::message::ModelMessage {
         .expect("a Completed event lands")
 }
 
-fn completed_usage(events: &[ModelEvent]) -> &hh_telemetry::TokenVector {
+fn completed_usage(events: &[ModelEvent]) -> &hharness_telemetry::TokenVector {
     events
         .iter()
         .find_map(|e| match &e.kind {
@@ -188,18 +188,18 @@ fn sse_response(body: &str) -> String {
 
 #[test]
 fn dialect_docs_load_strict() {
-    let a = hh_gateway::WireDialect::from_json(&dialects::anthropic_messages_doc())
+    let a = hharness_gateway::WireDialect::from_json(&dialects::anthropic_messages_doc())
         .expect("anthropic-messages@1 document loads");
     assert_eq!(a.dialect_id, "anthropic-messages");
-    assert_eq!(a.auth_kinds, vec![hh_gateway::AuthKind::ApiKeyHeader]);
+    assert_eq!(a.auth_kinds, vec![hharness_gateway::AuthKind::ApiKeyHeader]);
     assert!(a
         .plan_schema
         .required_keys
         .contains(&"max_tokens".to_string()));
-    let o = hh_gateway::WireDialect::from_json(&dialects::openai_doc())
+    let o = hharness_gateway::WireDialect::from_json(&dialects::openai_doc())
         .expect("openai@1 document loads");
     assert_eq!(o.dialect_id, "openai");
-    assert_eq!(o.auth_kinds, vec![hh_gateway::AuthKind::Bearer]);
+    assert_eq!(o.auth_kinds, vec![hharness_gateway::AuthKind::Bearer]);
     assert!(o.plan_schema.admits("max_completion_tokens"));
     assert!(o.plan_schema.admits("reasoning_effort"));
     assert!(o.plan_schema.admits("prompt_cache_key"));
@@ -322,7 +322,7 @@ fn anthropic_sse_stream_decodes_completed() {
     for doc in anthropic_sse_text()
         .split("\n\n")
         .filter(|s| !s.trim().is_empty())
-        .map(|s| hh_wire::json::parse_provider(s.trim_start_matches("data:").trim()).unwrap())
+        .map(|s| hharness_wire::json::parse_provider(s.trim_start_matches("data:").trim()).unwrap())
     {
         at += 10;
         for f in tr.push_event(&doc).unwrap() {
@@ -357,7 +357,7 @@ fn anthropic_sse_stream_decodes_completed() {
 #[test]
 fn anthropic_nonstreaming_message_folds() {
     let dialect = dialects::anthropic_messages();
-    let doc = hh_wire::json::parse_provider(
+    let doc = hharness_wire::json::parse_provider(
         r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-4-5",
            "content":[{"type":"text","text":"done"}],
            "stop_reason":"end_turn","stop_sequence":null,
@@ -474,7 +474,7 @@ fn anthropic_tool_use_partial_json_assembles() {
         .blocks
         .iter()
         .find_map(|b| match b {
-            hh_gateway::message::ModelBlock::ToolCall(tc) => Some(tc),
+            hharness_gateway::message::ModelBlock::ToolCall(tc) => Some(tc),
             _ => None,
         })
         .expect("a tool-call block lands");
@@ -487,7 +487,7 @@ fn anthropic_tool_use_partial_json_assembles() {
     );
     assert_eq!(call.surface_name, "fs_read");
     match &call.arguments {
-        hh_gateway::message::ToolArgs::Parsed(j) => {
+        hharness_gateway::message::ToolArgs::Parsed(j) => {
             assert_eq!(j.get("path").and_then(Json::as_str), Some("a.rs"))
         }
         other => panic!("args parse: {other:?}"),
@@ -598,7 +598,7 @@ fn anthropic_thinking_and_signature_deposit() {
         .blocks
         .iter()
         .find_map(|b| match b {
-            hh_gateway::message::ModelBlock::Reasoning {
+            hharness_gateway::message::ModelBlock::Reasoning {
                 text,
                 signature,
                 redacted,
@@ -653,7 +653,7 @@ fn anthropic_error_code_class_maps() {
         (
             "not_found_error",
             404,
-            ModelErrorClass::NotFound(hh_gateway::vocab::NotFoundKind::Model),
+            ModelErrorClass::NotFound(hharness_gateway::vocab::NotFoundKind::Model),
         ),
         ("rate_limit_error", 429, ModelErrorClass::RateLimited),
         ("overloaded_error", 529, ModelErrorClass::Overloaded),
@@ -672,7 +672,7 @@ fn anthropic_error_code_class_maps() {
         (
             "timeout_error",
             500,
-            ModelErrorClass::Timeout(hh_gateway::vocab::TimeoutKind::Attempt),
+            ModelErrorClass::Timeout(hharness_gateway::vocab::TimeoutKind::Attempt),
         ),
     ];
     for (ty, status, want) in cases {
@@ -753,7 +753,7 @@ fn anthropic_unknown_delta_is_notice() {
     let (events2, state2) = decode_all(&dialect, &frames2);
     assert!(state2.violations.iter().any(|v| matches!(
         v,
-        hh_gateway::grammar::GrammarViolation::UnknownFrame { .. }
+        hharness_gateway::grammar::GrammarViolation::UnknownFrame { .. }
     )));
     assert!(events2
         .iter()
@@ -841,7 +841,7 @@ fn credential_bind_carries_coordinate_only() {
         .bind(
             Some("env:KEY"),
             "https://api.example.test",
-            &[hh_gateway::AuthKind::ApiKeyHeader],
+            &[hharness_gateway::AuthKind::ApiKeyHeader],
         )
         .unwrap();
     assert_eq!(handle.binding_id.as_deref(), Some("launch_env:KEY"));
@@ -864,12 +864,12 @@ fn credential_bind_fails_closed() {
         .bind(
             Some("env:MISSING"),
             "https://api.example.test",
-            &[hh_gateway::AuthKind::ApiKeyHeader],
+            &[hharness_gateway::AuthKind::ApiKeyHeader],
         )
         .unwrap_err();
     assert!(matches!(
         err,
-        hh_gateway::GatewayError::CredentialUnavailable { .. }
+        hharness_gateway::GatewayError::CredentialUnavailable { .. }
     ));
     // No `credential_ref` under an auth-requiring dialect → refused.
     let mut port2 = BrokerCredentialPort::new(Box::<StaticVault>::default());
@@ -877,12 +877,12 @@ fn credential_bind_fails_closed() {
         .bind(
             None,
             "https://api.example.test",
-            &[hh_gateway::AuthKind::Bearer],
+            &[hharness_gateway::AuthKind::Bearer],
         )
         .unwrap_err();
     assert!(matches!(
         err2,
-        hh_gateway::GatewayError::CredentialUnavailable { .. }
+        hharness_gateway::GatewayError::CredentialUnavailable { .. }
     ));
     // A `credential_ref` under a `none`-auth dialect → refused (a bound
     // secret with nowhere legal to ride is a fault, not a convenience).
@@ -891,12 +891,12 @@ fn credential_bind_fails_closed() {
         .bind(
             Some("env:KEY"),
             "http://127.0.0.1:11434",
-            &[hh_gateway::AuthKind::None],
+            &[hharness_gateway::AuthKind::None],
         )
         .unwrap_err();
     assert!(matches!(
         err3,
-        hh_gateway::GatewayError::CredentialUnavailable { .. }
+        hharness_gateway::GatewayError::CredentialUnavailable { .. }
     ));
     // And `none`-auth with no ref binds `provided: no` — the local lane.
     let mut port4 = BrokerCredentialPort::new(Box::<StaticVault>::default());
@@ -904,7 +904,7 @@ fn credential_bind_fails_closed() {
         .bind(
             None,
             "http://127.0.0.1:11434",
-            &[hh_gateway::AuthKind::None],
+            &[hharness_gateway::AuthKind::None],
         )
         .unwrap();
     assert!(!h.provided);
@@ -928,7 +928,7 @@ fn transport_injects_anthropic_headers() {
     let dialect = dialects::anthropic_messages();
     let mut t = HttpModelTransport::with_credentials(
         dialect.clone(),
-        hh_tls::ClientTls::webpki_roots(),
+        hharness_tls::ClientTls::webpki_roots(),
         Box::new(vault),
     );
     let credential = CredentialHandle {
@@ -994,7 +994,7 @@ data: [DONE]
     let dialect = dialects::openai();
     let mut t = HttpModelTransport::with_credentials(
         dialect.clone(),
-        hh_tls::ClientTls::webpki_roots(),
+        hharness_tls::ClientTls::webpki_roots(),
         Box::new(vault),
     );
     let credential = CredentialHandle {
@@ -1102,7 +1102,7 @@ fn stub_oop_live_transport_binds_and_sends() {
         head.to_lowercase().contains("x-api-key: sk-oop-testsecret"),
         "the live OOP send injects the header: {head}"
     );
-    let doc = hh_wire::json::parse(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    let doc = hharness_wire::json::parse(&String::from_utf8_lossy(&out.stdout)).unwrap();
     assert_eq!(
         doc.get("result").and_then(Json::as_str),
         Some("completed"),
@@ -1138,7 +1138,7 @@ fn stub_oop_live_transport_binds_and_sends() {
 
 #[test]
 fn usage_to_cost_pinned_pricing() {
-    use hh_budget::{price, ModelRef, PricingRow, PricingTable, TokenDecomposition};
+    use hharness_budget::{price, ModelRef, PricingRow, PricingTable, TokenDecomposition};
     // The pinned table — USD micro-units per token (micro = 1e-6 USD;
     // e.g. 1000 micro/token ⇒ $1/1M).
     let table = PricingTable {
@@ -1181,7 +1181,7 @@ fn usage_to_cost_pinned_pricing() {
     };
     assert!(matches!(
         price(&decomp, &missing, &table),
-        Err(hh_budget::SpendError::NoPrice { .. })
+        Err(hharness_budget::SpendError::NoPrice { .. })
     ));
 }
 
@@ -1190,15 +1190,15 @@ fn usage_to_cost_pinned_pricing() {
 #[test]
 fn family_dispatch_is_dialect_bound() {
     assert_eq!(
-        hh_gateway::family_of(&dialects::anthropic_messages()),
-        hh_gateway::Family::Messages
+        hharness_gateway::family_of(&dialects::anthropic_messages()),
+        hharness_gateway::Family::Messages
     );
     assert_eq!(
-        hh_gateway::family_of(&dialects::openai()),
-        hh_gateway::Family::ChatCompletions
+        hharness_gateway::family_of(&dialects::openai()),
+        hharness_gateway::Family::ChatCompletions
     );
     assert_eq!(
-        hh_gateway::family_of(&dialects::openai_compatible()),
-        hh_gateway::Family::ChatCompletions
+        hharness_gateway::family_of(&dialects::openai_compatible()),
+        hharness_gateway::Family::ChatCompletions
     );
 }

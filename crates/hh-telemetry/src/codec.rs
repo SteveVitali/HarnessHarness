@@ -1,10 +1,10 @@
 //! Strict-codec helpers — the closed-record rule (`BadMember` on any member the
 //! shape does not declare, `MissingMember`/`TypeMismatch` on the rest), the same
-//! pattern `hh-secrets`/`hh-containment` use (CC8/CC3).
+//! pattern `hharness-secrets`/`hharness-containment` use (CC8/CC3).
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 use crate::errors::CodecError;
 

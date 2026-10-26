@@ -56,7 +56,7 @@ structure. No Rust code was transliterated.
 
 ```sh
 node foreign/e3-typescript/foreign.ts crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e3.json
-cargo run -p hh-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e3.json
+cargo run -p hharness-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e3.json
 # or one shot: bash scripts/xcheck-e3.sh [--answers PATH]
 ```
 

@@ -12,24 +12,24 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use hh_embed_schema::plugin_abi::BindParams;
-use hh_hir::leaves::Text;
-use hh_hir::records::AssumptionDebtRecord;
-use hh_hir::{debt_from_json, debt_json};
-use hh_ontology::debt::{
+use hharness_embed_schema::plugin_abi::BindParams;
+use hharness_hir::leaves::Text;
+use hharness_hir::records::AssumptionDebtRecord;
+use hharness_hir::{debt_from_json, debt_json};
+use hharness_ontology::debt::{
     DebtClass, DebtStatus, EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, OwnerRef,
     RemovalTest, RemovalTestKind,
 };
-use hh_plugin_fixture::fixture::FixtureLogic;
-use hh_plugin_fixture::PluginRuntime;
-use hh_provenance::ProvenanceRecord;
-use hh_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
-use hh_varhost::channel::MemIo;
-use hh_varhost::{
+use hharness_plugin_fixture::fixture::FixtureLogic;
+use hharness_plugin_fixture::PluginRuntime;
+use hharness_provenance::ProvenanceRecord;
+use hharness_registry::extension::plugin::{PluginIdentity, PluginManifest, Requests, Requires};
+use hharness_varhost::channel::MemIo;
+use hharness_varhost::{
     attach, spawn, InvokeOutcome, RecordingPorts, SpawnSpec, VariantHost, VariantPackage,
     VariantSession, VecEvents,
 };
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 /// The matched cap — both arms run exactly this many `assess` invocations.
@@ -46,7 +46,7 @@ fn fixture_bin() -> Option<PathBuf> {
 }
 
 fn helper_present() -> bool {
-    hh_env::helper::helper_binary().is_some()
+    hharness_env::helper::helper_binary().is_some()
 }
 
 fn manifest() -> PluginManifest {
@@ -145,7 +145,7 @@ fn confined_arm() -> Option<ConfinedArm> {
         package: pkg,
         session_id: format!("m19-{}", std::process::id()),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: std::env::temp_dir().join(format!(
             "vh-m19-{}-{}",
@@ -156,7 +156,7 @@ fn confined_arm() -> Option<ConfinedArm> {
         cap: Requests::default(),
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -220,7 +220,7 @@ fn memio_arm() -> ConfinedArm {
         package: pkg,
         session_id: format!("m19-mem-{}", std::process::id()),
         backend: "direct".into(),
-        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        placement: hharness_registry::kinds::Placement::SubprocessConfined,
         helper_extra_args: vec![],
         socket_dir: std::env::temp_dir().join(format!(
             "vh-m19m-{}-{}",
@@ -231,7 +231,7 @@ fn memio_arm() -> ConfinedArm {
         cap: Requests::default(),
         ambient_env: vec![],
         issuer_ref: "principal:test".into(),
-        holder: hh_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
+        holder: hharness_hir::refs::Ref::pinned("plugin:local/fixture", "pin:fixture"),
         registry_snapshot_id: "snap-1".into(),
         kernel_capabilities: BTreeMap::new(),
         contract_versions_offered: BTreeMap::from([(
@@ -396,8 +396,11 @@ fn ac_2_12_2_9_boundary_overhead_measured_matched_cap() {
             ]),
         ),
     ]);
-    let evidence_ref =
-        hh_identity::idp::address(report.to_canonical_string().as_bytes(), "application/json").id();
+    let evidence_ref = hharness_identity::idp::address(
+        report.to_canonical_string().as_bytes(),
+        "application/json",
+    )
+    .id();
 
     // The confined boundary must measure *above* the in-process one in
     // expectation — but the check that matters is that the field is real:

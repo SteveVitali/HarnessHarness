@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_wire::json::Json;
+use hharness_wire::json::Json;
 
 /// `{run_id → seq}` — the inclusive high-water mark per source run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

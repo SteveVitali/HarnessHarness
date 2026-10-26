@@ -2,16 +2,16 @@
 //! seam is S4.6's). `AgentCard` is the attestable descriptor —
 //! `version` is the deployable `bundle_id` (binding (b), never the
 //! protocol or session version); `signatures[]` carries
-//! `hh-ledger` audit-machinery signatures verified under a
+//! `hharness-ledger` audit-machinery signatures verified under a
 //! `TrustRootPolicy` fixture — unsigned/foreign *content* stays
 //! declared-not-evidence, and an unverifiable signature is never
 //! "passed" (CC4).
 
-use hh_compiler::acp::{project_task_state, TaskState};
-use hh_identity::idp::idp_id;
-use hh_ledger::audit::{parse_sig, render_sig, AuditKeyResolver, AuditSigner};
-use hh_wire::json::Json;
-use hh_wire::sha256::hmac_sha256;
+use hharness_compiler::acp::{project_task_state, TaskState};
+use hharness_identity::idp::idp_id;
+use hharness_ledger::audit::{parse_sig, render_sig, AuditKeyResolver, AuditSigner};
+use hharness_wire::json::Json;
+use hharness_wire::sha256::hmac_sha256;
 
 /// `AgentCard` — the A2A descriptor record.
 #[derive(Debug, Clone)]
@@ -101,7 +101,7 @@ pub fn card(name: &str, description: &str, url: &str, bundle_id: &str, skills: J
 }
 
 /// `sign_card(card, signer)` — append `{alg:"hmac-sha256",
-/// key_id, sig}` over the card content-address bytes (the hh-ledger
+/// key_id, sig}` over the card content-address bytes (the hharness-ledger
 /// audit machinery — key material stays in the `AuditSigner`
 /// wrapper; the card carries `key_id` + `sig`, never bytes).
 pub fn sign_card(card: &mut AgentCard, signer: &mut dyn AuditSigner) -> Result<(), String> {
@@ -186,7 +186,7 @@ pub fn delegate_task(
 /// `task_state(phase, outcome, paused, auth_pending)` — the
 /// exhaustive `TaskState` projection over the child's kernel
 /// lifecycle coordinates (the single-source map —
-/// `hh_compiler::acp::project_task_state`; `INPUT_REQUIRED` is
+/// `hharness_compiler::acp::project_task_state`; `INPUT_REQUIRED` is
 /// non-terminal on the wire, terminal-classified for the parent).
 pub fn task_state(
     phase: &str,

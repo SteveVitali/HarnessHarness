@@ -7,19 +7,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_eval::catalogue;
-use hh_eval::compliance::attribution_completeness;
-use hh_eval::facts::LedgerFacts;
-use hh_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
-use hh_eval::scorecard::{render_scorecard, ScorecardInput};
-use hh_eval::{tripped_veto_ids, veto_id, VetoContext};
-use hh_ontology::compliance::{Detector, MetricDeclaration};
-use hh_ontology::control::OutcomeClass;
-use hh_ontology::dimensions::DimensionId;
-use hh_ontology::eval::{MetricValue, MetricValueKind};
-use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Observability, ParticipantClass};
-use hh_wire::Json;
+use hharness_eval::catalogue;
+use hharness_eval::compliance::attribution_completeness;
+use hharness_eval::facts::LedgerFacts;
+use hharness_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
+use hharness_eval::scorecard::{render_scorecard, ScorecardInput};
+use hharness_eval::{tripped_veto_ids, veto_id, VetoContext};
+use hharness_ontology::compliance::{Detector, MetricDeclaration};
+use hharness_ontology::control::OutcomeClass;
+use hharness_ontology::dimensions::DimensionId;
+use hharness_ontology::eval::{MetricValue, MetricValueKind};
+use hharness_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hharness_ontology::participant::{Observability, ParticipantClass};
+use hharness_wire::Json;
 
 /// `(seq, class, payload)` — the `LedgerFacts::from_events` input shape.
 fn ev(seq: u64, class: &str, p: Json) -> (u64, String, Json) {
@@ -137,7 +137,7 @@ fn scorecard<'a>(
     tasks: &'a [TaskContext],
     suites: &'a [SuiteContext],
     decls: &'a [MetricDeclaration],
-) -> hh_lab::analysis::ScorecardReport {
+) -> hharness_lab::analysis::ScorecardReport {
     let fams: BTreeMap<String, String> = BTreeMap::new();
     render_scorecard(&ScorecardInput {
         runs,
@@ -257,10 +257,10 @@ fn unattributed_signal_trips_the_veto() {
 // coerced to 0 or silently dropped.
 #[test]
 fn ac_e3_9_hosted_selection_recall_is_na_observability() {
-    use hh_eval::scorecard::render_cell;
-    use hh_ontology::compliance::NaReason;
+    use hharness_eval::scorecard::render_cell;
+    use hharness_ontology::compliance::NaReason;
 
-    let decl = hh_telemetry::catalogue::PROCESS_METRICS
+    let decl = hharness_telemetry::catalogue::PROCESS_METRICS
         .iter()
         .find(|m| m.name == "selection_recall_at_need")
         .expect("selection_recall_at_need is registered (WS-I2)")

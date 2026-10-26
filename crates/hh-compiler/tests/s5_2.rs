@@ -16,10 +16,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_compiler::equiv::{
+use hharness_compiler::equiv::{
     ArgMapEntry, ArgTransform, EvidenceVerdict, SurfaceArgMap, SurfaceBinding,
 };
-use hh_compiler::family::{
+use hharness_compiler::family::{
     self, check_code_mode_sandbox, check_dialect_transform, check_family, check_plan_map,
     code_mode_catalogue, code_mode_nested_call, freeform_map, retire_surface, select_variant,
     shim_metering, shim_resolve, split_bindings, synthesize_surface, AdmissionResult,
@@ -27,11 +27,11 @@ use hh_compiler::family::{
     SafetyInput, SchemaDialectTransform, SurfaceFamily, SurfaceProposal, SurfaceVariant,
     TaskClassDeclaration, VariantSelector,
 };
-use hh_compiler::plan::PinnedRef;
-use hh_compiler::surface::{BindingMapping, CompileExposureMode, SurfaceFailure};
-use hh_compiler::CompileError;
-use hh_provenance::authority::AuthorityClass;
-use hh_wire::json::Json;
+use hharness_compiler::plan::PinnedRef;
+use hharness_compiler::surface::{BindingMapping, CompileExposureMode, SurfaceFailure};
+use hharness_compiler::CompileError;
+use hharness_provenance::authority::AuthorityClass;
+use hharness_wire::json::Json;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,12 +54,14 @@ fn binding(name: &str, cap: &str, mode: CompileExposureMode) -> SurfaceBinding {
         effects_bound: Vec::new(),
         family_id: None,
         variant_id: None,
-        dialect: hh_compiler::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
-        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        dialect: hharness_compiler::equiv::DEFAULT_SCHEMA_DIALECT.to_string(),
+        admitted_modes: [hharness_hir::tools::ExposureMode::Direct]
+            .into_iter()
+            .collect(),
         pinned: false,
         hidden: false,
     };
-    b.surface_id = hh_compiler::surface::surface_id(&b);
+    b.surface_id = hharness_compiler::surface::surface_id(&b);
     b
 }
 
@@ -122,22 +124,22 @@ fn env() -> EnvironmentDeclaration {
     }
 }
 
-fn complete_debt(rule_id: &str) -> hh_hir::records::AssumptionDebtRecord {
-    hh_hir::records::AssumptionDebtRecord {
+fn complete_debt(rule_id: &str) -> hharness_hir::records::AssumptionDebtRecord {
+    hharness_hir::records::AssumptionDebtRecord {
         rule_id: rule_id.to_string(),
-        hypothesis: hh_hir::leaves::Text::new(
+        hypothesis: hharness_hir::leaves::Text::new(
             "the surface holds while the capability does",
             "test",
-            hh_provenance::record::ProvenanceRecord::kernel("kernel:test", 0),
+            hharness_provenance::record::ProvenanceRecord::kernel("kernel:test", 0),
         ),
-        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
-        owner: hh_hir::OwnerRef::principal("test:owner"),
-        expiry_condition: hh_hir::ExpiryCondition {
-            kind: hh_hir::ExpiryKind::ModelVersionChange,
+        evidence_refs: vec![hharness_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hharness_hir::OwnerRef::principal("test:owner"),
+        expiry_condition: hharness_hir::ExpiryCondition {
+            kind: hharness_hir::ExpiryKind::ModelVersionChange,
             value: None,
         },
         removal_test_ref: "sha256:removal".to_string(),
-        status: hh_hir::DebtStatus::Active,
+        status: hharness_hir::DebtStatus::Active,
         debt_class: None,
         hypothesis_typed: None,
         scope: None,
@@ -344,7 +346,7 @@ fn ac_r_2_5_2_5_dialect_narrowing_must_be_declared() {
             // the detail leaf).
             assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
             assert_eq!(diagnostics[0].code.code(), "C-LINK-9");
-            assert_eq!(diagnostics[0].stage, hh_assembly::Stage::Link);
+            assert_eq!(diagnostics[0].stage, hharness_assembly::Stage::Link);
         }
         other => panic!("expected DialectNarrowingUndeclared, got {other:?}"),
     }
@@ -507,7 +509,7 @@ fn ac_r_2_5_2_9_freeform_and_code_mode() {
     // lacking the hint are absent (never an error entry).
     let mut cm = binding("nested", "cap/x", CompileExposureMode::Primitive);
     cm.admitted_modes
-        .insert(hh_hir::tools::ExposureMode::CodeMode);
+        .insert(hharness_hir::tools::ExposureMode::CodeMode);
     let plain = binding("plain", "cap/y", CompileExposureMode::Primitive);
     let items = [cm, plain];
     let catalogue = code_mode_catalogue(&items);

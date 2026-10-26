@@ -1,23 +1,23 @@
 //! `r4_7d` — the AC-R-2.7.3-10 lowering half over the emitted payload: the
 //! canonical `verification.validator.verdict` payload
-//! `hh_verification::events::validator_verdict` emits for a judged verdict
+//! `hharness_verification::events::validator_verdict` emits for a judged verdict
 //! (with the critic extensions) lowers to `gen_ai.evaluation.result` and
 //! the loss report names the judge-identity/evidence/calibration/
 //! independence/cost classes. The reference-corpus halves live in
 //! `crates/hh-verification/tests/r4_7d.rs`.
 
-use hh_identity::kinds::RecordKind;
-use hh_identity::refs::VersionedRef;
-use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
-use hh_provenance::record::ProvenanceRecord;
-use hh_telemetry::genai::lower_verdict;
-use hh_verification::events::validator_verdict;
-use hh_verification::validators::Verdict;
-use hh_verification::vocab::{
+use hharness_identity::kinds::RecordKind;
+use hharness_identity::refs::VersionedRef;
+use hharness_provenance::authority::PersistenceScope;
+use hharness_provenance::origin::Origin;
+use hharness_provenance::record::ProvenanceRecord;
+use hharness_telemetry::genai::lower_verdict;
+use hharness_verification::events::validator_verdict;
+use hharness_verification::validators::Verdict;
+use hharness_verification::vocab::{
     ChargedTo, CriterionRole, Detector, OracleClass, VerdictPhase, VerdictStatus, VerdictValue,
 };
-use hh_wire::Json;
+use hharness_wire::Json;
 
 /// AC-R-2.7.3-10 — a judged verdict emitted by the canonical payload
 /// builder lowers to `gen_ai.evaluation.result` with name/score/label/
