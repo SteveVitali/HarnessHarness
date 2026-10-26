@@ -139,3 +139,36 @@ readouts (`docs/build/readouts/GATE-G4.md`,
 - What shipped, per ticket: `docs/build/BUILD_INDEX.md`.
 - The build chain a human can drive: `docs/tickets/00_MANIFEST.md`.
 - Working on the repo as an agent: `AGENTS.md`.
+
+## About the build record
+
+This repository commits its own construction history — it is part of the
+artifact, not scaffolding to hide:
+
+- `docs/build/` — the build memory: `LEDGER.md` machine state,
+  `BUILD_INDEX.md` (one row per landed ticket), `runs/<ticket>.md`
+  per-ticket run ledgers, `pr/`, `readouts/` gate readouts, `reports/`
+  evidence.
+- `docs/tickets/` — the manifest chain (`00_MANIFEST.md`) and
+  `DEFERRALS.md`, the append-only ledger of owed work.
+- `docs/adr/` — the build's decision records (append-only).
+- `research/` — the MetaHarness program ledger, registers and research
+  ADRs that produced this build.
+
+These trees are **append-only provenance**: entries are amended by
+appending dated notes, never rewritten, and they keep the absolute
+paths, branch names and environment details recorded at the time —
+that fidelity is what makes the record auditable. By contrast the
+*living* human-facing files (this README, `CONTRIBUTING.md`, the
+docs and guides outside those trees) carry no personal paths;
+`scripts/check-living-docs.sh` enforces the split and CI runs it on
+every head. The posture was ruled 2026-10-20 ("keep provenance, fix
+living docs") and lands at ticket L4.1.
+
+## License
+
+Dual-licensed under **MIT OR Apache-2.0** — see `LICENSE-MIT` and
+`LICENSE-APACHE`; you may use either. Contributions are licensed under
+the same terms (`CONTRIBUTING.md`). Third-party components — the named,
+pinned admission set (`ring`, the rustls graph, `webpki-roots`, the
+`tempfile` dev-dep) — are inventoried in `THIRD_PARTY_NOTICES.md`.
