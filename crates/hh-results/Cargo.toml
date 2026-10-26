@@ -4,21 +4,27 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-3 results store slice (spec §6.5, R-2.10.5⁰; ticket S3.4b; ADR-0161/0162/0163): ResultsRow/1 + project_row, row versions under the fixed key with head resolution, build_cells/CellTable, get_row/query_rows/cells/distribution reads at a watermark_set, the header-only bundle catalogue + bundle_refs annotation, verify_row/verify_citation, and the lab-internal leaderboard() with L1–L5 (no publication). A projection layer, never a store of record — every derived object is rebuildable, watermark-stamped and view-hashed (ADR-0161)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-eval = { path = "../hh-eval" }
-hharness-bundle = { path = "../hh-bundle" }
-hharness-lab = { path = "../hh-lab" }
-hharness-experiment = { path = "../hh-experiment" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
+hharness-bundle = { path = "../hh-bundle", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-provenance = { path = "../hh-provenance" }

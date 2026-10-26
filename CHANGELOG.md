@@ -13,9 +13,15 @@ summary, updated per release.
 
 ## [0.1.0] — unreleased
 
-First public release; publication mechanics (crate renames under the
-`hharness` prefix, crates.io metadata, the GitHub Release) are the L4.4 /
-L4.5 tickets' scope.
+First public release. Publication mechanics land under L4.4 / L4.5:
+every workspace crate carries the `hharness-*` name and full crates.io
+metadata at version `0.1.0`; the umbrella `hharness` facade crate
+re-exports the public API crates; `scripts/publish-order.sh` derives
+the topological publish order and dry-runs the whole set; the
+`release.yml` workflow builds `hh` / `hh-kernel` / `hh-helper` for the
+ADR-0380 target set (macOS arm64 + x86_64, Linux x86_64 + aarch64 —
+Windows excluded, see the ADR) with a `SHA256SUMS` manifest attached to
+the GitHub Release.
 
 ### Added
 
@@ -34,12 +40,32 @@ L4.5 tickets' scope.
   hermetic `benchset/stage3_v1` corpus, run bundles, hosting ABI,
   subagent / orchestrator / fleet / evolution / debt services.
 - `hh-xcheck` cross-implementation replay (E1 self-check + E2/E3
-  foreign-answers verify).
+  foreign-answers verify); round 4 extended the bundle with the
+  HIR-documents and ledger-scenario arms and added the E3 TypeScript
+  foreign implementation (`foreign/e3-typescript`).
 - Packaged plugin variants under `plugins/` served out of process over
   `plugin_abi/1`.
+- Gateway-backed live model path (round 4): `ModelPort` on the run path
+  over HTTP transports — local Ollama, Anthropic Messages and OpenAI
+  through the broker `CredentialPort`; the ADR-0365 rustls graph gives
+  `hharness-tls` HTTPS/mTLS transport and honours `tls.terminate`;
+  `probe_profile` live-signal routing arms.
+- Live perimeter (round 4): the `hh-live-evidence/1` framework
+  (`live-verify.sh` + spend ledger), GitHub Issues `work_source_adapter`
+  with signed webhook ingress, OAuth device flow + the mTLS
+  `CallerCredential` mediator, provider-backed `Embedder`/`Summarizer`/
+  `ProviderCompaction` adapters, a live observability-sink seam, the
+  live judge binding (`CriticDeclaration{kind=judge}`), remote `fetch`
+  transports with adopted trust fields, and signer-key custody with
+  signed checkpoints.
 - The committed build record: `docs/build/` build memory, the manifest
   ticket chain, `docs/adr/` decision records, `research/` program
   ledger.
+- Launch hardening (round 4): dual MIT/Apache-2.0 licensing with the
+  generated `THIRD_PARTY_NOTICES.md`; CI supply-chain legs (cargo-deny,
+  gitleaks, dependabot, the protected `live-verify` workflow); the
+  docs-only CI fast path; and the publish-readiness set described
+  above.
 
 ### Notes
 

@@ -1,0 +1,84 @@
+[package]
+name = "hharness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "The HarnessHarness umbrella facade (L4.5; ADR-0380) — one crate that re-exports the E1 workspace's public API crates under short module names (`hharness::ledger`, `hharness::hir`, `hharness::embed`, …), so a single dependency pulls the whole published surface. The installable binaries ride their own crates: `cargo install hharness-cli` (the `hh` CLI), `hharness-kernel`, `hharness-helper`."
+
+[features]
+default = ["tier-c1", "tier-c4"]
+# C1 durability halves (R-2.5.5¹, §5a.3) — forwarded to the owning crates.
+# Absent ⇒ those crates answer `unsupported`/typed refusals (CC6).
+tier-c1 = ["hharness-env/tier-c1", "hharness-helper/tier-c1", "hharness-ledger/tier-c1"]
+# C4 surface (§5i.1 fleet, §05h evolution, §5h.6 debt) — removable tier:
+# forwarded to `hharness-embed`'s tier-c4 wiring AND the facade's own optional
+# re-exports below, so `--no-default-features` truly removes the layer.
+tier-c4 = [
+    "hharness-embed/tier-c4",
+    "dep:hharness-fleet",
+    "dep:hharness-evolution",
+    "dep:hharness-debt",
+]
+
+# The public API crates — the publishable library set of ADR-0380. Sorted;
+# bin-only publishable crates (hharness-kernel, hharness-codegen) have no lib
+# target and are install surfaces, not re-exports.
+[dependencies]
+hharness-acp = { path = "../hh-acp", version = "0.1.0" }
+hharness-analysis = { path = "../hh-analysis", version = "0.1.0" }
+hharness-assembly = { path = "../hh-assembly", version = "0.1.0" }
+hharness-bench = { path = "../hh-bench", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-bundle = { path = "../hh-bundle", version = "0.1.0" }
+hharness-cli = { path = "../hh-cli", version = "0.1.0" }
+hharness-compiler = { path = "../hh-compiler", version = "0.1.0" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
+hharness-context = { path = "../hh-context", version = "0.1.0" }
+hharness-control = { path = "../hh-control", version = "0.1.0" }
+hharness-embed = { path = "../hh-embed", version = "0.1.0" }
+hharness-embed-client-generated = { path = "../hh-embed-client-generated", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
+hharness-fleet-adapter = { path = "../hh-fleet-adapter", version = "0.1.0" }
+hharness-gateway = { path = "../hh-gateway", version = "0.1.0" }
+hharness-helper = { path = "../hh-helper", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-hosting = { path = "../hh-hosting", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-mcp = { path = "../hh-mcp", version = "0.1.0" }
+hharness-mcp-lab = { path = "../hh-mcp-lab", version = "0.1.0" }
+hharness-monitor = { path = "../hh-monitor", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-orchestrator = { path = "../hh-orchestrator", version = "0.1.0" }
+hharness-plugin = { path = "../hh-plugin", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-results = { path = "../hh-results", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
+hharness-subagent = { path = "../hh-subagent", version = "0.1.0" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
+hharness-tls = { path = "../hh-tls", version = "0.1.0" }
+hharness-varhost = { path = "../hh-varhost", version = "0.1.0" }
+hharness-verification = { path = "../hh-verification", version = "0.1.0" }
+hharness-web = { path = "../hh-web", version = "0.1.0" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-xcheck = { path = "../hh-xcheck", version = "0.1.0" }
+
+# The removable C4 tier — facade re-exports gated by `tier-c4` (above).
+hharness-fleet = { path = "../hh-fleet", version = "0.1.0", optional = true }
+hharness-evolution = { path = "../hh-evolution", version = "0.1.0", optional = true }
+hharness-debt = { path = "../hh-debt", version = "0.1.0", optional = true }
+
+[package.metadata.docs.rs]
+all-features = true

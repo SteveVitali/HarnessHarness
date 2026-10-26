@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 reference monitor — the security kernel & capability model (spec §5g.1, R-2.8.1; ticket S1.11): the kernel-owned AuthorityHandle table projection over security.permission.granted/revoked, root minting ∩ authority_cap, the SurfaceArgMap evaluator, deterministic raise-only risk assessment, the Π interpreter + default table in both modes, `authorize` steps 0–3 and 6, delegation attenuation + revocation cascade, the kernel context_label stamp, the HandleLeak checks, and the no-Text/no-model-call static + runtime protections. MUST-code (the §5g.1 §2.6 TCB); never model-facing; no `Text` leaf and no model call on any path."
 
 [lib]
@@ -14,14 +20,14 @@ name = "hh-authorize"
 path = "src/bin/hh-authorize.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-assembly = { path = "../hh-assembly" }
-hharness-compiler = { path = "../hh-compiler" }
-hharness-ledger = { path = "../hh-ledger" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-assembly = { path = "../hh-assembly", version = "0.1.0" }
+hharness-compiler = { path = "../hh-compiler", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-eval = { path = "../hh-eval" }

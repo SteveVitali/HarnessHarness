@@ -4,13 +4,19 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0/Stage-1 Harness IR — the HIR/1 dialect (spec §3.1, R-2.1.2; ADR-0015/0016/0017/0018): thirteen entity kinds, two opaque leaves, seven edges, a provenance and version record on every node and edge; validate/canonicalize/identity/seal/diff/apply/invert/classify, migrate (identity), project, and OpaqueProcess. Dialect bumps + migration are the CC8 mechanism for enum growth (anchors here); the §3.1.3 per-kind classify_home table is home-plane ownership data (CC10)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }

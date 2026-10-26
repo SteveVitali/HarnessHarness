@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C0 attended CLI slice R-2.11.1^0b — a generated client and renderer over hh-embed/1 (ADR-0167/0168/0169): attended terminal mode with per-effect approvals, `approval *`, `run resume/fork/cancel/inspect`, the attendance declaration, I-1, exhaustion escalate/stop, the full exit-class table, `json`, stdin typing, InvocationRecord + idempotency. The package depends only on the generated client (AC-R-2.11.1-1); it contains no kernel semantics (K-2)."
 
 [lib]
@@ -16,13 +22,13 @@ path = "src/main.rs"
 [dependencies]
 # The generated, drift-checked client — the CLI's only contract dependency
 # (AC-R-2.11.1-1; every command is one typed hh-embed/1 operation sequence).
-hharness-embed-client-generated = { path = "../hh-embed-client-generated" }
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
+hharness-embed-client-generated = { path = "../hh-embed-client-generated", version = "0.1.0" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
 # S4.12 — the `hh acp` verb: the ACP artefact + `serve_session`/`EmbedDriver`
 # are surface records-in/records-out code (no kernel reach — the driver
 # speaks `hh-embed/1` through the same `Boundary` every verb uses, K-2).
-hharness-acp = { path = "../hh-acp" }
+hharness-acp = { path = "../hh-acp", version = "0.1.0" }
 
 [dev-dependencies]
 # The in-process service, for the binding-(a) conformance suite — the same

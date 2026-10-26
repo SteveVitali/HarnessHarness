@@ -1,9 +1,17 @@
 [package]
 name = "hharness-plugin-fixture"
+# ADR-0380 (a): fixture / packaged-plugin / test-support — never published
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The S2.2 plugin-side `plugin_abi/1` runtime + conformance fixture (spec §8.4, R-2.12.2): the shared plugin-side loop (`VariantLogic` over a framed channel — hello, bind, invoke, stream, guard, conformance, callbacks) plus the fixture modes — null (well-behaved, one per class), hostile (authority-crossing/reach/isolation probes), guard (canned verdicts), crash, slow. `hh-compact-evict-oldest` builds on the same runtime."
 
 [[bin]]
@@ -11,12 +19,12 @@ name = "hh-plugin-fixture"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
-hharness-varhost = { path = "../hh-varhost" }
-hharness-control = { path = "../hh-control" }
-hharness-verification = { path = "../hh-verification" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-identity = { path = "../hh-identity" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ontology = { path = "../hh-ontology" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-varhost = { path = "../hh-varhost", version = "0.1.0" }
+hharness-control = { path = "../hh-control", version = "0.1.0" }
+hharness-verification = { path = "../hh-verification", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }

@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C1 read-only web instrument (spec §7.2, R-2.11.2¹; S4.10). A pure projection client over hh-embed/1 binding (c): no state of record, every view derived through canonical ops, all writes named kernel/Lab operations with responder provenance; the P1–P13 security posture is enforced at the surface gate."
 
 [lib]
@@ -14,17 +20,17 @@ name = "hh-web"
 path = "src/main.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
-hharness-identity = { path = "../hh-identity" }
-hharness-embed-client-generated = { path = "../hh-embed-client-generated" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-embed-client-generated = { path = "../hh-embed-client-generated", version = "0.1.0" }
 # The declared SinkPolicy is the hharness-telemetry record (P8 — the surface is
 # a sink, not a store): content classes, redaction, field caps, consent.
-hharness-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
 # The serving scrub — every payload sweeps `hharness_secrets::redact` before it
 # leaves (AC-6(g): the LT canary battery leaks nothing through any
 # response — SV-3's mask-before-model-visible applied at the surface).
-hharness-secrets = { path = "../hh-secrets" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-embed = { path = "../hh-embed" }

@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The Stage-3 fixture MCP surface (spec section 7.3, R-2.11.3^0; ticket S3.1; ADR-0097 D7/ADR-0173/0174). The hh-mcp-target/1 served-artifact record, the compiled-bundle -> canonical tool-catalogue lowering (byte-identical for every connection of one bundle), the stdio_launch CallerBinding record fixed to the test principal, and the newline-JSON-RPC serve loop the hh-mcp-serve binary wraps. A pure function of (artifact, binding): no ledger, no kernel link, no authority from caller _meta."
 
 [lib]
@@ -14,19 +20,19 @@ name = "hh-mcp-serve"
 path = "src/bin/hh-mcp-serve.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
 # The binary decodes `hh-bundle/1` directories/containers (the lib's
 # lowering is over member bytes only — the dep serves `hh-mcp-serve`).
-hharness-bundle = { path = "../hh-bundle" }
+hharness-bundle = { path = "../hh-bundle", version = "0.1.0" }
 # S4.5b — the `McpExecutor` is a `ToolExecutor`; `hharness-hir`/`hharness-containment`
 # name its declaration's domains/isolation.
-hharness-env = { path = "../hh-env" }
-hharness-hir = { path = "../hh-hir" }
-hharness-containment = { path = "../hh-containment" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
 # R2.14 — the propagation carrier's `_meta` shape (`dev.cognition/
 # propagation`) is hharness-telemetry's single definition (CC1).
-hharness-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
 
 [dev-dependencies]
 # The paused-arm integration fixture (DF-S3.9-1): a real Dispatcher over a

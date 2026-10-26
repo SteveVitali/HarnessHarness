@@ -1,0 +1,125 @@
+# HarnessHarness release — L4.5 / ADR-0380 (c). Builds the three installable
+# binaries (`hh`, `hh-kernel`, `hh-helper`) for the ADR's v0.1.0 target set:
+#   aarch64-apple-darwin      — macos-latest (native arm64 runner)
+#   x86_64-apple-darwin       — macos-latest, cross-built via `rustup target
+#                               add` (no hosted Intel runner is relied upon)
+#   x86_64-unknown-linux-gnu  — ubuntu-latest (native)
+#   aarch64-unknown-linux-gnu — ubuntu-24.04-arm (native; public repo)
+# Windows is deliberately excluded for v0.1.0 (ADR-0380 (c)): the helper's
+# containment backends are seatbelt (macOS) and podman (Linux) only — a
+# Windows build would ship without its containment floor.
+#
+# Triggers: tag `v*` (builds + attaches the archives and SHA256SUMS to the
+# GitHub Release) and `workflow_dispatch` (dry mode — builds and uploads the
+# same archives as workflow artifacts, no release). Every `uses:` is pinned
+# by commit SHA (the `# v…` comment names the version dependabot tracks),
+# matching the ci.yml convention (ADR-0378).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dist:
+    name: dist ${{ matrix.target }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          # no hosted Intel runner is relied upon — x86_64-apple-darwin is
+          # cross-built on the arm64 runner via `rustup target add`
+          # (ADR-0380 (c)'s recorded contingency).
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # rust-toolchain.toml pins 1.94 (the declared rust-version — the same
+      # toolchain the released bits are tested under); the cross leg adds
+      # its target explicitly.
+      - name: Install pinned toolchain + target
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: "1.94"
+          targets: ${{ matrix.target }}
+
+      - name: Fetch pinned dependencies
+        run: cargo fetch --locked --target ${{ matrix.target }}
+
+      - name: Build release binaries
+        run: |
+          cargo build --release --locked --target "${{ matrix.target }}" \
+            -p hharness-cli -p hharness-kernel -p hharness-helper
+
+      - name: Stage archive + checksum
+        run: |
+          set -euo pipefail
+          T="${{ matrix.target }}"
+          VER="$(sed -n '/\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          NAME="hharness-${VER}-${T}"
+          mkdir -p "stage/${NAME}"
+          cp "target/${T}/release/hh" "target/${T}/release/hh-kernel" \
+             "target/${T}/release/hh-helper" "stage/${NAME}/"
+          tar -czf "${NAME}.tar.gz" -C stage "${NAME}"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${NAME}.tar.gz" > "${NAME}.sha256"
+          else
+            shasum -a 256 "${NAME}.tar.gz" > "${NAME}.sha256"
+          fi
+          cat "${NAME}.sha256"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+        id: dist
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.dist.outputs.name }}
+          path: |
+            ${{ steps.dist.outputs.name }}.tar.gz
+            ${{ steps.dist.outputs.name }}.sha256
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release (tag only)
+    # workflow_dispatch is the dry mode: artifacts only, no release.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: dist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates the GitHub Release on tag runs
+    steps:
+      - name: Download all target archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: hharness-*
+          merge-multiple: true
+          path: release
+
+      - name: Combined SHA256SUMS + release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat release/*.sha256 > release/SHA256SUMS
+          cat release/SHA256SUMS
+          (cd release && sha256sum -c SHA256SUMS)
+          gh release create "${{ github.ref_name }}" --verify-tag \
+            --title "HarnessHarness ${{ github.ref_name }}" \
+            --notes "E1 reference build ${{ github.ref_name }} — see CHANGELOG.md. Archives: hh, hh-kernel, hh-helper per target (SHA256SUMS signed list attached)." \
+            release/*.tar.gz release/SHA256SUMS

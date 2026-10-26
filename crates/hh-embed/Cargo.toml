@@ -4,58 +4,64 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25). EmbedService is binding (a) — the in-process service over Store + EnvDriver + the hharness-control Driver; the stdio JSON-RPC loop in `stdio` is binding (b) — both dispatch through the one `handle` path so the bindings are byte-identical by construction. Sessions are ledger runs under a fenced writer lease; attach sessions are read-only by construction (no lease, no appends)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
 # The ADR-0365 TLS home — the model_port `tls{}` params build the
 # `ClientTls` `HttpModelTransport` consumes on `https:` lanes.
-hharness-tls = { path = "../hh-tls" }
-hharness-embed-schema = { path = "../hh-embed-schema" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-assembly = { path = "../hh-assembly" }
-hharness-registry = { path = "../hh-registry" }
-hharness-env = { path = "../hh-env" }
-hharness-control = { path = "../hh-control" }
-hharness-context = { path = "../hh-context" }
-hharness-verification = { path = "../hh-verification" }
-hharness-containment = { path = "../hh-containment" }
-hharness-secrets = { path = "../hh-secrets" }
-hharness-monitor = { path = "../hh-monitor" }
-hharness-gateway = { path = "../hh-gateway" }
-hharness-compiler = { path = "../hh-compiler" }
-hharness-eval = { path = "../hh-eval" }
-hharness-budget = { path = "../hh-budget" }
-hharness-lab = { path = "../hh-lab" }
-hharness-bundle = { path = "../hh-bundle" }
-hharness-experiment = { path = "../hh-experiment" }
-hharness-analysis = { path = "../hh-analysis" }
-hharness-results = { path = "../hh-results" }
-hharness-mcp = { path = "../hh-mcp" }
+hharness-tls = { path = "../hh-tls", version = "0.1.0" }
+hharness-embed-schema = { path = "../hh-embed-schema", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-assembly = { path = "../hh-assembly", version = "0.1.0" }
+hharness-registry = { path = "../hh-registry", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-control = { path = "../hh-control", version = "0.1.0" }
+hharness-context = { path = "../hh-context", version = "0.1.0" }
+hharness-verification = { path = "../hh-verification", version = "0.1.0" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
+hharness-monitor = { path = "../hh-monitor", version = "0.1.0" }
+hharness-gateway = { path = "../hh-gateway", version = "0.1.0" }
+hharness-compiler = { path = "../hh-compiler", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-bundle = { path = "../hh-bundle", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
+hharness-analysis = { path = "../hh-analysis", version = "0.1.0" }
+hharness-results = { path = "../hh-results", version = "0.1.0" }
+hharness-mcp = { path = "../hh-mcp", version = "0.1.0" }
 # S4.10 (R-2.11.2): the `trace_view`/`cost_view` projections fold in the
 # owning crate (ADR-0042 D2) — the boundary calls the owner fold; the
 # ledger only hosts ledger-owned kinds.
-hharness-telemetry = { path = "../hh-telemetry" }
+hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
 # S4.9 (§5i.1, C4): the organizational layer is a removable tier — the
 # `fleet.*` ops stay in the schema (CC7 single source) and answer
 # `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
-hharness-fleet = { path = "../hh-fleet", optional = true }
+hharness-fleet = { path = "../hh-fleet", optional = true, version = "0.1.0" }
 # S6.1a (§05h, C4): the evolution pipeline is a removable tier too —
 # `lab.evolution.*` ops stay in the schema (CC7) and answer
 # `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
-hharness-evolution = { path = "../hh-evolution", optional = true }
+hharness-evolution = { path = "../hh-evolution", optional = true, version = "0.1.0" }
 # S6.1b (§5h.6, C4): the assumption-debt manager is a removable tier too —
 # `lab.debt.{register,sweep,settle,retire,propose,manager_open}` ops stay
 # in the schema (CC7) and answer `Unsupported{by: "tier-c4"}` on a
 # `--no-default-features` build.
-hharness-debt = { path = "../hh-debt", optional = true }
+hharness-debt = { path = "../hh-debt", optional = true, version = "0.1.0" }
 
 # CAP.2's composed hosted-participant spine drives a real `hharness_hosting`
 # `HostingService` next to `EmbedService` — a test-only edge (the
@@ -71,3 +77,7 @@ hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
 [features]
 default = ["tier-c4"]
 tier-c4 = ["dep:hharness-fleet", "dep:hharness-evolution", "dep:hharness-debt"]
+
+# L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
+[package.metadata.docs.rs]
+all-features = true

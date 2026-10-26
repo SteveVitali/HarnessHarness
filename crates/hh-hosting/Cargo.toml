@@ -4,19 +4,25 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The hh-hosting/1 Hosting ABI schema slice (spec §6.6, R-2.10.6⁰; ticket S3.4d; ADR-0164/0165/0166 (e)): the HostedEvent envelope with I-1…I-5 validation, proj_ABI (native-ledger → hosted presentation driven by hharness-ledger's hosted_lowering column), the lift back into native-class rows with a declared LoweringLossReport, the ParticipantRecord/AdapterRecord schemas (hh.hosting/1 ext block), and adapter zero — the deterministic reference-harness fixture. Schemas and a fixture over native runs only; the hosting service (handshake, verbs, probes, quarantine) lands at S4.5a."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-telemetry = { path = "../hh-telemetry" }

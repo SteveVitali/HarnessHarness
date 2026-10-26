@@ -4,21 +4,27 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The C1/Stage-4 subagent kernel slice (spec §5e.3, R-2.6.3¹ + R-2.1.6¹; ticket S4.6): the one kernel operation `spawn` composing delegate + allocate + derive + the child writer lease atomically (idempotent on `(decision, H(spec))`), `SubagentSpec`/`SubagentResult`/`ReturnContract`/`ChildOutcome`, `merge` under `single_writer`/`parent_decides` with `MergeReport` + the G-1/G-2/G-5 vetoes, spawn-time `OwnershipRecord` grants, parent-mediated peer messaging, `cancel`/`detach_to_child` containment, the `control.subagent.*`/`control.merge.*`/`control.message.*`/`control.ownership.transferred` audit rows, and the subagent run-tree projection. MUST-code (TCB); never model-facing; no `Text` leaf is read on any path."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-hharness-wire = { path = "../hh-wire" }
-hharness-identity = { path = "../hh-identity" }
-hharness-provenance = { path = "../hh-provenance" }
-hharness-ontology = { path = "../hh-ontology" }
-hharness-hir = { path = "../hh-hir" }
-hharness-ledger = { path = "../hh-ledger" }
-hharness-budget = { path = "../hh-budget" }
-hharness-monitor = { path = "../hh-monitor" }
-hharness-env = { path = "../hh-env" }
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-monitor = { path = "../hh-monitor", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-compiler = { path = "../hh-compiler" }
