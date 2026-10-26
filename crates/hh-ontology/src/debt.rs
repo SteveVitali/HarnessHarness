@@ -601,7 +601,7 @@ impl HypothesisSubject {
     }
 
     /// Parse the canonical spelling (bare members only — `component` carries
-    /// a payload and decodes through [`HypothesisSubject::from_json`]).
+    /// a payload and decodes through [`HypothesisTyped::from_json`]).
     pub fn parse(s: &str) -> Option<HypothesisSubject> {
         match s {
             "deficiency" => Some(HypothesisSubject::Deficiency),

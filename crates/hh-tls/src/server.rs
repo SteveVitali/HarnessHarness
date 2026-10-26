@@ -135,6 +135,25 @@ impl ServerTlsStream {
     pub fn set_nonblocking(&self, nonblocking: bool) -> std::io::Result<()> {
         self.inner.sock.set_nonblocking(nonblocking)
     }
+
+    /// `release()` — the refuse-then-close path's orderly release, for a
+    /// caller that has already written + flushed its terminal reply:
+    /// blocking mode is restored, `close_notify` is sent and flushed now
+    /// (the `Drop` arm's later re-send is inert), the socket's write
+    /// half shuts so the queued reply stays deliverable, then the peer's
+    /// in-flight bytes drain to EOF — bounded by the socket's own read
+    /// deadline. A bare `close()` on a socket still holding unread
+    /// input answers RST on BSD loopback and can discard the queued
+    /// reply — observed on the L4.3 macOS leg, where the
+    /// unmapped-subject `401` surfaced client-side as ECONNRESET.
+    pub fn release(&mut self) {
+        let _ = self.inner.sock.set_nonblocking(false);
+        self.inner.conn.send_close_notify();
+        let _ = self.inner.flush();
+        let _ = self.inner.sock.shutdown(std::net::Shutdown::Write);
+        let mut sink = [0u8; 8192];
+        while matches!(self.inner.read(&mut sink), Ok(n) if n > 0) {}
+    }
 }
 
 impl Read for ServerTlsStream {

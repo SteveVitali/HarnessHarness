@@ -1,10 +1,10 @@
 //! Supersession & revocation: the `supersedes` edge, [`RevocationRecord`], the derived
-//! [`StaleIndex`], and `supersede`/`revoke` (§8.3 #2/#3; ADR-0037 D2 as amended by ADR-0080/0082).
+//! `StaleIndex`, and `supersede`/`revoke` (§8.3 #2/#3; ADR-0037 D2 as amended by ADR-0080/0082).
 //!
 //! Revocation is **never an in-place flag** (S1): a `RevocationRecord` is a new version of the
 //! same kind with an empty body, so "revoked" is itself hash-chained. The version graph is
 //! **acyclic** and per-name a DAG (S2). Dependants of a revoked member are *stale-by-dependency*
-//! in the derived [`StaleIndex`] and their results are annotated `depends_on_revoked = true`,
+//! in the derived `StaleIndex` and their results are annotated `depends_on_revoked = true`,
 //! never silently excluded (S4; CC3). Full resolver enforcement over the index is Stage 2; this
 //! Stage-1 slice lands the records, edges and the index.
 

@@ -101,7 +101,7 @@ pub enum IdError {
     UnknownIdentityProfile { idp: String },
 }
 
-/// The recomputation verdict for [`verify`].
+/// The recomputation verdict for [`verify_blob`]/[`verify_record`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerifyOutcome {
     /// The id matches the recomputed digest.
@@ -181,7 +181,7 @@ fn digest_for_algorithm(algo: &str, framed: &[u8]) -> Option<String> {
 /// The raw (unframed) digest of `bytes` under a profile's
 /// `hash_algorithm` — e.g. the audit tree's `H("")` constant. `None` when
 /// the profile's algorithm is unregistered (a catalogue bug, not an input
-/// error — see [`digest_for_algorithm`]).
+/// error — see `digest_for_algorithm`).
 pub fn raw_digest(profile: &IdentityProfile, bytes: &[u8]) -> String {
     digest_for_algorithm(profile.hash_algorithm, bytes).unwrap_or_else(|| {
         panic!(

@@ -302,7 +302,7 @@ impl Placeholder {
 
 /// `SecretUnavailable{channel, reason}` — the terminal observation the model
 /// boundary receives when mediation fails (§5g.3 §4; AC-R-2.8.3-10). `reason` is
-/// a closed tag ([`RefusedCode`] spelling), never prose and never a fallback
+/// a closed tag ([`crate::errors::RefusedCode`] spelling), never prose and never a fallback
 /// value — there is no environment-value path to fall back to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretUnavailable {

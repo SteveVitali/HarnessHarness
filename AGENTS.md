@@ -87,7 +87,7 @@ bash scripts/check-drift.sh           # regenerate schema artifacts; fail on dri
 bash scripts/check-removability.sh    # CC6 tier-removability gate
 bash <skills>/build-memory/scripts/check-build-memory.sh .   # build-memory hygiene
 gh workflow run ci.yml --ref <branch>   # a full run (ADR-0362 D4: per gate, never per ticket)
-gh run view <id> --json jobs,conclusion # read a full run by hand (reader lands at L4.3)
+bash scripts/ci/full-run.sh read <sha>        # read a full run (the D-D reader line; `gh run view` by hand)
 ```
 
 Smoke: `cargo build -p hh-cli -p hh-kernel` then
@@ -105,7 +105,7 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
   blob-pool AEAD (ADR-0361 — `hh-ledger`'s `BlobCipher` seam, the producer
   stays in `hh-secrets`), and (c) the `hh-tls`-only rustls graph admitted
   by ADR-0365 (`rustls =0.23.46` on the `ring` backend +
-  `rustls-webpki =0.103.15` + `webpki-roots =1.0.9` — the closed
+  `rustls-webpki =0.103.16` + `webpki-roots =1.0.10` — the closed
   HTTPS-client / TLS-server / mTLS scope). Do
   not add dependencies — any further crate or admitted surface is its own ADR.
 - **CC1 — one canonical implementation.** Reuse the existing codec, store,

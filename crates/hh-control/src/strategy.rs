@@ -8,7 +8,7 @@
 //!
 //! The class is registered per ADR-0023 with `required_inputs ⊇
 //! {ModelProfile, ResourceAccount}` (T-LCD-08); the `ClassRecord` declares
-//! `steer_mode` and `concurrent_input` ([`ClassSteering`]).
+//! `steer_mode` and `concurrent_input` (`ClassSteering`).
 
 use std::collections::BTreeMap;
 

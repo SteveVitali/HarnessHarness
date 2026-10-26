@@ -125,7 +125,7 @@ impl DiffOp {
         }
     }
 
-    /// The node `id` (base-side `semantic_id`) the op touches, or [`DOC`].
+    /// The node `id` (base-side `semantic_id`) the op touches, or `DOC`.
     pub fn node_id(&self) -> &str {
         match self {
             DiffOp::AddNode { .. } => DOC,

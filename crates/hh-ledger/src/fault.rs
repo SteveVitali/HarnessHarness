@@ -2,7 +2,7 @@
 //! ADR-0132 §4–5). `KillPoint` names the durable boundary a fault injector
 //! stops at — "runtime death *after* the named row is durable, before the
 //! next one lands". Every row before the kill point is already durable;
-//! nothing after lands. The battery ([`hh_battery`]) arms a point, drives
+//! nothing after lands. The battery (`hh_battery`) arms a point, drives
 //! the canonical sequence through the real seams, drops the store mid-run,
 //! reopens, and asserts the §5a.3 recovery-table outcome per effect class.
 //!

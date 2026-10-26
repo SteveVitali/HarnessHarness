@@ -2488,7 +2488,7 @@ impl Store {
     }
 
     /// `checkpoint` with witness cosignatures (§5g.6 §2 — the C2 witness
-    /// extension; S-320; ADR-0345 D1). Each supplied [`WitnessSigner`] mints a
+    /// extension; S-320; ADR-0345 D1). Each supplied [`crate::audit::WitnessSigner`] mints a
     /// `{witness_name, key_id, timestamp, sig}` entry over
     /// `timestamp ‖ <the same unsigned note>` — witness custody is external
     /// exactly like the primary signer's (OQ-170 stays open). When the run's

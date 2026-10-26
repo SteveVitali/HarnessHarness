@@ -11,6 +11,14 @@
 # comment — a step that reads committed content under docs/ or research/ is never
 # gated (a job's own output written there is not a read). check-ci-gating.sh
 # enforces this file's convention.
+#
+# L4.3 (R-2.12.4 supply-chain half / ADR-0378): ubuntu + macOS matrix — the
+# helper's seatbelt backend is macOS-native; each leg runs the fast-path
+# decision and uploads its own `$RUNNER_OS`-named anchor. The supply-chain
+# jobs (cargo-deny, gitleaks) are separate jobs that run on every head and are
+# declared before `build-test-drift` — the step-mode lint requires the anchor
+# pair to be this file's last two steps. Every `uses:` is pinned by commit SHA
+# (the `# v…` comment names the version dependabot tracks).
 name: ci
 
 on:
@@ -28,11 +36,53 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
-  build-test-drift:
-    name: build · test · fmt · drift
+  # The supply-chain jobs run on every head: gitleaks scans docs/ history (a
+  # docs reader is never gated) and cargo-deny audits the lockfile — neither
+  # sits behind the fast-path decision, which lives inside build-test-drift.
+  cargo-deny:
+    name: cargo-deny (licenses · advisories · bans · sources)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install cargo-deny (pinned 0.20.2)
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: cargo-deny@0.20.2
+      - name: cargo deny check (deny.toml)
+        run: cargo deny check
+
+  gitleaks:
+    name: gitleaks (full history + PR diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # --log-opts=--all needs every commit.
+          fetch-depth: 0
+      - name: Install gitleaks (pinned 8.30.1 + sha256)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C /usr/local/bin gitleaks
+          gitleaks version
+      # CC1 — the one committed config, shared with live-verify.sh's
+      # staged gate; the test-fixture allowlists live there only.
+      - name: Full-history scan (.gitleaks.toml)
+        run: gitleaks git --redact --log-opts=--all -c .gitleaks.toml .
+      - name: PR diff scan
+        if: github.event_name == 'pull_request'
+        run: gitleaks git --redact -c .gitleaks.toml --log-opts="${{ github.event.pull_request.base.sha }}..HEAD" .
+
+  build-test-drift:
+    name: build · test · fmt · drift (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # ci-mode: both — the fast-path machinery's and the live-evidence
       # runner's self-tests run on every head, so the machinery itself can
@@ -41,13 +91,17 @@ jobs:
         run: |
           bash scripts/ci/test-fast-path.sh
           bash scripts/ci/test-check-ci-gating.sh
+          bash scripts/ci/test-full-run.sh
           bash scripts/ci/test-live-verify.sh
+          bash scripts/ci/test-live-verify-workflow.sh
           bash scripts/ci/test-check-living-docs.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
 
       # ci-mode: both — the step-mode lint reads this file and the working tree.
       - name: CI step-mode lint
-        run: bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml
+        run: |
+          bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml
+          bash scripts/ci/check-live-verify-workflow.sh
 
       # ci-mode: both — the guard reads committed living human-facing files
       # (markdown, manifests, workflows), which a docs-only head can change;
@@ -77,10 +131,24 @@ jobs:
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain
         if: steps.path.outputs.mode != 'fast'
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: "1.94"
           components: rustfmt
+
+      # L4.3: the R4.5 E2/E3 foreign legs run on both matrix legs — E3 needs
+      # node >= 22 (runner images carry older majors), E2 needs python3.
+      - name: Install node 22 (E3 foreign leg)
+        if: steps.path.outputs.mode != 'fast'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install python 3.13 (E2 foreign leg)
+        if: steps.path.outputs.mode != 'fast'
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
 
       - name: Format check
         if: steps.path.outputs.mode != 'fast'
@@ -111,6 +179,14 @@ jobs:
       - name: Schema drift check (CC7)
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-drift.sh
+
+      # L4.3 / MINOR-2: rustdoc warnings are build noise the public repo
+      # cannot carry; one matrix leg suffices.
+      - name: Rustdoc warnings gate
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --no-deps
 
       # R4.5 / DF-S0.3-2: E1 self-check + E2 (python3) + E3 (node >= 22)
       # foreign verifies, answers regenerated at run time. Reads crates/ +
@@ -151,7 +227,7 @@ jobs:
 
       - name: Upload boundary measurement sheet
         if: steps.path.outputs.mode != 'fast' && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: s0.1-boundary-spike
           path: docs/build/reports/S0.1-boundary-spike.md
@@ -170,7 +246,7 @@ jobs:
 
       - name: Upload anchor
         if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.anchor.outputs.name }}
           path: ci-anchor.txt

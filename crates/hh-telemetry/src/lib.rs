@@ -3,7 +3,7 @@
 //!
 //! The architectural invariant: **a trace is a deterministic projection over
 //! the run ledger — never a second store** (ADR-0042 D1/D2). Everything this
-//! crate produces is either (a) a [`View`] folded from the durable prefix
+//! crate produces is either (a) a `View` folded from the durable prefix
 //! (`trace_view`, `cost_view`, `metric_view`), (b) a payload a named component
 //! appends through the canonical `Store::append` path
 //! (`measurement.export.delivered`, `measurement.metric.emitted`), or (c) a

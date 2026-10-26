@@ -1,7 +1,7 @@
 //! The §3.1.3 **semantic product types** — the thirteen entity records, the per-edge field
 //! records, `VersionRecord`, `SurfaceRecord`, and `OpaqueProcess`. Every record is a fixed
-//! product type (closed sums only); unknown members are [`HirError::SchemaViolation`] on
-//! parse, unknown kind names are [`HirError::UnknownKind`].
+//! product type (closed sums only); unknown members are [`crate::HirError::SchemaViolation`] on
+//! parse, unknown kind names are [`crate::HirError::UnknownKind`].
 //!
 //! Layout invariant (§3.1.2/§3.1.11): `content` is `Text`-leaved where prose is legal
 //! (instructions, `purpose`, rubrics, memory content); everything else is a structured
@@ -334,7 +334,7 @@ pub enum ProcedureStep {
 
 /// `Procedure = {preconditions, steps, expected_evidence, allowed_capabilities[],
 /// failure_handlers, effects_derived}` (§3.1.3). `effects_derived` is **computed** —
-/// [`ProcedureRecord::derive_effects`]; it is not an input field.
+/// `derived_effects`; it is not an input field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureRecord {
     /// Preconditions (structured).

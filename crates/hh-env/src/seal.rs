@@ -1,7 +1,7 @@
 //! The DF-S1.12-3 seal seam — the `PermissionUnreachable` warnings a
 //! definition's `EnvironmentRecord` + `Permission` grants produce *before* any
 //! run (the seal-path half of AC-R-2.8.4-14; the attach-path half is
-//! [`hh_containment::attach`]'s `SealWarning`). A grant whose domain can never
+//! [`mod@hh_containment::attach`]'s `SealWarning`). A grant whose domain can never
 //! be admitted under the environment's policy is an advisory at seal — never a
 //! refusal (the run's `floor_gate` refuses the *effect*, not the record).
 //!

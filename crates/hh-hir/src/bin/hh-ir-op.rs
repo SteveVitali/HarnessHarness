@@ -13,7 +13,7 @@
 //!                                                 ProvenanceRecord)
 //!   hh-ir-op apply <base.json> <diff.json>      → document bytes
 //!   hh-ir-op invert <diff.json>                 → diff bytes
-//!   hh-ir-op migrate <doc.json> <from> <to>     → document bytes
+//!   hh-ir-op migrate <doc.json> &lt;from&gt; &lt;to&gt;     → document bytes
 //!   hh-ir-op project <doc.json> <P1..P7|kind>   → sub-DAG JSON
 
 use std::io::Read;

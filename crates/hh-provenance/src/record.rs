@@ -237,7 +237,7 @@ impl ProvenanceRecord {
         }
     }
 
-    /// Mint under a [`MintingContext`] — `authority = default_authority_in(
+    /// Mint under a [`crate::origin::MintingContext`] — `authority = default_authority_in(
     /// origin, scope, None, ctx)` (CC8 additive: `minted` delegates with an
     /// empty context). The only behavioural difference a context makes for a
     /// `participant` origin is the vouched → `delegate` path (DF-S1.3-2;

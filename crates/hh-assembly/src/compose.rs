@@ -55,7 +55,7 @@ pub struct Layer {
 /// `compose(layers) → Assembly` — the merge is deterministic and order-defined:
 /// layers apply in ascending `precedence` (ties are a conflict where both set a
 /// `replace` path differently), each field merges by its declared
-/// [`MergePolicy`], and the result's `layers[]` records the participating
+/// [`crate::MergePolicy`], and the result's `layers[]` records the participating
 /// sources. `Err` carries the complete diagnostic set (never fail-fast —
 /// §3.3.5).
 pub fn compose(

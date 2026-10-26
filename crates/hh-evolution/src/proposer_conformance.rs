@@ -39,7 +39,7 @@ use crate::records::{
 };
 
 /// The drive channel a proposer runs over — the first-party variant is
-/// [`InProcessPort`]; a `plugin_abi/1` variant rides [`PluginPort`] (the
+/// [`InProcessPort`]; a `plugin_abi/1` variant rides `PluginPort` (the
 /// variant host supplies the out-of-process lane — §06's `registry_ci`).
 pub trait ProposerPort {
     /// `declare()` → the declaration document.

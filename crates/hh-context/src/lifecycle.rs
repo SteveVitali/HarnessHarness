@@ -56,7 +56,7 @@ pub struct ContractCheck {
     /// `invalidation_condition` fired (the condition kinds the environment
     /// can evaluate: `ttl_elapsed`, `validator_fails` are derived from the
     /// above; `scope_ended`/`replacement_published` come from the caller via
-    /// [`LifecycleInput::condition_fired`]).
+    /// [`LifecycleEnv::condition_fired`]).
     pub condition_fired: bool,
 }
 

@@ -23,7 +23,7 @@ ring is licensed Apache-2.0 AND ISC. Portions are derived from OpenSSL and Borin
 
 _admitted by ADR-0365 — `hh-tls` closed HTTPS/mTLS scope (`ring` backend)._
 
-### rustls-webpki 0.103.15 — ISC
+### rustls-webpki 0.103.16 — ISC
 
 _admitted by ADR-0365 — certificate verification inside `hh-tls`._
 
@@ -33,7 +33,7 @@ ISC-licensed; see the ISC text in the appendix below.
 
 _dev-dependency of `hh-varhost` tests only — never a shipped artifact._
 
-### webpki-roots 1.0.9 — CDLA-Permissive-2.0
+### webpki-roots 1.0.10 — CDLA-Permissive-2.0
 
 _admitted by ADR-0365 — Mozilla root store inside `hh-tls`._
 

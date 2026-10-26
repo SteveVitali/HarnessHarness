@@ -1,0 +1,107 @@
+# HarnessHarness live-verify — the operator's "Local + manual workflow"
+# ruling (LEDGER GATE DECISIONS, 2026-10-20): live legs may run in CI only
+# through a manual dispatch bound to the protected GitHub Environment
+# `live-verify` (secrets + required reviewer) — NEVER on pull_request or
+# any fork-visible event. Dormant-safe: nothing here runs until the
+# operator creates the Environment, provisions its secrets and dispatches.
+# Evidence records are uploaded as a run artifact; committing them stays
+# the local runner's job (scripts/live-verify.sh, ADR-0363). The dispatch
+# guard is lint-enforced by scripts/ci/check-live-verify-workflow.sh.
+name: live-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: "live-verify.sh leg ids, space-separated (see the leg registry)"
+        required: true
+        default: "selftest"
+      budget:
+        description: "per-leg USD budget ceiling (the script's own cap still gates)"
+        required: true
+        default: "0"
+
+permissions:
+  contents: read
+
+jobs:
+  live-verify:
+    name: live-verify (${{ inputs.legs }})
+    runs-on: ubuntu-latest
+    environment: live-verify
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install pinned toolchain
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: "1.94"
+
+      # Secrets reach live-verify.sh as NAME=value lines in its env file —
+      # names only in logs, values written under umask 077, never echoed.
+      - name: Materialize live.env (names only; values never logged)
+        env:
+          HH_LOCAL_BASE_URL: ${{ secrets.HH_LOCAL_BASE_URL }}
+          HH_LOCAL_MODEL: ${{ secrets.HH_LOCAL_MODEL }}
+          HH_LOCAL_EMBED_MODEL: ${{ secrets.HH_LOCAL_EMBED_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HH_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.HH_GITHUB_OAUTH_CLIENT_ID }}
+          HH_GITHUB_SANDBOX_REPO: ${{ secrets.HH_GITHUB_SANDBOX_REPO }}
+          HH_GITHUB_SANDBOX_TOKEN: ${{ secrets.HH_GITHUB_SANDBOX_TOKEN }}
+          HH_GITHUB_WEBHOOK_SECRET: ${{ secrets.HH_GITHUB_WEBHOOK_SECRET }}
+          HH_SELFTEST_TOKEN: ${{ secrets.HH_SELFTEST_TOKEN }}
+        run: |
+          set -euo pipefail; set +x
+          umask 077
+          out="$RUNNER_TEMP/live.env"; : > "$out"
+          for n in HH_LOCAL_BASE_URL HH_LOCAL_MODEL HH_LOCAL_EMBED_MODEL \
+            OPENAI_API_KEY ANTHROPIC_API_KEY HH_GITHUB_OAUTH_CLIENT_ID \
+            HH_GITHUB_SANDBOX_REPO HH_GITHUB_SANDBOX_TOKEN \
+            HH_GITHUB_WEBHOOK_SECRET HH_SELFTEST_TOKEN; do
+            eval "v=\${$n:-}"
+            [ -z "$v" ] || printf '%s=%q\n' "$n" "$v" >> "$out"
+          done
+          bash scripts/live-verify.sh --check-names --all
+
+      - name: Snapshot live-evidence dir (pre-run)
+        run: git status --porcelain -- docs/build/reports/live/ > "$RUNNER_TEMP/before.txt" || true
+
+      - name: Run the requested legs
+        env:
+          HH_LIVE_ENV: ${{ runner.temp }}/live.env
+          LEGS: ${{ inputs.legs }}
+          BUDGET: ${{ inputs.budget }}
+        run: |
+          set -uo pipefail; set +x
+          rc=0
+          for leg in $LEGS; do
+            echo "::group::leg $leg"
+            bash scripts/live-verify.sh "$leg" --budget "$BUDGET" \
+              --harness "github-actions/run-${{ github.run_id }}" || rc=$?
+            echo "::endgroup::"
+          done
+          exit "$rc"
+
+      # Only files the run created or modified under the evidence dir —
+      # committed records (pricing.json, older records) are not re-uploaded.
+      - name: Collect run-produced evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          git status --porcelain -- docs/build/reports/live/ \
+            | awk '{print $2}' \
+            | while IFS= read -r f; do
+                [ -f "$f" ] && cp "$f" "$RUNNER_TEMP/evidence/" || true
+              done
+          ls -la "$RUNNER_TEMP/evidence/"
+
+      - name: Upload live-evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: live-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30

@@ -6,7 +6,7 @@
 //! authoritative input (the laundering failure mode: a summary of `external` content stays
 //! `≤ external` and carries the union taint). A sanitizer's lowering is never the projection
 //! itself — it appears only as a `policy_rule` endorsement appended *with* the projection
-//! (see [`crate::endorse`]).
+//! (see [`mod@crate::endorse`]).
 
 use crate::authority::{AuthorityClass, PersistenceScope};
 use crate::label::Label;

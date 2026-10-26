@@ -2,11 +2,11 @@
 //! `idp/1` scheme (CC1: `hh_identity` is the only identity construction):
 //!
 //! - `semantic_id = H({kind ∥ semantic ∥ refs-by-semantic_id})` — the semantic projection
-//!   ([`crate::schema::node_semantic_projection`]); surface, provenance, `ext` and the
+//!   (`node_semantic_projection`); surface, provenance, `ext` and the
 //!   version record are excluded (N6). A rename/reorder/reword-template edit changes no
 //!   `semantic_id` (AC-IR-05).
 //! - `version_id = H(canonical(member))` — the canonical form with the computed id members
-//!   removed ([`crate::schema::node_identity_basis`]), under `RecordKind::HirNode` /
+//!   removed (`node_identity_basis`), under `RecordKind::HirNode` /
 //!   `RecordKind::HirEdge`.
 //!
 //! Edges carry a semantic id too — the version record shape is uniform across nodes and

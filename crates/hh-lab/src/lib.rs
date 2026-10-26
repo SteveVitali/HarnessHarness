@@ -8,7 +8,7 @@
 //! samplers, estimators and schedulers land at Stage 3 (ADR-0209 D2).
 //!
 //! Module map:
-//! - [`bench`] — benchmark/environment records: `EnvironmentFamilyRecord`,
+//! - [`mod@bench`] — benchmark/environment records: `EnvironmentFamilyRecord`,
 //!   `TaskRecord`, `SuiteManifest`, `SuiteValidityRecord`,
 //!   `SplitAssignmentRecord`, `ParityReport`, plus the import-side checks
 //!   (disjoint `visible`/`held_out`/`instrument` surfaces,

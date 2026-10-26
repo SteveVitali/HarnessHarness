@@ -1,0 +1,63 @@
+# HarnessHarness cargo-deny config — L4.3 (R-2.12.4 supply-chain half).
+# The workspace is hermetic modulo ADR-0359 (`ring` in `hh-secrets`),
+# ADR-0361 (`ring::aead`/`rand` for the blob-pool AEAD), ADR-0365 (the
+# `hh-tls` rustls/webpki graph) and `hh-varhost`'s `tempfile` dev-dep —
+# a new dependency, source or license outside this contract is an ADR
+# first, not an allow-list edit.
+
+[graph]
+# Check every feature tier: the tier-c* features are part of the
+# dependency surface a release could turn on.
+all-features = true
+
+[advisories]
+version = 2
+# No `ignore` entries: a RustSec finding is fixed or recorded with its
+# reason, never silenced by default.
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+
+[licenses]
+version = 2
+# SPDX ids compatible with the repo's MIT OR Apache-2.0 posture — the
+# permissive family the ticket names (MIT/Apache/ISC/MPL) plus the two
+# permissive ids the admitted rustls graph actually carries.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "ISC",
+  # MPL-2.0 covers the Mozilla root data webpki-roots embeds.
+  "MPL-2.0",
+  # `subtle` (rustls) — permissive, OSI-approved.
+  "BSD-3-Clause",
+  # `webpki-roots` — permissive data license for the Mozilla root set.
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+# No exceptions needed: `Apache-2.0 WITH LLVM-exception` alternatives
+# (rustix, linux-raw-sys, wasi) are satisfied by the plain
+# Apache-2.0/MIT alternatives in their OR expressions, and r-efi's
+# `OR LGPL-2.1-or-later` is satisfied by MIT/Apache-2.0 — LGPL is never
+# the operative term.
+exceptions = []
+# Ring's `Apache-2.0 AND ISC` needs both ids allowed — they are.
+clarify = []
+
+[bans]
+# "warn", not "deny": getrandom 0.2.17/0.4.3 and windows-sys
+# 0.52.0/0.61.2 are admitted transitive duplicates inside the ADR-0365
+# rustls graph — they report in every run so a NEW duplicate is seen.
+multiple-versions = "warn"
+# "warn", not "deny": the workspace's version-less path deps resolve
+# inside this checkout and read as wildcards to this lint — the
+# registry-side risk is carried by [sources] + the locked lockfile.
+wildcards = "warn"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# crates.io only — the one admitted registry.
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
