@@ -28,14 +28,19 @@ bash scripts/gen-third-party-notices.sh --check   # notices drift check
   its own ADR *before* the code.
 - **Generated files are never hand-edited** — `schema/*.json`,
   `crates/hh-embed-client-generated/src/generated.rs`,
-  `THIRD_PARTY_NOTICES.md`, `docs/adr/README.md`. Change the source and
-  regenerate.
+  `THIRD_PARTY_NOTICES.md`, `docs/adr/README.md`,
+  `docs/adr/REVISIT_TRIGGERS.md` (`scripts/gen-revisit-triggers.sh`).
+  Change the source and regenerate.
 - **CI step modes (ADR-0362)** — a `ci.yml` step reading committed
   `docs/`/`research/` content carries `# ci-mode: both — <reason>`;
   every other step after `id: path` carries
   `if: steps.path.outputs.mode != 'fast'`. `check-ci-gating.sh` enforces.
 - **Tests** land as acceptance batteries `crates/hh-*/tests/<ticket>.rs`;
   every new behaviour gets a test that fails if it is removed.
+
+Maintainer policy — releases, evidence classes, write integrity and the
+revisit-trigger triage — lives in `MAINTAINING.md`; decision authority
+and the amendment protocol in `GOVERNANCE.md`.
 
 ## The build record
 

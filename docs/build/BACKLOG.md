@@ -119,11 +119,17 @@
 | BL-34 | ADR-0211 ratified deferral set D-1…D-6 + OQ-461/462/463 |
 | BL-38 | ADR-0215 program-level candidates + OQ-440 (15 OQs) |
 
-### Standing — 3 rows (re-issued, never closed)
+### Standing — closed converted-to-policy 2026-10-22 (L4.2; the 2026-10-20 standing-rows ruling)
 
-| BL-41 | Ledger OPEN-FINDINGS dispositions — write-integrity standing rule honoured through R3.10; += LEDGER-OF-6 (the status-marker-drift sweep is a standing obligation — lead tokens and machine-readable pending sets re-checked against dated markers at every round closure) | accepted |
-| BL-42 | ADR revisit triggers — quiet/dormant (56 standing conditions after the round-3 sweeps) | open |
-| BL-43 | ADR revisit triggers fired and answered during the build (49) | accepted |
+| BL-41 | Ledger OPEN-FINDINGS dispositions — the write-integrity rules + LEDGER-OF-6 lead-token re-sweep converted to MAINTAINING.md §Write integrity / §Round-closure sweeps | **closed converted-to-policy** |
+| BL-42 | ADR revisit triggers — quiet/dormant catalogue converted to the generated `docs/adr/REVISIT_TRIGGERS.md` + MAINTAINING.md triage; the id set's index home re-issued as BL-47 | **closed converted-to-policy** |
+| BL-43 | ADR revisit triggers fired-and-answered catalogue converted likewise; index home re-issued as BL-48 | **closed converted-to-policy** |
+| BL-47 | standing **index** row (never debt): quiet-conditional id set — the catalogue's classification home; obligation lives in MAINTAINING.md §"ADR revisit triggers" | accepted |
+| BL-48 | standing **index** row: fired-and-answered id set | accepted |
+
+*(ADR-0377: `check-backlog`'s every-live-ADR-on-one-non-closed-home rule makes the
+two index rows the catalogue's backing store — they are classification state, not
+owed work; R4.16 re-verifies "no standing debt rows" at launch.)*
 
 ## Themes
 
