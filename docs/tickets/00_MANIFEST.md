@@ -320,11 +320,13 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 163 | `163_R4.14__bl38-adr-0215-package.md` | Round 4 | ticket | BL-38 brief: ADR-0215 (15 OQs incl. OQ-440, HIR/2 backlog) + the 24 READINESS_REPORT §10 minors — final proposals | — |
 | 164 | `164_R4.15__bl30-adjudication-prep.md` | Round 4 | ticket | BL-30 brief (7 CFs + concrete OQ-170 custody + OQ-388 ratification) + H4 decline → DF-S0.3-3 waived-by-ADR + CF-490 fix | — |
 | 164a | `164a_GATE-G7__round4-rulings.md` | Round 4 | gate | Round-4 rulings gate ("GATE-R4R"): operator adopts/amends/declines every brief proposal; scoped extend fleshes R4.15a–e | STOP |
-| 164b | `164b_R4.15a__conform-records-packages-a.md` | Round 4 | skeleton | Adopted-ruling records conform — ADR-0210/0211/0212/0213/0216 packages — gated on GATE-G7 | — |
-| 164e | `164e_R4.15b__conform-records-packages-b.md` | Round 4 | skeleton | Adopted-ruling records conform — ADR-0214/0215, BL-30 CF records, OQ-388 ratification (DF-S4.13-1) — gated on GATE-G7 | — |
-| 164h | `164h_R4.15c__conform-code-adopted-legs.md` | Round 4 | skeleton | Adopted-ruling code conform — CF-492, CF-493, adopted needs-code-leg items — gated on GATE-G7 | — |
-| 164k | `164k_R4.15d__remote-fetch-trust-fields.md` | Round 4 | skeleton | Remote fetch transports with the adopted trust fields (DF-S4.2-1) — gated on GATE-G7 | — |
-| 164m | `164m_R4.15e__signer-key-custody.md` | Round 4 | skeleton | Signer-key custody per the adopted OQ-170 ruling (DF-S2.5-1, DF-S1.15-1 custody; R-2.8.6) — gated on GATE-G7 | — |
+| 164b | `164b_R4.15a__conform-records-packages-a.md` | Round 4 | ticket | Adopted-ruling records conform part 1 — BL-33 (WS-L6 records) + BL-34 (ADR-0211 descope ADR) — fleshed at GATE-G7 | — |
+| 164c | `164c_R4.15a2__conform-records-packages-a2.md` | Round 4 | ticket | Adopted-ruling records conform part 2 — BL-35/39 (ADR-0212/0216) + BL-36 (ADR-0213) — GATE-G7 insert | — |
+| 164e | `164e_R4.15b__conform-records-packages-b.md` | Round 4 | ticket | Adopted-ruling records conform part 3 — BL-37 (ADR-0214) + BL-30 records + OQ-388 ratification (DF-S4.13-1) — fleshed at GATE-G7 | — |
+| 164f | `164f_R4.15b2__conform-records-packages-b2.md` | Round 4 | ticket | Adopted-ruling records conform part 4 — BL-38 (ADR-0215 + §10 minors) + the adopted spec-text legs — GATE-G7 insert | — |
+| 164h | `164h_R4.15c__conform-code-adopted-legs.md` | Round 4 | ticket | Adopted-ruling code conform — OQ-468, OQ-430, CF-492, CF-493, OQ-173 legal_hold — fleshed at GATE-G7 | — |
+| 164k | `164k_R4.15d__remote-fetch-trust-fields.md` | Round 4 | ticket | Remote fetch transports with the adopted trust fields (DF-S4.2-1, OQ-332) — fleshed at GATE-G7 | — |
+| 164m | `164m_R4.15e__signer-key-custody.md` | Round 4 | ticket | Signer-key custody per the adopted OQ-170 ruling (DF-S2.5-1, DF-S1.15-1 custody; R-2.8.6) — fleshed at GATE-G7 | — |
 | 164p | `164p_L4.1__oss-repo-files-licensing.md` | Round 4 | ticket | OSS files: LICENSE-MIT/APACHE + per-crate license + notices + SECURITY/CONTRIBUTING/CoC/CHANGELOG + templates + CODEOWNERS + living-doc scrub (R-2.12.4) | — |
 | 164q | `164q_L4.2__maintainer-policy.md` | Round 4 | ticket | MAINTAINING/GOVERNANCE + generated revisit-trigger catalogue; BL-41/42/43 closed converted-to-policy | — |
 | 164r | `164r_L4.3__ci-supply-chain-hardening.md` | Round 4 | ticket | CI: ubuntu+macOS matrix, cargo-deny, gitleaks (reusing R4.5a's `.gitleaks.toml`), `cargo doc -D warnings`, dependabot, protected dispatch-only `live-verify` workflow | — |
@@ -539,6 +541,13 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 - 2026-10-06 · §7.1 (`run` verb row §2.2, `Exit classes` row §2.5, `ResultRecord` row §3; R-2.11.1) · before: `result.exit_class` authoritative, no detach member declared (`detached:"parked"` a build interim) · after: `ResultRecord` declares `detached?: "parked"` — a parked detach answers `ok` + `detached:"parked"`, the run stays live/resumable, opens no turn, takes no `ExitClass` row; closed `ExitClass` sum unchanged · approver: operator tick (SPEC_RECONCILIATION_PLAN A-1) · ADR-0331 D2
 - 2026-10-06 · §7.1 `[[DEFERRED ADR-0214: OQ-388]]` marker + AC-R-2.11.2-13, §5a AC-R-2.2.1-16 (R-2.2.1/R-2.11.2) · before: bound's shape stated without a value · after: dated S4.13 measurement note — `by_event_id`/`by_class`/`ir_index` incremental at append, every other projection a shared-fold rebuild, 100-of-10⁵ filtered `read` ≈15 ms (`ac_r_2_2_1_16_latency_1e5_fixture`, CI-enforced); bound value + policy ratification remains WS-B1/K2's · approver: operator tick (A-2) · ADR-0331 D4 (measurement ADR-0305 D1)
 - 2026-10-06 · spec Appendix B header prose · before: appendix indexes only the pre-build ratified set ADR-0001…ADR-0216 · after: appended paragraph indexing the build-phase set ADR-0217–ADR-0330 (`docs/adr/` + generated `docs/adr/README.md`) by reference, Sections column n/a · approver: operator tick (A-3) · ADR-0331 D5
+- 2026-10-22 · §7.1/§7.2 + §05d/§03/§05c (OQ-383, OQ-384, OQ-389, OQ-394/OQ-068, OQ-218; R-2.12.4) · before: `[[DEFERRED ADR-0210: …]]` markers and the `<hh-prefix>`/`<hh-hir-uri>`/`hh/hir`/`_meta.hh` interim spellings · after: the adopted records — `hharness` umbrella + `hharness-<component>`; `<hh-prefix>` = `hharness` (`hharness/hir`, `hharness/account`; carried `hharness/semantic_id`,`hharness/version_id`,`hharness/authority`,`hharness/provenance_ref`); `_hh/` methods; `hh://` scheme; A2A `AgentExtension.uri` = `https://github.com/SteveVitali/HarnessHarness/a2a/hir`; binaries `hh`/`hh-kernel`/`hh-helper` + flat Lab nouns + precedent-style flags; `ExitClass::code()` numerals `ok`=0 + the BSD-sysexits band 64–73 (success-with-veto distinct only on request); the ADR-0301 D8 token-delivery set · approver: GATE-G7 "Adopt all" (GATE DECISIONS `### Round 4`, 2026-10-22) · ADR-0210 amendment log
+- 2026-10-22 · §05g (OQ-162) · before: `[[DEFERRED ADR-0210: OQ-162 — signing infrastructure and trust-root custody …]]` · after: the custody rule — key-based `accepted_signers` + keyless trusted-publishing class; maintainer-held roots under the L4.2 policy; two-key rotation bridge on the ADR-0036 D4 checkpoint; registry self-signs `hh/` `NameHistoryEntry` rows · approver: GATE-G7 "Adopt all" · ADR-0210 amendment log
+- 2026-10-22 · §05a (OQ-173) · before: "Durations and legal hold are OQ-173 (WS-L6)." · after: `RetentionPolicy` MUST-data — audit envelopes indefinite; experiment-ledger envelopes below audit envelopes and above ordinary rows; `legal_hold` set/clear only at `authority ≥ principal`; every gc path incl. the lab-wide record refuses `Refused{gc = legal_hold}` (the gc-enforcement code arm rides R4.15c) · approver: GATE-G7 "Adopt all" · ADR-0068 R2 authorization row + ADR-0210 amendment log
+- 2026-10-22 · §08 (OQ-093, OQ-411, OQ-463) · before: "governance is C1 (OQ-093)", the `[[DEFERRED ADR-0210 (OQ-411)]]` and `[[DEFERRED ADR-0211 (D-3; OQ-463)]]` markers · after: `hh/` publication by the instrument release process only + `max_age` 90 days + superseded-`version_id` retirement + USD/provider-unit rows; `ContractVersionPolicy` sunset ≥ 2 minor cycles per kind (schema/dialect ≥ 4) with `authority_cap` narrowing; `ext.effects.external_irreversible` stays registered `ext.*` (consumer count = 1) · approver: GATE-G7 "Adopt all" · ADR-0210 amendment log + ADR-0372
+- 2026-10-22 · §05h + §11.6 (OQ-445) · before: `params{evidence_max_age}` unset; "Post-Phase-5 ownership … is open (OQ-445)" · after: `evidence_max_age` = one model generation (the register-header field — not `DebtPolicy.evidence_max_age`, 180 d, OQ-441/R4.15b); revalidation owner = the maintainer per the L4.2 maintainer policy (the policy document rides 164q); a refuted `provisional` source flags `expiring`, never auto-reopens · approver: GATE-G7 "Adopt all" · ADR-0210 amendment log + the `spec-debt.md` register header
+- 2026-10-22 · §11.3/§11.4 + §05i (D-1…D-6, OQ-461, OQ-462; R-2.12.6) · before: the ADR-0211 deferral set table + §11.4.2 interim cells · after: dated descope notes — the six entry tests evaluated verbatim at R4.10 all FAIL; D-1…D-6 + OQ-462 descoped at launch with the re-entry tests preserved verbatim in ADR-0372; OQ-461's interim ratified verbatim as the answer · approver: GATE-G7 "Adopt all" · ADR-0372 + ADR-0211 amendment log
+- 2026-10-22 · CANONICAL front matter · before: the status line named amendments A-1–A-3 as the latest · after: names amendments R4.15a as applied · approver: GATE-G7 "Adopt all" · ADR-0210 amendment log + ADR-0372
 
 ## Decomposition decisions
 - **Grain:** one ticket per scope-item **slice at one stage** (subagent dispatch ceiling — each ticket
@@ -909,3 +918,20 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   amendment appended to the R4.4a file (executed-contract rule); Phase-4 fresh-context review recorded in
   `docs/build/planning/2026-10-21_R4.4b-split-review.md`. No file renamed; no row superseded; round 4 is
   now 52 rows.
+
+- 2026-10-22 · **GATE-G7 fleshing (scoped `decompose-spec mode=extend`)** — the operator's
+  "Adopt all" (GATE DECISIONS `### Round 4`, 2026-10-22) adopted all 146 brief proposals. The
+  five R4.15a–e skeletons fleshed; the two records-conform tickets split by their own fleshing
+  notes (~146 acts ≫ the ~900 ceiling): **R4.15a** → BL-33/BL-34 + the ADR-0211 descope ADR;
+  insert **R4.15a2** (164c) → BL-35/39 + BL-36; **R4.15b** → BL-37 + BL-30 records + OQ-388;
+  insert **R4.15b2** (164f) → BL-38 + the eight spec-text legs; **R4.15c** → the five code legs
+  (OQ-468, OQ-430, CF-492, CF-493, OQ-173 legal_hold); **R4.15d** → OQ-332 + DF-S4.2-1 (USD-0
+  live fetch); **R4.15e** → OQ-170 kernel-held Ed25519 custody. `R4.15a2`/`R4.15b2` use the
+  digit suffix because letters a–e were pre-assigned to the skeleton set while the 164c/164f
+  row slots were reserved for exactly this split (the 164-letter-spacing note). Phase-4
+  fresh-context review applied: M1 (these manifest rows + this entry), M2 (LEDGER correction +
+  `nextTicket: R4.15a`), M3 (OQ-445's L4.2 leg amended onto 164q), MINOR-1–11 (contract
+  numbering/act-count/spec-mechanics/OQ-170 ownership/evidence_max_age disambiguation/164s's
+  OQ-068 Load line/brief-table reconciliation notes). Round 4 is now **54 rows**; the two
+  densest tickets (164f, 164h) carry a split-ready note — further suffix splits are sanctioned
+  at run time if their budgets trip. Rows are not renumbered (insert convention).

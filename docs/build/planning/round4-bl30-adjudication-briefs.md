@@ -188,3 +188,5 @@ then. BL-30's flip is R4.16's accounting after GATE-G7 adoption and the conforms
 The two recording acts (H4 decline → DF-S0.3-3 waived-by-ADR-0371; CF-490 header fix)
 land *this* ticket because an operator ruling already on the record fully determines
 each — cited verbatim at the acts, never extended.
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* CF-491's amendment-log leg lands at **R4.15b** (164e) with the BL-30 records; CF-492/CF-493 land at **R4.15c** (164h); OQ-170 at **R4.15e** (164m); OQ-388's ratification record at **R4.15b** (164e).

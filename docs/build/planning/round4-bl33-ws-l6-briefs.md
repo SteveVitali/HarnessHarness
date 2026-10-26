@@ -303,3 +303,5 @@ No LICENSE file, crate metadata or rename lands here (L4.1/L4.4/L4.5); no ruling
 not already made; `deferred(ADR-0210)` / `MET-DIFFERENTLY` statuses unchanged (re-entry is a scope
 ADR citing satisfied entry tests); BL-33's flip is R4.16's accounting after GATE-G7 adoption and the
 conforms land.
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* the `R4.15a` conform cells in this table's needs-code-leg rows are records legs — they land under **R4.15a** (164b) as the WS-L6 MUST-data record set (OQ-173's `legal_hold` code arm rides R4.15c; OQ-445's L4.2 leg amended onto 164q).

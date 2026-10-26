@@ -355,3 +355,5 @@ test is preserved verbatim as the re-entry trigger. BL-38's flip is R4.16's acco
 after GATE-G7 adoption and the conforms land. Note for the fleshing pass: the BL-37
 briefs' `R4.15a` conform labels are naming drift — the 164e skeleton scopes BL-37/BL-38
 to `R4.15b`; reconcile at GATE-G7, never here.
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* the eight `needs-code-leg(R4.15b)` rows are spec-text legs — they land at **R4.15b2** (164f — the GATE-G7 insert); the rest of this package's records at R4.15b2 as well. Correction: the table carries **eight** `needs-code-leg(R4.15b)` items (C-26/DAG-12/TR-07/TR2-04/r2-C-12/r2-C-16/E2-05/E2-11), not seven as the tail note wrote.

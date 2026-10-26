@@ -264,3 +264,5 @@ adjudication is R4.15's; the DF-S0.3-3 waiver record is R4.15's). The interim ru
 stay in force unchanged until then; every ADR-0212/0216 entry test is preserved
 verbatim as a re-entry trigger. BL-35's and BL-39's flips are R4.16's accounting after
 GATE-G7 adoption and the conforms land.
+
+> *Reconciled 2026-10-22 (GATE-G7 fleshing):* this package's records conform lands at **R4.15a2** (164c — the GATE-G7 insert); the OQ-468 code leg at **R4.15c** (164h) as tabled.
