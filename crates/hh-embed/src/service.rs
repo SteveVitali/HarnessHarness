@@ -95,6 +95,13 @@ pub struct EmbedService {
     /// of every `lifecycle.contract.deprecated_use` row — kernel-recorded at
     /// handshake, never authored by call params; CC2).
     pub(crate) client_desc: Option<ClientDescriptor>,
+    /// The kernel-internal ledger run carrying the `kernel.fetch` remote
+    /// leg's rows (`security.egress.{requested,decided}` under the
+    /// `EgressMediator`'s own lease path plus `bundle.member.fetched` via
+    /// `commit_kernel_row_for`) — created lazily like `registry_run`
+    /// (R4.15d; the fetch act is the kernel's own, so its audit lands on
+    /// the kernel's run, never on a fabricated subject write).
+    pub(crate) fetch_run: Option<(String, Lease)>,
     /// Experiment-run writer leases held across `lab.experiment.*` calls
     /// (`experiment_run_id → Lease`; the fence still lives in the ledger —
     /// this map only avoids release/re-acquire churn per call).
@@ -372,6 +379,7 @@ impl EmbedService {
             holder: config.holder,
             registry_run: None,
             contract_run: None,
+            fetch_run: None,
             client_desc: None,
             hosting_plane: None,
             experiment_engines: BTreeMap::new(),
@@ -1139,6 +1147,106 @@ impl EmbedService {
             .map_err(ledger_err)?;
         let out = (run_id, lease);
         self.contract_run = Some(out.clone());
+        Ok(out)
+    }
+
+    /// The kernel-internal ledger run carrying `kernel.fetch`'s remote-leg
+    /// rows — the `EgressMediator`'s `security.egress.{requested,decided}`
+    /// and the `bundle.member.fetched` ledgered-arrival facts — created
+    /// lazily, re-leased on expiry exactly like `ensure_registry_run`
+    /// (R4.15d: the fetch act is the kernel's own mediated egress, so the
+    /// audit trail lands on the kernel's run — durable before the member
+    /// reads `present`).
+    pub(crate) fn ensure_fetch_run(&mut self) -> Result<(String, Lease), EmbedError> {
+        if let Some((run_id, lease)) = &self.fetch_run {
+            match self.store.renew(lease) {
+                Ok(l) => {
+                    let out = (run_id.clone(), l.clone());
+                    self.fetch_run = Some(out.clone());
+                    return Ok(out);
+                }
+                Err(_) => {
+                    let l = self
+                        .store
+                        .acquire_writer(&self.holder, run_id, LEASE_TTL_MS)
+                        .map_err(ledger_err)?;
+                    let out = (run_id.clone(), l);
+                    self.fetch_run = Some(out.clone());
+                    return Ok(out);
+                }
+            }
+        }
+        let mut manifest = RunManifest::minimal(RunKind::Fleet);
+        manifest.configuration_id = None;
+        manifest.configuration_version_id = None;
+        manifest
+            .extra
+            .insert("purpose".to_string(), Json::str("fetch"));
+        let (run_id, lease) = self
+            .store
+            .open_run(manifest, &self.holder)
+            .map_err(ledger_err)?;
+        // The kernel scope chain the fetch leg's effect-scoped rows
+        // validate against — the mediator mints `security.egress.decided`
+        // under the token's `bundle-fetch` effect binding, so the run
+        // opens `turn{kernel} → model_call{kernel} → tool_call{
+        // bundle-fetch} → effect{bundle-fetch}` once, before any wire
+        // (the same openers an agent run's dispatch chain carries).
+        {
+            use hh_ledger::event::Scope;
+            use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+            let m = hh_env::events::EventMinter::new(&self.store, &run_id);
+            let mut t = m
+                .mint("lifecycle.turn.started", Json::obj([]))
+                .map_err(ledger_err)?;
+            t.scope.turn_id = Some("kernel-fetch-turn".into());
+            let mut c = m
+                .mint("model.call.requested", Json::obj([]))
+                .map_err(ledger_err)?;
+            c.scope.turn_id = Some("kernel-fetch-turn".into());
+            c.scope.model_call_id = Some("kernel-fetch-mc".into());
+            let mut p = m
+                .mint("action.tool.proposed", Json::obj([]))
+                .map_err(ledger_err)?;
+            p.scope = Scope {
+                turn_id: Some("kernel-fetch-turn".into()),
+                model_call_id: Some("kernel-fetch-mc".into()),
+                tool_call_id: Some("kernel-fetch-tc".into()),
+                ..Scope::default()
+            };
+            let risk = RiskClass {
+                reversibility: RiskReversibility::Reversible,
+                repeat_safety: RepeatSafety::Idempotent,
+                scope: RiskScope::External,
+            };
+            // The effect scope id is the derived §5a.2 spelling — the
+            // `intended` row's `effect_id` validates against it, and the
+            // leg's attribution token binds the same id.
+            let eid = Store::effect_id(&run_id, "kernel-fetch-mc", "kernel-fetch-tc", 0);
+            let e = m
+                .mint_effect(
+                    "action.effect.intended",
+                    hh_env::events::intended_payload(
+                        &risk,
+                        Some(&risk),
+                        "kernel.fetch",
+                        "bundle-fetch",
+                        0,
+                    ),
+                    &eid,
+                    &hh_env::events::ScopeChain {
+                        turn_id: "kernel-fetch-turn".into(),
+                        model_call_id: "kernel-fetch-mc".into(),
+                        tool_call_id: "kernel-fetch-tc".into(),
+                    },
+                )
+                .map_err(ledger_err)?;
+            self.store
+                .append(&run_id, &lease, vec![t, c, p, e])
+                .map_err(ledger_err)?;
+        }
+        let out = (run_id, lease);
+        self.fetch_run = Some(out.clone());
         Ok(out)
     }
 

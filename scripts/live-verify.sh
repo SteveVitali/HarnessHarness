@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -117,6 +117,12 @@ leg_field() { # $1 leg, $2 field
     otel-live:provider) printf 'local-otel-collector';;
     otel-live:kind)     printf 'script';;
     otel-live:names)    printf '';;
+    r4-15d-fetch:ticket)   printf 'R4.15d';;
+    r4-15d-fetch:provider) printf 'public-https';;
+    r4-15d-fetch:kind)     printf 'script';;
+    r4-15d-fetch:names)    printf '';;
+    r4-15d-fetch:test)     printf 'hh-embed:r4_15d_live:r415d_live_member_fetch';;
+    r4-15d-fetch:host)     printf 'raw.githubusercontent.com:443';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -308,6 +314,43 @@ run_leg_https_reachability() { # R4.5c — the real rustls client, USD 0
     RESULT="skipped(unreachable: $ENDPOINT_HOST)"
   elif [ "$rc" -eq 0 ]; then
     RESULT="pass"
+  else
+    RESULT="fail:live-tests rc=$rc"
+  fi
+  MODEL_REPORTED=""
+}
+
+# R4.15d — `r4-15d-fetch`: ONE real `kernel.fetch` over the public
+# Internet (OQ-332; the GATE-G7-adopted §trust-fields set). The pinned
+# Harbor README member rides the adopted seam end to end — `first_party`
+# admission against the declared `admitted_origins`, the Π-mediated
+# `security.egress.{requested,decided}` trail on the kernel fetch run,
+# `hh_tls` webpki-roots verification, content-address re-verify on
+# arrival, `bundle.member.fetched` durable before the deposit, and the
+# blob-pool read-back byte-identical to the committed pin. USD 0,
+# read-only, no secrets, no extra roots (the public chain is the claim).
+run_leg_r4_15d_fetch() {
+  require cargo
+  ENDPOINT_HOST=$(leg_field "r4-15d-fetch" host)
+  ASSERTIONS="one kernel.fetch{trust:FetchTrustPolicy(first_party, admitted_origins=[raw.githubusercontent.com], require_ledgered_arrival)} materializing the pinned harbor-framework/harbor README.md member (commit dd88157): admit → security.egress.requested/decided durable on the kernel fetch run → hh_tls webpki-roots GET → content-address re-verify → bundle.member.fetched{verified} durable-before-deposit → blob-pool read-back byte-identical; USD 0 read-only, no secrets"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  local spec crate tbin filt rc=0
+  spec=$(leg_field "r4-15d-fetch" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } > "$TRANSCRIPT_RAW" || rc=$?
+  if grep -q "SKIPPED-UNREACHABLE" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(unreachable: $ENDPOINT_HOST)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local row
+    row=$(grep '^LIVE_FETCH: ' "$TRANSCRIPT_RAW" | tail -1 || true)
+    [ -n "$row" ] && ASSERTIONS="$ASSERTIONS; $row"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
   else
     RESULT="fail:live-tests rc=$rc"
   fi
