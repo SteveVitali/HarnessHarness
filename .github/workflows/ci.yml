@@ -254,7 +254,7 @@ jobs:
 
       - name: Upload boundary measurement sheet
         if: steps.path.outputs.mode != 'fast' && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: s0.1-boundary-spike
           path: docs/build/reports/S0.1-boundary-spike.md
@@ -273,7 +273,7 @@ jobs:
 
       - name: Upload anchor
         if: success() && steps.path.outputs.mode == 'full' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.anchor.outputs.name }}
           path: ci-anchor.txt
