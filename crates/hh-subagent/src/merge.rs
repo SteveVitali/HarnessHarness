@@ -102,6 +102,23 @@ pub struct MergeOpts<'a> {
     /// names (the `verification.validator.*` rows and the
     /// `control.merge.resolved{resolver}` member).
     pub validator_ref: Option<String>,
+    /// The bound-validator roster for the G-4 pass (OQ-430; ADR-0192
+    /// G-4): one [`BoundValidator`] per validator bound on a completion
+    /// criterion. The default pass selects only the validators whose
+    /// criteria's evidence handles intersect the merge's touched set;
+    /// `validator_selected{full_contract}` opts into the whole roster.
+    pub bound_validators: Vec<BoundValidator>,
+}
+
+/// A validator bound on a completion criterion plus the criterion's
+/// declared evidence handles — the G-4 selection input (OQ-430;
+/// ADR-0192 G-4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoundValidator {
+    /// The bound validator's ref.
+    pub validator_ref: String,
+    /// The criterion's declared evidence handles.
+    pub evidence_handles: Vec<String>,
 }
 
 /// The typed merge outcome — `control.merge.{started, completed}` rows
@@ -278,6 +295,22 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                         parent_current: parent_now.clone(),
                         child_run_id: input.child_run_id.clone(),
                         detector: None,
+                        // G-4 (OQ-430): the conflict's touched evidence
+                        // handles — the non-null heads it spans.
+                        touched_handles: {
+                            let mut h: Vec<String> = [
+                                baseline.clone(),
+                                before.clone(),
+                                after.clone(),
+                                parent_now.clone(),
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .collect();
+                            h.sort();
+                            h.dedup();
+                            h
+                        },
                     };
                     match ctx.policy {
                         MergePolicy::SingleWriter => {
@@ -327,7 +360,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                                 }
                             }
                         }
-                        MergePolicy::ValidatorSelected => {
+                        MergePolicy::ValidatorSelected { .. } => {
                             let mut c = conflict;
                             c.detector = Some(format!(
                                 "judged{{{}}}",
@@ -447,6 +480,41 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
     if accounted > 0 && veto.is_none() {
         veto = Some(MergeVeto::LostWrite { count: accounted });
     }
+    // G-4 (OQ-430; ADR-0192) — the merge's touched evidence handles are
+    // the union over the recorded conflicts; the post-merge pass selects
+    // only the bound validators whose criteria's evidence handles
+    // intersect that set. `validator_selected{full_contract}` is the
+    // opt-in arm that selects the whole bound roster (the pre-R4.15c
+    // semantics).
+    let mut touched: Vec<String> = report
+        .conflicts
+        .iter()
+        .flat_map(|c| c.touched_handles.iter().cloned())
+        .collect();
+    touched.sort();
+    touched.dedup();
+    report.touched_handles = touched;
+    let full_contract = matches!(
+        ctx.policy,
+        MergePolicy::ValidatorSelected {
+            full_contract: true
+        }
+    );
+    let mut selected: Vec<String> = ctx
+        .opts
+        .bound_validators
+        .iter()
+        .filter(|b| {
+            full_contract
+                || b.evidence_handles
+                    .iter()
+                    .any(|h| report.touched_handles.contains(h))
+        })
+        .map(|b| b.validator_ref.clone())
+        .collect();
+    selected.sort();
+    selected.dedup();
+    report.selected_validators = selected;
     report.provenance = Json::obj([
         ("fold", Json::str("hh-subagent::merge")),
         ("merge_id", Json::str(merge_id.clone())),
@@ -567,6 +635,26 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
             (
                 "absent_children",
                 Json::Arr(report.absent.iter().map(|a| Json::str(a.clone())).collect()),
+            ),
+            (
+                "touched_handles",
+                Json::Arr(
+                    report
+                        .touched_handles
+                        .iter()
+                        .map(|h| Json::str(h.clone()))
+                        .collect(),
+                ),
+            ),
+            (
+                "selected_validators",
+                Json::Arr(
+                    report
+                        .selected_validators
+                        .iter()
+                        .map(|v| Json::str(v.clone()))
+                        .collect(),
+                ),
             ),
             // `merge_report_ref` resolves through `project_merge_report`
             // to the blob above (ADR-0192 D3 rebuild-equality).
@@ -765,6 +853,17 @@ pub fn report_from_json(j: &Json) -> Option<MergeReport> {
                 parent_current: s("parent_current"),
                 child_run_id: s("child_run_id").unwrap_or_default(),
                 detector: s("detector"),
+                touched_handles: c
+                    .get("touched_handles")
+                    .and_then(|m| match m {
+                        Json::Arr(a) => Some(
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(str::to_string))
+                                .collect(),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or_default(),
             });
         }
     }
@@ -780,6 +879,17 @@ pub fn report_from_json(j: &Json) -> Option<MergeReport> {
         .and_then(Json::as_str)
         .unwrap_or_default()
         .to_string();
+    for (member, dst) in [
+        ("touched_handles", &mut r.touched_handles),
+        ("selected_validators", &mut r.selected_validators),
+    ] {
+        if let Some(Json::Arr(a)) = j.get(member) {
+            *dst = a
+                .iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect();
+        }
+    }
     Some(r)
 }
 

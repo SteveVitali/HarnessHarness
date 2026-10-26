@@ -430,7 +430,7 @@ impl CoordinationPolicy {
             // conflict-recorders, never side-pickers (the tokenizer
             // member changes collision granularity, not permissiveness).
             crate::types::MergePolicy::ThreeWayTextAst { .. } => 2,
-            crate::types::MergePolicy::ValidatorSelected => 1,
+            crate::types::MergePolicy::ValidatorSelected { .. } => 1,
         };
         for (k, o) in &self.merge_policies {
             match other.merge_policies.get(k) {

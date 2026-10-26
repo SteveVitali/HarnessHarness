@@ -1209,8 +1209,17 @@ pub enum MergePolicy {
         /// The declared grammar/tokenizer ref.
         grammar_ref: String,
     },
-    /// `validator_selected` — declared (the S4.8/R-2.6.5 arm).
-    ValidatorSelected,
+    /// `validator_selected` — declared (the S4.8/R-2.6.5 arm). The
+    /// `full_contract` member is OQ-430's G-4 opt-in (ADR-0192 G-4): the
+    /// default pass selects only the bound validators whose criteria's
+    /// evidence handles intersect the merge's touched set;
+    /// `validator_selected{full_contract}` selects the whole bound set —
+    /// the pre-R4.15c semantics, kept as an explicit opt-in.
+    ValidatorSelected {
+        /// `true` ⇒ the opt-in `validator_selected{full_contract}` arm —
+        /// every bound validator is selected for the post-merge pass.
+        full_contract: bool,
+    },
 }
 
 /// The one registered `three_way_text{ast}` grammar — a deterministic
@@ -1228,7 +1237,7 @@ impl MergePolicy {
             MergePolicy::ParentDecides => "parent_decides",
             MergePolicy::ThreeWayText => "three_way_text",
             MergePolicy::ThreeWayTextAst { .. } => "three_way_text{ast}",
-            MergePolicy::ValidatorSelected => "validator_selected",
+            MergePolicy::ValidatorSelected { .. } => "validator_selected",
         }
     }
 
@@ -1240,6 +1249,9 @@ impl MergePolicy {
             MergePolicy::ThreeWayTextAst { grammar_ref } => {
                 format!("three_way_text{{ast({grammar_ref})}}")
             }
+            MergePolicy::ValidatorSelected {
+                full_contract: true,
+            } => "validator_selected{full_contract}".to_string(),
             other => other.as_str().to_string(),
         }
     }
@@ -1265,7 +1277,12 @@ impl MergePolicy {
             "three_way_text{ast}" => MergePolicy::ThreeWayTextAst {
                 grammar_ref: TAGGED_CST_GRAMMAR.to_string(),
             },
-            "validator_selected" => MergePolicy::ValidatorSelected,
+            "validator_selected" => MergePolicy::ValidatorSelected {
+                full_contract: false,
+            },
+            "validator_selected{full_contract}" => MergePolicy::ValidatorSelected {
+                full_contract: true,
+            },
             _ => return None,
         })
     }
@@ -1305,6 +1322,13 @@ pub struct MergeConflictRecord {
     /// (§5e.5 `MergeConflict`; `None` spells `deterministic` — the
     /// S4.6-era records predating the member).
     pub detector: Option<String>,
+    /// `touched_handles[]` — the evidence handles the conflict touched
+    /// (the non-null head refs: `parent_baseline`, `child_before`,
+    /// `child_after`, `parent_current`; sorted, deduplicated). ADR-0192
+    /// G-4's selection input (OQ-430): the default post-merge pass runs
+    /// only the validators whose criteria's evidence handles intersect
+    /// this set.
+    pub touched_handles: Vec<String>,
 }
 
 impl MergeConflictRecord {
@@ -1330,6 +1354,15 @@ impl MergeConflictRecord {
         if let Some(d) = &self.detector {
             m.push(("detector", Json::str(d.clone())));
         }
+        m.push((
+            "touched_handles",
+            Json::Arr(
+                self.touched_handles
+                    .iter()
+                    .map(|h| Json::str(h.clone()))
+                    .collect(),
+            ),
+        ));
         Json::obj(m)
     }
 }
@@ -1393,6 +1426,15 @@ pub struct MergeReport {
     /// `merge` computes it over `{policy, merged refs, conflict ids,
     /// absent set}` — crash-restore equality is proven by comparing it).
     pub merge_hash: String,
+    /// `touched_handles[]` — the sorted union of every conflict's
+    /// `touched_handles` (OQ-430; ADR-0192 G-4): the evidence handles the
+    /// merge as a whole touched.
+    pub touched_handles: Vec<String>,
+    /// `selected_validators[]` — the G-4 selection (OQ-430): the bound
+    /// validators whose criteria's evidence handles intersect
+    /// `touched_handles` (the default pass), or the whole bound set under
+    /// the opt-in `validator_selected{full_contract}` arm. Sorted.
+    pub selected_validators: Vec<String>,
 }
 
 impl MergeReport {
@@ -1427,7 +1469,48 @@ impl MergeReport {
             ("provenance", self.provenance.clone()),
             ("derived_from", self.derived_from.clone()),
             ("merge_hash", Json::str(self.merge_hash.clone())),
+            (
+                "touched_handles",
+                Json::Arr(
+                    self.touched_handles
+                        .iter()
+                        .map(|h| Json::str(h.clone()))
+                        .collect(),
+                ),
+            ),
+            (
+                "selected_validators",
+                Json::Arr(
+                    self.selected_validators
+                        .iter()
+                        .map(|v| Json::str(v.clone()))
+                        .collect(),
+                ),
+            ),
         ])
+    }
+
+    /// `blocks_completion(criterion_evidence_handles, verdict_validators)`
+    /// — ADR-0192 G-4's gate predicate (OQ-430). `true` when the merge
+    /// touched any of the criterion's cited evidence handles and none of
+    /// the criterion's satisfied verdicts came from a *selected*
+    /// validator — a per-child or unselected verdict never discharges a
+    /// criterion whose evidence the merge moved.
+    pub fn blocks_completion(
+        &self,
+        criterion_evidence_handles: &[String],
+        verdict_validators: &[String],
+    ) -> bool {
+        let touched = self
+            .touched_handles
+            .iter()
+            .any(|h| criterion_evidence_handles.iter().any(|c| c == h));
+        if !touched {
+            return false;
+        }
+        !verdict_validators
+            .iter()
+            .any(|v| self.selected_validators.iter().any(|s| s == v))
     }
 
     /// The report's content address (`merge_report_ref`).
@@ -1903,6 +1986,8 @@ impl Default for MergeReport {
             provenance: Json::Null,
             derived_from: Json::Null,
             merge_hash: String::new(),
+            touched_handles: Vec::new(),
+            selected_validators: Vec::new(),
         }
     }
 }

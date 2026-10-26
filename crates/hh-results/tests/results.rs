@@ -2214,7 +2214,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
                 &gc_run,
                 &gc_lease,
                 vec![ev_blob.clone()],
-                "policy:test",
+                &gc_policy("policy:test"),
                 "warm",
                 None,
             )
@@ -2762,7 +2762,7 @@ fn leaderboard_define_snapshot_verify_publish_and_pins() {
                 &gc_run,
                 &gc_lease,
                 vec![pinned_addr.clone()],
-                "policy:test",
+                &gc_policy("policy:test"),
                 "warm",
                 None,
             )
@@ -3096,4 +3096,14 @@ fn publish_reports_verifiable_by_per_reader_and_public_tier() {
         "{:?}",
         pubd2.verifiable_by
     );
+}
+
+fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
+    hh_ledger::retention::RetentionPolicy {
+        policy_ref: policy_ref.to_string(),
+        blob_residency_ms: 0,
+        bundle_retention_ms: 0,
+        compress_cold: false,
+        legal_hold: false,
+    }
 }

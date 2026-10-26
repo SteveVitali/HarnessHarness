@@ -202,6 +202,53 @@ fn bundle_manifest_carries_the_honesty_record() {
         hh_xcheck::ARMS.len(),
         "an arm went missing from bundle.json"
     );
+    // CF-493 — `verified_by[]` on every arm: `{candidate,
+    // evidence_class, evidence_ref}`; the six original arms carry E1 +
+    // both foreign candidates' `foreign-run-verified` records.
+    let has_evidence = |vs: &Json, cand: &str, class: &str| {
+        let Json::Arr(vs) = vs else { return false };
+        vs.iter().any(|v| {
+            v.get("candidate").and_then(Json::as_str) == Some(cand)
+                && v.get("evidence_class").and_then(Json::as_str) == Some(class)
+                && v.get("evidence_ref").and_then(Json::as_str).is_some()
+        })
+    };
+    for arm in arms {
+        let id = arm.get("id").and_then(Json::as_str).unwrap();
+        let vs = arm
+            .get("verified_by")
+            .unwrap_or_else(|| panic!("arm {id} lost its verified_by record"));
+        assert!(
+            has_evidence(vs, "E1", "fixture-verified"),
+            "arm {id} lost the E1 fixture-verified record"
+        );
+        let Json::Arr(vs) = vs else {
+            panic!("verified_by not an array")
+        };
+        let original = matches!(
+            id,
+            "identity-trees"
+                | "identity-records"
+                | "ledger-transcript"
+                | "registry-snapshot"
+                | "plugin-manifests"
+                | "canonical-parse"
+        );
+        let e2 = vs
+            .iter()
+            .any(|v| v.get("candidate").and_then(Json::as_str) == Some("E2-candidate"));
+        assert_eq!(
+            e2, original,
+            "arm {id}: E2 evidence claim ≠ the e2 tree's coverage"
+        );
+        for v in vs {
+            let class = v.get("evidence_class").and_then(Json::as_str).unwrap();
+            assert!(
+                matches!(class, "fixture-verified" | "foreign-run-verified"),
+                "arm {id}: evidence_class {class} is outside the honesty vocabulary"
+            );
+        }
+    }
     let Json::Arr(pending) = m.get("pending_cells").unwrap() else {
         panic!("pending_cells must be an array");
     };
@@ -212,6 +259,23 @@ fn bundle_manifest_carries_the_honesty_record() {
             Some("environment-pending"),
             "a pending cell lost its honesty record"
         );
+        // CF-493 — partial discharge is recorded, never closure: the
+        // cell carries `verified_by[]` (possibly empty) alongside the
+        // unchanged `environment-pending` status.
+        let id = cell.get("cell").and_then(Json::as_str).unwrap();
+        let vs = cell
+            .get("verified_by")
+            .unwrap_or_else(|| panic!("pending cell {id} lost its verified_by record"));
+        let Json::Arr(vs) = vs else {
+            panic!("{id}: verified_by not an array")
+        };
+        for v in vs {
+            assert_eq!(
+                v.get("evidence_class").and_then(Json::as_str),
+                Some("foreign-run-verified"),
+                "{id}: a pending cell may cite only foreign-run evidence"
+            );
+        }
     }
 }
 

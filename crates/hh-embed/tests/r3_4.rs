@@ -803,6 +803,7 @@ fn retention_leg_runs_evaluate_retention() {
             blob_residency_ms: 0,
             bundle_retention_ms: 0,
             compress_cold: true,
+            legal_hold: false,
         }),
     };
     let mem = std::rc::Rc::new(std::cell::RefCell::new(ctx));

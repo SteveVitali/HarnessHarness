@@ -201,3 +201,16 @@ proves the packaging reproduces E1's answers. A foreign implementation's
 green `verify` run is evidence **the foreign run** produced; nothing in this
 bundle mints it. `bundle.json`'s `pending_cells[]` lists the cells still
 gated on the HUMAN-H3 foreign-toolchain environment.
+
+`bundle.json` `verified_by[]` (CF-493): every `arms[]` entry and every
+`pending_cells[]` entry carries the candidate/evidence record —
+`{candidate, evidence_class, evidence_ref}` members naming `E1`
+(`fixture-verified`, the in-tree self-check) and the foreign candidates
+whose recorded replay verifies that arm or partially discharges that
+cell (`foreign-run-verified` — a class *below* the fixture-verified
+ceiling, never conflated with it). A pending cell's `verified_by[]` is
+partial discharge only: `status` stays `environment-pending` while the
+named `needs` prerequisite stands; an empty `verified_by[]` records that
+no candidate's evidence covers the cell (the committed
+`foreign/e2-python` tree cannot answer the R4.3 arms — their
+`*.e2-replay` cells carry no E2 entry).

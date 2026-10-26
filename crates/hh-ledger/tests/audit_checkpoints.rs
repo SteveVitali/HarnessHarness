@@ -702,7 +702,14 @@ fn gc_writes_durable_record_then_deletes_and_tombstones() {
     let id = addr.id();
     fill(&mut s, &run, &lease, "a", 2);
     let env = s
-        .gc(&run, &lease, vec![id.clone()], "policy:test", "warm", None)
+        .gc(
+            &run,
+            &lease,
+            vec![id.clone()],
+            &gc_policy("policy:test"),
+            "warm",
+            None,
+        )
         .unwrap();
     assert_eq!(env.class, "lifecycle.ledger.gc");
     // Durable-before-delete: the record is in the WAL and the bytes are gone.
@@ -742,7 +749,14 @@ fn gc_refuses_pinned_and_malformed() {
     // Append to run2 via its own lease.
     let l2 = _lease2;
     s.append(&run2, &l2, vec![e]).unwrap();
-    match s.gc(&run, &lease, vec![id.clone()], "policy:test", "warm", None) {
+    match s.gc(
+        &run,
+        &lease,
+        vec![id.clone()],
+        &gc_policy("policy:test"),
+        "warm",
+        None,
+    ) {
         Err(LedgerError::Pinned { .. }) => {}
         other => panic!("expected Pinned, got {other:?}"),
     }
@@ -751,7 +765,7 @@ fn gc_refuses_pinned_and_malformed() {
         &run,
         &lease,
         vec!["not-an-id".into()],
-        "policy:test",
+        &gc_policy("policy:test"),
         "warm",
         None,
     ) {
@@ -834,8 +848,15 @@ fn audit_view_reports_checkpoints_completeness_and_tombstones() {
     s.checkpoint(&run, &lease, CheckpointKind::Periodic, &mut signer())
         .unwrap();
     s.set_audit_key_resolver(Box::new(keys()));
-    s.gc(&run, &lease, vec![addr.id()], "policy:test", "warm", None)
-        .unwrap();
+    s.gc(
+        &run,
+        &lease,
+        vec![addr.id()],
+        &gc_policy("policy:test"),
+        "warm",
+        None,
+    )
+    .unwrap();
     let v = s.project(&run, ViewKind::AuditView, None).unwrap();
     let cps = v.payload.get("checkpoints").unwrap();
     let Json::Arr(cps) = cps else {
@@ -902,4 +923,14 @@ fn corpus_100_runs_verify_and_prove() {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
+    hh_ledger::retention::RetentionPolicy {
+        policy_ref: policy_ref.to_string(),
+        blob_residency_ms: 0,
+        bundle_retention_ms: 0,
+        compress_cold: false,
+        legal_hold: false,
+    }
 }

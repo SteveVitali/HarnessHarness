@@ -225,6 +225,29 @@ fn bundle_manifest_records_the_new_arms_pending_cells() {
             Some(needs),
             "{cell}: the honest prerequisite"
         );
+        // CF-493 — `verified_by[]` records partial discharge honestly:
+        // the e3-replay cells name `E3-candidate`'s recorded run; the
+        // e2-replay cells stay empty (the committed e2 tree cannot
+        // answer the extension arms).
+        let Json::Arr(vs) = c
+            .get("verified_by")
+            .unwrap_or_else(|| panic!("{cell}: verified_by missing"))
+        else {
+            panic!("{cell}: verified_by not an array");
+        };
+        let candidates: Vec<&str> = vs
+            .iter()
+            .filter_map(|v| v.get("candidate").and_then(Json::as_str))
+            .collect();
+        let expected: &[&str] = if cell.ends_with(".e3-replay") {
+            &["E3-candidate"]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            candidates, expected,
+            "{cell}: verified_by ≠ the recorded evidence"
+        );
     }
     // Every pinned file member exists on disk — `files` pins every member.
     let Json::Obj(files) = m.get("files").unwrap() else {

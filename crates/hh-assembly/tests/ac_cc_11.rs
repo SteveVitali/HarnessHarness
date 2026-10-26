@@ -573,7 +573,7 @@ fn index() -> BTreeMap<&'static str, Row> {
     put(x("C-PLAN-2", "hh-lab::assembly::service"));
     put(u(
         "C-SEAL-1",
-        "defect-gated: `CompileError::SealError{non_canonical}` fires only when stage-5's re-encode self-check catches the compiler's own output failing to round-trip — no authored document reaches it; `hh-lab::assembly::service` stage-6b is armed to spell it `C-SEAL-1` if it ever fires (the row reports `validate:6b` as its producing stage — §3.3.8's closed stage set carries no `seal` spelling, CF-492). Re-opens when a content-dependent seal check lands or the stage taxonomy gains `seal`.",
+        "defect-gated: `CompileError::SealError{non_canonical}` fires only when stage-5's re-encode self-check catches the compiler's own output failing to round-trip — no authored document reaches it; `hh-lab::assembly::service` stage-6b is armed to spell it `C-SEAL-1` if it ever fires (the row reports `seal` as its producing stage — CF-492 conformed at R4.15c: §3.3.8's closed stage set carries `seal`). Re-opens when a content-dependent seal check lands.",
     ));
     put(u(
         "C-RES-1",
@@ -1476,4 +1476,42 @@ fn fuzzed_corpus_yields_no_c_int_1() {
             Err(_) => panic!("mutation {i} panicked the decode/validate path"),
         }
     }
+}
+
+// ── CF-492 (R4.15c) — `seal` in the §3.3.8 closed stage set ────────────────
+
+/// CF-492: the stage-5 seal self-check's producing stage is `seal` — the
+/// closed set carries it, the codec round-trips it, and the spelling is
+/// never `validate:6b`/another validation stage.
+#[test]
+fn cf_492_seal_is_a_closed_stage_member_and_round_trips() {
+    use hh_assembly::diagnostics::{diagnostic_from_json, diagnostic_json};
+    // The canonical spelling.
+    assert_eq!(Stage::Seal.as_str(), "seal");
+    // A `C-SEAL-1` diagnostic at `seal` round-trips through the codec.
+    let d = AssemblyDiagnostic {
+        code: Code::SealNonCanonical,
+        class: None,
+        severity: Severity::Error,
+        path: "/assembly".into(),
+        source_layer: None,
+        subject: "seal".into(),
+        stage: Stage::Seal,
+        detail: hh_assembly::diagnostics::detail_text(
+            "stage-5 seal refused: re-encoded bundle hashes differently",
+            &kernel(),
+        ),
+        remedy: "the bundle must re-encode to its hashed bytes — this is a compiler defect".into(),
+        owner_adr: "ADR-0148".into(),
+    };
+    let j = diagnostic_json(&d);
+    assert_eq!(
+        j.get("stage").and_then(Json::as_str),
+        Some("seal"),
+        "the seal self-check reports stage `seal`, not `validate:6`"
+    );
+    let back = diagnostic_from_json(&j, "$diag").expect("seal is a closed member");
+    assert!(matches!(back.stage, Stage::Seal));
+    // The unrelated `validate:6` stage keeps its own spelling.
+    assert_eq!(Stage::Validate(6).as_str(), "validate:6");
 }

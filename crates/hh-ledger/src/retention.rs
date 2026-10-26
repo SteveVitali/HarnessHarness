@@ -77,6 +77,13 @@ pub struct RetentionPolicy {
     /// Whether `cold` bytes are `HHZ1`-compressed at rest (off ⇒ the tier
     /// is an accounting fact only — the byte stays raw but readable).
     pub compress_cold: bool,
+    /// `legal_hold` (OQ-173, ruled 2026-10-22 GATE-G7 "Adopt all" —
+    /// ADR-0068 R2 as amended + ADR-0210's amendment log): while held,
+    /// *every* gc path — `gc`, `gc_bounded`, and the lab-wide record's
+    /// whole-run delete — refuses `Refused{gc = legal_hold}` at admission,
+    /// before any durable row or byte mutation. Set/clear only at
+    /// `authority ≥ principal` ([`RetentionPolicy::set_legal_hold`]).
+    pub legal_hold: bool,
 }
 
 impl RetentionPolicy {
@@ -103,6 +110,26 @@ impl RetentionPolicy {
         Ok(())
     }
 
+    /// Set or clear `legal_hold` (OQ-173 — ADR-0068 R2's authorization row
+    /// as amended): the act is gated at `authority ≥ principal`; a
+    /// sub-principal set or clear answers the typed refusal
+    /// `Refused{legal_hold = authority_below_principal}` — a hold is a
+    /// hold, and nobody below principal lifts or plants one.
+    pub fn set_legal_hold(
+        &mut self,
+        held: bool,
+        authority: hh_provenance::AuthorityClass,
+    ) -> Result<(), LedgerError> {
+        if authority < hh_provenance::AuthorityClass::Principal {
+            return Err(LedgerError::Refused {
+                op: "legal_hold",
+                reason: "authority_below_principal",
+            });
+        }
+        self.legal_hold = held;
+        Ok(())
+    }
+
     /// The canonical form.
     pub fn to_json(&self) -> Json {
         Json::obj([
@@ -116,6 +143,7 @@ impl RetentionPolicy {
                 Json::Int(self.bundle_retention_ms as i64),
             ),
             ("compress_cold", Json::Bool(self.compress_cold)),
+            ("legal_hold", Json::Bool(self.legal_hold)),
         ])
     }
 
@@ -140,6 +168,10 @@ impl RetentionPolicy {
             blob_residency_ms: int_of("blob_residency_ms")?,
             bundle_retention_ms: int_of("bundle_retention_ms")?,
             compress_cold: matches!(m.get("compress_cold"), Some(Json::Bool(true))),
+            // Additive member — an absent `legal_hold` decodes `false`
+            // (landed policies predate OQ-173; never coerce an absent
+            // member into a held state).
+            legal_hold: matches!(m.get("legal_hold"), Some(Json::Bool(true))),
         };
         p.validate()?;
         Ok(p)

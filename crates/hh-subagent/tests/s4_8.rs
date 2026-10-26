@@ -24,7 +24,8 @@ use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_provenance::{AuthorityClass, ProvenanceRecord};
 use hh_subagent::consistency::{ConsistencyDeclaration, ConsistencyLevel, OnAbsentChild};
 use hh_subagent::merge::{
-    merge, MergeCtx, MergeInput, MergeOpts, MergeValidator, MergeVeto, ValidatorMergeVerdict,
+    merge, BoundValidator, MergeCtx, MergeInput, MergeOpts, MergeValidator, MergeVeto,
+    ValidatorMergeVerdict,
 };
 use hh_subagent::ownership::{
     check_write, record_write_refusal, return_ownership, transfer_ownership, OwnershipTable,
@@ -960,7 +961,9 @@ fn ac4_validator_selected_choose_child_resolves() {
     let out = {
         let mut c = merge_ctx(
             &mut p,
-            MergePolicy::ValidatorSelected,
+            MergePolicy::ValidatorSelected {
+                full_contract: false,
+            },
             inputs,
             &parents,
             &baseline,
@@ -1006,7 +1009,9 @@ fn ac4_validator_abstain_leaves_conflict_open() {
     let out = {
         let mut c = merge_ctx(
             &mut p,
-            MergePolicy::ValidatorSelected,
+            MergePolicy::ValidatorSelected {
+                full_contract: false,
+            },
             inputs,
             &parents,
             &baseline,
@@ -1041,7 +1046,9 @@ fn ac4_validator_unavailable_is_a_typed_veto() {
     let out = {
         let mut c = merge_ctx(
             &mut p,
-            MergePolicy::ValidatorSelected,
+            MergePolicy::ValidatorSelected {
+                full_contract: false,
+            },
             inputs,
             &parents,
             &baseline,
@@ -1058,6 +1065,182 @@ fn ac4_validator_unavailable_is_a_typed_veto() {
         out.veto,
         Some(MergeVeto::ValidatorUnavailable { .. })
     ));
+}
+
+// ── OQ-430 / ADR-0192 G-4 — touched-handles validator selection ─────────────
+
+/// The `conflicted_input` heads — the conflict's `touched_handles` is the
+/// sorted dedup of the non-null heads it spans.
+fn g4_touched() -> Vec<String> {
+    vec![
+        "ref:base".to_string(),
+        "ref:child".to_string(),
+        "ref:parent".to_string(),
+    ]
+}
+
+fn g4_bound() -> Vec<BoundValidator> {
+    vec![
+        BoundValidator {
+            validator_ref: "validator:touching".to_string(),
+            evidence_handles: vec!["ref:child".to_string(), "ref:other-a".to_string()],
+        },
+        BoundValidator {
+            validator_ref: "validator:disjoint".to_string(),
+            evidence_handles: vec!["ref:other-b".to_string()],
+        },
+    ]
+}
+
+#[test]
+fn g4_conflict_record_carries_touched_handles() {
+    let mut p = open_parent("g4a");
+    let spawned = run(&mut p, &spec()).unwrap();
+    let (inputs, parents, baseline, child_owns) = conflicted_input(&spawned.child_run_id);
+    let out = {
+        let mut c = merge_ctx(
+            &mut p,
+            MergePolicy::ParentDecides,
+            inputs,
+            &parents,
+            &baseline,
+            &child_owns,
+            MergeOpts::default(),
+        );
+        merge(&mut c).unwrap()
+    };
+    let report = out.report.expect("report");
+    assert_eq!(report.conflicts.len(), 1);
+    assert_eq!(
+        report.conflicts[0].touched_handles,
+        g4_touched(),
+        "the conflict carries the evidence handles it touched (G-4)"
+    );
+    // The report surfaces the union + the codec round-trips it.
+    assert_eq!(report.touched_handles, g4_touched());
+    let parsed = hh_subagent::merge::report_from_json(&report.to_json()).expect("round-trip");
+    assert_eq!(parsed.touched_handles, g4_touched());
+    assert_eq!(
+        parsed.conflicts[0].touched_handles,
+        g4_touched(),
+        "conflict touched_handles round-trips"
+    );
+}
+
+#[test]
+fn g4_default_pass_selects_only_intersecting_validators() {
+    let mut p = open_parent("g4b");
+    let spawned = run(&mut p, &spec()).unwrap();
+    let (inputs, parents, baseline, child_owns) = conflicted_input(&spawned.child_run_id);
+    let out = {
+        let mut c = merge_ctx(
+            &mut p,
+            MergePolicy::ParentDecides,
+            inputs,
+            &parents,
+            &baseline,
+            &child_owns,
+            MergeOpts {
+                bound_validators: g4_bound(),
+                ..Default::default()
+            },
+        );
+        merge(&mut c).unwrap()
+    };
+    let report = out.report.expect("report");
+    // Only `validator:touching` cites an evidence handle the merge
+    // touched — `validator:disjoint` is never selected (G-4 default).
+    assert_eq!(
+        report.selected_validators,
+        vec!["validator:touching".to_string()]
+    );
+    // The durable `completed` row carries the same selection.
+    let completed = p
+        .store
+        .events(&p.run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "control.merge.completed")
+        .expect("completed row");
+    assert_eq!(
+        completed.payload.get("selected_validators"),
+        Some(&Json::Arr(vec![Json::str("validator:touching")]))
+    );
+}
+
+#[test]
+fn g4_full_contract_opt_in_selects_the_whole_roster() {
+    let mut p = open_parent("g4c");
+    let spawned = run(&mut p, &spec()).unwrap();
+    let (inputs, parents, baseline, child_owns) = conflicted_input(&spawned.child_run_id);
+    let port = ChooseChild;
+    let out = {
+        let mut c = merge_ctx(
+            &mut p,
+            MergePolicy::ValidatorSelected {
+                full_contract: true,
+            },
+            inputs,
+            &parents,
+            &baseline,
+            &child_owns,
+            MergeOpts {
+                validator: Some(&port),
+                validator_ref: Some("validator:sel-v1".to_string()),
+                bound_validators: g4_bound(),
+                ..Default::default()
+            },
+        );
+        merge(&mut c).unwrap()
+    };
+    let report = out.report.expect("report");
+    // The opt-in `validator_selected{full_contract}` arm selects the
+    // whole bound roster — disjoint handles included.
+    assert_eq!(
+        report.selected_validators,
+        vec![
+            "validator:disjoint".to_string(),
+            "validator:touching".to_string()
+        ]
+    );
+    assert_eq!(
+        MergePolicy::parse("validator_selected{full_contract}"),
+        Some(MergePolicy::ValidatorSelected {
+            full_contract: true
+        }),
+        "the opt-in spelling parses (removal-sensitive)"
+    );
+    assert_eq!(
+        MergePolicy::ValidatorSelected {
+            full_contract: true
+        }
+        .spelling(),
+        "validator_selected{full_contract}"
+    );
+}
+
+#[test]
+fn g4_blocks_completion_consults_only_selected_verdicts() {
+    let report = MergeReport {
+        touched_handles: g4_touched(),
+        selected_validators: vec!["validator:touching".to_string()],
+        ..Default::default()
+    };
+    // A criterion whose handles the merge touched is discharged only by a
+    // selected validator's verdict.
+    assert!(!report.blocks_completion(
+        &["ref:child".to_string()],
+        &["validator:touching".to_string()]
+    ));
+    // An unrelated validator's verdict never discharges a touched
+    // criterion — completion blocks.
+    assert!(report.blocks_completion(
+        &["ref:child".to_string()],
+        &["validator:disjoint".to_string()]
+    ));
+    // A criterion citing no touched handle is never blocked by this
+    // merge, whatever its verdicts.
+    assert!(!report.blocks_completion(&["ref:untouched".to_string()], &[]));
 }
 
 // ── G-6 — `merge_hash` order-independence ───────────────────────────────────

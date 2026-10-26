@@ -381,8 +381,15 @@ fn gc_and_redact_compose_over_sealed_blobs() {
     }));
     let a1 = s.put_blob(b"retired sealed", "text/plain").unwrap();
     let a2 = s.put_blob(b"redacted sealed", "text/plain").unwrap();
-    s.gc(&run, &lease, vec![addr_str(&a1)], "pol", "cold", None)
-        .unwrap();
+    s.gc(
+        &run,
+        &lease,
+        vec![addr_str(&a1)],
+        &gc_policy("pol"),
+        "cold",
+        None,
+    )
+    .unwrap();
     assert_eq!(
         s.blob_status(&addr_str(&a1)),
         BlobStatus::Tombstoned(MissingReason::Gc)
@@ -439,6 +446,7 @@ fn sealed_frames_bypass_the_hhz1_residency_codec() {
         blob_residency_ms: 60_000,
         bundle_retention_ms: 120_000,
         compress_cold: true,
+        legal_hold: false,
     };
     s.evaluate_retention(&run, &lease, &policy, &Default::default())
         .unwrap();
@@ -609,4 +617,14 @@ fn manifest_blob_encryption_round_trips_and_validates() {
     let mut bad = encryption_manifest();
     bad.blob_encryption.as_mut().unwrap().key_id = String::new();
     assert!(bad.validate().is_err());
+}
+
+fn gc_policy(policy_ref: &str) -> hh_ledger::retention::RetentionPolicy {
+    hh_ledger::retention::RetentionPolicy {
+        policy_ref: policy_ref.to_string(),
+        blob_residency_ms: 0,
+        bundle_retention_ms: 0,
+        compress_cold: false,
+        legal_hold: false,
+    }
 }
