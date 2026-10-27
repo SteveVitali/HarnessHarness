@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "the README quickstart-live block executed verbatim: hh run start on clients/ts/fixture-definition.json + the model_port override binds gateway_http openai-compatible@1 to env:HH_LOCAL_BASE_URL/env:HH_LOCAL_MODEL (NAMEs only); a real model.call.requested/completed lands (usage recorded) and the run reaches lifecycle.run.finished with exit_class:ok \u2014 the terminal outcome is the model's honest tool-call fidelity; USD 0 local lane; run=run-1792732719526-000000-f4aca153; terminal:\"stop_reason\":{\"count\":3,\"kind\":\"format_failure\"}"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:11434",
+  "git_head": "648f3e58600d4e117d1074bad0463b06782897e7",
+  "harness": "unknown",
+  "leg": "quickstart-live",
+  "model_reported": "qwen2.5:7b-instruct",
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T05:18:40Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.7.md",
+    "sha256": "8c86a628061f71a078cbdeba5dc41879f111342d16fd40a6774e058fb0c836a0"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.7",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-quickstart-live.transcript.txt",
+  "transcript_sha256": "8304608caecce59e7e7e9cfc9c9210ba23ff528dc7de822eb7cd0aff0eb0ac4f"
+}
