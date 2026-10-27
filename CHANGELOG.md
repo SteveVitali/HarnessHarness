@@ -13,20 +13,25 @@ summary, updated per release.
 
 ## [0.1.0] — unreleased
 
-First public release. Publication mechanics land under L4.4 / L4.5:
+First public release. Publication mechanics landed at L4.4 / L4.5:
 every workspace crate carries the `hharness-*` name and full crates.io
 metadata at version `0.1.0`; the umbrella `hharness` facade crate
 re-exports the public API crates; `scripts/publish-order.sh` derives
-the topological publish order and dry-runs the whole set; the
-`release.yml` workflow builds `hh` / `hh-kernel` / `hh-helper` for the
-ADR-0380 target set (macOS arm64 + x86_64, Linux x86_64 + aarch64 —
-Windows excluded, see the ADR) with a `SHA256SUMS` manifest attached to
-the GitHub Release.
+the topological publish order over the 49-crate publish set and
+dry-runs it (49/49 names free); the `release.yml` workflow builds `hh` /
+`hh-kernel` / `hh-helper` for the ADR-0380 target set (macOS arm64 +
+x86_64, Linux x86_64 + aarch64 — Windows excluded, see the ADR) with a
+`SHA256SUMS` manifest attached to the GitHub Release. The build record
+closed at **GATE-G6 PASSED** (2026-10-23): zero OPEN deferrals, zero
+open backlog debt, coverage 61 MET / 5 MET-DIFFERENTLY / 0 PARTIAL =
+66/66, and 34 committed `hh-live-evidence/1` records at USD 25.26 of
+the round-4 USD 100 live-spend cap — see
+`docs/build/readouts/GATE-G6.md`.
 
 ### Added
 
 - The E1 reference kernel + Laboratory for harness engineering: a
-  52-crate pure-std Rust workspace (modulo the ADR-0359 `ring` pin and
+  54-crate pure-std Rust workspace (modulo the ADR-0359 `ring` pin and
   the ADR-0365 rustls graph) — `hh-embed/1` typed boundary over three
   bindings (in-process, stdio JSON-RPC 2.0, loopback HTTP), the `hh`
   CLI, `hh-kernel`, `hh-helper`, `hh-web`, `hh-mcp-serve`.
@@ -69,7 +74,10 @@ the GitHub Release.
 
 ### Notes
 
-- The verified ceiling is **fixture-verified**: exercised end-to-end
-  against fixtures, with `live-executed` legs only under committed
-  `hh-live-evidence/1` records. See `README.md` → *Status — honesty
-  ceiling* and `docs/build/OPERATIONAL_READINESS.md`.
+- `fixture-verified` is the verified floor; `live-executed` legs are
+  earned where a committed `hh-live-evidence/1` record exists
+  (`docs/build/reports/live/` — 34 records, ADR-0363); the E2/E3 foreign
+  replays are a distinct `foreign-run-verified` class (57/57 each over
+  the eight `hh-xcheck` arms). `staging-verified` and `public` remain
+  unearned — R4.18 owns the publish decision. See `README.md` → *Status
+  — honesty ceiling* and `docs/build/OPERATIONAL_READINESS.md`.
