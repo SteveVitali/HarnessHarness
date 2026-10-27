@@ -31,13 +31,23 @@ while IFS= read -r line; do
   esac
   n=$((n + 1))
 done < <(bash scripts/deferrals-open.sh)
-[ "$n" -gt 0 ] || fail "deferrals-open.sh listed no rows at all"
-echo "check-bm-tools: $n open deferral(s), each resolving to exactly one row"
+if [ "$n" -gt 0 ]; then
+  echo "check-bm-tools: $n open deferral(s), each resolving to exactly one row"
+else
+  # Zero open rows is a legal index — GATE-G6's zero-deferral threshold,
+  # first reached at R4.16a. In that state (2)'s resolved discharged id
+  # below is the guard against a silently-broken reader.
+  echo "check-bm-tools: 0 open deferrals — the zero-deferral index is legal (GATE-G6 threshold; first reached R4.16a)"
+fi
 
-# (2) a discharged row is absent from the index (id derived, not pinned).
+# (2) a discharged row still resolves through bm-row.sh yet is absent from
+# the index (id derived, not pinned) — also the zero-open reader guard.
 done_id=$(grep -m1 '\*\*DONE\*\* — 20' docs/tickets/DEFERRALS.md \
           | grep -o 'DF-[A-Za-z0-9.-]*' | head -1 || true)
 [ -n "$done_id" ] || fail "could not derive a discharged DF id from DEFERRALS.md"
+out=$(bash scripts/bm-row.sh "$done_id") || fail "bm-row.sh $done_id exited $?"
+[ "$(printf '%s\n' "$out" | grep -c .)" -eq 1 ] \
+  || fail "bm-row.sh discharged $done_id did not resolve to exactly one row"
 # grep -q on a pipe would early-close deferrals-open.sh (SIGPIPE under
 # pipefail); read the index into a string first.
 open_index=$(bash scripts/deferrals-open.sh)

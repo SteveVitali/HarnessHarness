@@ -253,14 +253,14 @@ fn xcheck_e3_end_to_end_reports_zero_pending_cells() {
     );
 }
 
-/// The recorded e2 absence (the amendment's non-optional deliverable):
-/// `foreign/e2-python/foreign.py` carries exactly the six original
-/// `arm_*` functions — `arm_ledger_transcript` is the only WAL consumer;
-/// no `arm_ledger_scenarios`/`arm_hir_documents`. An e2-tree arm
-/// extension is its own operator-visible change; when it lands, this
-/// pin and the dated DEFERRALS notes update with it.
+/// The recorded e2 absence — **landed at R4.16a** (this pin's own
+/// forecast: "when it lands, this pin and the dated DEFERRALS notes
+/// update with it"). `foreign/e2-python/foreign.py` now carries eight
+/// `arm_*` functions — the six originals plus `arm_ledger_scenarios` and
+/// `arm_hir_documents`, the shared `_replay_wal` fold serving both
+/// ledger arms (CC1).
 #[test]
-fn e2_tree_carries_exactly_the_six_original_arms() {
+fn e2_tree_carries_the_eight_arms() {
     let py = std::fs::read_to_string(root().join("foreign/e2-python/foreign.py")).unwrap();
     let arms: Vec<&str> = py
         .lines()
@@ -268,15 +268,20 @@ fn e2_tree_carries_exactly_the_six_original_arms() {
         .collect();
     assert_eq!(
         arms.len(),
-        6,
-        "foreign.py must carry exactly the six original arm_* functions: {arms:?}"
+        8,
+        "foreign.py must carry the eight arm_* functions (six originals + the R4.16a ports): {arms:?}"
     );
-    for absent in ["arm_ledger_scenarios", "arm_hir_documents"] {
+    for ported in ["arm_ledger_scenarios", "arm_hir_documents"] {
         assert!(
-            !py.contains(&format!("def {absent}")),
-            "the recorded e2 absence is stale — foreign.py grew {absent}"
+            py.contains(&format!("def {ported}")),
+            "the e2 tree lost its R4.16a port — {ported} missing"
         );
     }
+    assert_eq!(
+        py.matches("def _replay_wal(").count(),
+        1,
+        "one shared WAL fold (CC1) — the e3 replayWal refactor's shape"
+    );
 }
 
 /// The installed node major version, or `None` when node is not on PATH

@@ -203,8 +203,9 @@ fn bundle_manifest_carries_the_honesty_record() {
         "an arm went missing from bundle.json"
     );
     // CF-493 — `verified_by[]` on every arm: `{candidate,
-    // evidence_class, evidence_ref}`; the six original arms carry E1 +
-    // both foreign candidates' `foreign-run-verified` records.
+    // evidence_class, evidence_ref}`; all eight arms carry E1 + both
+    // foreign candidates' `foreign-run-verified` records (the extension
+    // arms' E2 evidence landed at R4.16a).
     let has_evidence = |vs: &Json, cand: &str, class: &str| {
         let Json::Arr(vs) = vs else { return false };
         vs.iter().any(|v| {
@@ -225,21 +226,12 @@ fn bundle_manifest_carries_the_honesty_record() {
         let Json::Arr(vs) = vs else {
             panic!("verified_by not an array")
         };
-        let original = matches!(
-            id,
-            "identity-trees"
-                | "identity-records"
-                | "ledger-transcript"
-                | "registry-snapshot"
-                | "plugin-manifests"
-                | "canonical-parse"
-        );
         let e2 = vs
             .iter()
             .any(|v| v.get("candidate").and_then(Json::as_str) == Some("E2-candidate"));
-        assert_eq!(
-            e2, original,
-            "arm {id}: E2 evidence claim ≠ the e2 tree's coverage"
+        assert!(
+            e2,
+            "arm {id}: E2 evidence claim missing — the e2 tree covers all eight arms since R4.16a"
         );
         for v in vs {
             let class = v.get("evidence_class").and_then(Json::as_str).unwrap();

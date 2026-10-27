@@ -6,7 +6,8 @@
 //! fails *by name* on a corrupted or missing new-arm answer and skips the
 //! scenario arm's informational members; `bundle.json` carries the
 //! extended arms plus the honest pending cells (the committed e2 tree
-//! cannot answer the new arms — recorded, never claimed).
+//! could not answer the new arms until R4.16a's port — the `*.e2-replay`
+//! cells now carry the E2 evidence, `environment-pending` on HUMAN-H3).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -178,11 +179,11 @@ fn verify_skips_ledger_scenarios_informational_members() {
 }
 
 /// `bundle.json` declares the extended arms and the honest pending cells:
-/// the new arms' E3 replays stay `environment-pending` on `HUMAN-H3` and
-/// their E2 replays record the e2-tree extension they need — the
-/// committed `foreign/e2-python` tree cannot answer them today (CF-493
-/// vocabulary: `status` stays `environment-pending`, the `needs` member
-/// names the real prerequisite).
+/// the new arms' foreign replays stay `environment-pending` on `HUMAN-H3`
+/// and their `verified_by[]` records each landed replay — E2's landed at
+/// R4.16a (the `e2-tree arm extension` prerequisite is met), E3's at
+/// R4.4b (CF-493 vocabulary: `status` stays `environment-pending`, the
+/// `needs` member names the real prerequisite).
 #[test]
 fn bundle_manifest_records_the_new_arms_pending_cells() {
     let Json::Obj(m) = load(&bundle_dir().join("bundle.json")) else {
@@ -206,9 +207,9 @@ fn bundle_manifest_records_the_new_arms_pending_cells() {
         panic!("pending_cells must be an array");
     };
     for (cell, needs) in [
-        ("hir-documents.e2-replay", "e2-tree arm extension"),
+        ("hir-documents.e2-replay", "HUMAN-H3"),
         ("hir-documents.e3-replay", "HUMAN-H3"),
-        ("ledger-scenarios.e2-replay", "e2-tree arm extension"),
+        ("ledger-scenarios.e2-replay", "HUMAN-H3"),
         ("ledger-scenarios.e3-replay", "HUMAN-H3"),
     ] {
         let c = pending
@@ -226,9 +227,8 @@ fn bundle_manifest_records_the_new_arms_pending_cells() {
             "{cell}: the honest prerequisite"
         );
         // CF-493 — `verified_by[]` records partial discharge honestly:
-        // the e3-replay cells name `E3-candidate`'s recorded run; the
-        // e2-replay cells stay empty (the committed e2 tree cannot
-        // answer the extension arms).
+        // the e3-replay cells name `E3-candidate`'s recorded run and —
+        // since R4.16a — the e2-replay cells name `E2-candidate`'s.
         let Json::Arr(vs) = c
             .get("verified_by")
             .unwrap_or_else(|| panic!("{cell}: verified_by missing"))
@@ -242,7 +242,7 @@ fn bundle_manifest_records_the_new_arms_pending_cells() {
         let expected: &[&str] = if cell.ends_with(".e3-replay") {
             &["E3-candidate"]
         } else {
-            &[]
+            &["E2-candidate"]
         };
         assert_eq!(
             candidates, expected,

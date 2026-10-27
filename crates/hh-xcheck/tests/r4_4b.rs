@@ -7,10 +7,10 @@
 //!   answers and `verify` passes them green (no `missing answer` cells);
 //! * the fresh node replay agrees with the committed record on the gated
 //!   members (the recorded answers are the replay, not a patch);
-//! * the E2 python tree still carries exactly its original six `arm_*`
-//!   functions and no `arm_hir_documents` (the e2 limitation is a
-//!   documented absence — `hir-documents.e2-replay` stays
-//!   `environment-pending`, never edited or fabricated);
+//! * the E2 python tree grew its `arm_hir_documents` +
+//!   `arm_ledger_scenarios` ports at R4.16a (the `*.e2-replay` cells now
+//!   carry the E2 `foreign-run-verified` record — `environment-pending`
+//!   on HUMAN-H3); the pre-R4.16a absence is a landed fact, unchanged;
 //! * `scripts/xcheck-e3.sh` reports zero pending cells.
 
 use std::path::{Path, PathBuf};
@@ -193,13 +193,13 @@ fn e3_hir_documents_fresh_replay_matches_committed() {
     let _ = std::fs::remove_file(&tmp);
 }
 
-/// The E2 boundary: `foreign/e2-python/foreign.py` still defines exactly
-/// the original six `arm_*` functions and no `arm_hir_documents` — the
-/// e2 tree is not edited by this ticket (the dated note in the e2 README
-/// records the absence; `hir-documents.e2-replay` stays
-/// environment-pending).
+/// The E2 boundary (amended at R4.16a): `foreign/e2-python/foreign.py`
+/// now defines eight `arm_*` functions — the six originals plus
+/// `arm_hir_documents` + `arm_ledger_scenarios` (the dated note in the e2
+/// README records the port; `hir-documents.e2-replay`'s `verified_by[]`
+/// carries the E2 run record while `status` stays environment-pending).
 #[test]
-fn e2_tree_has_six_arms_and_no_hir_documents() {
+fn e2_tree_carries_the_eight_arms() {
     let src = std::fs::read_to_string(root().join("foreign/e2-python/foreign.py")).unwrap();
     let arms: Vec<&str> = src
         .lines()
@@ -207,13 +207,15 @@ fn e2_tree_has_six_arms_and_no_hir_documents() {
         .collect();
     assert_eq!(
         arms.len(),
-        6,
-        "e2 must still carry exactly its six original arm functions: {arms:?}"
+        8,
+        "e2 must carry its eight arm functions (six originals + the two R4.16a ports): {arms:?}"
     );
-    assert!(
-        !src.contains("arm_hir_documents") && !src.contains("hir-documents"),
-        "the e2 tree must not grow a hir-documents arm under this ticket"
-    );
+    for f in ["arm_hir_documents", "arm_ledger_scenarios"] {
+        assert!(
+            src.contains(&format!("def {f}")),
+            "the e2 tree must carry {f} (R4.16a)"
+        );
+    }
 }
 
 /// `xcheck-e3.sh` over the committed bundle answers zero pending cells —

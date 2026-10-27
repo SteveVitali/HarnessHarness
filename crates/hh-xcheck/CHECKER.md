@@ -211,6 +211,8 @@ cell (`foreign-run-verified` — a class *below* the fixture-verified
 ceiling, never conflated with it). A pending cell's `verified_by[]` is
 partial discharge only: `status` stays `environment-pending` while the
 named `needs` prerequisite stands; an empty `verified_by[]` records that
-no candidate's evidence covers the cell (the committed
-`foreign/e2-python` tree cannot answer the R4.3 arms — their
-`*.e2-replay` cells carry no E2 entry).
+no candidate's evidence covers the cell. (The committed
+`foreign/e2-python` tree could not answer the R4.3 arms until R4.16a
+ported the e3 reference semantics — their `*.e2-replay` cells now carry
+the E2 `foreign-run-verified` entry; `status` stays
+`environment-pending` on HUMAN-H3.)
