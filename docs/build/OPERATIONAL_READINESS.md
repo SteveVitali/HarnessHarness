@@ -160,3 +160,81 @@ plus one honest `fail` record for the anthropic replay divergence;
 100. `staging-verified` and `public` remain unearned; the production
 surface claims stay exactly as scoped above — every executed leg is a
 loopback/sandbox/private-credential surface.
+
+*Amended in place 2026-10-23 (R4.16 — round-4 closure sweep):* this
+amendment reconciles the R3-era prose above against the R4/L4 evidence
+that landed after it. Two statements in the header and in "What is *not*
+claimed" are stale and are corrected here (append-only — the originals
+stand for the record): (a) "the verified ceiling … stays
+`fixture-verified`" — superseded: `live-executed` was earned at R4.5b
+onward under ADR-0363 (`hh-live-evidence/1` records only), and the L4.6 /
+L4.6a capstone + surface sweep carried most public surfaces to
+`live-executed`; (b) "No live provider call, live TLS termination, live
+judge, real tracker or signed webhook, real OAuth/mTLS exchange, E3
+binding, or live foreign-manifest import is claimed" — every item on
+that list has since executed live with a cited record (provider calls:
+`2026-10-21-{local,openai,anthropic}-call` + the capstone runs; TLS:
+`2026-10-21-https-reachability`; judge: `2026-10-22-judge-{calibrate,run}`
++ `capstone-judge`; tracker + signed webhook: `2026-10-2{1,2}-github-live`
++ `capstone-fleet-webhook`; OAuth device flow: `2026-10-22-oauth-device`;
+E3 binding: the generated `clients/ts` client bound at R4.2 and the
+surface legs execute over it; foreign-manifest import:
+`2026-10-21-bench-manifest-live`). What remains true: no
+`staging-verified` or `public` claim exists anywhere; every live leg is a
+loopback/sandbox/private-credential surface.
+
+## Public operational surface — the R4.16 sweep (2026-10-23)
+
+The full inventory (`cargo metadata --no-deps` + `ls plugins/`), each row
+at its honestly-claimed highest layer. `live-executed` rows cite the
+`hh-live-evidence/1` record under `docs/build/reports/live/` produced by
+`scripts/live-verify.sh` (ADR-0363). Internal tooling binaries
+(`hh-codegen`, `hh-compile`, `hh-authorize`, `hh-bench-adapter`,
+`hh-eval-oracle`, `hh-gateway-stub`, `hh-plugin-check`,
+`hh-plugin-fixture`, `hh-secret-scan`, `hh-ir-op`, `hh-xcheck`) are
+dev/CI instruments, not public surfaces — `fixture-verified` under the
+workspace suite, no live claim owed.
+
+| Public surface | Form | Highest layer | Evidence |
+|---|---|---|---|
+| `hh` CLI (generated boundary client; `serve`, `acp`, `lab serve`, `bundle`, `verify`, `replay`, `ledger` verbs) | bin `hharness-cli` | live-executed | `2026-10-23-capstone-run-{local,openai}.json`, `2026-10-23-embed-sdk-live.json`, `2026-10-23-quickstart-live.json` |
+| `hh-kernel serve` — binding (b) stdio JSON-RPC | bin `hharness-kernel` | live-executed | capstone-run legs over binding (b); `embed-sdk-live` |
+| `hh-kernel serve --http` — binding (c) loopback HTTP | bin `hharness-kernel` | live-executed | capstone-run legs over binding (c); `surface-mcp-lab` |
+| binding (a) in-process `EmbedService` | lib `hharness-embed` | live-executed | `2026-10-23-embed-sdk-live.json` (out-of-workspace consumer crate) |
+| `hh-web` read-only web instrument | bin `hharness-web` | live-executed | `2026-10-23-capstone-web.json` |
+| `hh-mcp-serve` MCP protocol edge | bin `hharness-mcp` | live-executed | `2026-10-23-capstone-mcp.json` (`client=in-repo` — official SDK refuses the `2026-07-28` protocol-era pin; surfaced) |
+| `hh lab serve` (`hh-lab/1` MCP surface) | lib `hharness-mcp-lab` via `hh` | live-executed | `2026-10-23-surface-mcp-lab.json` (`client=in-repo`, same pin limit) |
+| `hh acp` ACP session boundary | lib `hharness-acp` via `hh` | live-executed | `2026-10-23-surface-acp.json` (`client=official-sdk` — `@zed-industries/agent-client-protocol`, full exchange incl. `session/request_permission`) |
+| Public SDK / embed API | libs `hharness-embed`, `hharness-embed-client-generated` | live-executed | `2026-10-23-embed-sdk-live.json` (all three bindings + foreign consumer crate) |
+| Generated TypeScript client `clients/ts` | generated artifact (HUMAN-H1 "Confirm TypeScript"; ADR-0050 log) | foreign-run-verified | e3-smoke 17/17 over spawned `serve --http`; `hh-codegen/tests/r4_2.rs`; drift gate CC7 |
+| `hh-memory-store` packaged variant | plugin (`plugins/hh-memory-store`) OOP via `hh-varhost`+`hh-helper`/`plugin_abi/1` | live-executed | `2026-10-23-plugin-memory-store.json` |
+| `hh-compact-evict-oldest` packaged variant | plugin OOP | live-executed | `2026-10-23-plugin-compact-evict-oldest.json` |
+| `hh-tracker-fixture` packaged variant | plugin OOP | live-executed | `2026-10-23-plugin-tracker-fixture.json` |
+| `hh-github-issues` packaged variant (real adapter + signed webhook) | plugin OOP `subprocess_confined` | live-executed | `2026-10-2{1,2}-github-live.json`, `2026-10-23-capstone-fleet-webhook.json` (ADR-0369) |
+| Provider lane — local Ollama | `hharness-gateway` transport | live-executed | `2026-10-21-local-{reachability,run}.json`, `capstone-run-local` |
+| Provider lane — OpenAI | `hharness-gateway` transport | live-executed | `2026-10-21-openai-call.json`, `capstone-run-openai` (replay byte-identical) |
+| Provider lane — Anthropic | `hharness-gateway` transport | live-executed — calls landed, `usage{available}`; run replay diverged (recorded `fail`, surfaced, never claimed deterministic) | `2026-10-21-anthropic-call.json`, `capstone-run-anthropic` |
+| TLS-terminating transport | `hharness-tls`/`hh-env` `LocalTlsTransport` (ADR-0365 rustls graph) | live-executed | `2026-10-21-https-reachability.json` |
+| Sandboxed tool exec (helper, seatbelt backend) | `hharness-env`/`hh-helper` | live-executed | `2026-10-23-capstone-sandboxed-exec.json` |
+| Judge pipeline (calibrated LiveJudge/PanelJudge pair) | `hharness-embed::judge_adapters` | live-executed | `2026-10-22-judge-{calibrate,run}.json`, `capstone-judge` |
+| Ledger verify + deterministic replay | `hh` `verify`/`replay` | live-executed | `capstone-ledger-replay`; **limit surfaced**: tool-dispatching runs answer `invalid{replay_diverged}` (id-allocator skew, 3/3 reproductions) |
+| Bundle export → reproduce | `hharness-bundle`, `hh bundle` | live-executed (R0) | `2026-10-23-capstone-bundle-repro.json` |
+| OAuth device flow / mediator legs | `hharness-secrets`/`hh-monitor` | live-executed | `2026-10-22-oauth-device.json` |
+| Observability sink (otel) | `hharness-telemetry` exporter | live-executed | `2026-10-22-otel-live.json` |
+| Remote fetch transports | `hharness-bundle` `FetchTrustPolicy` | live-executed | `2026-10-22-r4-15d-fetch.json` |
+| Foreign-manifest import | `hharness-bench` | live-executed | `2026-10-21-bench-manifest-live.json` |
+| `foreign/e2-python` (E2 candidate) | foreign toolchain replay of `hh-xcheck-bundle/1` | foreign-run-verified | PR #136, 49/49 on the six base arms; **extension arms unimplemented → environment-pending** (DF-S1.2-2/DF-S1.5-3 stay OPEN — GATE-G6 findings) |
+| `foreign/e3-typescript` (E3 candidate) | foreign toolchain replay | foreign-run-verified | R4.4b: 57/57 across all eight arms incl. HIR documents + ledger scenarios |
+| Quickstart (public on-ramp) | `scripts/` + `hh doctor` path | live-executed | `2026-10-23-quickstart-live.json` |
+
+**Carried (honest) residuals after R4.16:** `staging-verified` and
+`public` unearned (no staging environment is provisioned; R4.18 owns the
+publish decision). The e2-tree extension cells `hir-documents.e2-replay`
+and `ledger-scenarios.e2-replay` (`bundle.json` `verified_by[]` empty —
+`foreign/e2-python` does not implement those arms) remain
+`environment-pending` on BL-01 (`accepted`) as DF-S1.2-2/DF-S1.5-3 —
+surfaced as GATE-G6-blocking findings, not silently closed. The
+`replay_diverged` limits (Anthropic run; tool-dispatch effect paths) are
+surfaced findings per the capstone report. Live spend: USD **25.259768**
+of the USD 100 cap (90 `SPEND.jsonl` rows; R4.16 itself spent USD 0 —
+offline ticket). `check-live-evidence.sh` green over 34 records.
