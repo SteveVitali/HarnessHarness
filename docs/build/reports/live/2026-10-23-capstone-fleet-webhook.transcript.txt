@@ -1,0 +1,51 @@
+$ HH_GH_DIR=<tmp> scripts/live-github.sh
+
+HH_GITHUB_SANDBOX_TOKEN provided: yes
+HH_GITHUB_SANDBOX_REPO provided: yes
+HH_GITHUB_WEBHOOK_SECRET provided: yes
+   Compiling hharness-embed v0.1.0 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.06s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-1452ab188c45a578)
+
+running 1 test
+GH_BROKER token=provided:yes secret=provided:yes
+GH_LISTEN_PORT 58675
+GH_TUNNEL url=https://cars-camcorder-receivers-excellence.trycloudflare.com
+GH_PRESTATE_HOOKS n=0
+GH_HOOK_CREATED id=701945817
+GH_PRESTATE_ISSUES n=2
+GH_LABEL created=0 (exists)
+GH_ISSUE_CREATED number=3
+GH_COMMENT status=201
+GH_PING verified=1
+GH_DELIVERY event=issues delivery=16f13308-ce91-11f1-9bdd-dc047e49f183 status=received
+GH_WORKITEM item=gh-SteveVitali-hh-live-sandbox-3 state=dispatching
+GH_DEDUPE status=received observed=0 (durable skip audited)
+GH_STALE observed=1 items=1
+GH_HOOK_DELETED id=701945817 status=204
+GH_HOOK_GONE verified=1 status=200
+GH_ISSUE_CLOSED number=3 status=200
+GH_RESULT pass
+test r47_github_live ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 39.74s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/r4_7_live.rs (target/debug/deps/r4_7_live-1452ab188c45a578)
+
+running 1 test
+GH_PLUGIN_OOP spawn=subprocess_confined probe=capabilities
+GH_PLUGIN_LIST n=2
+GH_PLUGIN_GET native_id=2 n=1
+GH_PLUGIN_RESULT pass
+test r47_github_plugin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.49s
+
+live-github: GH_RESULT all-cells-pass
+  [cleanup] 
+  [cleanup] running 1 test
+  [cleanup] GH_CLEANUP nothing-pending
+  [cleanup] .
+  [cleanup] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+  [cleanup] 

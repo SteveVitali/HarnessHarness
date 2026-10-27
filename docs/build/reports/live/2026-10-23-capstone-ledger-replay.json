@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "hh CLI run over binding (b) then attach over binding (c): verify verdict ok + replay{deterministic} byte-identical offline \u2014 zero provider re-calls (model.* row count unchanged across the replay); CAPSTONE_REPLAY: run=run-1792725050710-000000-7010f291 verify=ok replay=deterministic byte-identical;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:11434",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-ledger-replay",
+  "model_reported": null,
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T03:10:57Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 21.257705,
+  "ticket": "L4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-ledger-replay.transcript.txt",
+  "transcript_sha256": "55fe4cf2067b64a5db6a59131ffa17fe82690111289b23aa72ea7cf479e35c34"
+}

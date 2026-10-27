@@ -333,6 +333,7 @@ dependencies = [
  "hharness-context",
  "hharness-control",
  "hharness-debt",
+ "hharness-embed-client-generated",
  "hharness-embed-schema",
  "hharness-env",
  "hharness-eval",

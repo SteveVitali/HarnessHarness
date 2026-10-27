@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "sandboxed tool exec on the real hh-helper backend (seatbelt): local_sandboxed attach spawns the helper; exec dispatch streams journaled frames and settles observed; the deadline is helper-enforced \u2014 AC-R-2.2.5-3 + AC-R-2.5.5-6 live halves; USD 0; helper_live cells green=2"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-sandboxed-exec",
+  "model_reported": null,
+  "provided": {},
+  "provider": "local-sandbox",
+  "recorded_at": "2026-10-23T03:12:51Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 21.257705,
+  "ticket": "L4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-sandboxed-exec.transcript.txt",
+  "transcript_sha256": "0397f4bd95d31daae0c684cf54634f2e826c5544d37afccdc6687356f192dfb7"
+}

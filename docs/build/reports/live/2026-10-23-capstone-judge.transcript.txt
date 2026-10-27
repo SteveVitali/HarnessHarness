@@ -1,0 +1,72 @@
+$ HH_JUDGE_CAL_OUT=<fixture> cargo test -p hharness-embed --test r4_7e_live r47e_live_judge_run-- --ignored --nocapture --test-threads=1
+
+   Compiling hharness-embed v0.1.0 (/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-embed)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.60s
+     Running tests/r4_7e_live.rs (target/debug/deps/r4_7e_live-8858f94b6fb6927e)
+
+running 1 test
+test r47e_live_judge_run ... JUDGE_USAGE: judge:live-local.v1 call=calibrate.0.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":160,"input_uncached":160,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":37}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.1.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":160,"input_uncached":160,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":37}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.2.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":160,"input_uncached":160,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":50}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.3.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":160,"input_uncached":160,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":51}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.4.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":171,"input_uncached":171,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":36}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.5.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":171,"input_uncached":171,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":35}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.6.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":169,"input_uncached":169,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":58}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.7.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":169,"input_uncached":169,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":52}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.8.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":166,"input_uncached":166,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":39}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.9.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":166,"input_uncached":166,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":36}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.10.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":166,"input_uncached":166,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":53}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=calibrate.11.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":166,"input_uncached":166,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":51}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.0.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":133,"input_uncached":133,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":39}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.1.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":133,"input_uncached":133,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":55}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.2.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":133,"input_uncached":133,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":49}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.3.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":133,"input_uncached":133,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":42}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.4.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":144,"input_uncached":144,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":51}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.5.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":144,"input_uncached":144,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":46}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.6.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":142,"input_uncached":142,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":49}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.7.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":142,"input_uncached":142,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":55}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.8.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":139,"input_uncached":139,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":67}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.9.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":139,"input_uncached":139,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":47}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.10.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":139,"input_uncached":139,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":85}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=calibrate.11.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":139,"input_uncached":139,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":61}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+LIVE_JUDGE_USAGE: {"calls":12,"input_total":1660,"output_total":646}
+JUDGE_LINK: critics=["judge:live-local.v1", "judge:live-hosted.v1"] families=["local", "openai"]
+JUDGE_RUN: run outcome Completed
+JUDGE_USAGE: judge:live-local.v1 call=judge.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":152,"input_uncached":152,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":29}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-local.v1 call=assess.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai-compatible@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":319,"input_uncached":319,"normalizer_ref":"openai-compatible@1","output_reasoning":0,"output_total":24}}}
+LIVE_MODEL: qwen2.5:7b-instruct
+JUDGE_USAGE: judge:live-hosted.v1 call=judge.0 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":121,"input_uncached":121,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":7}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+JUDGE_USAGE: judge:live-hosted.v1 call=assess.1 usage={"arrival":"final_frame","available":true,"record":{"normalizer_ref":"openai@1","view":{"cache_read":0,"cache_write":0,"convention":"hh-inclusive/1","input_total":293,"input_uncached":293,"normalizer_ref":"openai@1","output_reasoning":0,"output_total":19}}}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+LIVE_JUDGE_USAGE: {"calls":14,"input_total":2074,"output_total":672}
+JUDGE_RUN: finished=true judged_verdicts=5 reconciled_judged=1 model_io=5 replay_ppm=0
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 44.56s
+
