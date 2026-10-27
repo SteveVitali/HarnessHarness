@@ -132,3 +132,9 @@ the ticket's surfaced blocker for the operator's ruling.
 unavailable on the panicked runs), `capstone-run-openai` 0.000158,
 `capstone-judge` 0.001905, `capstone-fleet-webhook` 0. Cumulative
 USD 25.259768 of 100. `check-live-evidence.sh`: OK — 26 records.
+
+## Follow-on (appended 2026-10-23)
+
+L4.6a's surface & plugin sweep — `hh acp`, `hh-mcp-lab`, the SDK/embed
+library API, and the three packaged variants OOP — is recorded in
+`2026-10-23-live-e2e-surfaces.md` (6/6 pass, USD 0).

@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "the shipped hh acp verb on a real pty (BSD script, stty -echo \u2014 the interactive transport shape, never a pipe): initialize \u2192 session/new \u2192 session/prompt \u2192 session/request_permission round-trip \u2192 security.permission.decided{allow} \u2192 state.turn.completed, then a fresh hh-kernel serve attach verifies + replays{deterministic} the run offline (model.* rows unchanged); _hh/account + _hh/ledger/read exercised; client=official-sdk|in-repo recorded verbatim; USD 0 local lane; ACP_PROFILE: test:l46a-local@1.0 version_id=sha256:b741235b2c0b1b3a0f46101de95b0531d52d54af03b352a12cd8f99daf093090;ACP_INIT_REFUSED: offered=1 [object Object];ACP_INIT: offered=\"v1-compat\" negotiated=\"v1-compat\";ACP_SESSION: sess-1;ACP_PERMISSION: [{\"kind\":\"allow_once\",\"name\":\"allow once\",\"optionId\":\"allow_once\"},{\"kind\":\"reject_once\",\"name\":\"deny once\",\"optionId\":\"deny_once\"}];ACP_PROMPT: stop=end_turn updates=0 permissions=1;ACP_ACCOUNT: {\"account\":{\"account_ref\":\"acct:unbudgeted\",\"run_id\":\"run-1792744268385-000000-b6c44568\",\"until_seq\":42,\"usage\":[]}};ACP_LEDGER_READ: 48414 bytes;ACP_CLIENT: official-sdk;ACP_RUN: run-1792744268385-000000-b6c44568 client=official-sdk;ACP_REPLAY: run=run-1792744268385-000000-b6c44568 deterministic model_rows=8;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:11434",
+  "git_head": "388704d81e40016f18eb53be3d72c525621c16aa",
+  "harness": "unknown",
+  "leg": "surface-acp",
+  "model_reported": null,
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T08:31:17Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6a.md",
+    "sha256": "00050a8e4deb338606d52a6a6de1063cc393a143bc5461a83b3451fc35d24abd"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6a",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-surface-acp.transcript.txt",
+  "transcript_sha256": "5e512cde4b39e6c1722ea47e5d94ddd8a5a463f5869c5ff724a6cc97a55fd7e6"
+}

@@ -66,6 +66,7 @@ impl EmbedService {
         hharness_ledger::replay::replay_started(&mut self.store, &target, driver_mode, until)
             .map_err(ledger_err)?;
 
+        let mut diverged_debug: Option<(u64, String, String)> = None;
         let report = match driver_mode {
             ReplayDriverMode::Reconstruct => {
                 // The `reconstruct` driver — views + env binding rebuilt,
@@ -132,13 +133,14 @@ impl EmbedService {
                 .map_err(|e| EmbedError::Refused {
                     reason: format!("replay_driver: {e:?}"),
                 })?;
+                diverged_debug = outcome
+                    .diverged
+                    .as_ref()
+                    .map(|d| (d.at_seq, d.expected.clone(), d.got.clone()));
                 let input = ValidityInput {
                     variant_declares: true,
                     reproduced: Some(outcome.reproduced()),
-                    diverged: outcome
-                        .diverged
-                        .as_ref()
-                        .map(|d| (d.at_seq, d.expected.clone(), d.got.clone())),
+                    diverged: diverged_debug.clone(),
                     ..Default::default()
                 };
                 hharness_ledger::replay::validity(&self.store, &target, &input)
@@ -150,13 +152,27 @@ impl EmbedService {
         hharness_ledger::replay::replay_finished(&mut self.store, &target, driver_mode, &report)
             .map_err(ledger_err)?;
 
-        Ok(Json::obj([
+        let report_json = report.to_json();
+        let mut out = Json::obj([
             ("run_id", Json::str(target)),
             ("driver_mode", Json::str(driver_mode.as_str())),
             ("mode", Json::str(report.mode.as_str())),
             ("report_ref", Json::str(report_ref)),
-            ("report", report.to_json()),
-        ]))
+            ("report", report_json),
+        ]);
+        if let Json::Obj(m) = &mut out {
+            if let Some((at, expected, got)) = diverged_debug {
+                m.insert(
+                    "diverged".to_string(),
+                    Json::obj([
+                        ("at_seq", Json::Int(at as i64)),
+                        ("expected", Json::str(expected)),
+                        ("got", Json::str(got)),
+                    ]),
+                );
+            }
+        }
+        Ok(out)
     }
 
     /// The `ctx`/`policy`/`config` the deterministic driver arms with —

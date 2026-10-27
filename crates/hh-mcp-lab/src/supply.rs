@@ -18,6 +18,8 @@
 //! Every decision is a surface-session turn — the hosted run sees the
 //! same `lifecycle.turn.*` + `action.effect.*` spine a lab caller gets.
 
+use hharness_embed::service::EmbedService;
+use hharness_embed_schema::EmbedError;
 use hharness_wire::json::Json;
 
 use crate::binding::CallerBinding;
@@ -126,7 +128,7 @@ pub fn dispatch(
     );
     if let Err(e) = fx.intended(
         &mut srv.svc,
-        srv.sessions.get(&bid).expect("session"),
+        srv.sessions.get_mut(&bid).expect("session"),
         &turn_id,
         binding,
         &tool.name,
@@ -170,7 +172,7 @@ pub fn dispatch(
             );
             let _ = fx.refused(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
                 &err.kind,
                 err.detail.clone(),
@@ -193,7 +195,7 @@ pub fn dispatch(
                 );
                 let _ = fx.refused(
                     &mut srv.svc,
-                    srv.sessions.get(&bid).expect("session"),
+                    srv.sessions.get_mut(&bid).expect("session"),
                     &turn_id,
                     &err.kind,
                     err.detail.clone(),
@@ -246,11 +248,8 @@ pub fn dispatch(
             );
             match pending {
                 Ok(ev) => {
-                    let s = srv.sessions.get(&bid).expect("session");
-                    if let Err(e) = srv
-                        .svc
-                        .surface_append(&s.run_id.clone(), &s.lease, vec![ev])
-                    {
+                    let s = srv.sessions.get_mut(&bid).expect("session");
+                    if let Err(e) = s.append(&mut srv.svc, vec![ev]) {
                         return call_result_refusal(&SurfaceError::new(
                             "kernel_error",
                             format!("permission pending append: {e:?}"),
@@ -268,7 +267,7 @@ pub fn dispatch(
             }
             let _ = fx.refused(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
                 "PermissionAskRequired",
                 Json::obj([("permission_id", Json::str(permission_id.clone()))]),
@@ -287,7 +286,7 @@ pub fn dispatch(
             let mut fail = None;
             if let Err(e) = fx.authorize(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
             ) {
                 fail = Some(SurfaceError::new(
@@ -299,7 +298,7 @@ pub fn dispatch(
             if fail.is_none() {
                 if let Err(e) = fx.prepared(
                     &mut srv.svc,
-                    srv.sessions.get(&bid).expect("session"),
+                    srv.sessions.get_mut(&bid).expect("session"),
                     &turn_id,
                 ) {
                     fail = Some(SurfaceError::new(
@@ -346,7 +345,7 @@ pub fn dispatch(
         Ok(p) => {
             let _ = fx.observed(
                 &mut srv.svc,
-                srv.sessions.get(&bid).expect("session"),
+                srv.sessions.get_mut(&bid).expect("session"),
                 &turn_id,
                 "applied",
                 Some(p),
@@ -490,19 +489,43 @@ pub fn respond_approval(
             Json::Null,
         ));
     }
-    let (run_id, lease) = {
-        let s = srv.sessions.get(&bid).expect("session ensured");
-        (s.run_id.clone(), s.lease.clone())
+    let run_id = srv
+        .sessions
+        .get(&bid)
+        .expect("session ensured")
+        .run_id
+        .clone();
+    let respond = |svc: &mut EmbedService,
+                   lease: &hharness_ledger::store::Lease|
+     -> Result<Json, EmbedError> {
+        svc.surface_respond_permission(
+            &run_id,
+            lease,
+            &permission_id,
+            &outcome,
+            &binding.principal_ref,
+            Some(&bid),
+            &idem,
+        )
     };
-    match srv.svc.surface_respond_permission(
-        &run_id,
-        &lease,
-        &permission_id,
-        &outcome,
-        &binding.principal_ref,
-        Some(&bid),
-        &idem,
-    ) {
+    let lease = srv.sessions.get(&bid).expect("session").lease.clone();
+    let result = match respond(&mut srv.svc, &lease) {
+        // The session's writer lease outlived its TTL — re-acquire
+        // (the same takeover-reacquire `SurfaceSession::append` runs)
+        // and retry once; the fresh lease lands back on the session.
+        Err(EmbedError::SessionDetached { .. }) => {
+            let fresh = srv.svc.surface_acquire_writer(&run_id, 60_000);
+            match fresh {
+                Ok(l) => {
+                    srv.sessions.get_mut(&bid).expect("session").lease = l.clone();
+                    respond(&mut srv.svc, &l)
+                }
+                Err(e) => Err(e),
+            }
+        }
+        other => other,
+    };
+    match result {
         Ok(payload) => crate::dispatch::call_result_ok(payload),
         Err(e) => call_result_refusal(&SurfaceError::op(&e)),
     }

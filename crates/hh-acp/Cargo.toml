@@ -29,3 +29,14 @@ hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
 # R2.14 — the propagation carrier's `_meta.hharness` member set is
 # hharness-telemetry's single definition (CC1).
 hharness-telemetry = { path = "../hh-telemetry", version = "0.1.0" }
+
+[dev-dependencies]
+# L4.6a — the live stdio leg: the generated binding-(b) client drives a
+# spawned `hh-kernel serve`; the hir/1 fixture document + provenance
+# records build the served definition (the same typed construction the
+# conformance batteries use, never a second spelling).
+hharness-embed-client-generated = { path = "../hh-embed-client-generated" }
+hharness-embed-schema = { path = "../hh-embed-schema" }
+hharness-hir = { path = "../hh-hir" }
+hharness-assembly = { path = "../hh-assembly" }
+hharness-provenance = { path = "../hh-provenance" }

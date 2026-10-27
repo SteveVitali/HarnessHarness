@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "packaged hh-compact-evict-oldest out of process: pack\u2192seal\u2192load, spawn subprocess_confined via hh-helper, bind compaction_strategy 1.0, assess\u2192propose\u2192execute over the live session (V1 host-stamped provenance on the wire, remaining_tokens \u2264 cap), close; lifecycle.component.* rows durable on a real run ledger; USD 0; PLUGIN_OOP variant=hh-compact-evict-oldest class=compaction_strategy placement=subprocess_confined bound_rows=1 invoked_rows=3 run=run-1792743878782-000000-341a8b64;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1",
+  "git_head": "388704d81e40016f18eb53be3d72c525621c16aa",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "plugin-compact-evict-oldest",
+  "model_reported": "none",
+  "provided": {},
+  "provider": "local-varhost",
+  "recorded_at": "2026-10-23T08:24:38Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6a.md",
+    "sha256": "00050a8e4deb338606d52a6a6de1063cc393a143bc5461a83b3451fc35d24abd"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6a",
+  "token_usage": {
+    "input_total": 0,
+    "output_total": 0
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-23-plugin-compact-evict-oldest.transcript.txt",
+  "transcript_sha256": "8a8d1edf50dded82354793e3c711dee90a20b9c4f0b4341f2b6bf1dcf22d17cd"
+}

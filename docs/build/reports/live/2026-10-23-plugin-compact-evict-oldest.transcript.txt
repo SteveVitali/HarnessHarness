@@ -1,0 +1,13 @@
+$ L4_6A_LIVE=1 cargo test -p hharness-varhost --test l4_6a l46a_plugin_compact_evict_oldest-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/l4_6a.rs (target/debug/deps/l4_6a-4130b68ad8d5fc44)
+
+running 1 test
+test l46a_plugin_compact_evict_oldest ... PLUGIN_OOP variant=hh-compact-evict-oldest class=compaction_strategy placement=subprocess_confined bound_rows=1 invoked_rows=3 run=run-1792743878782-000000-341a8b64
+LIVE_USAGE: {"input_total":0,"output_total":0}
+LIVE_MODEL: none
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.59s
+

@@ -1538,6 +1538,22 @@ pub fn cmd_acp(
 
     // 2) The open spec every `session/new` drives — interactive asks
     //    round-trip as `session/request_permission` on the ACP wire.
+    //    `--capability <json>` declares `supplies.host_capabilities[]`
+    //    (the same record shape `hh run` parses — CC1); a
+    //    `requires_approval` declaration mints the attended ask at open.
+    let host_caps: Vec<Json> = p
+        .flag_all("capability")
+        .iter()
+        .map(|s| {
+            hharness_wire::json::parse(s).map_err(|e| {
+                CliError::Invocation(InvocationError::at(
+                    "bad_capability",
+                    "--capability",
+                    &e.to_string(),
+                ))
+            })
+        })
+        .collect::<Result<_, _>>()?;
     let mut spec = Json::obj([
         ("kind", Json::str("new")),
         ("definition", definition),
@@ -1555,7 +1571,7 @@ pub fn cmd_acp(
             "supplies",
             Json::obj([
                 ("context", Json::Arr(vec![])),
-                ("host_capabilities", Json::Arr(vec![])),
+                ("host_capabilities", Json::Arr(host_caps)),
                 ("mcp_servers", Json::Arr(vec![])),
                 ("procedures", Json::Arr(vec![])),
             ]),

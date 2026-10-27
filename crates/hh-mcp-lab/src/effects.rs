@@ -97,7 +97,7 @@ impl EffectCtx {
     pub fn intended(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
         _binding: &CallerBinding,
         tool_name: &str,
@@ -130,7 +130,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        let r = svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        let r = session.append(svc, vec![ev])?;
         let event_id = session.events(svc)?[r.first as usize].event_id.clone();
         let eref = EventRef {
             run_id: session.run_id.clone(),
@@ -148,7 +148,7 @@ impl EffectCtx {
     pub fn decide_and_authorize(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
         binding: &CallerBinding,
         decision: &str,
@@ -183,7 +183,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        svc.surface_append(&session.run_id, &session.lease, vec![decided, authorized])?;
+        session.append(svc, vec![decided, authorized])?;
         Ok(())
     }
 
@@ -192,7 +192,7 @@ impl EffectCtx {
     pub fn authorize(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
     ) -> Result<(), EmbedError> {
         let ev = mint_event(
@@ -206,7 +206,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        session.append(svc, vec![ev])?;
         Ok(())
     }
 
@@ -215,7 +215,7 @@ impl EffectCtx {
     pub fn prepared(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
     ) -> Result<EventRef, EmbedError> {
         let mut members: Vec<(String, Json)> = vec![
@@ -241,7 +241,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        let r = svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        let r = session.append(svc, vec![ev])?;
         let event_id = session.events(svc)?[r.first as usize].event_id.clone();
         let eref = EventRef {
             run_id: session.run_id.clone(),
@@ -256,7 +256,7 @@ impl EffectCtx {
     pub fn committed(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
     ) -> Result<EventRef, EmbedError> {
         let ev = mint_event(
@@ -271,7 +271,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        let r = svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        let r = session.append(svc, vec![ev])?;
         let event_id = session.events(svc)?[r.first as usize].event_id.clone();
         let eref = EventRef {
             run_id: session.run_id.clone(),
@@ -286,7 +286,7 @@ impl EffectCtx {
     pub fn observed(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
         outcome: &str,
         result_ref: Option<&Json>,
@@ -321,7 +321,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        let r = svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        let r = session.append(svc, vec![ev])?;
         let event_id = session.events(svc)?[r.first as usize].event_id.clone();
         let eref = EventRef {
             run_id: session.run_id.clone(),
@@ -336,7 +336,7 @@ impl EffectCtx {
     pub fn refused(
         &mut self,
         svc: &mut EmbedService,
-        session: &SurfaceSession,
+        session: &mut SurfaceSession,
         turn_id: &str,
         reason: &str,
         detail: Json,
@@ -363,7 +363,7 @@ impl EffectCtx {
             self.scope(turn_id),
             vec![],
         )?;
-        let r = svc.surface_append(&session.run_id, &session.lease, vec![ev])?;
+        let r = session.append(svc, vec![ev])?;
         let event_id = session.events(svc)?[r.first as usize].event_id.clone();
         let eref = EventRef {
             run_id: session.run_id.clone(),
@@ -379,8 +379,8 @@ impl EffectCtx {
 /// the same append — the §5a.2 batch semantics).
 pub fn append_batch(
     svc: &mut EmbedService,
-    session: &SurfaceSession,
+    session: &mut SurfaceSession,
     events: Vec<Event>,
 ) -> Result<hharness_ledger::event::SeqRange, EmbedError> {
-    svc.surface_append(&session.run_id, &session.lease, events)
+    session.append(svc, events)
 }
