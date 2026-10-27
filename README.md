@@ -15,8 +15,8 @@ ticket in `docs/build/BUILD_INDEX.md`.
 <!-- quickstart:begin -->
 ```sh
 # fresh clone → build the CLI pair
-git clone https://github.com/SteveVitali/MetaHarness.git
-cd MetaHarness
+git clone https://github.com/SteveVitali/HarnessHarness.git
+cd HarnessHarness
 cargo build -p hharness-cli -p hharness-kernel
 
 # connectivity self-check — `hh` over the spawned kernel (binding (b))
