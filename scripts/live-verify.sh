@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -105,13 +105,13 @@ leg_field() { # $1 leg, $2 field
     judge-calibrate:provider) printf 'multi-provider';;
     judge-calibrate:kind)     printf 'script';;
     judge-calibrate:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY';;
-    judge-calibrate:test)     printf 'hh-embed:r4_7e_live:r47e_live_judge_calibrate';;
+    judge-calibrate:test)     printf 'hharness-embed:r4_7e_live:r47e_live_judge_calibrate';;
     judge-calibrate:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
     judge-run:ticket)   printf 'R4.7e';;
     judge-run:provider) printf 'multi-provider';;
     judge-run:kind)     printf 'script';;
     judge-run:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY';;
-    judge-run:test)     printf 'hh-embed:r4_7e_live:r47e_live_judge_run';;
+    judge-run:test)     printf 'hharness-embed:r4_7e_live:r47e_live_judge_run';;
     judge-run:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
     otel-live:ticket)   printf 'R4.7c';;
     otel-live:provider) printf 'local-otel-collector';;
@@ -123,6 +123,71 @@ leg_field() { # $1 leg, $2 field
     r4-15d-fetch:names)    printf '';;
     r4-15d-fetch:test)     printf 'hh-embed:r4_15d_live:r415d_live_member_fetch';;
     r4-15d-fetch:host)     printf 'raw.githubusercontent.com:443';;
+    capstone-run-local:ticket)   printf 'L4.6';;
+    capstone-run-local:provider) printf 'local-ollama';;
+    capstone-run-local:kind)     printf 'script';;
+    capstone-run-local:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    capstone-run-local:test)     printf 'hharness-embed:l4_6_live:l46_live_reference_task';;
+    capstone-run-local:host)     printf '127.0.0.1:11434';;
+    capstone-run-anthropic:ticket)   printf 'L4.6';;
+    capstone-run-anthropic:provider) printf 'anthropic';;
+    capstone-run-anthropic:kind)     printf 'script';;
+    capstone-run-anthropic:names)    printf 'ANTHROPIC_API_KEY';;
+    capstone-run-anthropic:test)     printf 'hharness-embed:l4_6_live:l46_live_reference_task';;
+    capstone-run-anthropic:pricekey) printf 'anthropic/claude-haiku-4-5-20251001';;
+    capstone-run-anthropic:host)     printf 'api.anthropic.com:443';;
+    capstone-run-openai:ticket)   printf 'L4.6';;
+    capstone-run-openai:provider) printf 'openai';;
+    capstone-run-openai:kind)     printf 'script';;
+    capstone-run-openai:names)    printf 'OPENAI_API_KEY';;
+    capstone-run-openai:test)     printf 'hharness-embed:l4_6_live:l46_live_reference_task';;
+    capstone-run-openai:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
+    capstone-run-openai:host)     printf 'api.openai.com:443';;
+    capstone-sandboxed-exec:ticket)   printf 'L4.6';;
+    capstone-sandboxed-exec:provider) printf 'local-sandbox';;
+    capstone-sandboxed-exec:kind)     printf 'script';;
+    capstone-sandboxed-exec:names)    printf '';;
+    capstone-judge:ticket)   printf 'L4.6';;
+    capstone-judge:provider) printf 'multi-provider';;
+    capstone-judge:kind)     printf 'script';;
+    capstone-judge:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL OPENAI_API_KEY';;
+    capstone-judge:test)     printf 'hharness-embed:r4_7e_live:r47e_live_judge_run';;
+    capstone-judge:pricekey) printf 'openai/gpt-4.1-mini-2025-04-14';;
+    capstone-ledger-replay:ticket)   printf 'L4.6';;
+    capstone-ledger-replay:provider) printf 'local-ollama';;
+    capstone-ledger-replay:kind)     printf 'script';;
+    capstone-ledger-replay:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    capstone-ledger-replay:test)     printf 'hharness-embed:l4_6_live:l46_live_ledger_replay';;
+    capstone-ledger-replay:host)     printf '127.0.0.1:11434';;
+    capstone-web:ticket)   printf 'L4.6';;
+    capstone-web:provider) printf 'local-loopback';;
+    capstone-web:kind)     printf 'script';;
+    capstone-web:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    capstone-web:test)     printf 'hharness-embed:l4_6_live:l46_live_web';;
+    capstone-web:host)     printf '127.0.0.1';;
+    capstone-mcp:ticket)   printf 'L4.6';;
+    capstone-mcp:provider) printf 'mcp-fixture';;
+    capstone-mcp:kind)     printf 'script';;
+    capstone-mcp:names)    printf '';;
+    capstone-mcp:test)     printf 'hharness-mcp:l4_6_live:l46_live_mcp_client';;
+    capstone-mcp:host)     printf '127.0.0.1';;
+    capstone-fleet-webhook:ticket)   printf 'L4.6';;
+    capstone-fleet-webhook:provider) printf 'github-sandbox';;
+    capstone-fleet-webhook:kind)     printf 'script';;
+    capstone-fleet-webhook:names)    printf 'HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_SANDBOX_REPO HH_GITHUB_WEBHOOK_SECRET';;
+    capstone-fleet-webhook:host)     printf 'api.github.com:443';;
+    capstone-bundle-repro:ticket)   printf 'L4.6';;
+    capstone-bundle-repro:provider) printf 'local-ollama';;
+    capstone-bundle-repro:kind)     printf 'script';;
+    capstone-bundle-repro:names)    printf 'HH_LOCAL_BASE_URL HH_LOCAL_MODEL';;
+    capstone-bundle-repro:test)     printf 'hharness-embed:l4_6_live:l46_live_bundle_repro';;
+    capstone-bundle-repro:host)     printf '127.0.0.1:11434';;
+    l4-6b-replay:ticket)   printf 'L4.6b';;
+    l4-6b-replay:provider) printf 'none';;
+    l4-6b-replay:kind)     printf 'script';;
+    l4-6b-replay:names)    printf '';;
+    l4-6b-replay:test)     printf 'hharness-embed:l4_6b:l46b_replay_effect_run';;
+    l4-6b-replay:host)     printf '127.0.0.1';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -930,6 +995,259 @@ run_leg_otel_live() {
   else
     RESULT="fail:assertion — trace $tid absent from the collector's trace API (read-back failed)"
   fi
+}
+
+# ── L4.6 — the live E2E capstone legs ───────────────────────────────────
+# The reference task over all three bindings per provider, the sandboxed
+# helper exec, the calibrated judge pair, `hh` verify+replay, `hh-web`,
+# the MCP surface via a real client, the fleet webhook → reconciler on
+# the sandbox via tunnel, and bundle export + reproduce on a clean store.
+# `scripts/live-capstone.sh` orchestrates these; each is independently
+# re-runnable.
+
+# The binaries the capstone cells spawn (`bin()` asserts them).
+capstone_build() {
+  (cd "$REPO" && cargo build -q -p hharness-cli -p hharness-kernel \
+    -p hharness-web -p hharness-mcp) \
+    || { fail "capstone binary build failed"; return 1; }
+}
+
+# `capstone-run-{local,anthropic,openai}` — the reference task over
+# binding (a) in-process, binding (b) the real `hh` CLI, and binding (c)
+# `serve --http` + NetClient (plus a cross-binding attach-verify of the
+# CLI run). Markers: CAPSTONE_RUN lines (assertion view), LIVE_USAGE /
+# LIVE_MODEL for the hosted lanes.
+run_leg_capstone_run() { # $1 leg — provider from the name tail
+  require cargo; require python3
+  local leg="$1" provider="${1#capstone-run-}"
+  local spec crate tbin filt
+  spec=$(leg_field "$leg" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "$leg" names); do export "$n"; done
+  export HH_CAPSTONE_PROVIDER="$provider"
+  ENDPOINT_HOST=$(leg_field "$leg" host); MODEL_REPORTED=""
+  ASSERTIONS="the reference task live over all three bindings — (a) in-process EmbedService, (b) the real hh CLI (run start/status/events over spawned hh-kernel serve stdio), (c) hh-kernel serve --http + the generated NetClient, plus a (c) read-only attach onto the hh run's store — per arm model.call.requested/completed{usage:available} → verify ok → replay{deterministic} no divergence and no provider re-call (model.* rows unchanged); hosted arms carry launch_env:* coordinates and pass the payload/blob leak sweep"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"; RESP_HDRS=""
+  capstone_build || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    printf '$ HH_CAPSTONE_PROVIDER=%s cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' \
+      "$provider" "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture --test-threads=1) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  local usage model
+  usage=$(grep -o 'LIVE_USAGE: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_USAGE: //' || true)
+  model=$(grep -o 'LIVE_MODEL: .*' "$TRANSCRIPT_RAW" | tail -1 | sed 's/.*LIVE_MODEL: //' || true)
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"; MODEL_REPORTED="$model"
+    local marks
+    marks=$(grep -oE 'CAPSTONE_(RUN|REPLAY)[: ].*' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+    if [ -n "$usage" ]; then
+      LEG_TOKEN_USAGE="$usage"
+      local pricekey; pricekey=$(leg_field "$leg" pricekey)
+      LEG_COST_MEASURED=$(python3 - "$PRICING" "$pricekey" "$usage" <<'PY'
+import json, sys
+pricing = json.load(open(sys.argv[1]))
+row = pricing["models"].get(sys.argv[2])
+if row is None:
+    sys.exit("live-verify: NoPrice — no pinned row for " + sys.argv[2])
+u = json.loads(sys.argv[3])
+def f(k):
+    v = u.get(k)
+    return float(v) if v is not None else 0.0
+i, o, cr, cw = f("input_total"), f("output_total"), f("cache_read"), f("cache_write")
+uncached = max(i - cr - cw, 0.0)
+c = (uncached * row["prompt_per_1k_usd"]
+     + cr * row.get("cache_read_per_1k_usd", row["prompt_per_1k_usd"])
+     + cw * row.get("cache_write_per_1k_usd", row["prompt_per_1k_usd"])
+     + o * row["completion_per_1k_usd"]) / 1000.0
+print("%.6f" % c)
+PY
+) || { RESULT="fail:no-pinned-price"; LEG_COST_MEASURED=""; }
+    fi
+  elif grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+run_leg_capstone_run_local() { run_leg_capstone_run "capstone-run-local"; }
+run_leg_capstone_run_anthropic() { run_leg_capstone_run "capstone-run-anthropic"; }
+run_leg_capstone_run_openai() { run_leg_capstone_run "capstone-run-openai"; }
+
+# `capstone-sandboxed-exec` — the helper-backend legs: real `hh-helper`
+# (seatbelt) spawn, exec dispatch streams + settles observed, helper-side
+# deadline. USD 0, no names.
+run_leg_capstone_sandboxed_exec() {
+  require cargo
+  ENDPOINT_HOST="127.0.0.1"; MODEL_REPORTED=""; RESP_HDRS=""
+  ASSERTIONS="sandboxed tool exec on the real hh-helper backend (seatbelt): local_sandboxed attach spawns the helper; exec dispatch streams journaled frames and settles observed; the deadline is helper-enforced — AC-R-2.2.5-3 + AC-R-2.5.5-6 live halves; USD 0"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  (cd "$REPO" && cargo build -q -p hharness-helper) \
+    || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    for cell in ac_s2_live_exec_streams_and_settles_observed \
+                ac_s2_deadline_is_helper_enforced; do
+      printf '$ cargo test -p hharness-env --test helper_live %s -- --nocapture\n\n' "$cell"
+      (cd "$REPO" && cargo test -p hharness-env --test helper_live \
+        "$cell" -- --nocapture) 2>&1 || exit $?
+    done
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if grep -q 'SKIP: seatbelt backend unavailable' "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(seatbelt backend unavailable)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks
+    marks=$(grep -c 'test result: ok' "$TRANSCRIPT_RAW" || true)
+    ASSERTIONS="$ASSERTIONS; helper_live cells green=$marks"
+  else RESULT="fail:helper-live rc=$rc"; fi
+}
+
+# `capstone-judge` — judge scoring with the calibrated R4.7e pair:
+# reuses the `judge-run` machinery and gated cell verbatim (the
+# different-family pair, the real Driver run, judged reconciliation,
+# RecordedJudge replay byte-identical).
+run_leg_capstone_judge() { run_leg_judge "capstone-judge"; }
+
+# The local-run cargo-cell legs (web / ledger-replay / bundle-repro):
+# build the binaries, run the named gated cell, fold its CAPSTONE_*
+# markers into the assertions.
+run_leg_capstone_cell() { # $1 leg
+  require cargo
+  local spec crate tbin filt
+  spec=$(leg_field "$1" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  local n; for n in $(leg_field "$1" names); do export "$n"; done
+  ENDPOINT_HOST=$(leg_field "$1" host); MODEL_REPORTED=""; RESP_HDRS=""
+  case "$1" in
+    capstone-ledger-replay)
+      ASSERTIONS="hh CLI run over binding (b) then attach over binding (c): verify verdict ok + replay{deterministic} byte-identical offline — zero provider re-calls (model.* row count unchanged across the replay)";;
+    capstone-web)
+      ASSERTIONS="hh-web serving the live run over binding (c): GET / answers the shell 200; POST /api {op:run_index} (bearer + x-hh-script) answers 200 carrying the live run's id — the HTTP read asserted; USD 0 loopback";;
+    capstone-bundle-repro)
+      ASSERTIONS="bundle export + reproduce: hh bundle create --sink → validate → reproduce on a clean store at the bundle's max supported level — verdict reproduced; the bundle is the only evidence the clean store sees";;
+    *) ASSERTIONS="capstone cell";;
+  esac
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  capstone_build || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture --test-threads=1) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if grep -q "unprovided — skipped" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(credential-unprovided)"
+  elif [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks
+    marks=$(grep -oE 'CAPSTONE_[A-Z_]*[: ].*' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+run_leg_capstone_ledger_replay() { run_leg_capstone_cell "capstone-ledger-replay"; }
+run_leg_capstone_web() { run_leg_capstone_cell "capstone-web"; }
+run_leg_capstone_bundle_repro() { run_leg_capstone_cell "capstone-bundle-repro"; }
+
+# `l4-6b-replay` — L4.6b's USD-0 re-verification of the diverged
+# capstone hh-cli-attach arm (ADR-0381, leg (a)): a dispatching record —
+# `action.tool.proposed` + the §5a.2 write-ahead chains — produced over
+# binding (c) itself (`hh-kernel serve --http` + the scripted EmbedModel
+# lane; no provider dial, no credential names), then replayed
+# `driver_mode:deterministic` from a fresh read-only attach session on
+# the same store. The verdict must be `deterministic` with no
+# `replay_diverged` reason — pre-fix this arm answered `invalid`
+# (3/3 on the anthropic lane). Marker: L4_6B_REPLAY.
+run_leg_l4_6b_replay() {
+  require cargo
+  local spec crate tbin filt
+  spec=$(leg_field "l4-6b-replay" test)
+  crate=${spec%%:*}; spec=${spec#*:}; tbin=${spec%%:*}; filt=${spec#*:}
+  [ "$filt" = "$tbin" ] && filt=""
+  ENDPOINT_HOST=$(leg_field "l4-6b-replay" host); MODEL_REPORTED=""; RESP_HDRS=""
+  ASSERTIONS="the diverged capstone arm re-run at USD 0: an effect-dispatching record (hh.submit completion — action.tool.proposed + the write-ahead ceremony pair) produced over binding (c) by hh-kernel serve --http + the scripted lane, then replayed{deterministic} from a read-only attach session — verdict deterministic, no replay_diverged, zero model.*/effect rows minted by the replay"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  (cd "$REPO" && cargo build -q -p hharness-kernel) \
+    || { RESULT="fail:binary-build"; return; }
+  local rc=0
+  if {
+    printf '$ cargo test -p %s --test %s %s-- --ignored --nocapture\n\n' "$crate" "$tbin" "$filt"
+    (cd "$REPO" && cargo test -p "$crate" --test "$tbin" $filt -- --ignored --nocapture) 2>&1
+  } > "$TRANSCRIPT_RAW"; then rc=0; else rc=$?; fi
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks
+    marks=$(grep -oE 'L4_6B_REPLAY[: ].*' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:live-tests rc=$rc"; fi
+}
+
+# `capstone-fleet-webhook` — R4.7's full sandbox loop (the trap-guarded
+# webhook + test issue create/delete on SteveVitali/hh-live-sandbox via
+# the cloudflared quick tunnel, signed ingress → reconcile → WorkItem,
+# the OOP probe) re-run as the capstone's fleet leg under ticket L4.6.
+run_leg_capstone_fleet_webhook() { run_leg_github_live; }
+
+# `capstone-mcp` — the hh-mcp surface (hh-mcp-serve) driven by a real
+# MCP client: the official @modelcontextprotocol/sdk client when it
+# installs without new repo deps (npx, runtime-only, never committed),
+# else the in-repo McpClient cell — the record names which client ran.
+run_leg_capstone_mcp() {
+  require cargo; require python3
+  ENDPOINT_HOST="127.0.0.1"; MODEL_REPORTED=""; RESP_HDRS=""
+  ASSERTIONS="hh-mcp surface (hh-mcp-serve over a fixture hh-bundle/1 target:mcp member) driven by a real MCP client — negotiate handshake + tools/list carries the served tool + tools/call answers a typed outcome; USD 0"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  local client_kind="in-repo"
+  local rc=1
+  # Official-SDK arm — installable without new repo deps? Bound the
+  # install hard; any failure degrades to the stated in-repo client.
+  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    local sdk="$TMPD_L/sdk" bundle="$TMPD_L/mcp-bundle" npmwrap=""
+    command -v timeout >/dev/null 2>&1 && npmwrap="timeout 120"
+    if {
+      printf '$ npm install --prefix <tmp> @modelcontextprotocol/sdk  (bounded)\n'
+      (cd "$TMPD_L" && $npmwrap npm install --prefix "$sdk" --no-audit --no-fund --loglevel=error "@modelcontextprotocol/sdk") 2>&1
+    } >>"$TRANSCRIPT_RAW" 2>&1; then
+      capstone_build >>"$TRANSCRIPT_RAW" 2>&1 || true
+      if {
+        printf '$ HH_MCP_BUNDLE_OUT=<tmp> cargo test -p hharness-mcp --test l4_6_live -- --ignored (materialize bundle)\n'
+        (cd "$REPO" && HH_MCP_BUNDLE_OUT="$bundle" \
+          cargo test -q -p hharness-mcp --test l4_6_live -- --ignored --nocapture) 2>&1
+      } >>"$TRANSCRIPT_RAW" 2>&1 && [ -d "$bundle" ]; then
+        local kbin="$REPO/target/debug/hh-mcp-serve"
+        # The driver runs *inside* the install dir so ESM `import`
+        # resolves the package (NODE_PATH does not apply to ESM).
+        cp "$REPO/scripts/live-capstone-mcp.mjs" "$sdk/" 2>/dev/null
+        if (cd "$sdk" && node live-capstone-mcp.mjs "$kbin" --bundle "$bundle") \
+            >>"$TRANSCRIPT_RAW" 2>&1; then
+          client_kind="official-sdk"; rc=0
+        fi
+      fi
+    fi
+  fi
+  if [ "$rc" -ne 0 ]; then
+    client_kind="in-repo"
+    if {
+      printf '$ cargo test -p hharness-mcp --test l4_6_live -- --ignored --nocapture\n\n'
+      (cd "$REPO" && cargo test -p hharness-mcp --test l4_6_live -- --ignored --nocapture) 2>&1
+    } >>"$TRANSCRIPT_RAW" 2>&1; then rc=0; else rc=$?; fi
+  fi
+  ASSERTIONS="$ASSERTIONS; client=$client_kind"
+  if [ "$rc" -eq 0 ]; then
+    RESULT="pass"
+    local marks
+    marks=$(grep -oE 'MCP_[A-Z]*[: ].*' "$TRANSCRIPT_RAW" | tr '\n' ';' || true)
+    [ -n "$marks" ] && ASSERTIONS="$ASSERTIONS; $marks"
+  elif grep -q "0 filtered out" "$TRANSCRIPT_RAW" && grep -q "0 passed" "$TRANSCRIPT_RAW"; then
+    RESULT="skipped(no-ignored-tests-matched)"
+  else RESULT="fail:mcp-leg rc=$rc"; fi
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

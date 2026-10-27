@@ -1,0 +1,17 @@
+$ HH_CAPSTONE_PROVIDER=openai cargo test -p hharness-embed --test l4_6_live l46_live_reference_task-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-6ed345cbf55eaf9b)
+
+running 1 test
+test l46_live_reference_task ... CAPSTONE_RUN: provider=openai binding=in-process run=run-1792725721676-000000-a8acb6b3
+hh run start → {"exit_class":"ok","kind":"result","payload":{"configuration_version_id":"sha256:c968d32cd151c9959948a1b5efca8d40beff6cb58c4f4cf115007115ea16280b","outcome_class":"scored","resource_account":{"usage":[]},"run_id":"run-1792725726180-000000-b4a7f9df","stop_reason":"format_failure","veto_tripped":[]},"result_kind":"run"}
+CAPSTONE_RUN: provider=openai binding=hh-cli run=run-1792725726180-000000-b4a7f9df
+CAPSTONE_RUN: provider=openai binding=http run=run-1792725729994-000000-9442c2d5
+CAPSTONE_RUN: provider=openai binding=hh-cli-verify run=run-1792725726180-000000-b4a7f9df
+LIVE_USAGE: {"calls":3,"input_total":228,"output_total":42}
+LIVE_MODEL: gpt-4.1-mini-2025-04-14
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 11.99s
+

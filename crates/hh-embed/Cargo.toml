@@ -73,6 +73,9 @@ hharness-hosting = { path = "../hh-hosting" }
 # `PluginSourceAdapter` seam over the live-captured issue snapshot.
 hharness-varhost = { path = "../hh-varhost" }
 hharness-fleet-adapter = { path = "../hh-fleet-adapter" }
+# L4.6: the capstone's binding-(c) arm drives `hh-kernel serve --http`
+# through the generated loopback client.
+hharness-embed-client-generated = { path = "../hh-embed-client-generated" }
 
 [features]
 default = ["tier-c4"]

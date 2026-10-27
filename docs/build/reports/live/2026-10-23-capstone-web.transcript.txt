@@ -1,0 +1,12 @@
+$ cargo test -p hharness-embed --test l4_6_live l46_live_web-- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-6ed345cbf55eaf9b)
+
+running 1 test
+test l46_live_web ... hh run start → {"exit_class":"ok","kind":"result","payload":{"configuration_version_id":"sha256:8ab1bfa05b2c0a9b499c37ce9479c6ece09397db32ebe3bde6ca3ebf2c45e0a4","outcome_class":"scored","resource_account":{"usage":[]},"run_id":"run-1792725172980-000000-e88bc8e4","stop_reason":"format_failure","veto_tripped":[]},"result_kind":"run"}
+CAPSTONE_WEB: run=run-1792725172980-000000-e88bc8e4 shell=200 api=200 run_index=carries-run
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 7.04s
+

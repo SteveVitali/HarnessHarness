@@ -1,0 +1,38 @@
+{
+  "assertions": [
+    "the reference task live over all three bindings \u2014 (a) in-process EmbedService, (b) the real hh CLI (run start/status/events over spawned hh-kernel serve stdio), (c) hh-kernel serve --http + the generated NetClient, plus a (c) read-only attach onto the hh run's store \u2014 per arm model.call.requested/completed{usage:available} \u2192 verify ok \u2192 replay{deterministic} no divergence and no provider re-call (model.* rows unchanged); hosted arms carry launch_env:* coordinates and pass the payload/blob leak sweep; CAPSTONE_RUN: provider=openai binding=in-process run=run-1792725721676-000000-a8acb6b3;CAPSTONE_RUN: provider=openai binding=hh-cli run=run-1792725726180-000000-b4a7f9df;CAPSTONE_RUN: provider=openai binding=http run=run-1792725729994-000000-9442c2d5;CAPSTONE_RUN: provider=openai binding=hh-cli-verify run=run-1792725726180-000000-b4a7f9df;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.000158,
+  "endpoint_host": "api.openai.com:443",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-run-openai",
+  "model_reported": "gpt-4.1-mini-2025-04-14",
+  "provided": {
+    "OPENAI_API_KEY": "yes"
+  },
+  "provider": "openai",
+  "recorded_at": "2026-10-23T03:22:13Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.257863,
+  "ticket": "L4.6",
+  "token_usage": {
+    "calls": 3,
+    "input_total": 228,
+    "output_total": 42
+  },
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-run-openai.transcript.txt",
+  "transcript_sha256": "f55bef297136e0400464477148e699b9529c0fe508bebbe3f2316c8d2cc3f859"
+}

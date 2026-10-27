@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "the reference task live over all three bindings \u2014 (a) in-process EmbedService, (b) the real hh CLI (run start/status/events over spawned hh-kernel serve stdio), (c) hh-kernel serve --http + the generated NetClient, plus a (c) read-only attach onto the hh run's store \u2014 per arm model.call.requested/completed{usage:available} \u2192 verify ok \u2192 replay{deterministic} no divergence and no provider re-call (model.* rows unchanged); hosted arms carry launch_env:* coordinates and pass the payload/blob leak sweep; CAPSTONE_RUN: provider=local binding=in-process run=run-1792724968114-000000-346319d1;CAPSTONE_RUN: provider=local binding=hh-cli run=run-1792724976716-000000-355d0d8b;CAPSTONE_RUN: provider=local binding=http run=run-1792724984844-000000-15d3be1b;CAPSTONE_RUN: provider=local binding=hh-cli-verify run=run-1792724976716-000000-355d0d8b;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "127.0.0.1:11434",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-run-local",
+  "model_reported": null,
+  "provided": {
+    "HH_LOCAL_BASE_URL": "yes",
+    "HH_LOCAL_MODEL": "yes"
+  },
+  "provider": "local-ollama",
+  "recorded_at": "2026-10-23T03:09:50Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 21.257705,
+  "ticket": "L4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-run-local.transcript.txt",
+  "transcript_sha256": "b0cf8e394c526cbb3f9fb7f28f75461d1830a89dd075c64b90021cc02592cd38"
+}

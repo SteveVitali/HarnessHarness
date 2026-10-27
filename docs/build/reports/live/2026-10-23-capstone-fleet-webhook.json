@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    "sandbox-scoped: capability probe + list/get over the live repo; one webhook (pre-state GET, unconditional DELETE in trap); signed X-Hub-Signature-256 issues/issue_comment deliveries admitted at fleet.webhook_ingress and folded to a WorkItem at fleet.reconcile; replay dedupe + stale-window no-op; out-of-process subprocess_confined capability probe over the live snapshot; rollback = hook deleted + issue closed+hh-live-test; GH_* markers carry the assertion view; credentials broker-resolved \u2014 provided: yes only; GH_BROKER token=provided:yes secret=provided:yes;GH_LISTEN_PORT 58675;GH_TUNNEL url=https://cars-camcorder-receivers-excellence.trycloudflare.com;GH_PRESTATE_HOOKS n=0;GH_HOOK_CREATED id=701945817;GH_PRESTATE_ISSUES n=2;GH_LABEL created=0 (exists);GH_ISSUE_CREATED number=3;GH_COMMENT status=201;GH_PING verified=1;GH_DELIVERY event=issues delivery=16f13308-ce91-11f1-9bdd-dc047e49f183 status=received;GH_WORKITEM item=gh-SteveVitali-hh-live-sandbox-3 state=dispatching;GH_DEDUPE status=received observed=0 (durable skip audited);GH_STALE observed=1 items=1;GH_HOOK_DELETED id=701945817 status=204;GH_HOOK_GONE verified=1 status=200;GH_ISSUE_CLOSED number=3 status=200;GH_RESULT pass;GH_PLUGIN_OOP spawn=subprocess_confined probe=capabilities;GH_PLUGIN_LIST n=2;GH_PLUGIN_GET native_id=2 n=1;GH_PLUGIN_RESULT pass;"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": "api.github.com:443",
+  "git_head": "9412b2ba82e70eec4ca8484656e3860aff83ae1a",
+  "harness": "devin-desktop/swe-2/subagent",
+  "leg": "capstone-fleet-webhook",
+  "model_reported": null,
+  "provided": {
+    "HH_GITHUB_SANDBOX_REPO": "yes",
+    "HH_GITHUB_SANDBOX_TOKEN": "yes",
+    "HH_GITHUB_WEBHOOK_SECRET": "yes"
+  },
+  "provider": "github-sandbox",
+  "recorded_at": "2026-10-23T03:23:51Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/L4.6.md",
+    "sha256": "a31e302c56b8795b6b42a9442428b5fd9da92b1b74eb170b397682d6a43dbe3b"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "L4.6",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-10-23-capstone-fleet-webhook.transcript.txt",
+  "transcript_sha256": "3b29679b21fcfe2c20cd910ea52606de1174a497cda9f7c18c3b84900dc60573"
+}

@@ -1,0 +1,25 @@
+$ npm install --prefix <tmp> @modelcontextprotocol/sdk  (bounded)
+
+added 95 packages in 2s
+$ HH_MCP_BUNDLE_OUT=<tmp> cargo test -p hharness-mcp --test l4_6_live -- --ignored (materialize bundle)
+
+running 1 test
+MCP_BUNDLE: materialized at "/var/folders/0r/9hmb0nh57nv2tqxgh71hd92m0000gn/T/tmp.ZzmP45LVZ0/mcp-bundle"
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+official-sdk driver failed: Error: Server's protocol version is not supported: 2026-07-28
+$ cargo test -p hharness-mcp --test l4_6_live -- --ignored --nocapture
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/l4_6_live.rs (target/debug/deps/l4_6_live-c5f1e55d5cfc5870)
+
+running 1 test
+MCP_BINDING: era=Modern version=2026-07-28
+MCP_TOOLS: l46.echo
+MCP_CALL: outcome=typed-refusal refusal=stage_pending
+MCP_RESULT: in-repo-client pass
+test l46_live_mcp_client ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
