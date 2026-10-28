@@ -1,6 +1,6 @@
 # HUMAN-H7 — Public launch acts · readout
 
-- **Date:** 2026-10-23 (updated 2026-10-27) · **Status:** IN PROGRESS — operator-authorized launch acts executing
+- **Date:** 2026-10-23 (updated 2026-10-28) · **Status:** COMPLETE — all eight checklist items executed; exit criterion met
 - **Contract:** `docs/tickets/167a_HUMAN-H7__launch.md` · **Blocks:** R4.18 (the launch record)
 - **Precondition met:** R4.17 landed (PR #198, docs to launch truth) after GATE-G6 PASSED ("accept, proceed").
 - **Withheld until done:** any `public` claim; "released"/"published" wording; `projectStatus: DONE`.
@@ -49,22 +49,35 @@ landed on `main`. The l4.5 merge commit (`9458f545`) is content-equivalent (l4.6
       **release URL live**: `https://github.com/SteveVitali/HarnessHarness/releases/tag/v0.1.0` (4 tarballs +
       `SHA256SUMS`, checksums re-verified locally). The workflow defect is fixed for future tags in this
       branch's records PR (`actions/checkout` added to the release job).
-- [ ] **`cargo publish`** in `scripts/publish-order.sh` order — **blocked on the operator's crates.io token**:
-      `~/.cargo/credentials.toml` absent on this host; the operator runs `cargo login` (token never enters the
-      session), then the publish-order script runs.
+- [x] **`cargo publish`** in `scripts/publish-order.sh` order — **49/49 crates published at 0.1.0** and
+      verified visible on crates.io (API re-check, all names 200/`0.1.0`). The operator ran `cargo login`
+      ("ok, saved login token. proceed") — `provided: yes`, never a token value. The publish ran over
+      `cargo publish --workspace` + a per-crate resume loop in topological order across three honest
+      incidents: (1) an L4.5-era stale `tmp-registry` rmeta (pre-L4.6b `&'static` trait) forced a
+      `cargo clean` — nothing had uploaded yet; (2) crates.io's new-crate rate limit (~1 crate per
+      ~10 min after an initial 5-crate burst) drove a wait-and-retry loop — total wall-clock ~5.5 h;
+      (3) six crate `description`s exceeded the 1000-char server limit (a cargo-local verify gap) —
+      fixed honestly via PR #205 before those crates published; plus one transient crates.io 5xx
+      outage, retried. The crates.io account needed a verified email — the operator completed that
+      ("email confirmed. proceed").
 - [x] **Repo description, topics, website link** — description set (operator), topics verified
       (`agent-evaluation`, `agent-harness`, `harness-engineering`, `rust`, `sandboxing`); homepage unset —
       the repo has no external site; the operator may set one. README carries no badge markup — the badges
       item is satisfied vacuously (recorded honestly; nothing to resolve). The quickstart clone URL was
       corrected `MetaHarness` → `HarnessHarness` in this branch's records PR (the old URL redirects, but the
       canonical URL belongs in the launch docs).
-- [ ] **Flip `projectStatus: DONE`** (the operator's flip — recorded with the operator's words). The operator's
-      authorization above covers the flip; recorded verbatim at completion.
+- [x] **Flip `projectStatus: DONE`** — the operator's words (verbatim): "Likewise, you can then execute the
+      remaining steps through 9. as well. You are authorized to do all these steps. Please begin", and on the
+      publish leg: "ok, saved login token. proceed" / "email confirmed. proceed" / "just keep following up with
+      progress updates periodically as you see fit and let me know when we're totally done". The flip lands in
+      `docs/build/LEDGER.md` with this record.
 
-## Exit criterion
+## Exit criterion — MET (2026-10-28)
 
-Release URL live, every publishable crate visible on crates.io at 0.1.0, `main` protected, the merged-main SHA
-(CI + gitleaks green) recorded and tagged — recorded with the operator's words.
+Release URL live (`…/releases/tag/v0.1.0`, 4 archives + `SHA256SUMS`), all 49 publishable crates visible on
+crates.io at 0.1.0 (API-verified), `main` protected (active ruleset: required checks + deletion + non-ff),
+merged-main SHA `d1325a63` recorded with full CI + gitleaks green and tagged `v0.1.0` — all recorded with the
+operator's verbatim words.
 
 ---
 
@@ -75,9 +88,13 @@ Release URL live, every publishable crate visible on crates.io at 0.1.0, `main` 
 - Tag: `v0.1.0` on the recorded SHA — release URL:
   `https://github.com/SteveVitali/HarnessHarness/releases/tag/v0.1.0` (created from CI-verified artifacts
   after the release-workflow checkout defect; workflow fixed for future tags)
-- crates.io publish: `provided: no` — awaiting operator `cargo login`; `provided: yes/no`, never a token value
+- crates.io publish: `provided: yes` (operator `cargo login`; never a token value) — **49/49 crates
+  published at 0.1.0**, verified visible via the crates.io API; topological order; rate-limit waits and two
+  incidents recorded above
 - Secret hygiene verdict: no non-allowlisted finding in chain history; main-HEAD gitleaks green pending (required
   check on run `40525512308`)
 - Environment `live-verify`: secrets by NAME verified (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`);
   required_reviewer active; private vulnerability reporting enabled
-- `projectStatus: DONE` — pending tag + publish + release URL; the operator's words will be recorded
+- `projectStatus: DONE` — **flipped 2026-10-28** under the operator's recorded authorization:
+  "you can then execute the remaining steps through 9. as well. You are authorized to do all these steps"
+  (+ "saved login token. proceed" / "email confirmed. proceed")

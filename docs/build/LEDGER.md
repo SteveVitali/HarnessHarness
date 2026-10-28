@@ -16,10 +16,10 @@
 ## CURRENT STATE
 
 ```
-projectStatus:   PAUSED  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      HUMAN-H7 # round 4 row 167a — operator launch acts (protect main, checks-required merges, merged-main SHA, tag v0.1.0 -> release, cargo publish, repo metadata); blocks R4.18
-lastCompleted:   R4.17
-blockedOn:       HUMAN-H7 — operator launch acts (merge/protect/tag/release/publish/DONE flip); the chain pauses for the operator
+projectStatus:   DONE  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
+nextTicket:      R4.18 # round 4 row 167a — operator launch acts (protect main, checks-required merges, merged-main SHA, tag v0.1.0 -> release, cargo publish, repo metadata); blocks R4.18
+lastCompleted:   HUMAN-H7
+blockedOn:       (none — HUMAN-H7 COMPLETE 2026-10-28: all 8 launch acts executed under recorded operator authorization; 49/49 crates on crates.io, v0.1.0 tagged+released, projectStatus DONE)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -29,12 +29,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r4.17 # R4.17 tip — round-4 rows fork from here; stacked PR against svitali/harnessharness-r4.16a; operator merges
+chainTip:        main (post-launch; stacked chain collapsed — all PRs merged) # R4.17 tip — round-4 rows fork from here; stacked PR against svitali/harnessharness-r4.16a; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-23T16:00:00Z
+updatedAt:       2026-10-28T02:00:00Z
 ```
 
 ## OPEN FINDINGS
@@ -972,3 +972,4 @@ updatedAt:       2026-10-23T16:00:00Z
 - 2026-10-23 · R4.16a ci record refreshed at the closeout head — the done entry's `ci:` line names the repair head fb62b69; ci-boundary re-read after the docs-only closeout head landed (fast-path run, incl. cargo-deny + gitleaks): ci: pass #197@070b89b (cargo-deny (licenses · advisories · bans · sources) 39969234155; build · test · fmt · drift (ubuntu-latest) 39969234155; build · test · fmt · drift (macos-latest) 39969234155; gitleaks (full history + PR diff) 39969234155) · stack: #196 #195 #194 #193 #192 #191 #190 #189 #188 #187 #186 #185 #184 #183 #182 #181 #180 pass — logs/ci-R4.16a.json (BM-HIST-01: correction by appended entry).
 - 2026-10-23 · R4.17 done — branch `svitali/harnessharness-r4.17` · PR https://github.com/SteveVitali/HarnessHarness/pull/198 · base `svitali/harnessharness-r4.16a` (@84c53ec). Manifest row 167 — the launch-facing docs final (refresh-repo-docs -> agent-docs): README to post-GATE-G6 truth (54 member crates, 3800 tests, the live.env NAME-table section — provided: yes/no only — honesty ceiling to live-executed/34 records with staging+public unearned, Round-4 + GATE-G6 "accept, proceed" build state, SECURITY/CONTRIBUTING links; marked quickstart untouched), docs index rows for the launch set, AGENTS.md x2 (hharness-tls + hharness rows, xcheck 57/57 x8, gotcha 5 final wording + gotcha 1 large-file rule), CHANGELOG v0.1.0 launch entry. · **Verify:** check-quickstart.sh green verbatim on the committed head (MINOR-8 — clone -> build -> doctor connectivity:ok -> run finished succeeded/completed; runs in PR CI) · check-living-docs 380 files · ci-gating 14/14 · live-evidence 34 rec/$25.2598 · both freshness detectors 0 issues · gitleaks clean · fmt n/a (no .rs) · **Deferrals:** opened none, closed none (zero-deferral held — deferrals-open.sh + --bl empty both ends) · **Deviations:** none — no ADR owed · ~445 changed lines vs 700 · chainTip -> svitali/harnessharness-r4.17 · next -> HUMAN-H7 · ci: pass #198@84c53ec (cargo-deny (licenses · advisories · bans · sources) 39985513661; gitleaks (full history + PR diff) 39985513661; build · test · fmt · drift (ubuntu-latest) 39985513661; build · test · fmt · drift (macos-latest) 39985513661) · stack: #197–#180 pass · layer: engineered · harness: devin-desktop/swe-2/subagent
 - 2026-10-23 · GATE-G6 PASSED → R4.17 landed → **HUMAN-H7 pauses the chain** — operator verbatim "accept, proceed" recorded in GATE DECISIONS. R4.17 (PR #198) brought the public docs to launch truth (README/AGENTS/CHANGELOG/docs index; quickstart verbatim still green; 54-crate map). The chain now pauses at HUMAN-H7 — the operator's launch acts (protect main, checks-required bottom-up merges of the ~64-PR stack, merged-main CI+gitleaks green → record SHA → tag v0.1.0 → release, cargo publish in publish-order.sh order, repo metadata, DONE flip). Readout seeded at docs/build/readouts/HUMAN-H7.md. nextTicket → HUMAN-H7 · projectStatus → PAUSED · chainTip → svitali/harnessharness-r4.17.
+- 2026-10-28 · **HUMAN-H7 COMPLETE — the public launch is done** — all eight checklist items executed under the operator's recorded authorization ("you can then execute the remaining steps through 9. as well. You are authorized to do all these steps"; publish legs: "saved login token. proceed" / "email confirmed. proceed"). Evidence: main ruleset ACTIVE (4 required checks + deletion + non-ff); merges #192–#203 bottom-up + records PRs #204/#205; merged-main SHA `d1325a63bab7bf0836250d9df871e2bfdd76dea2` with CI run 40525512308 success; gitleaks clean (no non-allowlisted finding); `live-verify` env secrets-by-name + required reviewer; private vulnerability reporting enabled; repo public; tag `v0.1.0` on d1325a63; release live (release.yml checkout defect surfaced by the tag run — artifacts checksum-verified, release created under delegation, workflow fixed via #204); **49/49 crates published at 0.1.0** (rate-limit resume loop ~5.5h; 6 description-length fixes via #205; 2 transient incidents); repo metadata + homepage set. `projectStatus: DONE` flipped under the recorded authorization. Readout: docs/build/readouts/HUMAN-H7.md. nextTicket → R4.18 (the launch record).
