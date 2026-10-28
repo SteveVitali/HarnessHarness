@@ -2,116 +2,131 @@
 
 ## Purpose
 
-The 54-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
-service slices, the Lab (experiment/evaluation plane), the C3–C5 services, and
-the surfaces. Members are declared — with a one-line provenance comment each —
-in the root `Cargo.toml`. Dependency edges point downward through the layers
-below; the root AGENTS.md has the layering narrative.
+- The 54 workspace members implement the runtime, Lab, clients, and packaged variants. `Cargo.toml` at the repository root is the authoritative member list.
+- Read the root `AGENTS.md` first. These instructions add Rust workspace guidance; use the [README documentation links](../README.md#documentation) for the architecture explanation.
+- Package names use `hharness-*`, directories generally use `crates/hh-*`, and binaries have their own names. For example: package `hharness-kernel`, directory `crates/hh-kernel/`, binary `hh-kernel`.
 
-## Crate map
+## Architecture — crate map
 
 | Crate | Purpose |
 |---|---|
-| `hharness-wire` | canonical JSON, JSON-RPC 2.0 framing, SHA-2 — transport primitives, no verbs |
-| `hharness-tls` | the workspace's ONE TLS home (ADR-0365): HTTPS client / TLS-server / mTLS over the admitted rustls/`ring` graph — the only member that may name it |
-| `hharness-ontology` | the formal model: seven-plane home-plane rule (CC10 anchors here), κ, config ids, compliance schema |
-| `hharness-identity` | idp/1 identity, `ContentAddress`, `VersionedRef`, the one canonicalizer (CC1 anchor), sameness ladder |
-| `hharness-provenance` | the one `ProvenanceRecord` + `Label` lattice, seven-class `AuthorityClass` order, seal/endorse basis |
-| `hharness-hir` | the HIR/1 IR: 13 entity kinds, validate/canonicalize/identity/seal/diff/apply/invert/classify |
-| `hharness-ledger` | the event store / run ledger — append-only hash-chained log, fenced writer, WAL, blob pool (+ per-event AEAD `BlobCipher`/`HHBE`, ADR-0361), projections |
-| `hharness-budget` | resource economics: `ResourceQuantity`, `BudgetTree`, spend provenance, `MatchSpec` budgets |
-| `hharness-registry` | the component-variation registry store (`hh/` + `local/` namespaces, closed `registry/1` kinds) |
-| `hharness-secrets` | the credential broker — `SecretRef`/`SecretChannel`, mint/mediate/revoke, deny-by-default projection; DPoP sender-constraint verify + AEAD over the ADR-0359 `ring` pin |
-| `hharness-telemetry` | measurement points M1–M19, span/cost/metric views as pure folds, `TokenVector` |
-| `hharness-monitor` | the Π reference monitor (TCB): `AuthorityHandle` table, `authorize`, delegation attenuation |
-| `hharness-containment` | the containment floor — `ContainmentPolicy/1`, layered meet, fail-closed attach |
-| `hharness-env` | execution environments: `EnvHandle` lifecycle, sandboxed tool exec contract, effect capture |
-| `hharness-gateway` | the model boundary: dialect-parameterised wire, normalized `ModelEvent`, static routing, cache semantics |
-| `hharness-context` | the context builder + memory slices (K6 semantic cache included), assembly inputs |
-| `hharness-control` | the control plane: `control_strategy` contract, the sealed envelope, guard points, stop protocol |
-| `hharness-verification` | the verification substrate: claims, reconciliation classes, validator/critic declarations |
-| `hharness-assembly` | the configuration & composition model: assembly grammar, `resolve`, `validate_assembly` |
-| `hharness-compiler` | the compilation pipeline: link → lower → seal to `RuntimePlan/1`; `hh-compile` binary |
-| `hharness-embed-schema` | the single schema source for `hh-embed/1` (CC7) + the JSON-Schema exporter |
-| `hharness-embed` | the `hh-embed/1` boundary service — binding (a) in-process + (b) stdio dispatch through one `handle` |
-| `hharness-embed-client-generated` | the generated drift-checked client — emitted by `hh-codegen`, never hand-edited |
-| `hharness-codegen` | the schema-export → generated-client pipeline; `hh-codegen` binary |
-| `hharness-kernel` | the kernel binary: `serve` (b), `serve --http` (c), `export-schema`, `hello`, `doctor` |
-| `hharness-helper` | the out-of-process sandbox helper binary + `hh-helper/1` codec (seatbelt/podman backends) |
-| `hharness-cli` | the `hh` operator CLI — a generated client + renderer over the boundary (K-2: no kernel semantics) |
-| `hharness-lab` | the Lab schema plane: `hh-experiment/1` dialect, analysis records, the canonical exemplars |
-| `hharness-experiment` | the single-worker experiment engine — LabDocs store + the register…close lifecycle |
-| `hharness-results` | the results store: `ResultsRow/1`, watermark reads, `verify_row`, leaderboard projection |
-| `hharness-analysis` | the estimator kernel: `summarize`/`compare`/`equivalence`/`multiplicity` over results rows |
-| `hharness-eval` | the evaluation-first slice: metric catalogue, deterministic oracles, pass^k, typed `n/a` lattice |
-| `hharness-bench` | the benchmark-adapter contract + the hermetic `fixtures/benchset/stage3_v1` corpus |
-| `hharness-bundle` | the reproducible run bundle: `hh-bundle/1` manifest, staged validation, repro levels |
-| `hharness-hosting` | the `hh-hosting/1` ABI: hosted-event envelope, `proj`/lift, participant/adapter records, adapter zero |
-| `hharness-mcp` | the Stage-3 MCP protocol edge + `hh-mcp-serve` binary (fixture surface) |
-| `hharness-mcp-lab` | the C1 `hh-lab/1` MCP surface — Lab ops as tools, surface-session ledger, caller bindings |
-| `hharness-acp` | the ACP session boundary + the C2 A2A edge (AgentCard/TaskState records) |
-| `hharness-web` | the C1 read-only web instrument over binding (c); `hh-web` binary |
-| `hharness-plugin` | the extension contract surface: `ContractRef`, tier/`depends_on`, spec-DAG check; `hh-plugin-check` |
-| `hharness-plugin-fixture` | the shared plugin-side `plugin_abi/1` runtime + conformance fixture modes; binary |
-| `hharness-varhost` | the kernel-side out-of-process variant host over the live `hh-helper` boundary |
-| `hharness-compact-evict-oldest` | packaged `compaction_strategy` variant `evict_oldest` (plugin under `plugins/`) |
-| `hharness-memory-store` | packaged `memory_store` variant — `MemoryStorePort` served out of process (plugin) |
-| `hharness-subagent` | the C1 subagent kernel slice: `spawn`, `merge`, ownership grants (TCB, never model-facing) |
-| `hharness-orchestrator` | the C3 orchestrator class: topology presets, wait policies, delegation runtime |
-| `hharness-fleet` | the C4 fleet reconciler — human-agent org layer over durable `FleetSpec`/`WorkItem` rows |
-| `hharness-fleet-adapter` | the `work_source_adapter` plugin-class contract (the tracker boundary codec) |
-| `hharness-tracker-fixture` | the packaged reference tracker variant — the honest fixture proxy for HUMAN-H2 |
-| `hharness-github-issues` | the packaged GitHub Issues tracker variant (R4.7; DF-S5.6-1) — `GithubTracker` out of process |
-| `hharness-evolution` | the C5 evolution pipeline: S0–S10 candidate state machine over durable rows |
-| `hharness-debt` | the C4 assumption-debt manager service (sweep/settle/retire, `tier-c4` on `hharness-embed`) |
-| `hharness-xcheck` | the cross-implementation replay/checker packaging (spec §10.7, R2.21, ADR-0353): `hh-xcheck-bundle/1` export + E1 self-check + foreign-answers `verify`; `hh-xcheck` binary |
-| `hharness` | the umbrella facade crate (L4.4): re-exports the publishable public-API crates under short module names (`hharness::ledger`, `hharness::hir`, …) for library consumers |
+| `hharness-wire` | Canonical JSON, JSON-RPC framing, HTTP primitives, SHA-2 |
+| `hharness-tls` | The admitted TLS client/server and mTLS implementation (ADR-0365) |
+| `hharness-ontology` | Formal vocabulary, home-plane classification, configuration and compliance schemas |
+| `hharness-identity` | Identity and version records, content addresses, canonicalization |
+| `hharness-provenance` | Provenance records, authority classes, labels, sealing and endorsement |
+| `hharness-hir` | HIR/1 documents: validation, identity, sealing, diff and patch operations |
+| `hharness-ledger` | Fenced run ledger, WAL, blob pool, projections, and the BlobCipher seam |
+| `hharness-budget` | Resource quantities, accounting, budget trees, and matched-budget records |
+| `hharness-registry` | Typed component/variant registry, namespaces, snapshots and imports |
+| `hharness-secrets` | Credential broker, DPoP verification, and blob AEAD producer |
+| `hharness-telemetry` | Measurements, cost/token records, and ledger-derived trace/metric views |
+| `hharness-monitor` | Reference monitor: authorization, handle tables, delegation and revocation |
+| `hharness-containment` | Containment policy, policy meet, attachment checks and backend requirements |
+| `hharness-env` | Environment lifecycle, tool dispatch, effect capture and helper client |
+| `hharness-gateway` | Provider/model boundary, dialect codecs, routing and cache semantics |
+| `hharness-context` | Context assembly, compaction, memory interfaces and semantic-cache policy |
+| `hharness-control` | Control strategies, guarded execution envelope, loops and stopping |
+| `hharness-verification` | Claims, evidence reconciliation, validators and critics |
+| `hharness-assembly` | Assembly grammar, configuration resolution, composition and validation |
+| `hharness-compiler` | Link, lower and seal harness documents into runtime and surface artifacts |
+| `hharness-embed-schema` | The single hh-embed/1 and plugin_abi/1 schema source |
+| `hharness-embed` | Boundary service: in-process, stdio and loopback HTTP share one RPC handler |
+| `hharness-embed-client-generated` | Generated Rust boundary client; never edit its generated.rs by hand |
+| `hharness-codegen` | Schema/client generation; hh-codegen executable |
+| `hharness-kernel` | hh-kernel command dispatch, serving and identity diagnostics |
+| `hharness-helper` | Out-of-process sandbox helper, protocol and seatbelt/Podman backends |
+| `hharness-cli` | hh terminal client and renderer over the kernel boundary |
+| `hharness-lab` | Experiment, benchmark and analysis records plus canonical exemplars |
+| `hharness-experiment` | Experiment engine and durable experiment-document lifecycle |
+| `hharness-results` | Results projections, watermark reads, exports and leaderboard views |
+| `hharness-analysis` | Estimators and statistical analysis over results rows |
+| `hharness-eval` | Metric/oracle catalogue, evaluation, comparison and typed n/a outcomes |
+| `hharness-bench` | Benchmark-adapter contracts and the committed benchmark fixture corpus |
+| `hharness-bundle` | Reproducible bundle manifests, validation, import and export |
+| `hharness-hosting` | Hosted-participant ABI, adapters and event projection/lifting |
+| `hharness-mcp` | MCP protocol edge, artifacts, client/executor and fixture server |
+| `hharness-mcp-lab` | Lab MCP instrument, caller binding, launches and surface-session records |
+| `hharness-acp` | ACP session/client boundary and A2A task/agent-card records |
+| `hharness-web` | Read-only web instrument over the loopback HTTP binding |
+| `hharness-plugin` | Plugin contracts, dependency-DAG checks and source/dependency linting |
+| `hharness-plugin-fixture` | Shared plugin-side ABI runtime and conformance fixture modes |
+| `hharness-varhost` | Kernel-side out-of-process variant host over hh-helper |
+| `hharness-compact-evict-oldest` | Packaged evict_oldest compaction variant |
+| `hharness-memory-store` | Packaged memory-store variant using the shared memory ABI |
+| `hharness-subagent` | Subagent spawn, merge, messaging and ownership grants |
+| `hharness-orchestrator` | Topology execution, delegation, coordination and wait policies |
+| `hharness-fleet` | Durable work-item reconciliation and organizational policy |
+| `hharness-fleet-adapter` | Work-source adapter ABI and tracker logic |
+| `hharness-tracker-fixture` | Packaged deterministic tracker variant for conformance tests |
+| `hharness-github-issues` | Packaged GitHub Issues tracker over host-supplied source documents |
+| `hharness-evolution` | Candidate/campaign evolution state machine and durable views |
+| `hharness-debt` | Assumption-debt sweep, settlement, retirement and proposal services |
+| `hharness-xcheck` | Cross-implementation corpus export, self-check and foreign-answer comparator |
+| `hharness` | Facade re-exporting public API crates under short module names |
+
+## Key files
+
+| File | Lines (approx) | Purpose |
+|---|---|---|
+| `crates/hh-embed/src/lib.rs` | 71 | Boundary bindings and module entry points |
+| `crates/hh-embed-schema/src/lib.rs` | ~1.7k | Contract vocabulary, schema export, and identity helpers |
+| `crates/hh-codegen/src/main.rs` | ~150 | Generator outputs and orchestration |
+| `crates/hh-kernel/src/main.rs` | ~250 | Kernel command dispatch and identity diagnostics |
 
 ## Build & Test
 
+- Commands run at the repository root. Select the package and acceptance battery for the change; these examples exercise the boundary:
+
 ```sh
-cargo test -p hharness-<crate>                 # one crate
-cargo test -p hharness-<crate> --test <name>   # one acceptance battery (tests/<ticket>.rs)
-cargo build -p hharness-helper --no-default-features   # tier-off build (removability leg)
-cargo build -p hharness-embed --no-default-features    # tier-c4 off
+cargo test -p hharness-embed
+cargo test -p hharness-embed --test cap_2_composed
+cargo clippy -p hharness-embed -- -D warnings
+cargo fmt --all --check
 ```
+
+- For schema/client changes, run `bash scripts/check-drift.sh` and review all regenerated outputs.
+- For feature/dependency changes, run `bash scripts/check-removability.sh`; it rebuilds tier combinations and checks dependency edges.
+- Direct-package tier-off examples are `cargo build -p hharness-helper --no-default-features` and `cargo build -p hharness-embed --no-default-features`. Restore the default helper afterward: `cargo build -p hharness-helper`.
+- New behavior needs a regression test in the relevant crate. Prefer a test of an observable outcome, including refusal cases, over one that only repeats implementation details.
 
 ## Code conventions
 
-- The workspace is dependency-free by contract **modulo ADR-0359 +
-  ADR-0365**: only `hharness-secrets` may name the admitted `ring =0.17.14`
-  pin, and only inside the ADR's closed API scope (DPoP signature
-  verification + test-time fixture signing + `ring::aead`/`ring::rand`,
-  the blob-pool AEAD R3.8 consumed under ADR-0361's `BlobCipher` seam);
-  and only `hharness-tls` may name the admitted rustls graph
-  (`rustls =0.23.46` on the `ring` backend + `rustls-webpki =0.103.16`
-  + `webpki-roots =1.0.10` — the closed HTTPS-client / TLS-server / mTLS
-  scope). Every
-  other crate and every other admitted surface stays hermetic.
-- A crate's public contract is its `src/lib.rs` doc header — it names the spec
-  section, the `R-2.*` slices, the ticket and the owning ADRs. Read it before
-  editing the crate.
-- Kernel-owned event classes are registered in `hharness-ledger`'s class table with
-  declared durability/audit grade — a new `lifecycle.*`/`control.*`/etc. row is
-  a schema change, not an implementation detail.
-- Lower tiers never depend upward; plugin/adapter halves communicate through
-  `plugin_abi/1` records — records-in/records-out, no back-channel authority.
-- Binaries are thin: every binary is a `main.rs` over library code — `hh`,
-  `hh-kernel`, `hh-helper`, `hh-web`, `hh-mcp-serve`, `hh-codegen`,
-  `hh-compile`, `hh-authorize`, `hh-bench-adapter`, `hh-eval-oracle`,
-  `hh-gateway-stub`, `hh-plugin-check`, `hh-plugin-fixture`,
-  `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture`,
-  `hh-xcheck` — plus `hh-ir-op` (the §3.1.7 ops driven out-of-process over
-  canonical bytes).
+- Read the package's `Cargo.toml`, `src/lib.rs` contract header where present, the relevant implementation, and its tests. Binary-only packages use `src/main.rs`; not every member has a library.
+- Keep the root dependency admissions exact: `ring` is a direct dependency only of `hharness-secrets`; the admitted rustls graph belongs to `hharness-tls`; `tempfile` is a dev-dependency of `hharness-varhost`. ADR-0359/0361/0365 bound their permitted use.
+- Keep the ledger's `BlobCipher` seam independent of its cryptographic producer in `hharness-secrets`. The TLS `ring` backend is not permission to add direct crypto dependencies elsewhere.
+- Event classes are registered in `crates/hh-ledger/src/classes.rs` with durability/audit metadata. Adding a class changes a contract; coordinate its ontology home, schema, producer, projection, and acceptance tests.
+- Lower layers do not depend on higher services. Plugin halves exchange `plugin_abi/1` records through the host boundary; do not add back-channel authority.
+- Reuse canonical JSON, identity, and class-table implementations. Maintain typed refusals when a capability or tier is absent.
+
+| Correct ✓ | Wrong ✗ |
+|---|---|
+| Add a boundary field to the schema source and regenerate both clients | Patch only the Rust client or handwritten TypeScript types |
+| Use an existing workspace crate as a dev-dependency for acceptance fixtures where appropriate | Add a production dependency solely to make a test reach another layer |
+| Check the host and plugin sides of an ABI failure | Bypass the helper boundary to make a packaged variant work |
 
 ## Critical gotchas
 
-1. `hh-embed-client-generated/src/generated.rs` and `schema/*.json` are
-   generated — `bash scripts/check-drift.sh` regenerates and fails on drift.
-2. `hharness-embed`'s default features include `tier-c4` — check feature flags
-   before assuming a type is always compiled.
-3. `spikes/` trees are outside the workspace — changes there never affect
-   `cargo build --workspace`.
-4. The `hh-*-fixture`/`hh-plugin-*` crates are the *plugin side* of
-   `plugin_abi/1`; `hharness-varhost` is the host side. A variant bug can live on
-   either side of the process boundary — identify which before editing.
+1. `crates/hh-embed-client-generated/src/generated.rs`, `clients/ts/hh-embed.ts`, and `schema/*.json` are generated. Change their source, not the output.
+2. Cargo features are additive across dependencies. A package-level `--no-default-features` does not disable defaults requested by another dependency; inspect the resolved graph before claiming a tier is absent.
+3. `spikes/` is excluded from the workspace. A workspace build does not validate a spike.
+4. `crates/hh-plugin-fixture/` and the packaged variant crates implement the plugin side; `crates/hh-varhost/` implements the host side. Manifests are under `plugins/`.
+5. An interrupted tier-off check can leave a stale `hh-helper` binary. See root gotchas 9–10 for restoration and host-timeout diagnosis.
+6. Some source files exceed 40 KB. Locate symbols with `rg -n`, then read bounded ranges; do not dump a whole driver or service file into context.
+
+## Terminology
+
+| Term | Meaning |
+|---|---|
+| Package / directory / binary | Cargo selector / filesystem path / executable; their names need not match |
+| ABI host / variant | Kernel-side process manager / plugin-side implementation |
+| TCB | Trusted computing base; authorization and containment code whose invariants must hold |
+| Class table | Canonical metadata for registered event classes, including durability and audit rules |
+
+## Do
+
+- Trace a change through its schema, owner, caller, and acceptance test; follow the root verification and evidence rules.
+
+## Don't
+
+- Do not change a contract in only one binding, add upward production dependencies, or treat a fixture result as live-service evidence.
