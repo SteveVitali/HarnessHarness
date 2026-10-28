@@ -2,39 +2,49 @@
 
 ## Supported versions
 
-HarnessHarness is pre-1.0 (workspace `0.0.1`; the first public release
-`0.1.0` is pending publication). Until then:
+HarnessHarness is pre-1.0. Security fixes are supported for:
 
 | Version | Supported |
 |---|---|
-| tip of the default branch | yes |
-| latest tagged release (when one exists) | yes |
-| anything older | no |
+| Tip of the default branch | Yes |
+| Latest tagged release | Yes |
+| Older releases | No |
+
+See [GitHub Releases](https://github.com/SteveVitali/HarnessHarness/releases)
+for available releases and [project status](docs/status.md) for capability and
+verification limits.
 
 ## Reporting a vulnerability
 
-**Report privately — never a public issue.** Use GitHub Security
-Advisories:
+**Report privately; do not open a public issue.** Use
+[GitHub's private vulnerability reporting form](https://github.com/SteveVitali/HarnessHarness/security/advisories/new).
 
-<https://github.com/SteveVitali/MetaHarness/security/advisories/new>
-
-Include the affected commit or version, the component (crate/binary or
-build tooling), a reproduction, and the impact you see. If you receive
-no acknowledgement within **14 days**, reply on the advisory thread.
+Include the affected commit or version, component (crate, binary, or build
+tooling), a reproduction, and the impact you see. Do not include real credentials
+or sensitive production data. If you receive no acknowledgement within **14 days**,
+reply on the advisory thread.
 
 ## Response targets
 
 - **Acknowledge:** within 7 days of the report.
-- **Triage + severity:** within 30 days, with a fix or a mitigation plan.
-- **Disclosure:** coordinated with the reporter; a fix lands on the
-  default branch before any public advisory is published.
+- **Triage and severity:** within 30 days, with a fix or a mitigation plan.
+- **Disclosure:** coordinated with the reporter; a fix lands on the default
+  branch before any public advisory is published.
 
-## Scope notes
+## Scope
 
-The build is offline/hermetic by contract: the only admitted network +
-TLS surface is `hharness-tls`'s closed rustls scope (ADR-0365) and the
-out-of-process `hh-github-issues` tracker variant; the `ring` pin
-(ADR-0359) is signature-verification + AEAD only. Secrets never enter
-ledgers or logs by contract — a path that leaks one is a defect worth
-reporting. Vulnerabilities in third-party components are tracked in
-`THIRD_PARTY_NOTICES.md`; report them the same way.
+Security reports may cover the runtime, sandbox/helper boundary, authorization
+and credential handling, network integrations, plugins, or build and release
+tooling. The fixture-based development workflow does not imply a network-free
+runtime: configured model providers and integrations can make network requests,
+and the kernel has an HTTP binding.
+
+TLS implementation lives in `hharness-tls` under
+[ADR-0365](docs/adr/ADR-0365-r4.5c-rustls-dependency-admission-the-hh-tls-home-and-the-closed-https-mtls-scope.md).
+The admitted `ring` use in `hharness-secrets` covers the DPoP verifier and blob-pool
+AEAD. Secrets must not enter run ledgers or logs; a path that exposes one is a
+defect worth reporting.
+
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists admitted third-party
+components and their licenses. Report vulnerabilities involving those components
+through the same private channel.

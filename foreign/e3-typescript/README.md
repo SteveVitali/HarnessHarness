@@ -1,69 +1,77 @@
-# E3-candidate — a foreign `hh-xcheck` replay implementation (TypeScript, node stdlib)
+# TypeScript cross-implementation replay (E3)
 
-A **foreign implementation candidate** for the HUMAN-H3 environment leg of
-the cross-implementation replay contract (spec §10.7, R2.21, ADR-0353).
-It consumes the committed `hh-xcheck-bundle/1` corpus at
-`crates/hh-xcheck/fixtures/cross-impl/` and emits `answers.json`, which
-`hh-xcheck verify` diffs against the bundle's E1 expectations.
-
-**Part 1 (R4.4)** landed the shared `lib/` core plus the
-identity-trees, identity-records, ledger-transcript, registry-snapshot
-and canonical-parse arms. **Part 2 (R4.4a)** wired the plugin-manifests
-and ledger-scenarios arms against the same core — `lib/` is the one
-spelling; it is extended, never re-implemented. **Part 3 (R4.4b**
-— `docs/tickets/153b_R4.4b__e3-typescript-foreign-impl-part3.md`)
-landed the eighth and final arm, `hir-documents` (`lib/hir.ts`):
-a corpus-faithful HIR/1 decode → canonicalize → validate → seal
-pipeline reproducing `crates/hh-xcheck/src/hir_replay.rs`'s answer
-contract.
-
-This tree is **outside the cargo workspace** (`foreign/` has no
-`Cargo.toml`; the workspace's `members` list is explicit `crates/*`
-paths). `cargo metadata` reports the unchanged 51 members and `cargo
-build --workspace` is unaffected.
-
-## Honesty note (read first)
-
-This is a *candidate* implementation, not E1 truth. The answers it emits
-are evidence **this run** produced — `verify` only ever checks; nothing
-in the bundle mints a claim for it. A green `verify` is real evidence a
-foreign implementation replayed the corpus byte-for-byte; it is not a new
-reference.
-
-The evidence class is **`foreign-run-verified`** — a foreign toolchain's
-recorded replay of the committed `hh-xcheck` bundle (the PR #136 E2
-precedent) — a distinct class **below** the in-tree fixture-verified
-ceiling, never conflated with it. Nothing here is `staging-verified`,
-`live-executed` or `public`.
-
-The primitives were implemented from `CHECKER.md`'s spec text and the
-committed fixture shapes, with `foreign/e2-python` read as the reference
-structure. No Rust code was transliterated.
+This implementation replays the committed HarnessHarness conformance corpus
+using TypeScript and Node's standard library. It reads the
+[`hh-xcheck-bundle/1` fixtures](../../crates/hh-xcheck/fixtures/cross-impl/), writes
+an answer file, and checks against the Rust reference through `hh-xcheck`.
+All **eight arms and 57 checked answers** are implemented. This tree is outside
+the Cargo workspace and is not a kernel runtime dependency.
 
 ## Toolchain
 
-- **node ≥ 22** (recorded on node `v25.2.1`). Run directly under node's
-  type stripping — `.ts` imports, type annotations and `import type`
-  only. **Erasable TypeScript only**: no enums, no namespaces, no
-  parameter properties, no decorators (node's strip-types rejects them at
-  run time — the replay leg in `crates/hh-xcheck/tests/r4_4.rs` is the
-  check that fails if one lands).
-- **Stdlib only**: `node:crypto`, `node:fs`, `node:path`, `node:process`,
-  `node:buffer`. No `package.json`, no `node_modules`, no build step —
-  the `e3_tree_carries_no_npm_dependency` test asserts it.
+Use **Node 22.18 or newer in the 22.x series, or Node 24 or newer**, plus the
+repository's pinned Rust toolchain for the comparator. These Node versions run
+erasable TypeScript directly; no npm packages, `package.json`, or build step
+are needed. Node's [TypeScript documentation](https://nodejs.org/api/typescript.html#type-stripping)
+explains the built-in type stripping. The recorded E3 run used Node `v25.2.1`.
+
+Keep this tree within erasable TypeScript: ordinary type annotations and
+`import type`, without syntax that needs code generation. Tests in
+[`r4_4.rs`](../../crates/hh-xcheck/tests/r4_4.rs) check direct execution and the
+absence of npm dependencies. Running under Node strips types; it does not type-check.
 
 ## Run
+
+From the repository root:
 
 ```sh
 node foreign/e3-typescript/foreign.ts crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e3.json
 cargo run -p hharness-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e3.json
-# or one shot: bash scripts/xcheck-e3.sh [--answers PATH]
 ```
 
-`answers.json` here is the run's committed output
-(`candidate: "E3-candidate"`).
+The comparator's final line should be `verify: 57 passed, 0 failed`, with exit
+code 0. To use the combined runner, build the comparator first:
 
-## Recorded verify output (R4.4b scope, verbatim)
+```sh
+cargo build -p hharness-xcheck
+bash scripts/xcheck-e3.sh --answers /tmp/answers-e3.json
+```
+
+The script uses `target/debug/hh-xcheck`, or the binary named by `HH_XCHECK_BIN`.
+Its Node check only checks the major version; use the toolchain versions above
+so direct `.ts` execution works. [answers.json](answers.json) is the committed
+R4.4b result; the commands write fresh results to scratch space.
+
+## Coverage and limits
+
+[CHECKER.md](../../crates/hh-xcheck/CHECKER.md) defines the encoding, identity
+functions, replay contract, and answer comparison. The implementation is split
+into a shared core and corpus adapters:
+
+| Source | Responsibility |
+|---|---|
+| [lib/core.ts](lib/core.ts) | Canonical JSON, SHA-256, and `idp/1` primitives |
+| [lib/trees.ts](lib/trees.ts) | `identity-trees` |
+| [lib/records.ts](lib/records.ts) | `identity-records` |
+| [lib/ledger.ts](lib/ledger.ts) | One WAL fold for `ledger-transcript` and `ledger-scenarios` |
+| [lib/registry.ts](lib/registry.ts) | `registry-snapshot` and the shared class catalog |
+| [lib/plugin.ts](lib/plugin.ts) | `plugin-manifests` |
+| [lib/canonical_parse.ts](lib/canonical_parse.ts) | `canonical-parse`; timings are informational |
+| [lib/hir.ts](lib/hir.ts) | `hir-documents`: parse, canonicalize, validate, and seal |
+
+This is a corpus implementation, not a complete TypeScript runtime. HIR cases
+reaching unported kinds, edges, `assumption_debt`, or `flow_contract` are omitted;
+the comparator reports a missing answer instead of receiving a fabricated
+verdict. The original primitives were written from the contract and fixtures,
+with the Python candidate used as a structural reference.
+
+A successful run is `foreign-run-verified` evidence for this corpus. It does
+not establish general conformance, live-service operation, or release readiness.
+Zero missing answers does not close the bundle's recorded `environment-pending`
+cells: `verified_by[]` records replay evidence while the HUMAN-H3 prerequisite
+remains separate. See [the evidence policy](../../MAINTAINING.md#evidence-classes).
+
+## Recorded verify summary (R4.4b)
 
 ```
 candidate: E3-candidate
@@ -90,87 +98,16 @@ ledger-transcript 2/2 · registry-snapshot 1/1 · plugin-manifests 14/14 ·
 canonical-parse 6/6 · ledger-scenarios 3/3 · hir-documents 5/5 =
 57/57 cases green.** `hh-xcheck verify` exits 0 on this answers file;
 `scripts/xcheck-e3.sh` reports `covered-arm failures: 0; pending (R4.4b)
-cells missing: 0` — all eight arms answered, zero pending cells.
+cells missing: 0` — all eight arms answered, zero missing answers.
 
-## What it implements
+## Historical implementation notes
 
-1. **`hh-json/1` canonical JSON** (`lib/core.ts`) — byte-sorted keys
-   (UTF-8 order), `,`/`:` separators, integers only, `\uXXXX`
-   lowercase-hex escapes for U+0000–U+001F plus `\"` `\\` `\n` `\r` `\t`;
-   everything else verbatim UTF-8. A parse refuses non-integer numbers
-   and unpaired surrogates (outside the dialect — refused, never
-   silently coerced).
-2. **`idp/1`** — `sha256("idp/1" ‖ 0x1f ‖ tag ‖ 0x1f ‖ payload)` via
-   `node:crypto`, lowercase-hex, `sha256:` prefix.
-3. **`tree/1`** (`lib/trees.ts`) — manifest → Merkelized canonical
-   document → `idp_id("tree", …)` (file `bytes_hex` → `content`
-   blob-address; dir `entries` → `tree` subtree-id), per the committed
-   `*.canonical.json` bytes.
-4. **Identity records** (`lib/records.ts`) — `address_blob`,
-   `identify_text`, and the `record` form's
-   `version_id`/`semantic_id` fold.
-5. **Ledger WAL replay** (`lib/ledger.ts`) — `hash = idp_id("ledger.event",
-   0x00 ‖ canonical(envelope − {"hash"}) ‖ prev_hash_utf8)`,
-   `prev = "genesis"`; every `e`-frame's recorded hash is recomputed and
-   compared; frames must be canonical JSON (a drifted frame fails,
-   never silently reserialized). `replayWal` is the one fold R4.4a's
-   `ledger-scenarios` reuses per case dir.
-6. **Registry snapshot fold** (`lib/registry.ts`) — `registry.json`
-   replayed into the record/name/revocation/stale-by-dependency
-   projections; the fixed corpus output vector (Audit resolves, six
-   snapshot-pinned Execute selectors, `kind = variant` query,
-   `slot_choices` for `control_strategy`/`context_policy`/`export_sink`
-   under `contract_version: "1.0"`) folded to the
-   `expected-outputs.json` bytes; the answer is their SHA-256.
-7. **Canonical-parse** (`lib/canonical_parse.ts`) — decode + re-emit +
-   digest per frame; `parse_ns`/`rehash_ns` recorded via
-   `process.hrtime.bigint()`, never gated.
-8. **Plugin manifests** (`lib/plugin.ts`, R4.4a) — the strict
-   `PluginManifest/1` decode (closed member set, pinned `records[]`
-   `{version_id, kind, ext?}` shape checks, no inline bodies, no
-   package-escaping paths, `code-pointer` pins, `fetched_at` uint,
-   all-`v`-stripped versions, shorter-prefix-is-less `versionCmp`,
-   first-`-` range split, empty tier digits refused) then the admission
-   order decode → namespace → locality → tier → compatibility →
-   `requests ⊆ cap` under the bundle
-   posture (`first_party=true`, deny-everything requests cap). Verdicts
-   spell `admit:<id>` / `refuse:<Kind>`; the class catalog comes from
-   `RegistryReplay.classCatalog()` — the same `registry.json` fold the
-   snapshot arm ships (CC1, never a second registry read).
-9. **Ledger scenarios** (`lib/ledger.ts` `armLedgerScenarios`, R4.4a) —
-   the R4.3 WAL corpus (`causal-chain`, `blob-refs`, `writer-handover`)
-   replayed through the one `replayWal` fold per case dir; answers carry
-   `<case>` `{event_hashes, head_hash}` plus the informational
-   `<case>.wal_sha256` / `<case>.event_count` members `verify` skips.
-10. **HIR/1 documents** (`lib/hir.ts`, R4.4b) — the
-    `hir_replay.rs` pipeline **parse → canonicalize → validate → seal**
-    (the empirical E1 order) over the five committed legs, sealed at the
-    scenario's fixed `sealed_at = 1700000000`. The port decodes and
-    re-emits byte-exactly: canonical-JSON admission
-    (`NonCanonicalInput`), the `ProvenanceRecord` codec
-    (`MissingProvenance`, origin/authority/scope/taint/readers/
-    derivation/attestation members), `Ref`/`ProfileRef`/
-    `ComponentVariantRef`, the five exercised kind bodies —
-    `AgentProcess` (native + hosted), `Budget`, `HarnessRule`,
-    `Permission`, `ToolCapability` — slots/boundary/capability-
-    declaration/supplies/rule-action/validity/issuer/grant/effect/
-    resource/scope-binding members, `ToolSurface`, and the
-    node/document envelope. Validation covers root+ref resolution
-    (`UnresolvedRef` — the `unresolved-ref` leg), provenance ceilings,
-    `Text` leaf authority, budget registry/parent containment,
-    hosted-agent `version_identity` recomputation, and the capability
-    member battery (`tools::validate_capability`); seal performs the
-    definition-authority endorsement (`hir:seal` attestation), ref
-    pinning, hosted `version_identity` minting, and emits the
-    `definition_version_id` — `gated-tool-no-contract` honestly refuses
-    `ContributionUndeclared`. Errors join first-raised,
-    duplicate-collapsed `HirError::kind_str` spellings; `skipped` gating
-    matches the driver. **Honest bound:** a case reaching surface the
-    corpus does not exercise — an unexercised registered kind, any edge,
-    `assumption_debt`, or `flow_contract` — is *omitted* (the bundle's
-    `missing answer` signal), never a fabricated verdict.
+The notes below preserve the recorded R4.4/R4.4a/R4.4b implementation and the
+CF-493 evidence-vocabulary change. The E2 six-arm observations describe the
+Python tree at those dates; [R4.16a later added its two missing arms](../e2-python/README.md#dated-note--2026-10-23-r416a).
+The current Python implementation also answers all eight arms.
 
-## Spec ambiguities / discrepancies observed
+### Contract observations
 
 - **`identify_text` — resolved in the contract text.** E2 recorded a
   spec-text defect: an earlier CHECKER.md spelled `idp_id("text",
@@ -192,7 +129,7 @@ cells missing: 0` — all eight arms answered, zero pending cells.
 - No new spec-text discrepancies were found implementing the part-1
   arms; no answer was patched to force a pass.
 
-## Result
+### Recorded R4.4b result
 
 `verify` over the eight-arm answers — **57 passed, 0 failed** (exit 0):
 every arm green including all five `hir-documents` cases. `xcheck-e3`
