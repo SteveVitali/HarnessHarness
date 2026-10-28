@@ -238,3 +238,31 @@ surfaced as GATE-G6-blocking findings, not silently closed. The
 surfaced findings per the capstone report. Live spend: USD **25.259768**
 of the USD 100 cap (90 `SPEND.jsonl` rows; R4.16 itself spent USD 0 —
 offline ticket). `check-live-evidence.sh` green over 34 records.
+
+## Public launch surface — the R4.18 record (2026-10-28)
+
+`HUMAN-H7` executed the launch; R4.18's record
+(`docs/build/reports/2026-10-28-launch-record.md`) verified every row
+below at run time on 2026-10-28. **`public` is now earned — for exactly
+these rows and no more.** `staging-verified` stays unearned (no staging
+environment is provisioned); every row not listed here keeps its prior
+highest layer from the R4.16 sweep above.
+
+| Public surface | Form | Highest layer | Evidence |
+|---|---|---|---|
+| Published crate set — 49 `hharness-*` crates at `0.1.0` on crates.io | crates.io registry | public | `docs/build/reports/2026-10-28-launch-record.md` §crates.io — each name re-read via `GET crates.io/api/v1/crates/<name>` at run time, `0.1.0` present (49/49); the five `publish = false` crates correctly absent (HTTP 404) |
+| Tagged release `v0.1.0` — 4 target tarballs + `SHA256SUMS` | GitHub Release | public | `docs/build/reports/2026-10-28-launch-record.md` §Tag proof + §GitHub Release — annotated tag `93d8f79c` peels to merged-main `d1325a63`; release live (not draft) at `…/releases/tag/v0.1.0`; `SHA256SUMS` quoted verbatim |
+| Protected `main` — required checks + deletion + non-fast-forward | ruleset `23836544`, `enforcement: active` | public | `docs/build/reports/2026-10-28-launch-record.md` §`main` protection — read via `gh api` at run time: 4 required check contexts (build·test·fmt·drift ×2 platforms, cargo-deny, gitleaks), non-strict policy |
+| Private vulnerability reporting | repo setting `enabled: true` | public | `docs/build/reports/2026-10-28-launch-record.md` §`main` protection — `gh api …/private-vulnerability-reporting` |
+| `live-verify` deployment environment — secrets by name + required reviewer | GitHub Environment | public | `docs/build/reports/2026-10-28-launch-record.md` §`main` protection — `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` present by name (values never read), `required_reviewers` rule active |
+
+**Honest residuals that remain true after R4.18:** the release was
+created under operator delegation after the tag-run's release job failed
+on a missing checkout (workflow fixed via PR #204 for future tags) — the
+defect and the fix are part of the launch record, not a footnote. The
+`surface-mcp*`/`hh-mcp-serve` official-SDK protocol-pin limit, the
+Anthropic run-replay divergence, the tool-dispatch `replay_diverged`
+limit, and the e2-tree extension-cell `environment-pending` set all
+stand exactly as recorded in the R4.16 sweep — `public` does not heal or
+erase them; it only asserts that the named artifacts are now reachable
+by strangers on the public internet.

@@ -19,7 +19,19 @@ the original prepublication summary, retained as recorded. Archive availability
 does not establish complete crates.io publication or close the engineering
 launch gate; see [project status](docs/status.md) for the current distinction.
 
-## [0.1.0] — unreleased
+*Update 2026-10-28:* publication is complete — all 49 publishable crates are
+on crates.io at `0.1.0` and the launch gate closed at `HUMAN-H7`; the verified
+record is `docs/build/reports/2026-10-28-launch-record.md`.
+
+## [0.1.0] — 2026-10-28
+
+Released 2026-10-28 — annotated tag `v0.1.0` on merged-main
+`d1325a63bab7bf0836250d9df871e2bfdd76dea2` (CI + gitleaks green, run
+`40525512308`), the four-archive GitHub Release live at
+`…/releases/tag/v0.1.0`, and **all 49 publishable crates on crates.io at
+`0.1.0`** (each verified via the crates.io API). The full verified
+record — tag proof, asset checksums, publish incidents, protection
+state — is `docs/build/reports/2026-10-28-launch-record.md`.
 
 First public release. Publication mechanics landed at L4.4 / L4.5:
 every workspace crate carries the `hharness-*` name and full crates.io
@@ -89,6 +101,10 @@ the round-4 USD 100 live-spend cap — see
   the eight `hh-xcheck` arms). `staging-verified` and `public` remain
   unearned — R4.18 owns the publish decision. See `README.md` → *Status
   — honesty ceiling* and `docs/build/OPERATIONAL_READINESS.md`.
+  *(2026-10-28 update — R4.18: `public` is now earned for the published
+  crate set, the tagged release, protected `main`, PVR and the
+  `live-verify` environment, per the launch record; `staging-verified`
+  stays unearned — no staging environment exists.)*
 
 For the current capability and evidence summary, see [project status](docs/status.md).
 The README status-heading reference in the original notes above is historical.
