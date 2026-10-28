@@ -1,75 +1,75 @@
-# E2-candidate — a foreign `hh-xcheck` replay implementation (Python stdlib)
+# Python cross-implementation replay (E2)
 
-A **foreign implementation candidate** for the HUMAN-H3 environment leg of
-the cross-implementation replay contract (spec §10.7, R2.21, ADR-0353).
-It consumes the committed `hh-xcheck-bundle/1` corpus at
-`crates/hh-xcheck/fixtures/cross-impl/` and emits `answers.json`, which
-`hh-xcheck verify` diffs against the bundle's E1 expectations.
-
-This tree is **outside the cargo workspace** (`foreign/` has no
-`Cargo.toml`; the workspace's `members` list is explicit `crates/*` paths).
-`cargo metadata` reports the unchanged 51 members and `cargo build
---workspace` is unaffected.
-
-## Honesty note (read first)
-
-This is a *candidate* implementation, not E1 truth. The answers it emits
-are evidence **this run** produced — `verify` only ever checks; nothing in
-the bundle mints a claim for it. A green `verify` is real evidence a
-foreign implementation replayed the corpus byte-for-byte; it is not a new
-reference.
-
-The primitives were implemented from `CHECKER.md`'s spec text and the
-committed fixture shapes. Rust sources were read to understand fixture
-shapes and the error-kind vocabulary `CHECKER.md` itself defers to
-(`hh-registry::extension::plugin`, §Plugin-manifest verdicts); no Rust
-primitive was transliterated.
+This standard-library Python implementation independently replays the committed
+HarnessHarness conformance corpus. It reads the
+[`hh-xcheck-bundle/1` fixtures](../../crates/hh-xcheck/fixtures/cross-impl/), writes
+an answer file, and lets the Rust `hh-xcheck` comparator check its digests and
+verdicts. It covers **eight arms and 57 checked answers**. It is outside the Rust
+workspace and is not a runtime dependency of the kernel.
 
 ## Run
+
+From the repository root, with Python 3.10 or newer and the pinned Rust toolchain:
 
 ```sh
 python3 foreign/e2-python/foreign.py crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e2.json
 cargo run -p hharness-xcheck -- verify crates/hh-xcheck/fixtures/cross-impl /tmp/answers-e2.json
-# → verify: 49 passed, 0 failed   (exit 0)
 ```
 
-`foreign.py` is Python 3 stdlib only (`hashlib`, `json`, `pathlib`, `sys`,
-`time`). `answers.json` here is the run's committed output
-(`candidate: "E2-candidate"`).
+The comparator's final line should be `verify: 57 passed, 0 failed`, with exit
+code 0. A missing or different answer is a failure. The output path above is
+scratch space; [answers.json](answers.json) is the committed R4.16a evidence.
+No Python packages need installing: [foreign.py](foreign.py) imports only
+`copy`, `functools`, `hashlib`, `json`, `pathlib`, `sys`, and `time`.
 
-## What it implements
+To run the Rust self-check and both foreign implementations together, also
+install the [TypeScript replay's Node prerequisite](../e3-typescript/README.md#toolchain):
 
-1. **`hh-json/1` canonical JSON** — byte-sorted keys, `,`/`:` separators,
-   integers only, `\uXXXX` lowercase-hex escapes for U+0000–U+001F plus
-   `\"` `\\` `\n` `\r` `\t`; everything else verbatim UTF-8. A parse
-   rejects floats and unpaired surrogates (outside the dialect — refused,
-   never silently coerced).
-2. **`idp/1`** — `sha256("idp/1" ‖ 0x1f ‖ tag ‖ 0x1f ‖ payload)`,
-   lowercase-hex, `sha256:` prefix.
-3. **`tree/1`** — manifest → canonical document → `idp_id("tree", …)`. See
-   *Spec ambiguities* below: the canonical document is the **Merkelized**
-   form of the manifest (file `bytes_hex` → `content` blob-address; dir
-   `entries` → `tree` subtree-id), per the committed `*.canonical.json`
-   bytes.
-4. **Ledger WAL replay** — `hash = idp_id("ledger.event", 0x00 ‖
-   canonical(envelope − {"hash"}) ‖ prev_hash_utf8)`, `prev = "genesis"`;
-   every `e`-frame's recorded hash is recomputed and compared.
-5. **`PluginManifest/1` + registry snapshot fold** — strict manifest decode
-   (unknown members, inline bodies, package-escaping paths, unpinned
-   pointers, `publisher_claim`-only conformance claims, `summary.authority
-   ≤ external`), then the admission order namespace → locality → tier →
-   compatibility → `requests ⊆ cap` under the bundle posture
-   (`first_party=true`, deny-everything cap). The registry arm replays
-   `registry.json` into the record/name/revocation/stale projections and
-   folds the corpus output vector (Audit resolves, snapshot-pinned Execute
-   resolves, the `kind=variant` query, `slot_choices` per class) to the
-   `expected-outputs.json` bytes; the answer is their SHA-256.
+```sh
+cargo build -p hharness-xcheck
+bash scripts/xcheck-foreign.sh
+```
 
-The plugin arm's store is the deterministic registry corpus — the same log
-the `registry-snapshot` arm ships; only the class catalog
-(`class_id → contract_version, tier`) is read from it.
+## Coverage and limits
 
-## Spec ambiguities / deviations found
+The [checker contract](../../crates/hh-xcheck/CHECKER.md) defines the byte encoding,
+identity functions, expected answers, and comparison rules. The implementation
+covers:
+
+| Arm | Replay |
+|---|---|
+| `identity-trees` | Canonical, content-addressed directory trees |
+| `identity-records` | Blob, text, version, and semantic identities |
+| `ledger-transcript` | Event hashes and head hash from the write-ahead log |
+| `registry-snapshot` | Registry replay and the fixed resolution/query vector |
+| `plugin-manifests` | Decode and admission verdicts under the bundle's posture |
+| `canonical-parse` | Canonical JSON parse/re-emit digests; timings are informational |
+| `hir-documents` | Parse, canonicalize, validate, and seal the five HIR cases |
+| `ledger-scenarios` | The shared WAL fold over three additional scenarios |
+
+This is a corpus implementation, not a complete Python port of the runtime.
+In particular, HIR cases reaching unported kinds, edges, `assumption_debt`, or
+`flow_contract` are omitted; the comparator reports a missing answer. The HIR
+and ledger-scenario arms were added at R4.16a using the E3 reference semantics
+and this tree's own canonical JSON and identity primitives.
+
+A successful run earns `foreign-run-verified` evidence for the tested corpus.
+It does not establish general conformance, live-service operation, or release
+readiness. The bundle retains `environment-pending` cells for HUMAN-H3 and
+records replay evidence in `verified_by[]`; those are distinct from missing
+answers. See [the evidence policy](../../MAINTAINING.md#evidence-classes).
+
+## Historical implementation notes
+
+The original six-arm observations and dated notes below are preserved as build
+evidence. Their 49-answer count and descriptions of missing extension arms
+refer to those earlier states. **Current resolution:** CHECKER.md specifies
+`idp_id("hir.text", bytes)` with verbatim content, the Merkelized tree document,
+and the fixed registry request vector. R4.16a added both extension arms and
+recorded 57/57 answers. The original primitives were written from the contract
+and fixtures; Rust sources were consulted for fixture shapes and error names.
+
+### Original six-arm observations
 
 - **`identify_text` (spec-text defect, resolved in E1's favor).**
   `CHECKER.md §idp/1` spells `idp_id("text", normalized)` where `normalized`
@@ -101,7 +101,7 @@ the `registry-snapshot` arm ships; only the class catalog
   validation; the `authority ≤ external` gate is the admission-relevant
   leg.
 
-## Result
+### Original six-arm result
 
 `verify` — **49 passed, 0 failed** (exit 0). `selfcheck` — 55 passed, 0
 failed. All six `*.foreign-*` bundle cells' evidence now exists; whether

@@ -1,19 +1,24 @@
 # Maintaining HarnessHarness
 
-The maintainer policy for the E1 reference build — the standing rules a
-maintainer follows between rounds and at release. This file lands the
+This guide covers releases, verification claims, and the design/build records
+maintainers keep current. Contributor instructions are in
+[CONTRIBUTING.md](CONTRIBUTING.md); decision authority is in
+[GOVERNANCE.md](GOVERNANCE.md).
+
+These policies implement the
 2026-10-20 standing-rows ruling ("Convert to maintainer policy" —
 `docs/build/LEDGER.md` decision table): what were the BACKLOG rows BL-41
 (write integrity) and BL-42/BL-43 (the ADR revisit-trigger catalogues) are
 maintainer policy here; the three rows closed `converted-to-policy`
-(ADR-0377). Companion documents: `GOVERNANCE.md` (decision authority),
-`CONTRIBUTING.md` (how a change lands), `AGENTS.md` (the behavioural
-contract).
+([ADR-0377](docs/adr/ADR-0377-l4.2-standing-rows-converted-to-maintainer-policy.md)).
 
 ## Releasing
 
-The release act itself is an operator act (the HUMAN-H7 row); everything up
-to it is scripted and dry-runnable.
+Releases are an operator act. During the launch chain,
+[HUMAN-H7](docs/build/readouts/HUMAN-H7.md) owns that decision; the checks below
+support it. Publishing an archive does not by itself close the launch gate or
+earn the `public` evidence class. [Project status](docs/status.md) distinguishes
+available artifacts from recorded readiness.
 
 1. **Version.** `Cargo.toml` `[workspace.package].version` is the single
    version source — every member carries `version.workspace = true`. Bump
@@ -22,16 +27,26 @@ to it is scripted and dry-runnable.
    `## [Unreleased]`; at release, rename the section `## [x.y.z] —
    <YYYY-MM-DD>` (UTC date) and open a fresh `## [Unreleased]` above it.
 3. **Tag.** `v<x.y.z>` on the merged `main` commit, pushed by the operator.
-4. **Release workflow.** The L4.5 release workflow builds the declared
-   target set (macOS arm64/x86_64, linux x86_64/aarch64; Windows excluded)
-   plus checksums and drafts the GitHub Release.
+4. **Release workflow.** [release.yml](.github/workflows/release.yml) builds
+   `hh`, `hh-kernel`, and `hh-helper` for macOS arm64/x86_64 and Linux
+   x86_64/aarch64 (Windows excluded), with a `SHA256SUMS` manifest. A
+   `workflow_dispatch` run uploads workflow artifacts only. **Pushing a
+   `v*` tag triggers publication of a GitHub Release**, not a draft; the
+   operator must make the release decision before pushing the tag.
 5. **Publish order.** `cargo publish` runs crate-by-crate in dependency
    order over the publish set (fixtures, plugins and test-support crates
-   are `publish = false`). `scripts/publish-order.sh` (lands at L4.5)
-   prints that order and drives the `--dry-run` / `cargo package` sweep.
+   are `publish = false`). [scripts/publish-order.sh](scripts/publish-order.sh)
+   prints that order, checks registry names, and runs
+   `cargo publish --workspace --dry-run`.
    crates.io ownership of the `hharness` + `hharness-<x>` names is checked
    at publish time — a name collision is a stop-and-ask, never a rename or
    a quiet drop from the set.
+
+The name-availability check currently treats any existing crate as taken,
+including one already owned by this project. It is an initial-publication
+check, not an ownership check for later releases. If it stops, review registry
+ownership and the publication state with the operator; a successful package
+dry-run alone does not establish that the full set was published.
 
 ## Evidence classes
 
@@ -91,6 +106,24 @@ GATE-ACCEPT; the CC4 report-prose nit was adjudicated out-of-scope at
 CAP.3. The full mapping lives at `docs/build/BACKLOG.md` §"Findings
 mapping".
 
+## Build-memory tools
+
+The committed build records use scripts from the separate
+[agent-skills repository](https://github.com/SteveVitali/agent-skills). They are
+maintainer tooling, not Cargo dependencies. With a checkout of that repository
+at `$HOME/agent-skills`, run these from the HarnessHarness root:
+
+```sh
+AGENT_SKILLS_ROOT="$HOME/agent-skills"
+bash "$AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh" .
+bash "$AGENT_SKILLS_ROOT/skills/reconcile-build/scripts/check-backlog.sh"
+```
+
+Adjust `AGENT_SKILLS_ROOT` to your checkout. Record the tooling revision with
+verification results. The same checkout supplies
+`skills/build-memory/scripts/adr-index.sh` for the generated ADR index;
+`bash scripts/gen-revisit-triggers.sh` regenerates the separate revisit catalogue.
+
 ## Round-closure sweeps
 
 Before a round's closure gate reads counts:
@@ -134,7 +167,7 @@ dated record plus the re-home.
 
 ## Spec-debt revalidation (RK-06)
 
-The `spec-debt.md` register's post-Phase-5 revalidation rides this policy
+The [spec-debt register](research/registers/spec-debt.md)'s post-Phase-5 revalidation rides this policy
 (OQ-445's adopted disposition — GATE-G7 "Adopt all", 2026-10-22; ADR-0210
 amendment log; spec §11.6):
 

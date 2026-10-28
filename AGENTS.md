@@ -2,270 +2,139 @@
 
 ## Purpose
 
-The E1 reference build of the MetaHarness program: a kernel + Laboratory for
-*harness engineering* — durable, observable, model-conditioned runtimes for
-goal-directed agents, with provenance, budgets and governance carried as
-load-bearing contracts rather than conventions. The system is a 54-crate
-pure-std-modulo-ADR-0359/ADR-0365 Rust workspace (one named, pinned `ring`
-dep — the DPoP verifier plus R3.8's blob-pool AEAD under ADR-0361 — and the
-named, pinned rustls/`ring`-backend TLS graph admitted by ADR-0365 for
-`hharness-tls`'s closed HTTPS/mTLS scope) plus
-committed contract, spec and build records.
-Human-facing overview: `README.md`. The behavioural contract:
-`spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
+- HarnessHarness is a Rust runtime and experiment lab for building and evaluating agent harnesses. This file governs repository work; [README.md](README.md) is the user introduction.
+- The behavioral contract is [spec/CANONICAL_SPEC.md](spec/CANONICAL_SPEC.md). It is frozen: amend through an ADR and the manifest protocol, not an in-place rewrite.
+- Read the applicable nested `AGENTS.md` before editing a subtree. Human contribution and maintainer policies live in [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and [MAINTAINING.md](MAINTAINING.md).
 
 ## Architecture
 
-- **One schema source.** `crates/hh-embed-schema` defines the `hh-embed/1`
-  boundary; `hh-codegen` emits the checked-in artifacts
-  (`schema/hh-embed-1.schema.json`, `schema/plugin-abi-1.schema.json`,
-  `schema/compat-1.matrix.json`,
-  `crates/hh-embed-client-generated/src/generated.rs`). Drift is a build
-  failure (CC7).
-- **One boundary, three bindings.** Every `hh-embed/1` op dispatches through
-  one `handle` path: (a) the in-process `EmbedService`, (b) stdio JSON-RPC 2.0
-  (`hh-kernel serve`), (c) loopback HTTP (`hh-kernel serve --http`). The `hh`
-  CLI (`hharness-cli`) is a generated client over the boundary — no kernel semantics
-  (K-2).
-- **Kernel spine (deps point downward only).** `hharness-wire` (canonical JSON /
-  JSON-RPC framing / SHA-2) → `hharness-ontology` + `hharness-identity` + `hharness-provenance`
-  (the formal model, idp/1 identity, the label lattice) → `hharness-hir` (the HIR/1
-  IR: validate/canonicalize/seal/diff) → `hharness-ledger` (the append-only
-  hash-chained event store — the sole authoritative record of a run). The
-  Stage-1 slices sit beside it: `hharness-budget`, `hharness-registry`, `hharness-secrets`,
-  `hharness-telemetry`, `hharness-monitor` (the Π reference monitor), `hharness-containment`,
-  `hharness-env` (execution environments + sandboxed exec), `hharness-gateway` (model
-  boundary), `hharness-context`, `hharness-control`, `hharness-verification`; then
-  `hharness-assembly`/`hharness-compiler` (assembly grammar → `RuntimePlan/1`),
-  `hharness-embed` (the boundary service) and the binaries `hh-kernel`, `hh-helper`.
-- **Lab tier (records-in/records-out).** `hharness-lab` (schemas + exemplars) →
-  `hharness-experiment`/`hharness-results`/`hharness-analysis`/`hharness-eval`/`hharness-bench` →
-  `hharness-hosting` (the hosted-participant ABI) → the C3–C5 services
-  `hharness-subagent`, `hharness-orchestrator`, `hharness-fleet` (+ `hharness-fleet-adapter`),
-  `hharness-evolution`, `hharness-debt`.
-- **Surfaces & plugins.** `hharness-cli` (`hh`), `hharness-web`, `hharness-mcp`/`hharness-mcp-lab`,
-  `hharness-acp`; packaged variants under `plugins/` run out of process through
-  `hharness-varhost` + `hh-helper` over `plugin_abi/1`.
-- **Cross-implementation replay.** `hh-xcheck` packages the committed
-  `hh-xcheck-bundle/1` corpus (eight arms — identity trees/records, ledger
-  transcript+WAL, registry snapshot, plugin manifests, canonical-parse
-  frames, HIR documents, ledger scenarios) plus the E1 `self_check` and
-  the foreign-answers `verify` comparator (R2.21, ADR-0353). The E2 + E3
-  legs carry `foreign-run-verified` evidence — `hh-xcheck verify` 57/57
-  on each toolchain over the eight arms (PR #136's six base arms plus the
-  R4.16a e2 extension) — a distinct class that does not lift the in-tree
-  ceiling.
+| Boundary or responsibility | Source of truth |
+|---|---|
+| `hh-embed/1` schema and generated clients | `crates/hh-embed-schema/` → `crates/hh-codegen/` |
+| In-process, stdio JSON-RPC, and loopback HTTP bindings | `EmbedService::handle` in `crates/hh-embed/src/service.rs`; transport adapters in the same crate |
+| Authoritative run history | `crates/hh-ledger/`: append-only hash-chained events, fenced writers, durable-prefix projections |
+| Identity, provenance, and home-plane classification | `crates/hh-identity/`, `crates/hh-provenance/`, `crates/hh-ontology/` |
+| Harness documents and compilation | `crates/hh-hir/`, `crates/hh-assembly/`, `crates/hh-compiler/` |
+| Model calls and execution environments | `crates/hh-gateway/`, `crates/hh-env/`, `crates/hh-helper/` |
+| Experiment, evaluation, and orchestration services | See the full package map in [crates/AGENTS.md](crates/AGENTS.md) |
+| Packaged variants | Manifests in `plugins/`; host in `crates/hh-varhost/`; shared plugin runtime in `crates/hh-plugin-fixture/` |
 
-Full per-crate map and workspace rules: `crates/AGENTS.md`.
+- `hh` is a client and renderer over `hh-embed/1`; keep kernel semantics out of the CLI (K-2).
+- Dependency direction and ownership matter: reuse the existing lower-layer contract; do not add a reverse dependency or a second implementation of a codec, store, or class table (CC1).
+- For explanations rather than editing instructions, use [architecture](docs/architecture.md) and [reference](docs/reference.md). Current capability and release evidence belongs in [status](docs/status.md).
 
 ## Key files
 
-| Path | What |
-|---|---|
-| `Cargo.toml` | workspace `members` — annotated one-line-per-crate; the hermetic-deps note |
-| `rust-toolchain.toml` | pins Rust 1.94 (+ `rustfmt`); CI honors it |
-| `crates/` | the 54-member workspace — see `crates/AGENTS.md` |
-| `plugins/` | packaged first-party variants: `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture` |
-| `schema/` | generated contract artifacts — regenerate via `scripts/check-drift.sh`, never hand-edit |
-| `scripts/` | `check-drift.sh` (CC7), `check-removability.sh` (CC6), spike runners |
-| `spec/` | `CANONICAL_SPEC.md` + `sections/` sources + `READINESS_REPORT.md` |
-| `docs/` | the docs corpus — `docs/adr/` (build ADRs), `docs/tickets/` (chain + `DEFERRALS.md`), `docs/build/` (build memory); mode table in `docs/README.md` |
-| `research/` | the program ledger + research ADRs — frozen at the readiness gate |
-| `spikes/` | committed-but-throwaway measurement trees; excluded from the workspace (`exclude = ["spikes"]`) |
-| `.github/workflows/ci.yml` | fmt + build + test + drift; docs-only heads take a fail-closed fast path (ADR-0362) |
+| File | Lines (approx) | Purpose |
+|---|---|---|
+| `Cargo.toml` | ~550 | Workspace members, package metadata, dependency admissions |
+| `rust-toolchain.toml` | 6 | Rust 1.94 and `rustfmt` pin |
+| `.github/workflows/ci.yml` | ~300 | Linux/macOS build, test, provenance, and supply-chain checks |
+| `scripts/check-drift.sh` | ~25 | Regenerate schema/client artifacts and compare the listed outputs |
+| `crates/hh-codegen/src/main.rs` | ~150 | Authoritative list of schema/client outputs |
+| `docs/README.md` | ~100 | Documentation navigation and edit modes |
 
 ## Build & Test
 
+- Run from the repository root. Use the toolchain in `rust-toolchain.toml`; setup and platform prerequisites are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ```sh
-cargo build --workspace               # all crates + binaries
-cargo build --workspace --all-targets # what CI builds
-cargo test --workspace                # the full suite (~3.5k tests)
-cargo test -p hharness-<crate>              # one crate's tests
-cargo fmt --all --check               # CI gate
-cargo clippy -p hharness-<crate> -- -D warnings   # convention: clean on touched crates
-bash scripts/check-drift.sh           # regenerate schema artifacts; fail on drift
-bash scripts/check-removability.sh    # CC6 tier-removability gate
-bash <skills>/build-memory/scripts/check-build-memory.sh .   # build-memory hygiene
-gh workflow run ci.yml --ref <branch>   # a full run (ADR-0362 D4: per gate, never per ticket)
-bash scripts/ci/full-run.sh read <sha>        # read a full run (the D-D reader line; `gh run view` by hand)
+cargo build --workspace --all-targets
+cargo test --workspace
+cargo fmt --all --check
+bash scripts/check-drift.sh
+bash scripts/check-removability.sh
+bash scripts/check-bm-tools.sh
 ```
 
-Smoke: `cargo build -p hharness-cli -p hharness-kernel` then
-`HH_KERNEL_CMD=./target/debug/hh-kernel ./target/debug/hh doctor` →
-`connectivity: ok`. Env vars: `HH_KERNEL_CMD` (kernel child command),
-`HH_STORE_ROOT` (default `<cwd>/.hh/store` — gitignored),
-`HH_WORKSPACE_ROOT` (default cwd).
+- For a scoped change, select the package and acceptance battery you actually touched. These are concrete examples:
+
+```sh
+cargo test -p hharness-embed
+cargo test -p hharness-embed --test cap_2_composed
+cargo clippy -p hharness-embed -- -D warnings
+```
+
+- Run `cargo fmt --all --check` and the scoped package tests (or the workspace suite) before claiming code verification. Report executed commands and passed/failed/skipped counts; an unavailable prerequisite is not a pass.
+- New behavior needs a regression test that fails without it. Acceptance batteries live under each crate's `tests/`, commonly named for their ticket. Ignored tests cite a `DF-*` row or the live-evidence ADR, for example `#[ignore = "live — ADR-0363: scripts/live-verify.sh <leg>"]`.
+- Documentation checks: `bash scripts/check-living-docs.sh`. The clean-clone quickstart check, `bash scripts/check-quickstart.sh`, reads **committed HEAD**, not uncommitted README edits.
+- A full CI dispatch is a maintainer/gate action under ADR-0362, not a per-ticket requirement. Follow [MAINTAINING.md](MAINTAINING.md) for CI evidence and release operations.
+
+- Local connectivity smoke:
+
+```sh
+cargo build -p hharness-cli -p hharness-kernel
+HH_KERNEL_CMD=./target/debug/hh-kernel ./target/debug/hh doctor
+```
+
+- Expected doctor field: `"connectivity":"ok"`.
+- `HH_KERNEL_CMD` selects the CLI's kernel child; `HH_STORE_ROOT` defaults to the current directory's `.hh/store`; `HH_WORKSPACE_ROOT` defaults to the current directory. Use scratch paths when a check creates runs.
 
 ## Code conventions
 
-- **Pure std, hermetic — modulo ADR-0359 + ADR-0365.** No external runtime
-  crates except (a) the `tempfile` dev-dep of `hharness-varhost` tests, (b) the
-  `ring =0.17.14` dep of `hharness-secrets` admitted by ADR-0359 for the closed
-  DPoP-verifier scope plus `ring::aead`/`ring::rand`, consumed by R3.8's
-  blob-pool AEAD (ADR-0361 — `hharness-ledger`'s `BlobCipher` seam, the producer
-  stays in `hharness-secrets`), and (c) the `hharness-tls`-only rustls graph admitted
-  by ADR-0365 (`rustls =0.23.46` on the `ring` backend +
-  `rustls-webpki =0.103.16` + `webpki-roots =1.0.10` — the closed
-  HTTPS-client / TLS-server / mTLS scope). Do
-  not add dependencies — any further crate or admitted surface is its own ADR.
-- **CC1 — one canonical implementation.** Reuse the existing codec, store,
-  canonicalizer or class table; a second spelling of a contract is a defect.
-- **CC7 — the schema source owns both directions.** Change `hharness-embed-schema`
-  and regenerate; never hand-edit generated artifacts.
-- **CC10 — home-plane ownership.** A record/event kind lives in exactly one
-  plane's home table (`hharness-ontology` owns the rule).
-- **Honest refusal, never silent degrade.** A missing capability answers a
-  typed refusal (`Unsupported`, `Refused`, `n/a{reason}`) — never a
-  fabricated result or a silent zero.
-- **Durable-before-visible.** Kernel state changes append through the run's
-  single fenced writer; projections are pure folds over the durable prefix.
-- **Feature tiers = spec maturity.** C1+ halves sit behind `tier-c*` features
-  (`hharness-helper`/`hharness-ledger`/`hharness-env`: `tier-c1`; `hharness-embed`: `tier-c4` →
-  `hharness-fleet`/`hharness-evolution`/`hharness-debt`); an absent tier answers `unsupported`.
-- **Tests** are acceptance batteries named per ticket:
-  `crates/hh-*/tests/<ticket>.rs` (e.g. `crates/hh-embed/tests/cap_2_composed.rs`).
-  Every new behaviour gets a test that fails if removed; `ignore`d tests cite
-  a `DF-*` deferral row or, for live legs, the live-evidence ADR
-  (`#[ignore = "live — ADR-0363: scripts/live-verify.sh <leg>"]`).
+- **Dependency admissions:** no new dependency or expanded dependency scope without an ADR. The admitted external packages are `ring =0.17.14` directly in `hharness-secrets` (DPoP verification and the ADR-0361 blob cipher, ADR-0359), the pinned rustls graph directly in `hharness-tls` (ADR-0365), and test-only `tempfile` in `hharness-varhost`. Exact pins live in the owning manifests. TLS's `ring` backend does not authorize other crates to depend directly on `ring`.
+- **CC7:** edit schema definitions or generator code, then regenerate. Never patch a generated client or exported schema to make a test pass.
+- **CC10:** every registered kind has one home. Reuse `crates/hh-ontology/src/planes.rs`; kernel event-class metadata lives in `crates/hh-ledger/src/classes.rs`.
+- **Durable before visible:** state changes append through the run's fenced writer. Projections fold durable records; they do not become another authoritative store.
+- **Honest refusal:** absent capabilities return typed `Unsupported`, `Refused`, or `n/a{reason}` outcomes. Do not silently downgrade or fabricate a result.
+- **Feature tiers:** inspect the owning package's features. `hharness-helper`, `hharness-ledger`, and `hharness-env` have `tier-c1`; `hharness-embed` has `tier-c4` for fleet/evolution/debt. Preserve the removability checks and typed refusals.
+
+| Correct ✓ | Wrong ✗ |
+|---|---|
+| Change `hh-embed-schema`, regenerate, review every changed output | Hand-edit `generated.rs` or `clients/ts/hh-embed.ts` |
+| Reuse the existing canonicalizer and event-class table | Introduce a second JSON/identity scheme or unregistered event class |
+| Record a missing live prerequisite as skipped/pending | Count a fixture or skipped leg as a live pass |
 
 ## Critical gotchas
 
-1. **`docs/tickets/DEFERRALS.md` — read it first, every run.** Owed work lives
-   there; if your change unblocks an `OPEN` row, closing it is part of the
-   run. A deferral not in the file did not happen. **Read it row-wise, never
-   whole** (BM-ORIENT-01): `bash scripts/deferrals-open.sh` indexes every row
-   whose dated marker is not DONE/WONTFIX, `bash scripts/bm-row.sh DF-…`
-   prints one row (`--status` → `id | status | marker`, `--bl` → the BL
-   home), `bash scripts/spec-section.sh <anchor>` prints one spec section. The
-   same row-wise discipline holds for oversized sources (> ~40 KB — e.g.
-   `crates/hh-control/src/driver.rs`): locate with `grep -n`, read
-   `sed -n '<a>,<b>p'` ranges — never the whole file.
-   (See Build memory below.)
-2. **Generated files are never hand-edited:** `schema/*.json`,
-   `crates/hh-embed-client-generated/src/generated.rs`, `docs/adr/README.md`
-   (regenerate: `build-memory adr-index docs/adr`).
-3. **`hh-kernel doctor` self-checks the negotiated identity** — it exits 0
-   on a clean build (DF-DOC.1-1 fixed at R2.1; ADR-0332):
-   `KernelDescriptor.version` is the SemVer-class label (the
-   `kernel_version_id` tail via `hharness_embed_schema::kernel_version_label`),
-   never the full `hh-kernel/<ver>` id. `hh doctor` over the boundary
-   answers the same facts. A real identity mismatch still fails loudly.
-4. **The `edit` tool can lose writes** (the overlay anomaly — confirmed on
-   the build-memory files, the standing rule covers every file): write via
-   shell/python and verify with `git diff` before committing —
-   `git show --stat` must list every file a commit claims.
-5. **Offline/hermetic by design — the evidence classes are
-   load-bearing.** `fixture-verified` is the floor; `live-executed` is
-   earned on the surfaces `docs/build/OPERATIONAL_READINESS.md`
-   inventories (34 committed records) and is claimable **only** with a
-   cited `hh-live-evidence/1` record under `docs/build/reports/live/`
-   produced by `scripts/live-verify.sh` (ADR-0363) — never a bare claim,
-   and a leg that did not execute records
-   `skipped(<reason>)`/`environment-pending`, never a pass.
-   `staging-verified` and `public` claims stay forbidden until R4.18
-   earns them. `foreign-run-verified` — a foreign toolchain's recorded
-   replay of the committed `hh-xcheck` bundle (the E2 + E3 legs, 57/57
-   each over the eight arms) — is a distinct evidence class, below the
-   in-tree ceiling and never conflated with `fixture-verified` or
-   `live-executed`.
-6. **The manifest chain is a stack, not a queue:** work forks from the
-   previous ticket's branch; append-only history; a gate is a pause, not a
-   block; secrets never enter a ledger (`provided: yes/no` only).
-7. **`docs/build/logs/` is the one gitignored subtree** (`logs/.gitignore`:
-   `*` + `!.gitignore`) — CI-boundary records land via `git add -f`.
-8. **DEFERRALS status cells are token-led, marker-governed:** the cell opens
-   with a status token (`OPEN`/`PARTIAL`/…) and discharges append dated
-   `**DONE** — YYYY-MM-DD (ticket)` evidence. Read owed state from the dated
-   markers — the G4-4 drift (discharged cells still leading `OPEN`) was
-   swept at R3.1/R3.10 (16 + 5 cells; DF-S0.3-3's `PARTIAL` lead is
-   genuinely scoped — machine cells DONE, the human signature owed), and
-   LEDGER-OF-6 makes the lead-token/machine-readable re-sweep a standing
-   round-closure rule (BL-41). Environment-bound legs carry dated
-   `environment-pending on HUMAN-*` notes — `gate pending` is a recorded
-   state, never a fabricated pass (the GATE-G5 named set stays carried).
-9. **A stale `hh-helper` binary lies to `helper_live`.** An interrupted
-   `check-removability.sh` can leave a tier-off `hh-helper` in
-   `target/debug`; `helper_live` then fails honestly on the `tier-c1`
-   absence. `cargo build -p hharness-helper` restores the default binary.
-10. **A loaded host stalls helper spawns.** On a `syspolicyd`-saturated
-    host each fresh test binary's first `exec` can block for minutes —
-    `check-removability.sh`'s `helper_live` legs then time out; the script
-    detects a saturated-spawn timeout in its captured leg output and prints
-    the override recipe verbatim.
-    `HH_HELPER_SPAWN_DEADLINE_MS` / `HH_HELPER_CONNECT_DEADLINE_MS`
-    stretch the bounds (defaults stay the contract's 10 s / 5 s —
-    `hh-env/src/helper.rs`; recorded at R3.7–R3.10).
-11. **CI step modes (ADR-0362).** Only `docs/` and `research/` are docs paths
-    (trailing slash included; `docsx/` is not). A `ci.yml` step that reads
-    committed content under them runs on both paths (`# ci-mode: both —
-    <reason>`); every other step after `id: path` carries
-    `if: steps.path.outputs.mode != 'fast'`. A job's own output written under
-    `docs/` (the spike sheet) is not a read. `check-ci-gating.sh` enforces the
-    convention — an unmarked step or an un-allowlisted docs read fails CI.
+1. **Read deferrals first, every run:** `bash scripts/deferrals-open.sh` indexes owed rows in `docs/tickets/DEFERRALS.md`. Empty output is a valid zero-open-rows result. Read relevant rows with `bash scripts/bm-row.sh DF-S0.3-3` or `bash scripts/bm-row.sh --status DF-S0.3-3`; options precede IDs. Closing a row unblocked by your change is part of the work. Never delete rows or invent an unrecorded deferral.
+2. **Generated files are not editing targets:** `schema/*.json`, `crates/hh-embed-client-generated/src/generated.rs`, `clients/ts/hh-embed.ts`, `THIRD_PARTY_NOTICES.md`, `docs/adr/README.md`, and `docs/adr/REVISIT_TRIGGERS.md`. Use their generators; see [docs/AGENTS.md](docs/AGENTS.md) and [clients/AGENTS.md](clients/AGENTS.md).
+3. **Doctor checks negotiated identity:** `KernelDescriptor.version` is the semantic version label returned by `kernel_version_label`, not the full `hh-kernel/<version>` ID (ADR-0332). Do not suppress a real mismatch to make the smoke pass.
+4. **Verify writes:** the recorded editor overlay anomaly requires shell/Python writes and `git diff` verification before committing. After a commit, `git show --stat` must include every file claimed as changed (BL-41 standing policy).
+5. **Evidence labels require evidence:** `live-executed` needs a cited `hh-live-evidence/1` record produced by `scripts/live-verify.sh` under `docs/build/reports/live/` (ADR-0363). Preserve `skipped(<reason>)` and `environment-pending` outcomes. `foreign-run-verified` is a distinct class, not an in-tree or live result. Repository visibility and a release tag do not, by themselves, earn `staging-verified` or `public` capability claims; follow the recorded R4.18 acceptance requirements.
+6. **Scope the manifest workflow:** build tickets fork from the preceding ticket's branch; a gate is an operator review pause, not a missing implementation. For work outside a manifest ticket, follow the task's authorized base and scope. Do not advance `nextTicket`, change gate decisions, or close launch work as a side effect of a documentation change.
+7. **Build-memory logs are deliberately ignored:** within `docs/build/`, `logs/` is the gitignored subtree. Intentionally committed CI-boundary records there require `git add -f`; do not force-add unrelated logs.
+8. **Status is dated-marker governed:** deferral cells have a leading status token, but the latest dated disposition determines owed work. Reconcile lead tokens and machine-readable status at round closure under [MAINTAINING.md](MAINTAINING.md). An old OPEN mention inside a closed row is history, not new debt.
+9. **Tier-off checks can leave a stale helper:** an interrupted `scripts/check-removability.sh` can leave `target/debug/hh-helper` without `tier-c1`. Restore it with `cargo build -p hharness-helper` before interpreting later `helper_live` failures.
+10. **Loaded macOS hosts can stall helper spawns:** the default spawn/connect bounds are 10 s / 5 s. `HH_HELPER_SPAWN_DEADLINE_MS` and `HH_HELPER_CONNECT_DEADLINE_MS` are diagnostic overrides; the removability script prints a rerun recipe. Record the timeout and rerun outcome; do not reclassify a failure as a pass.
+11. **CI path modes are exact:** only `docs/` and `research/` qualify as docs paths in ADR-0362's fast-path classifier. A step after `id: path` that reads committed content there must carry `# ci-mode: both — <reason>`; other steps use `if: steps.path.outputs.mode != 'fast'`. A job's own output under `docs/` is not a committed-content read. Validate with `bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml`.
 
 ## Terminology
 
 | Term | Meaning |
 |---|---|
-| kernel / E1 | the reference runtime — winner of the Stage-0 ecosystem decision (ADR-0050) |
-| Lab | the experiment/evaluation plane (spec §6) |
-| `hh-embed/1` | the one typed kernel boundary every surface speaks |
-| binding (a)/(b)/(c) | in-process / stdio JSON-RPC / loopback HTTP |
-| Π | the reference monitor's authorization interpreter (`hharness-monitor`) |
-| run ledger | the append-only hash-chained event store (`hharness-ledger`) |
-| HIR/1 | the Harness IR dialect (`hharness-hir`) |
-| DF-* | a `docs/tickets/DEFERRALS.md` row — owed work with a compensating control |
-| BL-* | a `docs/build/BACKLOG.csv` normalized-debt row |
-| gate | a manifest STOP row — a pause for operator readout, not a block |
-| C0…C5, `tier-c*` | spec maturity tiers; mapped to cargo features |
-| `n/a{reason}` | the typed not-applicable lattice — claims carry their reason |
-| fixture-verified | the verified floor: exercised end-to-end against fixtures, never a live service |
-| live-executed | a real-environment leg with a cited `hh-live-evidence/1` record (ADR-0363) — the highest claimed layer |
-| foreign-run-verified | a foreign toolchain's recorded replay of the committed `hh-xcheck` bundle (E2 + E3, 57/57 each) — a distinct class below the ceiling, never conflated |
+| E1 / kernel | The Rust reference runtime |
+| Lab | Experiment, evaluation, and analysis services |
+| `hh-embed/1` | Shared typed boundary; bindings (a), (b), (c) are in-process, stdio, loopback HTTP |
+| HIR/1 | Harness intermediate representation |
+| Π / reference monitor | Authorization interpreter in `hharness-monitor` |
+| `DF-*` / `BL-*` | Deferral row / normalized backlog row |
+| ADR / `R-2.*` / CC | Architecture decision record / requirement ID / cross-cutting constraint |
+| C0…C5 / `tier-c*` | Contract maturity tiers / Cargo feature gates |
+| `fixture-verified` | Exercised against fixtures; does not attest to a live service |
+| `foreign-run-verified` | Recorded foreign-toolchain replay of the cross-implementation corpus |
 
 ## Build memory
 
-This repo uses committed build memory (agent-skills `build-memory` v2). If you are running a
-build ticket, read these first:
+- The repository uses committed build memory v2. Its layout is indexed by [docs/build/README.md](docs/build/README.md); documentation edit modes are in [docs/README.md](docs/README.md).
+- After the deferrals-first check, a **manifest build ticket** reads its row in `docs/tickets/00_MANIFEST.md`, machine state in `docs/build/LEDGER.md`, and its ticket contract. Runs, PR bodies, `BUILD_INDEX.md`, and gate readouts record what happened. ADRs live in `docs/adr/`; their README is generated.
+- Read a row or a section, never a whole large register. Use `scripts/bm-row.sh`, `scripts/deferrals-open.sh --bl`, and `scripts/spec-section.sh`. For source files larger than about 40 KB, locate symbols with `rg -n` and read bounded `sed -n` ranges.
+- Contracts and historical records are append-only: correct them with a dated note or new ADR. Preserve stacked ticket history and operator gate decisions. Secrets never enter a ledger; record only `provided: yes/no`.
+- Build-ticket runs also require the external build-memory validator from [SteveVitali/agent-skills](https://github.com/SteveVitali/agent-skills). Follow [MAINTAINING.md](MAINTAINING.md#build-memory-tools) to set `AGENT_SKILLS_ROOT` to that repository checkout, then run:
 
-- **`docs/tickets/DEFERRALS.md` — read it first, every run.** It is the append-only ledger of
-  owed work. If your ticket (or a landed prerequisite) unblocks an `OPEN` row, closing it is
-  part of your run. Never delete a row; a deferral not in the file did not happen. *(Critical
-  Gotcha: skipping this is how obligations silently vanish between sessions.)*
-- **`docs/tickets/00_MANIFEST.md`** — the ticket chain: the authoritative order, the four
-  build rules, the requirement-ID index. A human can drive the chain from it alone.
-- **`docs/build/LEDGER.md`** — the machine state (`nextTicket`, `chainTip`, gate decisions).
-  `orchestrate-build` parses it; the chain is driven by `implement-spec` per ticket (or by
-  hand from the manifest table).
-- **`docs/build/`** — the record of what happened: `runs/<ID>.md` (per-ticket run ledgers),
-  `pr/<ID>.md` (PR bodies), `BUILD_INDEX.md` (one row per landed ticket), `readouts/` (gates).
-  Reach it row-wise: `scripts/bm-row.sh <id>` (DF-/BL-/OQ-/CF-/RK-/SD-/R- ids — `--status`,
-  `--bl`), `scripts/deferrals-open.sh` (`--bl` for the open BL set), `scripts/spec-section.sh
-  <anchor>` — a row or a section is the unit of read, never the whole file (BM-ORIENT-01).
-- **`docs/adr/`** — decision records; `README.md` is generated (`build-memory adr-index`) —
-  never hand-edit it.
+```sh
+bash "$AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh" .
+```
 
-Rules that hold across the build: contracts and history are **append-only** (amend by adding a
-dated note or a new ADR, never by rewriting a landed file); PRs **stack** (each ticket forks
-from the previous ticket's branch); a **gate is a pause, not a block**; **secrets never** enter
-any ledger (record `provided: yes/no`). Validate with
-`bash <skills>/build-memory/scripts/check-build-memory.sh .`.
+- `scripts/check-bm-tools.sh` checks the in-repo row readers; it does not replace the external build-memory validator.
 
 ## Do
 
-- Run `cargo fmt --all --check` and the scoped `cargo test -p hharness-<crate>` (or
-  `--workspace`) before claiming verification — cite the numbers.
-- Cite requirement ids (`R-2.*`), `DF-*`/`BL-*` rows and ADRs when discussing
-  scope or owed work.
-- Amend history by appending dated notes, never by rewriting landed files.
+- Read the relevant source, contract, and acceptance tests before editing; cite requirement/ADR/DF/BL IDs when they determine scope.
+- Preserve unrelated work, review the final diff, and report verification with its actual limits.
 
 ## Don't
 
-- Don't add runtime dependencies — the workspace is hermetic by contract
-  modulo the named, pinned, scoped admissions (`ring` in `hharness-secrets` —
-  ADR-0359; the rustls graph in `hharness-tls` — ADR-0365); anything beyond
-  their scope needs its own ADR first.
-- Don't hand-edit generated artifacts, `docs/adr/README.md`, or anything under
-  `docs/build/` history regions.
-- Don't merge PRs — `mergePolicy: OPERATOR`; the operator merges.
-- Don't put secrets, credentials, or live-service claims in any ledger.
+- Do not hand-edit generated artifacts, rewrite historical records, or change the frozen spec without its amendment protocol.
+- Do not add dependencies, duplicate authoritative state, or hide unsupported behavior.
+- Do not merge PRs: `mergePolicy: OPERATOR`. Do not put credentials or unsupported service claims in any record.

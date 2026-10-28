@@ -11,6 +11,14 @@ summary, updated per release.
 
 ## [Unreleased]
 
+### Availability note — 2026-10-27
+
+The [v0.1.0 GitHub Release](https://github.com/SteveVitali/HarnessHarness/releases/tag/v0.1.0)
+is available with four platform archives and `SHA256SUMS`. The entry below is
+the original prepublication summary, retained as recorded. Archive availability
+does not establish complete crates.io publication or close the engineering
+launch gate; see [project status](docs/status.md) for the current distinction.
+
 ## [0.1.0] — unreleased
 
 First public release. Publication mechanics landed at L4.4 / L4.5:
@@ -81,3 +89,6 @@ the round-4 USD 100 live-spend cap — see
   the eight `hh-xcheck` arms). `staging-verified` and `public` remain
   unearned — R4.18 owns the publish decision. See `README.md` → *Status
   — honesty ceiling* and `docs/build/OPERATIONAL_READINESS.md`.
+
+For the current capability and evidence summary, see [project status](docs/status.md).
+The README status-heading reference in the original notes above is historical.
