@@ -26,6 +26,17 @@ project's formal launch acceptance. The recorded
 build ledger has not recorded launch closeout. This page does not award the
 project's `public` operational evidence class or a production-readiness rating.
 
+*Update 2026-10-28 (R4.18):* crates.io publication is complete — all 49
+publishable crates are at `0.1.0` (each verified via the crates.io API),
+the launch checklist is COMPLETE, and the build ledger records launch
+closeout (`projectStatus: DONE`). The `public` evidence class is now
+earned for the published crate set, the tagged release, protected
+`main`, private vulnerability reporting, and the `live-verify`
+environment — per the
+[launch record](build/reports/2026-10-28-launch-record.md). A
+production-readiness rating is still not awarded; the qualifications
+below stand.
+
 ## What you can evaluate
 
 | Area | Implemented surface | Evidence and scope |
