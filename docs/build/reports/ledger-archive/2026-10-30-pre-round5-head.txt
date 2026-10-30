@@ -1,0 +1,15 @@
+<!-- docs/build/LEDGER.md — machine-state file (BM-LEDGER-01..07). Seeded by decompose-spec.
+     STATE ONLY — the manifest is the plan. CURRENT STATE keys in EXACTLY this order. -->
+# Build ledger — the machine-state file
+
+<!-- OPERATING MODE prior wording living-archived (BM-LEDGER-08, R4.1):
+     docs/build/reports/ledger-archive/operating-mode-2026-10-20-pre-R4.1.txt
+     sha256:7c5a293036b199cb65f26fba7c384197b5bba3d0d222288450785d79b43da51e -->
+> **OPERATING MODE.** Fresh session: read this ledger's head, then run
+> `bash scripts/deferrals-open.sh` for the owed index, then `bash scripts/bm-row.sh`
+> the rows your contract names (`--status`, `--bl`; `scripts/spec-section.sh <anchor>`
+> prints one spec section) — never read DEFERRALS.md, BACKLOG.csv, the registers
+> or the spec whole (BM-ORIENT-01). Run the row named by `nextTicket` via
+> `implement-spec`; a gate is a pause, not a block. Resume line:
+> `implement-spec spec=docs/tickets/<nextTicket file> worktree=<buildWorktree> base_branch=<chainTip>`
+

@@ -1,25 +1,24 @@
-<!-- docs/build/LEDGER.md — machine-state file (BM-LEDGER-01..07). Seeded by decompose-spec.
-     STATE ONLY — the manifest is the plan. CURRENT STATE keys in EXACTLY this order. -->
+<!-- docs/build/LEDGER.md — state-only committed build memory v2. -->
 # Build ledger — the machine-state file
 
-<!-- OPERATING MODE prior wording living-archived (BM-LEDGER-08, R4.1):
-     docs/build/reports/ledger-archive/operating-mode-2026-10-20-pre-R4.1.txt
-     sha256:7c5a293036b199cb65f26fba7c384197b5bba3d0d222288450785d79b43da51e -->
-> **OPERATING MODE.** Fresh session: read this ledger's head, then run
-> `bash scripts/deferrals-open.sh` for the owed index, then `bash scripts/bm-row.sh`
-> the rows your contract names (`--status`, `--bl`; `scripts/spec-section.sh <anchor>`
-> prints one spec section) — never read DEFERRALS.md, BACKLOG.csv, the registers
-> or the spec whole (BM-ORIENT-01). Run the row named by `nextTicket` via
-> `implement-spec`; a gate is a pause, not a block. Resume line:
-> `implement-spec spec=docs/tickets/<nextTicket file> worktree=<buildWorktree> base_branch=<chainTip>`
+<!-- Prior non-state head archived byte-for-byte:
+     reports/ledger-archive/2026-10-30-pre-round5-head.txt
+     sha256:a8e8960073c5ac5e83e28bdfb9af7f645413c610e1e8b90235f7b25784848f10 -->
+> **OPERATING MODE.** Deferrals first, then bounded current-state/manifest/contract reads.
+> GATE-G8 PASSED 2026-10-30 — scoped authorization: SETUP planning commit +
+> sequential R5.1/R5.2 bootstrap only. Consult the manifest Operating rules and the
+> review/readiness packet. Product dispatch requires the retained guard + actual
+> chosen launch-path proof before/after relevant boundaries; no unguarded accumulating loop.
+> A gate is RETURN PASS; a failed technical prerequisite is blockedOn.
+> No old budget/provider/harness/autonomy authority carries forward; merges remain OPERATOR.
 
 ## CURRENT STATE
 
 ```
-projectStatus:   DONE  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      DONE # manifest chain complete — row 167b R4.18 was the last row; projectStatus DONE
-lastCompleted:   R4.18
-blockedOn:       (none — chain complete 2026-10-28: HUMAN-H7 executed the launch; R4.18 wrote the verified record — reports/2026-10-28-launch-record.md)
+projectStatus:   IN_PROGRESS
+nextTicket:      R5.1
+lastCompleted:   GATE-G8
+blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -27,14 +26,15 @@ canonicalSpec:   spec/CANONICAL_SPEC.md
 memoryRoot:      docs/build
 dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
-buildBranchBase: svitali/harnessharness
-pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        main (post-launch; stacked chain collapsed — all PRs merged) # R4.18 landed — chain complete; all merges to main
-benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
+buildBranchBase: codex/harnessharness-evidence
+pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
+chainTip:        codex/harnessharness-evidence
+benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
-mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
-round:           4
-updatedAt:       2026-10-28T02:45:00Z
+mergePolicy:     OPERATOR
+round:           5
+harness:         devin-desktop/swe-2-high/subagent
+updatedAt:       2026-10-30T04:20:00Z
 ```
 
 ## OPEN FINDINGS
@@ -183,6 +183,13 @@ updatedAt:       2026-10-28T02:45:00Z
 | 2026-10-23 | R4.16a (insert) | GATE-G6 finding | e2 extension arms — insert vs descope | "ok insert and proceed" (operator chat, received 2026-10-23) | run-time insert `165a_R4.16a__e2-python-extension-arms.md` at row 165a, after R4.16 (165), before GATE-G6 (166) — implements the `e2-python` `hir-documents`/`ledger-scenarios` replay arms (verified_by[] currently empty), discharging DF-S1.2-2 + DF-S1.5-3 and clearing R-2.12.1's last member; USD 0, foreign-run-verified; round 4 → 56 rows; nextTicket → R4.16a; GATE-G6 signature re-presents after | decision |
 
 | 2026-10-23 | GATE-G6 | round-4 discharge + launch readiness | the readout's finding + signed disposition | "accept, proceed" (operator chat, received 2026-10-23) | **PASSED** — all eleven pre-registered thresholds met on evidence: deferrals-open empty (101/101 discharged after insert R4.16a), 61 MET + 5 MET-DIFFERENTLY + 0 PARTIAL coverage, 34+ live records + $25.259768/$100 spend, launch hardening green, every surface live-executed, main contained, GATE-ACCEPT ×10 discharged, checkers clean, pre-auths dispositioned, DF-R4.2a-1 honest 64.1% recorded. The e2 finding was discharged by insert R4.16a (PR #197) — deferrals-open empty. Spend reconciliation owed to the consoles by the operator (recorded when received). Full-run 39939140505 success. R4.17 released (nextTicket → R4.17) | decision |
+
+### Round 5
+
+| date | ticket | gate | item | answer | consequence | kind |
+|---|---|---|---|---|---|---|
+| 2026-10-30T03:05:43Z | ROUND5 | decomposition only | author tickets/build artifacts | “Ok. Now run the decompose-spec step and continue” — current Codex chat; recorded UTC shown | Author/review/validate/open in Zed only; GATE-G8 remains pending, no tooling/product execution authority; expires: delivery of decomposition review packet; voided-by: operator cancellation or scope/input change | pre-authorization |
+| 2026-10-30T04:16Z | GATE-G8 | partition review + bounded tooling bootstrap | scoped items: SETUP planning commit on codex/harnessharness-evidence at 001490c1; R5.1 retained guard; R5.2 native stub dispatch proof | "passed. please proceed" (Devin Desktop chat, received 2026-10-30T04:16Z) | **PASSED** — reviewed artifact identity verified byte-for-byte (aggregate d5b58551…; supplement 8f540171…; baseline 001490c1 = origin/main, zero open PRs, CI green; validator 0 viol / 8 scoped warnings; deferrals-open empty). Authorizes ONLY the named SETUP + the two bootstrap contracts; no product semantics, §9.3 admission, spend, collection, outreach, publication or merges; every later gate/human row returns for its own decision. Carried unmet predicates and withheld claims retained; expires: R5.2 close or scope/input change; voided-by: operator cancellation or material contract change | decision |
 
 ## RETURN PASS
 
@@ -975,3 +982,9 @@ updatedAt:       2026-10-28T02:45:00Z
 - 2026-10-28 · **HUMAN-H7 COMPLETE — the public launch is done** — all eight checklist items executed under the operator's recorded authorization ("you can then execute the remaining steps through 9. as well. You are authorized to do all these steps"; publish legs: "saved login token. proceed" / "email confirmed. proceed"). Evidence: main ruleset ACTIVE (4 required checks + deletion + non-ff); merges #192–#203 bottom-up + records PRs #204/#205; merged-main SHA `d1325a63bab7bf0836250d9df871e2bfdd76dea2` with CI run 40525512308 success; gitleaks clean (no non-allowlisted finding); `live-verify` env secrets-by-name + required reviewer; private vulnerability reporting enabled; repo public; tag `v0.1.0` on d1325a63; release live (release.yml checkout defect surfaced by the tag run — artifacts checksum-verified, release created under delegation, workflow fixed via #204); **49/49 crates published at 0.1.0** (rate-limit resume loop ~5.5h; 6 description-length fixes via #205; 2 transient incidents); repo metadata + homepage set. `projectStatus: DONE` flipped under the recorded authorization. Readout: docs/build/readouts/HUMAN-H7.md. nextTicket → R4.18 (the launch record).
 - 2026-10-28 · **R4.18 done — round 4 closes; the manifest chain is complete** — branch `svitali/harnessharness-r4.18` · PR https://github.com/SteveVitali/HarnessHarness/pull/208 · base `main` (@66b8b3a2 — post-#207; the stacked chain collapsed at launch). Manifest row 167b, the chain's last row — the launch record (reconcile, offline, USD 0). **Record:** `docs/build/reports/2026-10-28-launch-record.md` — every launch fact re-verified at run time: merged-main `d1325a63bab7bf0836250d9df871e2bfdd76dea2` = `v0.1.0`'s peeled commit (annotated tag `93d8f79c`; `git ls-remote refs/tags/v0.1.0^{}`); CI run `40525512308` success on all four required jobs incl. gitleaks; release live `…/releases/tag/v0.1.0` (4 tarballs + `SHA256SUMS` quoted verbatim); **crates.io 49/49 at `0.1.0`** re-verified via the crates.io API at run time (User-Agent + ~1 s spacing; the five `publish = false` crates correctly 404); ruleset `23836544` active (the four required contexts + deletion + non-ff, non-strict); `live-verify` env — secrets by name (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) + `required_reviewers`; PVR `enabled: true`; repo PUBLIC (description/topics/homepage). **Incidents (honest):** release.yml release-job checkout defect on run `40527732513` (4 dist jobs success / release step fail) → release created under delegation from the CI-verified artifacts, workflow fixed by PR #204; six >1000-char crate descriptions → PR #205; ~5.5 h crates.io new-crate rate-limit loop; one transient 5xx retried; stale `tmp-registry` clean pre-publish; verified-email gate. **OPERATIONAL_READINESS:** §Public launch surface — five `public` rows (crate set, release, protected main, PVR, live-verify env) each citing the record; `staging-verified` stays unearned. **CHANGELOG:** `[0.1.0] — 2026-10-28` + dated updates on two stale lines. **Verify:** check-living-docs 387 files · check-build-memory 0 viol / 8 pre-existing warnings · gitleaks staged clean · fmt n/a (no .rs). **Deferrals:** opened none, closed none — zero-deferral held to the end. **Deviations:** ~446 changed lines vs 300 — TRIPPED, surfaced (every line a mandated deliverable; ≈1.5×). **full-run: 40619320611 success** (`workflow_dispatch` ci.yml on `main`@`66b8b3a2` — the contract's ADR-0362 amendment, dispatched before the records work). ci: pass #208@68fa321f (cargo-deny (licenses · advisories · bans · sources) 40621023435; gitleaks (full history + PR diff) 40621023435; build · test · fmt · drift (ubuntu-latest) 40621023435; build · test · fmt · drift (macos-latest) 40621023435) · logs/ci-r4.18.json · chainTip → main · next → (none — manifest chain complete; projectStatus DONE) · lastCompleted → R4.18 · layer: public · harness: devin-desktop/swe-2/subagent
 - 2026-10-28 · R4.18 ci record refreshed at the closeout head — the done entry's `ci:` line names the records head 68fa321f; ci-boundary re-read after the closeout head landed (run 40622437567, all four required jobs): ci: pass #208@adad8f67 (cargo-deny (licenses · advisories · bans · sources) 40622437567; gitleaks (full history + PR diff) 40622437567; build · test · fmt · drift (ubuntu-latest) 40622437567; build · test · fmt · drift (macos-latest) 40622437567) · logs/ci-r4.18.json (BM-HIST-01: correction by appended entry). Same commit also lands the `docs/status.md` dated update — the #206 availability wording predated completed crates.io publication; corrected append-style with the launch-record citation.
+
+## PHASE LOG — Round 5
+
+- 2026-10-30T03:05:43Z · ROUND5 round — extended from completed R4.18/main `001490c14a6568972d16a663bb04c07a4255d30d`; 79 rows, full tail, supplemental scope [partition](planning/2026-10-30_evidence-decomposition.md). Authoring only; NOT_STARTED, nextTicket=GATE-G8, lastCompleted=R4.18, RETURN PASS. Old head archived with digest above. No landing/CI/runtime evidence invented. Plan revisable by scoped review; one state writer. No prior spend/provider/model/autonomy inherited. [Working ledger](planning/2026-10-30_evidence-planning-ledger.md).
+- 2026-10-30T04:20Z · **GATE-G8 PASSED — operator recorded "passed. please proceed"** — verbatim decision in GATE DECISIONS + readout signature `docs/build/readouts/GATE-G8.md` (agent-drafted block sha256:259ee9f5c65a…; hash-confirmation line records it was not separately quoted — decision followed the presented readout). Evidence at presentation: baseline `001490c1` = local = origin/main (ancestry confirmed; zero open PRs; CI run 40623318459 success); supplement `8f540171` byte-identical; reviewed aggregate `d5b58551` recomputes exactly over the 4 planning files at reviewed bytes + all 79 contracts; validator exit 0 (0 viol / 8 warnings = scoped legacy baseline); deferrals-open empty; no concurrent writer in checkout. Scoped authorization: SETUP planning commit + sequential R5.1 (retained guard) → R5.2 (native stub dispatch/rejection/CI-fail/resume proof) only. nextTicket → R5.1 · projectStatus → IN_PROGRESS · chainTip → codex/harnessharness-evidence · harness: devin-desktop/swe-2-high/subagent.
+

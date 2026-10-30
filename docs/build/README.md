@@ -21,3 +21,7 @@ Everything here is a **historical record**: corrected by a new entry, never by e
 one. Run `check-build-memory.sh .` to validate.
 
 <!-- migrate appends a "## Migration rename mapping" section below when adopting v2 from a legacy scratch dir. -->
+
+## Round 5 planning
+
+[Partition](planning/2026-10-30_evidence-decomposition.md), [coverage](planning/2026-10-30_evidence-coverage.md), [working ledger](planning/2026-10-30_evidence-planning-ledger.md) and [common contract clauses](planning/2026-10-30_evidence-invariants.md) describe the evidence/adoption extension. They are plans, not execution evidence. Gate G8 is pending; retained guard/dispatch implementation is a separately authorized prerequisite.
