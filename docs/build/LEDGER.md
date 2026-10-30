@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.4
-lastCompleted:   R5.3
+nextTicket:      R5.5
+lastCompleted:   R5.4
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.3
+chainTip:        codex/harnessharness-evidence-r5.4
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-10-30T06:05:05Z
+updatedAt:       2026-10-30T06:22:02Z
 ```
 
 ## OPEN FINDINGS
@@ -997,3 +997,5 @@ updatedAt:       2026-10-30T06:05:05Z
 - 2026-10-30 · R5.3 done — branch `codex/harnessharness-evidence-r5.3` · PR #211 · base `codex/harnessharness-evidence-r5.2` (@33658aa). Prepared the common seven-row §9.3 amendment register (`docs/build/planning/2026-10-30_amendment-dossier.md`): Packet A PADR-R5-1∗ (opted-in required-grade mode; execution-cost settlement once; grade_pending admission state; immutable graded disposition/revision) and Packet B PADR-R5-2∗ (Dispatcher DurableEffectRef∗ seam; durable retained selection → existing renderer → wire; whole-vector projected derived-cap checks; actual-use/exposure enforcement) with exact before/after, owner map, durable payload/home/class, authority proof, recovery, tier/negotiation, compatibility, numbered acceptance maps, dependency edges; rows 3–7 carry owner-bound slots owed to R5.4/R5.5. Nothing admitted — `∗`-marked candidates, no ADR number, zero product-source edits; REQ-E-205's §5/AC-5-2 operational cells explicitly owed to R5.32–34. **Verify:** check-amendment-dossier.sh OK + fails-without 19f/1f · guard PASS DISPATCH R5.3 pre+post · living-docs 418 · bm-tools OK · revisit-triggers in sync (168) · check-build-memory 0 viol · 0 source/test lines. **ADRs:** ADR-0384 register-shape decision (trigger homed on BL-47). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** none. · chainTip → codex/harnessharness-evidence-r5.3 · next → R5.4 · ci: pass #211@091f8bd (build · test · fmt · drift ubuntu+macos · gitleaks · cargo-deny 41011779075) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 
 - 2026-10-30 · R5.3 ci record refreshed at the closeout head — the done entry's `ci:` line names the impl head 091f8bd; ci-boundary re-read after the docs-only closeout head `a6a65e96` landed (run 41012067990, all four required jobs): ci: pass #211@a6a65e9 (cargo-deny 41012067990; gitleaks 41012067990; build · test · fmt · drift (ubuntu-latest) 41012067990; build · test · fmt · drift (macos-latest) 41012067990) · logs/ci-r5.3.json (BM-HIST-01: correction by appended entry). harness: devin-desktop/swe-2-high/subagent
+
+- 2026-10-30 · R5.4 done — branch `codex/harnessharness-evidence-r5.4` · PR #212 · base `codex/harnessharness-evidence-r5.3` (@b07d0c5). Prepared row-3 Packet C (PADR-R5-3∗) of the common seven-row §9.3 amendment register: additive versioned `evidence-package/1`∗ typed member/role profile inside `hh-bundle/1` (derived index, not a receipt authority), `closure_walk`∗ owner-typed closure interface, immutable attempt/grade/export coordinates + native heads/watermarks, `closure_report`∗ access/loss/procedure verdicts, unknown-required-version refusal, `producer_ref`∗ bound to lower owners. Nothing admitted — ∗-marked candidates, no ADR number, zero product-source edits, no bundle→bench/results edge; REQ-F-001–008/REQ-E-208 full predicates stay owed to R5.21–R5.27 + GATE-G9. **Verify:** check-amendment-dossier.sh OK + fails-without ×3 (absent packet / removed field / missing PADR id) + base-file control · guard PASS DISPATCH R5.4 pre+post · living-docs 418 · bm-tools OK · revisit-triggers in sync · fmt OK · check-build-memory 0 viol/8 scoped warnings · 0 source/test lines. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** none (design-F5 R0 anchor drift recorded, semantics adopted as observed). · chainTip → codex/harnessharness-evidence-r5.4 · next → R5.5 · ci: pass #212@14abaec (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41013398110) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
