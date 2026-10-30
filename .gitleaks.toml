@@ -43,3 +43,10 @@ condition = "AND"
 commits = ["1667c5e448af0b41c3e9cecbb981e0a6207897df"]
 rules = ["generic-api-key"]
 paths = ['''^docs/build/planning/2026-10-30_evidence-invariants\.md$''', '''^docs/evidence-and-adoption-spec\.md$''']
+
+[[allowlists]]
+description = "R5.5 dossier: generic-api-key false positives on English prose — 'missing keys, short/…' refusal vocabulary echoed verbatim from ratified spec §4.3 into the rows 4–7 packets. Scoped to this ticket's impl commit + path; any new hit on this path or another commit still reports"
+condition = "AND"
+commits = ["0f1ac7760b647df5f9ba7b0064cd82ec148a1a22"]
+rules = ["generic-api-key"]
+paths = ['''^docs/build/planning/2026-10-30_amendment-dossier\.md$''']
