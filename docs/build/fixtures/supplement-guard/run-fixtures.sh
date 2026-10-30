@@ -32,7 +32,10 @@ for case_dir in "$FIXDIR"/cases/*; do
   [ -f "$case_dir/checker.json" ] && checker="$case_dir/checker.json"
   bash "$case_dir/patch.sh" "$root"
   out=$(python3 "$GUARD" --root "$root" --checker-json "$checker" 2>&1) && rc=0 || rc=$?
-  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "\[$expected\]"; then
+  # grep -F: the bracketed code is a literal, never a regex character class
+  # (R5.2 repair — "\[$expected\]" matched any listed char, so a wrong
+  # diagnostic could satisfy a case).
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qF "[$expected]"; then
     echo "  ✓ $name — rejected with [$expected]"
     pass=$((pass + 1))
   else
