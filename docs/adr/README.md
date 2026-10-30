@@ -171,3 +171,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0379](ADR-0379-l4.4-crate-rename-hh-to-hharness-scripted-mechanical-sweep.md) | L4.4 crate rename — `hh-*` → `hharness-*` by scripted sweep; directories, binaries, and contract spellings preserved | L4.4 | Accepted |
 | [ADR-0380](ADR-0380-l4.5-publish-set-rust-version-v0.1.0-targets-and-docsrs-readiness.md) | L4.5 publish readiness — the publish set per crate, the declared rust-version, the v0.1.0 release target set, and docs.rs settings | L4.5 | Accepted |
 | [ADR-0381](ADR-0381-l4.6b-deterministic-replay-re-mints-the-recorded-dispatch-ceremony.md) | L4.6b deterministic replay re-mints the recorded dispatch ceremony (the shared-allocator contract) | L4.6b | Accepted |
+| [ADR-0382](ADR-0382-r5.1-supplement-guard-evidence-model.md) | Retained supplemental guard — landed-evidence and diagnostic-class model | R5.1 | Accepted |

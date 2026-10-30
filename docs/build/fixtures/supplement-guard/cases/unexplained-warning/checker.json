@@ -1,0 +1,81 @@
+{
+  "schema": "build-memory-check/2",
+  "tool": "check-build-memory.sh",
+  "capture_kind": "stand-in",
+  "note": "recorded conforming diagnostic set for guard fixtures; not a live validation result",
+  "violations": [],
+  "warnings": [
+    {
+      "check": "manifest",
+      "severity": "warning",
+      "file": "docs/tickets/00_MANIFEST.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "108 chain row(s) are not under a numbered '### Round <n>' banner (first: 001_S0.1__toolchain-codegen.md); new rows go under the current round's banner (BM-MANIFEST-01, V13)"
+    },
+    {
+      "check": "adr",
+      "severity": "warning",
+      "file": "spec/CANONICAL_SPEC.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "spec ADR appendix and docs/adr/ file set differ (BM-ADR-04)"
+    },
+    {
+      "check": "ledger",
+      "severity": "warning",
+      "file": "docs/build/LEDGER.md",
+      "obligation": "nextTicket",
+      "evidence": "GATE-G1",
+      "message": "LEDGER nextTicket 'R5.1' is not the lowest chain row that has not landed ('GATE-G1'; superseded-by/deferred/unused gate-cell tokens and HUMAN rows skipped)"
+    },
+    {
+      "check": "ledger-budget",
+      "severity": "warning",
+      "file": "docs/build/LEDGER.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "LEDGER.md: 142 PHASE LOG entr(y/ies) in older regions exceed 2 KiB (legacy; lines: 201 203 204 206 207)"
+    },
+    {
+      "check": "index",
+      "severity": "warning",
+      "file": "docs/build/BUILD_INDEX.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+    },
+    {
+      "check": "index",
+      "severity": "warning",
+      "file": "docs/build/BUILD_INDEX.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "BUILD_INDEX.md: 2 live-verification value(s) outside live-executed | staging | fixture-only | engineered | n-a | gate-pending (legacy: run) (BM-INDEX-01, BM-STATUS-01) (first: line 187 (fixture-verified:))"
+    },
+    {
+      "check": "readout",
+      "severity": "warning",
+      "file": "docs/build/readouts",
+      "obligation": "",
+      "evidence": "",
+      "message": "4 readout(s) predate the guard sentence (first: GATE-G1.md); readouts created after the guards marker must carry it (BM-INDEX-03)"
+    },
+    {
+      "check": "harness",
+      "severity": "warning",
+      "file": "docs/build/runs",
+      "obligation": "",
+      "evidence": "",
+      "message": "82 run ledger(s) have no 'Harness:' header line (first: S0.1.md); new run ledgers must name harness/model/tier (BM-HARNESS-01)"
+    },
+    {
+      "check": "novel",
+      "severity": "warning",
+      "file": "docs/build/NOVEL.md",
+      "obligation": "",
+      "evidence": "",
+      "message": "a brand-new diagnostic the baseline never scoped"
+    }
+  ]
+}
