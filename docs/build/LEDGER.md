@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-10-30T04:20:00Z
+updatedAt:       2026-10-30T04:25:00Z
 ```
 
 ## OPEN FINDINGS
@@ -987,4 +987,5 @@ updatedAt:       2026-10-30T04:20:00Z
 
 - 2026-10-30T03:05:43Z · ROUND5 round — extended from completed R4.18/main `001490c14a6568972d16a663bb04c07a4255d30d`; 79 rows, full tail, supplemental scope [partition](planning/2026-10-30_evidence-decomposition.md). Authoring only; NOT_STARTED, nextTicket=GATE-G8, lastCompleted=R4.18, RETURN PASS. Old head archived with digest above. No landing/CI/runtime evidence invented. Plan revisable by scoped review; one state writer. No prior spend/provider/model/autonomy inherited. [Working ledger](planning/2026-10-30_evidence-planning-ledger.md).
 - 2026-10-30T04:20Z · **GATE-G8 PASSED — operator recorded "passed. please proceed"** — verbatim decision in GATE DECISIONS + readout signature `docs/build/readouts/GATE-G8.md` (agent-drafted block sha256:259ee9f5c65a…; hash-confirmation line records it was not separately quoted — decision followed the presented readout). Evidence at presentation: baseline `001490c1` = local = origin/main (ancestry confirmed; zero open PRs; CI run 40623318459 success); supplement `8f540171` byte-identical; reviewed aggregate `d5b58551` recomputes exactly over the 4 planning files at reviewed bytes + all 79 contracts; validator exit 0 (0 viol / 8 warnings = scoped legacy baseline); deferrals-open empty; no concurrent writer in checkout. Scoped authorization: SETUP planning commit + sequential R5.1 (retained guard) → R5.2 (native stub dispatch/rejection/CI-fail/resume proof) only. nextTicket → R5.1 · projectStatus → IN_PROGRESS · chainTip → codex/harnessharness-evidence · harness: devin-desktop/swe-2-high/subagent.
+- 2026-10-30T04:25Z · SETUP — branch `codex/harnessharness-evidence` created at pinned base `001490c14a6568972d16a663bb04c07a4255d30d` (= origin/main); planning commit `1667c5e448af0b41c3e9cecbb981e0a6207897df` lands the exact reviewed artifacts (139 files: 79 contracts, planning packet, upstream spec/research/design surfaces, reports, GATE-G8 PASSED readout, modified README/LEDGER/MANIFEST). `git show --stat` covers every claimed file; chainTip → `codex/harnessharness-evidence`. No new worktree — the ledger's recorded buildWorktree is this checkout; no clean-clone from old main (planning identities preserved). harness: devin-desktop/swe-2-high/subagent.
 
