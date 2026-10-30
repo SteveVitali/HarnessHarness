@@ -36,6 +36,7 @@ for n in $(grep -oE '^\| [1-7] \| .*\*\*prepared\*\*' "$REG" | grep -oE '^\| [1-
   case "$n" in
     1) grep -q '^## Packet A ' "$REG" || fail "row 1 prepared but Packet A section absent" ;;
     2) grep -q '^## Packet B ' "$REG" || fail "row 2 prepared but Packet B section absent" ;;
+    3) grep -q '^## Packet C ' "$REG" || fail "row 3 prepared but Packet C section absent" ;;
     *) : ;;  # sibling packets named by their own owners' sections
   esac
 done
@@ -49,6 +50,18 @@ fi
 if grep -q '^## Packet B ' "$REG"; then
   for field in 'Exact before' 'Owner map' 'Durable payload' 'Authority' 'Recovery' 'Tier / negotiation' 'Compatibility and preserved legacy' 'Dependency edges' 'Acceptance mapping' 'Alternatives rejected'; do
     grep -q "$field" "$REG" || fail "Packet B missing field: $field"
+  done
+fi
+# Packet row 3, when prepared, carries the same contract field set and cites
+# its proposal id (PADR-R5-3, never an ADR number — the pairing rule below).
+# Fields are checked inside the Packet C section — file-wide greps would be
+# masked by the sibling packets' same-named fields.
+if grep -q '^## Packet C ' "$REG"; then
+  grep -q 'PADR-R5-3' "$REG" || fail "PADR-R5-3 proposal id absent"
+  pkt_c=$(awk '/^## Packet C /{f=1} f&&/^## /&&!/^## Packet C /{f=0} f' "$REG")
+  echo "$pkt_c" | grep -q 'evidence-package/1' || fail "Packet C missing profile name evidence-package/1"
+  for field in 'Exact before' 'Owner map' 'Durable payload' 'Authority' 'Recovery' 'Tier / negotiation' 'Compatibility and preserved legacy' 'Dependency edges' 'Acceptance mapping' 'Alternatives rejected'; do
+    echo "$pkt_c" | grep -q "$field" || fail "Packet C missing field: $field"
   done
 fi
 

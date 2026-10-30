@@ -30,7 +30,7 @@
 |---|---|---|---|---|---|
 | 1 | Launch/required grade/settlement: §06.3.2.2–2.4 (R-2.10.3), §06.5 overlays (R-2.10.5), §05h.2.3–2.4; ADR-0155/0161/0162 | REQ-E-201–204; experiment/embed/bench/eval/results | R5.3 | [Packet A](#packet-a) | **prepared** (this ticket) |
 | 2 | Effects/prepared calls/derived admission: §§05a/05b/05c/05e and §8.2 | REQ-E-205–207; env/context/gateway/budget/control | R5.3 | [Packet B](#packet-b) | **prepared** (this ticket) |
-| 3 | Native closure/profile: §05h.3 R-2.9.3/§10.4 and ADR-0363 collector linking | REQ-F-001–008, REQ-E-208; bundle/producer/ontology | R5.4 | slot — proposal returns to this register | **owed** to R5.4 |
+| 3 | Native closure/profile: §05h.3 R-2.9.3/§10.4 and ADR-0363 collector linking | REQ-F-001–008, REQ-E-208; bundle/producer/ontology | R5.4 | [Packet C](#packet-c) | **prepared** (this ticket) |
 | 4 | Finite-task efficacy: §10.1 reporting, §05h.2/R-2.10.4, ADR-0158 D1–D3/D8–D9 | REQ-D-107/109, REQ-E-209; eval math/lab metadata/analysis | R5.5 | slot | **owed** to R5.5 |
 | 5 | Statistical parity grouping: §10.1 replicate factor, §05h.2.1 compare, ADR-0046 CF-095 | REQ-D-302/310; bench/lab/eval | R5.5 | slot | **owed** to R5.5 |
 | 6 | Finite-manifest equivalence: §10.1 estimator/multiplicity, §10.2 equivalence, §05h.2.1, ADR-0158 D2/D7/D9 | REQ-D-303–307/310; eval/lab/analysis/bench | R5.5 | slot | **owed** to R5.5 |
@@ -392,6 +392,246 @@ Landing owners **env, context, gateway, budget, control** (REQ-E-205–207,
 - Rebuilt transcript without durable selection — rejected (unprovable
   treatment; resurrection hazard).
 
+<a id="packet-c"></a>
+## Packet C — PADR-R5-3∗: additive `evidence-package/1`∗ typed member/role profile inside `hh-bundle/1`; owner-typed recipient closure; access/loss/procedure verdicts
+
+Landing owners **bundle, producer (ledger/experiment/bench/verification/
+budget/results/analysis/eval/identity/provenance), ontology** (REQ-F-001–008,
+REQ-E-208 + merged aliases REQ-E-010/108/109).
+
+### C.1 Exact before → proposed after
+
+**Before (re-confirmed at b07d0c5).**
+
+- §05h.3 / ADR-0139–0141 and `crates/hh-bundle/src/manifest.rs`: three-layer
+  `hh-bundle/1` — `MemberRef{role, ref, media_type, size, status ∈
+  {present, fetch, redacted, gc}, foreign?}` (:104), `FetchEntry{address,
+  size?, locations[] credential-free, expires?}` (:257), `SubjectSection
+  {run_ids, heads{run_id → {seq, event_id, hash}}, lineage, watermarks,
+  status ∈ {open, finished}, experiment}` (:571), per-run chunked
+  `LedgerExport`; `validate_bundle` S1–S9 (`check_completeness` = {S1, S2,
+  S4, S7}); basis-derived `max_supported_level`; `reproduce` R0–R3;
+  export lowering + `measurement.export.delivered` + loss reports; status
+  by supersession.
+- Inspected anchors: `export.rs` ~95–120 builds `ledger_page`/`ledger_tree`
+  members — the member index enumerates page/tree addresses, while typed
+  payload references inside event payloads (causes, sealed
+  submission/grade/usage/selection refs) are not enumerated (the F5
+  closure gap); `assemble.rs` ~167–179 derives `subject.status`
+  `open|finished` from `lifecycle.run.finished`; `bundle_ops.rs`
+  1365–1367/1567–1584 R0 folds `lifecycle.run.*` envelopes to
+  `subject.status` with `lifecycle_status` drift rows — the §9.3
+  "existing-contract fix" (R0 open/finished mapping, R-2.9.3) is already
+  lifecycle-correct at this head and rides **beside** this amendment, not
+  inside it; `scripts/live-verify.sh` ~1516–1533 `run_ledger_head` =
+  sha256 of `docs/build/runs/<ticket>.md` — a build-note snapshot, never a
+  native WAL head (§6.5 label).
+- ADR-0363: `hh-live-evidence/1` records + `SPEND.jsonl` + `live-verify.sh`
+  gating — preserved byte-for-byte; `live-executed` / `fixture-verified` /
+  `foreign-run-verified` stay distinct classes.
+- `crates/hh-bundle/Cargo.toml` deps = wire/identity/provenance/ontology/
+  ledger/secrets/lab/telemetry; `hharness-results` depends **on** bundle —
+  no bundle→bench/results edge exists or is added.
+
+**Proposed after (candidates — unadmitted).**
+
+1. `evidence-package/1`∗ — an **additive, versioned** typed member/role
+   profile inside `hh-bundle/1`, owned by the bundle codec/validator; a
+   **derived index** over the §6.1 member groups (required even when
+   partial), recomputable from the named authorities at the recorded
+   watermark — never a second authoritative store or receipt authority.
+2. Immutable coordinates: attempt/grade-attempt/export identities from
+   native bindings — plan id, attempt/launch binding, subject run,
+   ordinal, predecessor/reason, settlement, sealed subject/submission
+   digest, oracle/version, frozen selection and supersession/revision
+   refs; `native_heads∗` `{run_id, seq, event_id, hash}` per included
+   subject/experiment/instrument/overlay/lineage prefix plus projection
+   watermarks; later appends do not change a snapshot; date/leg
+   filenames and provider ids are never attempt identity.
+3. `closure_walk∗` — owner-typed closure interface: traverse claim/
+   procedure roots through native heads/manifests/pages/causes/lineage,
+   ordinary refs, IR refs and **owner-typed payload refs** (response
+   bytes, sealed submission/grade/usage/selection/rows/analysis); the
+   owning codecs enumerate references — no hash regex, no second class
+   table; visited dedup `{parent, role, field, media, size}` plus explicit
+   traversal limits; an unknown relevant schema or an exhausted limit
+   fails closure.
+4. `closure_report∗` — access/loss/procedure verdicts: `{bundle_id,
+   profile_version, procedure, recipient_class, checked_at, required,
+   resolved, withheld, unresolved, verdict, failures[]}`; every required
+   edge resolves to verified member bytes or explicit `fetch`/`redacted`/
+   `gc`; `present` requires recipient bytes, never a producer assertion;
+   `fetch` requires exact identity, allowed locator/trust/expiry/rights
+   and verified arrival under existing durable rules — it never executes;
+   a sidecar cannot raise a level.
+5. Unknown-version behavior: an unknown required profile version/major
+   refuses new claims while legacy inspection is preserved; optional
+   additions cannot strengthen old evidence; a profile major bump is a
+   superseding member family, never an in-place rewrite.
+6. Producer export binding: every producer export reference names its
+   lower owner — ledger (prefixes/causes/payloads/blobs), experiment
+   (plans/launches/settlement), bench/verification (instrument/grade
+   attempts), budget/telemetry (Account usage/cost view), results
+   (rows/selections), analysis/eval (records/families),
+   identity/provenance (access/claims) — bound by type/domain through
+   owner enumeration; no crate edge is added to hh-bundle.
+
+### C.2 Owner map
+
+| Seam | Owner (crate) | Durable fact |
+|---|---|---|
+| `evidence-package/1`∗ codec + validator | hh-bundle | profile member inside `hh-bundle/1`; derived index only |
+| heads/prefixes/causes/payloads/blobs | hh-ledger | fenced run ledger, chunked export, watermark reads |
+| plans/launches/attempt bindings/settlement | hh-experiment | durable experiment events → population index |
+| instrument/grade-attempt refs | hh-bench, hh-verification | invoked/verdict refs on the instrument run |
+| usage/cost | hh-budget, hh-telemetry | reservations/actual/unknown; physical outlay separate (`cost_view` fold) |
+| rows/selection/analysis | hh-results, hh-analysis, hh-eval | row versions, overlay watermarks, AnalysisSpec/report |
+| identity/provenance/access/redaction | hh-identity, hh-provenance, hh-secrets | provenance mandatory; secret-bearing bundle invalid |
+| class/plane homes if admitted | hh-ledger/classes.rs, hh-ontology/planes.rs | one home per kind (CC10) |
+
+### C.3 Durable payload / home / class candidates (all `∗`)
+
+- `evidence-package/1`∗ profile record — every field group is labelled
+  **R** (required even when partial), **C** (required for a dependent
+  claim/procedure) or **O** (optional), per §6.1/F2, so requiredness is
+  reviewable field by field:
+  - R: `profile_version`, `source_versions{code_commit,
+    dirty_patch_member | dirty_unknown, runtime, toolchain, features}`,
+    `claims[]{id, text, scope, class, population, native_refs,
+    report_refs}`, `protocol_ref`, `phase`, `slot_set{plans, hash,
+    count, close_reason, watermark}`, `attempts[]`, `native_heads[]`,
+    `watermarks[]`, `pins{task, models, treatment, usage}`,
+    `access{supersedes, losses, policy, rights, recipient_class,
+    retention, owner}` (empty lists allowed).
+  - C: `oracle_observation_refs[]` (task claims: pinned oracle, raw
+    stdout/stderr/reward/exit, mapping, access/veto evidence),
+    `grade_attempts[]` (task claims), `treatment_joins[]` (treatment
+    claims: trigger→selection→actual request/response/call joins),
+    `rows_analysis_refs[]` (quantitative claims),
+    `operational_evidence_refs[]` (operational claims).
+  - O: `legacy_refs[]` (e.g., a `hh-live-evidence/1` member: exact
+    bytes/path/revision/digest, labelled build-note, never a native
+    head), `presentation_refs[]`.
+  - Carried as a typed member inside the manifest's member set under
+    `idp/1`; derived — the record asserts nothing the named authorities
+    did not durably produce. Historical prefix behavior is explicit:
+    `native_heads[]` carries `lineage_prefixes[{run_id, up_to_seq,
+    head_hash}]` verbatim for every included prefix, and prior
+    `hh-bundle/N` manifests keep decoding unchanged (C.7).
+- `closure_report∗` — versioned sidecar-class report (same shape as
+  `BundleValidationReport`), pure over bundle bytes plus `fetch` when
+  permitted; it cannot raise `max_supported_level`.
+- `producer_ref∗{domain, owner, ref, role}` — each producer export
+  reference bound to its lower owner's codec domain; enumeration lives in
+  the owner, never in a scan of payload bytes.
+- Member/edge status vocabulary reuses `MemberStatus{present, fetch,
+  redacted, gc}` and `FetchEntry`; any admitted kind/event name lands
+  once in the class table + ontology home with durability/producer/audit/
+  content-ref policy (CC10, I-02) — none is committed here.
+
+### C.4 Authority
+
+- No stand-alone receipt authority: producers remain the authorities; the
+  profile records references and verified bytes, never decisions; a
+  process pass cannot erase a format failure or skipped oracle.
+- Per-item access records require a recorded `rights`/`recipient`/
+  `retention`/`owner`; unknown rights = withheld; no agent infers access
+  or grading authority — mirroring Packet A's authority-field discipline.
+- No public RPC is proposed; `closure_walk∗`/fetch are in-process owner
+  interfaces, not wire commitments (I-02).
+
+### C.5 Recovery
+
+- Regrade/correction/redaction/export retry produces a new snapshot by
+  supersession, never rewrites; create-if-absent identities refuse
+  conflicting bytes; latest pointers are derived.
+- `fetch`/`redacted`/`gc` statuses carry their records; expiry/GC/deletion
+  emits permitted superseding tombstones and disables dependent
+  procedures even after earlier passes; a required-input loss marks the
+  dependent procedure unavailable — arithmetic may survive only while row
+  inputs remain.
+- Unknown relevant schema, exhausted traversal limit, or
+  missing/wrong/expired/unauthorized fetch → typed failure/refusal; no
+  producer home/cache/path/credential fallback, no secret-bearing URLs.
+
+### C.6 Tier / negotiation
+
+- An unknown required profile version refuses (versioned negotiation —
+  the §9.3 row's "unknown required versions refuse"); optional members
+  decode absent (additive, mirroring `SubjectSection.experiment`'s
+  additive decode).
+- No new tier or feature dependency; hh-bundle stays in its current
+  removability scope; fixtures prove plumbing only — fixture versus live
+  enforcement reported separately.
+
+### C.7 Compatibility and preserved legacy
+
+- Every `hh-live-evidence/1` byte and ADR-0363 meaning preserved;
+  `run_ledger_head` is labelled a build-note snapshot in new views —
+  never relabelled native WAL; no reconstruction of missing attempts, no
+  evidence-class upgrade, no historical prefix rewrite.
+- R0 `open|finished` lifecycle semantics preserved (already correct at
+  this head — C.1); prior `hh-bundle/N` manifests keep decoding; unknown
+  required versions refuse while legacy stays inspectable.
+- Old bytes/fields/levels preserved; the exported last event still agrees
+  with the recorded head; later appends never mutate a snapshot; legacy
+  receipts remain exact bytes.
+
+### C.8 Dependency edges and owed predicates
+
+- Consumes: Packet A's sealed subject/submission, `execution_settled∗`,
+  `grade_pending∗` and selection-revision roots; Packet B's
+  dispatched-bytes/usage/exposure facts — {P1, P2, P7} → P3 per the §9.1
+  graph. P3 feeds P4 recipe, P5 operations and P8 study per the same
+  graph.
+- REQ-F-001–008 + REQ-E-208 full-target predicates stay owed to their
+  coverage-register primary owners — R5.21 profile (REQ-F-001/002), R5.22
+  closure (REQ-F-005), R5.23 population receipt (REQ-F-003/004/008,
+  REQ-E-208), R5.24 R0 (REQ-F-007), R5.27 rights (REQ-F-006) — this
+  packet is the admission-dossier slice, not the implementation; closing
+  it does not satisfy those targets.
+- Forbidden edges held: no hh-bundle→bench/results crate edge (dep
+  manifest re-confirmed), no hash-regex reference discovery, no second
+  codec/store/class table, no duplicated fold, no implied public closure.
+
+### C.9 Acceptance mapping (AC-6-1/AC-6-2 → numbered checks)
+
+1. Regenerate the profile from authorities; verify after producer
+   stores/caches/credentials are inaccessible (clean-recipient closure).
+2. Same-day attempts/regrades/export collision; removed
+   slot/orphan/duplicate grade; pending/skip/format failure → all
+   attempts retained, one first-subject denominator, explicit
+   partial/deviation — never a favorable shrink or fabricated zero.
+3. Stale watermark/build-note-head substitution; missing ordinary and
+   payload-only blobs → typed coordinate/head/projection mismatch,
+   closure failure.
+4. Wrong/expired/unauthorized fetch; traversal limit; unknown profile
+   version → typed fetch failure/refusal; recipient-specific loss.
+5. Hierarchical/reverted/unknown costs; secret-bearing export;
+   redaction/GC → one owning total with physical outlay separate;
+   forbidden export invalid; dependent procedures unavailable.
+6. Exact all-planned membership and typed losses; never infer unseen
+   executions or grade truth (AC-6-1).
+7. Six R0 cases (successful→finished, failed→finished, open→open;
+   changed bytes, missing member, re-sealed wrong lifecycle) plus each
+   advertised procedure independently after producer cleanup, and one
+   consenting outside reviewer completing verify/recompute (AC-6-2) —
+   owed to R5.24/R5.52, recorded not discharged.
+
+### C.10 Alternatives rejected
+
+- Stand-alone receipt store/authority — rejected; the §9.3 row names it
+  rejected; the profile is a derived index.
+- Hash-regex/byte-scan reference discovery — rejected; owner-typed codec
+  enumeration only.
+- Reverse dependency hh-bundle→bench/results — rejected; dependency
+  direction preserved, producers pass records in.
+- Legacy byte rewrite / build-note relabelled as native head — rejected
+  (§6.5).
+- Implied public closure — rejected; closure verdicts are recipient-class
+  and time-scoped; public rows may support arithmetic while withheld
+  members still block independent truth/fidelity checks.
+
 ## Non-admission ledger (AC-2 negative space — all unadmitted)
 
 - **Wire/domain/event names:** every `∗` name is a candidate; none is
@@ -406,6 +646,16 @@ Landing owners **env, context, gateway, budget, control** (REQ-E-205–207,
   (A.4); inference is unadmitted.
 - **New backend/dependency/public boundary:** none; HelperExecutor/Podman
   feasibility stays a separately reviewed P2 prerequisite.
+- **Stand-alone receipt authority:** none proposed — `evidence-package/1`∗
+  is a derived index inside `hh-bundle/1`; producers stay authoritative.
+- **Reverse dependency to bench/results:** none — producer export
+  references bind to lower owners by typed enumeration; hh-bundle's
+  manifest edge set is unchanged.
+- **Hash-regex reference discovery:** none — owning codecs enumerate
+  payload refs; no byte scanning, no second class table.
+- **Legacy byte rewrite / implied public closure:** none — historical
+  receipts/members stay exact bytes (build-note label is a view
+  annotation); closure verdicts are recipient-class/time-scoped.
 - **Semantics in source:** no crate, schema or generated file is touched;
   implementing edits wait for GATE-G9.
 
