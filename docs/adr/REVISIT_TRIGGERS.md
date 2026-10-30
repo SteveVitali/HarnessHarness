@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_166 ADRs: 114 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_167 ADRs: 115 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -150,6 +150,7 @@ _166 ADRs: 114 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0380 | Reopen when: a Windows containment backend lands for `hh-helper` (the excluded `x86_64-pc-windows-*`/… targets join the set); a lower-MSRV claim is needed and a toolchain to prove it exists (the declaration drops below the pin and the CI step verifies it); GitHub retires or gates `ubuntu-24.04-arm` for public repos; the publish set's rule changes (a fixture/plugin becomes distributable or a surface crate becomes internal); or crates.io metadata requirements change (e.g. keyword/category vocabulary). |
 | ADR-0381 | Reopen when: the `EffectGate` contract grows a new emitted-row class the window rule misclassifies (a driver-minted non-`intended` row inside a dispatch window, or a gate-emitted row naming its effect some other way); the id allocator leaves `Driver` (the ceremony re-serve's binding to the shared `next_id` is the contract being kept — moving the allocator moves the contract); or deterministic replay is asked to re-execute effects (the recorded-terminal design is `executor calls = 0` by construction — re-execution is a different driver mode, not a change to this leg). |
 | ADR-0382 | Reopen if the manifest kind vocabulary changes, BUILD_INDEX changes shape, the stock checker emits a `build-memory-check/3` schema, the supplement's `hh-supplement-plan/1` register is amended, or a new round changes the active-round scoping rule — the class table and kind map then need a matching amendment, never a silent edit of expectations. |
+| ADR-0383 | Reopen if the ledger state schema renames `chainTip`/`buildBranchBase`, the manifest kind or CURRENT STATE key sets change, a different dispatch tier is admitted for the round (`dispatchTarget`), the native primitive/profile set changes, or `hh-dispatch-transcript/1` needs fields a real coordinator leg cannot supply — the schema then bumps to `/2`, never a silent edit. |
 
 ## Fired-and-answered triggers (BL-48)
 

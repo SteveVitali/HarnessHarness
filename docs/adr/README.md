@@ -172,3 +172,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0380](ADR-0380-l4.5-publish-set-rust-version-v0.1.0-targets-and-docsrs-readiness.md) | L4.5 publish readiness — the publish set per crate, the declared rust-version, the v0.1.0 release target set, and docs.rs settings | L4.5 | Accepted |
 | [ADR-0381](ADR-0381-l4.6b-deterministic-replay-re-mints-the-recorded-dispatch-ceremony.md) | L4.6b deterministic replay re-mints the recorded dispatch ceremony (the shared-allocator contract) | L4.6b | Accepted |
 | [ADR-0382](ADR-0382-r5.1-supplement-guard-evidence-model.md) | Retained supplemental guard — landed-evidence and diagnostic-class model | R5.1 | Accepted |
+| [ADR-0383](ADR-0383-r5.2-guard-chain-tip-ancestry-and-dispatch-driver-evidence-model.md) | Guard chain-tip ancestry repair + guarded dispatch-driver evidence model | R5.2 | Accepted |
