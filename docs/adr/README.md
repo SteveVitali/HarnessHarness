@@ -173,3 +173,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0381](ADR-0381-l4.6b-deterministic-replay-re-mints-the-recorded-dispatch-ceremony.md) | L4.6b deterministic replay re-mints the recorded dispatch ceremony (the shared-allocator contract) | L4.6b | Accepted |
 | [ADR-0382](ADR-0382-r5.1-supplement-guard-evidence-model.md) | Retained supplemental guard — landed-evidence and diagnostic-class model | R5.1 | Accepted |
 | [ADR-0383](ADR-0383-r5.2-guard-chain-tip-ancestry-and-dispatch-driver-evidence-model.md) | Guard chain-tip ancestry repair + guarded dispatch-driver evidence model | R5.2 | Accepted |
+| [ADR-0384](ADR-0384-r5.3-amendment-dossier-register-shape.md) | Round-5 amendment dossier — one common register, proposal-ids only | R5.3 | Accepted |
