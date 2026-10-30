@@ -19,10 +19,15 @@
   already-existing RPC/wire commitments (I-02); an admitted name lands once
   in the owning codec/class table/home (CC1/CC7/CC10) at implementation.
 - **Sources:** supplement [§9.3](../../evidence-and-adoption-spec.md#s9) rows,
-  [§2](../../evidence-and-adoption-spec.md#s2) requirements, canonical spec
-  §06.3.2.2–2.4 / §06.5 / §05h.2.3–2.4 / §§05a/05b/05c/05e / §08.2, research
-  ADR-0155/0161/0162, [14_integration-design.md](../../design/14_integration-design.md)
-  F1–F5 (retrieved 2026-10-29T20:53:30Z; anchors re-confirmed 2026-10-30).
+  [§2](../../evidence-and-adoption-spec.md#s2), [§3](../../evidence-and-adoption-spec.md#s3)
+  and [§4](../../evidence-and-adoption-spec.md#s4) requirements, canonical spec
+  §06.3.2.2–2.4 / §06.5 / §05h.2.3–2.4 / §§05a/05b/05c/05e / §08.2 /
+  §10.1 / §10.2 / §05h.2.1 / §06.4 / §10.5.1, research
+  ADR-0155/0161/0162, research ADR-0158/0046/0077,
+  [14_integration-design.md](../../design/14_integration-design.md)
+  F1–F5 (retrieved 2026-10-29T20:53:30Z; anchors re-confirmed 2026-10-30) and
+  [23_parity-method-review.md](../../design/23_parity-method-review.md)
+  F1–F8 (retrieved 2026-10-30; code anchors re-confirmed at 8eeb3740).
 
 ## Seven-row amendment register
 
@@ -31,10 +36,10 @@
 | 1 | Launch/required grade/settlement: §06.3.2.2–2.4 (R-2.10.3), §06.5 overlays (R-2.10.5), §05h.2.3–2.4; ADR-0155/0161/0162 | REQ-E-201–204; experiment/embed/bench/eval/results | R5.3 | [Packet A](#packet-a) | **prepared** (this ticket) |
 | 2 | Effects/prepared calls/derived admission: §§05a/05b/05c/05e and §8.2 | REQ-E-205–207; env/context/gateway/budget/control | R5.3 | [Packet B](#packet-b) | **prepared** (this ticket) |
 | 3 | Native closure/profile: §05h.3 R-2.9.3/§10.4 and ADR-0363 collector linking | REQ-F-001–008, REQ-E-208; bundle/producer/ontology | R5.4 | [Packet C](#packet-c) | **prepared** (this ticket) |
-| 4 | Finite-task efficacy: §10.1 reporting, §05h.2/R-2.10.4, ADR-0158 D1–D3/D8–D9 | REQ-D-107/109, REQ-E-209; eval math/lab metadata/analysis | R5.5 | slot | **owed** to R5.5 |
-| 5 | Statistical parity grouping: §10.1 replicate factor, §05h.2.1 compare, ADR-0046 CF-095 | REQ-D-302/310; bench/lab/eval | R5.5 | slot | **owed** to R5.5 |
-| 6 | Finite-manifest equivalence: §10.1 estimator/multiplicity, §10.2 equivalence, §05h.2.1, ADR-0158 D2/D7/D9 | REQ-D-303–307/310; eval/lab/analysis/bench | R5.5 | slot | **owed** to R5.5 |
-| 7 | Detectors/analysis metadata: ADR-0077 D4, §§05c/05h/06.4/10.5.1 | REQ-D-003/005/008/106/109; eval/context/lab/analysis | R5.5 | slot | **owed** to R5.5 |
+| 4 | Finite-task efficacy: §10.1 reporting, §05h.2/R-2.10.4, ADR-0158 D1–D3/D8–D9 | REQ-D-107/109, REQ-E-209; eval math/lab metadata/analysis | R5.5 | [Packet D](#packet-d) | **prepared** (this ticket) |
+| 5 | Statistical parity grouping: §10.1 replicate factor, §05h.2.1 compare, ADR-0046 CF-095 | REQ-D-302/310; bench/lab/eval | R5.5 | [Packet E](#packet-e) | **prepared** (this ticket) |
+| 6 | Finite-manifest equivalence: §10.1 estimator/multiplicity, §10.2 equivalence, §05h.2.1, ADR-0158 D2/D7/D9 | REQ-D-303–307/310; eval/lab/analysis/bench | R5.5 | [Packet F](#packet-f) | **prepared** (this ticket) |
+| 7 | Detectors/analysis metadata: ADR-0077 D4, §§05c/05h/06.4/10.5.1 | REQ-D-003/005/008/106/109; eval/context/lab/analysis | R5.5 | [Packet G](#packet-g) | **prepared** (this ticket) |
 
 Sibling owners fill only their slot; a slot cites the §9.3 row verbatim until
 its packet lands. Rows 4–7 packets must additionally carry the R5.5 AC-1
@@ -632,6 +637,685 @@ REQ-E-208 + merged aliases REQ-E-010/108/109).
   and time-scoped; public rows may support arithmetic while withheld
   members still block independent truth/fidelity checks.
 
+<a id="shared-method"></a>
+## Shared method contract (rows 4–7) — PADR-R5-4∗/5∗/6∗/7∗ common spine
+
+The four method/detector packets share one spine so no packet re-defines it.
+Every name is `∗` unadmitted; nothing here is implemented or admitted.
+
+### S.1 Shared population and metadata contract
+
+- **Population.** Method inputs are the existing `CellTable`/analysis-input
+  population — cells keyed `(task_id, split_label, stratum, arm,
+  replicate_index | pair_id, attempt_no, subject_run)` produced by the
+  §06.3/§06.5 producer contract; first subject per slot is primary; the
+  canonical, raw and joint-task-pass-without-observed-veto populations stay
+  three named sets with class counts (§3.1). Short cells keep
+  `planned`/`not-run` rows — no n inflation; retries/regrades add no
+  independent n.
+- **Metadata.** Every proposed method record carries declared
+  `{estimator, version, target, assumptions[], prior?, keys,
+  stratum_membership, seed, draws_requested, draws_used, floors,
+  interval{kind ∈ {credible, confidence, concentration_bound}, level},
+  refusal?}` — REQ-D-008/109/REQ-E-209 routing metadata on the report,
+  never implied by a method name or registry entry.
+- **Missingness.** Unknown/veto/not-run/short cells cannot improve a
+  denominator; `[s/M, (s+u)/M]` bounds and equal-task completion envelopes
+  are preserved (§3.2); missing required inputs refuse through the actual
+  report path — no `n/a` laundering into a pass.
+
+### S.2 Additive integer-canonical numerical representation
+
+- All proposed quantities — interval endpoints, draws, counts, η/α levels,
+  margins, tolerances — carry `i64` ppm fixed point (the existing
+  `PPM`/`Interval` convention, `hh-eval/src/stats.rs`); canonical JSON
+  carries integers only (`hh-wire/src/json.rs` `Json::Int` — no float ever
+  reaches a canonical byte).
+- Field additions are **additive**: new members decode absent on old
+  records; no existing field changes meaning or unit.
+- Comparison rule: endpoints are computed inward then **rounded outward**
+  (lower bound floored, upper bound ceiled), so a stored ppm endpoint never
+  overstates coverage; verdict equality stays strict per the owning method
+  (Packet F's `L_Δ > −ε ∧ U_Δ < ε`).
+- Posterior/resampling draws are `i64` ppm variates from
+  canonical-input-seeded xorshift64* (the existing `XorShift64`); seed
+  material derives from the declared spec/canonical inputs — recorded on
+  the report, never shopped.
+- Unspecified precision or encoding blocks the dependent method: a packet
+  whose encoding or tolerance is not frozen here carries no implementable
+  claim (AC-2).
+
+### S.3 Frozen numerical error / tolerance / doubling rules
+
+- Each method's tolerance `tol_ppm` is declared **before any numerical
+  execution**; convergence is checked by draw-doubling — recompute at 2×
+  draws through the frozen cap (efficacy posterior: 8,000 base → 64,000
+  cap; whole-task bootstrap: ≥2,000 confirmatory; sign-flip: 8,000 Monte
+  Carlo) — and the max endpoint delta is recorded as `numerical_error` on
+  the report: a fact, never a silent retry or redraw.
+- Bisection iteration bounds (Beta inverse-CDF, KL inversion) and their
+  residual tolerances are frozen as proposed values here; actual draws,
+  iterations and deltas land on the persisted report.
+- Unknown precision ⇒ stop/requote or an explicitly approved limited scope
+  (§4.3); post-observation tolerance changes are barred (AC-2).
+
+### S.4 Frozen simulation generator parameters and seeds
+
+- Proposed registered battery (frozen before execution; seed material
+  allocated at admission): T ∈ {10, 20, 30} tasks × R ∈ {5, 10} replicates
+  × effect ∈ {0, +.05, −.05, +.10, −.10} × task mixture
+  {easy, hard, heterogeneous effects} × mechanism {zero activation,
+  informative missingness/vetoes, shared shocks} — ≥2,000 datasets per
+  scenario cell.
+- Generator seed rule (proposed): `seed_sim = H(canonical(scenario_id ∥
+  battery_version ∥ replicate_index))` — one derivable stream per dataset;
+  the parameter table, seed list and every generator failure are retained
+  on the battery record; no post-hoc seed selection.
+- Reported per scenario: availability, coverage/prior sensitivity,
+  relevant frequentist type-I error, widths/verdict probabilities and
+  declared Monte Carlo error.
+
+### S.5 Routing review and approval scope
+
+- Nothing here is executed. The §9.2 **method/contract** reviewer/operator
+  gate disposes the ADR semantics; the **numerical/routing** reviewer gate
+  (known-answer/refusal/heterogeneity/missingness/simulation plus actual
+  dispatch evidence) must pass before any method-dependent collection; the
+  **endpoint/independence/margins** inputs remain sponsor-signed
+  prerequisites.
+- GATE-G9 scope is design + implementation admission only — numerical
+  validation is evidence still to be earned and study funding stays $0;
+  the D2 offline envelope (≤8 h, 4 cores/8 GiB, 32 core-hours, 2 GiB) is
+  cited per stage, never pooled or authorized by this dossier.
+- Independent derivation/routing/numerics review precedes implementation:
+  existing owners (eval math, lab metadata, analysis persistence, bench
+  pairs) implement only after admission; metadata-only method support
+  fails (§9.2).
+
+### S.6 S11 confidence labels preserved
+
+- `credible{prior}` (Bayesian), `confidence` (frequentist),
+  `concentration_bound` (KL/Hoeffding) and descriptive bounds stay four
+  distinct label kinds; a credible interval is never reported as TOST or
+  confidence, and a mixed Bayesian-efficacy + frequentist-calibration
+  claim is not a joint 95% certificate (§4.5).
+- S11 (spec §0.3): inferential **not-equivalent** requires the separately
+  computed 95% reporting interval wholly outside the equivalence band
+  under selected-claim multiplicity; disjointness of the 90% TOST
+  interval is descriptive and the negative inference stays
+  `inconclusive`.
+
+<a id="packet-d"></a>
+## Packet D — PADR-R5-4∗: labelled finite-manifest task efficacy — independent task/arm Beta(1,1) posterior contrast, frozen draws/doubling, whole-task bootstrap + sharp-null sign-flip companions
+
+Landing owners **eval math, lab metadata, analysis** (REQ-D-107/109,
+REQ-E-209).
+
+### D.1 Exact before → proposed after
+
+**Before (re-confirmed at 8eeb3740).**
+
+- §10.1 distributional reporting (ADR-0045 D4; ADR-0157; ADR-0158):
+  `EstimatorSelection{declared, floors{T_clt placeholder 100, T_bca 30},
+  fallback_chain, substituted?}` on every interval; the task is the
+  cluster, pairing key and resampling unit; `clustered_clt(task)` only at
+  `n_tasks ≥ T_clt`, else Wilson / Beta-Binomial `Beta(1,1)` labelled
+  `credible{prior}`; unclustered `clt` inadmissible for task-level metrics
+  with replicates and `unit ∈ {tokens, money, ms}`; per-task `(c,n)`;
+  pass^k/pass@k; tails; paired effects at matched budget with
+  `test{permutation_signflip | wilcoxon_signed_rank | paired_bayes}`;
+  `contrast` interactions; `outcome_bounds`; `multiplicity{holm|bh}`;
+  `label{confirmatory|exploratory|preview}`; `n/a{reason}` closed set.
+- §05h.2 / §06.4 (R-2.10.4): `analyze(AnalysisSpec, QuerySpec @
+  watermark_set) → AnalysisReport` pure; `AnalysisRecord` persisted under
+  supersession; `record_analysis` refusals (`UnmatchedBudget`,
+  `NotPreRegistered`).
+- ADR-0158: D1 task unit + `estimator_undefined`/`MissingClusterKey`; D2
+  declared selection with labelled substitution (`bayesian_beta` small-n
+  fallback beside Wilson); D3 paired effects; D8 declared resampling
+  parameters (placeholders 2000 confirmatory / 200 preview); D9
+  `interval_method` enum growth by dialect bump.
+- Inspected anchors: `hh-eval/src/stats.rs` — `wilson`:159, `clt`:177,
+  `clustered_clt`:194, `XorShift64`:211, `bootstrap`:243,
+  `BOOTSTRAP_RESAMPLES = 4_000`:239 (hardcoded — the §4.3 "hardcoded
+  4,000 draws" gap), `bootstrap_paired`:267, `bayesian_beta`:339 (integer
+  hyperparameters, bisection on `regularized_beta`:371),
+  `permutation_signflip_p`:454 (`(hits+1)/(draws+1)` in ppm);
+  `hh-eval/src/compare.rs` ~638–648 `Pairing::ByTaskAndReplicate`
+  requiring `seed_honoured` (CF-095), paired bootstrap ~781–791,
+  `EstimatorSelection` ~883; `hh-analysis/src/kernel.rs`
+  `resampling_draws`:97 (declared `AnalysisSpec` field); `hh-wire` Json is
+  integer-only (`json.rs` :15–23).
+- No finite-manifest **contrast posterior** exists: `bayesian_beta` is a
+  per-cell interval; nothing samples `Δ^(b) = Σ_t w_t[p_Bt^(b) −
+  p_At^(b)]`, w_t = 1/T, over independent per-cell Beta(1,1) posteriors;
+  nothing reports a numerical-error/doubling record or the registered
+  8,000-draw battery.
+
+**Proposed after (candidates — unadmitted).**
+
+1. `finite_manifest_contrast∗` — for the frozen finite manifest within each
+   declared contamination stratum: `p_at | data ~ Beta(c_at+1,
+   n_at−c_at+1)`, independent across task/arm cells; posterior draws
+   `Δ^(b) = Σ_t w_t[p_Bt^(b) − p_At^(b)]`, `w_t = 1/T`; analytic
+   posterior mean; a labelled 95% equal-tail **`credible{Beta(1,1),
+   finite-manifest}`** interval; the observed equal-task contrast always
+   reported beside. Task pairing is stratification, never
+   correlated-replicate modelling; no pooled Beta, hierarchical or
+   task-population claim.
+2. Integer inverse-CDF draws: `i64` ppm variates via bisection on
+   `regularized_beta` (integer hyperparameters — the existing primitive);
+   canonical-input-seeded xorshift64*; **8,000 posterior draws** base
+   with the frozen doubling check through **64,000** (S.3); actual draws
+   and `numerical_error` recorded on the report; no seed shopping.
+3. Refusals preserved: one task, missing keys, short/unequal required
+   cells, unsupported dependence or a degenerate estimator refuse
+   inference through the actual report path (D1/D2 vocabulary —
+   `estimator_undefined`, `MissingClusterKey`, `InsufficientReplicates`).
+4. Distinct companions, never merged into an omnibus verdict: whole-task
+   paired bootstrap for rates/cost (BCa at ≥30 tasks, percentile below,
+   declared seed/draws/degeneracy, ≥2,000 confirmatory draws —
+   `bootstrap_paired` reused) as **task-mixture sensitivity**; task
+   sign-flips under the registered lane-randomization/exchangeability
+   argument (exact enumeration at ≤20 tasks, else 8,000 Monte Carlo draws
+   at `(extreme+1)/(draws+1)` — `permutation_signflip_p` reused) testing
+   the sharp no-effect null, not weak-mean or practical-margin nulls.
+5. `Beta(2,2)` sensitivity predeclared **exploratory** only — it never
+   replaces the registered `Beta(1,1)` prior.
+6. Frozen simulation battery per S.4 with parameters/seeds/failures
+   retained; pilot uncertainty propagated; the existing paired-binary
+   power formula is a cross-check, never override authority.
+7. Multiplicity: D2 Holm α=.05 across all three primaries and
+   confirmatory strata including unavailable members; exploratory BH
+   stays separate; interval coverage and multiplicity-adjusted tests
+   remain distinct.
+
+### D.2 Owner map
+
+| Seam | Owner (crate) | Durable fact |
+|---|---|---|
+| `finite_manifest_contrast∗` estimator | hh-eval (math) | posterior draws/interval + doubling record on the report |
+| estimator/floor metadata + `interval_method` member | hh-lab (registry declarations) | declared method/prior/floors before collection |
+| `AnalysisSpec` seed/draws/family + persisted report | hh-analysis | `AnalysisRecord` carrying seed, draws, `numerical_error` |
+| cell population (consumed, unchanged) | hh-results | `CellTable` first-subject canonical/raw/joint cells |
+
+### D.3 Durable payload / home / class candidates (all `∗`)
+
+- `finite_manifest_contrast∗` — additive `AnalysisReport` member:
+  `{stratum, cells[{task_id, arm, c, n}], weights_ref, prior{beta, 1, 1},
+  draws{requested, used, doubling[{draws, max_delta_ppm}], tol_ppm},
+  seed, posterior_mean_ppm, interval{lo_ppm, hi_ppm, kind: credible},
+  observed_contrast_ppm}` — report-payload data, not a new event class.
+- An admitted `interval_method` member is a dialect bump landing once in
+  the owning codec (hh-embed-schema → hh-codegen → all outputs if it
+  crosses the boundary — CC7); none is committed here.
+- Companion records reuse `bootstrap_paired`/`permutation_signflip_p`
+  result facts — `ResamplePlan`/`EstimatorSelection` extended additively.
+
+### D.4 Authority
+
+- The estimator computes and labels; it never decides task truth beyond
+  the declared finite-manifest target; unsupported inputs are typed
+  refusals, never warnings; no new authority class.
+
+### D.5 Recovery
+
+- Reports are pure persisted `AnalysisRecord`s: same spec + inputs ⇒
+  same report address; recomputation under the recorded seed reproduces
+  the interval; supersession only.
+
+### D.6 Tier / negotiation
+
+- Unknown method/prior/family version → typed refusal at the report
+  boundary; no new tier or feature dependency.
+
+### D.7 Compatibility and preserved legacy
+
+- The declared-selection ladder, floors, Wilson/per-cell-Beta fallbacks,
+  `test`/`sign_profile`/`tail_effects`, outcome bounds and n/a vocabulary
+  are unchanged; the observed contrast rides beside every posterior;
+  no global floor reduction or historical re-estimation required
+  (stored `(c,n)` permits it, never demands it).
+
+### D.8 Dependency edges and owed predicates
+
+- REQ-D-107 → R5.16, REQ-D-109/REQ-E-209 → R5.40 are the primary owners;
+  this packet is their admission-dossier slice — the landings,
+  simulation battery and dispatch evidence are owed to them and the
+  §9.2 numerical/routing gate; nothing discharged here.
+- Consumed by: R5.37 (task-mixture), R5.38 (KL/equivalence — Packet F
+  inputs), R5.39 (parity admission), R5.49 (study report);
+  {P3,P6,P7,method/parity admission} → P8 collection/report.
+- Forbidden edges held: no new fitter/dependency, no second estimator
+  home, no pooled-Beta substitution for the declared target.
+
+### D.9 Acceptance mapping (AC-4-2 → numbered checks)
+
+1. Analytic/known answers: closed-form per-cell posterior means/tails vs
+   computed draws; canonical small-cell tables.
+2. Numerical tolerance + doubling: 8,000→64,000 recompute; endpoint
+   delta ≤ frozen `tol_ppm` or `numerical_error` recorded.
+3. Heterogeneous/unequal n; prior placement (`Beta(2,2)` sensitivity
+   labelled exploratory); independent-versus-correlated counterexamples
+   refuse or are flagged as assumptions.
+4. Floors/refusals: one task, missing keys, short/unequal cells,
+   unsupported dependence, degenerate estimator.
+5. Actual seed/draw/family routing; deterministic recomputation; the
+   eval→analysis→persisted-report dispatch; a metadata change without a
+   computation change fails.
+6. Registered simulation battery per S.4 retained with Monte Carlo
+   uncertainty; availability/coverage/type-I/widths/verdict
+   probabilities reported.
+
+### D.10 Alternatives rejected
+
+- Pooled Beta over all cells — rejected (finite-manifest target).
+- Hierarchical/task-population or correlated-replicate model — rejected
+  (not the target; needs a fitter).
+- Credible-as-TOST certificate — rejected (S.6).
+- Retain hardcoded 4,000 draws — rejected (frozen 8,000 + doubling).
+- Seed shopping — rejected (canonical-input-seeded stream).
+- Combined omnibus efficacy verdict — rejected (distinct targets).
+
+<a id="packet-e"></a>
+## Packet E — PADR-R5-5∗: narrow preassigned H/O first-attempt parity grouping under an independent-across-pairs finite design
+
+Landing owners **bench, lab, eval** (REQ-D-302/310).
+
+### E.1 Exact before → proposed after
+
+**Before (re-confirmed at 8eeb3740).**
+
+- §10.1 replicate factor: "pairing by task, by replicate only where all
+  participants declare `seed_honoured` (CF-095)"; §05h.2.1 `compare` row
+  carries the same rule plus `UnmatchedBudget`,
+  `InsufficientReplicates(task)`, `IncommensurableMatch`,
+  `MissingMatchSpec` refusals; ADR-0046 D2–D5 supply the budget/
+  task-set/split/image/fault/model preconditions and the pairing rule.
+- `hh-eval/src/compare.rs` ~638–648: `Pairing::ByTaskAndReplicate`
+  requires `seed_honoured` on every run (`by_task_and_replicate requires
+  seed_honoured: {run_id}` refusal :130); no runner-side (H/O) pairing
+  exists — the `hh-bench` parity fixture repeats recorded `model_io`
+  with empty model snapshots and `equivalence_margin: None` (design F1);
+  product smoke carries `parity=none`.
+- Design F4: identities create no correlation/CRN — independent p=.5
+  outcomes typically yield q+ = q− = .25 — so honoured-seed pairing
+  cannot express the proposed design and is not extended silently.
+
+**Proposed after (candidates — unadmitted).**
+
+1. `parity_pair_grouping∗` — H/O **first attempts** preassigned within
+   `(task, repeat, pair_id)`; for one participant/policy/stratum with T
+   fixed tasks and equal repeats R, N = T·R pairs;
+   `W+ = 1{Y_H=1, Y_O=0}`, `W− = 1{Y_H=0, Y_O=1}` with counts c+/c− feed
+   Packet F's directional bound.
+2. `independence_declaration∗` — a recorded **design assumption**:
+   across-pair independence is required; within-pair dependence is
+   allowed; the justification is signed before data and is never proved
+   by reset logs, calendar balance or IDs. Known common shocks,
+   cache/carryover or reused subjects → typed refusal or a separately
+   admitted design.
+3. No coupling claim: the grouping exception grants no CRN, honoured-seed
+   coupling, R2 or causal pairing; requested/honoured seed status is
+   still recorded per run (CF-095 preserved); §4.1's efficacy assignment
+   is unaltered.
+4. Floors preserved: adapter floor ≥3/task; the S3 floor ≥5/task/arm;
+   task pairing unchanged. Unequal/missing `(task, repeat, pair_id)`
+   identity, retried/superseded attempts or non-first attempts → typed
+   refusal or recorded exclusion — never re-pairing after observation.
+
+### E.2 Owner map
+
+| Seam | Owner (crate) | Durable fact |
+|---|---|---|
+| authentic H/O attempt records + first-attempt binding | hh-bench | adapter-pair identities on run records |
+| `Design`/`PreRegistration` pairing + independence declaration | hh-lab | frozen design metadata before first bound run |
+| grouping consumed in compare/equivalence | hh-eval | c+/c−/N inputs to `equivalence_verdict∗` |
+
+### E.3 Durable payload / home / class candidates (all `∗`)
+
+- `pair_id` — additive member on the plan's attempt coordinates (a
+  design/attempt metadata field, not a lifecycle event); `Pairing`
+  member `parity_pairs{pair_id}` would be a dialect bump landing once in
+  the owning codec if admitted (CC7).
+- `independence_declaration∗{statement, justification_ref,
+  known_shock_checks[]}` on the design record — immutable once the first
+  run binds (mirrors `PreRegistration` immutability).
+
+### E.4 Authority
+
+- Pairing metadata is recorded under the frozen pre-registration; it
+  confers no scheduler or oracle authority; refusal is typed, never a
+  warning.
+
+### E.5 Recovery
+
+- Identities are assigned before launch; duplicated/missing pair ids are
+  detected at bind; superseded attempts keep their original rows and
+  reasons — no silent re-pairing.
+
+### E.6 Tier / negotiation
+
+- An unknown pairing member → typed refusal on versioned data; no new
+  tier.
+
+### E.7 Compatibility and preserved legacy
+
+- The honoured-seed pairing path (CF-095) is unchanged; product smoke
+  `parity=none` is retained until admission; `compare` budget/image/
+  oracle/task-set preconditions are untouched; task pairing unchanged.
+
+### E.8 Dependency edges and owed predicates
+
+- REQ-D-302 → R5.39, REQ-D-310 → R5.40 are the primary owners; authentic
+  pair capture and live-parity evidence stay owed to R5.39/R5.47 and the
+  parity admission packet (AC-4-4).
+- Consumed by: Packet F (c+/c−/N); R5.47 (parity-live), R5.49 (study
+  report). Consumes: the S.1 population contract only — no Packet A/B/C
+  seam is redefined.
+
+### E.9 Acceptance mapping (AC-4-3 grouping cells → numbered checks)
+
+1. Unequal/missing `(task, repeat, pair_id)` identity refuses.
+2. Reused-subject / shared-shock / cache-carryover counterexamples
+   refuse or route to a separately admitted design.
+3. Empty pins and non-first attempts refuse; honoured-seed pairing path
+   regression-tested unchanged.
+4. Actual grouping routed through the compare/equivalence report path —
+   metadata-only support fails.
+
+### E.10 Alternatives rejected
+
+- Reuse honoured-seed pairing unchanged — rejected (cannot express H/O
+  pairs; F4).
+- CRN or fitted-correlation model — rejected (no such claim admitted).
+- Retry/best-of pairing — rejected (first attempts only).
+- Product smoke as parity evidence — rejected (design F1).
+
+<a id="packet-f"></a>
+## Packet F — PADR-R5-6∗: directional-KL finite-manifest equivalence, completion envelope, bounded relative-mean test, one IUT conjunction exception
+
+Landing owners **eval, lab, analysis, bench** (REQ-D-303–307/310).
+
+### F.1 Exact before → proposed after
+
+**Before (re-confirmed at 8eeb3740).**
+
+- §10.2 equivalence (ADR-0046 D5; ADR-0158 D7): `equivalence_run` is a
+  `compare` with a pre-registered per-dimension margin and two one-sided
+  tests — `equivalent` iff the paired-Δ interval lies within ±margin,
+  `not_equivalent` iff it excludes the band, else `inconclusive`;
+  margins come only from `PreRegistration`.
+- §10.1 multiplicity: Holm across pre-registered primaries, BH
+  elsewhere; `multiplicity{holm|bh}` on `ComparisonReport`; ADR-0158 D2
+  estimator selection + D9 enum growth.
+- Inspected anchors (design F8): `hh-eval/src/compare.rs` ~622–634 /
+  ~781–791 / ~883–892 always constructs the paired bootstrap with empty
+  floors; equivalence parses relative margins but compares the raw Δ
+  against ±margin_ppm; `hh-analysis/src/kernel.rs` ~557–569 /
+  ~1583–1591 applies multiplicity over the same computation — no KL
+  endpoint, no completion envelope, no relative-mean branch, no IUT
+  conjunction exists.
+- REQ-D-108's historical R5 width calculation remains an inspected
+  diagnostic only — superseded by REQ-D-304 (with REQ-D-309/310
+  dependencies) per the coverage register.
+
+**Proposed after (candidates — unadmitted).**
+
+1. `kl_directional_bound∗` — `K_η(x,N) = [L,U]` by continuous Bernoulli
+   KL inversion `N·kl(x,L) = N·kl(x,U) = log(1/η)`, `L ≤ x ≤ U`;
+   `L=0` at `x=0`, `U=1` at `x=1` (continuous endpoint conventions;
+   `x=0 ⇒ U = 1−η^(1/N)`, `x=1 ⇒ L = η^(1/N)`); integer-ppm endpoints by
+   bisection, outward-rounded (S.2/S.3). One-sided noncoverage ≤ η per
+   endpoint — concentration, never CP/binomial inversion.
+2. `equivalence_verdict∗` — TOST α=.05: `η = α/2 = .025` per direction;
+   `point_Δ = (c+−c−)/N`, `L_Δ = L+−U−`, `U_Δ = U+−L−`; **equivalent ⇔
+   strictly** `L_Δ > −ε ∧ U_Δ < ε`; touching/overlap ⇒ `inconclusive`;
+   each null branch's size ≤ α; joint coverage ≥ 1−2α = .90; a separate
+   95% reporting interval uses α=.025, η=.0125.
+3. S11 verdict rule (S.6): inferential `not_equivalent` only when the
+   95% reporting interval lies wholly outside the band under applicable
+   selected-claim multiplicity; otherwise the outside-band wording is
+   descriptive and the negative inference stays `inconclusive`.
+4. `completion_envelope∗` — with `u` uncertain pairs the planned N is
+   preserved: each direction becomes `[K_η(c/N).L,
+   K_η((c+u)/N,N).U]` — a conservative envelope, never missing-at-random;
+   canonical/raw/joint populations and class counts kept; informative
+   exclusions cannot gain coverage by shrinking N; required conditional
+   claims need another admitted method.
+5. `bounded_difference∗` — for a required absolute bounded contrast
+   `D = X_H − X_O ∈ [a,b]`: apply K to `mean((D−a)/(b−a))` and transform
+   back; `a=b` is exact; zero sample variance never proves zero range.
+6. `relative_mean_test∗` — relative margin ρ targets the **ratio of
+   finite-manifest means**: lower bound for `E_H−(1−ρ)E_O > 0` and upper
+   bound for `E_H−(1+ρ)E_O < 0`, using known physical ranges, affine
+   normalization and K at α per direction; zero/near-zero reference ⇒
+   frozen absolute convention or refusal. S11 negative verdict on a
+   relative endpoint: `U(C−)<0` or `L(C+)>0` at one-sided α/2=.025 per
+   negative branch; union controls .05 — no ratio interval or
+   observed-reference division implied.
+7. `iut_conjunction∗` — one preregistered **all-endpoints/all-strata
+   equivalent** claim: the IUT needs no additional endpoint Bonferroni
+   (at least one true null must be rejected); selected individual or
+   multiple claims and any-endpoint efficacy keep their family
+   correction; unknown members and compliance vetoes can never be
+   removed or averaged away; the D2 efficacy Holm is unchanged.
+8. Declared `α/η/target/range/unit/margin` per endpoint before data;
+   unbounded/unknown billing, unbounded intensity, missing values
+   without valid completion bounds, or changed eligible-only
+   populations → `estimator_undefined`/unavailable inference — never a
+   fabricated bound.
+
+### F.2 Owner map
+
+| Seam | Owner (crate) | Durable fact |
+|---|---|---|
+| `kl_directional_bound∗` + `equivalence_verdict∗` math | hh-eval | ppm endpoints/verdict on the report |
+| dimension→metric/margin map metadata | hh-lab | declared targets/margins before data |
+| report persistence + multiplicity/family records | hh-analysis | `AnalysisRecord` incl. unavailable members |
+| authentic pair input (consumed) | hh-bench | Packet E's c+/c−/N |
+
+### F.3 Durable payload / home / class candidates (all `∗`)
+
+- `kl_bound∗{eta_ppm, n, x_ppm, lo_ppm, hi_ppm}`;
+  `equivalence_verdict∗{point_delta_ppm, lo_ppm, hi_ppm,
+  margin{kind: absolute|relative{rho_ppm}}, verdict ∈ {equivalent,
+  not_equivalent, inconclusive}, reporting{lo_ppm, hi_ppm, eta_ppm}}`;
+  `completion_envelope∗{c, u, n}`; `iut_conjunction∗{claim_ref,
+  members[{endpoint, verdict}], unknown_members[]}` — additive report
+  payload members; no new event class.
+
+### F.4 Authority
+
+- Margins come only from `PreRegistration`/the sponsor — never from the
+  caller or post-outcome data; the verdict is a report fact; refusals
+  are typed.
+
+### F.5 Recovery
+
+- Pure recompute over durable inputs; supersession only; deterministic
+  under recorded seeds.
+
+### F.6 Tier / negotiation
+
+- Unknown margin/method/member versions → typed refusal; no new tier.
+
+### F.7 Compatibility and preserved legacy
+
+- The existing TOST path and estimator defaults are unchanged outside
+  the admitted scope; the REQ-D-108 diagnostic stays inspectable;
+  floors, outcome classes, veto axes and history are retained; no
+  post-outcome margin or endpoint.
+
+### F.8 Dependency edges and owed predicates
+
+- Consumes Packet E's pair records; REQ-D-303 → R5.39,
+  REQ-D-304–307 → R5.38, REQ-D-310 → R5.40 are the primary owners;
+  R5.47 parity-live and R5.49 study report predicates remain owed —
+  recorded, not discharged.
+- {P3,P6,P7,method/parity admission} → P8; the dimension map, margins
+  and both-runner quote are sponsor inputs outside this dossier.
+
+### F.9 Acceptance mapping (AC-4-3/AC-4-4 → numbered checks)
+
+1. Endpoints/continuous limits/monotonicity; strict and outward-rounded
+   boundaries.
+2. Small-N/heterogeneous tails; sign reversal; .90 TOST vs .95
+   reporting interval distinction.
+3. Missingness/veto completion envelopes at preserved N.
+4. Relative scale invariance; zero/near-zero reference convention or
+   refusal; unknown/unbounded cases unavailable.
+5. Unequal/missing identity; empty pins; reused-subject/shared-shock
+   counterexamples; selected-versus-conjunction family corrections.
+6. Unsupported assumptions refuse through the actual report path;
+   derivation + existing-owner routing reviewed before collection
+   (design F8's acceptance line).
+
+### F.10 Alternatives rejected
+
+- D2's per-task CP/Bonferroni construction — superseded by this narrow
+  proposal (concentration bound; design F4).
+- Credible-as-TOST — rejected (S.6).
+- Raw-unit vs ppm mixed comparisons — rejected (single canonical unit).
+- Post-outcome CP fallback — rejected.
+- Mean-of-task-ratios / observed-reference division / clipping /
+  invented bounds — rejected (F5's explicit bars).
+- A mixed Bayesian-efficacy + frequentist-calibration joint certificate
+  — rejected (§4.5).
+
+<a id="packet-g"></a>
+## Packet G — PADR-R5-7∗: exact detector join windows, unbounded-intensity denominators and complete analysis metadata families
+
+Landing owners **eval, context, lab, analysis** (REQ-D-003/005/008/106/109).
+
+### G.1 Exact before → proposed after
+
+**Before (re-confirmed at 8eeb3740).**
+
+- ADR-0077 D4 metric declarations — `grounding.reacquisition_rate`,
+  `reliability.repeated_action_rate`, `grounding.recall_probe@compaction`,
+  `efficiency.compaction_overhead_share`, `efficiency.compaction_latency_ms`
+  — `computed_from` ledger events under `trace_predicate` oracles;
+  `n/a{no_detector}` without an extractor.
+- §05c: `context.compaction.completed{…CompactionRecord{compaction_id,
+  applied_ops, forgotten{ids | range}, tokens_before, tokens_after,
+  …}}`; `context.artefact.delivered`; idempotency keys (ADR-0031);
+  provider-side compaction's `forgotten = {range: all_prior}` fallback.
+- §05h `MetricDeclaration`; §06.4 analysis engine; §10.5.1 the
+  `lab/compaction-family-v1` exemplar table.
+- Inspected anchors: `hh-eval/src/compare.rs` ~365–367 the
+  `replicate_reducer` is applied per task; §4.2's exact window
+  `(completion_seq(c), subject_execution_stop_seq]` — including later
+  compactions and overlapping `(c,event)` joins — plus `(c,event,item)`/
+  `(c,effect)` join retention are **not yet** the declared detector
+  contract: the §9.3 row's "overlapping completion→execution-stop
+  joins, repeated deliveries/idempotency keys, denominators/coverage/
+  unbounded intensity" is the proposed change.
+
+**Proposed after (candidates — unadmitted).**
+
+1. `detector_join_contract∗` — per completed compaction c the subject
+   window is `(completion_seq(c), subject_execution_stop_seq]`,
+   including later compactions; retain `(c,event,item)` joins —
+   reacquisition = matching post-c deliveries / fs or memory reads ÷
+   forgotten items, repeated deliveries count so intensity may exceed
+   one (never probability/ppm-clamped) — and `(c,effect)` joins with
+   idempotency keys — repeated action = post-c effects matching pre-c
+   keys ÷ all post-c effects; argument/capability similarity stays a
+   distinctly named approximation.
+2. `detector_declaration∗` — versioned registry names, native
+   units/bounds/direction, detector/extractor IDs, windows and reducers
+   declared **before collection**; absent extractor `no_detector`;
+   zero denominator `estimator_undefined`; missing ID/key `no_detector`;
+   a required unavailable detector blocks its claims and stays in the
+   frozen multiplicity family.
+3. `coverage_reducer∗` — sum numerator/denominator within subject,
+   divide, average available subject ratios within task, then
+   equal-task contrast; coverage and missingness disclosed; never pool
+   events as trials or weight tasks by opportunities.
+4. `analysis_family∗` — the complete frozen primary/stratum family
+   recorded per report **including unavailable members**; actual
+   estimator, version, target, assumptions, prior, keys, seed, draws,
+   floors, refusal and interval `{kind, level}` recorded per analysis
+   (REQ-D-008/109, REQ-E-209); uncertainty labels per S.6.
+5. Activation semantics — starts/eligible pressure opportunities,
+   completions/starts, triggered first subjects/all first subjects;
+   ineffective/fallback counts with fallback an assigned-arm deviation
+   (never a relabelled arm); untriggered subjects remain in task
+   success — activated-only analysis is exploratory post-treatment
+   selection; association with omission is never causal-forgetting
+   proof.
+
+### G.2 Owner map
+
+| Seam | Owner (crate) | Durable fact |
+|---|---|---|
+| detector predicates + catalogue | hh-eval | `(c,event,item)`/`(c,effect)` join facts |
+| compaction window facts (consumed, unchanged) | hh-context | `CompactionRecord`/delivery events |
+| versioned registry declarations | hh-lab | detector/extractor ids, units, reducers |
+| families + analysis metadata | hh-analysis | `analysis_family∗` on `AnalysisRecord` |
+
+### G.3 Durable payload / home / class candidates (all `∗`)
+
+- `detector_join∗{compaction_id, window{from_seq, to_seq},
+  joins[{event_ref, item_ref}], numerator, denominator, coverage}` —
+  join facts on existing measurement families (no second store);
+  `analysis_family∗{family_id, members[{claim, status ∈ {reported,
+  unavailable, refused}}], correction{holm|bh}}` on `AnalysisRecord`.
+
+### G.4 Authority
+
+- Detectors compute from ledger evidence only — no grading authority is
+  inferred; a missing/unknown required declaration refuses or yields
+  `no_detector`, never a silent zero.
+
+### G.5 Recovery
+
+- Joins recompute deterministically from durable evidence;
+  later-compaction overlaps re-join identically; no mutable detector
+  state.
+
+### G.6 Tier / negotiation
+
+- Unknown detector/extractor version → `no_detector`/typed refusal; no
+  new tier.
+
+### G.7 Compatibility and preserved legacy
+
+- Old approximation names are retained; six outcome classes, veto axes
+  and the `n/a{reason}` vocabulary unchanged; no count-to-rate
+  relabelling; grading-time events never enter the subject window.
+
+### G.8 Dependency edges and owed predicates
+
+- REQ-D-003 → R5.15, REQ-D-005/106 → R5.36, REQ-D-008 → R5.37,
+  REQ-D-109 → R5.40 are the primary owners; R5.20 (wire) and R5.49
+  (study report) predicates remain owed — recorded, not discharged.
+- Feeds Packets D/F inputs (population + metadata contract, S.1/S.4);
+  no Packet A/B/C seam is redefined.
+
+### G.9 Acceptance mapping (AC-3-1 / AC-4-1 / AC-4-2 → numbered checks)
+
+1. Golden traces: overlapping compactions, repeated deliveries,
+   matching/nonmatching idempotency keys, missing keys/extractors,
+   zero opportunities, no event, fallback/ineffective/impossible
+   outcomes, a next-dispatch join.
+2. Subject/task reducers and every reported denominator recomputed from
+   native evidence; old approximation names retained.
+3. Unknown/veto/short-cell denominators unchanged — the AC-3-1 D1
+   counterexample bound `[−0.4, 0.5]` stands.
+4. Missing-key/missing-detector tests; complete frozen family incl.
+   unavailable members; actual draws/seeds routed and recorded.
+
+### G.10 Alternatives rejected
+
+- Probability/ppm clamp on intensity — rejected (unbounded).
+- Count-to-rate relabelling — rejected.
+- Pooling events as trials / task weighting by opportunities —
+  rejected.
+- Dropping unavailable members from the family — rejected.
+- Grading-time events inside the subject window — rejected.
+
 ## Non-admission ledger (AC-2 negative space — all unadmitted)
 
 - **Wire/domain/event names:** every `∗` name is a candidate; none is
@@ -658,6 +1342,30 @@ REQ-E-208 + merged aliases REQ-E-010/108/109).
   annotation); closure verdicts are recipient-class/time-scoped.
 - **Semantics in source:** no crate, schema or generated file is touched;
   implementing edits wait for GATE-G9.
+
+- **New fitter/prior/method beyond the four rows:** none proposed —
+  `factorial_glmm`, hierarchical/task-population and correlated-replicate
+  models stay unadmitted; `Beta(2,2)` is exploratory sensitivity only.
+- **CP fallback:** none — `kl_directional_bound∗` is concentration, not
+  CP/binomial inversion; no post-outcome CP substitution.
+- **Credible-as-TOST / mixed uncertainty transfer:** barred — a
+  Bayesian-efficacy + frequentist-calibration claim is no joint 95%
+  certificate (§4.5); `credible{prior}` is never relabelled.
+- **Guessed endpoint/margin/seed/tolerance:** none — unspecified
+  precision/encoding blocks dependent implementation (S.2, AC-2);
+  margins/δ/κ stay sponsor-signed inputs; the provisional δ=.05 / h=.05 /
+  half-width .10 are not ratified.
+- **Post-observation tolerance or N:** barred — tolerances, N and the
+  simulation battery freeze before any numerical execution; no peeking
+  or top-ups.
+- **Coupling inflation:** none — `parity_pair_grouping∗` grants no
+  CRN/honoured-seed/R2/causal-pairing claim (E.1).
+- **Intensity clamp / event pooling:** none — repeated deliveries count
+  and intensity may exceed one (G.1); no count-to-rate relabelling, no
+  dropped unavailable family members.
+- **Numerical execution:** none — parameters/seeds/envelope are cited,
+  not run; the D2 tranche (≤8 h, 4 cores/8 GiB, 32 core-hours, 2 GiB) is
+  not authorized by this dossier; $0 stands.
 
 ## Admission evidence GATE-G9 will need
 
