@@ -457,16 +457,25 @@ class Driver:
                      "'clean' — the stub mutated the product tree")
         for ev in events:
             if ev.get("kind") == "stub_report":
-                if ev.get("spend_usd", 0) not in (0, 0.0):
+                # the stub's report object is itself the evidence: fields may
+                # live at event level or inside `report` (the coordinator's
+                # actual encoding) — accept either, require one.
+                rep = ev.get("report", {}) if isinstance(
+                    ev.get("report"), dict) else {}
+                spend = ev.get("spend_usd", rep.get("spend_usd", 0))
+                if spend not in (0, 0.0):
                     self.err("provider-budget",
                              f"stub_report attempt {ev.get('attempt')} spent "
-                             f"{ev.get('spend_usd')} — budget is USD 0")
-                for w in ev.get("writes", []):
+                             f"{spend} — budget is USD 0")
+                writes = ev.get("writes") or rep.get("writes") or []
+                for w in writes:
                     if w not in contract.get("allowed_writes", []):
                         self.err("product-mutation",
                                  f"stub wrote {w!r} outside allowed_writes "
                                  f"{contract.get('allowed_writes')}")
-                if not ev.get("actions") and not ev.get("interrupted"):
+                actions = ev.get("actions") or rep.get("actions")
+                interrupted = ev.get("interrupted") or rep.get("interrupted")
+                if not actions and not interrupted:
                     self.err("no-progress",
                              f"stub_report attempt {ev.get('attempt')} records "
                              "no actions — no-progress is not a launch")
@@ -539,7 +548,10 @@ class Driver:
                      "contracted resume attempt)")
         disp = env.get("dispatch", {})
         for s in spawns:
-            if s.get("primitive") != disp.get("primitive") or \
+            # a real resume spawn records run_subagent(resume=<agent_id>) —
+            # normalize the primitive to its base token for the identity check
+            prim = str(s.get("primitive", "")).split("(")[0]
+            if prim != disp.get("primitive") or \
                     s.get("profile") != disp.get("profile"):
                 self.err("envelope-mismatch",
                          f"spawn {s.get('primitive')}/{s.get('profile')} != "
