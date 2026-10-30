@@ -24,4 +24,4 @@ one. Run `check-build-memory.sh .` to validate.
 
 ## Round 5 planning
 
-[Partition](planning/2026-10-30_evidence-decomposition.md), [coverage](planning/2026-10-30_evidence-coverage.md), [working ledger](planning/2026-10-30_evidence-planning-ledger.md) and [common contract clauses](planning/2026-10-30_evidence-invariants.md) describe the evidence/adoption extension. They are plans, not execution evidence. Gate G8 is pending; retained guard/dispatch implementation is a separately authorized prerequisite.
+[Partition](planning/2026-10-30_evidence-decomposition.md), [coverage](planning/2026-10-30_evidence-coverage.md), [working ledger](planning/2026-10-30_evidence-planning-ledger.md) and [common contract clauses](planning/2026-10-30_evidence-invariants.md) describe the evidence/adoption extension. They are plans, not execution evidence. GATE-G8 PASSED 2026-10-30 scoped to the bootstrap pair; the retained read-only guard lives at [tools/check-supplement-guard.sh](tools/check-supplement-guard.sh) (R5.1) with rejection fixtures under [fixtures/supplement-guard/](fixtures/supplement-guard/). Product dispatch still requires its own launch-path proof.
