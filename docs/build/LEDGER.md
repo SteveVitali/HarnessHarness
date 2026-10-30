@@ -16,9 +16,9 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.1
-lastCompleted:   GATE-G8
-blockedOn:       CI fail on #209 (CI scripts self-test — check-living-docs personal paths; gitleaks full-history 2 leaks — both inherited from base codex/harnessharness-evidence, not this ticket)
+nextTicket:      R5.2
+lastCompleted:   R5.1
+blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence
+chainTip:        codex/harnessharness-evidence-r5.1
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-10-30T04:18:21Z
+updatedAt:       2026-10-30T05:00:19Z
 ```
 
 ## OPEN FINDINGS
@@ -990,3 +990,4 @@ updatedAt:       2026-10-30T04:18:21Z
 - 2026-10-30T04:25Z · SETUP — branch `codex/harnessharness-evidence` created at pinned base `001490c14a6568972d16a663bb04c07a4255d30d` (= origin/main); planning commit `1667c5e448af0b41c3e9cecbb981e0a6207897df` lands the exact reviewed artifacts (139 files: 79 contracts, planning packet, upstream spec/research/design surfaces, reports, GATE-G8 PASSED readout, modified README/LEDGER/MANIFEST). `git show --stat` covers every claimed file; chainTip → `codex/harnessharness-evidence`. No new worktree — the ledger's recorded buildWorktree is this checkout; no clean-clone from old main (planning identities preserved). harness: devin-desktop/swe-2-high/subagent.
 - 2026-10-30T04:18:21Z · correction — the GATE-G8 PASSED (`04:20Z`) and SETUP (`04:25Z`) PHASE LOG entries and the `updatedAt` state carried agent-estimated timestamps ahead of the actual clock (BM-CLOCK-01 fault caught by the validator's clock check, exit-0 run 2026-10-30T04:17Z); true write times were ≈04:17–04:18Z. Content unchanged; writes read `date -u` at writing. harness: devin-desktop/swe-2-high/subagent.
 - 2026-10-30 — R5.1 blocked — branch codex/harnessharness-evidence-r5.1 · PR #209 · base codex/harnessharness-evidence (@5d3edc79). Guard + fixtures landed and verified locally; ci-boundary/1 fail on pushed head ef40a13: `CI scripts self-test` fails inside check-living-docs on 4 `/home/class*` personal paths committed in the base branch's planning commit (docs/design/14,20,21 · tickets/171 · evidence-and-adoption-spec.md — none authored by this ticket; identical output on stashed base), and `gitleaks` full-history finds 2 leaks — `gitleaks --log-opts=codex/harnessharness-evidence..HEAD` = no leaks in this ticket's commits, `main..codex/harnessharness-evidence` = the same 2 (inherited). Inherited red ⇒ blockedOn per BM-CI-01; nextTicket not advanced. **Deferrals:** opened DF-R5.1-1 · **ADRs:** ADR-0382 · ci: fail #209@ef40a13 (build·test·fmt·drift ubuntu+macos 41003825469; gitleaks 41003825469; cargo-deny pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-10-30T05:00Z · R5.1 done — branch `codex/harnessharness-evidence-r5.1` · PR https://github.com/SteveVitali/HarnessHarness/pull/209 · base `codex/harnessharness-evidence` (head `a3ed602b`; base-owner repair `9dab9436` merged at `146e6c0d` — that commit cleared the inherited living-docs personal-path matcher + gitleaks full-history red recorded at the block). Manifest row 169 — retained supplemental coverage/routing guard `hh-supplement-guard/1` v1.0.0: read-only `supplement_guard.py` + `check-supplement-guard.sh` under docs/build/tools/ emitting input digests/counts/diagnostics; 13-case negative-fixture battery 13/13 rejections with named diagnostics; class-exact diagnostic baseline (no warning count); route DISPATCH R5.1 on the real checkout; never a state writer (git status identical across runs). **Deferrals:** opened DF-R5.1-1 (GATE-G17 contributor evidence — intentional), closed none. **ADRs:** ADR-0382 — quiet trigger homed on BL-47 + REVISIT_TRIGGERS regenerated (166 ADRs) as a post-open CI repair after the gen-revisit-triggers self-test caught the unplaced trigger (repair `a3ed602b`). **Verify:** guard PASS 0 viol/8 baseline warnings · fixtures 13/13 · fails-without green · check-living-docs 418 files · check-bm-tools OK · build-memory 0 viol · fmt clean (no Rust). blockedOn discharged; nextTicket → R5.2 · chainTip → codex/harnessharness-evidence-r5.1 · ci: pass #209@a3ed602 (build · test · fmt · drift (macos-latest) 41004794180; cargo-deny (licenses · advisories · bans · sources) 41004794180; gitleaks (full history + PR diff) 41004794180; build · test · fmt · drift (ubuntu-latest) 41004794180) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
