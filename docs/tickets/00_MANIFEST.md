@@ -359,6 +359,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 175 | `175_R5.6__launch.md` | Round 5 | ticket | Recoverable launch and subject funding binding | — |
 | 175 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 176 | `176_R5.7__adopt.md` | Round 5 | ticket | Adopt a launched subject through the existing runtime | — |
+| 176 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 177 | `177_R5.8__effect.md` | Round 5 | ticket | Bridge Dispatcher durability to the task runtime | — |
 | 178 | `178_R5.9__selection.md` | Round 5 | ticket | Shared first-valid grade selection and immutable revisions | — |
 | 179 | `179_R5.10__seal.md` | Round 5 | ticket | Seal submission and persist actual created-to-finished time | — |
