@@ -62,6 +62,7 @@ pub mod plan;
 pub mod policy;
 pub mod policy_family;
 pub mod procedure;
+pub mod retained;
 pub mod retrieve;
 pub mod vocab;
 
@@ -111,6 +112,11 @@ pub use policy::{
     check as check_policy, check_selection, AdmittedCandidate, ConditionedRule, ContextPolicy,
     DefaultPolicy, PolicyDeclaration, PolicyRequest, PolicyViolation, RegistrationError,
     RuleCondition, Selection, REQUIRED_POLICY_INPUTS,
+};
+pub use retained::{
+    replay_selection, verify_selection, ReplayedSelection, RetainedSelection, SelectionInput,
+    SelectionItem, SelectionOutcome, SelectionPolicy, SelectionRefusal, SelectionVerdict, ToolJoin,
+    RETAINED_SELECTION_SCHEMA,
 };
 pub use retrieve::{
     artifact_candidate, as_candidate, lexical_index, rank_score, retrieve, tokenize, LexicalIndex,

@@ -464,6 +464,11 @@ pub fn compaction_completed(record: &crate::compact::CompactionRecord) -> Json {
                 ),
             ]),
         ),
+        // R5.18 (REQ-E-206): the durable retained selection — exact
+        // policy/parameters and the retained/omitted content +
+        // pair/batch/required-group joins; additive member, replayable
+        // from the row alone (`retained_selection/1`).
+        ("selection", record.selection.to_json()),
     ];
     if let Some(s) = &record.summary_ref {
         v.push(("summary_ref", Json::str(s.clone())));
