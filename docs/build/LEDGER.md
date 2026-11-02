@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.14b
-lastCompleted:   R5.14
+nextTicket:      R5.15
+lastCompleted:   R5.14b
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.14
+chainTip:        codex/harnessharness-evidence-r5.14b
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T17:01:00Z
+updatedAt:       2026-11-02T17:54:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1029,3 +1029,4 @@ updatedAt:       2026-11-02T17:01:00Z
 - 2026-11-02T17:01Z · R5.14 done — branch `codex/harnessharness-evidence-r5.14` · PR #224 · base `codex/harnessharness-evidence-r5.13` (@1c95e96). Owner-model leg (a) of the `07b6be09` SPLIT (X7 contingency; contract 183 rescoped; leg (b) → seq 183a/R5.14b): `grade_pending` admission state (never a seventh outcome class) — `disposition::plan_disposition_at` (DispositionPins watermarks; strict `ext.required_grade` decode → `UnknownRequiredFeature`, absent → legacy byte-identical; seal/stop/veto + revision fold + verdicts → `select_grade_at`→`plan_disposition`); launch freezes `mode:"required"`+`selection_policy_ref`; settle mints `run_settled{grade_pending}`+`execution_settled{dedup_key}` once; `settle_graded` records `plan_disposition` (pending→no write, replay→verbatim, no recharge/replan/n); `record_selection_revision` RevisionLog-validated; scheduler `eligible_at`/`open_at`/`pending_plans` block; `CloseBlocked{grade_pending}` + partial `pending[]`; `cause_run` LAST-separator fix (colon-bearing `subj-sha256:` run ids — ADR-0393 D7 + R5.9 revisit flag); 3 classes + `closed.pending` member (CC10). **Verify:** fmt OK · r5_14a 7/7 · experiment/ledger/eval suites 0 regressions · fails-without compile-red at 1c95e96d + value-red pre-`cause_run` · guard PASS DISPATCH R5.14 post · bm 0 viol · bm-tools OK · triggers in sync (177). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,837 changed source/test lines vs ≤1000 — inside the pre-ruled ~1.8× band under SPLIT (183a carries consumers). REQ-E-202/E-008 support-only — producer checks; discharge owed 183a, never stamped. · chainTip → codex/harnessharness-evidence-r5.14 · next → R5.14b · ci: pass #224@d818728 (build·test·fmt·drift macos+ubuntu · gitleaks · cargo-deny 41483261622; macos rerun after helper_live deadline flake) · logs/ci-r5.14.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-02T17:34:45Z · **R5.14b size ruling** — worker stopped correctly at the ≤900 line trigger (measured 1,671, ~1.85×; context within estimate). Scoped fresh-context review verdict: **AMEND** — X7's only documented contingency (owner model before consumer wiring) consumed by the 183/183a split; b1/b2 per-consumer cut is the "not seven tiny tickets" fragmentation X7 names; AC-1/AC-2/AC-3 each span both halves. Removability deviation verified (pre-existing `hharness→hharness-varhost` baseline edge `crates/hharness/Cargo.toml:72`). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.14 precedent); dated note on `183a_R5.14b__pending-consumers.md`; manifest row-183a note; review record `planning/2026-11-02_R5.14b2-split-review.md`; `runs/R5.14b.md` ruling. Worker resumes to close. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-02T17:54Z · R5.14b done — branch `codex/harnessharness-evidence-r5.14b` · PR #225 · base `codex/harnessharness-evidence-r5.14` (@6baa09e). Consumer wiring leg (b) of the `07b6be09` SPLIT — every declared scored consumer composes the one admitted `plan_disposition_at` owner contract UNCHANGED (X7): hh-results `scoring.experiment_run` pin → `project_row` reads the admitted disposition (pending withholds `outcome_class` + stamps `outcome.disposition='pending'`; graded/oracle_failure restore the class; pin → `watermark_set`) + `Field::Disposition` query leg + `DispositionUnresolved` + export `foreign_leaderboard_submission` refusal / `outcome.disposition` no_slot entries; hh-eval `EvalRun.disposition` + `in_denominator` never denominates pending; hh-analysis `eval_run` propagates; hh-embed `lab.analysis.analyze` `Refused{grade_pending}`; step-6 agreement + old-watermark byte-identical reproduction proven. **Verify:** fmt OK · batteries 7/3/2 (results/eval/embed) · owning packages all-ok · fails-without compile-red at base (15/7/4) · guard PASS DISPATCH R5.14b pre+post · bm 0 viol (. + --staged) · bm-tools OK · triggers in sync. **Deferrals:** DF-R5.1-1 carried; none opened/closed. **ADRs:** none new — pure composition of ADR-0393's contract; BL-49 homes the removability edge. **Deviations:** 1,671 changed source/test lines vs ≤900 (~1.85×) — accepted as recorded Deviation per AMEND ruling `d4aba7ad`; `check-removability.sh` exits 1 on the pre-existing `hharness→hharness-varhost` baseline edge (`crates/hharness/Cargo.toml:72`, identical at base; BL-49). **AC-3:** REQ-E-202/REQ-E-008 discharged (met, engineered E-layer); REQ-E-102/103/201/204 contributing-only. chainTip → codex/harnessharness-evidence-r5.14b · next → R5.15 · ci: pass #225@c0d60d2 (build · test · fmt · drift macos+ubuntu · cargo-deny · gitleaks 41493327253; logs/ci-r5.14b.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
