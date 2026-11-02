@@ -363,6 +363,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 177 | `177_R5.8__effect.md` | Round 5 | ticket | Bridge Dispatcher durability to the task runtime | — |
 | 177 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict; post-hoc — ticket already closed) |
 | 178 | `178_R5.9__selection.md` | Round 5 | ticket | Shared first-valid grade selection and immutable revisions | — |
+| 178 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 179 | `179_R5.10__seal.md` | Round 5 | ticket | Seal submission and persist actual created-to-finished time | — |
 | 180 | `180_R5.11__oracle.md` | Round 5 | ticket | Execute and retain isolated instrument oracle attempts | — |
 | 181 | `181_R5.12__reserve.md` | Round 5 | ticket | Atomic whole-vector Account cap admission | — |
