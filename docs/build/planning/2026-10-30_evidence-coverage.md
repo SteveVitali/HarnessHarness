@@ -277,3 +277,25 @@ REQ-D-109 / REQ-D-310 / REQ-E-209 / REQ-H-010 gain R5.16b as a
 surface, boundary strict decode and records-in view fold exercise
 their clauses); their primary targets keep `planned; unmet` — this
 ticket never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-02 (seq 186, R5.17): the early
+> offline efficacy route is independently verified through
+> `crates/hh-analysis/tests/r5_17.rs` — a scenario harness whose
+> rollup can never count an unrun scenario, discrepancy, missing
+> method metadata or unknown error as a pass — driving the landed
+> `analyze`/`analyze_and_record` route end-to-end: EX-02 known answers
+> re-derived as exact rationals (observed 200_000, posterior 142_857),
+> the 95% credible interval reproduced by an independent SplitMix64 +
+> integer-Beta order-statistic sampler over the persisted cells
+> (declared tol 20_000 ppm), prior placement labels, unequal-n
+> heterogeneity (equal-task 425_000 ≠ pooled), missingness refusals
+> (unrun member → UnresolvedCell, n=4 → ShortCell), and persisted-
+> report instrumentation (idempotent report_id, record.kind, S.1
+> metadata complete, 8,000→64,000 doubling ladder, seed/tol,
+> integer-canonical ppm members). REQ-D-109 / REQ-D-310 / REQ-E-209 /
+> REQ-H-010 gain R5.17 as a **contributing-only** evidence row — the
+> exploratory-prior parameterization defect it surfaced is recorded
+> as DF-R5.17-1 OPEN (owed to R5.40/GATE-G10, never fixed in-place);
+> the four targets keep `planned; unmet` — this ticket never marks a
+> deferred full-target predicate MET and makes no numerical/study
+> validation claim (GATE-G9 exclusion stands; owed to GATE-G10/R5.40).
