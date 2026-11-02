@@ -2515,7 +2515,7 @@ impl EmbedService {
     /// `control_strategy` slot selects the variant (`strategy_for`; the
     /// canonical control loop under `KernelSink` + the writer lease).
     #[allow(clippy::too_many_arguments)] // the arming record is the §5f.2 arm tuple — the arity is the call's.
-    fn arm_driver(
+    pub(crate) fn arm_driver(
         &mut self,
         run_id: &str,
         lease: &hharness_ledger::store::Lease,
@@ -2695,7 +2695,7 @@ impl EmbedService {
     /// and through `Driver::resume_react` — the durable tail is observed
     /// past `last_cue_seq`, never re-minted. Returns the driver plus the
     /// arm record (the session carries it as `leaf_arm`).
-    fn arm_resume_driver(
+    pub(crate) fn arm_resume_driver(
         &mut self,
         run_id: &str,
         lease: &hharness_ledger::store::Lease,
@@ -3597,7 +3597,7 @@ pub(crate) fn manifest_leaf_ids(manifest: &RunManifest) -> Vec<String> {
 /// binding's enforcement evidence and the `bypass` gate can fail before
 /// any run exists (AC-R-2.11.1-7). `provision_environment` consumes the
 /// same spec — one construction, never two rules.
-fn environment_spec(
+pub(crate) fn environment_spec(
     environment: &EnvironmentInput,
     workspace_root: &str,
 ) -> Result<

@@ -168,7 +168,7 @@ pub struct EmbedService {
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
 #[derive(Debug, Clone)]
-pub(crate) struct HostCap {
+pub struct HostCap {
     pub capability_id: String,
     pub surface_id: String,
     pub requires_approval: bool,
