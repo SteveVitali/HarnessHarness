@@ -93,7 +93,7 @@ pub use spec::{
     BudgetMode, BudgetNode, BudgetScope, BudgetScopeKind, BudgetSpec, Ceiling, DimensionRule,
     Grace, Reservation, Threshold, ThresholdAt,
 };
-pub use tree::{BudgetTree, Exceeded};
+pub use tree::{BudgetTree, Exceeded, PhysicalUse, UnknownExposure, UnknownExposureReason};
 pub use usage::{
     decompose, RawUsage, ReasoningSource, TokenDecomposition, TokenVector, UsageDialect,
     UsageMapping,

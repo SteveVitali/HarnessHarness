@@ -1125,6 +1125,18 @@ impl<'a> Account<'a> {
         AccountabilityReport { orphans }
     }
 
+    /// `physical_use()` — the deduplicated physical-use view (PADR-R5-2
+    /// B.1 item 4; REQ-E-207): physical incurred/billed/unknown use read
+    /// **beside** the logical `remaining`/`check`/`totals` reads, never
+    /// merged into them. Propagated ancestor copies and repeated
+    /// reconciles count once at the leaf-most node; reverted-effect
+    /// charges stay (physical spend survives logical reversal);
+    /// `released` rows never subtract it; a terminal call whose usage is
+    /// not known is unknown exposure — never zero.
+    pub fn physical_use(&self) -> crate::tree::PhysicalUse {
+        self.tree.physical_use()
+    }
+
     /// `remaining(budget_id, key)` — the `AccountingHandle.remaining()` read.
     pub fn remaining(&self, budget_id: &str, key: DimensionKey) -> Option<i64> {
         self.tree.remaining(budget_id, key)

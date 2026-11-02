@@ -845,6 +845,93 @@ fn project_row_is_deterministic_and_refuses_typed() {
 }
 
 #[test]
+fn r5_13_propagated_consumed_copies_count_once() {
+    // R5.13 (AC-1/AC-2; REQ-E-207 contributing) — `Account::charge` emits
+    // one `control.budget.consumed` row per node on the charged node's
+    // ancestor path; the settle `consumed` vector and the row's
+    // `consumption.dimensions` deduplicate the propagated copies on
+    // `(source_event, dimension)` — propagated leaf/ancestor copies count
+    // once in experiment and results (PADR-R5-2 B.1 item 4 / B.3).
+    let mut r = rig("dedup", 1_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _exp_run) = open(&mut r, &s);
+    let run_id = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        let run_plan_id = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected plan, got {other:?}"),
+        };
+        let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+        let launched = eng.launch(&ticket, "subject").unwrap();
+        drop(eng);
+        // One charge at a child node propagated to the root — two durable
+        // rows for one `(source_event, dimension)` charge, `amount` 5 on
+        // each; execution cost must transfer once, never twice.
+        let src = Json::obj([
+            ("run_id", Json::str(&launched.run_id)),
+            ("event_id", Json::str("src-charge-1")),
+        ]);
+        finish_subject(
+            &mut r.store,
+            &launched.run_id,
+            &launched.subject_writer,
+            StopReason::Completed,
+            &[],
+            vec![
+                (
+                    "control.budget.consumed".to_string(),
+                    Json::obj([
+                        ("dimension", Json::str("model_calls")),
+                        ("amount", Json::Int(5)),
+                        ("budget_id", Json::str("budget:child")),
+                        ("source_event", src.clone()),
+                    ]),
+                ),
+                (
+                    "control.budget.consumed".to_string(),
+                    Json::obj([
+                        ("dimension", Json::str("model_calls")),
+                        ("amount", Json::Int(5)),
+                        ("budget_id", Json::str("budget:root")),
+                        ("source_event", src),
+                    ]),
+                ),
+                (
+                    "measurement.metric.emitted".to_string(),
+                    metric_payload(
+                        "wall_time_ms",
+                        MetricValueKind::Decimal(120),
+                        &launched.run_id,
+                    ),
+                ),
+            ],
+        );
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        let out = eng.settle(&run_plan_id).unwrap();
+        assert!(out.accepted);
+        // consumed 5 / eval cap 100 = 50_000 ppm — never the
+        // propagated-copies double count 100_000.
+        assert_eq!(
+            out.budget_utilization
+                .get("model_calls")
+                .and_then(Json::as_int),
+            Some(50_000)
+        );
+        launched.run_id
+    };
+    let row = r
+        .results
+        .project_row(&r.store, Some(&r.docs), &run_id, None, None)
+        .unwrap();
+    assert_eq!(
+        row.consumption.dimensions.get("model_calls").copied(),
+        Some(5)
+    );
+}
+
+#[test]
 fn row_codec_round_trips_and_ids_recompute() {
     let mut r = rig("codec", 2_000);
     let s = spec(ExperimentKind::Comparative);

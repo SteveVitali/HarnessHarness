@@ -3500,9 +3500,16 @@ fn terminal_of(payload: &Json) -> (StopReason, bool) {
 }
 
 /// The subject run's consumed vector — the `control.budget.consumed` rows'
-/// `{dimension, amount}` summed.
+/// `{dimension, amount}` summed **once per charge** (PADR-R5-2 B.1 item 4 /
+/// B.3; REQ-E-207): `Account::charge` emits one row per node on the charged
+/// node's ancestor path — the propagated copies of one `(source_event,
+/// dimension)` charge carry the same `amount`, so keyed rows deduplicate
+/// on `(source_event.event_id, dimension)` (the Account's own dedup key).
+/// Legacy rows without `source_event` count individually — they are
+/// already the one-row-per-charge form.
 fn consumed_vector(events: &[hharness_ledger::event::EventEnvelope]) -> Vec<(DimensionId, i64)> {
-    let mut v = BTreeMap::new();
+    let mut keyed: BTreeMap<(String, DimensionId), i64> = BTreeMap::new();
+    let mut unkeyed: Vec<(DimensionId, i64)> = Vec::new();
     for e in events {
         if e.class != "control.budget.consumed" {
             continue;
@@ -3513,9 +3520,25 @@ fn consumed_vector(events: &[hharness_ledger::event::EventEnvelope]) -> Vec<(Dim
             p.get("amount").and_then(Json::as_int),
         ) {
             if let Some(dim) = DimensionId::parse(d) {
-                *v.entry(dim).or_insert(0) += a;
+                match p
+                    .get("source_event")
+                    .and_then(|s| s.get("event_id"))
+                    .and_then(Json::as_str)
+                {
+                    Some(src) => {
+                        keyed.entry((src.to_string(), dim)).or_insert(a);
+                    }
+                    None => unkeyed.push((dim, a)),
+                }
             }
         }
+    }
+    let mut v = BTreeMap::new();
+    for ((_, dim), a) in keyed {
+        *v.entry(dim).or_insert(0) += a;
+    }
+    for (dim, a) in unkeyed {
+        *v.entry(dim).or_insert(0) += a;
     }
     v.into_iter().collect()
 }
