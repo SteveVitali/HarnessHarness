@@ -182,3 +182,7 @@ The [partition rereview](2026-10-30_evidence-partition-rereview.md) closes IP-01
 ## Dated note — 2026-11-02 row 183
 
 Seq 183 (R5.14) split at run time per X7's documented contingency: owner-model leg (a) stays on row 183 (rescoped by dated contract note); consumer-wiring leg (b) = new seq 183a (`183a_R5.14b__pending-consumers.md`). Review record: `2026-11-02_R5.14b-split-review.md`.
+
+## Dated note — 2026-11-02 row 184
+
+Seq 184 (R5.15) split at run time at the documented "population contract vs consumer wiring" seam (M-A contingency): leg (a) stays row 184 (sole contract owner, whole eval-side contract incl. bounds/metadata); leg (b) = new seq 184a (`184a_R5.15b__population-adapter.md`, hh-analysis consumer adapter). Review record: `2026-11-02_R5.15b-split-review.md`.
