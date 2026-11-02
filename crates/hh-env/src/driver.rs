@@ -52,7 +52,24 @@ pub struct EnvDriver {
     /// The registered provider adapters — `environment.class → adapter`
     /// (S4.13; one adapter per provider class).
     providers: BTreeMap<String, Box<dyn crate::provider::ProviderAdapter>>,
+    /// R5.10 (ADR-0389) — the submission-seal pin's walk budget
+    /// `(max_files, max_bytes)`; `None` ⇒ [`SEAL_PIN_MAX_FILES`] /
+    /// [`SEAL_PIN_MAX_BYTES`]. A test seam only — the production default
+    /// is the contract bound.
+    #[doc(hidden)]
+    pub seal_pin_budget: Option<(usize, u64)>,
 }
+
+/// R5.10 (ADR-0389 D7) — the submission-seal pin's budget. The seal's
+/// end-state content pin runs inside the run's fenced writer lease (the
+/// service holds a 120 s lease): an unbounded whole-tree hash of a large
+/// workspace (e.g. a repo rooted at `target/`) outlives the lease, the
+/// driver's next append fences, and the run never finishes. Over-budget
+/// workspaces report a typed `refused` leg — a failed seal yields no
+/// grade, never a leased-time stall or a partial pin.
+pub(crate) const SEAL_PIN_MAX_FILES: usize = 16_384;
+/// See [`SEAL_PIN_MAX_FILES`].
+pub(crate) const SEAL_PIN_MAX_BYTES: u64 = 128 * 1024 * 1024;
 
 /// `preserve_until(ttl)` offered to the helper on `hello` — §05a
 /// `reconcile_detached` requires `ttl ≥ writer_lease.ttl + recovery_grace`
@@ -252,6 +269,7 @@ impl EnvDriver {
             sessions: BTreeMap::new(),
             containers: BTreeMap::new(),
             providers: BTreeMap::new(),
+            seal_pin_budget: None,
         }
     }
 
@@ -1052,8 +1070,17 @@ impl EnvDriver {
         match state {
             Some(HandleState::Ready) => {
                 let mut legs: Vec<String> = Vec::new();
+                let budget = self
+                    .seal_pin_budget
+                    .unwrap_or((SEAL_PIN_MAX_FILES, SEAL_PIN_MAX_BYTES));
                 // ── end-state pin ────────────────────────────────────
-                match self.path_baseline_inner(store, lease, id, Some("submission_seal")) {
+                match self.path_baseline_budgeted_inner(
+                    store,
+                    lease,
+                    id,
+                    Some("submission_seal"),
+                    Some(budget),
+                ) {
                     Ok((rec, _)) => {
                         seal.end_state_ref = Some(rec.snapshot_ref.clone());
                         seal.end_state_event_ref =
@@ -3077,6 +3104,22 @@ impl EnvDriver {
         env_handle_id: &str,
         purpose: Option<&str>,
     ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
+        self.path_baseline_budgeted_inner(store, lease, env_handle_id, purpose, None)
+    }
+
+    /// [`path_baseline_inner`] with an optional `(max_files, max_bytes)`
+    /// walk budget — the submission seal's leg carries one (ADR-0389 D7)
+    /// so the pin cannot outlive the fenced writer lease; other callers
+    /// stay unbounded (legacy behavior unchanged). Over-budget walks
+    /// refuse `Unavailable`, never partial.
+    fn path_baseline_budgeted_inner(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        purpose: Option<&str>,
+        budget: Option<(usize, u64)>,
+    ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
         // R2.14 (M13) — the take window's measured open (`snapshot_ms`).
         let snap_t0 = store.now_ms();
         let (roots, image_base) = {
@@ -3098,7 +3141,29 @@ impl EnvDriver {
         };
         let mut paths = Vec::new();
         for r in &roots {
-            collect_files(r, &mut paths);
+            match budget {
+                Some((max_files, _)) => {
+                    if !collect_files_bounded(r, &mut paths, max_files) {
+                        return Err(EnvError::Unavailable {
+                            env_handle_id: env_handle_id.to_string(),
+                            state: "seal pin file budget exceeded",
+                        });
+                    }
+                }
+                None => collect_files(r, &mut paths),
+            }
+        }
+        if let Some((_, max_bytes)) = budget {
+            let mut total = 0u64;
+            for p in &paths {
+                total = total.saturating_add(std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+                if total > max_bytes {
+                    return Err(EnvError::Unavailable {
+                        env_handle_id: env_handle_id.to_string(),
+                        state: "seal pin byte budget exceeded",
+                    });
+                }
+            }
         }
         let baseline = PathBaseline::take(&|p| std::fs::read(p).ok(), &paths);
         let at_seq = store.head(&self.run_id).map(|h| h.seq).unwrap_or(0);
@@ -3588,6 +3653,30 @@ fn collect_files(root: &str, out: &mut Vec<String>) {
             }
         }
     }
+}
+
+/// Bounded [`collect_files`] — returns `false` the moment `out` reaches
+/// `max` (the caller refuses; the partial walk is never pinned).
+fn collect_files_bounded(root: &str, out: &mut Vec<String>, max: usize) -> bool {
+    if out.len() >= max {
+        return false;
+    }
+    if let Ok(rd) = std::fs::read_dir(root) {
+        for e in rd.flatten() {
+            if out.len() >= max {
+                return false;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                if !collect_files_bounded(&p.to_string_lossy(), out, max) {
+                    return false;
+                }
+            } else {
+                out.push(p.to_string_lossy().to_string());
+            }
+        }
+    }
+    true
 }
 
 /// `blob_by_id(store, "sha256:<hex>")` — resolve a manifest content

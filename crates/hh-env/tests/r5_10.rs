@@ -421,6 +421,40 @@ fn r510_workspace_seal_member_form() {
     );
 }
 
+// ── AC-2: the pin budget is a typed refusal, never a lease-time stall ────────
+
+/// The seal's whole-tree pin runs inside the run's fenced writer lease
+/// (120 s service TTL): an unbounded walk of a huge workspace outlives
+/// it, the driver's next append fences and the run never finishes
+/// (`check-quickstart` surfaced this on a repo-rooted `local_host`).
+/// Over-budget workspaces refuse `refused{seal:…budget…}` — a failed
+/// seal yields no grade, and the revocation leg still lands.
+#[test]
+fn r510_over_budget_pin_refuses_but_still_revokes() {
+    let (mut store, run, lease, _clock) = open("seal-budget");
+    let ws = workspace("seal-budget");
+    for i in 0..4 {
+        std::fs::write(ws.join(format!("f{i}.txt")), b"x").unwrap();
+    }
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    driver.seal_pin_budget = Some((2, u64::MAX)); // 4 files > 2-file cap
+    let seals = driver.seal_workspace(&mut store, &lease);
+    assert_eq!(seals.len(), 1);
+    assert_eq!(seals[0].status, "refused");
+    assert!(
+        seals[0]
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("seal pin file budget exceeded"),
+        "the budget refusal is named: {seals:?}"
+    );
+    assert!(seals[0].access_event_ref.is_some());
+    assert!(seals[0].end_state_ref.is_none(), "no fabricated pin");
+    assert_eq!(driver.handle(&env).unwrap().state, HandleState::Detached);
+}
+
 // keep the collection imports honest across cfg variations
 #[allow(dead_code)]
 fn _unused(_: BTreeMap<String, Json>, _: BTreeSet<String>) {}
