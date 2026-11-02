@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.13
-lastCompleted:   R5.12
+nextTicket:      R5.14
+lastCompleted:   R5.13
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.12
+chainTip:        codex/harnessharness-evidence-r5.13
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T10:42:33Z
+updatedAt:       2026-11-02T15:43:08Z
 ```
 
 ## OPEN FINDINGS
@@ -1024,4 +1024,4 @@ updatedAt:       2026-11-02T10:42:33Z
 
 - 2026-11-02 · R5.12 done — branch `codex/harnessharness-evidence-r5.12` · PR #222 · base `codex/harnessharness-evidence-r5.11` (@b9abf37). Atomic whole-vector Account cap admission (PADR-R5-2 B.1 item 3; REQ-D-006/REQ-E-207 contributing — primary R5.19 AC-3): `Account::reserve` projects the vector at the node and every ancestor — each non-gauge hard key, primary or derived, as `level + quantity.key_total > hard` through the owning fold (consumed + outstanding + slice_held); derived `tokens.*.total` ceilings now bind; exact boundary admits; any refusal holds nothing (`reserved{outcome:"refused"}` ledgered); gauge dims `DimensionNotBudgetable`; WAL-recovered holds enforced. **Verify:** fmt OK · budget 5 targets (r5_12 7/7) · consumer sweep 62 targets (gateway/env/subagent/fleet/control/orchestrator/debt) · fails-without 3/7 red at base · guard PASS DISPATCH R5.12 pre+post · check-build-memory 0 viol/8 scoped · bm-tools OK · triggers in sync (175 ADRs) · ADR-0391 + BL-47 sources. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 645 changed source/test lines vs ≤600 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling · chainTip → codex/harnessharness-evidence-r5.12 · next → R5.13 · ci: pass #222@97bcb1c (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41429239235; logs/ci-r5.12.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-02T15:24:53Z · **R5.13 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,165, ~1.55×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic physical-use fold + count-once dedup unit (PADR-R5-2 B.1 item 4 / B.3 / B.9 items 3–4 / B.2 owner map; decomposition row 28 — distinct operation of the same Account owner as R5.12's reserve; no documented sub-seam); proposed (a)/(b) cut lands AC-1 "transfer execution cost once" unexercised — (a)+battery ≈1,015 still over trigger — or dedup tests against no owner view; ACs not repartitionable along the cut. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.12 precedent); dated note on `182_R5.13__physical.md`; manifest row-182 note; `runs/R5.13.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
-
+- 2026-11-02 · R5.13 done — branch `codex/harnessharness-evidence-r5.13` · PR #223 · base `codex/harnessharness-evidence-r5.12` (@322edae). Deduplicated incurred-use and unknown-exposure views (PADR-R5-2 B.1 item 4; REQ-D-006/E-102/E-103/E-204/E-207 contributing — primaries R5.19/R5.10/R5.9 AC-3): `BudgetTree::physical_use` + `Account::physical_use` expose physical incurred (each (source,dim) once at leaf-most, revert-surviving, never release-subtracted) / billed (dedup spend rows) / unknown (typed exposure — failed-no-usage + available:false, never zero); charged_to strata + per-run roots keep instrument separate; engine `consumed_vector` + results consumption fold count propagated copies once (settle transfers cost once). **Verify:** fmt OK · budget r5_13 9/9 + results 1/1 + 14 package targets · fails-without consumer leg red at base (100000 vs 50000 ppm) · guard PASS DISPATCH R5.13 pre+post · ADR-0392 + BL-47 sources · triggers in sync (176). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,165 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling. chainTip → codex/harnessharness-evidence-r5.13 · next → R5.14 · ci: pass #223@49e063d (build · test · fmt · drift macos+ubuntu · gitleaks · cargo-deny 41472087139; logs/ci-r5.13.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
