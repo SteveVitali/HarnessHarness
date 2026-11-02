@@ -90,11 +90,6 @@ pub enum AnalysisError {
     /// The R5.15 planned-population contract refused (`hharness_eval::
     /// population` — the same refusal vocabulary, never a second rule).
     Population(hharness_eval::population::PopulationError),
-    /// The R5.16 finite-manifest contrast refused (`hharness_eval::
-    /// finite_manifest` — pooled/unknown method, missing/short/
-    /// unresolved cells, dependence, nonfinite, metadata-only,
-    /// credible-as-TOST; the same typed vocabulary).
-    Contrast(hharness_eval::finite_manifest::ContrastError),
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -140,7 +135,6 @@ impl std::fmt::Display for AnalysisError {
                 write!(f, "StrataPooledUnannotated: {detail}")
             }
             AnalysisError::Population(e) => write!(f, "population: {e}"),
-            AnalysisError::Contrast(e) => write!(f, "finite_manifest_contrast: {e}"),
         }
     }
 }
@@ -174,11 +168,5 @@ impl From<ExperimentError> for AnalysisError {
 impl From<hharness_eval::population::PopulationError> for AnalysisError {
     fn from(e: hharness_eval::population::PopulationError) -> AnalysisError {
         AnalysisError::Population(e)
-    }
-}
-
-impl From<hharness_eval::finite_manifest::ContrastError> for AnalysisError {
-    fn from(e: hharness_eval::finite_manifest::ContrastError) -> AnalysisError {
-        AnalysisError::Contrast(e)
     }
 }

@@ -265,61 +265,6 @@ impl EmbedService {
             None => Vec::new(),
         };
 
-        // The single bound experiment run across the selected rows (the
-        // same coordinate `post_amendment` resolves) — a mixed/unbound
-        // selection binds nothing.
-        let bound_eid: Option<String> = {
-            let mut bound: Option<&str> = None;
-            let mut mixed = false;
-            for r in &rows {
-                let e = r
-                    .experiment
-                    .as_ref()
-                    .and_then(|x| x.get("experiment_run_id"))
-                    .and_then(Json::as_str);
-                match (bound, e) {
-                    (None, Some(e)) => bound = Some(e),
-                    (Some(b), Some(e)) if b == e => {}
-                    _ => mixed = true,
-                }
-            }
-            match (mixed, bound) {
-                (false, Some(e)) => Some(e.to_string()),
-                _ => None,
-            }
-        };
-
-        // R5.16 — the `finite_manifest_contrast` kind consumes the bound
-        // experiment's folded `ExperimentView` (the planned-slot
-        // universe the R5.15 population contract reconciles). The fold
-        // reads the same durable events `post_amendment` already reads;
-        // an unbound/mixed selection supplies `None` and the kernel
-        // refuses (records-in — never a fabricated universe).
-        let experiment_view = if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND {
-            bound_eid
-                .as_ref()
-                .and_then(|eid| self.store.events(eid).ok())
-                .map(|evs| hharness_experiment::view::ExperimentView::fold(&evs))
-        } else {
-            None
-        };
-
-        // R5.16 — for the contrast kind the numeric analysis params are
-        // declared inputs: a present-but-non-integer member is a
-        // nonfinite input and refuses (never a silent default).
-        if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND {
-            for k in ["confidence_ppm", "resampling_draws", "seed"] {
-                if let Some(v) = params.get(k) {
-                    if v.as_int().is_none() {
-                        return Err(bad(
-                            &format!("/{k}"),
-                            &format!("nonfinite input: {k} must be an integer"),
-                        ));
-                    }
-                }
-            }
-        }
-
         let declarations = decls_for(&spec.query.metrics)?;
         let metric_registry_version = params
             .get("metric_registry_version")
@@ -357,8 +302,22 @@ impl EmbedService {
             // `measurement.experiment.amended` rows (§6.3; ADR-0162). A
             // mixed/unbound selection is never marked amended.
             post_amendment: {
-                match &bound_eid {
-                    Some(eid) => match self.store.events(eid) {
+                let mut bound: Option<&str> = None;
+                let mut mixed = false;
+                for r in &rows {
+                    let e = r
+                        .experiment
+                        .as_ref()
+                        .and_then(|x| x.get("experiment_run_id"))
+                        .and_then(Json::as_str);
+                    match (bound, e) {
+                        (None, Some(e)) => bound = Some(e),
+                        (Some(b), Some(e)) if b == e => {}
+                        _ => mixed = true,
+                    }
+                }
+                match (mixed, bound) {
+                    (false, Some(eid)) => match self.store.events(eid) {
                         // The `experiment_run_id` marker is row metadata — a
                         // bound id that is not a ledger run (ad-hoc rows, a
                         // foreign store) is never an amended experiment, and
@@ -368,10 +327,9 @@ impl EmbedService {
                             .is_empty(),
                         Err(_) => false,
                     },
-                    None => false,
+                    _ => false,
                 }
             },
-            view: experiment_view.as_ref(),
         };
         let outcome = analyze_and_record(&docs, &spec, &input).map_err(xerr)?;
         Ok(Json::obj([

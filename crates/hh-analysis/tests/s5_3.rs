@@ -380,7 +380,6 @@ impl Fixture {
             resampling_draws: 2000,
             seed: 7,
             post_amendment: false,
-            view: None,
         }
     }
 }
