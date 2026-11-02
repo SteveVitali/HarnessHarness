@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.11
-lastCompleted:   R5.10
+nextTicket:      R5.12
+lastCompleted:   R5.11
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.10
+chainTip:        codex/harnessharness-evidence-r5.11
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T09:29:10Z
+updatedAt:       2026-11-02T10:15:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1019,3 +1019,4 @@ updatedAt:       2026-11-02T09:29:10Z
 - 2026-11-02T09:29Z · R5.10 done — branch `codex/harnessharness-evidence-r5.10` · PR https://github.com/SteveVitali/HarnessHarness/pull/220 · base `codex/harnessharness-evidence-r5.9` (@c96a471a). Landed the admitted PADR-R5-1 X4 slice (REQ-E-203/REQ-E-102 primary): `EnvDriver::seal_workspace`/`WorkspaceSeal` — end-state `snapshot{purpose:"submission_seal"}` → `detached{reason:"submission_seal"}` (unconditional on pin failure) → final `meters_sampled`, durable before `lifecycle.run.finished` cites `submission_seal`; `prior` recovery; `unavailable`/`refused{legs}` typed refusals; seq-0 `created_at_ms` member + `wall_ms` rebased created→finished (`na{observability}`/`na{untrustworthy_origin}`, never backdated); seal-pin walk budget (16,384/128 MiB) → typed refusal, never a writer-lease overrun. **Verify:** fmt OK · hh-ledger 34+44 · hh-control 152 · env r5_10 8/8 · cap_2/r2_4 · cli · xcheck corpus+answers regenerated · guard PASS pre+post · bm 0 viol/8w · bm-tools OK · triggers in sync. **Deferrals:** none opened/closed; DF-R5.1-1 carried; contributor evidence → R5.11/R5.13/R5.14/R5.9/R5.43 owed, unclaimed. **Deviations:** 1,084 changed source/test lines vs ≤850 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling (184e4840); ADR-0389 (7 decisions incl. seal budget). · chainTip → codex/harnessharness-evidence-r5.10 · next → R5.11 · ci: pass #220@489b7be (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41419273375) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-02T09:55:13Z · **R5.11 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,797, ~2.4×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic X5 instrument-oracle invoked→verdict unit (PADR-R5-1 A.1 item 5 / A.2 owner map; REQ-E-007; no documented sub-seam); proposed leg cut lands unexercised AC-2 refusal machinery or execution without mandated refusals — invoked-without-verdict or verdict-without-refusals. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7/R5.8/R5.9/R5.10 precedent); dated note on `180_R5.11__oracle.md`; manifest row-180 note; `runs/R5.11.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-02 · R5.11 done — branch `codex/harnessharness-evidence-r5.11` · PR #221 · base `codex/harnessharness-evidence-r5.10` (@cad96e5). Executed instrument oracle + durable attempt evidence (X5; REQ-E-007 primary, REQ-E-102/103/204 contributing): `hh-bench::oracle` — invoked row persists before the pinned oracle runs on the sealed submission (structural `submission_seal` proof, invoked<verdict seq, append-failure ⇒ no execution); durable-derived `attempt_no` enforces frozen `max_attempts`; `wall_ms`/output bounds enforced on the raw observation; unchanged `grade()`/infra/typed-reward mapping — empty/nonfinite/crash/timeout/refused/over-bound ⇒ `oracle_failure`; pin/digest/seal refusals with zero rows; `shared` keeps `separate_verifier:false`+`tamper:n/a{no_detector}`; instrument-only charge, subject stream untouched; `to_grade_attempt` producer fact. Two new `verification.oracle.*` classes registered (existing plane, `hint` lowering). **Verify:** fmt OK · bench 14 targets (r5_11 10/10) · ledger 21 targets · fails-without compile-red at base · guard PASS DISPATCH R5.11 pre+post · check-build-memory 0 viol/8 scoped · bm-tools OK · triggers in sync · ci: pass #221@5b0dca4 (build·test·fmt·drift ubuntu+macos · cargo-deny · gitleaks 41425091432; logs/ci-r5.11.json). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,797 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling · chainTip → codex/harnessharness-evidence-r5.11 · next → R5.12 · layer: engineered · harness: devin-desktop/swe-2-high/subagent
