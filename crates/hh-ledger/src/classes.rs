@@ -1591,6 +1591,9 @@ const EXPERIMENT_CLOSED_FIELDS: &[AuditField] = &[
     afb("budget_match", AUDIT_FIELD_LIST_BYTES),
     afb("na_cells", AUDIT_FIELD_LIST_BYTES),
     afb("utilization", AUDIT_FIELD_LIST_BYTES),
+    // R5.14: `pending` — the `grade_pending` run_plan_id list a partial
+    // close enumerates (unresolved slots; record/list-shaped).
+    afb("pending", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// The one table (CC7). Order is irrelevant; `lookup` is exact-match.

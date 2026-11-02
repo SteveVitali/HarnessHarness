@@ -48,6 +48,25 @@ pub const MODE_LEGACY: &str = "legacy";
 pub const ORACLE_VERDICT: &str = "verification.oracle.verdict";
 /// The subject run's end-state pin purpose marker (R5.10).
 pub const SEAL_PURPOSE: &str = "submission_seal";
+/// The seal proof class — `action.environment.snapshot{purpose}` rows
+/// (mirrors `hh-bench::oracle::SEAL_CLASS`; named locally so the owner
+/// stays free of a bench-crate dependency).
+pub const SEAL_CLASS: &str = "action.environment.snapshot";
+
+/// The subject-run coordinate that cites the sealed submission — the
+/// `run_id:event_id` pin R5.9's `UncitedCauses` check requires on every
+/// admissible attempt (the seal proof row itself, else the finished row
+/// whose `submission_seal` member folds it).
+fn subject_pin(events: &[hharness_ledger::event::EventEnvelope], subject: &str) -> String {
+    let pin = events
+        .iter()
+        .find(|e| {
+            e.class == SEAL_CLASS && s(&e.payload, "purpose").as_deref() == Some(SEAL_PURPOSE)
+        })
+        .or_else(|| events.iter().find(|e| e.class == "lifecycle.run.finished"));
+    pin.map(|e| format!("{subject}:{}", e.event_id))
+        .unwrap_or_default()
+}
 /// The experiment-run revision record class this ticket lands.
 pub const SELECTION_REVISION: &str = "measurement.experiment.selection_revision";
 
@@ -194,6 +213,7 @@ fn verdict_attempts(
     e: &hharness_ledger::event::EventEnvelope,
     subject: &str,
     eligible: &BTreeSet<String>,
+    subject_cause: &str,
     out: &mut Vec<GradeAttempt>,
 ) {
     if e.class != ORACLE_VERDICT {
@@ -216,6 +236,9 @@ fn verdict_attempts(
         _ => GradeOutcome::OracleFailure,
     };
     let mut causes = Vec::new();
+    if !subject_cause.is_empty() {
+        causes.push(subject_cause.to_string());
+    }
     for k in ["seal_ref", "invocation_ref"] {
         if let Some(c) = s(p, k) {
             causes.push(c);
@@ -415,6 +438,7 @@ pub fn plan_disposition_at(
     };
 
     // Instrument-run verdicts at the pinned watermarks.
+    let subj_pin = subject_pin(&subject_events, &subject);
     let mut attempts: Vec<GradeAttempt> = Vec::new();
     let mut watermarks: BTreeMap<String, u64> = BTreeMap::new();
     for (ov_run, ov_until) in &pins.overlay_runs {
@@ -426,7 +450,7 @@ pub fn plan_disposition_at(
             .iter()
             .filter(|e| e.seq <= oseq)
         {
-            verdict_attempts(e, &subject, &tpins.eligible, &mut attempts);
+            verdict_attempts(e, &subject, &tpins.eligible, &subj_pin, &mut attempts);
         }
         watermarks.insert(ov_run.clone(), oseq);
     }
@@ -575,6 +599,7 @@ pub fn validate_revision(
         members: tpins.eligible.clone(),
     };
     let mut attempts: Vec<GradeAttempt> = Vec::new();
+    let subj_pin = subject_pin(&subject_events, &set.subject_ref);
     for (ov_run, ov_until) in &pins.overlay_runs {
         let ohead = store.head(ov_run).map_err(ExperimentError::Ledger)?;
         let oseq = ov_until.unwrap_or(ohead.seq);
@@ -584,7 +609,13 @@ pub fn validate_revision(
             .iter()
             .filter(|e| e.seq <= oseq)
         {
-            verdict_attempts(e, &set.subject_ref, &tpins.eligible, &mut attempts);
+            verdict_attempts(
+                e,
+                &set.subject_ref,
+                &tpins.eligible,
+                &subj_pin,
+                &mut attempts,
+            );
         }
     }
     let mut log = RevisionLog::default();
