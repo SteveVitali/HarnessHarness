@@ -357,6 +357,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 173 | `173_R5.5__adr-methods.md` | Round 5 | ticket | Prepare method, encoding and numerical-validation admission dossier | — |
 | 174 | `174_GATE-G9__admit.md` | Round 5 | gate | Admit exact architecture and method contracts | STOP |
 | 175 | `175_R5.6__launch.md` | Round 5 | ticket | Recoverable launch and subject funding binding | — |
+| 175 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 176 | `176_R5.7__adopt.md` | Round 5 | ticket | Adopt a launched subject through the existing runtime | — |
 | 177 | `177_R5.8__effect.md` | Round 5 | ticket | Bridge Dispatcher durability to the task runtime | — |
 | 178 | `178_R5.9__selection.md` | Round 5 | ticket | Shared first-valid grade selection and immutable revisions | — |
