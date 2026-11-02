@@ -827,10 +827,13 @@ fn cadence_default_never_produces_no_rows() {
             ("idempotency_key", Json::str("sub-1")),
         ]),
     ));
+    // R5.10 — the finish seal's `purpose:"submission_seal"` pin is a
+    // separate producer; "never" still means no cadence/other take.
     assert!(
-        rows(&svc, &run)
-            .iter()
-            .all(|(_, c, _)| c != "action.environment.snapshot"),
+        rows(&svc, &run).iter().all(|(_, c, p)| {
+            c != "action.environment.snapshot"
+                || p.get("purpose").and_then(Json::as_str) == Some("submission_seal")
+        }),
         "never means never"
     );
 }
@@ -961,9 +964,13 @@ fn cadence_every_n_effects_fires_only_on_settled_effects() {
         evs.iter().all(|(_, c, _)| !c.starts_with("action.effect.")),
         "the fixture settles no effects"
     );
+    // R5.10 — exclude the finish seal's `purpose:"submission_seal"` pin
+    // (a separate producer) from the cadence-count assertion.
     assert!(
-        evs.iter()
-            .all(|(_, c, _)| c != "action.environment.snapshot"),
+        evs.iter().all(|(_, c, p)| {
+            c != "action.environment.snapshot"
+                || p.get("purpose").and_then(Json::as_str) == Some("submission_seal")
+        }),
         "no settled effects → no every_n_effects take"
     );
 }
