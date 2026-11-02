@@ -186,3 +186,7 @@ Seq 183 (R5.14) split at run time per X7's documented contingency: owner-model l
 ## Dated note — 2026-11-02 row 184
 
 Seq 184 (R5.15) split at run time at the documented "population contract vs consumer wiring" seam (M-A contingency): leg (a) stays row 184 (sole contract owner, whole eval-side contract incl. bounds/metadata); leg (b) = new seq 184a (`184a_R5.15b__population-adapter.md`, hh-analysis consumer adapter). Review record: `2026-11-02_R5.15b-split-review.md`.
+
+## Dated note — 2026-11-02 row 185
+
+Seq 185 (R5.16) split at run time at the Packet D D.2 admitted owner map + line-150 "numerical math vs already-fixed report routing" seam: leg (a) stays row 185 (eval/ontology method contract); leg (b) = new seq 185a (`185a_R5.16b__beta-routing.md`, analysis/embed routing). Review record: `2026-11-02_R5.16b-split-review.md`.
