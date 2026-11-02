@@ -1036,13 +1036,36 @@ impl Store {
             ));
         }
         // seq 0 — `lifecycle.run.created{manifest}` under the anchor.
+        // R5.10 (REQ-E-203; the §9.3-adjacent R-2.9.1 existing-contract
+        // fix): the persisted created origin rides the row as a recorded
+        // `created_at_ms{value, measured_at}` member on the store's own
+        // clock — the same authority a fenced sink's `now_ms()` answers —
+        // so M1's `wall_ms` measures created→finished including adoption
+        // delay, approval waits, restart downtime and drain/seal. A
+        // recorded member, never a `ts` difference (§5h.1 §2.6).
+        // `RunManifest::from_json` preserves the member in `extra`, so a
+        // re-read manifest serializes byte-identically; rows minted
+        // before this stamp simply lack it (an honest `n/a` origin).
+        let mut created_payload = manifest.to_json();
+        if let Json::Obj(m) = &mut created_payload {
+            m.insert(
+                "created_at_ms".to_string(),
+                Json::obj([
+                    (
+                        "value",
+                        Json::Int(self.clock.now_ms().min(i64::MAX as u64) as i64),
+                    ),
+                    ("measured_at", Json::str("runtime")),
+                ]),
+            );
+        }
         let created = system_event(
             &*self.ids,
             &*self.clock,
             &state,
             0,
             "lifecycle.run.created",
-            manifest.to_json(),
+            created_payload,
             &anchor,
             1, // generation 1 — the lease record lands right after.
             KERNEL_LEDGER,
@@ -5057,5 +5080,47 @@ mod tests {
         assert_eq!(rfc3339_ms(0), "1970-01-01T00:00:00.000Z");
         assert_eq!(rfc3339_ms(1_789_200_000_123), "2026-09-12T08:00:00.123Z");
         assert!(valid_ts(&rfc3339_ms(1_789_200_000_123)));
+    }
+
+    /// R5.10 (REQ-E-203) — the seq-0 `lifecycle.run.created` carries the
+    /// persisted created origin as a recorded
+    /// `created_at_ms{value, measured_at}` member on the store's clock,
+    /// and a re-read manifest preserves it byte-identically through
+    /// `extra` (CC3's unknown-member rule).
+    #[test]
+    fn run_created_stamps_created_at_ms_origin() {
+        let root = std::env::temp_dir().join(format!("hh-led-r510-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut store = Store::open_test(&root, 42_000).expect("test store opens");
+        let (run, _lease) = store
+            .open_run(
+                crate::manifest::RunManifest::minimal(crate::manifest::RunKind::Agent),
+                "writer-a",
+            )
+            .expect("run opens");
+        let created = &store.events(&run).unwrap()[0];
+        assert_eq!(created.seq, 0);
+        assert_eq!(created.class, "lifecycle.run.created");
+        let stamp = created
+            .payload
+            .get("created_at_ms")
+            .expect("the created origin is recorded");
+        assert_eq!(
+            stamp.get("value").and_then(Json::as_int),
+            Some(42_000),
+            "the origin is the store clock's now_ms at mint"
+        );
+        assert_eq!(
+            stamp.get("measured_at").and_then(Json::as_str),
+            Some("runtime")
+        );
+        // The member survives `from_json` in `extra` — a re-read
+        // manifest serializes byte-identically (no decode drop).
+        let back = crate::manifest::RunManifest::from_json(&created.payload).unwrap();
+        assert_eq!(
+            back.to_json().to_canonical_string(),
+            created.payload.to_canonical_string()
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

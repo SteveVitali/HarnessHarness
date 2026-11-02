@@ -90,7 +90,23 @@ fn ac1_open_run_writes_created_at_seq0_and_takes_the_writer() {
     assert_eq!(page.events[0].class, "lifecycle.run.created");
     assert_eq!(page.events[0].seq, 0);
     assert_eq!(page.events[0].prev_hash, GENESIS_HASH);
-    assert_eq!(page.events[0].payload, m.to_json());
+    // R5.10 (REQ-E-203): seq 0 carries the manifest plus the recorded
+    // `created_at_ms{value, measured_at}` created origin — the persisted
+    // M1 base on the store's clock (`open_test` froze it at 1_000).
+    let mut payload = page.events[0].payload.clone();
+    if let Json::Obj(map) = &mut payload {
+        let stamp = map.remove("created_at_ms").expect("created origin stamped");
+        assert_eq!(
+            stamp.get("value").and_then(Json::as_int),
+            Some(1_000),
+            "the created origin is the store clock at mint"
+        );
+        assert_eq!(
+            stamp.get("measured_at").and_then(Json::as_str),
+            Some("runtime")
+        );
+    }
+    assert_eq!(payload, m.to_json());
     assert_eq!(page.events[1].class, "lifecycle.lease.acquired");
     assert_eq!(page.events[1].lease_generation, 1);
     // Kernel stamps: provenance origin = kernel on lifecycle rows.
@@ -100,8 +116,12 @@ fn ac1_open_run_writes_created_at_seq0_and_takes_the_writer() {
     let head = s.head(&run).unwrap();
     assert_eq!(head.seq, 1);
     assert_eq!(head.event_id, page.events[1].event_id);
-    // Manifest immutable thereafter — read-back equals the submitted manifest.
-    let back = RunManifest::from_json(&page.events[0].payload).unwrap();
+    // Manifest immutable thereafter — read-back round-trips the payload
+    // byte-identically (`created_at_ms` rides `extra`, CC3) and the typed
+    // manifest equals the submitted one.
+    let mut back = RunManifest::from_json(&page.events[0].payload).unwrap();
+    assert_eq!(back.to_json(), page.events[0].payload);
+    back.extra.remove("created_at_ms");
     assert_eq!(back, m);
     // The chain verifies; reopening reproduces it byte-identically.
     s.verify(&run).unwrap();
@@ -1031,13 +1051,17 @@ fn golden_transcript_is_byte_stable() {
     )
     .unwrap();
     let head = s.head(&run).unwrap();
+    // R5.10 (REQ-E-203): the seq-0 row gained the `created_at_ms`
+    // created-origin member — the pinned bytes moved with the contract
+    // (prior: e8c2c0a9…/700cd1ba…, pre-R5.10).
     assert_eq!(
         head.hash,
-        "sha256:e8c2c0a9ce754a4d26c4fe501d24bd71719bebbcacb46c909fc91a0275b45468"
+        "sha256:db714b038805f1bf21ef2587459231c8886deeb4f7f8e8a1c0a1e6f48c69ccd4"
     );
     // The committed transcript, byte for byte.
     let wal = std::fs::read_to_string(d.join("runs").join(&run).join("events.wal")).unwrap();
-    let created_hash = "sha256:700cd1baea595813110a2541a2f9100f899cd72e7519aaf492cd8790c727f9bb";
+    let created_hash = "sha256:5a7da637419f9869c31dcb7a613d3f5ee11bd24dea55e1775f25425bf17cc0d2";
+    assert_eq!(s.events(&run).unwrap()[0].hash, created_hash);
     assert!(wal.contains(&format!("\"hash\":\"{created_hash}\"")));
     assert!(wal.contains("{\"k\":\"c\",\"n\":0}"));
     assert!(wal.contains("{\"k\":\"c\",\"n\":2}"));

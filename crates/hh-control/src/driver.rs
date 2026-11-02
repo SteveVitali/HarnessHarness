@@ -5058,6 +5058,27 @@ impl<S: ControlStrategy> Driver<S> {
             "sha256:{}",
             hharness_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
         );
+        // R5.10 (REQ-E-203/REQ-E-102; PADR-R5-1 A.1 item 3) — seal before
+        // finish: participant access revoked, usage finalized, the
+        // end-state content-pinned — through the durable-dispatch seam's
+        // store/lease/envs (the same fenced writer, never a second
+        // append path). The seam's rows land durable *before* the
+        // terminal `lifecycle.run.finished` cites them. A seam-less sink
+        // (host/replay recorders) carries no `submission_seal` member —
+        // the unarmed path stays byte-identical (PADR-R5-1 A.7).
+        let submission_seal: Option<Json> = match sink.dispatch_seam() {
+            Some(DispatchSeam {
+                store,
+                lease,
+                envs: Some(envs),
+            }) => Some(Json::Arr(
+                envs.seal_workspace(store, lease)
+                    .iter()
+                    .map(hharness_env::driver::WorkspaceSeal::to_json)
+                    .collect(),
+            )),
+            _ => None,
+        };
         // §5c.4 scope floors (DF-S2.8-1): the turn is ending —
         // `turn`-scoped memories expire; the run is ending — `run`-scoped
         // the same. The memory boundary's `context.memory.invalidated`
@@ -5143,15 +5164,23 @@ impl<S: ControlStrategy> Driver<S> {
                 );
             }
         }
-        // R2.14 — M1's `wall_ms` on the same producing clock as the
-        // turn's recorded open (the C0 runtime is single-turn — the
-        // turn-1 `started_at_ms` member is the run's measured open;
-        // an unstamped prefix reports `n/a{observability}`).
+        if let Some(seals) = submission_seal {
+            if let Json::Obj(m) = &mut finished {
+                m.insert("submission_seal".to_string(), seals);
+            }
+        }
+        // R5.10 (REQ-E-203; the R-2.9.1 existing-contract fix — the M1
+        // table's opens/closes are `lifecycle.run.created` →
+        // `lifecycle.run.finished`): `wall_ms` measures the persisted
+        // created origin through actual finish on the producing clock —
+        // adoption delay, approval waits, restart downtime and the
+        // drain/seal legs all accrue; postterminal instrument work lands
+        // after this row and never inflates M1. An unstamped origin
+        // reports `n/a{observability}`; a clock reading earlier than the
+        // recorded origin reports `n/a{untrustworthy_origin}` — never a
+        // backdated finish.
         if let Json::Obj(m) = &mut finished {
-            m.insert(
-                "wall_ms".to_string(),
-                self.duration_stamp_ms(sink, "lifecycle.turn.started", "started_at_ms"),
-            );
+            m.insert("wall_ms".to_string(), self.created_origin_wall_ms(sink));
         }
         // R2.15 (DF-S1.21-2) — computed metrics emit on the live run: the
         // deterministic per-run fold (`evalfold::compute` over the durable
@@ -6161,6 +6190,36 @@ impl<S: ControlStrategy> Driver<S> {
                     ("measured_at", Json::str("runtime")),
                 ])
             }
+            None => Json::obj([("na", Json::str("observability"))]),
+        }
+    }
+
+    /// R5.10 (REQ-E-203) — `now − <run.created>.created_at_ms.value` as a
+    /// `{value, measured_at}` duration: M1's `wall_ms` base is the
+    /// persisted seq-0 created origin, so adoption delay, approval
+    /// waits, restart downtime and drain/seal all accrue (the M1 table's
+    /// opens/closes are `lifecycle.run.created` →
+    /// `lifecycle.run.finished`). The member is the recorded instant —
+    /// never a `ts` difference (§5h.1 §2.6). An unstamped origin (a
+    /// pre-R5.10 row, a replay prefix) yields `n/a{observability}`; a
+    /// producing clock reading *earlier* than the recorded origin —
+    /// rollback or an untrustworthy restart — yields
+    /// `n/a{untrustworthy_origin}`: the origin cannot prove the span,
+    /// never a backdated finish.
+    fn created_origin_wall_ms(&self, sink: &dyn LedgerSink) -> Json {
+        let base = sink
+            .prefix()
+            .iter()
+            .find(|e| e.class == "lifecycle.run.created")
+            .and_then(|e| e.payload.get("created_at_ms"))
+            .and_then(|v| v.get("value"))
+            .and_then(Json::as_int);
+        match base {
+            Some(b) if self.clock_ms(sink) as i64 >= b => Json::obj([
+                ("value", Json::Int(self.clock_ms(sink) as i64 - b)),
+                ("measured_at", Json::str("runtime")),
+            ]),
+            Some(_) => Json::obj([("na", Json::str("untrustworthy_origin"))]),
             None => Json::obj([("na", Json::str("observability"))]),
         }
     }
@@ -10236,5 +10295,233 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── R5.10 (REQ-E-203/REQ-E-102) — created-origin M1 + the seal member ──
+
+    /// A sink on a live clock (`now_ms` answers `Some`) with a
+    /// pre-seeded `lifecycle.run.created` carrying the recorded
+    /// `created_at_ms` member — the R5.10 persisted origin.
+    struct ClockedSink {
+        mem: MemSink,
+        now: u64,
+    }
+
+    impl ClockedSink {
+        fn new(now: u64, created_ms: Option<i64>) -> ClockedSink {
+            let mut mem = MemSink {
+                events: vec![],
+                seq: 0,
+            };
+            let payload = match created_ms {
+                Some(v) => Json::obj([(
+                    "created_at_ms",
+                    Json::obj([
+                        ("value", Json::Int(v)),
+                        ("measured_at", Json::str("runtime")),
+                    ]),
+                )]),
+                None => Json::obj([]),
+            };
+            mem.events.push(EventEnvelope {
+                event_id: "evt-created".into(),
+                run_id: "run".into(),
+                seq: 0,
+                ts: "1970-01-01T00:00:00.000Z".into(),
+                hlc: None,
+                plane: hharness_ledger::event::EventPlane::Lifecycle,
+                class: "lifecycle.run.created".into(),
+                schema_version: 1,
+                producer: hharness_ledger::event::Producer::kernel("hh-ledger"),
+                participant_class: hharness_ledger::manifest::ParticipantClass::Native,
+                observability_level: Default::default(),
+                durability: hharness_ledger::classes::Durability::Ledger,
+                scope: scope_empty(),
+                lease_generation: 1,
+                parent_event_id: hharness_ledger::ids::ROOT_EVENT.to_string(),
+                causes: vec![],
+                refs: vec![],
+                ir_refs: vec![],
+                surface_ids: Default::default(),
+                provenance: None,
+                payload,
+                prev_hash: "h".into(),
+                hash: "h0".into(),
+            });
+            ClockedSink { mem, now }
+        }
+    }
+
+    impl LedgerSink for ClockedSink {
+        fn append(&mut self, events: Vec<Event>) -> Result<(), String> {
+            self.mem.append(events)
+        }
+        fn prefix(&self) -> &[EventEnvelope] {
+            self.mem.prefix()
+        }
+        fn now_ms(&self) -> Option<u64> {
+            Some(self.now)
+        }
+    }
+
+    /// A seam-providing sink whose `dispatch_seam` carries a real
+    /// `EnvDriver` (zero handles — the owner API's legs live in the
+    /// hh-env r5_10 battery; this leg proves the finish wiring).
+    struct EnvSeamSink {
+        mem: MemSink,
+        store: hharness_ledger::store::Store,
+        lease: hharness_ledger::store::Lease,
+        envs: hharness_env::driver::EnvDriver,
+    }
+
+    impl EnvSeamSink {
+        fn new(tag: &str) -> EnvSeamSink {
+            let root =
+                std::env::temp_dir().join(format!("hh-ctl-r510-{}-{tag}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let mut store = hharness_ledger::store::Store::open_with(
+                root,
+                Box::new(hharness_ledger::ids::ManualClock::at(1_000)),
+                Some(Box::new(hharness_ledger::ids::SeqIds::new())),
+                hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+            )
+            .unwrap();
+            let (run, lease) = store
+                .open_run(
+                    hharness_ledger::manifest::RunManifest::minimal(
+                        hharness_ledger::manifest::RunKind::Agent,
+                    ),
+                    "writer-a",
+                )
+                .unwrap();
+            EnvSeamSink {
+                mem: MemSink {
+                    events: vec![],
+                    seq: 0,
+                },
+                store,
+                lease,
+                envs: hharness_env::driver::EnvDriver::new(&run),
+            }
+        }
+    }
+
+    impl LedgerSink for EnvSeamSink {
+        fn append(&mut self, events: Vec<Event>) -> Result<(), String> {
+            self.mem.append(events)
+        }
+        fn prefix(&self) -> &[EventEnvelope] {
+            self.mem.prefix()
+        }
+        fn dispatch_seam(&mut self) -> Option<DispatchSeam<'_>> {
+            Some(DispatchSeam {
+                store: &mut self.store,
+                lease: &self.lease,
+                envs: Some(&mut self.envs),
+            })
+        }
+    }
+
+    /// Drive the one-call scripted run to `stop{completed}` and return
+    /// the `lifecycle.run.finished` payload (the R5.10 battery's shape).
+    fn drive_to_finished(sink: &mut dyn LedgerSink) -> Json {
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(&ctx(), policy, sink, DriverConfig::default()).unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::EndTurn,
+                vec![],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = ScriptedGate {
+            out: GateOutcome {
+                durable_effect_ref: None,
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: Some("sub-1".into()),
+                error_class: None,
+                emitted: Vec::new(),
+            },
+            finish: None,
+        };
+        let mut asm = NullAssembler;
+        driver.run(&mut model, &mut gate, &mut asm, sink).unwrap();
+        sink.prefix()
+            .iter()
+            .find(|e| e.class == "lifecycle.run.finished")
+            .map(|e| e.payload.clone())
+            .expect("the run finished")
+    }
+
+    /// AC-1 — M1 measures the persisted created origin through actual
+    /// finish: created at 40_000, the clock answers 100_000 (the delayed
+    /// adoption leg — the turn-1 open stamps at 100_000, so the created
+    /// origin is the only base that includes it).
+    #[test]
+    fn wall_ms_measures_created_origin_not_turn_open() {
+        let mut sink = ClockedSink::new(100_000, Some(40_000));
+        let finished = drive_to_finished(&mut sink);
+        let wall = finished.get("wall_ms").expect("wall_ms stamped");
+        assert_eq!(wall.get("value").and_then(Json::as_int), Some(60_000));
+        assert_eq!(
+            wall.get("measured_at").and_then(Json::as_str),
+            Some("runtime")
+        );
+    }
+
+    /// AC-2 — a clock reading earlier than the recorded origin is an
+    /// untrustworthy origin: the truthful `n/a`, never a backdated or
+    /// clamped finish.
+    #[test]
+    fn wall_ms_rollback_reports_untrustworthy_origin() {
+        let mut sink = ClockedSink::new(100_000, Some(200_000));
+        let finished = drive_to_finished(&mut sink);
+        let wall = finished.get("wall_ms").expect("wall_ms member");
+        assert_eq!(
+            wall.get("na").and_then(Json::as_str),
+            Some("untrustworthy_origin"),
+            "{wall:?}"
+        );
+        assert!(wall.get("value").is_none());
+    }
+
+    /// AC-2 — an unstamped origin (a pre-R5.10 row, a replay prefix)
+    /// reports the observability `n/a`, never a guessed span.
+    #[test]
+    fn wall_ms_unstamped_origin_reports_na() {
+        let mut sink = ClockedSink::new(100_000, None);
+        let finished = drive_to_finished(&mut sink);
+        let wall = finished.get("wall_ms").expect("wall_ms member");
+        assert_eq!(
+            wall.get("na").and_then(Json::as_str),
+            Some("observability"),
+            "{wall:?}"
+        );
+    }
+
+    /// AC-1/AC-2 — the armed env seam lands the `submission_seal` member
+    /// on `lifecycle.run.finished`; a seam-less sink carries none (the
+    /// unarmed path stays byte-identical).
+    #[test]
+    fn finish_cites_submission_seal_only_when_the_seam_is_armed() {
+        let mut armed = EnvSeamSink::new("armed");
+        let finished = drive_to_finished(&mut armed);
+        assert_eq!(
+            finished.get("submission_seal"),
+            Some(&Json::Arr(vec![])),
+            "zero handles → the empty (truthful) seal set: {finished:?}"
+        );
+        let mut plain = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let finished = drive_to_finished(&mut plain);
+        assert!(
+            finished.get("submission_seal").is_none(),
+            "no seam, no member — legacy bytes preserved"
+        );
     }
 }
