@@ -1432,6 +1432,9 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.experiment.run_planned", "none"),
     ("measurement.experiment.run_replanned", "none"),
     ("measurement.experiment.run_settled", "none"),
+    ("measurement.experiment.execution_settled", "none"),
+    ("measurement.experiment.plan_disposition", "none"),
+    ("measurement.experiment.selection_revision", "none"),
     // ── measurement:export ──
     ("measurement.export.delivered", "none"),
     // ── measurement:harness_edit ──
@@ -2226,6 +2229,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.experiment.bound",            Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_bound",        Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_settled",      Led, O::Events, false, false, true,  None, None),
+    // R5.14 (PADR-R5-1 A.1 item 4 / A.3 — admitted GATE-G9): the
+    // required-mode exactly-once execution-cost settlement record and the
+    // recorded graded disposition + durable selection-revision home.
+    // `grade_pending` itself is admission state — it is not a class (A.3).
+    row_prov("measurement.experiment.execution_settled",
+                                                    Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.plan_disposition",
+                                                    Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.selection_revision",
+                                                    Led, O::Events, false, false, true,  None, None),
     row_audit("measurement.experiment.run_excluded",    O::Events, true, OPEN_AUDIT, &[], None, None),
     row_prov("measurement.experiment.run_replanned",    Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.cell_completed",   Led, O::Events, false, false, true,  None, None),

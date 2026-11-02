@@ -141,6 +141,14 @@ pub struct PlanState {
     pub finished_final: bool,
     /// The plan's latest `launch_bound` record (R5.6), if any.
     pub launch_binding: Option<LaunchBinding>,
+    /// `run_settled{grade_pending}` — required-grade admission state
+    /// (R5.14): execution cost settled once; scored-success/completion
+    /// interpretations block until `settle_graded` records a disposition.
+    /// Pending blocks relaunch and counts as an unresolved slot at close.
+    pub grade_pending: bool,
+    /// The recorded `plan_disposition` payload (`None` while pending or
+    /// in legacy mode) — the replay record for `settle_graded` idempotence.
+    pub disposition: Option<Json>,
 }
 
 impl PlanState {
@@ -156,7 +164,9 @@ impl PlanState {
     /// dispatch: an expired claim reads as eligible, the observer appends
     /// `claim_expired`; a re-attempt inside its backoff window waits).
     pub fn eligible_at(&self, now_ms: u64) -> bool {
-        if self.accepted_run.is_some() || self.finished_final {
+        // `grade_pending` blocks relaunch — a pending plan is never
+        // eligible (R5.14: retry cannot relaunch while pending).
+        if self.accepted_run.is_some() || self.finished_final || self.grade_pending {
             return false;
         }
         if self.in_flight().is_some() || now_ms < self.not_before_ms {
@@ -169,9 +179,11 @@ impl PlanState {
     }
 
     /// Whether the plan counts against `close`'s precondition (eligible or
-    /// claimed live at `now_ms`).
+    /// claimed live at `now_ms`). A `grade_pending` plan is an unresolved
+    /// slot — it blocks non-partial close and partial close lists it.
     pub fn open_at(&self, now_ms: u64) -> bool {
-        self.eligible_at(now_ms)
+        self.grade_pending
+            || self.eligible_at(now_ms)
             || self.in_flight().is_some()
             || matches!(&self.claim, Some(c) if c.expires_at_ms > now_ms)
     }
@@ -312,6 +324,8 @@ impl ExperimentView {
                         accepted_run: None,
                         finished_final: false,
                         launch_binding: None,
+                        grade_pending: false,
+                        disposition: None,
                     },
                 );
             }
@@ -454,6 +468,37 @@ impl ExperimentView {
                     if plan_final {
                         ps.finished_final = true;
                     }
+                    // R5.14 — required-mode scored settle leaves the plan
+                    // in the `grade_pending` admission state.
+                    if b(p, "grade_pending").unwrap_or(false) {
+                        ps.grade_pending = true;
+                    }
+                }
+            }
+            c if c == class::PLAN_DISPOSITION => {
+                // The recorded graded disposition — resolves `grade_pending`.
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
+                let Some(run_id) = s(p, "run_id") else { return };
+                if let Some(ps) = self.plans.get_mut(&rpid) {
+                    ps.grade_pending = false;
+                    ps.disposition = Some(p.clone());
+                    let kind = s(p, "disposition").unwrap_or_default();
+                    if kind == "graded" && s(p, "outcome_class").as_deref() == Some("scored") {
+                        ps.accepted_run = Some(run_id.clone());
+                    }
+                    if kind == "oracle_failure" {
+                        ps.finished_final = true;
+                        if let Some(a) = ps.attempts.iter_mut().find(|a| a.run_id == run_id) {
+                            a.regrade_pending = true;
+                        }
+                    } else if kind == "graded" && s(p, "outcome_class").as_deref() != Some("scored")
+                    {
+                        // A valid grade restored a non-scored stop class —
+                        // the plan is terminally done (A.1 item 6).
+                        ps.finished_final = true;
+                    }
                 }
             }
             c if c == class::RUN_EXCLUDED => {
@@ -560,6 +605,11 @@ impl ExperimentView {
             .values()
             .filter(|p| matches!(&p.claim, Some(c) if c.expires_at_ms > now_ms))
             .collect()
+    }
+
+    /// The `grade_pending` plans — unresolved slots at close.
+    pub fn pending_plans(&self) -> Vec<&PlanState> {
+        self.plans.values().filter(|p| p.grade_pending).collect()
     }
 
     /// The count of in-flight (launched-unsettled) runs.

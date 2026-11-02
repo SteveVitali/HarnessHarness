@@ -16,6 +16,7 @@
 //!   verbatim, never a warning (T-LCD-14, CC9).
 
 pub mod boundary;
+pub mod disposition;
 pub mod docs;
 pub mod engine;
 pub mod errors;

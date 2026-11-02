@@ -1314,12 +1314,27 @@ impl<'a> ExperimentEngine<'a> {
             participant_class,
         );
         // The admitted `grade_binding` (PADR-R5-1 A.3): `mode:"legacy"`
-        // while the required-grade opt-in freeze lands with the
-        // R5.9/R5.10/R5.14 owners; `pins_ref` is the `CellPlan` content
-        // address (the frozen task/oracle/config pins);
-        // `selection_policy_ref` stays absent in legacy mode.
-        let grade_binding =
-            ev::grade_binding("legacy", &declared.plan_id, &spec.budgets.instrument);
+        // unless the spec freezes `ext.required_grade` — then `"required"`
+        // plus `selection_policy_ref`, and the plan's task must carry
+        // frozen pins (an unknown required feature refuses — A.6).
+        let freeze = crate::disposition::required_grade_freeze(&spec)?;
+        let grade_binding = match &freeze {
+            Some(f) => {
+                if !f.tasks.contains_key(&ps.task_id) {
+                    return Err(ExperimentError::UnknownRequiredFeature {
+                        member: "required_grade.tasks".to_string(),
+                        detail: format!("no frozen pins for task `{}`", ps.task_id),
+                    });
+                }
+                ev::grade_binding_frozen(
+                    "required",
+                    &declared.plan_id,
+                    &spec.budgets.instrument,
+                    Some(&f.selection_policy_ref),
+                )
+            }
+            None => ev::grade_binding("legacy", &declared.plan_id, &spec.budgets.instrument),
+        };
         let linking = match &ps.launch_binding {
             Some(b) if b.attempt_no == attempt_no && b.phase == "intent" => {
                 // Link requires the same intent and byte-equal frozen
@@ -1934,6 +1949,7 @@ impl<'a> ExperimentEngine<'a> {
                 replanned: false,
                 paused: view.paused.clone(),
                 regrade_pending: attempt.regrade_pending,
+                grade_pending: ps.grade_pending,
             });
         }
 
@@ -2007,7 +2023,22 @@ impl<'a> ExperimentEngine<'a> {
         let backoff_min = reattempt.backoff.min_ms;
         let error_classes = reattempt.error_classes_included.clone();
 
-        let accepted = outcome_class == OutcomeClass::Scored;
+        // Required-grade mode (R5.14): a scored stop does not yet admit
+        // scored success — the plan enters the `grade_pending` admission
+        // state; the execution cost still transfers exactly once.
+        let required = ps
+            .launch_binding
+            .as_ref()
+            .and_then(|b| {
+                b.grade_binding
+                    .get("mode")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })
+            .as_deref()
+            == Some("required");
+        let accepted = outcome_class == OutcomeClass::Scored && !required;
+        let grade_pending = outcome_class == OutcomeClass::Scored && required;
         let mut superseded = false;
         let mut plan_final = false;
         let mut replanned = false;
@@ -2111,6 +2142,7 @@ impl<'a> ExperimentEngine<'a> {
             replanned,
             paused: paused.clone(),
             regrade_pending,
+            grade_pending,
         };
         // `pool_released` — the keys the attempt's `run_launched` consumed
         // (pre-C1 rows without the member re-derive from the arm; S-1).
@@ -2124,6 +2156,22 @@ impl<'a> ExperimentEngine<'a> {
             class::RUN_SETTLED,
             ev::run_settled(&outcome, &pool_released),
         )?];
+        if required {
+            // `execution_settled` — the deduplicated execution-cost
+            // settlement recorded exactly once (A.3); `dedup_key` is
+            // deterministic over {plan, run, finished ref} so a replayed
+            // settle can never record the transfer twice.
+            batch.push(self.mint(
+                &run_id,
+                class::EXECUTION_SETTLED,
+                ev::execution_settled(
+                    run_plan_id,
+                    &attempt.run_id,
+                    &format!("{}:{}", finished_ref.run_id, finished_ref.event_id),
+                    &attempt.budget_id,
+                ),
+            )?);
+        }
         if superseded && outcome_class == OutcomeClass::InfrastructureFailure {
             // §2.3: `run_settled` and `run_excluded{infrastructure_retry}`
             // land **before** `run_replanned`. A cancelled supersede carries
@@ -2550,11 +2598,19 @@ impl<'a> ExperimentEngine<'a> {
         // in-flight plans block a non-partial close.
         let open = view.open_plans(now);
         if !open.is_empty() && !partial {
+            // `grade_pending` plans are unresolved slots — they block the
+            // non-partial close alongside eligible/claimed/in-flight plans
+            // and are named distinctly (R5.14; A.9 item 5).
+            let pending: Vec<String> = view
+                .pending_plans()
+                .iter()
+                .map(|p| p.run_plan_id.clone())
+                .collect();
             let outstanding: Vec<String> = open.iter().map(|p| p.run_plan_id.clone()).collect();
             return Err(ExperimentError::CloseBlocked {
                 detail: format!(
-                    "outstanding_runs={:?} holds=[ExperimentReadyToLaunch]",
-                    outstanding
+                    "outstanding_runs={:?} grade_pending={:?} holds=[ExperimentReadyToLaunch]",
+                    outstanding, pending
                 ),
             });
         }
@@ -2608,6 +2664,13 @@ impl<'a> ExperimentEngine<'a> {
             budget_match,
             na_cells,
             utilization,
+            // Partial close enumerates every unresolved slot — pending
+            // plans alongside the open ones (A.9 item 5).
+            pending: view
+                .pending_plans()
+                .iter()
+                .map(|p| p.run_plan_id.clone())
+                .collect(),
         };
         self.append_chained(
             &run_id,
@@ -2622,6 +2685,172 @@ impl<'a> ExperimentEngine<'a> {
             ],
         )?;
         Ok(report)
+    }
+
+    /// `plan_disposition_at(run_plan_id, pins)` — the shared admission read
+    /// every consumer composes (R5.14; PADR-R5-1 A.1 item 6; REQ-E-202).
+    /// Pure — it never writes; `pins` is the `scoring_ref`.
+    pub fn plan_disposition_at(
+        &self,
+        run_plan_id: &str,
+        pins: &crate::disposition::DispositionPins,
+    ) -> Result<crate::disposition::DispositionRead, ExperimentError> {
+        let run_id = self.bound_run()?.to_string();
+        crate::disposition::plan_disposition_at(self.store, &self.docs, &run_id, run_plan_id, pins)
+    }
+
+    /// `settle_graded(run_plan_id, pins)` — the grade-admission op (R5.14;
+    /// A.1 items 4/6). It resolves the admitted disposition through
+    /// `plan_disposition_at` and records `plan_disposition` — never a
+    /// participant rerun, a recharge or a new n. `grade_pending` stays an
+    /// admission state: a still-pending call returns without a write; a
+    /// recorded disposition replays verbatim (exactly-once).
+    pub fn settle_graded(
+        &mut self,
+        run_plan_id: &str,
+        pins: &crate::disposition::DispositionPins,
+    ) -> Result<crate::disposition::DispositionRead, ExperimentError> {
+        let (run_id, lease) = self.bound()?;
+        let now = self.store.now_ms();
+        self.reconcile(&run_id, &lease, now)?;
+        let view = self.project()?;
+        if view.closed.is_some() {
+            return Err(ExperimentError::ExperimentClosed {
+                run_id: run_id.clone(),
+            });
+        }
+        let ps = view
+            .plans
+            .get(run_plan_id)
+            .ok_or_else(|| ExperimentError::UnknownRunPlan {
+                run_plan_id: run_plan_id.to_string(),
+            })?
+            .clone();
+        let read = self.plan_disposition_at(run_plan_id, pins)?;
+        if read.mode == crate::disposition::MODE_LEGACY {
+            return Err(ExperimentError::BadPlanState {
+                run_plan_id: run_plan_id.to_string(),
+                detail: "plan is not in required-grade mode".to_string(),
+            });
+        }
+        // Exactly-once: a recorded disposition replays, never re-writes.
+        if ps.disposition.is_some() {
+            return Ok(read);
+        }
+        use hharness_eval::selection::PlanDisposition as D;
+        let (kind, outcome_class, grades, selected_refs, veto_tripped, revisions, regrade) =
+            match &read.disposition {
+                Some(D::Pending { .. }) | None => return Ok(read),
+                Some(D::Graded {
+                    outcome_class,
+                    grades,
+                    selected_refs,
+                    veto_tripped,
+                    revisions,
+                }) => (
+                    "graded",
+                    Some(outcome_class.as_str()),
+                    grades
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.to_json()))
+                        .collect::<std::collections::BTreeMap<_, _>>(),
+                    selected_refs.clone(),
+                    veto_tripped.clone(),
+                    revisions.clone(),
+                    false,
+                ),
+                Some(D::OracleFailure {
+                    missing: _,
+                    veto_tripped,
+                }) => (
+                    "oracle_failure",
+                    Some("oracle_failure"),
+                    std::collections::BTreeMap::new(),
+                    std::collections::BTreeMap::new(),
+                    veto_tripped.clone(),
+                    Vec::new(),
+                    true,
+                ),
+            };
+        let subject = ps
+            .attempts
+            .iter()
+            .rev()
+            .find(|a| !a.superseded)
+            .map(|a| a.run_id.clone())
+            .or_else(|| ps.launch_binding.as_ref().map(|b| b.subject_run_id.clone()))
+            .ok_or_else(|| ExperimentError::BadPlanState {
+                run_plan_id: run_plan_id.to_string(),
+                detail: "no subject run bound".to_string(),
+            })?;
+        let mut batch = vec![self.mint(
+            &run_id,
+            class::PLAN_DISPOSITION,
+            ev::plan_disposition(
+                run_plan_id,
+                &subject,
+                kind,
+                outcome_class,
+                &grades,
+                &selected_refs,
+                &veto_tripped,
+                &revisions,
+                &read.watermarks,
+                read.eligible_set_ref.as_deref().unwrap_or(""),
+                regrade,
+            ),
+        )?];
+        // `cell_completed` — every replicate of the cell now accepted.
+        if outcome_class == Some("scored") {
+            let accepted = view
+                .plans
+                .values()
+                .filter(|p| p.cell_id == ps.cell_id && p.accepted_run.is_some())
+                .count() as u64
+                + 1;
+            let planned = view
+                .plans
+                .values()
+                .filter(|p| p.cell_id == ps.cell_id)
+                .count() as u64;
+            if accepted == planned {
+                batch.push(self.mint(
+                    &run_id,
+                    class::CELL_COMPLETED,
+                    ev::cell_completed(&ps.cell_id, accepted as u32, planned as u32),
+                )?);
+            }
+        }
+        self.append_chained(&run_id, &lease, batch)?;
+        Ok(read)
+    }
+
+    /// `record_selection_revision(run_plan_id, pins, revision)` — the
+    /// durable home of an authorized grade correction (A.3/A.4): the
+    /// append is validated through `RevisionLog` semantics against the
+    /// durable log and the pinned attempts before it lands — a correction
+    /// lacking `authority` or binding a foreign set is a typed refusal.
+    pub fn record_selection_revision(
+        &mut self,
+        run_plan_id: &str,
+        pins: &crate::disposition::DispositionPins,
+        revision: &hharness_eval::selection::SelectionRevision,
+    ) -> Result<(), ExperimentError> {
+        let (run_id, lease) = self.bound()?;
+        crate::disposition::validate_revision(
+            self.store,
+            &self.docs,
+            &run_id,
+            run_plan_id,
+            pins,
+            revision,
+        )?;
+        let ev = self.mint(
+            &run_id,
+            class::SELECTION_REVISION,
+            ev::selection_revision(run_plan_id, revision),
+        )?;
+        self.append_chained(&run_id, &lease, vec![ev])
     }
 
     // ── internals ────────────────────────────────────────────────────────
