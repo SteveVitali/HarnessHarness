@@ -284,12 +284,18 @@ impl<'a> Account<'a> {
     // ── reserve ──────────────────────────────────────────────────────────
 
     /// `reserve(budget_id, quantity, holder, ttl) → reservation_id` (§8.2 §2;
-    /// ADR-0040 D3).
+    /// ADR-0040 D3; the whole-vector admission — PADR-R5-2 B.1 item 3,
+    /// REQ-E-207).
     ///
-    /// Conservation: for the node and every ancestor,
-    /// `consumed + reserved + slice_held + quantity ≤ hard` on every bounded key —
-    /// a violation is `InsufficientBudget{dimension, requested, available}`, a
-    /// typed pre-dispatch refusal (ledgered as `reserved{outcome: refused}`).
+    /// Conservation, projected: for the node and every ancestor, **every**
+    /// bounded key — primary or derived — is checked against
+    /// `consumed + reserved + slice_held + quantity ≤ hard`. `level` is the
+    /// owning fold and `key_total` evaluates derived names over stored
+    /// primaries, so `tokens.input/output.total` ceilings bind the vector's
+    /// components without ever being charged or folded by a second
+    /// calculation. A violation is `InsufficientBudget{dimension, requested,
+    /// available}` — a typed pre-dispatch refusal (ledgered as
+    /// `reserved{outcome: refused}`); refusing any dimension holds nothing.
     /// Gauges are `DimensionNotBudgetable` — they cap via E5, never reserve.
     pub fn reserve(
         &mut self,
@@ -311,26 +317,32 @@ impl<'a> Account<'a> {
                 });
             }
         }
-        // Conservation along the ancestor chain, applied to reservations.
+        // Whole-vector admission along the ancestor chain: every hard key on
+        // every ancestor, in deterministic leaf→root / canonical-key order.
+        // `>` keeps the exact boundary admissible; an untouched key refuses
+        // only when conservation is already breached there (`requested = 0`
+        // and `level > hard`). Gauge hard keys are E5 increments — skipped
+        // exactly as `BudgetTree::check` skips them.
         let mut refusal: Option<BudgetError> = None;
-        for (d, amount) in quantity.iter() {
-            let key = DimensionKey::Primary(d);
-            for anc in self.tree.path(budget_id)? {
-                let n = &self.tree.nodes[&anc];
-                if let Some(hard) = n.node.spec.hard(key) {
-                    let level = self.tree.level(n, key);
-                    if level + amount > hard {
-                        refusal = Some(BudgetError::InsufficientBudget {
-                            dimension: key,
-                            requested: amount,
-                            available: (hard - level).max(0),
-                        });
-                        break;
-                    }
+        'path: for anc in self.tree.path(budget_id)? {
+            let n = &self.tree.nodes[&anc];
+            for (key, rule) in &n.node.spec.dimensions {
+                let Some(hard) = rule.hard.as_ref().map(|c| c.limit) else {
+                    continue;
+                };
+                if key.primary().map(|d| d.class()) == Some(DimensionClass::Gauge) {
+                    continue;
                 }
-            }
-            if refusal.is_some() {
-                break;
+                let level = self.tree.level(n, *key);
+                let requested = quantity.key_total(*key);
+                if level + requested > hard {
+                    refusal = Some(BudgetError::InsufficientBudget {
+                        dimension: *key,
+                        requested,
+                        available: (hard - level).max(0),
+                    });
+                    break 'path;
+                }
             }
         }
         let reservation_id = self.store.alloc_id("res");
