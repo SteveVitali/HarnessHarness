@@ -285,6 +285,26 @@ pub trait EffectGate {
     fn producer_component(&self) -> &str {
         "effect-gate"
     }
+
+    /// The durable-dispatch leg (R5.8; PADR-R5-2 `DurableEffectRef`): a
+    /// gate binding real environment execution settles the
+    /// already-intended `effect_id` through the `Dispatcher` — the
+    /// lifecycle rows land durable under the fenced writer inside `seam`
+    /// and the returned [`GateOutcome`] carries the validated
+    /// `durable_effect_ref` instead of `emitted` rows (duplicate driver
+    /// lifecycle rows suppressed by construction). `None` — the default
+    /// and the answer for any intent the gate does not own durably —
+    /// falls back to `dispatch`; an armed gate refusing its own intent
+    /// returns `Some` with `SettledOutcome::Refused` and no ref.
+    fn dispatch_durable(
+        &mut self,
+        _seam: DispatchSeam<'_>,
+        _effect_id: &str,
+        _attempt_no: u64,
+        _intent: &Json,
+    ) -> Option<GateOutcome> {
+        None
+    }
 }
 
 /// The gate's terminal report.
@@ -303,6 +323,13 @@ pub struct GateOutcome {
     /// writer lease — the producer computes, the fenced writer lands
     /// (CC3; the `AssembleOutcome.side_events` convention).
     pub emitted: Vec<(String, Json)>,
+    /// The durable-dispatch settlement (R5.8; PADR-R5-2
+    /// `DurableEffectRef`): `Some` means the gate ran the real
+    /// `Dispatcher` — the lifecycle rows are already durable under the
+    /// fenced writer — so the driver **validates the refs and appends
+    /// nothing** (the `emitted`+terminal convention is suppressed;
+    /// `emitted` must be empty on this path).
+    pub durable_effect_ref: Option<hharness_env::dispatch::DurableEffectRef>,
 }
 
 /// The kernel-owned inputs `assemble` reads beyond the strategy's
@@ -391,6 +418,15 @@ pub trait LedgerSink {
     fn store_seam(&mut self) -> Option<StoreSeam<'_>> {
         None
     }
+    /// The durable-dispatch seam (R5.8; PADR-R5-2): the run's store +
+    /// writer lease + the env driver the real `Dispatcher`'s stages
+    /// consume. `None` (the default — replay/arm sinks and recorders
+    /// without a live store/env) means a gate's `dispatch_durable` can
+    /// never run; the driver falls back to `dispatch` and the
+    /// host/fixture port mode is preserved byte-identical.
+    fn dispatch_seam(&mut self) -> Option<DispatchSeam<'_>> {
+        None
+    }
 }
 
 /// The fenced-writer half of `LedgerSink` — the run's store + the writer
@@ -400,6 +436,19 @@ pub struct StoreSeam<'a> {
     pub store: &'a mut hharness_ledger::store::Store,
     /// The parent's writer lease.
     pub lease: &'a hharness_ledger::store::Lease,
+}
+
+/// The durable-dispatch half of `LedgerSink` (R5.8; PADR-R5-2
+/// `DurableEffectRef`): the run's store + fenced writer + the env driver
+/// the `Dispatcher`'s seven stages consume.
+pub struct DispatchSeam<'a> {
+    /// The run's store.
+    pub store: &'a mut hharness_ledger::store::Store,
+    /// The run's fenced writer lease.
+    pub lease: &'a hharness_ledger::store::Lease,
+    /// The run's env driver. `None` refuses durable dispatch — a session
+    /// with no provisioned environment never gains a hidden executor.
+    pub envs: Option<&'a mut hharness_env::driver::EnvDriver>,
 }
 
 /// The compaction boundary (R-2.4.2's `compact` driver — §5c.2; the S2.11
@@ -3545,6 +3594,69 @@ impl<S: ControlStrategy> Driver<S> {
         Ok(())
     }
 
+    /// R5.8 (PADR-R5-2) — validate the gate's `DurableEffectRef` against
+    /// the durable prefix instead of reappending driver rows: the
+    /// coordinate must name this `ef`, `emitted` must be empty, the
+    /// `coordinate_ref` must resolve to `ef`'s `action.effect.intended`
+    /// row, and the `settlement_ref` must resolve to the durable record
+    /// matching the reported outcome (`Pending` parks behind its
+    /// permission/input-required record). A mismatched ref is a typed
+    /// port failure — never a blind trust, never a silent append.
+    fn validate_durable_outcome(
+        &self,
+        sink: &mut dyn LedgerSink,
+        ef: &str,
+        dref: &hharness_env::dispatch::DurableEffectRef,
+        out: &GateOutcome,
+    ) -> Result<(), DriverError> {
+        let fail = |detail: String| DriverError::Port {
+            port: "effect",
+            detail,
+        };
+        if dref.effect_id != ef {
+            return Err(fail(format!(
+                "durable_ref.effect_id {} ≠ dispatched {ef}",
+                dref.effect_id
+            )));
+        }
+        if !out.emitted.is_empty() {
+            return Err(fail(
+                "durable effect path must not emit driver lifecycle rows".to_string(),
+            ));
+        }
+        let prefix = sink.prefix();
+        let intended_ok = prefix.iter().any(|e| {
+            e.event_id == dref.coordinate_ref
+                && e.class == "action.effect.intended"
+                && e.scope.effect_id.as_deref() == Some(ef)
+        });
+        if !intended_ok {
+            return Err(fail(format!(
+                "durable_ref.coordinate_ref {} does not resolve to {ef}'s intended row",
+                dref.coordinate_ref
+            )));
+        }
+        let expected: &[&str] = match &out.outcome {
+            SettledOutcome::Observed { .. } => &["action.effect.observed"],
+            SettledOutcome::Refused => &["action.effect.refused", "action.tool.rejected"],
+            SettledOutcome::Unknown { .. } => &["action.effect.unknown"],
+            SettledOutcome::Abandoned => &["action.effect.abandoned"],
+            SettledOutcome::Pending => {
+                &["security.permission.pending", "action.effect.input_required"]
+            }
+        };
+        if !prefix
+            .iter()
+            .any(|e| e.event_id == dref.settlement_ref && expected.contains(&e.class.as_str()))
+        {
+            return Err(fail(format!(
+                "durable_ref.settlement_ref {} does not resolve to {expected:?}",
+                dref.settlement_ref
+            )));
+        }
+        Ok(())
+    }
+
     /// One `act` round (sequential): `action.effect.intended` (causes ∋
     /// the `control.decision` — I1) → G-PRE-DISPATCH → the gate's
     /// dispatch → the settled terminal → the `effects_settled` cue.
@@ -3647,18 +3759,40 @@ impl<S: ControlStrategy> Driver<S> {
                 // list as the tool result.
                 let out = match self.exposure_dispatch(sink, &ef, dispatch_intent)? {
                     Some(out) => out,
-                    None => gate.dispatch(&ef, 1, dispatch_intent),
+                    None => match sink.dispatch_seam() {
+                        // R5.8 (PADR-R5-2) — the durable-dispatch leg is
+                        // tried first; `None` (seamless sink or a surface
+                        // the gate does not own durably) falls back to
+                        // the ordinary `dispatch` verbatim.
+                        Some(seam) => gate
+                            .dispatch_durable(seam, &ef, 1, dispatch_intent)
+                            .unwrap_or_else(|| gate.dispatch(&ef, 1, dispatch_intent)),
+                        None => gate.dispatch(&ef, 1, dispatch_intent),
+                    },
                 };
-                // The gate's dispatch-lifecycle rows land durable before
-                // the terminal — `decided`/`authorized`/`prepared`/
-                // `committed` in emit order (§5a.2; the sink stamps the
-                // fencing token it owns on the post-`prepared` classes).
-                // Producer: the gate's component — these are the
-                // boundary's authorization records, not the envelope's
-                // (INV-7).
-                let gate_component = gate.producer_component().to_string();
-                for (class, payload) in &out.emitted {
-                    self.append_producer(sink, class, payload.clone(), Some(&ef), &gate_component)?;
+                if let Some(dref) = &out.durable_effect_ref {
+                    // The dispatcher settled `ef` durably — validate the
+                    // admitted refs instead of reappending driver rows
+                    // (PADR-R5-2: duplicate lifecycle rows suppressed).
+                    self.validate_durable_outcome(sink, &ef, dref, &out)?;
+                } else {
+                    // The gate's dispatch-lifecycle rows land durable before
+                    // the terminal — `decided`/`authorized`/`prepared`/
+                    // `committed` in emit order (§5a.2; the sink stamps the
+                    // fencing token it owns on the post-`prepared` classes).
+                    // Producer: the gate's component — these are the
+                    // boundary's authorization records, not the envelope's
+                    // (INV-7).
+                    let gate_component = gate.producer_component().to_string();
+                    for (class, payload) in &out.emitted {
+                        self.append_producer(
+                            sink,
+                            class,
+                            payload.clone(),
+                            Some(&ef),
+                            &gate_component,
+                        )?;
+                    }
                 }
                 if matches!(out.outcome, SettledOutcome::Pending) {
                     // Out-of-loop dispatch (a host capability): the
@@ -3707,7 +3841,9 @@ impl<S: ControlStrategy> Driver<S> {
                         m.insert("submission_ref".to_string(), Json::str(s.clone()));
                     }
                 }
-                self.append(sink, terminal_class, terminal_payload, Some(&ef))?;
+                if out.durable_effect_ref.is_none() {
+                    self.append(sink, terminal_class, terminal_payload, Some(&ef))?;
+                }
                 // AC-R-2.4.3-12 (DF-S2.8-1) — the `trigger{path_touched}`
                 // leg: an *observed* effect whose intent names `args.path`
                 // runs a trigger retrieval over the memory boundary
@@ -6389,6 +6525,7 @@ impl<S: ControlStrategy> Driver<S> {
             .unwrap_or_else(|| ef.to_string());
         let refused = |reason: String| -> Option<GateOutcome> {
             Some(GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Refused,
                 submission_ref: None,
                 error_class: Some(reason),
@@ -6513,6 +6650,7 @@ impl<S: ControlStrategy> Driver<S> {
             ("truncated", Json::Bool(result.truncated)),
         ]);
         Ok(Some(GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Observed {
                 outcome: outcome.to_canonical_string(),
             },
@@ -7243,6 +7381,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -7337,6 +7476,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -7452,6 +7592,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Abandoned,
                 submission_ref: None,
                 error_class: None,
@@ -7506,6 +7647,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Abandoned,
                 submission_ref: None,
                 error_class: None,
@@ -7580,6 +7722,7 @@ mod tests {
     fn observed_gate() -> ScriptedGate {
         ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -7860,6 +8003,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -7927,6 +8071,7 @@ mod tests {
             };
             let mut gate = ScriptedGate {
                 out: GateOutcome {
+                    durable_effect_ref: None,
                     outcome: SettledOutcome::Observed {
                         outcome: "applied".into(),
                     },
@@ -8468,6 +8613,7 @@ mod tests {
         // reach the probe emitter.
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -8594,6 +8740,7 @@ mod tests {
         };
         let mut gate = ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -9400,6 +9547,7 @@ mod tests {
     fn observing_gate() -> ScriptedGate {
         ScriptedGate {
             out: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "ok".into(),
                 },
