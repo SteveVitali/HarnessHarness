@@ -1,6 +1,6 @@
 # GATE-G9 readout — admit exact architecture and method contracts
 
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 *Append-only. Each operator reading is a new dated block; never edit an earlier one.*
 
@@ -34,3 +34,8 @@ GATE-G9 orientation verified at presentation (reads this coordinator session):
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+Operator decision (verbatim, received 2026-11-02T02:06:07Z via Devin Desktop chat): "yes" — recorded as a `confirmation` of the concrete restated disposition (adopt all seven PADR-R5-1*…7*; design+implementation scope; no numerical validation / spend / skeleton dispatch / participant-publication acts; expiry GATE-G10 or material change; voided-by operator cancellation or materially changed semantics), after the hedged "sounds good to me. can we proceed?" was restated as a yes/no per BM-GATE-02 rule 2.
+GATE DECISIONS row: 2026-11-02 | GATE-G9
+Operator confirmation of agent-drafted text: "yes" — covers the restated disposition presented with sha256:3d9a2b5af03a9a5f49aaba19d8308a3460ca66117f29d789a399bebf43b92fc0
+Signed by: the operator. Recorded by devin-desktop/swe-2-high, which does not sign.
