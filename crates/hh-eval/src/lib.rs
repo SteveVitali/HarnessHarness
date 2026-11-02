@@ -39,6 +39,7 @@ pub mod oracle;
 pub mod runs;
 pub mod scorecard;
 pub mod security_metrics;
+pub mod selection;
 pub mod stats;
 pub mod vetoes;
 
