@@ -7301,7 +7301,6 @@ mod tests {
     struct SeamSink {
         mem: MemSink,
         store: hharness_ledger::store::Store,
-        run: String,
         lease: hharness_ledger::store::Lease,
     }
 
@@ -7317,7 +7316,7 @@ mod tests {
                 hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
             )
             .unwrap();
-            let (run, lease) = store
+            let (_run, lease) = store
                 .open_run(
                     hharness_ledger::manifest::RunManifest::minimal(
                         hharness_ledger::manifest::RunKind::Agent,
@@ -7331,7 +7330,6 @@ mod tests {
                     seq: 0,
                 },
                 store,
-                run,
                 lease,
             }
         }
