@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_172 ADRs: 120 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_173 ADRs: 121 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -156,6 +156,7 @@ _172 ADRs: 120 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0386 | - If a later owner (R5.8 `DurableEffectRef*`, R5.14 pending) needs adoption to join the effect/settlement lifecycle, revisit the session record members — not the seam shape. |
 | ADR-0387 | - A dispatch path whose `intended` rows carry `ordinal` must derive `f(run, mc, tc, ordinal)` — the free-coordinate adoption contract assumes the task runtime's own coordinate discipline (the driver's `ef-N` shape). - A future `LedgerSink` implementation exposing `dispatch_seam` without a live fenced writer must answer `None`, or a gated run could bind a reader as if it were the writer. |
 | ADR-0388 | - If R5.14/R5.11 need the selection bound to a different identity discipline than `(instrument_run_id, seq)` coordinates (e.g. event-id pins), revisit the dedup/conflict and `attempt_ref` convention. - If a revision ever needs to invalidate a member wholesale rather than a named attempt ref, revisit the `supersedes` grammar (currently attempt ref \| prior revision id). |
+| ADR-0389 | - If R5.19/B3 need the created origin bound to a different authority (e.g. HLC or a lease record rather than the seq-0 member), revisit the `created_at_ms` member shape. - If a later owner needs seal legs that span multiple environments atomically (a failed leg currently still revokes the ready ones and records `refused`), revisit per-handle independence. - If instrument/observer runs ever need end-state pins without access revocation, revisit the single `seal_workspace` verb (a `taken_by` leg already distinguishes subject vs instrument snapshots). |
 
 ## Fired-and-answered triggers (BL-48)
 
