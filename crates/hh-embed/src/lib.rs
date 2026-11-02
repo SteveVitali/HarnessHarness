@@ -27,6 +27,7 @@
 //! [`Driver`](hharness_control::driver::Driver) (`ReactMinimal`) with kernel
 //! ports implemented in this crate ([`runtime`]).
 
+pub mod adopt;
 pub(crate) mod analysis_ops;
 mod assembly_ops;
 pub(crate) mod attribution_ops;
