@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_171 ADRs: 119 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_172 ADRs: 120 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -155,6 +155,7 @@ _171 ADRs: 119 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0385 | When the required-grade opt-in lands (R5.9/R5.10/R5.14), `grade_binding` gains `mode:"required"` + `selection_policy_ref`; when R5.7 lands the adoption read must consume `launch_binding` unchanged (breaking it is a contract change returned for amendment). |
 | ADR-0386 | - If a later owner (R5.8 `DurableEffectRef*`, R5.14 pending) needs adoption to join the effect/settlement lifecycle, revisit the session record members — not the seam shape. |
 | ADR-0387 | - A dispatch path whose `intended` rows carry `ordinal` must derive `f(run, mc, tc, ordinal)` — the free-coordinate adoption contract assumes the task runtime's own coordinate discipline (the driver's `ef-N` shape). - A future `LedgerSink` implementation exposing `dispatch_seam` without a live fenced writer must answer `None`, or a gated run could bind a reader as if it were the writer. |
+| ADR-0388 | - If R5.14/R5.11 need the selection bound to a different identity discipline than `(instrument_run_id, seq)` coordinates (e.g. event-id pins), revisit the dedup/conflict and `attempt_ref` convention. - If a revision ever needs to invalidate a member wholesale rather than a named attempt ref, revisit the `supersedes` grammar (currently attempt ref \| prior revision id). |
 
 ## Fired-and-answered triggers (BL-48)
 
