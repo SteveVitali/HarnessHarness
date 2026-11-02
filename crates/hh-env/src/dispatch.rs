@@ -563,9 +563,7 @@ impl<'a> Dispatcher<'a> {
             )));
         }
         if lease.expires_at_ms <= self.store.now_ms() {
-            return Err(refused(
-                "adopt_writer_stale: lease expired".to_string(),
-            ));
+            return Err(refused("adopt_writer_stale: lease expired".to_string()));
         }
         // ── already-intended coordinate (pre-mutation) ───────────────
         let folds = self
@@ -591,12 +589,9 @@ impl<'a> Dispatcher<'a> {
         // The arg-map eval is pure — run it here so a mismatch refuses
         // before the pipeline's first append. Members the coordinate's
         // `intended` row recorded are authoritative.
-        let canonical = hharness_monitor::args::eval(
-            input.binding,
-            input.scope_bindings,
-            &input.surface_args,
-        )
-        .map_err(|e| refused(format!("adopt_arg_eval: {e:?}")))?;
+        let canonical =
+            hharness_monitor::args::eval(input.binding, input.scope_bindings, &input.surface_args)
+                .map_err(|e| refused(format!("adopt_arg_eval: {e:?}")))?;
         let args_hash = hharness_identity::idp::idp_id(
             "canonical_args",
             canonical_json(&canonical).to_canonical_string().as_bytes(),
@@ -626,10 +621,7 @@ impl<'a> Dispatcher<'a> {
             lease,
         )?;
         // ── validate the durable result, then hand back the refs ─────
-        let events = self
-            .store
-            .events(&self.run_id)
-            .map_err(EnvError::Ledger)?;
+        let events = self.store.events(&self.run_id).map_err(EnvError::Ledger)?;
         let coordinate_ref = events
             .iter()
             .find(|e| {

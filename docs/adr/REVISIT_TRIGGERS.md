@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_170 ADRs: 118 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_171 ADRs: 119 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -154,6 +154,7 @@ _170 ADRs: 118 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0384 | Reopen if GATE-G9 or a later disposition changes where amendment proposals are homed (e.g., an admitted proposal pipeline), if the supplement's §9.3 register gains or loses rows, or if the build adopts per-row dossier files — the slot/status audit then needs a matching amendment, never a silent edit. |
 | ADR-0385 | When the required-grade opt-in lands (R5.9/R5.10/R5.14), `grade_binding` gains `mode:"required"` + `selection_policy_ref`; when R5.7 lands the adoption read must consume `launch_binding` unchanged (breaking it is a contract change returned for amendment). |
 | ADR-0386 | - If a later owner (R5.8 `DurableEffectRef*`, R5.14 pending) needs adoption to join the effect/settlement lifecycle, revisit the session record members — not the seam shape. |
+| ADR-0387 | - A dispatch path whose `intended` rows carry `ordinal` must derive `f(run, mc, tc, ordinal)` — the free-coordinate adoption contract assumes the task runtime's own coordinate discipline (the driver's `ef-N` shape). - A future `LedgerSink` implementation exposing `dispatch_seam` without a live fenced writer must answer `None`, or a gated run could bind a reader as if it were the writer. |
 
 ## Fired-and-answered triggers (BL-48)
 

@@ -8,6 +8,7 @@
 
 use crate::frames::FrameAdapter;
 use crate::runtime::{EmbedGate, EmbedModel, KernelAssembler, KernelSink};
+use hharness_control::driver::EffectGate;
 use hharness_control::driver::{Driver, DriverError};
 use hharness_control::strategy::{ConcurrentInput, ControlStrategy, SteerMode};
 use hharness_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
@@ -16,7 +17,6 @@ use hharness_embed_schema::frames::StreamNotification;
 use hharness_embed_schema::negotiate;
 use hharness_embed_schema::ops::{self, Direction, Tier};
 use hharness_embed_schema::types::*;
-use hharness_control::driver::EffectGate;
 use hharness_env::driver::EnvDriver;
 use hharness_env::events::EventMinter;
 use hharness_ledger::manifest::{RunKind, RunManifest};
@@ -1583,24 +1583,19 @@ impl EmbedService {
         caps: Vec<crate::runtime::ExecCap>,
     ) -> Result<(), EmbedError> {
         for cap in &caps {
-            let req =
-                hharness_env::executor::ExecutionRequirement::from_json(
-                    &cap.capability.execution_requirement,
-                )
-                .map_err(|e| EmbedError::Refused {
-                    reason: format!("exec_cap_requirement:{}:{e:?}", cap.surface_id),
-                })?;
-            hharness_env::executor::bind(
-                cap.executor.declaration(),
-                cap.declared.domain,
-                &req,
+            let req = hharness_env::executor::ExecutionRequirement::from_json(
+                &cap.capability.execution_requirement,
             )
             .map_err(|e| EmbedError::Refused {
-                reason: format!("exec_cap_unbound:{}:{e:?}", cap.surface_id),
+                reason: format!("exec_cap_requirement:{}:{e:?}", cap.surface_id),
             })?;
+            hharness_env::executor::bind(cap.executor.declaration(), cap.declared.domain, &req)
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("exec_cap_unbound:{}:{e:?}", cap.surface_id),
+                })?;
         }
         let s = self.session_mut(sess_id)?;
-        if s.attach || s.finished {
+        if s.finished {
             return Err(EmbedError::Refused {
                 reason: "exec_cap_arm_inadmissible".to_string(),
             });

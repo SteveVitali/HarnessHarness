@@ -3641,9 +3641,10 @@ impl<S: ControlStrategy> Driver<S> {
             SettledOutcome::Refused => &["action.effect.refused", "action.tool.rejected"],
             SettledOutcome::Unknown { .. } => &["action.effect.unknown"],
             SettledOutcome::Abandoned => &["action.effect.abandoned"],
-            SettledOutcome::Pending => {
-                &["security.permission.pending", "action.effect.input_required"]
-            }
+            SettledOutcome::Pending => &[
+                "security.permission.pending",
+                "action.effect.input_required",
+            ],
         };
         if !prefix
             .iter()
@@ -7292,6 +7293,237 @@ mod tests {
         fn finish_record(&self) -> Option<Json> {
             self.finish.clone()
         }
+    }
+
+    /// R5.8 (PADR-R5-2) — a seam-providing sink: `dispatch_seam` answers
+    /// a real store/lease so the durable-dispatch leg is tried; the
+    /// scripted gate ignores the seam's contents.
+    struct SeamSink {
+        mem: MemSink,
+        store: hharness_ledger::store::Store,
+        run: String,
+        lease: hharness_ledger::store::Lease,
+    }
+
+    impl SeamSink {
+        fn new(tag: &str) -> SeamSink {
+            let root =
+                std::env::temp_dir().join(format!("hh-ctl-r58-{}-{tag}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let mut store = hharness_ledger::store::Store::open_with(
+                root,
+                Box::new(hharness_ledger::ids::ManualClock::at(1_000)),
+                Some(Box::new(hharness_ledger::ids::SeqIds::new())),
+                hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+            )
+            .unwrap();
+            let (run, lease) = store
+                .open_run(
+                    hharness_ledger::manifest::RunManifest::minimal(
+                        hharness_ledger::manifest::RunKind::Agent,
+                    ),
+                    "writer-a",
+                )
+                .unwrap();
+            SeamSink {
+                mem: MemSink {
+                    events: vec![],
+                    seq: 0,
+                },
+                store,
+                run,
+                lease,
+            }
+        }
+    }
+
+    impl LedgerSink for SeamSink {
+        fn append(&mut self, events: Vec<Event>) -> Result<(), String> {
+            self.mem.append(events)
+        }
+        fn prefix(&self) -> &[EventEnvelope] {
+            self.mem.prefix()
+        }
+        fn dispatch_seam(&mut self) -> Option<DispatchSeam<'_>> {
+            Some(DispatchSeam {
+                store: &mut self.store,
+                lease: &self.lease,
+                envs: None,
+            })
+        }
+    }
+
+    /// A gate whose `dispatch_durable` returns a scripted outcome —
+    /// exercises the callsite's durable-ref validation without running a
+    /// real dispatcher.
+    struct DurableScriptGate {
+        out: GateOutcome,
+        /// `Some` forces the ref's `effect_id` (the wrong-coordinate
+        /// leg); `None` echoes the dispatched coordinate back.
+        ref_effect_id: Option<String>,
+    }
+
+    impl EffectGate for DurableScriptGate {
+        fn dispatch(&mut self, _ef: &str, _a: u64, _i: &Json) -> GateOutcome {
+            unreachable!("the durable leg is answered first")
+        }
+        fn dispatch_durable(
+            &mut self,
+            _seam: DispatchSeam<'_>,
+            ef: &str,
+            _a: u64,
+            _i: &Json,
+        ) -> Option<GateOutcome> {
+            let mut out = self.out.clone();
+            if let (Some(fixed), Some(dref)) =
+                (&self.ref_effect_id, out.durable_effect_ref.as_mut())
+            {
+                dref.effect_id = fixed.clone();
+            } else if let Some(dref) = out.durable_effect_ref.as_mut() {
+                dref.effect_id = ef.to_string();
+            }
+            Some(out)
+        }
+    }
+
+    /// The callsite validates the cited `DurableEffectRef` — a coordinate
+    /// naming another effect id is a typed port failure, never a blind
+    /// trust.
+    #[test]
+    fn durable_ref_wrong_effect_id_is_a_port_failure() {
+        let mut sink = SeamSink::new("wrong-ef");
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                surfaces: vec![SurfaceSpec {
+                    surface_id: "fs.read".into(),
+                    semantic_id: "sem/fs.read".into(),
+                    params: [(
+                        "path".into(),
+                        crate::output::ParamSpec {
+                            required: true,
+                            kind: crate::output::ParamKind::Str,
+                            enum_values: vec![],
+                            domain: vec![],
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                    risk_class: None,
+                    family: None,
+                }],
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = DurableScriptGate {
+            ref_effect_id: Some("ef-other".into()),
+            out: GateOutcome {
+                durable_effect_ref: Some(hharness_env::dispatch::DurableEffectRef {
+                    effect_id: String::new(),
+                    coordinate_ref: "evt-x".into(),
+                    writer_lease_ref: "l@1".into(),
+                    settlement_ref: "evt-y".into(),
+                }),
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: None,
+                error_class: None,
+                emitted: vec![],
+            },
+        };
+        let mut asm = NullAssembler;
+        let err = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap_err();
+        let spelling = format!("{err:?}");
+        assert!(spelling.contains("durable_ref.effect_id"), "{spelling}");
+    }
+
+    /// A durable-path outcome must never carry `emitted` rows — the
+    /// dispatcher already owns the lifecycle; a gate that tries both is a
+    /// typed port failure.
+    #[test]
+    fn durable_ref_with_emitted_rows_is_a_port_failure() {
+        let mut sink = SeamSink::new("emit-dup");
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                surfaces: vec![SurfaceSpec {
+                    surface_id: "fs.read".into(),
+                    semantic_id: "sem/fs.read".into(),
+                    params: [(
+                        "path".into(),
+                        crate::output::ParamSpec {
+                            required: true,
+                            kind: crate::output::ParamKind::Str,
+                            enum_values: vec![],
+                            domain: vec![],
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                    risk_class: None,
+                    family: None,
+                }],
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hharness_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = DurableScriptGate {
+            ref_effect_id: None,
+            out: GateOutcome {
+                durable_effect_ref: Some(hharness_env::dispatch::DurableEffectRef {
+                    effect_id: String::new(),
+                    coordinate_ref: "evt-x".into(),
+                    writer_lease_ref: "l@1".into(),
+                    settlement_ref: "evt-y".into(),
+                }),
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: None,
+                error_class: None,
+                emitted: vec![("action.effect.authorized".to_string(), Json::obj([]))],
+            },
+        };
+        let mut asm = NullAssembler;
+        let err = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap_err();
+        let spelling = format!("{err:?}");
+        assert!(spelling.contains("must not emit"), "{spelling}");
     }
 
     struct NullAssembler;

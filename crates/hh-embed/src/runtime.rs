@@ -37,10 +37,10 @@ use hharness_context::{
     SlotConstraints, TriggerKind, ValidityPolicy, DETERMINISTIC_DEFAULT,
 };
 use hharness_control::driver::{
-    DispatchSeam,
     AssembleInputs, AssembledRequest, AssemblerPort, CacheBinding, CacheResolution, CompactionDone,
-    CompactionImpossible, CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort,
-    ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry, StoreSeam,
+    CompactionImpossible, CompactionPort, DispatchSeam, EffectGate, GateOutcome, LedgerSink,
+    MemoryPort, ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry,
+    StoreSeam,
 };
 use hharness_control::output::ParsedCall;
 use hharness_control::vocab::SettledOutcome;
@@ -559,11 +559,9 @@ impl DispatchGate {
             &cap.capability.execution_requirement,
         );
         if let Ok(req) = requirement {
-            if let Err(e) = hharness_env::executor::bind(
-                cap.executor.declaration(),
-                cap.declared.domain,
-                &req,
-            ) {
+            if let Err(e) =
+                hharness_env::executor::bind(cap.executor.declaration(), cap.declared.domain, &req)
+            {
                 return refused(&format!("exec_capability_unbound:{e:?}"));
             }
         }
@@ -611,16 +609,37 @@ impl DispatchGate {
                 let (outcome, err) = match out {
                     hharness_env::dispatch::DispatchOutcome::Observed(obs) => (
                         SettledOutcome::Observed {
-                            outcome: match &obs.outcome { hharness_env::observe::EffectOutcome::Applied => "applied".to_string(), hharness_env::observe::EffectOutcome::NotApplied => "not_applied".to_string(), hharness_env::observe::EffectOutcome::Partial => "partial".to_string(), _ => "unknown".to_string() },
+                            outcome: match &obs.outcome {
+                                hharness_env::observe::EffectOutcome::Applied => {
+                                    "applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::NotApplied => {
+                                    "not_applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::Partial => {
+                                    "partial".to_string()
+                                }
+                                _ => "unknown".to_string(),
+                            },
                         },
                         None,
                     ),
                     hharness_env::dispatch::DispatchOutcome::ObservedCached {
-                        observation,
-                        ..
+                        observation, ..
                     } => (
                         SettledOutcome::Observed {
-                            outcome: match &observation.outcome { hharness_env::observe::EffectOutcome::Applied => "applied".to_string(), hharness_env::observe::EffectOutcome::NotApplied => "not_applied".to_string(), hharness_env::observe::EffectOutcome::Partial => "partial".to_string(), _ => "unknown".to_string() },
+                            outcome: match &observation.outcome {
+                                hharness_env::observe::EffectOutcome::Applied => {
+                                    "applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::NotApplied => {
+                                    "not_applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::Partial => {
+                                    "partial".to_string()
+                                }
+                                _ => "unknown".to_string(),
+                            },
                         },
                         None,
                     ),
