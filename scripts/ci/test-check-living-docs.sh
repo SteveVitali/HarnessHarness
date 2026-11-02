@@ -59,6 +59,20 @@ EOF
 )
 expect fail "home path rejected" "$d"
 
+# a real path embedded mid-sentence still fails (quoted, parenthesized, space)
+d=$(fixture embedded <<'EOF'
+GUIDE.md	the store lives at "/home/steven/.hh" and (/Users/steven/ws)
+EOF
+)
+expect fail "embedded personal paths rejected" "$d"
+
+# a "/" glued to a preceding letter is a slashed word list, not a path
+d=$(fixture wordlist <<'EOF'
+GUIDE.md	every event kind keeps one codec/home/class table; see payload/home/class too
+EOF
+)
+expect ok "slashed word list not a path" "$d"
+
 # placeholders + code fixtures pass
 d=$(fixture placeholders <<'EOF'
 README.md	check out /home/user/HarnessHarness or /Users/<you>/HarnessHarness

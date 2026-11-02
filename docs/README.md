@@ -22,6 +22,7 @@ history behind it.
 | Maintain or release the project | [Maintaining](../MAINTAINING.md) and [governance](../GOVERNANCE.md) |
 | Read the behavioral contract | [Canonical specification](../spec/CANONICAL_SPEC.md) and its [source sections](../spec/sections/) |
 | Understand a design decision | [ADR index](adr/README.md) |
+| Review the evidence and adoption program | [Round-5 partition](build/planning/2026-10-30_evidence-decomposition.md), [ownership trace](build/planning/2026-10-30_evidence-coverage.md), [Ratification guide](spec-ratification-review.md), [ratified supplement](evidence-and-adoption-spec.md), [decomposition handoff](decomposition-prompt.md), [protocol/resource review](protocol-resource-review.md); [founding brief](brief.md), [research/design ledger](research-ledger.md), and [outline trace](OUTLINE_TRACE.md) |
 | Trace the build | [Build records](build/README.md), [ticket manifest](tickets/00_MANIFEST.md), and [build index](build/BUILD_INDEX.md) |
 
 Start each work session with `bash scripts/deferrals-open.sh` from the repository
@@ -53,11 +54,20 @@ entries under the applicable record protocol.
 | [architecture.md](architecture.md) | living | An explanation of the system and its main contracts |
 | [reference.md](reference.md) | living | Commands, configuration, and integration entry points |
 | [status.md](status.md) | living | A current account of availability, evidence, and limitations |
+| [brief.md](brief.md) | frozen | Evidence and adoption founding intent; later changes are dated addenda. Charter approved; see its dated addendum. |
+| [protocol-resource-review.md](protocol-resource-review.md) | living checkpoint summary | Accepted research/design recommendations and Q-3–Q-6 review; decisions are recorded in the research ledger |
+| [spec-ratification-review.md](spec-ratification-review.md) | living checkpoint summary | Concise Q-7 scope, independent review outcome and recorded ratification; exact decisions remain in the frozen research ledger |
+| [evidence-and-adoption-spec.md](evidence-and-adoption-spec.md) | frozen | Q-7-ratified supplemental requirements, proposed amendments and acceptance/coverage indexes; does not replace the original canonical contract |
+| [research-ledger.md](research-ledger.md) | frozen | Completed upstream work units, exact operator decisions and append-only history; frozen at Q-7 ratification |
+| [OUTLINE_TRACE.md](OUTLINE_TRACE.md) | frozen | All 24 founding obligations mapped to ratified supplemental-spec requirements; downstream build records add ticket/evidence links |
+| [decomposition-prompt.md](decomposition-prompt.md) | frozen | Exact extend-mode invocation, binding constraints and validation/dispatch prerequisites for the later ticket/build-artifact phase |
+| [research/](research/) | living conventions + frozen accepted notes | New evidence/adoption research; [note conventions](research/CONVENTIONS.md). Distinct from the frozen root `research/` tree. Design notes use the directory below under the same conventions. |
 | [README.md](README.md) | living | This navigation and edit-mode map |
 | [AGENTS.md](AGENTS.md) | living | Agent instructions for editing guides and preserving historical records |
 | [1_harness_engineering_frontier_report.md](1_harness_engineering_frontier_report.md) | frozen | The founding frontier survey, called “doc 1” in historical records |
 | [2_Harness_Engineering_Genealogy_Anatomy_2026_Frontier_v2.md](2_Harness_Engineering_Genealogy_Anatomy_2026_Frontier_v2.md) | frozen | The genealogy and anatomy study, “doc 2”; source of the seven-plane model |
 | [3_MetaHarness_Meta_Plan_and_Research_Ledger.md](3_MetaHarness_Meta_Plan_and_Research_Ledger.md) | frozen | The meta-plan that produced the specification, “doc 3” |
+| [design/](design/) | frozen accepted notes | Evidence/adoption portfolio, execution and protocol design; draft notes are reviewed before acceptance under the [note conventions](research/CONVENTIONS.md). |
 | [adr/](adr/) | append-only | Build decision records. `adr/README.md` is **generated** with `build-memory adr-index`; `adr/REVISIT_TRIGGERS.md` is **generated** with `scripts/gen-revisit-triggers.sh`. |
 | [tickets/](tickets/) | historical | Ticket contracts and the manifest chain. `DEFERRALS.md` is **append-only**. |
 | [build/](build/) | historical | Build ledger and index, per-ticket runs and PR records, gate readouts, planning, reports, backlog and coverage registers, and the dated capability account. `logs/` is gitignored; CI-boundary records are added explicitly with `git add -f`. |

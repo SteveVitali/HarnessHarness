@@ -343,6 +343,92 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 167a | `167a_HUMAN-H7__launch.md` | Round 4 | human | Operator launch acts: protect main, checks-required bottom-up merges, main CI + gitleaks green → record merged-main SHA, tag v0.1.0 → release, `cargo publish` in order, repo metadata, DONE flip | — |
 | 167b | `167b_R4.18__launch-record.md` | Round 4 | reconcile | Launch record: merged-main SHA = tag commit, release URL + published versions verified; OPERATIONAL_READINESS → public | — |
 
+### Round 5 — evidence and adoption (79 rows; decomposition pending review)
+
+Source: [ratified supplemental specification](../evidence-and-adoption-spec.md); supplemental pattern `REQ-[A-H]-[0-9]+`. This adds no mixed canonical matcher. [Partition](../build/planning/2026-10-30_evidence-decomposition.md), [exact supplemental owners](../build/planning/2026-10-30_evidence-coverage.md), [common clauses](../build/planning/2026-10-30_evidence-invariants.md). No new row is landed or gate pre-signed.
+
+| # | file | phase | kind | scope | gate |
+|---|---|---|---|---|---|
+| 168 | `168_GATE-G8__bootstrap.md` | Round 5 | gate | Review partition and authorize the bounded tooling bootstrap | STOP |
+| 169 | `169_R5.1__guard.md` | Round 5 | ticket | Retained supplemental coverage and routing guard | — |
+| 170 | `170_R5.2__dispatch.md` | Round 5 | ticket | Prove the actual guarded native dispatch and resume path | — |
+| 171 | `171_R5.3__adr-exec.md` | Round 5 | ticket | Prepare execution, effect and Account amendment dossier | — |
+| 172 | `172_R5.4__adr-receipt.md` | Round 5 | ticket | Prepare native profile and producer-reference admission dossier | — |
+| 173 | `173_R5.5__adr-methods.md` | Round 5 | ticket | Prepare method, encoding and numerical-validation admission dossier | — |
+| 174 | `174_GATE-G9__admit.md` | Round 5 | gate | Admit exact architecture and method contracts | STOP |
+| 175 | `175_R5.6__launch.md` | Round 5 | ticket | Recoverable launch and subject funding binding | — |
+| 176 | `176_R5.7__adopt.md` | Round 5 | ticket | Adopt a launched subject through the existing runtime | — |
+| 177 | `177_R5.8__effect.md` | Round 5 | ticket | Bridge Dispatcher durability to the task runtime | — |
+| 178 | `178_R5.9__selection.md` | Round 5 | ticket | Shared first-valid grade selection and immutable revisions | — |
+| 179 | `179_R5.10__seal.md` | Round 5 | ticket | Seal submission and persist actual created-to-finished time | — |
+| 180 | `180_R5.11__oracle.md` | Round 5 | ticket | Execute and retain isolated instrument oracle attempts | — |
+| 181 | `181_R5.12__reserve.md` | Round 5 | ticket | Atomic whole-vector Account cap admission | — |
+| 182 | `182_R5.13__physical.md` | Round 5 | ticket | Deduplicated incurred-use and unknown-exposure views | — |
+| 183 | `183_R5.14__pending.md` | Round 5 | ticket | Required-grade pending across every scored consumer | — |
+| 184 | `184_R5.15__population.md` | Round 5 | ticket | Planned-slot population and historical analysis coordinates | — |
+| 185 | `185_R5.16__beta.md` | Round 5 | ticket | Early routed finite-manifest Bayesian efficacy | — |
+| 186 | `186_R5.17__early-numeric.md` | Round 5 | ticket | Verify the early offline efficacy route | — |
+| 187 | `187_GATE-G10__offline-gate.md` | Round 5 | gate | Accept the narrow offline analysis evidence | STOP |
+| 188 | `188_R5.18__retained.md` | Round 5 | ticket | Persist retained context and replay its selection | — |
+| 189 | `189_R5.19__gateway.md` | Round 5 | ticket | Prepared gateway reservations and persistent deadline | — |
+| 190 | `190_R5.20__wire.md` | Round 5 | ticket | Prove retained treatment reaches exact provider bytes | — |
+| 191 | `191_R5.21__profile.md` | Round 5 | ticket | Native evidence profile and immutable snapshot coordinates | — |
+| 192 | `192_R5.22__closure.md` | Round 5 | ticket | Owner-typed reference closure and materialization | — |
+| 193 | `193_R5.23__population-receipt.md` | Round 5 | ticket | Assemble all-planned evidence from owning projections | — |
+| 194 | `194_R5.24__r0.md` | Round 5 | ticket | Repair R0 lifecycle and prove clean-recipient verifyfixed | — |
+| 195 | `195_R5.25__recompute.md` | Round 5 | ticket | Recompute frozen analysis through the native owner | — |
+| 196 | `196_R5.26__replay.md` | Round 5 | ticket | Isolated replay and fresh-execution admission cards | — |
+| 197 | `197_R5.27__rights.md` | Round 5 | ticket | Rights, losses, quotas and recipient handoff validation | — |
+| 198 | `198_R5.28__recipe.md` | Round 5 | ticket | One supported native recipe and exact CLI forwarding | — |
+| 199 | `199_R5.29__offline.md` | Round 5 | ticket | Early offline examples and informative Lab lesson | — |
+| 200 | `200_R5.30__ci.md` | Round 5 | ticket | Example CI modes and bounded refresh workflow | — |
+| 201 | `201_R5.31__contrib.md` | Round 5 | ticket | Ordinary contribution and failure-report routes | — |
+| 202 | `202_R5.32__observer.md` | Round 5 | ticket | Confined observer apparatus and Kp4 controls | — |
+| 203 | `203_R5.33__permission.md` | Round 5 | ticket | Real permission wait, answer and resume matrix | — |
+| 204 | `204_R5.34__operations.md` | Round 5 | ticket | Account refusal, exhaustion and operational reporting machinery | — |
+| 205 | `205_R5.35__position.md` | Round 5 | ticket | Reader spine, evidence cards and portfolio positioning | — |
+| 206 | `206_R5.36__metrics.md` | Round 5 | ticket | Mechanism joins and versioned denominator definitions | — |
+| 207 | `207_R5.37__taskstats.md` | Round 5 | ticket | Task-mixture sensitivity, sharp-null families and tails | — |
+| 208 | `208_R5.38__kl.md` | Round 5 | ticket | Directional KL and correctly labelled bounded equivalence | — |
+| 209 | `209_R5.39__parity-admission.md` | Round 5 | ticket | Authentic paired records and policy applicability | — |
+| 210 | `210_R5.40__numerics.md` | Round 5 | ticket | Composed numerical validation and independent method evidence | — |
+| 211 | `211_R5.41__protocol.md` | Round 5 | ticket | Deterministic central protocol materialization | — |
+| 212 | `212_R5.42__quote.md` | Round 5 | ticket | Per-stage readiness and full exposure quote | — |
+| 213 | `213_HUMAN-H8__inputs.md` | Round 5 | human | Bind actual backend, inputs, rights and stage resources | — |
+| 214 | `214_GATE-G18__backend-gate.md` | Round 5 | gate | Authorize narrowly quoted backend feasibility preflight | STOP |
+| 215 | `215_R5.42a__backend-preflight.md` | Round 5 | skeleton | Earn bounded native backend feasibility evidence | pending GATE-G18 |
+| 216 | `216_GATE-G11__execute-gate.md` | Round 5 | gate | Authorize exact S1 and S4 executions | STOP |
+| 217 | `217_R5.43__useful.md` | Round 5 | skeleton | Execute two fixed useful-task subjects | pending GATE-G11 |
+| 218 | `218_R5.44__ops-live.md` | Round 5 | skeleton | Execute the confined operational proof matrix | pending GATE-G11 |
+| 219 | `219_R5.45__trace.md` | Round 5 | ticket | Actual task trace, bounded edit and example integration | — |
+| 220 | `220_GATE-G12__activation-gate.md` | Round 5 | gate | Authorize activation then fixed pilot | STOP |
+| 221 | `221_R5.46__pilot.md` | Round 5 | skeleton | Collect bounded activation and pilot evidence | pending GATE-G12 |
+| 222 | `222_GATE-G13__parity-gate.md` | Round 5 | gate | Freeze and fund authentic original-runner parity | STOP |
+| 223 | `223_R5.47__parity-live.md` | Round 5 | skeleton | Collect one authentic fixed-N parity tranche | pending GATE-G13 |
+| 224 | `224_GATE-G14__confirm-gate.md` | Round 5 | gate | Preregister and authorize held-out confirmation | STOP |
+| 225 | `225_R5.48__confirm.md` | Round 5 | skeleton | Execute the frozen held-out confirmation | pending GATE-G14 |
+| 226 | `226_R5.49__study-report.md` | Round 5 | skeleton | Report and recompute admitted study results | pending GATE-G14 |
+| 227 | `227_HUMAN-H9__participants.md` | Round 5 | human | Authorize recipient, optional exercises and formative participation | — |
+| 228 | `228_GATE-G15__participation-gate.md` | Round 5 | gate | Admit cleared recipient and participant procedures | STOP |
+| 229 | `229_R5.50__plugin.md` | Round 5 | skeleton | Selected existing component walkthrough and controls | pending GATE-G15 |
+| 230 | `230_R5.51__interchange.md` | Round 5 | skeleton | Selected native-to-external consumer exercise | pending GATE-G15 |
+| 231 | `231_R5.52__outside.md` | Round 5 | skeleton | Outside clean-recipient verification and recomputation | pending GATE-G15 |
+| 232 | `232_R5.53__formative.md` | Round 5 | skeleton | Consented evaluator and contributor observations | pending GATE-G15 |
+| 233 | `233_GATE-G16__publication-gate.md` | Round 5 | gate | Disposition capability and scientific publication scope | STOP |
+| 234 | `234_HUMAN-H10__publish.md` | Round 5 | human | Perform explicitly approved publication and outreach | — |
+| 235 | `235_R5.54__publication-record.md` | Round 5 | skeleton | Record public availability, claims and corrections | pending GATE-G16 |
+| 236 | `236_HUMAN-H11__value-dates.md` | Round 5 | human | Perform bounded manual day-30 and day-90 review | — |
+| 237 | `237_R5.55__value.md` | Round 5 | skeleton | Record bounded adoption and contribution follow-up | pending GATE-G16 |
+| 238 | `238_CAP5.1__cap1.md` | Round 5 | capstone | Independent whole-scope gap hunt | — |
+| 239 | `239_CAP5.2__cap2.md` | Round 5 | capstone | Composed execution, methods and recipient verification | — |
+| 240 | `240_CAP5.3__cap3.md` | Round 5 | capstone | Close layers and prepare fresh acceptance | — |
+| 241 | `241_GATE-G17__accept.md` | Round 5 | gate | Fresh round-5 acceptance (GATE-ACCEPT role) | STOP |
+| 242 | `242_REC5.1__rec1.md` | Round 5 | reconcile | Reconcile backlog and current readiness | — |
+| 243 | `243_REC5.2__rec2.md` | Round 5 | reconcile | Reconcile landed code, ADRs and supplemental coverage | — |
+| 244 | `244_REC5.3__rec3.md` | Round 5 | reconcile | Prepare integration recommendation from actual branch and CI state | — |
+| 245 | `245_DOC5.1__doc1.md` | Round 5 | docs | Refresh reader documentation from accepted evidence | — |
+| 246 | `246_DOC5.2__doc2.md` | Round 5 | docs | Refresh agent ownership and verification guidance | — |
+
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
 
@@ -443,6 +529,16 @@ Every ticket's gap-analysis re-checks these; the capstone re-checks all.
 - **CC9 — matched-budget-or-refuse; research-grade is walled off (§8.2 / ADR-0002)** — Every comparison arm carries `MatchSpec` + `search_budget` + `eval_budget`; a result without a `MatchSpec` is refused (typed), never warned or made comparable retroactively; a `research-grade` result never enters a C0–C3 acceptance decision or a leaderboard without independent reproduction (ADR-0209 D3).
 - **CC10 — home-plane / ownership boundaries** — Every entity kind, class, plane operator and event family declares exactly one home plane; a section that fixes records does not own the services (Π owned by §5g, `StopReason` by §5e, bundle format by §5h, `role_map` a §5b surface). Cite shared schemas by name+ADR; never redefine locally — propose a CF row.
 
+## Operating rules
+
+### Round 5 scope
+
+[Round-5 common clauses](../build/planning/2026-10-30_evidence-invariants.md#operating-clauses) O-01–O-08 apply, with a gap-table disposition per clause. Root is single state writer; fresh worker context; actual clock; bounded reads; no living-record pins; shell/Python writes plus diff/show verification. Each branch defaults `codex/` and forks from/targets the preceding implementation branch; marker rows inherit tip. Keep `mergePolicy: OPERATOR`.
+
+No previous-round provider/model/harness/budget/production authority carries forward. GATE-G8 first reviews this exact plan and can authorize only the named bounded tooling bootstrap and admission dossiers. R5.1/R5.2 must establish retained supplemental checks and actual native stub launch/resume evidence before any product dispatch. Every later boundary invokes the retained guard plus stock checks and real current-head/ancestor CI. Pending gates use RETURN PASS; failed technical checks use blockedOn; skeletons never dispatch. No unguarded orchestrator loop or implied readiness from documentation checks.
+
+Full-target D/E/R/P closure is distinct from bounded ticket completion: at an early owner close, create/update exact owed DF predicates naming later contributors and withheld claims. The coverage map's forward **evidence** references are not dispatch/branch dependencies. Use explicit operator scope disposition for unmet research/participant outcomes; optional or skipped work earns no positive claim. Read current inputs and require a new review if admitted semantics materially change the unexecuted contract.
+
 ## Out of scope
 No ticket builds any of these (the scope-creep guard; ADR-0006 D3):
 - N1 — not a general-purpose framework for others' core loops (the LCD trap)
@@ -536,6 +632,10 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 | `R-2.12.6` | S4.9, S5.6, S6.4, R2.21, R3.2, R4.7, L4.6 |
 | `R-2.12.4` | deferred(ADR-0210) — WS-L6 package · R4.8 (window opened by the round-4 charter 2026-10-20) · amended 2026-10-20: R4.8 (ruled postures recorded), L4.1, L4.2, L4.3, L4.5, R4.15a |
 | `R-2.12.5` | program-level (novelty/naming thesis, §1); no code · amended 2026-10-20: R4.8 (naming market check), L4.4 (ruled crate scheme applied) |
+
+### Round 5 supplemental requirement ownership
+
+The original canonical source and legacy matcher/index above remain unchanged. Supplemental canonical source: `docs/evidence-and-adoption-spec.md`; literal ERE: `REQ-[A-H]-[0-9]+`. [180-row literal owner/alias table](../build/planning/2026-10-30_evidence-coverage.md) and [machine-readable literal companion](../build/planning/2026-10-30_evidence-coverage.json) bind all 167 adopted targets to exactly one primary contract/numbered AC/layer, retaining 12 merged and one superseded alias, original row hashes, legacy relations, contributors and 24 OL links. No full-target acceptance has been earned. This is explicit supplemental coverage; do not enable mixed-namespace `req_index_literal_from`.
 
 ## Spec amendments applied
 (none — the spec is ratified v1.0-rc2, gate-passed PASS 7/7; amend via the protocol above.)
@@ -842,6 +942,14 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 - **Phase-4 review:** fresh-context critic findings + resolutions in
   `docs/build/planning/2026-10-20_round4-decomposition.md` §Amendment → Phase 4.
 
+### Round 5 decomposition decisions
+
+- Full tail is required because the program combines native execution, methods, portable receipts, actual studies and human evidence. Role mapping: CAP.1→CAP5.1; CAP.2→CAP5.2; CAP.3→CAP5.3; GATE-ACCEPT→GATE-G17; REC.1→REC5.1; REC.2→REC5.2; REC.3→REC5.3; DOC.1→DOC5.1; DOC.2→DOC5.2. New round reports use `docs/build/reports/round5/`, not historical same-named targets.
+- REC5.1 **reads current artifact access and claimed service state** because access/availability can expire. REC5.2 **reads actual landed code, ADRs and coverage** so reconciliation describes what landed. REC5.3 **reads actual stack CI, branches and release conditions** before an operator integration recommendation. These reads confer no collection/production/merge authority.
+- Dispatch target `subagent`; context estimates plus 10k verification reserve must be ≤40% of selected worker context. Line/context trigger requires reviewed split, with one owner for every shared decision. The plan is revisable by scoped decompose-spec before execution; executed contracts gain dated amendments only.
+- Initial architecture/method admission, earned numerical verification, and actual study authorization are distinct gates. EX-02 receives its early routed finite-task method and does not wait for paid collection or parity. Actual external pins/authority yield skeletons with no Run line. The complete default chain includes manual day-30/day-90 follow-up; it is not an uninterrupted unattended build. An earlier capability release requires explicit scoped gate/plan disposition retaining S3.
+- [Partition and conscious tradeoffs](../build/planning/2026-10-30_evidence-decomposition.md); fresh independent review/dispositions will be linked there before handoff. Source maps are analysis, not new design authority or runtime evidence.
+
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
 - 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.
@@ -973,3 +1081,7 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   only blocking finding under the zero-deferral charter. The insert implements the two arms in the e2
   foreign tree (the e3 reference arms exist; USD 0, `foreign-run-verified`). No file renamed; no row
   superseded; round 4 is now 56 rows. GATE-G6's signature re-presents after the rows flip DONE.
+
+- 2026-10-30T03:05:43Z · **Round 5 extension (decompose-spec):** operator requested “Ok. Now run the decompose-spec step and continue” in the current Codex chat; append sequences 168–246, 79 rows including full tail. Baseline main/HEAD/origin main `001490c14a6568972d16a663bb04c07a4255d30d`, R4.18 complete, zero open PR/owed legacy rows. No old contract/row/signature renamed or closed. Current state becomes NOT_STARTED at GATE-G8 with RETURN PASS; lastCompleted remains R4.18. This records planning authorization only; no tooling/product implementation, live execution, publication or merge is authorized by it. [Planning ledger](../build/planning/2026-10-30_evidence-planning-ledger.md).
+
+- 2026-10-30T03:15:54Z · **Round-5 partition review closed:** [independent partition rereview](../build/planning/2026-10-30_evidence-partition-rereview.md) and [coverage/layer rereview](../build/planning/2026-10-30_evidence-coverage-rereview.md) are clean at planning scope. Repairs retain 79 rows/167 unique adopted owners; new GATE-G18/R5.42a supplies separately quoted backend proof before GATE-G11. No implementation, gate signature or new evidence class earned; pending-review banner above is historical draft status, superseded by this review closure.
