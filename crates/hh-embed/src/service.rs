@@ -16,6 +16,7 @@ use hharness_embed_schema::frames::StreamNotification;
 use hharness_embed_schema::negotiate;
 use hharness_embed_schema::ops::{self, Direction, Tier};
 use hharness_embed_schema::types::*;
+use hharness_control::driver::EffectGate;
 use hharness_env::driver::EnvDriver;
 use hharness_env::events::EventMinter;
 use hharness_ledger::manifest::{RunKind, RunManifest};
@@ -254,6 +255,10 @@ pub(crate) struct SessionState {
     /// it; `None` on sessions armed before the fold existed.
     pub mem_ctx: Option<std::rc::Rc<std::cell::RefCell<crate::runtime::KernelContext>>>,
     pub host_caps: Vec<HostCap>,
+    /// R5.8 (PADR-R5-2) — armed task surfaces the `DispatchGate` settles
+    /// through the real `Dispatcher` (`arm_exec_capabilities`; empty ⇒
+    /// the byte-identical host/`EmbedGate` path).
+    pub exec_caps: Vec<crate::runtime::ExecCap>,
     pub turn_active: bool,
     pub active_turn: String,
     pub finished: bool,
@@ -1563,6 +1568,47 @@ impl EmbedService {
         Ok(())
     }
 
+    /// `arm_exec_capabilities(sess, caps)` — the R5.8 (PADR-R5-2) arming
+    /// seam: declares task surfaces the session's `DispatchGate` settles
+    /// through the real `Dispatcher`. Each cap's executor declaration is
+    /// re-bound against the capability's `execution_requirement`
+    /// (`hharness_env::executor::bind`) — an insufficient executor
+    /// (domain/isolation/dedup shortfall, e.g. a `local_host` executor
+    /// standing in for an admitted confinement requirement, or a tier-off
+    /// surface) is a typed `Refused`, never a downgrade. No sink/store
+    /// mutation: arming is runtime posture only.
+    pub fn arm_exec_capabilities(
+        &mut self,
+        sess_id: &str,
+        caps: Vec<crate::runtime::ExecCap>,
+    ) -> Result<(), EmbedError> {
+        for cap in &caps {
+            let req =
+                hharness_env::executor::ExecutionRequirement::from_json(
+                    &cap.capability.execution_requirement,
+                )
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("exec_cap_requirement:{}:{e:?}", cap.surface_id),
+                })?;
+            hharness_env::executor::bind(
+                cap.executor.declaration(),
+                cap.declared.domain,
+                &req,
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("exec_cap_unbound:{}:{e:?}", cap.surface_id),
+            })?;
+        }
+        let s = self.session_mut(sess_id)?;
+        if s.attach || s.finished {
+            return Err(EmbedError::Refused {
+                reason: "exec_cap_arm_inadmissible".to_string(),
+            });
+        }
+        s.exec_caps = caps;
+        Ok(())
+    }
+
     /// Drive the session's control loop until it parks or finishes, then
     /// scan the newly durable prefix (host asks, turn/flags).
     pub(crate) fn drive(&mut self, sess_id: &str) -> Result<(), EmbedError> {
@@ -1657,6 +1703,9 @@ impl EmbedService {
         // byte-identical (AC1).
         let model_lane = self.session(sess_id)?.model_lane.clone();
         let model_surfaces = self.session(sess_id)?.leaf_arm.surfaces.clone();
+        // R5.8 — armed exec surfaces (taken before the sink borrows self).
+        let exec_caps = std::mem::take(&mut self.session_mut(sess_id)?.exec_caps);
+        let gate_env_handle = env_handle.clone();
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
@@ -1684,9 +1733,34 @@ impl EmbedService {
             Some(g) => g,
             None => &mut scripted,
         };
-        let mut gate = EmbedGate {
-            host_surfaces,
+        // R5.8 (PADR-R5-2) — armed exec surfaces route through the real
+        // `Dispatcher` via `DispatchGate`; an empty `exec_caps` keeps the
+        // byte-identical `EmbedGate` host path (fallback inside the gate
+        // is the same fallback, so the host mode is preserved either way).
+        let mut embed_gate = EmbedGate {
+            host_surfaces: host_surfaces.clone(),
             host_asks: Vec::new(),
+        };
+        let mut dispatch_gate = if exec_caps.is_empty() {
+            None
+        } else {
+            Some(crate::runtime::DispatchGate {
+                embed: EmbedGate {
+                    host_surfaces,
+                    host_asks: Vec::new(),
+                },
+                exec_caps: exec_caps
+                    .into_iter()
+                    .map(|c| (c.surface_id.clone(), c))
+                    .collect(),
+                run_id: run_id.clone(),
+                env_handle_id: gate_env_handle,
+                seed: hharness_wire::sha256::sha256_bytes(run_id.as_bytes()),
+            })
+        };
+        let gate: &mut dyn EffectGate = match dispatch_gate.as_mut() {
+            Some(g) => g,
+            None => &mut embed_gate,
         };
         let mut asm = KernelAssembler {
             ctx: mem_ctx.clone(),
@@ -1697,12 +1771,19 @@ impl EmbedService {
             driver
                 .set_compaction_port(Box::new(crate::runtime::KernelCompaction::new(ctx.clone())));
         }
-        let outcome = driver.run(model, &mut gate, &mut asm, &mut sink);
+        let outcome = driver.run(model, gate, &mut asm, &mut sink);
         // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
         // env's idle boundary; the declared cadence take lands durable
         // below while the run is still open.
         let parked = matches!(&outcome, Err(DriverError::Port { .. }));
-        let asks = std::mem::take(&mut gate.host_asks);
+        let asks = match dispatch_gate.as_mut() {
+            Some(g) => {
+                self.session_mut(sess_id)?.exec_caps =
+                    std::mem::take(&mut g.exec_caps).into_values().collect();
+                std::mem::take(&mut g.embed.host_asks)
+            }
+            None => std::mem::take(&mut embed_gate.host_asks),
+        };
         let fail_left = std::mem::take(&mut scripted.fail_plan);
         let s = self.session_mut(sess_id)?;
         s.driver = Some(driver);

@@ -2049,6 +2049,7 @@ impl EmbedService {
             client: None,
             contract_json: None,
             sink_seq: head.seq as i64,
+            exec_caps: Vec::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
         let mut out = session_json(
