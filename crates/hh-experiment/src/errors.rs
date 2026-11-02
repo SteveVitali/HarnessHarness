@@ -126,6 +126,26 @@ pub enum ExperimentError {
         /// The failure detail.
         detail: String,
     },
+    /// A recorded `launch_bound` fact conflicts with the launch being
+    /// attempted (R5.6; AC-2): the durable intent's frozen inputs differ,
+    /// the pre-minted subject run's manifest bytes differ, the subject's
+    /// existing root budget carries a different spec, or a `bound` record
+    /// lacks its published attempt. Typed refusal — never a re-write.
+    LaunchBindingConflict {
+        /// The plan key.
+        run_plan_id: String,
+        /// The conflict detail.
+        detail: String,
+    },
+    /// A live `slice` budget scoped to the plan exists with no live
+    /// `launch_bound` intent (R5.6; AC-2): orphan funding is never spent —
+    /// it must be owned-released via `abort_launch` first.
+    OrphanLaunchFunding {
+        /// The plan key.
+        run_plan_id: String,
+        /// The orphan slice budget id(s).
+        detail: String,
+    },
 }
 
 impl ExperimentError {
@@ -154,6 +174,8 @@ impl ExperimentError {
             ExperimentError::PoolExhausted { .. } => "PoolExhausted",
             ExperimentError::HostedLaunchUnavailable { .. } => "HostedLaunchUnavailable",
             ExperimentError::ExclusionRefused { .. } => "ExclusionRefused",
+            ExperimentError::LaunchBindingConflict { .. } => "LaunchBindingConflict",
+            ExperimentError::OrphanLaunchFunding { .. } => "OrphanLaunchFunding",
         }
     }
 }
@@ -243,6 +265,18 @@ impl std::fmt::Display for ExperimentError {
             }
             ExperimentError::ExclusionRefused { detail } => {
                 write!(f, "exclusion refused: {detail}")
+            }
+            ExperimentError::LaunchBindingConflict {
+                run_plan_id,
+                detail,
+            } => {
+                write!(f, "launch binding conflict on {run_plan_id}: {detail}")
+            }
+            ExperimentError::OrphanLaunchFunding {
+                run_plan_id,
+                detail,
+            } => {
+                write!(f, "orphan launch funding on {run_plan_id}: {detail}")
             }
         }
     }

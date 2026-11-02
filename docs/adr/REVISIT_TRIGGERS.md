@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_168 ADRs: 116 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_169 ADRs: 117 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -152,6 +152,7 @@ _168 ADRs: 116 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0382 | Reopen if the manifest kind vocabulary changes, BUILD_INDEX changes shape, the stock checker emits a `build-memory-check/3` schema, the supplement's `hh-supplement-plan/1` register is amended, or a new round changes the active-round scoping rule — the class table and kind map then need a matching amendment, never a silent edit of expectations. |
 | ADR-0383 | Reopen if the ledger state schema renames `chainTip`/`buildBranchBase`, the manifest kind or CURRENT STATE key sets change, a different dispatch tier is admitted for the round (`dispatchTarget`), the native primitive/profile set changes, or `hh-dispatch-transcript/1` needs fields a real coordinator leg cannot supply — the schema then bumps to `/2`, never a silent edit. |
 | ADR-0384 | Reopen if GATE-G9 or a later disposition changes where amendment proposals are homed (e.g., an admitted proposal pipeline), if the supplement's §9.3 register gains or loses rows, or if the build adopts per-row dossier files — the slot/status audit then needs a matching amendment, never a silent edit. |
+| ADR-0385 | When the required-grade opt-in lands (R5.9/R5.10/R5.14), `grade_binding` gains `mode:"required"` + `selection_policy_ref`; when R5.7 lands the adoption read must consume `launch_binding` unchanged (breaking it is a contract change returned for amendment). |
 
 ## Fired-and-answered triggers (BL-48)
 

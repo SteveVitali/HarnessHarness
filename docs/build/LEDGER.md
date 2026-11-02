@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.6
-lastCompleted:   GATE-G9
+nextTicket:      R5.7
+lastCompleted:   R5.6
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.5
+chainTip:        codex/harnessharness-evidence-r5.6
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T02:06:07Z
+updatedAt:       2026-11-02T02:55:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1006,4 +1006,6 @@ updatedAt:       2026-11-02T02:06:07Z
 
 - 2026-10-30 · R5.5 ci record refreshed at the closeout head — the done entry's `ci:` line names the impl head 5927281b; ci-boundary re-read after the docs-only closeout head `cbaf8258` landed (run 41017127381, all four required jobs): ci: pass #213@cbaf825 · logs/ci-r5.5.json (BM-HIST-01: correction by appended entry). harness: devin-desktop/swe-2-high/subagent
 - 2026-11-02T02:06:07Z · **GATE-G9 PASSED — operator recorded "yes"** (confirmation of the restated seven-row disposition; hedged first reply restated as yes/no per gate-record rule 2) — verbatim in GATE DECISIONS + readout signature `docs/build/readouts/GATE-G9.md` (agent-drafted sha256:3d9a2b5a…). All seven §9.3 rows adopted as written (PADR-R5-1*…7*); scope design+implementation only — numerical validation still owed evidence (R5.16/17, GATE-G10, R5.40); spend $0; skeletons undispatchable; participant/publication acts unauthorized. Prerequisites re-verified at presentation: guard PASS route DISPATCH, stack CI pass (#211@b07d0c5/#212@8eeb374/#213@cbaf825), deferrals-open = DF-R5.1-1 only. nextTicket → R5.6 · lastCompleted → GATE-G9 · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-02T02:40:41Z · **R5.6 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 1,284, ~1.5×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic `launch_bound` unit (PADR-R5-1 A.2 owner seam experiment+budget); no documented owner seam for the proposed phase cut; (a) would land an incorrect intermediate `launch()`. Accepted as recorded Deviation (R4.4b/R4.5b precedent); dated note appended to `175_R5.6__launch.md`; manifest row 175 note; `runs/R5.6.md` ruling. Worker resumes to close — deviation carried conspicuously (PHASE LOG/BUILD_INDEX/PR). · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-02 · R5.6 done — branch `codex/harnessharness-evidence-r5.6` · PR #214 · base `codex/harnessharness-evidence-r5.5` (@f089b2a). Landed the admitted PADR-R5-1 `launch_bound` recoverable launch on the experiment/budget seam: phased `measurement.experiment.launch_bound{intent|bound|aborted}` (class-table + P7 home reused), deterministic `lbi-/subj-<idp>` ids + `open_run_with_id`/`has_run` link recovery (S4.6 precedent), adopt-or-refuse funding slice, subject `pool` root distinct from funding slice (REQ-E-207), atomic publish-before-arm, `abort_launch` owned idempotent release, `launch_binding` exposed contract, `LaunchPhase` fault seam; embed launch response +2 members; ADR-0385. **Verify:** fmt OK · `cargo test -p hharness-experiment --test engine` 55/55 (8 new: all 5 boundary kills→one binding, conflicting-intent/manifest, orphan slice, duplicate publication, stale claim, abort-of-published, contract members) · `-p hharness-experiment -p hharness-ledger -p hharness-embed` all pass · guard PASS DISPATCH R5.6 pre+post · living-docs 418 · bm-tools OK · revisit-triggers in sync · check-build-memory 0 viol/8 scoped warnings. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,284 changed source/test lines vs ≤850 flag — accepted as recorded Deviation per contract's Amended 2026-11-02 ruling (d6b574ac). · chainTip → codex/harnessharness-evidence-r5.6 · next → R5.7 · ci: pass #214@e8cf179 (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41379137608) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

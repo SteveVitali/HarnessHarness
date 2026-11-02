@@ -1422,6 +1422,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.experiment.drift_bracket", "none"),
     ("measurement.experiment.halving_bracket", "none"),
     ("measurement.experiment.inclusion_probabilities", "none"),
+    ("measurement.experiment.launch_bound", "none"),
     ("measurement.experiment.paused", "none"),
     ("measurement.experiment.resumed", "none"),
     ("measurement.experiment.run_bound", "none"),
@@ -2210,6 +2211,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.experiment.run_claimed",      Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.claim_expired",    Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_launched",     Led, O::Events, false, false, true,  None, None),
+    // `launch_bound` is the recoverable launch record (PADR-R5-1 A.3 —
+    // admitted GATE-G9): `{phase, intent_ref, lease_ref,
+    // funding_slice_ref, subject_root_budget_id, grade_binding}` persisted
+    // intent-first, bound before arming, aborted on owned release. Durable
+    // + provenance-mandatory like the rest of the run family.
+    row_prov("measurement.experiment.launch_bound",     Led, O::Events, false, false, true,  None, None),
     // `bound` is the *subject* run's own binding stamp (§6.3 `launch` step
     // 4); `run_bound` is the experiment run's mirror of it (§6.5 `bind`).
     row_prov("measurement.experiment.bound",            Led, O::Events, false, false, true,  None, None),

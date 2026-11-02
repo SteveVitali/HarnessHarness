@@ -26,6 +26,13 @@ pub mod class {
     pub const CLAIM_EXPIRED: &str = "measurement.experiment.claim_expired";
     /// `measurement.experiment.run_launched` — the engine's launch record.
     pub const RUN_LAUNCHED: &str = "measurement.experiment.run_launched";
+    /// `measurement.experiment.launch_bound` — the recoverable launch
+    /// record (PADR-R5-1 A.3, admitted GATE-G9): `{phase, intent_ref,
+    /// lease_ref, funding_slice_ref, subject_root_budget_id,
+    /// grade_binding{…}}` — `intent` lands before any allocation, `bound`
+    /// publishes with `run_launched`/`run_bound`, `aborted` records the
+    /// owned release. One class, one home (R5.6).
+    pub const LAUNCH_BOUND: &str = "measurement.experiment.launch_bound";
     /// `measurement.experiment.bound` — the subject run's own binding stamp
     /// (`{experiment_id, arm_id, configuration_id, cell_id, replicate_index,
     /// attempt_no, budget_id}`; §6.3 `launch` step 4 — its chain is the proof
@@ -309,6 +316,135 @@ pub fn run_bound_mirror(
         ("subject_head", Json::str(subject_head)),
         ("participant_class", Json::str(participant_class)),
         ("limits_enforced", Json::str(limits_enforced)),
+    ])
+}
+
+/// The `grade_binding` member the admitted `launch_bound` contract carries
+/// (PADR-R5-1 A.3): `{mode, pins_ref, selection_policy_ref?,
+/// instrument_budget_ref}`. `mode` records the grade mode frozen at launch
+/// — `"legacy"` while the required-grade opt-in freeze lands with the
+/// R5.9/R5.10/R5.14 owners; `pins_ref` is the `CellPlan` content address
+/// (the frozen task/oracle/config pins); `selection_policy_ref` stays
+/// absent in legacy mode; `instrument_budget_ref` names the spec's
+/// instrument budget.
+pub fn grade_binding(mode: &str, pins_ref: &str, instrument_budget_ref: &str) -> Json {
+    Json::obj([
+        ("mode", Json::str(mode)),
+        ("pins_ref", Json::str(pins_ref)),
+        ("instrument_budget_ref", Json::str(instrument_budget_ref)),
+    ])
+}
+
+/// The frozen launch inputs — the `inputs` member of `launch_bound{intent}`:
+/// the exact coordinates a recovery pass must reproduce (conflicting bytes
+/// refuse, AC-2). `seed_material` rides verbatim like `run_planned`.
+#[allow(clippy::too_many_arguments)] // the frozen input set's members are its shape.
+pub fn launch_inputs(
+    experiment_id: &str,
+    plan_id: &str,
+    run_plan_id: &str,
+    cell_id: &str,
+    arm_id: &str,
+    task_id: &str,
+    configuration_id: &str,
+    configuration_version_id: &str,
+    replicate_index: u32,
+    seed_material: &Json,
+    participant_class: &str,
+) -> Json {
+    Json::obj([
+        ("experiment_id", Json::str(experiment_id)),
+        ("plan_id", Json::str(plan_id)),
+        ("run_plan_id", Json::str(run_plan_id)),
+        ("cell_id", Json::str(cell_id)),
+        ("arm_id", Json::str(arm_id)),
+        ("task_id", Json::str(task_id)),
+        ("configuration_id", Json::str(configuration_id)),
+        (
+            "configuration_version_id",
+            Json::str(configuration_version_id),
+        ),
+        ("replicate_index", Json::Int(replicate_index as i64)),
+        ("seed_material", seed_material.clone()),
+        ("participant_class", Json::str(participant_class)),
+    ])
+}
+
+/// `launch_bound{phase:"intent", intent_ref, run_plan_id, attempt_no,
+/// lease_ref, subject_run_id, inputs{…}, grade_binding{…}}` — persisted
+/// before any allocation so a crash-window recovery can link the recorded
+/// intent (or owned-abort it) instead of minting a second subject.
+#[allow(clippy::too_many_arguments)] // the row's members are the record's shape.
+pub fn launch_intent(
+    intent_ref: &str,
+    run_plan_id: &str,
+    attempt_no: u32,
+    lease_ref: &str,
+    subject_run_id: &str,
+    inputs: Json,
+    grade_binding: Json,
+) -> Json {
+    Json::obj([
+        ("phase", Json::str("intent")),
+        ("intent_ref", Json::str(intent_ref)),
+        ("run_plan_id", Json::str(run_plan_id)),
+        ("attempt_no", Json::Int(attempt_no as i64)),
+        ("lease_ref", Json::str(lease_ref)),
+        ("subject_run_id", Json::str(subject_run_id)),
+        ("inputs", inputs),
+        ("grade_binding", grade_binding),
+    ])
+}
+
+/// `launch_bound{phase:"bound", intent_ref, run_plan_id, attempt_no,
+/// lease_ref, funding_slice_ref, subject_run_id, subject_root_budget_id,
+/// subject_head, grade_binding{…}}` — the admitted binding record,
+/// committed atomically with `run_launched`/`run_bound` (publish before
+/// arm — the durable record exists before the writer is returned).
+#[allow(clippy::too_many_arguments)] // the row's members are the record's shape.
+pub fn launch_bound(
+    intent_ref: &str,
+    run_plan_id: &str,
+    attempt_no: u32,
+    lease_ref: &str,
+    funding_slice_ref: &str,
+    subject_run_id: &str,
+    subject_root_budget_id: &str,
+    subject_head: &str,
+    grade_binding: Json,
+) -> Json {
+    Json::obj([
+        ("phase", Json::str("bound")),
+        ("intent_ref", Json::str(intent_ref)),
+        ("run_plan_id", Json::str(run_plan_id)),
+        ("attempt_no", Json::Int(attempt_no as i64)),
+        ("lease_ref", Json::str(lease_ref)),
+        ("funding_slice_ref", Json::str(funding_slice_ref)),
+        ("subject_run_id", Json::str(subject_run_id)),
+        ("subject_root_budget_id", Json::str(subject_root_budget_id)),
+        ("subject_head", Json::str(subject_head)),
+        ("grade_binding", grade_binding),
+    ])
+}
+
+/// `launch_bound{phase:"aborted", intent_ref, run_plan_id, attempt_no,
+/// released[]}` — the owned abort/release record (AC-1's alternative
+/// terminal: exactly one binding, or an owned release).
+pub fn launch_aborted(
+    intent_ref: &str,
+    run_plan_id: &str,
+    attempt_no: u32,
+    released: &[String],
+) -> Json {
+    Json::obj([
+        ("phase", Json::str("aborted")),
+        ("intent_ref", Json::str(intent_ref)),
+        ("run_plan_id", Json::str(run_plan_id)),
+        ("attempt_no", Json::Int(attempt_no as i64)),
+        (
+            "released",
+            Json::Arr(released.iter().map(Json::str).collect()),
+        ),
     ])
 }
 
