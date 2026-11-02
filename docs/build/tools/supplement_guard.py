@@ -557,11 +557,17 @@ class Guard:
                                  "signature — old acceptance signatures cannot satisfy new scope")
 
     def check_git_ancestry(self, state):
+        # Stacked tickets advance chainTip past buildBranchBase (the setup base
+        # branch is immutable; see the stock ledger convention and ADR-0382's
+        # ancestry consequence). "Agree" therefore means: both refs resolve and
+        # chainTip descends from (or equals) buildBranchBase — equality being
+        # the degenerate pre-first-ticket case — plus pinnedBaseSha is an
+        # ancestor of chainTip. (R5.2/ADR-0383: the earlier literal-equality
+        # check held only before the first ticket landed and refused every
+        # stacked state.)
         base = state.get("pinnedBaseSha", "")
         tip = state.get("chainTip", "")
-        if state.get("chainTip") != state.get("buildBranchBase"):
-            self.err("chain-tip",
-                     f"chainTip {tip!r} != buildBranchBase {state.get('buildBranchBase')!r}")
+        build_base = state.get("buildBranchBase", "")
         if not re.fullmatch(r"[0-9a-f]{40}", base):
             self.err("chain-tip", f"pinnedBaseSha {base!r} is not a 40-hex sha")
             return
@@ -571,11 +577,25 @@ class Guard:
             self.note("git-ancestry", "skipped — root is not a git checkout")
             return
         try:
-            subprocess.run(["git", "-C", self.root, "rev-parse", "--verify", tip],
+            subprocess.run(["git", "-C", self.root, "rev-parse", "--verify",
+                            f"{tip}^{{commit}}"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", self.root, "rev-parse", "--verify",
+                            f"{build_base}^{{commit}}"],
                            check=True, capture_output=True)
-            subprocess.run(["git", "-C", self.root, "merge-base", "--is-ancestor",
-                            base, tip], check=True, capture_output=True)
         except subprocess.CalledProcessError:
+            self.err("chain-tip",
+                     f"chainTip {tip!r} or buildBranchBase {build_base!r} "
+                     "does not resolve to a commit")
+            return
+        r = subprocess.run(["git", "-C", self.root, "merge-base", "--is-ancestor",
+                            build_base, tip], capture_output=True)
+        if r.returncode != 0:
+            self.err("chain-tip",
+                     f"chainTip {tip!r} does not descend from buildBranchBase "
+                     f"{build_base!r} — the chain tip must sit on the base stack")
+        r = subprocess.run(["git", "-C", self.root, "merge-base", "--is-ancestor",
+                            base, tip], capture_output=True)
+        if r.returncode != 0:
             self.err("git-ancestry",
                      f"pinnedBaseSha {base[:12]} is not an ancestor of chainTip {tip}")
 

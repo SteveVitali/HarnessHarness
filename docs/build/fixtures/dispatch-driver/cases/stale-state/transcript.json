@@ -1,0 +1,113 @@
+{
+  "schema": "hh-dispatch-transcript/1",
+  "capture_kind": "stand-in",
+  "driver_version": "1.0.0",
+  "leg": "resume",
+  "envelope_sha256": "6a55f20d80ee763787ae6d7d0e47b375008f6aa1257009427a7a745466541af7",
+  "recorded_by": "devin-desktop coordinator (stand-in fixture)",
+  "tree_status": "clean",
+  "events": [
+    {
+      "seq": 1,
+      "kind": "guard",
+      "phase": "pre",
+      "verdict": "PASS",
+      "route": "DISPATCH R5.2",
+      "guard_version": "1.0.0",
+      "input_digests": {
+        "docs/build/planning/2026-10-30_evidence-coverage.md": "1dd62a49438826aa9db448ffa01c33fff2d42f1e05f71540d369ed17adc3925b",
+        "docs/build/planning/2026-10-30_evidence-coverage.json": "803474423c9aa60b23993cc372393bcad85d75f6f30e1db0c2c7c5dca630624c",
+        "docs/build/planning/2026-10-30_evidence-legacy-baseline.json": "835e00c255e0dc5aede146edbacec41d566b778c4f720ae3145c6b9468e238fe",
+        "docs/tickets/00_MANIFEST.md": "c01d46f1b1abd45638c8792738557b73d3e9be08cacad500677f2acfa3b0affe",
+        "docs/build/LEDGER.md": "ce88eb6ea0a8c068cefa75b12f713d8615a8efea31b6e96c9cb3dc4b88f801e1",
+        "docs/build/BUILD_INDEX.md": "081dbcac8bf83a7816239fad99d8fb0322216f08e64991c7d7094de8e42a5b6a",
+        "docs/evidence-and-adoption-spec.md": "8f540171dd38711ad563459d1721277b84100b66a207379668f0efe6db8b208f",
+        "docs/build/readouts/GATE-G1.md": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
+      }
+    },
+    {
+      "seq": 2,
+      "kind": "spawn",
+      "attempt": 1,
+      "primitive": "run_subagent",
+      "profile": "subagent_general",
+      "title": "R5.2 stub dispatch \u2014 resume leg (hh-dispatch-driver/1)",
+      "prompt_sha256": "5aba1c281a53e54520d06101c3c0e8447bf951ec1dd7fe33ece342bf07150b0d"
+    },
+    {
+      "seq": 3,
+      "kind": "stub_report",
+      "attempt": 1,
+      "interrupted": true,
+      "report": {
+        "schema": "hh-stub-report/1",
+        "leg": "resume",
+        "attempt": 1,
+        "interrupted": true
+      },
+      "writes": [],
+      "actions": [
+        "git-rev-parse"
+      ],
+      "spend_usd": 0,
+      "capture_kind": "stand-in"
+    },
+    {
+      "seq": 4,
+      "kind": "spawn",
+      "attempt": 2,
+      "resume": true,
+      "primitive": "run_subagent",
+      "profile": "subagent_general",
+      "title": "R5.2 stub dispatch \u2014 resume leg (hh-dispatch-driver/1)",
+      "prompt_sha256": "b7b706c18101c4ceebe857c685b5eb1dff827d98d73d11ead67a18d75011aec7"
+    },
+    {
+      "seq": 6,
+      "kind": "stub_report",
+      "attempt": 2,
+      "report": {
+        "schema": "hh-stub-report/1",
+        "leg": "resume",
+        "deferrals_open": "DF-R5.1-1 | OPEN |  | -",
+        "observed_state": {
+          "nextTicket": "R5.2",
+          "lastCompleted": "R5.1",
+          "chainTip": "codex/harnessharness-evidence-r5.1"
+        },
+        "head_sha": "(recorded)",
+        "branch": "(recorded)"
+      },
+      "writes": [
+        "docs/build/logs/stub-r5.2-resume.json"
+      ],
+      "actions": [
+        "deferrals-open",
+        "ledger-read",
+        "git-rev-parse",
+        "write-report",
+        "return-report"
+      ],
+      "spend_usd": 0,
+      "capture_kind": "stand-in"
+    },
+    {
+      "seq": 7,
+      "kind": "guard",
+      "phase": "post",
+      "verdict": "PASS",
+      "route": "DISPATCH R5.2",
+      "guard_version": "1.0.0",
+      "input_digests": {
+        "docs/build/planning/2026-10-30_evidence-coverage.md": "1dd62a49438826aa9db448ffa01c33fff2d42f1e05f71540d369ed17adc3925b",
+        "docs/build/planning/2026-10-30_evidence-coverage.json": "803474423c9aa60b23993cc372393bcad85d75f6f30e1db0c2c7c5dca630624c",
+        "docs/build/planning/2026-10-30_evidence-legacy-baseline.json": "835e00c255e0dc5aede146edbacec41d566b778c4f720ae3145c6b9468e238fe",
+        "docs/tickets/00_MANIFEST.md": "c01d46f1b1abd45638c8792738557b73d3e9be08cacad500677f2acfa3b0affe",
+        "docs/build/LEDGER.md": "ce88eb6ea0a8c068cefa75b12f713d8615a8efea31b6e96c9cb3dc4b88f801e1",
+        "docs/build/BUILD_INDEX.md": "081dbcac8bf83a7816239fad99d8fb0322216f08e64991c7d7094de8e42a5b6a",
+        "docs/evidence-and-adoption-spec.md": "8f540171dd38711ad563459d1721277b84100b66a207379668f0efe6db8b208f",
+        "docs/build/readouts/GATE-G1.md": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
+      }
+    }
+  ]
+}

@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.2
-lastCompleted:   R5.1
+nextTicket:      R5.3
+lastCompleted:   R5.2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.1
+chainTip:        codex/harnessharness-evidence-r5.2
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-10-30T05:00:19Z
+updatedAt:       2026-10-30T05:37:00Z
 ```
 
 ## OPEN FINDINGS
@@ -992,3 +992,4 @@ updatedAt:       2026-10-30T05:00:19Z
 - 2026-10-30 — R5.1 blocked — branch codex/harnessharness-evidence-r5.1 · PR #209 · base codex/harnessharness-evidence (@5d3edc79). Guard + fixtures landed and verified locally; ci-boundary/1 fail on pushed head ef40a13: `CI scripts self-test` fails inside check-living-docs on 4 `/home/class*` personal paths committed in the base branch's planning commit (docs/design/14,20,21 · tickets/171 · evidence-and-adoption-spec.md — none authored by this ticket; identical output on stashed base), and `gitleaks` full-history finds 2 leaks — `gitleaks --log-opts=codex/harnessharness-evidence..HEAD` = no leaks in this ticket's commits, `main..codex/harnessharness-evidence` = the same 2 (inherited). Inherited red ⇒ blockedOn per BM-CI-01; nextTicket not advanced. **Deferrals:** opened DF-R5.1-1 · **ADRs:** ADR-0382 · ci: fail #209@ef40a13 (build·test·fmt·drift ubuntu+macos 41003825469; gitleaks 41003825469; cargo-deny pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-10-30T05:00Z · R5.1 done — branch `codex/harnessharness-evidence-r5.1` · PR https://github.com/SteveVitali/HarnessHarness/pull/209 · base `codex/harnessharness-evidence` (head `a3ed602b`; base-owner repair `9dab9436` merged at `146e6c0d` — that commit cleared the inherited living-docs personal-path matcher + gitleaks full-history red recorded at the block). Manifest row 169 — retained supplemental coverage/routing guard `hh-supplement-guard/1` v1.0.0: read-only `supplement_guard.py` + `check-supplement-guard.sh` under docs/build/tools/ emitting input digests/counts/diagnostics; 13-case negative-fixture battery 13/13 rejections with named diagnostics; class-exact diagnostic baseline (no warning count); route DISPATCH R5.1 on the real checkout; never a state writer (git status identical across runs). **Deferrals:** opened DF-R5.1-1 (GATE-G17 contributor evidence — intentional), closed none. **ADRs:** ADR-0382 — quiet trigger homed on BL-47 + REVISIT_TRIGGERS regenerated (166 ADRs) as a post-open CI repair after the gen-revisit-triggers self-test caught the unplaced trigger (repair `a3ed602b`). **Verify:** guard PASS 0 viol/8 baseline warnings · fixtures 13/13 · fails-without green · check-living-docs 418 files · check-bm-tools OK · build-memory 0 viol · fmt clean (no Rust). blockedOn discharged; nextTicket → R5.2 · chainTip → codex/harnessharness-evidence-r5.1 · ci: pass #209@a3ed602 (build · test · fmt · drift (macos-latest) 41004794180; cargo-deny (licenses · advisories · bans · sources) 41004794180; gitleaks (full history + PR diff) 41004794180; build · test · fmt · drift (ubuntu-latest) 41004794180) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-10-30T05:03Z · R5.1 ci record refreshed at the closeout head — the done entry's `ci:` line names the impl head a3ed602; ci-boundary re-read after the docs-only closeout head `e2b24b83` landed (run 41006109863, all four required jobs): ci: pass #209@e2b24b8 (cargo-deny (licenses · advisories · bans · sources) 41006109863; gitleaks (full history + PR diff) 41006109863; build · test · fmt · drift (ubuntu-latest) 41006109863; build · test · fmt · drift (macos-latest) 41006109863) · logs/ci-r5.1.json (BM-HIST-01: correction by appended entry). harness: devin-desktop/swe-2-high/subagent
+- 2026-10-30 · R5.2 done — branch `codex/harnessharness-evidence-r5.2` · PR #210 · base `codex/harnessharness-evidence-r5.1` (@1a59e7a). Landed `hh-dispatch-driver/1` (guarded dispatch driver: plan emits hh-dispatch-envelope/1 only after invoked-guard PASS + DISPATCH route + chain-tip/base ancestry + recorded ci-boundary/1 green; validate checks ordered guard.pre→spawn→guard.post, spawn count, prompt-sha, digest equality, clean tree, USD 0, resume fresh-state re-read) + 22-case battery. Coordinator executed both native stub legs via `run_subagent`/`subagent_general`; actual transcripts VALIDATE. Guard `chain-tip` repaired to ancestry (ADR-0383); fixture honesty repairs (BM-TEST-01). **Verify:** driver fixtures 22/22 · guard fixtures 13/13 · real preflight EMIT · transcripts VALID · fails-without proven · check-build-memory 0 viol/8 scoped warnings · fmt n/a (no Rust). **Deferrals:** none opened/closed; DF-R5.1-1 carried (GATE-G17 leg). **Deviations:** ~890 source/test lines vs 700 trigger (accept-and-proceed per R5.1 precedent); validator accepted coordinator's honest real encodings. · chainTip → codex/harnessharness-evidence-r5.2 · next → R5.3 · ci: pass #210@5e590a9 (run 41009208030) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.

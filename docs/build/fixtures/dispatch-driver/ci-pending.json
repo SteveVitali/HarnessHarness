@@ -1,0 +1,13 @@
+{
+ "schema": "ci-boundary/1",
+ "capture_kind": "stand-in",
+ "pr": 209,
+ "head_sha": "e2b24b83",
+ "state": "pending",
+ "read_at": null,
+ "required": null,
+ "stack": [],
+ "checks": [],
+ "line": "blockedOn: CI pending on #209 (build \u00b7 test \u00b7 fmt \u00b7 drift (ubuntu-latest)): pending",
+ "exit": 4
+}
