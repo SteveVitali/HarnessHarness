@@ -5058,27 +5058,6 @@ impl<S: ControlStrategy> Driver<S> {
             "sha256:{}",
             hharness_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
         );
-        // R5.10 (REQ-E-203/REQ-E-102; PADR-R5-1 A.1 item 3) — seal before
-        // finish: participant access revoked, usage finalized, the
-        // end-state content-pinned — through the durable-dispatch seam's
-        // store/lease/envs (the same fenced writer, never a second
-        // append path). The seam's rows land durable *before* the
-        // terminal `lifecycle.run.finished` cites them. A seam-less sink
-        // (host/replay recorders) carries no `submission_seal` member —
-        // the unarmed path stays byte-identical (PADR-R5-1 A.7).
-        let submission_seal: Option<Json> = match sink.dispatch_seam() {
-            Some(DispatchSeam {
-                store,
-                lease,
-                envs: Some(envs),
-            }) => Some(Json::Arr(
-                envs.seal_workspace(store, lease)
-                    .iter()
-                    .map(hharness_env::driver::WorkspaceSeal::to_json)
-                    .collect(),
-            )),
-            _ => None,
-        };
         // §5c.4 scope floors (DF-S2.8-1): the turn is ending —
         // `turn`-scoped memories expire; the run is ending — `run`-scoped
         // the same. The memory boundary's `context.memory.invalidated`
@@ -5141,6 +5120,32 @@ impl<S: ControlStrategy> Driver<S> {
             );
         }
         self.append(sink, "lifecycle.turn.finished", turn_finished, None)?;
+        // R5.10 (REQ-E-203/REQ-E-102; PADR-R5-1 A.1 item 3) — seal between
+        // the turn close and the run terminal: participant access
+        // revoked, usage finalized, the end-state content-pinned —
+        // through the durable-dispatch seam's store/lease/envs (the same
+        // fenced writer, never a second append path). The placement is
+        // load-bearing: the sink's turn-boundary cadence take fires on
+        // the `turn.finished` append while the handle is still Ready —
+        // detaching earlier would preempt a declared cadence (cap_2's
+        // `taken_by:"cadence"` row lands before the seal's). The seam's
+        // rows land durable *before* the terminal `lifecycle.run.finished`
+        // cites them. A seam-less sink (host/replay recorders) carries no
+        // `submission_seal` member — the unarmed path stays
+        // byte-identical (PADR-R5-1 A.7).
+        let submission_seal: Option<Json> = match sink.dispatch_seam() {
+            Some(DispatchSeam {
+                store,
+                lease,
+                envs: Some(envs),
+            }) => Some(Json::Arr(
+                envs.seal_workspace(store, lease)
+                    .iter()
+                    .map(hharness_env::driver::WorkspaceSeal::to_json)
+                    .collect(),
+            )),
+            _ => None,
+        };
         let mut finished = crate::events::run_finished_payload(
             &run_status,
             &final_reason,
