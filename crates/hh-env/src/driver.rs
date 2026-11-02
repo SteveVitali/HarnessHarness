@@ -53,8 +53,8 @@ pub struct EnvDriver {
     /// (S4.13; one adapter per provider class).
     providers: BTreeMap<String, Box<dyn crate::provider::ProviderAdapter>>,
     /// R5.10 (ADR-0389) — the submission-seal pin's walk budget
-    /// `(max_files, max_bytes)`; `None` ⇒ [`SEAL_PIN_MAX_FILES`] /
-    /// [`SEAL_PIN_MAX_BYTES`]. A test seam only — the production default
+    /// `(max_files, max_bytes)`; `None` ⇒ `SEAL_PIN_MAX_FILES` /
+    /// `SEAL_PIN_MAX_BYTES`. A test seam only — the production default
     /// is the contract bound.
     #[doc(hidden)]
     pub seal_pin_budget: Option<(usize, u64)>,
