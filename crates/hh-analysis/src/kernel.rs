@@ -103,7 +103,8 @@ pub struct AnalysisInput<'a> {
     /// experiment run's view (§6.3 `post_amendment`; ADR-0162). Records-in:
     /// the kernel never reads a ledger.
     pub post_amendment: bool,
-    /// The bound experiment's folded [`ExperimentView`] — required by the
+    /// The bound experiment's folded
+    /// [`ExperimentView`](hharness_experiment::view::ExperimentView) — required by the
     /// `finite_manifest_contrast` kind (the planned-slot universe the
     /// R5.15 population contract reconciles). Records-in: the caller
     /// folds the experiment run's durable events; `None` for kinds that
