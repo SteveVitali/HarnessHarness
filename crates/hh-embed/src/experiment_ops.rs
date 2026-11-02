@@ -540,6 +540,9 @@ impl Bag {
                                 + '_,
                         >
                 }),
+            // The durability-fault seam stays unarmed on every product
+            // path — it exists for the R5.6 acceptance battery only.
+            launch_fault_hook: None,
         }
     }
 }
@@ -767,6 +770,14 @@ impl EmbedService {
             ("run_id", Json::str(out.run_id)),
             ("attempt_no", Json::Int(out.attempt_no as i64)),
             ("budget_id", Json::str(out.budget_id)),
+            // R5.6 — the admitted `launch_bound` binding coordinates
+            // (PADR-R5-1 A.3): the intent ref and the subject's own root
+            // budget, distinct from the `budget_id` funding slice.
+            ("intent_ref", Json::str(out.intent_ref)),
+            (
+                "subject_root_budget_id",
+                Json::str(out.subject_root_budget_id),
+            ),
             (
                 "subject_writer",
                 Json::obj([

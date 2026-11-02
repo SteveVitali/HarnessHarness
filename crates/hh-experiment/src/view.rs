@@ -73,6 +73,34 @@ pub struct Attempt {
     pub pools: Vec<String>,
 }
 
+/// The plan's recorded `launch_bound` row (R5.6; PADR-R5-1 A.3) — the
+/// recoverable launch record. `phase` is `"intent"` | `"bound"` |
+/// `"aborted"`; the latest committed row wins (a re-launch after an abort
+/// re-opens the same `intent_ref` at `intent`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaunchBinding {
+    /// The deterministic intent id — `lbi-<idp(run, plan, attempt)>`.
+    pub intent_ref: String,
+    /// `intent | bound | aborted`.
+    pub phase: String,
+    /// The attempt ordinal this record binds.
+    pub attempt_no: u32,
+    /// The claim lease that owns this binding (`lease_ref`).
+    pub lease_ref: String,
+    /// The deterministic subject run id.
+    pub subject_run_id: String,
+    /// The funding slice (experiment-pool child), once bound.
+    pub funding_slice_ref: Option<String>,
+    /// The subject run's own root budget, once bound.
+    pub subject_root_budget_id: Option<String>,
+    /// The frozen launch inputs the recovery path must reproduce exactly.
+    pub inputs: Json,
+    /// The admitted `grade_binding{mode, pins_ref, instrument_budget_ref}`.
+    pub grade_binding: Json,
+    /// The slices an `aborted` row released.
+    pub released: Vec<String>,
+}
+
 /// The scheduler's per-plan state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlanState {
@@ -111,6 +139,8 @@ pub struct PlanState {
     /// The plan is terminally done without an accepted run (a final
     /// cancellation, or a re-attempt budget exhausted without a replan).
     pub finished_final: bool,
+    /// The plan's latest `launch_bound` record (R5.6), if any.
+    pub launch_binding: Option<LaunchBinding>,
 }
 
 impl PlanState {
@@ -281,6 +311,7 @@ impl ExperimentView {
                         not_before_ms: 0,
                         accepted_run: None,
                         finished_final: false,
+                        launch_binding: None,
                     },
                 );
             }
@@ -327,6 +358,34 @@ impl ExperimentView {
                         budget_utilization: None,
                         regrade_pending: false,
                         pools: match p.get("pool_consumed") {
+                            Some(Json::Arr(items)) => items
+                                .iter()
+                                .filter_map(Json::as_str)
+                                .map(str::to_string)
+                                .collect(),
+                            _ => Vec::new(),
+                        },
+                    });
+                }
+            }
+            c if c == class::LAUNCH_BOUND => {
+                // The recoverable launch record (R5.6) — the latest phase
+                // row per plan wins.
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
+                if let Some(ps) = self.plans.get_mut(&rpid) {
+                    ps.launch_binding = Some(LaunchBinding {
+                        intent_ref: s(p, "intent_ref").unwrap_or_default(),
+                        phase: s(p, "phase").unwrap_or_default(),
+                        attempt_no: i(p, "attempt_no").unwrap_or(1) as u32,
+                        lease_ref: s(p, "lease_ref").unwrap_or_default(),
+                        subject_run_id: s(p, "subject_run_id").unwrap_or_default(),
+                        funding_slice_ref: s(p, "funding_slice_ref"),
+                        subject_root_budget_id: s(p, "subject_root_budget_id"),
+                        inputs: p.get("inputs").cloned().unwrap_or(Json::Null),
+                        grade_binding: p.get("grade_binding").cloned().unwrap_or(Json::Null),
+                        released: match p.get("released") {
                             Some(Json::Arr(items)) => items
                                 .iter()
                                 .filter_map(Json::as_str)

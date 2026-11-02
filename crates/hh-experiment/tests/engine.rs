@@ -11,7 +11,7 @@ use hharness_budget::spec::{BudgetMode, BudgetSpec};
 use hharness_budget::{DimensionId, DimensionKey, MatchSpec};
 use hharness_experiment::docs::LabDocs;
 use hharness_experiment::engine::{
-    ClaimTicket, EngineContext, ExperimentEngine, LaunchOutcome, NextVerdict,
+    ClaimTicket, EngineContext, ExperimentEngine, LaunchOutcome, LaunchPhase, NextVerdict,
 };
 use hharness_experiment::errors::{refusal_code, ExperimentError};
 use hharness_experiment::events::PauseReason;
@@ -2804,4 +2804,392 @@ fn settle_emits_nothing_when_security_never_ran() {
         .map(str::to_string)
         .collect();
     assert!(leaked.is_empty(), "n/a metrics must not emit: {leaked:?}");
+}
+
+// ── R5.6 — recoverable launch and subject funding binding ───────────────────
+// PADR-R5-1 A.3 (admitted GATE-G9): `launch_bound` phases intent→bound|
+// aborted; deterministic intent/subject ids; adopt-or-release recovery.
+// The kill seam is `EngineContext::launch_fault_hook` — an `Err` at a
+// `LaunchPhase` simulates the crash: everything before is durable, nothing
+// after lands (the SpawnHook precedent).
+
+/// `claim` + `launch` under a fresh engine whose fault hook kills at
+/// `phase`. Returns the run-plan id; the engine is dropped on the fault
+/// (the "crash").
+fn launch_kill(rig: &mut Rig, eid: &str, rpid: &str, phase: LaunchPhase) {
+    let mut eng = ExperimentEngine::new(
+        &mut rig.store,
+        rig.docs.clone(),
+        EngineContext {
+            launch_fault_hook: Some(Box::new(move |p| {
+                if p == phase {
+                    Err(format!("kill at {p:?}"))
+                } else {
+                    Ok(())
+                }
+            })),
+            ..ctx()
+        },
+    );
+    eng.attach(eid).unwrap();
+    let ticket = eng.claim(rpid, "driver").unwrap();
+    assert!(eng.launch(&ticket, "subject").is_err());
+}
+
+/// Re-claim and re-launch after a kill (claim/subject leases lapse first —
+/// recovery never depends on a still-live lease).
+fn relaunch(rig: &mut Rig, eid: &str, rpid: &str) -> LaunchOutcome {
+    rig.clock.advance(61_000);
+    let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
+    eng.attach(eid).unwrap();
+    let ticket = eng.claim(rpid, "driver").unwrap();
+    eng.launch(&ticket, "subject").unwrap()
+}
+
+fn first_plan(rig: &mut Rig, eid: &str) -> String {
+    let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
+    eng.attach(eid).unwrap();
+    match eng.next().unwrap() {
+        NextVerdict::Plan { run_plan_id } => run_plan_id,
+        other => panic!("{other:?}"),
+    }
+}
+
+fn bound_of(rig: &mut Rig, eid: &str, rpid: &str) -> hharness_experiment::view::LaunchBinding {
+    let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
+    eng.attach(eid).unwrap();
+    eng.launch_binding(rpid).unwrap().expect("binding")
+}
+
+fn launch_bound_rows(rig: &mut Rig, run_id: &str) -> Vec<Json> {
+    rig.store
+        .events(run_id)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.launch_bound")
+        .map(|e| e.payload.clone())
+        .collect()
+}
+
+fn slice_count(rig: &mut Rig, run_id: &str, rpid: &str) -> usize {
+    let acct = hharness_budget::account::Account::open(&mut rig.store, run_id).unwrap();
+    acct.tree
+        .nodes
+        .values()
+        .filter(|ns| {
+            ns.node.scope.target == rpid
+                && ns.node.mode == hharness_budget::spec::BudgetMode::Slice
+                && !ns.node.completed
+        })
+        .count()
+}
+
+#[test]
+fn r5_6_recovery_at_every_launch_boundary() {
+    // AC-1: kill at each durable boundary; recovery completes exactly one
+    // subject/root/slice binding — never a second subject, never a second
+    // publication.
+    for (tag, phase) in [
+        ("intent", LaunchPhase::AfterIntent),
+        ("slice", LaunchPhase::AfterSlice),
+        ("open", LaunchPhase::AfterSubjectOpen),
+        ("bound", LaunchPhase::AfterSubjectBound),
+    ] {
+        let mut r = rig(&format!("r56-{tag}"), 0);
+        let s = spec(ExperimentKind::Comparative);
+        let (eid, run_id) = open(&mut r, &s);
+        let rpid = first_plan(&mut r, &eid);
+        launch_kill(&mut r, &eid, &rpid, phase);
+        let l = relaunch(&mut r, &eid, &rpid);
+        // Exactly one binding: one subject run (deterministic id), one live
+        // slice, one published attempt, admitted members on the bound row.
+        let b = bound_of(&mut r, &eid, &rpid);
+        assert_eq!(b.phase, "bound", "{tag}");
+        assert_eq!(b.subject_run_id, l.run_id, "{tag}");
+        assert_eq!(
+            b.funding_slice_ref.as_deref(),
+            Some(l.budget_id.as_str()),
+            "{tag}"
+        );
+        assert_eq!(
+            b.subject_root_budget_id.as_deref(),
+            Some(l.subject_root_budget_id.as_str()),
+            "{tag}"
+        );
+        assert_eq!(slice_count(&mut r, &run_id, &rpid), 1, "{tag}");
+        assert_eq!(l.run_id, {
+            let pre = Json::Arr(vec![Json::str(&run_id), Json::str(&rpid), Json::Int(1)]);
+            format!(
+                "subj-{}",
+                idp_id(
+                    "hh.experiment.subject",
+                    pre.to_canonical_string().as_bytes()
+                )
+            )
+        });
+        // The subject's own root exists on its stream (distinct from the
+        // funding slice); exactly one `bound` stamp.
+        let subj: Vec<_> = r.store.events(&l.run_id).unwrap().to_vec();
+        assert_eq!(
+            subj.iter()
+                .filter(|e| e.class == "measurement.experiment.bound")
+                .count(),
+            1,
+            "{tag}"
+        );
+        let root_rows: Vec<_> = subj
+            .iter()
+            .filter(|e| e.class == "control.budget.allocated" && e.payload.get("parent").is_none())
+            .collect();
+        assert_eq!(root_rows.len(), 1, "{tag}");
+        assert_eq!(
+            root_rows[0].payload.get("budget_id").and_then(Json::as_str),
+            Some(l.subject_root_budget_id.as_str()),
+            "{tag}"
+        );
+        let gb = b.grade_binding;
+        assert_eq!(
+            gb.get("mode").and_then(Json::as_str),
+            Some("legacy"),
+            "{tag}"
+        );
+        assert_eq!(
+            gb.get("instrument_budget_ref").and_then(Json::as_str),
+            Some("instr"),
+            "{tag}"
+        );
+    }
+}
+
+#[test]
+fn r5_6_post_publish_relaunch_refuses_no_second_subject() {
+    // AC-1/AC-2: everything durable; a relaunch is a typed refusal — one
+    // attempt, one subject run, never a phantom second run.
+    let mut r = rig("r56-published", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    launch_kill(&mut r, &eid, &rpid, LaunchPhase::AfterPublish);
+    r.clock.advance(61_000);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    // The claim consumed into the launch; a stale ticket refuses typed.
+    let stale = ClaimTicket {
+        run_plan_id: rpid.clone(),
+        holder: "driver".into(),
+        lease_id: "lease:stale".into(),
+        expires_at_ms: u64::MAX,
+    };
+    assert!(matches!(
+        eng.launch(&stale, "subject").unwrap_err(),
+        ExperimentError::BadPlanState { .. }
+    ));
+    // A fresh claim is refused too — the attempt is already in flight.
+    assert!(eng.claim(&rpid, "driver2").is_err());
+    drop(eng);
+    let b = bound_of(&mut r, &eid, &rpid);
+    assert_eq!(b.phase, "bound");
+    let launched = r
+        .store
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.run_launched")
+        .count();
+    assert_eq!(launched, 1);
+}
+
+#[test]
+fn r5_6_abort_releases_orphan_slice_idempotently() {
+    // AC-1 alternative terminal: owned abort/release — the slice remainder
+    // returns to the pool, the aborted row records it, re-abort is a no-op.
+    let mut r = rig("r56-abort", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    launch_kill(&mut r, &eid, &rpid, LaunchPhase::AfterSlice);
+    assert_eq!(slice_count(&mut r, &run_id, &rpid), 1);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let released = eng.abort_launch(&rpid).unwrap();
+    assert_eq!(released.len(), 1);
+    // Idempotent: second abort releases nothing and adds no row.
+    assert!(eng.abort_launch(&rpid).unwrap().is_empty());
+    drop(eng);
+    assert_eq!(slice_count(&mut r, &run_id, &rpid), 0);
+    assert_eq!(bound_of(&mut r, &eid, &rpid).phase, "aborted");
+    assert_eq!(launch_bound_rows(&mut r, &run_id).len(), 2);
+    // The claim was never consumed — a fresh launch completes one binding.
+    let l = relaunch(&mut r, &eid, &rpid);
+    assert_eq!(bound_of(&mut r, &eid, &rpid).phase, "bound");
+    assert_eq!(slice_count(&mut r, &run_id, &rpid), 1);
+    let _ = l;
+}
+
+#[test]
+fn r5_6_conflicting_intent_bytes_refuse() {
+    // AC-2: a recorded intent whose frozen inputs differ refuses — never
+    // re-written, never rebound.
+    let mut r = rig("r56-conflict", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    // Forge an intent row with wrong frozen inputs (cell_id) — a 1 ms
+    // writer lease so the engine's own writer re-acquires cleanly.
+    let writer = r.store.acquire_writer("forge", &run_id, 1).unwrap();
+    let forged = mint(
+        &r.store,
+        &run_id,
+        "measurement.experiment.launch_bound",
+        Json::obj([
+            ("phase", Json::str("intent")),
+            ("intent_ref", Json::str("lbi-forged")),
+            ("run_plan_id", Json::str(&rpid)),
+            ("attempt_no", Json::Int(1)),
+            ("lease_ref", Json::str("lease:x")),
+            ("subject_run_id", Json::str("subj-x")),
+            ("inputs", Json::obj([("cell_id", Json::str("cell:forged"))])),
+            ("grade_binding", Json::Null),
+        ]),
+    );
+    r.store.append(&run_id, &writer, vec![forged]).unwrap();
+    r.clock.advance(2);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    assert!(matches!(
+        eng.launch(&ticket, "subject").unwrap_err(),
+        ExperimentError::LaunchBindingConflict { .. }
+    ));
+}
+
+#[test]
+fn r5_6_conflicting_subject_manifest_refuses() {
+    // AC-2: a pre-existing run holding the deterministic subject id with
+    // different manifest bytes refuses — the recorded intent is never
+    // bound to divergent bytes.
+    let mut r = rig("r56-subjconflict", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    let pre = Json::Arr(vec![Json::str(&run_id), Json::str(&rpid), Json::Int(1)]);
+    let subj_id = format!(
+        "subj-{}",
+        idp_id(
+            "hh.experiment.subject",
+            pre.to_canonical_string().as_bytes()
+        )
+    );
+    // Occupy the deterministic id with a foreign manifest.
+    let foreign =
+        hharness_ledger::manifest::RunManifest::minimal(hharness_ledger::manifest::RunKind::Agent);
+    r.store
+        .open_run_with_id(&subj_id, foreign, "intruder")
+        .unwrap();
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    assert!(matches!(
+        eng.launch(&ticket, "subject").unwrap_err(),
+        ExperimentError::LaunchBindingConflict { .. }
+    ));
+}
+
+#[test]
+fn r5_6_orphan_slice_without_intent_refuses() {
+    // AC-2: a live plan-scoped slice under no live intent is orphan
+    // funding — the launch refuses; `abort_launch` releases it.
+    let mut r = rig("r56-orphan", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    // Forge an orphan slice on the experiment account.
+    let root = r
+        .store
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "control.budget.allocated" && e.payload.get("parent").is_none())
+        .and_then(|e| e.payload.get("budget_id").and_then(Json::as_str))
+        .unwrap()
+        .to_string();
+    let writer = r.store.acquire_writer("forge", &run_id, 1).unwrap();
+    let mut acct = hharness_budget::account::Account::open(&mut r.store, &run_id).unwrap();
+    acct.allocate(
+        &writer,
+        Some(&root),
+        hharness_budget::spec::BudgetScope {
+            kind: hharness_budget::spec::BudgetScopeKind::Experiment,
+            target: rpid.clone(),
+        },
+        hharness_budget::spec::BudgetSpec {
+            mode: hharness_budget::spec::BudgetMode::Slice,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    drop(acct);
+    r.clock.advance(2);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    assert!(matches!(
+        eng.launch(&ticket, "subject").unwrap_err(),
+        ExperimentError::OrphanLaunchFunding { .. }
+    ));
+    // The owned release frees it; the still-live claim binds cleanly.
+    assert_eq!(eng.abort_launch(&rpid).unwrap().len(), 1);
+    eng.launch(&ticket, "subject").unwrap();
+}
+
+#[test]
+fn r5_6_abort_of_published_launch_refuses() {
+    // Bound funding is never released from under an armed subject.
+    let mut r = rig("r56-abortpub", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _run_id) = open(&mut r, &s);
+    let (rpid, _l) = launch_one(&mut r, &eid);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    assert!(matches!(
+        eng.abort_launch(&rpid).unwrap_err(),
+        ExperimentError::BadPlanState { .. }
+    ));
+}
+
+#[test]
+fn r5_6_binding_contract_members_and_intent_phase() {
+    // AC-1: only the admitted contract is exposed — the intent row lands
+    // before allocation, the bound row carries the A.3 member set, and the
+    // durable record is what consumers (same writer) validate.
+    let mut r = rig("r56-contract", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let rpid = first_plan(&mut r, &eid);
+    launch_kill(&mut r, &eid, &rpid, LaunchPhase::AfterIntent);
+    // Pre-publish: the binding exists at intent — root/funding unbound.
+    let b = bound_of(&mut r, &eid, &rpid);
+    assert_eq!(b.phase, "intent");
+    assert!(b.funding_slice_ref.is_none());
+    assert!(b.subject_root_budget_id.is_none());
+    let l = relaunch(&mut r, &eid, &rpid);
+    let rows = launch_bound_rows(&mut r, &run_id);
+    assert_eq!(rows.len(), 2);
+    for key in [
+        "intent_ref",
+        "lease_ref",
+        "funding_slice_ref",
+        "subject_root_budget_id",
+        "grade_binding",
+    ] {
+        assert!(rows[1].get(key).is_some(), "missing {key}");
+    }
+    assert_eq!(
+        rows[1].get("subject_run_id").and_then(Json::as_str),
+        Some(l.run_id.as_str())
+    );
+    // The adopted subject run carries the same durable writer the
+    // adoption path re-acquires — `subject_writer` is the run's fenced
+    // writer (generation bumps on takeover, never a second writer class).
+    assert_eq!(l.subject_writer.run_id, l.run_id);
 }

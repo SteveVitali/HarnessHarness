@@ -174,3 +174,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0382](ADR-0382-r5.1-supplement-guard-evidence-model.md) | Retained supplemental guard — landed-evidence and diagnostic-class model | R5.1 | Accepted |
 | [ADR-0383](ADR-0383-r5.2-guard-chain-tip-ancestry-and-dispatch-driver-evidence-model.md) | Guard chain-tip ancestry repair + guarded dispatch-driver evidence model | R5.2 | Accepted |
 | [ADR-0384](ADR-0384-r5.3-amendment-dossier-register-shape.md) | Round-5 amendment dossier — one common register, proposal-ids only | R5.3 | Accepted |
+| [ADR-0385](ADR-0385-r5.6-recoverable-launch-binding-landing.md) | R5.6 recoverable launch — `launch_bound` landing decisions | R5.6 | Accepted |

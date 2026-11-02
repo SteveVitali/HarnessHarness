@@ -51,11 +51,13 @@ use hharness_budget::attribution::Attribution;
 use hharness_budget::quantity::ResourceQuantity;
 use hharness_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
 use hharness_budget::{BudgetEnforcement, MatchMode, MatchSpec};
+use hharness_identity::idp::idp_id;
 use hharness_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
 use hharness_lab::experiment::{
     ArmSpec, BudgetRelevantParam, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec,
     RetirementDiffResolver, SpecContext, ValidationStrategy,
 };
+use hharness_ledger::errors::LedgerError;
 use hharness_ledger::event::{Event, Producer, Scope};
 use hharness_ledger::leases::LeaseScope;
 use hharness_ledger::manifest::{
@@ -73,7 +75,7 @@ use hharness_wire::json::Json;
 use crate::docs::{kind as doc_kind, LabDocs};
 use crate::errors::ExperimentError;
 use crate::events::{self as ev, class, CloseStatus, ExperimentReport, PauseReason, RunOutcome};
-use crate::view::{Declared, ExperimentView, PlanState};
+use crate::view::{Declared, ExperimentView, LaunchBinding, PlanState};
 
 /// The kernel component spelling on this crate's ledger rows.
 pub const COMPONENT: &str = "hh-experiment/1";
@@ -256,6 +258,10 @@ pub struct EngineContext<'a> {
     /// The hosted-dispatch adapter (`None` = hosted launches refuse
     /// `HostedLaunchUnavailable` — never a silent native downgrade).
     pub hosted_launcher: Option<Box<HostedLauncher<'a>>>,
+    /// Durability-fault seam (`None` in production — the `SpawnHook`
+    /// precedent): invoked at each [`LaunchPhase`]; an `Err` aborts the
+    /// launch at that durable boundary as if the process died.
+    pub launch_fault_hook: Option<Box<dyn Fn(LaunchPhase) -> Result<(), String> + 'a>>,
 }
 
 impl EngineContext<'_> {
@@ -346,6 +352,71 @@ pub struct LaunchOutcome {
     /// The slice budget id allocated for this run (the subject manifest's
     /// `budget` member).
     pub budget_id: String,
+    /// The `launch_bound` intent id (R5.6 — the admitted binding record's
+    /// key; a crash-window relaunch links this intent instead of a second
+    /// launch).
+    pub intent_ref: String,
+    /// The subject run's own root budget — distinct from `budget_id`'s
+    /// funding slice (REQ-E-207; PADR-R5-1 A.3 `subject_root_budget_id`).
+    pub subject_root_budget_id: String,
+}
+
+/// The durable launch boundaries the `launch_fault_hook` observes — an
+/// `Err` return is a kill at that boundary: everything before is durable,
+/// nothing after lands (the S4.6 `SpawnPhase` precedent — a test-only
+/// seam, never armed in production paths).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchPhase {
+    /// `launch_bound{intent}` committed; nothing allocated yet.
+    AfterIntent,
+    /// The funding slice committed; no subject opened yet.
+    AfterSlice,
+    /// The subject run's `created` row committed; unbound yet.
+    AfterSubjectOpen,
+    /// The subject root + `bound` committed; publish pending.
+    AfterSubjectBound,
+    /// `launch_bound{bound}` + `run_launched` + `run_bound` committed;
+    /// only the arming return remains.
+    AfterPublish,
+}
+
+/// The deterministic `launch_bound` intent id — `lbi-<idp(run, plan,
+/// attempt)>`: the `(run_plan_id, attempt_no)` pair *is* the idempotency
+/// key (the S4.6 `sub-<H(decision, H(spec))>` precedent — a post-crash
+/// relaunch derives the same ref and links the recorded intent instead of
+/// minting a second subject).
+fn launch_intent_ref(run_id: &str, run_plan_id: &str, attempt_no: u32) -> String {
+    let preimage = Json::Arr(vec![
+        Json::str(run_id),
+        Json::str(run_plan_id),
+        Json::Int(attempt_no as i64),
+    ]);
+    format!(
+        "lbi-{}",
+        idp_id(
+            "hh.experiment.launch_intent",
+            preimage.to_canonical_string().as_bytes()
+        )
+    )
+}
+
+/// The deterministic subject `RunId` — `subj-<idp(run, plan, attempt)>`:
+/// pre-minted into the intent row so a half-created run is adoptable via
+/// `open_run_with_id`/`has_run` (S4.6's adoption rule — the idempotency
+/// pair is the id).
+fn subject_run_id_for(run_id: &str, run_plan_id: &str, attempt_no: u32) -> String {
+    let preimage = Json::Arr(vec![
+        Json::str(run_id),
+        Json::str(run_plan_id),
+        Json::Int(attempt_no as i64),
+    ]);
+    format!(
+        "subj-{}",
+        idp_id(
+            "hh.experiment.subject",
+            preimage.to_canonical_string().as_bytes()
+        )
+    )
 }
 
 // ── The engine ──────────────────────────────────────────────────────────────
@@ -1029,15 +1100,20 @@ impl<'a> ExperimentEngine<'a> {
 
     // ── launch ───────────────────────────────────────────────────────────
 
-    /// `launch(ticket, subject_holder) → LaunchOutcome` — dispatch the claimed
-    /// plan: drift probes (E-2's `DependsOnDriftedCapability` /
-    /// `ModelFingerprintDrift`), the budget slice allocation
-    /// (`InsufficientBudget` leaves the plan re-plannable — the claim is
-    /// released back, never consumed), the subject `agent` run open with the
-    /// complete `experiment{…}` row-key binding (registry snapshot included —
-    /// the §6.2 one-snapshot rule propagates onto every bundle), the subject
-    /// run's `run_bound` stamp, and the experiment run's `run_launched` +
-    /// `run_bound` mirror.
+    /// `launch(ticket, subject_holder) → LaunchOutcome` — the recoverable
+    /// launch (R5.6; PADR-R5-1 A.3, admitted GATE-G9): drift probes (E-2's
+    /// `DependsOnDriftedCapability` / `ModelFingerprintDrift`), then the
+    /// admitted order **persist intent → allocate/open → bind subject/root
+    /// → publish → arm** — `launch_bound{intent}` lands before any
+    /// allocation; the deterministic `intent_ref`/`subject_run_id` let a
+    /// relaunch after a crash-window kill link the recorded intent and
+    /// half-created subject instead of minting a second; the funding slice
+    /// (experiment-pool `slice` child, `InsufficientBudget` leaves the plan
+    /// re-plannable) and the subject's own `pool` root are bound by
+    /// `launch_bound{bound}` committed atomically with `run_launched` +
+    /// `run_bound` before the writer is returned. Conflicting bytes,
+    /// orphan funding and duplicate publication refuse (AC-2); the owned
+    /// release is [`Self::abort_launch`].
     pub fn launch(
         &mut self,
         ticket: &ClaimTicket,
@@ -1193,38 +1269,18 @@ impl<'a> ExperimentEngine<'a> {
             }
         }
 
-        // The budget slice — a `slice` child of the experiment pool whose
-        // hard caps are the arm's `eval_budget` (E-2/E-3).
-        let budget_id = {
-            let root = self.root_budget(&run_id)?;
-            let slice_spec = self.slice_spec(&arm)?;
-            let mut acct = Account::open(self.store, &run_id)?;
-            match acct.allocate(
-                &lease,
-                Some(&root),
-                BudgetScope {
-                    kind: BudgetScopeKind::Experiment,
-                    target: ps.run_plan_id.clone(),
-                },
-                slice_spec,
-            ) {
-                Ok(id) => id,
-                Err(e) => {
-                    // `allocate` already ledgered the refused row; the plan
-                    // stays claimed (re-plannable once the claim lapses or the
-                    // pool frees). The engine does not consume the claim.
-                    return Err(ExperimentError::from(e));
-                }
-            }
-        };
-
-        // C1 hosted dispatch (§6.3; AC-R-2.10.3-14; ADR-0046 (d)): an arm
-        // assigning hosted levels routes through the boundary's
-        // `HostedLauncher` SPI before the subject run opens — the adapter
-        // opens the session and reports the enforcement it applied; a
-        // missing/refused adapter fails the launch `HostedLaunchUnavailable`
-        // (the slice returns to the pool) — a hosted run is never silently
-        // downgraded to native.
+        // ── Persist launch intent (R5.6; PADR-R5-1 recoverable
+        // `launch_bound`) — the admitted order: persist intent →
+        // allocate/open → bind subject/root → publish → arm. The
+        // `(run_plan_id, attempt_no)` pair is the idempotency key —
+        // `intent_ref`/`subject_run_id` are deterministic, so a relaunch
+        // after a crash-window kill links the recorded intent (or
+        // owned-aborts it) instead of minting a second subject.
+        let attempt_no = ps.next_attempt_no;
+        // C1 hosted dispatch (§6.3; AC-R-2.10.3-14; ADR-0046 (d)): the
+        // arm's hosted levels route through the boundary's
+        // `HostedLauncher` SPI below — resolved here so the
+        // request-determined `participant_class` rides the frozen inputs.
         let hosted_refs: Vec<String> = arm
             .level_assignment
             .iter()
@@ -1237,6 +1293,140 @@ impl<'a> ExperimentEngine<'a> {
                     .map(|l| l.ref_.clone())
             })
             .collect();
+        let participant_class = if hosted_refs.is_empty() {
+            "native"
+        } else {
+            "hosted"
+        };
+        let intent_ref = launch_intent_ref(&run_id, &ps.run_plan_id, attempt_no);
+        let subject_run_id = subject_run_id_for(&run_id, &ps.run_plan_id, attempt_no);
+        let inputs = ev::launch_inputs(
+            &declared.experiment_id,
+            &declared.plan_id,
+            &ps.run_plan_id,
+            &cell.cell_id,
+            &arm.arm_id,
+            &cell.task_id,
+            &cell.configuration_id,
+            &cell.configuration_version_id,
+            ps.replicate_index,
+            &ps.seed_material,
+            participant_class,
+        );
+        // The admitted `grade_binding` (PADR-R5-1 A.3): `mode:"legacy"`
+        // while the required-grade opt-in freeze lands with the
+        // R5.9/R5.10/R5.14 owners; `pins_ref` is the `CellPlan` content
+        // address (the frozen task/oracle/config pins);
+        // `selection_policy_ref` stays absent in legacy mode.
+        let grade_binding =
+            ev::grade_binding("legacy", &declared.plan_id, &spec.budgets.instrument);
+        let linking = match &ps.launch_binding {
+            Some(b) if b.attempt_no == attempt_no && b.phase == "intent" => {
+                // Link requires the same intent and byte-equal frozen
+                // inputs — conflicting bytes refuse (AC-2), never re-write.
+                if b.intent_ref != intent_ref {
+                    return Err(ExperimentError::LaunchBindingConflict {
+                        run_plan_id: ps.run_plan_id.clone(),
+                        detail: format!(
+                            "recorded intent {} vs derived {}",
+                            b.intent_ref, intent_ref
+                        ),
+                    });
+                }
+                if b.inputs != inputs {
+                    return Err(ExperimentError::LaunchBindingConflict {
+                        run_plan_id: ps.run_plan_id.clone(),
+                        detail: "recorded intent's frozen inputs differ".to_string(),
+                    });
+                }
+                true
+            }
+            Some(b) if b.attempt_no == attempt_no && b.phase == "bound" => {
+                // `bound` commits atomically with `run_launched` — a bound
+                // record without its published attempt is never this
+                // engine's own product; refuse the anomaly, never bind
+                // over it.
+                return Err(ExperimentError::LaunchBindingConflict {
+                    run_plan_id: ps.run_plan_id.clone(),
+                    detail: "bound record without a published attempt".to_string(),
+                });
+            }
+            _ => {
+                // Fresh (`None`, `aborted`, or a prior attempt's terminal
+                // record): persist the intent before any allocation.
+                self.append_chained(
+                    &run_id,
+                    &lease,
+                    vec![self.mint(
+                        &run_id,
+                        class::LAUNCH_BOUND,
+                        ev::launch_intent(
+                            &intent_ref,
+                            &ps.run_plan_id,
+                            attempt_no,
+                            &ticket.lease_id,
+                            &subject_run_id,
+                            inputs.clone(),
+                            grade_binding.clone(),
+                        ),
+                    )?],
+                )?;
+                false
+            }
+        };
+        self.fault(LaunchPhase::AfterIntent)?;
+
+        // The funding slice — a `slice` child of the experiment pool whose
+        // hard caps are the arm's `eval_budget` (E-2/E-3). Adopt-or-
+        // allocate: under a live intent exactly one live plan-scoped slice
+        // links as the launch's own allocation; a live slice under no live
+        // intent is orphan funding — refused, never spent (`abort_launch`
+        // releases it). `InsufficientBudget` leaves the plan re-plannable —
+        // the claim is released back, never consumed.
+        let slice_spec = self.slice_spec(&arm)?;
+        let live_slices = self.live_plan_slices(&run_id, &ps.run_plan_id)?;
+        let budget_id = match (linking, live_slices.len()) {
+            (true, 1) => live_slices[0].clone(),
+            (true, n) if n > 1 => {
+                return Err(ExperimentError::LaunchBindingConflict {
+                    run_plan_id: ps.run_plan_id.clone(),
+                    detail: format!("{n} live plan-scoped slices under one intent"),
+                });
+            }
+            (false, n) if n > 0 => {
+                return Err(ExperimentError::OrphanLaunchFunding {
+                    run_plan_id: ps.run_plan_id.clone(),
+                    detail: format!("{n} live plan-scoped slice(s) with no live intent"),
+                });
+            }
+            _ => {
+                let root = self.root_budget(&run_id)?;
+                let mut acct = Account::open(self.store, &run_id)?;
+                match acct.allocate(
+                    &lease,
+                    Some(&root),
+                    BudgetScope {
+                        kind: BudgetScopeKind::Experiment,
+                        target: ps.run_plan_id.clone(),
+                    },
+                    slice_spec.clone(),
+                ) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        // `allocate` already ledgered the refused row; the plan
+                        // stays claimed (re-plannable once the claim lapses or the
+                        // pool frees). The engine does not consume the claim.
+                        return Err(ExperimentError::from(e));
+                    }
+                }
+            }
+        };
+        self.fault(LaunchPhase::AfterSlice)?;
+
+        // The adapter opens the hosted session and reports the enforcement
+        // it applied; a missing/refused adapter fails the launch
+        // `HostedLaunchUnavailable` (the slice returns to the pool) — a
+        // hosted run is never silently downgraded to native.
         let hosted_outcome = if hosted_refs.is_empty() {
             None
         } else {
@@ -1274,11 +1464,6 @@ impl<'a> ExperimentEngine<'a> {
                 }
             }
         };
-        let participant_class = if hosted_refs.is_empty() {
-            "native"
-        } else {
-            "hosted"
-        };
         // The `limits_enforced` stamp is *derived*: the adapter's report on
         // a hosted launch, the arm's (register-verified) claim on a native
         // one — never a stamped upgrade (ADR-0046 (d); AC-R-2.10.3-3).
@@ -1289,7 +1474,6 @@ impl<'a> ExperimentEngine<'a> {
 
         // The subject run — `run_kind = agent` with the complete experiment
         // row-key binding (§6.5's result-row key fields).
-        let attempt_no = ps.next_attempt_no;
         let seed = ps
             .seed_material
             .get("harness_seed")
@@ -1394,65 +1578,162 @@ impl<'a> ExperimentEngine<'a> {
             pre_registration_ref: None,
             ..Default::default()
         });
-        let (subject_id, subject_lease) = self.store.open_run(manifest, subject_holder)?;
+        // Open or link the subject run: the deterministic `subject_run_id`
+        // makes a half-created run adoptable — an existing run must carry
+        // byte-equal manifest bytes (conflicting bytes refuse, AC-2); its
+        // writer re-acquires through the same fenced `acquire_writer` (the
+        // durable writer adoption shares — a live foreign holder is
+        // `WouldBlock`, never bypassed).
+        let (subject_id, subject_lease) = if self.store.has_run(&subject_run_id) {
+            let existing = self
+                .store
+                .manifest(&subject_run_id)
+                .map_err(ExperimentError::Ledger)?
+                .clone();
+            if existing != manifest {
+                return Err(ExperimentError::LaunchBindingConflict {
+                    run_plan_id: ps.run_plan_id.clone(),
+                    detail: format!(
+                        "subject run {subject_run_id} manifest bytes differ from the recorded intent"
+                    ),
+                });
+            }
+            let writer = self
+                .store
+                .acquire_writer(subject_holder, &subject_run_id, self.writer_ttl_ms)
+                .map_err(|e| match e {
+                    LedgerError::WouldBlock { active_holder } => ExperimentError::WouldBlock {
+                        holder: active_holder,
+                    },
+                    other => ExperimentError::Ledger(other),
+                })?;
+            (subject_run_id.clone(), writer)
+        } else {
+            self.store
+                .open_run_with_id(&subject_run_id, manifest, subject_holder)
+                .map_err(ExperimentError::Ledger)?
+        };
+        self.fault(LaunchPhase::AfterSubjectOpen)?;
+
+        // Bind subject/root: the subject run's own `pool` root mirrors the
+        // funding slice's spec (REQ-E-207 — the subject root is distinct
+        // from its funding slice), minted through the native
+        // `Account::allocate` on the subject's own stream. An existing root
+        // must carry the same spec/scope — a mismatched or bound-but-
+        // rootless subject is conflicting state, refused.
+        let mut root_spec = slice_spec.clone();
+        root_spec.mode = BudgetMode::Pool;
+        let subject_bound_already = self.subject_has(&subject_id, class::BOUND)?;
+        let subject_root_scope = BudgetScope {
+            kind: BudgetScopeKind::Experiment,
+            target: ps.run_plan_id.clone(),
+        };
+        let subject_root_budget_id = match self.subject_root(&subject_id)? {
+            Some((root_id, spec_j, scope_j)) => {
+                if spec_j != root_spec.to_json() || scope_j != subject_root_scope.to_json() {
+                    return Err(ExperimentError::LaunchBindingConflict {
+                        run_plan_id: ps.run_plan_id.clone(),
+                        detail: "subject root budget carries a different spec/scope".to_string(),
+                    });
+                }
+                root_id
+            }
+            None => {
+                if subject_bound_already {
+                    return Err(ExperimentError::LaunchBindingConflict {
+                        run_plan_id: ps.run_plan_id.clone(),
+                        detail: "subject bound without its root budget".to_string(),
+                    });
+                }
+                let mut sacct = Account::open(self.store, &subject_id)?;
+                sacct
+                    .allocate(&subject_lease, None, subject_root_scope, root_spec)
+                    .map_err(ExperimentError::from)?
+            }
+        };
+        self.fault(LaunchPhase::AfterSubjectBound)?;
 
         // The subject stamps `measurement.experiment.bound` on its own
-        // stream (§6.3 `launch` step 4 — §6.5's `bind` proof).
-        let bound_payload = ev::subject_bound(
-            &declared.experiment_id,
-            &arm.arm_id,
-            &cell.configuration_id,
-            &cell.configuration_version_id,
-            &cell.cell_id,
-            ps.replicate_index,
-            attempt_no,
-            &budget_id,
-            participant_class,
-            &limits_enforced,
-        );
-        let mut subject_events = vec![self.mint(&subject_id, class::BOUND, bound_payload)?];
-        // The hosted audit stamps (§6.6 §6; S4.5a): `lifecycle.hosted.
-        // attached` records the ABI attach the dispatch reported and
-        // `lifecycle.component.bound{class_id = hosting_adapter}` names the
-        // conditioned adapter artefact the hosted rows will enter through.
-        // Both are Lab-minted on the subject's stream — the participant's
-        // own events ride the adapter's projection, never this row.
-        if let Some(o) = &hosted_outcome {
-            subject_events.push(self.mint(
-                &subject_id,
-                "lifecycle.hosted.attached",
-                ev::hosted_attached(
-                    &o.hosting_mechanism,
-                    o.session_ref.as_deref(),
-                    o.participant_version_identity.as_deref(),
-                    o.adapter_version_id.as_deref(),
-                    o.abi_version.as_deref(),
-                    &o.limits_enforced,
-                    &o.budget_enforcement,
-                    o.mediation.as_deref(),
-                ),
-            )?);
-            if let Some(adapter) = &o.adapter_version_id {
+        // stream (§6.3 `launch` step 4 — §6.5's `bind` proof); on link the
+        // durable row already exists — never a second stamp.
+        let subject_head = if subject_bound_already {
+            self.store
+                .head_event_id(&subject_id)
+                .map_err(ExperimentError::Ledger)?
+        } else {
+            let bound_payload = ev::subject_bound(
+                &declared.experiment_id,
+                &arm.arm_id,
+                &cell.configuration_id,
+                &cell.configuration_version_id,
+                &cell.cell_id,
+                ps.replicate_index,
+                attempt_no,
+                &budget_id,
+                participant_class,
+                &limits_enforced,
+            );
+            let mut subject_events = vec![self.mint(&subject_id, class::BOUND, bound_payload)?];
+            // The hosted audit stamps (§6.6 §6; S4.5a): `lifecycle.hosted.
+            // attached` records the ABI attach the dispatch reported and
+            // `lifecycle.component.bound{class_id = hosting_adapter}` names
+            // the conditioned adapter artefact the hosted rows will enter
+            // through. Both are Lab-minted on the subject's stream — the
+            // participant's own events ride the adapter's projection,
+            // never this row.
+            if let Some(o) = &hosted_outcome {
                 subject_events.push(self.mint(
                     &subject_id,
-                    "lifecycle.component.bound",
-                    ev::component_bound_hosting_adapter(adapter, o.session_ref.as_deref()),
+                    "lifecycle.hosted.attached",
+                    ev::hosted_attached(
+                        &o.hosting_mechanism,
+                        o.session_ref.as_deref(),
+                        o.participant_version_identity.as_deref(),
+                        o.adapter_version_id.as_deref(),
+                        o.abi_version.as_deref(),
+                        &o.limits_enforced,
+                        &o.budget_enforcement,
+                        o.mediation.as_deref(),
+                    ),
                 )?);
+                if let Some(adapter) = &o.adapter_version_id {
+                    subject_events.push(self.mint(
+                        &subject_id,
+                        "lifecycle.component.bound",
+                        ev::component_bound_hosting_adapter(adapter, o.session_ref.as_deref()),
+                    )?);
+                }
             }
-        }
-        self.store
-            .append(&subject_id, &subject_lease, subject_events)
-            .map_err(ExperimentError::Ledger)?;
-        let subject_head = self
-            .store
-            .head_event_id(&subject_id)
-            .map_err(ExperimentError::Ledger)?;
+            self.store
+                .append(&subject_id, &subject_lease, subject_events)
+                .map_err(ExperimentError::Ledger)?;
+            self.store
+                .head_event_id(&subject_id)
+                .map_err(ExperimentError::Ledger)?
+        };
 
-        // The experiment run's launch record + bound mirror.
+        // Publish — the admitted `launch_bound{bound}` record, the launch
+        // record and the bound mirror land in one atomic commit; the
+        // writer (arm) returns only after the binding is durable.
         self.append_chained(
             &run_id,
             &lease,
             vec![
+                self.mint(
+                    &run_id,
+                    class::LAUNCH_BOUND,
+                    ev::launch_bound(
+                        &intent_ref,
+                        &ps.run_plan_id,
+                        attempt_no,
+                        &ticket.lease_id,
+                        &budget_id,
+                        &subject_id,
+                        &subject_root_budget_id,
+                        &subject_head,
+                        grade_binding.clone(),
+                    ),
+                )?,
                 self.mint(
                     &run_id,
                     class::RUN_LAUNCHED,
@@ -1487,13 +1768,118 @@ impl<'a> ExperimentEngine<'a> {
                 )?,
             ],
         )?;
+        self.fault(LaunchPhase::AfterPublish)?;
         Ok(LaunchOutcome {
             run_plan_id: ps.run_plan_id.clone(),
             run_id: subject_id,
             subject_writer: subject_lease,
             attempt_no,
             budget_id,
+            intent_ref,
+            subject_root_budget_id,
         })
+    }
+
+    /// `abort_launch(run_plan_id) → released[]` — the owned idempotent
+    /// abort/release (R5.6; AC-1's alternative terminal): every live
+    /// `slice` scoped to the plan completes (its remainder returns to the
+    /// experiment pool; `complete` is terminal-idempotent and ledgered),
+    /// and `launch_bound{phase:"aborted"}` records the release. A
+    /// published attempt refuses `BadPlanState` — bound funding is never
+    /// released from under an armed subject. Re-running finishes an
+    /// interrupted abort without a second row once nothing remains.
+    pub fn abort_launch(&mut self, run_plan_id: &str) -> Result<Vec<String>, ExperimentError> {
+        let (run_id, lease) = self.bound()?;
+        let now = self.store.now_ms();
+        self.reconcile(&run_id, &lease, now)?;
+        let view = self.project()?;
+        if view.closed.is_some() {
+            return Err(ExperimentError::ExperimentClosed {
+                run_id: run_id.clone(),
+            });
+        }
+        let ps = view
+            .plans
+            .get(run_plan_id)
+            .ok_or_else(|| ExperimentError::UnknownRunPlan {
+                run_plan_id: run_plan_id.to_string(),
+            })?
+            .clone();
+        if ps.in_flight().is_some() {
+            return Err(ExperimentError::BadPlanState {
+                run_plan_id: ps.run_plan_id.clone(),
+                detail: "cannot abort a published launch".to_string(),
+            });
+        }
+        let live = self.live_plan_slices(&run_id, run_plan_id)?;
+        let mut released = Vec::with_capacity(live.len());
+        {
+            let mut acct = Account::open(self.store, &run_id)?;
+            for id in &live {
+                acct.complete(&lease, id)?;
+                released.push(id.clone());
+            }
+        }
+        match &ps.launch_binding {
+            // Already terminal — the completes above finish an interrupted
+            // abort; never a second `aborted` row.
+            Some(b) if b.phase == "aborted" => {}
+            Some(b) if b.phase == "bound" => {
+                return Err(ExperimentError::LaunchBindingConflict {
+                    run_plan_id: ps.run_plan_id.clone(),
+                    detail: "bound record without a published attempt".to_string(),
+                });
+            }
+            Some(b) if b.phase == "intent" => {
+                self.append_chained(
+                    &run_id,
+                    &lease,
+                    vec![self.mint(
+                        &run_id,
+                        class::LAUNCH_BOUND,
+                        ev::launch_aborted(&b.intent_ref, &ps.run_plan_id, b.attempt_no, &released),
+                    )?],
+                )?;
+            }
+            _ => {
+                // No recorded intent — orphan slices still release under a
+                // recorded abort (the derived intent ref names the pair).
+                if !released.is_empty() {
+                    self.append_chained(
+                        &run_id,
+                        &lease,
+                        vec![self.mint(
+                            &run_id,
+                            class::LAUNCH_BOUND,
+                            ev::launch_aborted(
+                                &launch_intent_ref(&run_id, run_plan_id, ps.next_attempt_no),
+                                run_plan_id,
+                                ps.next_attempt_no,
+                                &released,
+                            ),
+                        )?],
+                    )?;
+                }
+            }
+        }
+        Ok(released)
+    }
+
+    /// `launch_binding(run_plan_id) → Option<LaunchBinding>` — the exposed
+    /// admitted binding contract (R5.6): consumers (the R5.7 adoption
+    /// path) validate run/plan/attempt/root against this durable record.
+    /// A `phase` other than `"bound"` is not a usable binding — the
+    /// funding slice and subject root are unbound until publish, so root
+    /// use before binding has nothing to act on and refuses downstream.
+    pub fn launch_binding(
+        &self,
+        run_plan_id: &str,
+    ) -> Result<Option<LaunchBinding>, ExperimentError> {
+        let view = self.project()?;
+        Ok(view
+            .plans
+            .get(run_plan_id)
+            .and_then(|ps| ps.launch_binding.clone()))
     }
 
     // ── settle ───────────────────────────────────────────────────────────
@@ -2535,6 +2921,75 @@ impl<'a> ExperimentEngine<'a> {
             });
         }
         Ok(())
+    }
+
+    /// The durability-fault seam — an `Err` at a [`LaunchPhase`] boundary
+    /// aborts the launch as an injected kill (nothing after lands).
+    fn fault(&self, phase: LaunchPhase) -> Result<(), ExperimentError> {
+        if let Some(hook) = &self.ctx.launch_fault_hook {
+            hook(phase).map_err(|detail| {
+                ExperimentError::Ledger(LedgerError::Durability {
+                    detail: format!("injected launch kill at {phase:?}: {detail}"),
+                })
+            })?;
+        }
+        Ok(())
+    }
+
+    /// The plan's live funding slices — uncompleted `slice` children scoped
+    /// `{experiment, run_plan_id}` on the experiment run's account
+    /// (durable-derived, S-1; the adopt-or-refuse set `launch`/`abort`
+    /// resolve).
+    fn live_plan_slices(
+        &mut self,
+        run_id: &str,
+        run_plan_id: &str,
+    ) -> Result<Vec<String>, ExperimentError> {
+        let acct = Account::open(&mut *self.store, run_id)?;
+        Ok(acct
+            .tree
+            .nodes
+            .values()
+            .filter(|ns| {
+                ns.node.scope.kind == BudgetScopeKind::Experiment
+                    && ns.node.scope.target == run_plan_id
+                    && ns.node.mode == BudgetMode::Slice
+                    && !ns.node.completed
+            })
+            .map(|ns| ns.node.budget_id.clone())
+            .collect())
+    }
+
+    /// The subject run's parentless `control.budget.allocated` row —
+    /// `(budget_id, spec, scope)` — or `None` when the run has no root
+    /// budget yet.
+    fn subject_root(&self, run_id: &str) -> Result<Option<(String, Json, Json)>, ExperimentError> {
+        for e in self.store.events(run_id).map_err(ExperimentError::Ledger)? {
+            if e.class == "control.budget.allocated" && e.payload.get("parent").is_none() {
+                let id = e
+                    .payload
+                    .get("budget_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                return Ok(Some((
+                    id,
+                    e.payload.get("spec").cloned().unwrap_or(Json::Null),
+                    e.payload.get("scope").cloned().unwrap_or(Json::Null),
+                )));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Whether the subject run already carries a `class` row.
+    fn subject_has(&self, run_id: &str, class_name: &str) -> Result<bool, ExperimentError> {
+        Ok(self
+            .store
+            .events(run_id)
+            .map_err(ExperimentError::Ledger)?
+            .iter()
+            .any(|e| e.class == class_name))
     }
 
     /// Reconcile-before-dispatch — append `claim_expired` for every recorded
