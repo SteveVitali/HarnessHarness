@@ -367,6 +367,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 179 | `179_R5.10__seal.md` | Round 5 | ticket | Seal submission and persist actual created-to-finished time | — |
 | 179 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 180 | `180_R5.11__oracle.md` | Round 5 | ticket | Execute and retain isolated instrument oracle attempts | — |
+| 180 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 181 | `181_R5.12__reserve.md` | Round 5 | ticket | Atomic whole-vector Account cap admission | — |
 | 182 | `182_R5.13__physical.md` | Round 5 | ticket | Deduplicated incurred-use and unknown-exposure views | — |
 | 183 | `183_R5.14__pending.md` | Round 5 | ticket | Required-grade pending across every scored consumer | — |
