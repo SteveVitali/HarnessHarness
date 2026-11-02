@@ -1771,6 +1771,14 @@ fn ac2_cli_ledger_range_byte_identical_to_the_boundary_sequence() {
         "lease_id",
         "decision_id",
         "checkpoint_ref",
+        // R5.10 — the `submission_seal` member's event-id refs are
+        // allocated ids, mechanical like `*_event_id`.
+        "access_event_ref",
+        "end_state_event_ref",
+        "usage_event_ref",
+        // …and `end_state_ref` — a content address whose preimage
+        // embeds the per-run env handle/at_seq (see `snapshot_ref`).
+        "end_state_ref",
         "containment_report_ref",
         "drain_report_ref",
         // R5.10 — the seal's `snapshot_ref` content-addresses a
