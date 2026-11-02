@@ -241,6 +241,22 @@ impl EmbedService {
             rows.push(row);
         }
 
+        // R5.14b — a row whose `outcome.disposition` is the `grade_pending`
+        // admission state blocks every scored-success/completion
+        // interpretation: scored analysis over a pending row refuses
+        // (never a silent exclusion or downgrade — the same admitted
+        // `plan_disposition_at` read every consumer composes).
+        for r in &rows {
+            if r.outcome.disposition.as_deref() == Some("pending") {
+                return Err(EmbedError::Refused {
+                    reason: format!(
+                        "grade_pending: run {} has an unresolved required-grade admission",
+                        r.key.run_id
+                    ),
+                });
+            }
+        }
+
         // DF-CAP.2-2 — the arms resolve *after* the manifests load: the
         // enforcement view comes from the stamped `budget_enforcement`
         // the bound subject runs carry, not the record's claim.

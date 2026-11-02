@@ -4069,6 +4069,7 @@ fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
         cache_state: CacheState::ColdStart,
         comparable: true,
         outcome_class: OutcomeClass::Scored,
+        disposition: None,
         budget_consumed: [(DimensionId::ModelCalls, 5)].into_iter().collect(),
         veto_tripped: vec![],
         values: vec![MetricValue {
@@ -4509,6 +4510,7 @@ fn s34c_row(
             veto_tripped: vec![],
             finished_at: Some("2026-01-01T00:00:00.000Z".into()),
             wall_ms: Some(100),
+            disposition: None,
             activation_no: 1,
         },
         cells: vec![Cell {
@@ -4547,6 +4549,7 @@ fn s34c_row(
         },
         scoring: ScoringContext {
             validator_set: vec![],
+            experiment_run: None,
             overlay_runs: vec![],
             metric_registry_version: "test-registry".into(),
             pricing_ref: None,

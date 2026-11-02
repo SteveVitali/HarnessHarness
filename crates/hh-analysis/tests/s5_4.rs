@@ -205,6 +205,7 @@ fn row(arm: &str, task_id: &str, rep: u64, value: i64, metric: &str) -> ResultsR
             veto_tripped: vec![],
             finished_at: Some("2026-01-01T00:00:00.000Z".into()),
             wall_ms: Some(100),
+            disposition: None,
             activation_no: 1,
         },
         cells: vec![Cell {
@@ -243,6 +244,7 @@ fn row(arm: &str, task_id: &str, rep: u64, value: i64, metric: &str) -> ResultsR
         },
         scoring: ScoringContext {
             validator_set: vec![],
+            experiment_run: None,
             overlay_runs: vec![],
             metric_registry_version: "test-registry".into(),
             pricing_ref: None,

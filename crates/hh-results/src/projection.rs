@@ -308,6 +308,99 @@ pub fn project_row(
         outcome.outcome_class = Some("oracle_failure".to_string());
     }
 
+    // ── required-grade admission read (R5.14b) ─────────────────────────
+    // `scoring.experiment_run` pins the owner's `plan_disposition_at` —
+    // every consumer composes the same read (§2.2 step-6 agreement;
+    // REQ-E-202/REQ-E-008), never a divergent predicate (X7). A pending
+    // read withholds the scored-success interpretation (`outcome_class`
+    // stays `None` — pending is an admission state, not an outcome
+    // class); a graded disposition restores the stop-derived class; an
+    // oracle_failure disposition settles `oracle_failure`. The
+    // experiment pin enters `watermark_set` — the row records exactly
+    // what it read.
+    let mut experiment_watermark: Option<(String, u64)> = None;
+    if let Some(exp) = &scoring.experiment_run {
+        let docs = docs.ok_or_else(|| ResultsError::DispositionUnresolved {
+            run_id: run_id.to_string(),
+            experiment_run_id: exp.run_id.clone(),
+            detail: "the required-grade admission read needs the LabDocs resolver".to_string(),
+        })?;
+        let ehead = store.head(&exp.run_id).map_err(ResultsError::from)?;
+        let eseq = exp.until_seq.unwrap_or(ehead.seq);
+        if eseq > ehead.seq {
+            return Err(ResultsError::RunNotDurable {
+                run_id: exp.run_id.clone(),
+                until_seq: eseq,
+                head: ehead.seq,
+            });
+        }
+        let eevents: Vec<EventEnvelope> = store
+            .envelopes(&exp.run_id)
+            .map_err(ResultsError::from)?
+            .iter()
+            .filter(|e| e.seq <= eseq)
+            .cloned()
+            .collect();
+        let eview = hharness_experiment::view::ExperimentView::fold(&eevents);
+        let ps = eview
+            .plans
+            .values()
+            .find(|p| {
+                p.attempts.iter().any(|a| a.run_id == run_id)
+                    || p.launch_binding.as_ref().map(|b| b.subject_run_id.as_str()) == Some(run_id)
+            })
+            .ok_or_else(|| ResultsError::DispositionUnresolved {
+                run_id: run_id.to_string(),
+                experiment_run_id: exp.run_id.clone(),
+                detail: "no run plan binds this subject on the pinned experiment run".to_string(),
+            })?;
+        let pins = hharness_experiment::disposition::DispositionPins {
+            experiment_until: exp.until_seq,
+            overlay_runs: scoring
+                .overlay_runs
+                .iter()
+                .map(|o| (o.run_id.clone(), o.until_seq))
+                .collect(),
+        };
+        let read = hharness_experiment::disposition::plan_disposition_at(
+            store,
+            docs,
+            &exp.run_id,
+            &ps.run_plan_id,
+            &pins,
+        )
+        .map_err(|e| ResultsError::DispositionUnresolved {
+            run_id: run_id.to_string(),
+            experiment_run_id: exp.run_id.clone(),
+            detail: format!("{}: {e}", e.code()),
+        })?;
+        experiment_watermark = Some((exp.run_id.clone(), eseq));
+        use hharness_eval::selection::PlanDisposition as PD;
+        if read.is_pending() {
+            // `grade_pending` — withhold the scored-success/completion
+            // interpretation; `status`/`stop_reason` stay facts.
+            outcome.outcome_class = None;
+            outcome.disposition = Some("pending".to_string());
+        } else {
+            match &read.disposition {
+                Some(PD::Graded { outcome_class, .. }) => {
+                    // The valid grade restores the stop-derived class —
+                    // `budget_exhausted` included (step 6).
+                    outcome.outcome_class = Some(outcome_class.as_str().to_string());
+                    outcome.disposition = Some("graded".to_string());
+                }
+                Some(PD::OracleFailure { .. }) => {
+                    outcome.outcome_class = Some("oracle_failure".to_string());
+                    outcome.disposition = Some("oracle_failure".to_string());
+                }
+                _ => {
+                    // The legacy read — the binding resolved `mode:"legacy"`;
+                    // the row is unchanged except the recorded pin.
+                }
+            }
+        }
+    }
+
     // ── cells — the total list (R-ROW-3) ───────────────────────────────
     let head_ref = |seq: u64, hash: &str| AuditRef {
         run_id: run_id.to_string(),
@@ -593,6 +686,9 @@ pub fn project_row(
     let mut watermark_set = WatermarkSet::new();
     watermark_set.pin(run_id, until);
     for (r, s) in &overlay_watermarks {
+        watermark_set.pin(r, *s);
+    }
+    if let Some((r, s)) = &experiment_watermark {
         watermark_set.pin(r, *s);
     }
 

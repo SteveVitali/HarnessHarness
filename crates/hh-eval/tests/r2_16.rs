@@ -86,6 +86,7 @@ fn run(arm: &str, task: &str, rep: u64, value: i64, metric_name: &str) -> EvalRu
         cache_state: CacheState::ColdStart,
         comparable: true,
         outcome_class: OutcomeClass::Scored,
+        disposition: None,
         budget_consumed: [(DimensionId::ModelCalls, 5)].into_iter().collect(),
         veto_tripped: vec![],
         values: vec![MetricValue {

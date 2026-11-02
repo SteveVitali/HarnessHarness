@@ -2078,7 +2078,7 @@
       "primary_file": "docs/tickets/183_R5.14__pending.md",
       "acceptance_anchor": "ac-r5-14-3",
       "contributors": [],
-      "status": "planned; no execution evidence",
+      "status": "met \u2014 engineered D/E evidence landed seq 183a R5.14b (2026-11-02)",
       "source_sha256": "e9989678357673ecef89928d16356f9ac0949af0f0d17132fe4a8438c466415c"
     },
     {
@@ -2211,7 +2211,8 @@
         "R5.11",
         "R5.13",
         "R5.14",
-        "R5.43"
+        "R5.43",
+        "R5.14b"
       ],
       "status": "planned; no execution evidence",
       "source_sha256": "caba42c69ba1277cd77a6ec0f1a136acb011501276fffde27d9eecb69c7f6b99"
@@ -2235,7 +2236,8 @@
         "R5.10",
         "R5.11",
         "R5.13",
-        "R5.14"
+        "R5.14",
+        "R5.14b"
       ],
       "status": "planned; no execution evidence",
       "source_sha256": "c61daea0985df7b1998daaf64873791bfa3757135129640c016a4cf90bc6d4c5"
@@ -2413,7 +2415,8 @@
         "R5.6",
         "R5.8",
         "R5.10",
-        "R5.14"
+        "R5.14",
+        "R5.14b"
       ],
       "status": "planned; no execution evidence",
       "source_sha256": "539baf470b980cd14e27b6272b3d62c1cbafd89f5b0505f530ce7b3d9e42c510"
@@ -2434,7 +2437,7 @@
       "primary_file": "docs/tickets/183_R5.14__pending.md",
       "acceptance_anchor": "ac-r5-14-3",
       "contributors": [],
-      "status": "planned; no execution evidence",
+      "status": "met \u2014 engineered D/E evidence landed seq 183a R5.14b (2026-11-02)",
       "source_sha256": "aff5d9714ee3453c720c07d4d2647e77ff5cc54edcbc3b2181b34a1120d62ca4"
     },
     {
@@ -2475,7 +2478,8 @@
         "R5.10",
         "R5.11",
         "R5.13",
-        "R5.14"
+        "R5.14",
+        "R5.14b"
       ],
       "status": "planned; no execution evidence",
       "source_sha256": "ac6cde92a704f87947f64788dcde2d6eb9be451c68ecfc03b8693cc7431c704d"

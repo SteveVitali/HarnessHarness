@@ -83,6 +83,7 @@ fn hosted_row() -> ResultsRow {
             veto_tripped: vec![],
             finished_at: Some("2026-01-01T00:00:00.000Z".into()),
             wall_ms: Some(100),
+            disposition: None,
             activation_no: 1,
         },
         cells: vec![Cell {
@@ -121,6 +122,7 @@ fn hosted_row() -> ResultsRow {
         },
         scoring: ScoringContext {
             validator_set: vec![],
+            experiment_run: None,
             overlay_runs: vec![],
             metric_registry_version: "test-registry".into(),
             pricing_ref: None,

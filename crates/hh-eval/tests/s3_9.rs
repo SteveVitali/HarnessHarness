@@ -101,6 +101,7 @@ fn run(id: &str, veto_tripped: Vec<String>, facts: LedgerFacts) -> EvalRun {
         cache_state: CacheState::ColdStart,
         comparable: true,
         outcome_class: OutcomeClass::Scored,
+        disposition: None,
         budget_consumed: [(DimensionId::ModelCalls, 5)].into_iter().collect(),
         veto_tripped,
         values: vec![MetricValue {

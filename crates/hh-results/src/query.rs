@@ -23,6 +23,10 @@ pub enum Field {
     ParticipantClass,
     /// `outcome.outcome_class`.
     OutcomeClass,
+    /// `outcome.disposition` — the admitted `plan_disposition_at` kind
+    /// (`pending | graded | oracle_failure`; R5.14b). Pending rows carry
+    /// no `outcome_class` — this is the filter that names them.
+    Disposition,
     /// `coordinates.task.task_id`.
     TaskId,
     /// `coordinates.task.suite_id`.
@@ -53,6 +57,7 @@ impl Field {
             "configuration_version_id" => Field::ConfigurationVersionId,
             "participant_class" => Field::ParticipantClass,
             "outcome_class" => Field::OutcomeClass,
+            "disposition" => Field::Disposition,
             "task_id" => Field::TaskId,
             "suite_id" => Field::SuiteId,
             "split_label" => Field::SplitLabel,
@@ -113,6 +118,7 @@ impl QuerySpec {
                 Field::ConfigurationVersionId => row.coordinates.configuration_version_id == *v,
                 Field::ParticipantClass => row.coordinates.participant_class == *v,
                 Field::OutcomeClass => row.outcome.outcome_class.as_deref() == Some(v.as_str()),
+                Field::Disposition => row.outcome.disposition.as_deref() == Some(v.as_str()),
                 Field::TaskId => {
                     row.coordinates
                         .task
