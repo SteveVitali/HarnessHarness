@@ -1,6 +1,6 @@
 # GATE-G10 readout — accept the narrow offline analysis evidence
 
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 *Append-only. Each operator reading is a new dated block; never edit an earlier one.*
 
@@ -34,3 +34,8 @@ GATE-G10 orientation verified at presentation (reads this coordinator session):
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+Operator decision (verbatim, received 2026-11-02T23:43:27Z via Devin Desktop chat): "1. passed. 2 defer. 3. can confirm. Please use your best judgement and continue" — PASSED the admitted, tested EX-02 offline path as engineered/fixture evidence only; DF-R5.17-1 disposition = defer to R5.40 as recorded (honest exploratory label carried, defect recorded); agent-drafted block sha256:6d8d0446e7a0aa03063aa4cd4854fa971f738ae2d5febcd791e744db50a4db79 confirmed ("can confirm" to its presented prefix). Scoped items: EX-02 estimator + routed persisted-report path + independent battery only; S1/S3, live tasks, parity, confirmation, and any public scientific claim remain unauthorized; numerical/study validation stays owed to GATE-G10's successors (R5.40) per the GATE-G9 disposition. Expiry/void: not separately stated — carried per contract posture (materially changed admitted semantics or operator cancellation). Carried unmet predicates: R/P + actual-execution E legs remain owed; DF-R5.1-1 stays OPEN (intentional GATE-G17 row).
+GATE DECISIONS row: 2026-11-02 | GATE-G10
+Signed by: the operator. Recorded by devin-desktop/swe-2-high, which does not sign.
+
