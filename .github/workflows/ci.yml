@@ -68,8 +68,23 @@ jobs:
           gitleaks version
       # CC1 — the one committed config, shared with live-verify.sh's
       # staged gate; the test-fixture allowlists live there only.
-      - name: Full-history scan (.gitleaks.toml)
-        run: gitleaks git --redact --log-opts=--all -c .gitleaks.toml .
+      # `--all` walks every branch, so this head's own .gitleaks.toml alone
+      # is the wrong judge: a head forked before an allowlist fix landed on
+      # the default branch would go red on another branch's history. The
+      # scan therefore uses the default branch's .gitleaks.toml (at the
+      # origin ref the fetch-depth: 0 checkout above just fetched, i.e. the
+      # same snapshot `--all` walks) unioned with this head's: default-branch
+      # rules + head rules, default-branch allowlists + head allowlists.
+      # Nothing scanned is dropped; a head that allowlists its own content
+      # still passes.
+      - name: Full-history scan (default-branch ∪ head .gitleaks.toml)
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git show "refs/remotes/origin/$DEFAULT_BRANCH:.gitleaks.toml" > "$RUNNER_TEMP/gitleaks-default.toml"
+          python3 scripts/ci/gitleaks-union-config.py "$RUNNER_TEMP/gitleaks-default.toml" .gitleaks.toml > "$RUNNER_TEMP/gitleaks-union.toml"
+          gitleaks git --redact --log-opts=--all -c "$RUNNER_TEMP/gitleaks-union.toml" .
+      # The PR's own commits stay judged by the PR's own config.
       - name: PR diff scan
         if: github.event_name == 'pull_request'
         run: gitleaks git --redact -c .gitleaks.toml --log-opts="${{ github.event.pull_request.base.sha }}..HEAD" .
