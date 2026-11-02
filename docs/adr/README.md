@@ -181,3 +181,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0389](ADR-0389-r5.10-submission-seal-created-origin-m1-landing.md) | R5.10 submission seal and created-origin M1 — landing decisions | R5.10 | Accepted |
 | [ADR-0390](ADR-0390-r5.11-instrument-oracle-attempt-landing.md) | R5.11 instrument oracle attempt — landing decisions | R5.11 | Accepted |
 | [ADR-0391](ADR-0391-r5.12-whole-vector-reserve-landing.md) | R5.12 whole-vector Account reserve — landing decisions | R5.12 | Accepted |
+| [ADR-0392](ADR-0392-r5.13-physical-use-fold-landing.md) | R5.13 deduplicated physical-use fold — landing decisions | R5.13 | Accepted |
