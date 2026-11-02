@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.7
-lastCompleted:   R5.6
+nextTicket:      R5.8
+lastCompleted:   R5.7
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.6
+chainTip:        codex/harnessharness-evidence-r5.7
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T02:55:00Z
+updatedAt:       2026-11-02T05:44:18Z
 ```
 
 ## OPEN FINDINGS
@@ -1010,4 +1010,4 @@ updatedAt:       2026-11-02T02:55:00Z
 
 - 2026-11-02 · R5.6 done — branch `codex/harnessharness-evidence-r5.6` · PR #214 · base `codex/harnessharness-evidence-r5.5` (@f089b2a). Landed the admitted PADR-R5-1 `launch_bound` recoverable launch on the experiment/budget seam: phased `measurement.experiment.launch_bound{intent|bound|aborted}` (class-table + P7 home reused), deterministic `lbi-/subj-<idp>` ids + `open_run_with_id`/`has_run` link recovery (S4.6 precedent), adopt-or-refuse funding slice, subject `pool` root distinct from funding slice (REQ-E-207), atomic publish-before-arm, `abort_launch` owned idempotent release, `launch_binding` exposed contract, `LaunchPhase` fault seam; embed launch response +2 members; ADR-0385. **Verify:** fmt OK · `cargo test -p hharness-experiment --test engine` 55/55 (8 new: all 5 boundary kills→one binding, conflicting-intent/manifest, orphan slice, duplicate publication, stale claim, abort-of-published, contract members) · `-p hharness-experiment -p hharness-ledger -p hharness-embed` all pass · guard PASS DISPATCH R5.6 pre+post · living-docs 418 · bm-tools OK · revisit-triggers in sync · check-build-memory 0 viol/8 scoped warnings. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,284 changed source/test lines vs ≤850 flag — accepted as recorded Deviation per contract's Amended 2026-11-02 ruling (d6b574ac). · chainTip → codex/harnessharness-evidence-r5.6 · next → R5.7 · ci: pass #214@e8cf179 (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41379137608) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-02T05:31:33Z · **R5.7 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,124, ~1.5×; context within estimate). Scoped fresh-context review verdict: **AMEND** — single atomic `adopt_subject*` unit (PADR-R5-1 A.2 owner seam hh-embed arming/drive); proposed leg cut has no documented seam and would land AC-2 refusals unexercised (unenforced intermediate). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6 precedent); dated note on `176_R5.7__adopt.md`; manifest note; `runs/R5.7.md` ruling (count corrected to 1,124). Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
-
+- 2026-11-02 · R5.7 done — branch `codex/harnessharness-evidence-r5.7` · PR #215 · base `codex/harnessharness-evidence-r5.6` (@7959c8e). Landed the admitted PADR-R5-1 `adopt_subject*` owner seam (hh-embed arming/drive; REQ-E-201 + REQ-C-103 primary): in-process `EmbedService::adopt_subject(AdoptBinding, env, ports)` — durable `launch_binding` re-read read-only via `ExperimentView::fold`; run/plan/attempt/config/environment/root/generation validation against the subject `bound` row + manifest; `renew` proves the launch's own writer (one writer, never a second); env provisioned once/durable-reused; `lifecycle.session.attached{mode:adopt}` payload extension; arm_driver|arm_resume_driver legs; typed `adopt_*` refusals pre-mutation; ADR-0386 (8 landing decisions). **Verify:** fmt OK · `cargo test -p hharness-embed` all pass incl r5_7 4/4 · guard PASS DISPATCH R5.7 pre+post · bm-tools OK · revisit-triggers in sync · check-build-memory 0 viol/8 scoped warnings. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,124 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling (4517d185). · chainTip → codex/harnessharness-evidence-r5.7 · next → R5.8 · ci: pass #215@db6afa5 (cargo-deny (licenses · advisories · bans · sources) 41394644709; gitleaks (full history + PR diff) 41394644709; build · test · fmt · drift (ubuntu-latest) 41394644709; build · test · fmt · drift (macos-latest) 41394644709) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
