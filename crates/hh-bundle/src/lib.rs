@@ -40,6 +40,7 @@ pub mod lifecycle;
 pub mod manifest;
 pub mod profile;
 pub mod repro;
+pub mod rights;
 pub mod runrefs;
 pub mod scoped;
 pub mod trust;
@@ -77,6 +78,11 @@ pub use profile::{
 pub use repro::{
     budget_limits_equal, fingerprint_drift, snapshot_fingerprint, ReproOutcome, ReproReport,
     REPRO_SCHEMA,
+};
+pub use rights::{
+    admit_handoff, sanitize_replace, Departure, HandoffPlan, HandoffReport, HandoffScope,
+    RightsDecision, RightsRecord, SanitizeTransform, SanitizedItem, HANDOFF_REPORT_SCHEMA,
+    RIGHTS_RECORD_SCHEMA, SUPERSESSION_SCHEMA, TOMBSTONE_SCHEMA,
 };
 pub use runrefs::{declared_run_refs, manifest_refs, run_refs_index};
 pub use scoped::{
