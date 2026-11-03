@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.40
-lastCompleted:   R5.39
+nextTicket:      R5.41
+lastCompleted:   R5.40
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.39
+chainTip:         codex/harnessharness-evidence-r5.40
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T16:37:56Z
+updatedAt:        2026-11-03T19:06:42Z
 ```
 
 ## OPEN FINDINGS
@@ -1103,3 +1103,4 @@ updatedAt:        2026-11-03T16:37:56Z
 - 2026-11-03T16:37:56Z · R5.39 done — branch codex/harnessharness-evidence-r5.39 · PR #253 · base codex/harnessharness-evidence-r5.38 · §4 Packet-E/M-F parity admission (ADR-0417): `parity_admission.rs` records-in validator — `authentic_first_attempt` H/O pair manifest (actual run/verdict/replay identities, equal T/R/weights, distinct subjects, adapter >=3/S3 >=5 floors, first attempts) + signed pre-data dimension→metric/estimand/population/range/unit/margin/applicability/evidence map + both-policy or predeclared identical-bridge; closed `AdmissionEvidence` union (5 known-inadequate shapes + Other → InauthenticEvidence), `AdmissionError` 30 legs, `TransferDecl` refusals, seeds recorded never required; routed kind `parity_admission` (margins only `PreRegistration`; `AnalysisError::ParityAdmission`; `record_kind`; `MetadataOnly`; `IntervalMethod::ParityAdmission` → cell `estimator_undefined`); admitted pair ids feed `directional_kl_equivalence` unchanged. **Verify:** r5_39 12/12 · eval+analysis+ontology all green · fmt OK · fails-without compile-red at 73171738 · guard PASS DISPATCH R5.39 pre / DISPATCH R5.40 post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 201 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0417 · **Deviations:** 2,527 changed source/test lines vs ≤850 flag (~3.0× — ties the R5.29/R5.38 high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** five primary ids (D-004/301/302/303/308) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.47/R5.49) · chainTip → codex/harnessharness-evidence-r5.39 · next → R5.40 · ci: pass #253@3c9d256 (all 4 checks 41673526036; first read red — ubuntu rustdoc private-link, repaired 3c9d256a; stack #252 #251 #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T17:09:16Z · **R5.40 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,745 numstat, ~2.3×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-G :131 one scope sentence (frozen numerical validation protocol; no contingency); repair-vs-battery not a legal seam — GATE-G10 bound DF-R5.17-1 to this ticket verbatim and the battery's beta{2,2} prior-sensitivity arms are the repair's spec'd verification (battery leg alone still ~2.0× over); generator-vs-report is one closed pipeline; impl-vs-battery rejected. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.39 precedent); dated note on `210_R5.40__numerics.md`; manifest row-210 note; review record `planning/2026-11-03_R5.40-split-review.md`; `runs/R5.40.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03T19:06:42Z · R5.40 done — branch codex/harnessharness-evidence-r5.40 · PR #254 · base codex/harnessharness-evidence-r5.39 · M-G composed numerical validation + DF-R5.17-1 prior repair (ADR-0418): `decl.prior` parameterizes the conjugate update (mean `(c+a)/(n+a+b)`, draws `beta_inv_ppm(u, c+a, n−c+b)`; beta{1,1} byte-identical); shared-core factor — sim headline is the estimator's interval bit-identical by construction; `sim_battery/1` frozen — 42 cells S.4-complete, ≥2,000 declared/cell, derivable seeds, refusal census, diagnostic coverage, widths, sign-flip/type-I, binomial MC error, armed prior sensitivity, all-or-nothing rollup; ≤4-thread offline executor; executed record `reports/2026-11-03-r5.40-sim-battery.json` rollup `complete` (84,000 datasets, 5,916s wall vs ≤8h; first in-flight run died pre-write — deterministic protocol re-executed). **Verify:** r5_40 11/11 · eval+analysis all green · fmt OK · fails-without at base (compile-red + 142_857 defect at f5f9ae1e) · independent SplitMix64 beta{2,2} sampler ≤20_000 ppm · routed persisted `analysis_report_body/1` · guard PASS DISPATCH R5.40 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 202 · **Deferrals:** opened none, closed DF-R5.17-1 (DONE per its recipe) — carried DF-R5.1-1 · **ADRs:** ADR-0418 · **Deviations:** 1,745 changed source/test lines vs ≤750 flag (~2.3×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-109/D-310/E-209/H-010) + D-008 contributing-only — R/P + actual-execution owed R5.47/R5.49 · chainTip → codex/harnessharness-evidence-r5.40 · next → R5.41 · ci: pass #254@6482b9a (cargo-deny 41697590305; gitleaks 41697590305; build · test · fmt · drift ubuntu 41697590305; macos 41697590305; stack #253…#239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
