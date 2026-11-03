@@ -177,3 +177,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0385](ADR-0385-r5.6-recoverable-launch-binding-landing.md) | R5.6 recoverable launch — `launch_bound` landing decisions | R5.6 | Accepted |
 | [ADR-0386](ADR-0386-r5.7-adopt-subject-owner-seam-landing.md) | R5.7 adopt-subject — `adopt_subject*` owner-seam landing decisions | R5.7 | Accepted |
 | [ADR-0387](ADR-0387-r5.8-dispatcher-durability-bridge-landing.md) | R5.8 Dispatcher durability bridge — `DurableEffectRef` landing decisions | R5.8 | Accepted |
+| [ADR-0388](ADR-0388-r5.9-first-valid-grade-selection-landing.md) | R5.9 shared first-valid grade selection and immutable revisions — landing decisions | R5.9 | Accepted |
