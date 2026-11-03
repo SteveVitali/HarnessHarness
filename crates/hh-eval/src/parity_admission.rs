@@ -357,7 +357,7 @@ pub struct ParityAdmissionDecl {
     /// The actual source/verifier/rights pins.
     pub pins: SourcePins,
     /// The declared downstream use — headline/CRN/R2 spellings
-    /// refuse ([`FORBIDDEN_USES`]).
+    /// refuse (`FORBIDDEN_USES`).
     pub use_as: Option<String>,
 }
 
