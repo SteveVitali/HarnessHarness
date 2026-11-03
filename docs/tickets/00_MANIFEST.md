@@ -429,6 +429,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 209 | `209_R5.39__parity-admission.md` | Round 5 | ticket | Authentic paired records and policy applicability | — |
 | 209 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; one-function admit predicate; ~3.0× ties high-water) |
 | 210 | `210_R5.40__numerics.md` | Round 5 | ticket | Composed numerical validation and independent method evidence | — |
+| 210 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; M-G keep-together; DF-R5.17-1 discharge bound to this ticket) |
 | 211 | `211_R5.41__protocol.md` | Round 5 | ticket | Deterministic central protocol materialization | — |
 | 212 | `212_R5.42__quote.md` | Round 5 | ticket | Per-stage readiness and full exposure quote | — |
 | 213 | `213_HUMAN-H8__inputs.md` | Round 5 | human | Bind actual backend, inputs, rights and stage resources | — |
