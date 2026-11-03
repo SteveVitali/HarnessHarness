@@ -222,6 +222,10 @@ pub fn cell_interval(
             // the directional-KL bound is contrast-level, never a
             // per-cell interval).
             IntervalMethod::KlDirectional => None,
+            // cell reports `n/a{estimator_undefined}` (R5.39; Packet E:
+            // parity admission is manifest-level, never a per-cell
+            // interval).
+            IntervalMethod::ParityAdmission => None,
         }
     };
     // Rate methods need (c, n); value methods need per-task values. A method

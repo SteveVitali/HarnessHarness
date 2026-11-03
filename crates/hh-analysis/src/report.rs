@@ -113,6 +113,7 @@ pub(crate) fn record_kind(spec_kind: &str) -> &'static str {
         "finite_manifest_contrast" => "finite_manifest_contrast",
         "task_mixture_sensitivity" => "task_mixture_sensitivity",
         "directional_kl_equivalence" => "directional_kl_equivalence",
+        "parity_admission" => "parity_admission",
         _ => "custom",
     }
 }

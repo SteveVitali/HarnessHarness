@@ -482,6 +482,20 @@ pub fn analyze(
             },
         ));
     }
+    // R5.39 metadata-only gate (S.5/§9.2, same rule): the admitted
+    // parity-admission method declared on a kind that does not
+    // compute it fails — never a silent decoration.
+    if matches!(
+        spec.estimator_selection.method,
+        hharness_ontology::eval::IntervalMethod::ParityAdmission
+    ) && spec.kind != hharness_eval::parity_admission::KIND
+    {
+        return Err(AnalysisError::ParityAdmission(
+            hharness_eval::parity_admission::AdmissionError::MetadataOnly {
+                kind: spec.kind.clone(),
+            },
+        ));
+    }
     let mut summaries = Vec::new();
     let mut comparisons: Vec<ComparisonReport> = Vec::new();
     let mut contrasts: Vec<Json> = Vec::new();
@@ -2099,6 +2113,282 @@ pub fn analyze(
                 &margins,
             )?;
             sections.push((kl::KIND, out.to_json()));
+        }
+        hharness_eval::parity_admission::KIND => {
+            // R5.39 — the GATE-G9-admitted Packet E (PADR-R5-5*):
+            // authentic paired records and policy applicability.
+            // Validates *supplied* evidence (authentic first-attempt
+            // H/O manifest + signed pre-data dimension map + both-
+            // policy applicability or predeclared identical bridge);
+            // it never manufactures authentic runs. Margins come
+            // only from the pre-registration
+            // (`benefits::registered_margins` — never the caller).
+            use hharness_eval::parity_admission as pa;
+            if !matches!(
+                spec.estimator_selection.method,
+                hharness_ontology::eval::IntervalMethod::ParityAdmission
+            ) {
+                return Err(AnalysisError::ParityAdmission(
+                    pa::AdmissionError::UnknownMethod {
+                        declared: spec
+                            .estimator_selection
+                            .method
+                            .to_json()
+                            .to_canonical_string(),
+                    },
+                ));
+            }
+            let prereg = input
+                .pre_registration
+                .ok_or_else(|| AnalysisError::MissingSpecRef {
+                    kind: format!("{} (pre_registration margins)", pa::KIND),
+                })?;
+            let margins = hharness_eval::benefits::registered_margins(prereg).map_err(|e| {
+                AnalysisError::ParityAdmission(pa::AdmissionError::MarginAuthority {
+                    detail: format!("{e}"),
+                })
+            })?;
+            let str_at = |j: &Json, member: &str| -> String {
+                j.get(member)
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let int_at = |j: &Json, member: &str| -> Result<i64, AnalysisError> {
+                j.get(member)
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| AnalysisError::BadSpec {
+                        member: member.into(),
+                        detail: "expected integer".into(),
+                    })
+            };
+            let opt_int =
+                |j: &Json, member: &str| -> Option<i64> { j.get(member).and_then(Json::as_int) };
+            let opt_str = |j: &Json, member: &str| -> Option<String> {
+                j.get(member).and_then(Json::as_str).map(str::to_string)
+            };
+            let str_vec = |j: &Json, member: &str| -> Vec<String> {
+                match j.get(member) {
+                    Some(Json::Arr(a)) => a
+                        .iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            };
+            let opt_range = |j: &Json, member: &str| -> Result<Option<(i64, i64)>, AnalysisError> {
+                match j.get(member) {
+                    None | Some(Json::Null) => Ok(None),
+                    Some(Json::Arr(a)) if a.len() == 2 => Ok(Some((
+                        a[0].as_int().ok_or_else(|| AnalysisError::BadSpec {
+                            member: member.into(),
+                            detail: "range bound must be integer".into(),
+                        })?,
+                        a[1].as_int().ok_or_else(|| AnalysisError::BadSpec {
+                            member: member.into(),
+                            detail: "range bound must be integer".into(),
+                        })?,
+                    ))),
+                    Some(_) => Err(AnalysisError::BadSpec {
+                        member: member.into(),
+                        detail: "range must be [lo, hi] integers".into(),
+                    }),
+                }
+            };
+            let evidence_json = filters
+                .get("evidence")
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.filters.evidence".into(),
+                    detail: "parity_admission requires declared evidence".into(),
+                })?;
+            let evidence = match str_at(evidence_json, "shape").as_str() {
+                "authentic_first_attempt" => {
+                    let m =
+                        evidence_json
+                            .get("manifest")
+                            .ok_or_else(|| AnalysisError::BadSpec {
+                                member: "evidence.manifest".into(),
+                                detail: "authentic_first_attempt requires a manifest".into(),
+                            })?;
+                    let mut pairs = Vec::new();
+                    if let Some(Json::Arr(ps)) = m.get("pairs") {
+                        for p in ps {
+                            pairs.push(pa::ManifestPair {
+                                task_id: str_at(p, "task_id"),
+                                repeat: int_at(p, "repeat")?.try_into().map_err(|_| {
+                                    AnalysisError::BadSpec {
+                                        member: "pairs[].repeat".into(),
+                                        detail: "repeat must be a non-negative integer".into(),
+                                    }
+                                })?,
+                                pair_id: str_at(p, "pair_id"),
+                                subject: str_at(p, "subject"),
+                                phase: str_at(p, "phase"),
+                                stratum: str_at(p, "stratum"),
+                                policy: str_at(p, "policy"),
+                                h_run_ref: str_at(p, "h_run_ref"),
+                                o_run_ref: str_at(p, "o_run_ref"),
+                                h_verdict_ref: str_at(p, "h_verdict_ref"),
+                                o_verdict_ref: str_at(p, "o_verdict_ref"),
+                                replay_ref: opt_str(p, "replay_ref"),
+                                attempt: int_at(p, "attempt")?.try_into().map_err(|_| {
+                                    AnalysisError::BadSpec {
+                                        member: "pairs[].attempt".into(),
+                                        detail: "attempt must be a positive integer".into(),
+                                    }
+                                })?,
+                                seed_requested: opt_int(p, "seed_requested"),
+                                seed_honoured: opt_int(p, "seed_honoured"),
+                                h: opt_int(p, "h"),
+                                o: opt_int(p, "o"),
+                            });
+                        }
+                    }
+                    pa::AdmissionEvidence::AuthenticFirstAttempt(pa::PairManifest {
+                        tasks: int_at(m, "tasks")?.try_into().map_err(|_| {
+                            AnalysisError::BadSpec {
+                                member: "manifest.tasks".into(),
+                                detail: "tasks must be a positive integer".into(),
+                            }
+                        })?,
+                        repeats: int_at(m, "repeats")?.try_into().map_err(|_| {
+                            AnalysisError::BadSpec {
+                                member: "manifest.repeats".into(),
+                                detail: "repeats must be a positive integer".into(),
+                            }
+                        })?,
+                        weights: opt_str(m, "weights"),
+                        phase: str_at(m, "phase"),
+                        stratum: str_at(m, "stratum"),
+                        dependence: opt_str(m, "dependence"),
+                        independence_rationale_ref: str_at(m, "independence_rationale_ref"),
+                        pairs,
+                    })
+                }
+                "recorded_model_io" => pa::AdmissionEvidence::RecordedModelIo {
+                    corpus_ref: str_at(evidence_json, "corpus_ref"),
+                },
+                "artifact_benefit_wrapper" => pa::AdmissionEvidence::ArtifactBenefitWrapper {
+                    report_ref: str_at(evidence_json, "report_ref"),
+                },
+                "model_snapshot_maps" => pa::AdmissionEvidence::ModelSnapshotMaps {
+                    h_map_ref: str_at(evidence_json, "h_map_ref"),
+                    o_map_ref: str_at(evidence_json, "o_map_ref"),
+                },
+                "oracle_transport_equality" => pa::AdmissionEvidence::OracleTransportEquality {
+                    transport_ref: str_at(evidence_json, "transport_ref"),
+                },
+                "seed_presence" => pa::AdmissionEvidence::SeedPresence {
+                    seed_refs: str_vec(evidence_json, "seed_refs"),
+                },
+                other => pa::AdmissionEvidence::Other(other.to_string()),
+            };
+            let dimension_map = match filters.get("dimension_map") {
+                None | Some(Json::Null) => None,
+                Some(d) => {
+                    let mut entries = Vec::new();
+                    if let Some(Json::Arr(es)) = d.get("entries") {
+                        for e in es {
+                            entries.push(pa::DimensionEntry {
+                                dimension: str_at(e, "dimension"),
+                                metric_ref: str_at(e, "metric_ref"),
+                                estimand: str_at(e, "estimand"),
+                                estimand_kind: str_at(e, "estimand_kind"),
+                                population: str_at(e, "population"),
+                                range: opt_range(e, "range")?,
+                                unit: str_at(e, "unit"),
+                                margin_ref: str_at(e, "margin_ref"),
+                                applicability: str_at(e, "applicability"),
+                                inapplicable_reason: opt_str(e, "inapplicable_reason"),
+                                evidence_ref: str_at(e, "evidence_ref"),
+                            });
+                        }
+                    }
+                    Some(pa::DimensionMap {
+                        signature_ref: str_at(d, "signature_ref"),
+                        map_seq: int_at(d, "map_seq")?.try_into().map_err(|_| {
+                            AnalysisError::BadSpec {
+                                member: "dimension_map.map_seq".into(),
+                                detail: "map_seq must be a non-negative integer".into(),
+                            }
+                        })?,
+                        first_outcome_seq: int_at(d, "first_outcome_seq")?.try_into().map_err(
+                            |_| AnalysisError::BadSpec {
+                                member: "dimension_map.first_outcome_seq".into(),
+                                detail: "first_outcome_seq must be a non-negative integer".into(),
+                            },
+                        )?,
+                        required: str_vec(d, "required"),
+                        entries,
+                    })
+                }
+            };
+            let applicability_json =
+                filters
+                    .get("applicability")
+                    .ok_or_else(|| AnalysisError::BadSpec {
+                        member: "query.filters.applicability".into(),
+                        detail: "parity_admission requires declared applicability".into(),
+                    })?;
+            let applicability = match str_at(applicability_json, "mode").as_str() {
+                "both_policies" => {
+                    let mut evidence = Vec::new();
+                    if let Some(Json::Arr(es)) = applicability_json.get("evidence") {
+                        for e in es {
+                            evidence.push(pa::PolicyEvidence {
+                                policy: str_at(e, "policy"),
+                                evidence_ref: str_at(e, "evidence_ref"),
+                            });
+                        }
+                    }
+                    pa::PolicyApplicability::BothPolicies { evidence }
+                }
+                "identical_bridge" => pa::PolicyApplicability::IdenticalBridge {
+                    bridge_ref: str_at(applicability_json, "bridge_ref"),
+                    bridge_seq: int_at(applicability_json, "bridge_seq")?
+                        .try_into()
+                        .map_err(|_| AnalysisError::BadSpec {
+                            member: "applicability.bridge_seq".into(),
+                            detail: "bridge_seq must be a non-negative integer".into(),
+                        })?,
+                },
+                "baseline_only" => pa::PolicyApplicability::BaselineOnly {
+                    covered: str_vec(applicability_json, "covered"),
+                },
+                other => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "applicability.mode".into(),
+                        detail: format!("unknown applicability mode {other}"),
+                    })
+                }
+            };
+            let transfer = match filters.get("transfer") {
+                None | Some(Json::Null) => None,
+                Some(t) => Some(pa::TransferDecl {
+                    claim: str_at(t, "claim"),
+                    bound_a_ppm: opt_int(t, "bound_a_ppm"),
+                    bound_b_ppm: opt_int(t, "bound_b_ppm"),
+                    kappa_ppm: opt_int(t, "kappa_ppm"),
+                    uncertainty: str_at(t, "uncertainty"),
+                }),
+            };
+            let pins_json = filters.get("pins").cloned().unwrap_or(Json::Null);
+            let decl = pa::ParityAdmissionDecl {
+                participant_ref: str_at(&filters, "participant_ref"),
+                policies: str_vec(&filters, "policies"),
+                evidence,
+                dimension_map,
+                applicability,
+                transfer,
+                pins: pa::SourcePins {
+                    source_ref: str_at(&pins_json, "source_ref"),
+                    verifier_ref: str_at(&pins_json, "verifier_ref"),
+                    rights_ref: str_at(&pins_json, "rights_ref"),
+                },
+                use_as: opt_str(&filters, "use_as"),
+            };
+            let out = pa::parity_admission(&decl, &margins)?;
+            sections.push((pa::KIND, out.to_json()));
         }
         other => {
             return Err(AnalysisError::KindNotImplemented {

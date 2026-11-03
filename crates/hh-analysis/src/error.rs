@@ -108,6 +108,14 @@ pub enum AnalysisError {
     /// authority/kind, unsupported use/level/method, metadata-only,
     /// malformed claim family; the same typed vocabulary).
     KlEquivalence(hharness_eval::directional_kl::KlEquivalenceError),
+    /// The R5.39 parity admission validator refused (`hharness_eval::
+    /// parity_admission` — inauthentic evidence shapes, missing/late
+    /// map, dropped/inapplicable required dimension, unavailable
+    /// estimand, unequal design/floors, pair identity/first-attempt/
+    /// replay/subject, dependence, policy scope/bridge, transfer
+    /// uncertainty/budget, unsupported claim/method, metadata-only,
+    /// margin authority; the same typed vocabulary).
+    ParityAdmission(hharness_eval::parity_admission::AdmissionError),
     /// The R5.25 §6.3 recompute verify stage refused (withheld/malformed
     /// input, nonfinite pin, wrong selector/price/weight/family/draw
     /// pin, unclosed frozen selection, declared-side drift; the same
@@ -161,6 +169,7 @@ impl std::fmt::Display for AnalysisError {
             AnalysisError::Contrast(e) => write!(f, "finite_manifest_contrast: {e}"),
             AnalysisError::TaskMixture(e) => write!(f, "task_mixture_sensitivity: {e}"),
             AnalysisError::KlEquivalence(e) => write!(f, "directional_kl_equivalence: {e}"),
+            AnalysisError::ParityAdmission(e) => write!(f, "parity_admission: {e}"),
             AnalysisError::Recompute(e) => write!(f, "recompute: {e}"),
         }
     }
@@ -207,6 +216,12 @@ impl From<hharness_eval::finite_manifest::ContrastError> for AnalysisError {
 impl From<hharness_eval::directional_kl::KlEquivalenceError> for AnalysisError {
     fn from(e: hharness_eval::directional_kl::KlEquivalenceError) -> AnalysisError {
         AnalysisError::KlEquivalence(e)
+    }
+}
+
+impl From<hharness_eval::parity_admission::AdmissionError> for AnalysisError {
+    fn from(e: hharness_eval::parity_admission::AdmissionError) -> AnalysisError {
+        AnalysisError::ParityAdmission(e)
     }
 }
 

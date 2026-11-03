@@ -612,6 +612,13 @@ pub enum IntervalMethod {
     /// `n/a{estimator_undefined}`; it computes only through the
     /// analysis kernel's `directional_kl_equivalence` kind (R5.38).
     KlDirectional,
+    /// `parity_admission` — the GATE-G9-admitted Packet E
+    /// (PADR-R5-5*) authentic paired-records admission's declared
+    /// form: a *manifest-level* admission check, never a per-cell
+    /// interval — a cell declaration naming it reports
+    /// `n/a{estimator_undefined}`; it computes only through the
+    /// analysis kernel's `parity_admission` kind (R5.39).
+    ParityAdmission,
 }
 
 impl IntervalMethod {
@@ -630,6 +637,7 @@ impl IntervalMethod {
                 Json::obj([("finite_manifest_contrast", Json::str(prior))])
             }
             IntervalMethod::KlDirectional => Json::str("kl_directional"),
+            IntervalMethod::ParityAdmission => Json::str("parity_admission"),
         }
     }
 
@@ -641,6 +649,7 @@ impl IntervalMethod {
                 "wilson" => Some(IntervalMethod::Wilson),
                 "bootstrap" => Some(IntervalMethod::Bootstrap),
                 "kl_directional" => Some(IntervalMethod::KlDirectional),
+                "parity_admission" => Some(IntervalMethod::ParityAdmission),
                 _ => None,
             },
             Json::Obj(m) if m.len() == 1 => {

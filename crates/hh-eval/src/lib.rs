@@ -39,6 +39,7 @@ pub mod loss;
 pub mod mechanism;
 pub mod opacity;
 pub mod oracle;
+pub mod parity_admission;
 pub mod population;
 pub mod runs;
 pub mod scorecard;

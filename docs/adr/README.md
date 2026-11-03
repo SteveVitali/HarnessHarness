@@ -206,3 +206,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0414](ADR-0414-r5.36-mechanism-joins-denominators-landing.md) | R5.36 §4.2 mechanism joins and versioned denominator definitions — landing decisions | R5.36 (Mechanism joins and versioned denominator definitions) | Accepted |
 | [ADR-0415](ADR-0415-r5.37-task-mixture-landing.md) | R5.37 task-mixture sensitivity, sharp-null families and tails — landing decisions | R5.37 (Task-mixture sensitivity, sharp-null families and tails) | Accepted |
 | [ADR-0416](ADR-0416-r5.38-directional-kl-landing.md) | R5.38 directional KL and bounded equivalence — landing decisions | R5.38 (Directional KL and correctly labelled bounded | Accepted |
+| [ADR-0417](ADR-0417-r5.39-parity-admission-landing.md) | R5.39 parity admission — landing decisions | R5.39 (Authentic paired records and policy | Accepted |
