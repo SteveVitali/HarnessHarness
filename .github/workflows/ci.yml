@@ -96,6 +96,7 @@ jobs:
           bash scripts/ci/test-live-verify-workflow.sh
           bash scripts/ci/test-check-living-docs.sh
           bash scripts/ci/test-check-examples.sh
+          bash scripts/ci/test-check-contributing.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -138,6 +139,16 @@ jobs:
         run: |
           bash scripts/check-examples.sh
           bash scripts/check-examples.sh --head
+
+      # ci-mode: both — reads committed contribution-route docs and forms
+      # (CONTRIBUTING.md lanes, the issue/PR templates) and resolves
+      # repo-relative links into docs/; a docs-only head that drifts a lane,
+      # a privacy or gating rule, or a form field must not take the fast
+      # path green.
+      - name: Contribution routes static check
+        run: |
+          bash scripts/check-contributing.sh
+          bash scripts/check-contributing.sh --head
 
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain

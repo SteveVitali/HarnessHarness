@@ -843,3 +843,48 @@ ticket never marks a deferred full-target predicate MET.
 > O-06). Owed: none beyond this ticket and the common closure audit
 > — full-target R/P predicates per the register; this note does not
 > mark REQ-F-106/107/108 fully satisfied.
+
+> Dated primary-owner note — 2026-11-03 (seq 201, R5.31): the §8.1
+> ordinary contribution and failure-report routes landed (ADR-0409).
+> REQ-A-205 (preserves R-2.12.2/R-2.11.* ABI/client/corpus limits):
+> N1 — the routes reuse CONTRIBUTING, the existing issue/PR forms and
+> the private security route only; no new platform, RPC, schema,
+> dependency or event class; `commands_real` binds every cited `hh`
+> command to the real `cli.rs` dispatch arms, never a second
+> interface. REQ-B-004 (preserves CONTRIBUTING/GOVERNANCE ordinary
+> PR and operator merge): N2 — `lanes`/`no_run`/`receipt`/`privacy`
+> check the separate no-run bug/setup and receipt lanes with their
+> field sets and the secrets/rights inspection; N3 — `verifyfixed`
+> pins the failed-receipt→candidate disposition (original preserved,
+> regression fails without, unable-to-reproduce ≠ fixed, distinct
+> verifier classes); N4 — `no_ritual`/`blocked`/`codeowners` keep
+> ordinary PRs free of the internal question register/build
+> ledger/manifest ritual while `* @SteveVitali` review and the
+> manifest-ticket conditional stay intact (the spec's
+> governance-preserving reconcile); N5 — `gated` keeps the optional
+> packaged component and scientific replication explicitly
+> unopened; N6 — `form_fields` mirrors the documented fields into
+> `bug_report.yml` (exit code/signal, dirty state, toolchain/
+> features/backend/prerequisites, receipt-or-loss, required
+> sanitization attestation) with `config.yml`'s private security
+> route kept. Evidence `scripts/ci/test-check-contributing.sh`
+> 20/20 — `check-contributing.sh --head` red at base `928e9287`
+> (10/12 legs: every lane/field/privacy/verifyfixed/ritual/gated/
+> form/blocked/codeowners leg absent); negatives: lane-heading
+> drift, dropped exit-code field, fictitious `hh bug-bundle`,
+> removed secrets block, removed loss-reason rule, ungated
+> component lane, removed issue-form field/attestation, restored
+> broad CODEOWNERS wording, dropped owner line, manifest machinery
+> on the ordinary path, broken link, working-tree dirt invisible
+> to `--head`, committed drift failing `--head`, stripped
+> `ci-mode: both` annotation failing `check-ci-gating.sh`.
+> Achieved **engineered D/E**; achieved layer `engineered`
+> (self-tested lint + fixture drives — actual CI execution on
+> pushed heads read at close per O-06). Owed: full-target R/P and
+> actual-execution predicates per the register — R5.50 owns the
+> packaged-component predicate, R5.52 the outside-review/
+> replication contributor evidence, R5.53 the participant
+> observations for the contributing-only ids (evidence dependency,
+> never dispatch); this note does not mark REQ-A-205/REQ-B-004
+> fully satisfied. REQ-C-007, REQ-G-008, REQ-G-101/102/103/105/107
+> are stamped **contributing-only** — the same rule.

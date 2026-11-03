@@ -1,6 +1,8 @@
 # CODEOWNERS — default review ownership.
-# Everything lands through the manifest ticket chain; the repository owner
-# reviews all paths. Refine per-area when additional maintainers join (L4.2
-# owns the maintainer-policy posture).
+# The repository owner reviews all paths — ordinary contributions and
+# manifest-ticket work alike. The manifest ticket chain governs assigned
+# build tickets only; no build-ledger or question-register ritual attaches
+# to an ordinary PR (see CONTRIBUTING.md). Refine per-area when additional
+# maintainers join (L4.2 owns the maintainer-policy posture).
 
 * @SteveVitali

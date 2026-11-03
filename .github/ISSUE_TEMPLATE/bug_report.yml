@@ -1,8 +1,13 @@
 name: Bug report
-description: Report a defect in the kernel, Lab, surfaces, or build tooling
+description: Report a defect in the kernel, Lab, surfaces, or build tooling — no binary, run, or bundle required
 title: "[bug]: "
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: >
+        Pick the lane that matches what you have. No report needs a built
+        binary, a finished run, a bundle, a paid account, or a prior issue.
   - type: textarea
     id: summary
     attributes:
@@ -14,21 +19,28 @@ body:
     id: reproduce
     attributes:
       label: Reproduction
-      description: The exact command(s) and observed output. `hh doctor` output helps.
+      description: The exact command(s) and observed output. `hh doctor` output helps — only if the binary starts.
       render: sh
     validations:
       required: true
   - type: input
+    id: exit
+    attributes:
+      label: Exit code / signal
+      description: The exit status or signal the command ended with, if it ran.
+      placeholder: e.g. exit 101, SIGSEGV
+  - type: input
     id: commit
     attributes:
       label: Commit / version
-      description: `git rev-parse HEAD`, or the release tag.
-      placeholder: e.g. d7c99d4
+      description: `git rev-parse HEAD` or the release tag, and whether the checkout was dirty (`git status --porcelain`).
+      placeholder: e.g. d7c99d4, dirty
   - type: dropdown
     id: area
     attributes:
       label: Area
       options:
+        - setup / build / startup (no run)
         - kernel / boundary (hharness-kernel, hharness-embed)
         - CLI (hh)
         - Lab (experiment / results / eval / bench)
@@ -41,4 +53,26 @@ body:
     id: context
     attributes:
       label: Environment
-      description: OS + arch, `cargo --version`, anything unusual about the setup.
+      description: OS + arch, `cargo --version`, feature flags, backend, and relevant prerequisites.
+  - type: textarea
+    id: receipt
+    attributes:
+      label: Run or receipt identifiers (if a run exists)
+      description: >
+        Run, attempt, configuration, and input ids; the relevant event,
+        grade, or procedure ids; and the native export locator
+        (`hh run export <run-id> --out <dir>`) — or the access/loss reason
+        you cannot produce one (withheld input, expired access, failed
+        validation).
+  - type: checkboxes
+    id: cleared
+    attributes:
+      label: Attachments are cleared
+      description: >
+        Inspect logs, bundles, and output for credentials, signed URLs,
+        private paths or content, model I/O, task solutions or oracles, and
+        material whose redistribution rights you do not hold. A report that
+        attaches uncleared secrets is blocked until the material is removed.
+      options:
+        - label: I removed credentials, signed URLs, private data, and material I am not permitted to share.
+          required: true
