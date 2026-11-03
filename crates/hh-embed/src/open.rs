@@ -1127,6 +1127,7 @@ impl EmbedService {
             client: client.cloned(),
             contract_json: contract_json.cloned(),
             sink_seq: head.seq as i64,
+            exec_caps: Vec::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
         // Persist the resume-by-leaf pair (S2.3) — a resume right
@@ -1778,6 +1779,7 @@ impl EmbedService {
             client: None,
             contract_json: None,
             sink_seq: head.seq as i64,
+            exec_caps: Vec::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
         Ok(session_json(
@@ -1872,6 +1874,7 @@ impl EmbedService {
             client: client.cloned(),
             contract_json: contract_json.cloned(),
             sink_seq: head.seq as i64,
+            exec_caps: Vec::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
         // The surface-session record (§7.2 §6.6) — minted only for

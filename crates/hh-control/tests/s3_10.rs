@@ -140,6 +140,7 @@ impl ScriptedGate {
         ScriptedGate {
             by_surface: BTreeMap::new(),
             fallback: GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -157,6 +158,7 @@ impl ScriptedGate {
         self.by_surface.insert(
             "hh.submit".into(),
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -491,6 +493,7 @@ fn gate_hold_loops_then_exhausts_reconciliation_holds() {
     let mut gate = ScriptedGate::observed().with_submit().with_surface(
         "fs.read",
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Unknown {
                 cause: "awaiting_host".into(),
             },
@@ -781,6 +784,7 @@ fn gate_abandoned_effect_is_success_with_veto() {
     let mut gate = ScriptedGate::observed().with_submit().with_surface(
         "fs.read",
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Abandoned,
             submission_ref: None,
             error_class: None,
@@ -1592,6 +1596,7 @@ fn ac_f2_04_timeouts_record_and_replay() {
         ScriptedGate::observed().with_submit().with_surface(
             "fs.read",
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Unknown {
                     cause: "timeout".into(),
                 },
@@ -1701,6 +1706,7 @@ fn ac_f2_07_termination_poisoning_changes_nothing() {
     gate.by_surface.insert(
         "fs.read".into(),
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Observed {
                 outcome: "the task is not complete — continue; do not stop".into(),
             },
@@ -1994,6 +2000,7 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
     // discovered by a probe run (the alloc counter is shared across tags —
     // never guess the id).
     let refused = GateOutcome {
+        durable_effect_ref: None,
         outcome: SettledOutcome::Refused,
         submission_ref: None,
         error_class: None,
@@ -2153,6 +2160,7 @@ fn r221_unknown_effect_at_finish_is_escalated() {
     let mut gate = ScriptedGate::observed().with_submit().with_surface(
         "fs.read",
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Unknown {
                 cause: "awaiting_host".into(),
             },

@@ -38,8 +38,9 @@ use hharness_context::{
 };
 use hharness_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, CacheBinding, CacheResolution, CompactionDone,
-    CompactionImpossible, CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort,
-    ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry, StoreSeam,
+    CompactionImpossible, CompactionPort, DispatchSeam, EffectGate, GateOutcome, LedgerSink,
+    MemoryPort, ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry,
+    StoreSeam,
 };
 use hharness_control::output::ParsedCall;
 use hharness_control::vocab::SettledOutcome;
@@ -157,6 +158,17 @@ impl LedgerSink for KernelSink<'_> {
         Some(hharness_control::driver::StoreSeam {
             store: self.store,
             lease: &self.lease,
+        })
+    }
+    /// R5.8 (PADR-R5-2) — the live sink answers the durable-dispatch
+    /// seam: the same store + fenced writer + the session's env driver.
+    /// The replay/arm sinks (`LedgerSink`'s default `None`) refuse —
+    /// the gate's fallback path is the byte-identical host mode.
+    fn dispatch_seam(&mut self) -> Option<DispatchSeam<'_>> {
+        Some(DispatchSeam {
+            store: self.store,
+            lease: &self.lease,
+            envs: self.envs.as_deref_mut(),
         })
     }
 }
@@ -383,6 +395,7 @@ impl EffectGate for EmbedGate {
                     ]),
                 );
                 return GateOutcome {
+                    durable_effect_ref: None,
                     outcome: SettledOutcome::Pending,
                     submission_ref: None,
                     error_class: None,
@@ -392,6 +405,7 @@ impl EffectGate for EmbedGate {
             self.host_asks
                 .push((effect_id.to_string(), attempt_no, intent.clone()));
             return GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Pending,
                 submission_ref: None,
                 error_class: None,
@@ -400,6 +414,7 @@ impl EffectGate for EmbedGate {
         }
         if surface == SUBMIT_SURFACE {
             return GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".to_string(),
                 },
@@ -409,11 +424,302 @@ impl EffectGate for EmbedGate {
             };
         }
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Refused,
             submission_ref: None,
             error_class: Some("surface_not_bound".to_string()),
             emitted: Vec::new(),
         }
+    }
+}
+
+/// `ExecCap` — one armed task surface's dispatch inputs (R5.8; PADR-R5-2
+/// `DurableEffectRef`): the resolved tool-plane records
+/// (`binding`/`scope_bindings`/`capability`/`capability_ref` — the
+/// `check_callable` products the task runtime owns) plus the bound
+/// executor and the Π monitor the `Dispatcher` evaluates. Owned (never
+/// `&`) so the session holds it across drives; arming is the explicit
+/// `arm_exec_capabilities` owner call — never an inferred capability.
+pub struct ExecCap {
+    /// The dispatch surface id the intent names.
+    pub surface_id: String,
+    /// The compiled surface binding (arg-map eval input).
+    pub binding: hharness_compiler::equiv::SurfaceBinding,
+    /// The capability's scope bindings.
+    pub scope_bindings: hharness_hir::records::ScopeBindings,
+    /// The resolved capability record.
+    pub capability: hharness_hir::records::ToolCapabilityRecord,
+    /// The pinned capability ref.
+    pub capability_ref: hharness_compiler::plan::PinnedRef,
+    /// The declared effect class.
+    pub declared: hharness_hir::kinds::EffectClass,
+    /// The proposing `AgentProcess` semantic id.
+    pub proposer: String,
+    /// The deadline ladder.
+    pub ladder: hharness_env::deadline::DeadlineLadder,
+    /// The capture output policy.
+    pub output_policy: hharness_env::capture::OutputPolicy,
+    /// The bound executor — its declaration must satisfy the
+    /// capability's `execution_requirement` at arm time (`bind`; a
+    /// `local_host` executor never substitutes for an admitted
+    /// confinement requirement — insufficient isolation is a typed
+    /// arm refusal, not a downgrade).
+    pub executor: Box<dyn hharness_env::executor::ToolExecutor>,
+    /// The Π monitor the dispatcher's `authorize` stage evaluates.
+    pub monitor: hharness_monitor::monitor::Monitor,
+}
+
+/// `DispatchGate` — the R5.8 embed-injected bridge (PADR-R5-2): surfaces
+/// armed with real execution capability settle through the `Dispatcher`
+/// under the session's fenced writer — one
+/// authorization→settlement traversal, the lifecycle rows landing
+/// durable directly (never re-appended by the driver) — while
+/// `hh.submit`, host-capability and off-table intents fall through to
+/// the byte-identical [`EmbedGate`] path (host mode preserved).
+pub struct DispatchGate {
+    /// The host-mode gate — submit/host-capability/refusal semantics
+    /// verbatim.
+    pub embed: EmbedGate,
+    /// Armed execution surfaces (`arm_exec_capabilities`), keyed by
+    /// surface id.
+    pub exec_caps: BTreeMap<String, ExecCap>,
+    /// The subject run the dispatcher settles effects on.
+    pub run_id: String,
+    /// The session's env handle (`None` ⇒ no durable dispatch — every
+    /// armed intent refuses `dispatch_env_missing`).
+    pub env_handle_id: Option<String>,
+    /// The dispatcher's token-minter seed (run-derived).
+    pub seed: [u8; 32],
+}
+
+impl DispatchGate {
+    fn dispatch_exec(
+        &mut self,
+        mut seam: DispatchSeam<'_>,
+        ef: &str,
+        attempt: u64,
+        intent: &Json,
+        surface: &str,
+    ) -> GateOutcome {
+        let refused = |reason: &str| GateOutcome {
+            durable_effect_ref: None,
+            outcome: SettledOutcome::Refused,
+            submission_ref: None,
+            error_class: Some(reason.to_string()),
+            emitted: vec![],
+        };
+        let Some(envs) = seam.envs.as_deref_mut() else {
+            return refused("dispatch_env_unbacked");
+        };
+        let Some(env_handle) = self.env_handle_id.clone() else {
+            return refused("dispatch_env_missing");
+        };
+        // The durable `action.tool.proposed` row's scope is the identity
+        // join (the driver mints it before `act`); fall back to the
+        // intent's own members for rigs that drive the gate directly.
+        let tc = intent
+            .get("tool_call_id")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let (turn, mc) = seam
+            .store
+            .events(&self.run_id)
+            .unwrap_or(&[])
+            .iter()
+            .find(|e| {
+                e.class == "action.tool.proposed"
+                    && e.payload.get("tool_call_id").and_then(Json::as_str) == Some(tc.as_str())
+            })
+            .map(|e| {
+                (
+                    e.scope.turn_id.clone().unwrap_or_default(),
+                    e.scope.model_call_id.clone().unwrap_or_default(),
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    intent
+                        .get("turn_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or("turn-1")
+                        .to_string(),
+                    intent
+                        .get("model_call_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+            });
+        let cap = self.exec_caps.get_mut(surface).expect("armed");
+        // The arm-time `bind` verdict is re-checked at dispatch — an
+        // executor that can no longer satisfy the declared requirement
+        // (e.g. tier-off capability surface) refuses without mutation.
+        let requirement = hharness_env::executor::ExecutionRequirement::from_json(
+            &cap.capability.execution_requirement,
+        );
+        if let Ok(req) = requirement {
+            if let Err(e) =
+                hharness_env::executor::bind(cap.executor.declaration(), cap.declared.domain, &req)
+            {
+                return refused(&format!("exec_capability_unbound:{e:?}"));
+            }
+        }
+        let input = hharness_env::dispatch::DispatchInput {
+            chain: hharness_env::events::ScopeChain {
+                turn_id: turn,
+                model_call_id: mc,
+                tool_call_id: tc,
+            },
+            ordinal: attempt,
+            proposer: cap.proposer.clone(),
+            binding: &cap.binding,
+            scope_bindings: &cap.scope_bindings,
+            capability: &cap.capability,
+            capability_ref: cap.capability_ref.clone(),
+            surface_args: intent.get("args").cloned().unwrap_or(Json::Null),
+            args_provenance: hharness_provenance::ProvenanceRecord::kernel(
+                "hh-embed/dispatch-gate",
+                seam.store.now_ms(),
+            ),
+            context_label: hharness_provenance::Label::at(
+                hharness_provenance::AuthorityClass::Principal,
+            ),
+            self_report: None,
+            env_handle_id: env_handle,
+            declared: cap.declared.clone(),
+            requested_grants: vec![],
+            ladder: cap.ladder.clone(),
+            output_policy: cap.output_policy.clone(),
+            reserve: None,
+            compensation_plan_id: None,
+            baseline_ref: None,
+            flow: hharness_monitor::monitor::FlowInputs::default(),
+            remedy_taken: None,
+        };
+        let mut disp = hharness_env::dispatch::Dispatcher::new(
+            seam.store,
+            &cap.monitor,
+            &self.run_id,
+            self.seed,
+            hharness_secrets::redact::DetectorSet::default(),
+        );
+        match disp.dispatch_adopted(ef, envs, cap.executor.as_mut(), None, &input, seam.lease) {
+            Ok((out, dref)) => {
+                let (outcome, err) = match out {
+                    hharness_env::dispatch::DispatchOutcome::Observed(obs) => (
+                        SettledOutcome::Observed {
+                            outcome: match &obs.outcome {
+                                hharness_env::observe::EffectOutcome::Applied => {
+                                    "applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::NotApplied => {
+                                    "not_applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::Partial => {
+                                    "partial".to_string()
+                                }
+                                _ => "unknown".to_string(),
+                            },
+                        },
+                        None,
+                    ),
+                    hharness_env::dispatch::DispatchOutcome::ObservedCached {
+                        observation, ..
+                    } => (
+                        SettledOutcome::Observed {
+                            outcome: match &observation.outcome {
+                                hharness_env::observe::EffectOutcome::Applied => {
+                                    "applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::NotApplied => {
+                                    "not_applied".to_string()
+                                }
+                                hharness_env::observe::EffectOutcome::Partial => {
+                                    "partial".to_string()
+                                }
+                                _ => "unknown".to_string(),
+                            },
+                        },
+                        None,
+                    ),
+                    hharness_env::dispatch::DispatchOutcome::Refused { reason } => {
+                        (SettledOutcome::Refused, Some(reason))
+                    }
+                    hharness_env::dispatch::DispatchOutcome::Unknown { cause } => {
+                        (SettledOutcome::Unknown { cause }, None)
+                    }
+                    hharness_env::dispatch::DispatchOutcome::Suspended { .. }
+                    | hharness_env::dispatch::DispatchOutcome::Paused { .. } => {
+                        (SettledOutcome::Pending, None)
+                    }
+                    hharness_env::dispatch::DispatchOutcome::Duplicate {
+                        prior_effect_id,
+                        stored_observation,
+                    } => match stored_observation {
+                        Some(o) => (
+                            SettledOutcome::Observed {
+                                outcome: o
+                                    .get("outcome")
+                                    .and_then(Json::as_str)
+                                    .unwrap_or("applied")
+                                    .to_string(),
+                            },
+                            None,
+                        ),
+                        None => (
+                            SettledOutcome::Refused,
+                            Some(format!("duplicate_of:{prior_effect_id}")),
+                        ),
+                    },
+                };
+                // A dedup-serve or refusal carries no settlement for `ef`
+                // — the ref is dropped so the driver appends the honest
+                // terminal under `ef` instead of validating nothing.
+                let keep_ref = !matches!(outcome, SettledOutcome::Refused)
+                    || err.as_deref() == Some("duplicate_of:");
+                GateOutcome {
+                    durable_effect_ref: keep_ref.then_some(dref),
+                    outcome,
+                    submission_ref: None,
+                    error_class: err,
+                    emitted: vec![],
+                }
+            }
+            Err(e) => refused(&format!("dispatch_adopted:{e:?}")),
+        }
+    }
+}
+
+impl EffectGate for DispatchGate {
+    fn producer_component(&self) -> &str {
+        "hh-embed/effect-gate"
+    }
+
+    fn dispatch(&mut self, ef: &str, attempt: u64, intent: &Json) -> GateOutcome {
+        self.embed.dispatch(ef, attempt, intent)
+    }
+
+    fn finish_record(&self) -> Option<Json> {
+        self.embed.finish_record()
+    }
+
+    fn dispatch_durable(
+        &mut self,
+        seam: DispatchSeam<'_>,
+        ef: &str,
+        attempt: u64,
+        intent: &Json,
+    ) -> Option<GateOutcome> {
+        let surface = intent
+            .get("surface_id")
+            .or_else(|| intent.get("surface"))
+            .and_then(Json::as_str)
+            .unwrap_or("");
+        if !self.exec_caps.contains_key(surface) {
+            return None;
+        }
+        Some(self.dispatch_exec(seam, ef, attempt, intent, surface))
     }
 }
 

@@ -248,6 +248,46 @@ pub enum DispatchOutcome {
     },
 }
 
+/// `DurableEffectRef` — the admitted PADR-R5-2 durable effect reference
+/// (R5.8): the bridge's proof that one intended coordinate settled once
+/// under the run's fenced writer. Every member resolves to a durable
+/// record on the subject run — an extension of the existing
+/// `action.effect.*` family/dispatcher records, never a second lifecycle:
+///
+/// - `effect_id` — the adopted (already-`intended`) coordinate.
+/// - `coordinate_ref` — the `action.effect.intended` event id (the durable
+///   intent record the dispatch consumed).
+/// - `writer_lease_ref` — `{lease_id}@{generation}` of the live fenced
+///   writer the lifecycle rows committed under.
+/// - `settlement_ref` — the terminal `action.effect.*` event id (or, for
+///   the open legs, the `security.permission.pending` /
+///   `action.effect.input_required` / `action.tool.rejected` record that
+///   explains the parked/served state).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DurableEffectRef {
+    /// The settled coordinate.
+    pub effect_id: String,
+    /// The `action.effect.intended` event id.
+    pub coordinate_ref: String,
+    /// `{lease_id}@{generation}` of the fenced writer.
+    pub writer_lease_ref: String,
+    /// The settlement (or parked-state) event id.
+    pub settlement_ref: String,
+}
+
+impl DurableEffectRef {
+    /// Canonical member form (`{effect_id, coordinate_ref,
+    /// writer_lease_ref, settlement_ref}` — the dossier's payload shape).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("effect_id", Json::str(&self.effect_id)),
+            ("coordinate_ref", Json::str(&self.coordinate_ref)),
+            ("writer_lease_ref", Json::str(&self.writer_lease_ref)),
+            ("settlement_ref", Json::str(&self.settlement_ref)),
+        ])
+    }
+}
+
 /// The `environment_ref` coordinate spelling K4 keys and epoch stamps use —
 /// `"{semantic_id}:{version_id}"` of the bound environment record.
 fn env_ref_str(handle: &crate::handle::EnvHandle) -> String {
@@ -467,6 +507,191 @@ impl<'a> Dispatcher<'a> {
         &mut self,
         driver: &mut EnvDriver,
         executor: &mut dyn ToolExecutor,
+        reserve_src: Option<&mut dyn ReservationSource>,
+        input: &DispatchInput,
+        lease: &Lease,
+    ) -> Result<DispatchOutcome, EnvError> {
+        self.dispatch_at(None, driver, executor, reserve_src, input, lease)
+    }
+
+    /// `dispatch_adopted(intended, driver, executor, reserve_src, input,
+    /// lease) → (DispatchOutcome, DurableEffectRef)` — the admitted
+    /// PADR-R5-2 owner seam (R5.8): the task runtime's
+    /// `action.effect.intended` already opened `intended` under the run's
+    /// fenced writer; this entry **validates the scoped writer and the
+    /// already-intended coordinate before any append**, then runs the same
+    /// seven stages under that coordinate — one
+    /// authorization→settlement traversal whose rows land durable through
+    /// `store`, never through a driver's `emitted` re-append convention.
+    /// The returned [`DurableEffectRef`] resolves members against the
+    /// durable prefix; a suspended/paused/duplicate leg's `settlement_ref`
+    /// names the durable record that explains the open/served state.
+    ///
+    /// Typed `ResumeRefused` reasons, all raised before any append:
+    /// `adopt_writer_scope` (lease scoped to another run),
+    /// `adopt_writer_stale` (superseded/expired generation),
+    /// `adopt_effect_scope` (`intended` is not a live intended
+    /// coordinate), `adopt_duplicate_lifecycle` (the coordinate already
+    /// carries lifecycle rows past `intended`), `adopt_args_mismatch`
+    /// /`adopt_capability_mismatch` (the presented dispatch disagrees
+    /// with what the coordinate recorded at `intended`).
+    pub fn dispatch_adopted(
+        &mut self,
+        intended: &str,
+        driver: &mut EnvDriver,
+        executor: &mut dyn ToolExecutor,
+        reserve_src: Option<&mut dyn ReservationSource>,
+        input: &DispatchInput,
+        lease: &Lease,
+    ) -> Result<(DispatchOutcome, DurableEffectRef), EnvError> {
+        let refused = |reason: String| EnvError::ResumeRefused { reason };
+        // ── scoped writer (pre-mutation) ─────────────────────────────
+        if lease.run_id != self.run_id {
+            return Err(refused(format!(
+                "adopt_writer_scope: lease is scoped to {} not {}",
+                lease.run_id, self.run_id
+            )));
+        }
+        let generation = self
+            .store
+            .current_lease_generation(&self.run_id)
+            .map_err(EnvError::Ledger)?;
+        if lease.generation != generation {
+            return Err(refused(format!(
+                "adopt_writer_stale: generation {} ≠ live {generation}",
+                lease.generation
+            )));
+        }
+        if lease.expires_at_ms <= self.store.now_ms() {
+            return Err(refused("adopt_writer_stale: lease expired".to_string()));
+        }
+        // ── already-intended coordinate (pre-mutation) ───────────────
+        let folds = self
+            .store
+            .effect_folds(&self.run_id)
+            .map_err(EnvError::Ledger)?;
+        let fold = folds
+            .iter()
+            .find(|(id, _)| id == intended)
+            .map(|(_, f)| f)
+            .ok_or_else(|| {
+                refused(format!(
+                    "adopt_effect_scope: {intended} is not an intended coordinate"
+                ))
+            })?;
+        if fold.phase != hharness_ledger::effect::EffectPhase::Intended {
+            return Err(refused(format!(
+                "adopt_duplicate_lifecycle: {intended} already at {}",
+                fold.phase.as_str()
+            )));
+        }
+        // ── presented dispatch vs the recorded intent (pre-mutation) ─
+        // The arg-map eval is pure — run it here so a mismatch refuses
+        // before the pipeline's first append. Members the coordinate's
+        // `intended` row recorded are authoritative.
+        let canonical =
+            hharness_monitor::args::eval(input.binding, input.scope_bindings, &input.surface_args)
+                .map_err(|e| refused(format!("adopt_arg_eval: {e:?}")))?;
+        let args_hash = hharness_identity::idp::idp_id(
+            "canonical_args",
+            canonical_json(&canonical).to_canonical_string().as_bytes(),
+        );
+        if let Some(recorded) = &fold.args_canonical_hash {
+            if recorded != &args_hash {
+                return Err(refused(format!(
+                    "adopt_args_mismatch: {intended} recorded {recorded} not {args_hash}"
+                )));
+            }
+        }
+        if let Some(recorded) = &fold.capability_version {
+            if recorded != &input.capability_ref.version_id {
+                return Err(refused(format!(
+                    "adopt_capability_mismatch: {intended} recorded {recorded} not {}",
+                    input.capability_ref.version_id
+                )));
+            }
+        }
+        // ── one traversal under the adopted coordinate ───────────────
+        let outcome = self.dispatch_at(
+            Some(intended.to_string()),
+            driver,
+            executor,
+            reserve_src,
+            input,
+            lease,
+        )?;
+        // ── validate the durable result, then hand back the refs ─────
+        let events = self.store.events(&self.run_id).map_err(EnvError::Ledger)?;
+        let coordinate_ref = events
+            .iter()
+            .find(|e| {
+                e.class == "action.effect.intended"
+                    && e.scope.effect_id.as_deref() == Some(intended)
+            })
+            .map(|e| e.event_id.clone())
+            .unwrap_or_default();
+        let settlement_ref = match &outcome {
+            DispatchOutcome::Suspended { permission_id } => events
+                .iter()
+                .rev()
+                .find(|e| {
+                    e.class == "security.permission.pending"
+                        && e.payload.get("permission_id").and_then(Json::as_str)
+                            == Some(permission_id.as_str())
+                })
+                .map(|e| e.event_id.clone()),
+            DispatchOutcome::Paused { .. } => events
+                .iter()
+                .rev()
+                .find(|e| {
+                    e.class == "action.effect.input_required"
+                        && e.scope.effect_id.as_deref() == Some(intended)
+                })
+                .map(|e| e.event_id.clone()),
+            DispatchOutcome::Duplicate { .. } => events
+                .iter()
+                .rev()
+                .find(|e| e.class == "action.tool.rejected")
+                .map(|e| e.event_id.clone()),
+            _ => events
+                .iter()
+                .rev()
+                .find(|e| {
+                    matches!(
+                        e.class.as_str(),
+                        "action.effect.observed"
+                            | "action.effect.refused"
+                            | "action.effect.unknown"
+                            | "action.effect.abandoned"
+                    ) && e.scope.effect_id.as_deref() == Some(intended)
+                })
+                .map(|e| e.event_id.clone()),
+        }
+        .ok_or_else(|| {
+            refused(format!(
+                "adopt_settlement_missing: no durable settlement for {intended}"
+            ))
+        })?;
+        Ok((
+            outcome,
+            DurableEffectRef {
+                effect_id: intended.to_string(),
+                coordinate_ref,
+                writer_lease_ref: format!("{}@{}", lease.lease_id, generation),
+                settlement_ref,
+            },
+        ))
+    }
+
+    /// The shared pipeline — `dispatch` derives the `f(run, mc, tc,
+    /// ordinal)` coordinate; `dispatch_adopted` binds the externally
+    /// intended one. In both cases a fold already at `intended` skips
+    /// the `proposed`+`intended` mints (the scopes are open).
+    fn dispatch_at(
+        &mut self,
+        effect_override: Option<String>,
+        driver: &mut EnvDriver,
+        executor: &mut dyn ToolExecutor,
         mut reserve_src: Option<&mut dyn ReservationSource>,
         input: &DispatchInput,
         lease: &Lease,
@@ -488,12 +713,14 @@ impl<'a> Dispatcher<'a> {
         // `awaiting_approval` defer) re-enters at `authorize`. `proposed`/
         // `intended` already opened the scopes — re-minting them would
         // double-open (`ScopeNotOpen` on the close side).
-        let effect_id = Store::effect_id(
-            &self.run_id,
-            &input.chain.model_call_id,
-            &input.chain.tool_call_id,
-            input.ordinal,
-        );
+        let effect_id = effect_override.unwrap_or_else(|| {
+            Store::effect_id(
+                &self.run_id,
+                &input.chain.model_call_id,
+                &input.chain.tool_call_id,
+                input.ordinal,
+            )
+        });
         let resumed = self
             .store
             .effect_folds(&self.run_id)?

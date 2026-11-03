@@ -1172,6 +1172,7 @@ mod r2_3_tests {
                 client: None,
                 contract_json: None,
                 sink_seq: head.seq as i64,
+                exec_caps: Vec::new(),
             },
         );
         (session_id, run_id)

@@ -160,6 +160,7 @@ impl EffectGate for ScriptedGate {
             .unwrap_or("");
         if surface == "hh.submit" {
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -169,6 +170,7 @@ impl EffectGate for ScriptedGate {
             }
         } else {
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },

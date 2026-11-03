@@ -177,6 +177,7 @@ impl EffectGate for ParticipantGate {
                         .any(|c| matches!(c, std::path::Component::ParentDir));
                 if escapes || path.is_empty() {
                     return GateOutcome {
+                        durable_effect_ref: None,
                         outcome: SettledOutcome::Refused,
                         submission_ref: None,
                         error_class: Some("path_escape".into()),
@@ -185,6 +186,7 @@ impl EffectGate for ParticipantGate {
                 }
                 match std::fs::write(self.root.join(rel), text.as_bytes()) {
                     Ok(()) => GateOutcome {
+                        durable_effect_ref: None,
                         outcome: SettledOutcome::Observed {
                             outcome: "applied".into(),
                         },
@@ -193,6 +195,7 @@ impl EffectGate for ParticipantGate {
                         emitted: Vec::new(),
                     },
                     Err(e) => GateOutcome {
+                        durable_effect_ref: None,
                         outcome: SettledOutcome::Unknown {
                             cause: format!("io:{e}"),
                         },
@@ -203,6 +206,7 @@ impl EffectGate for ParticipantGate {
                 }
             }
             "hh.submit" => GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -211,6 +215,7 @@ impl EffectGate for ParticipantGate {
                 emitted: Vec::new(),
             },
             _ => GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Refused,
                 submission_ref: None,
                 error_class: Some("surface_not_bound".into()),

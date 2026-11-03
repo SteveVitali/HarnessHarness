@@ -369,6 +369,7 @@ pub fn extract_recorded(
             out.effect_terminals.insert(
                 effect_id,
                 GateOutcome {
+                    durable_effect_ref: None,
                     outcome,
                     submission_ref: None,
                     error_class: None,
@@ -740,6 +741,7 @@ impl EffectGate for ReplayGate {
                     .get(effect_id)
                     .cloned()
                     .unwrap_or(GateOutcome {
+                        durable_effect_ref: None,
                         outcome: SettledOutcome::Unknown {
                             cause: "record_incomplete".to_string(),
                         },
@@ -770,6 +772,7 @@ impl EffectGate for ReplayGate {
                     got: format!("dispatch {effect_id}"),
                 });
                 GateOutcome {
+                    durable_effect_ref: None,
                     outcome: SettledOutcome::Unknown {
                         cause: "replay_diverged".to_string(),
                     },
@@ -1263,6 +1266,7 @@ mod tests {
                 ("scope", Json::str("workspace_local")),
             ]);
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },
@@ -1307,6 +1311,7 @@ mod tests {
         fn dispatch(&mut self, ef: &str, _a: u64, i: &Json) -> GateOutcome {
             let tc = i.get("tool_call_id").and_then(Json::as_str).unwrap_or("");
             GateOutcome {
+                durable_effect_ref: None,
                 outcome: SettledOutcome::Observed {
                     outcome: "applied".into(),
                 },

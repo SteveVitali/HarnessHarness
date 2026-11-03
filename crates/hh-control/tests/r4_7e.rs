@@ -132,6 +132,7 @@ impl EffectGate for ScriptedGate {
             .and_then(Json::as_str)
             .unwrap_or("");
         GateOutcome {
+            durable_effect_ref: None,
             outcome: SettledOutcome::Observed {
                 outcome: "applied".into(),
             },
