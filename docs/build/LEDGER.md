@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.18
-lastCompleted:   GATE-G10
+nextTicket:      R5.19
+lastCompleted:   R5.18
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.17
+chainTip:        codex/harnessharness-evidence-r5.18
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T23:43:27Z
+updatedAt:       2026-11-03T00:19:45Z
 ```
 
 ## OPEN FINDINGS
@@ -1044,3 +1044,4 @@ updatedAt:       2026-11-02T23:43:27Z
 - 2026-11-02T23:43:27Z · **GATE-G10 PASSED — operator recorded "1. passed. 2 defer. 3. can confirm. Please use your best judgement and continue"** — verbatim in GATE DECISIONS + readout signature `docs/build/readouts/GATE-G10.md` (agent-drafted sha256:6d8d0446… confirmed). EX-02 estimator + routed path + independent battery accepted as engineered evidence; S1/S3/live/parity/confirmation/public claim remain unauthorized; numerical validation stays owed R5.40. DF-R5.17-1 deferred to R5.40 as recorded (defect + honest label carried). nextTicket stays R5.18 · lastCompleted → GATE-G10 · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-03T00:01:41Z · **R5.18 size ruling** — worker stopped correctly at the ≤700 line trigger (measured ~1,691 numstat, ~2.4×; context within estimate). Scoped fresh-context review verdict: **AMEND** — single atomic `retained_selection/1` unit (Packet B B.2 one seam/owner persist+rebuild equality; partition T1 one slice; L150 omits persist-vs-replay); proposed cut lands persisted-but-unverifiable records (B.10 rejection) and splits AC-1 mid-predicate; proposed legs each still over trigger. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.16 precedent); dated note on `188_R5.18__retained.md`; manifest row-188 note; review record `planning/2026-11-03_R5.18-split-review.md`; `runs/R5.18.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 · R5.18 done — branch `codex/harnessharness-evidence-r5.18` · PR #232 · base `codex/harnessharness-evidence-r5.17` (@3c07e28). `retained_selection/1` — the additive `selection` member on `context.compaction.completed` (hh-context; Packet B B.2 owner seam; ADR-0396): `RetainedSelection{input, retained, omitted, status, pipeline_index, fallback_variant}` — `SelectionInput` is the shared input representation the prepared call consumes (policy{variant_ref,parameters} + assessed envelope + legal cut points + flattened pair/batch/required/tool join rows); `selection_parameters()` (ClearToolResults persists the completion-age join); `replay_selection`/`verify_selection` re-run the production assess/propose/execute path — Reproduced / Diverged / 9 typed refusals; outcomes Untriggered/Applied/Ineffective/Failed + via_fallback distinct. **Verify:** fmt OK · hh-context 122/0 (r5_18 6/6) · hh-embed/hh-control compile clean · fails-without compile-red at 3c07e282 · guard PASS DISPATCH R5.18 pre+post+boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 180 · backlog 180 (ADR-0396→BL-47). **Deferrals:** none opened/closed; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0396. **Deviations:** ~1,691 changed source/test lines vs ≤700 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-206 + aliases REQ-E-003/E-104 contributing-only; predicate owner R5.20 AC-3 stays owed. chainTip → codex/harnessharness-evidence-r5.18 · next → R5.19 · ci: pass #232@f6557cf (all 4 checks 41550291153) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
