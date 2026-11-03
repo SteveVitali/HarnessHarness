@@ -756,3 +756,53 @@ ticket never marks a deferred full-target predicate MET.
 > REQ-F-202, REQ-G-001, REQ-G-003, REQ-G-005, REQ-G-008, REQ-G-009,
 > REQ-G-104 and REQ-G-203 are stamped **contributing-only** — the
 > same rule.
+
+> Dated contributing note — 2026-11-03 (seq 199, R5.29): the §7.2
+> early offline examples and the informative Lab lesson landed
+> (ADR-0407; `crates/hharness/src/examples.rs` — `example-card/1`
+> versioned committed cards under `scripts/examples/` +
+> `run_example(&mut EmbedService, &ExampleCard, …) →
+> Result<ExampleReport, ExampleError>`, runner version
+> `hh-examples/1` — records-in/records-out over binding (a)'s
+> `handle` plus the landed owner seams; no public RPC, no second
+> runner/store/codec). Card decode is a closed member set —
+> unknown members `unsupported_shape`, absent required
+> `missing_field`, wrong types `type_mismatch`, unadmitted `case`
+> `unknown_case`; every declared `sha256:` pin recomputes over the
+> pinned file's bytes and drift refuses `stale_pin` **before any
+> execution**. EX-01 drives `hello` → `open_session` (the pinned
+> fixture definition) → `submit{hh.submit}` → attach by the
+> returned run id → six excerpt checks resolving actual event
+> id/seq/payload/causes → `kernel.bundle` → clean-recipient
+> `check_completeness` + `kernel.reproduce` R0 `reproduced` (a
+> fresh service on its own scratch store — no producer fallback)
+> → `admit_replay` (typed `CardRefused{missing_input}` recorded
+> verbatim as `expected_refusal` — the scripted lane mints no
+> `compiled_bundle`; tampered-copy `not_admitted` control). EX-02
+> drives one `run_recipe` per task over the pinned
+> `ex-02-fixture/1` (2 experiments × 2 arms × 5 replicates = 20
+> subjects — a shared grade vector would be the constant fixture
+> AC-2 refuses), both `population-receipt/1` `closed`; durable
+> rows re-read through fresh `Store`/`ResultsStore`/`LabDocs`
+> handles feed the merged `ExperimentView` → `analyze_and_record`
+> `finite_manifest_contrast` `beta{1,1}` → persisted
+> `analysis_report_body/1` (idempotent `report_id`) →
+> `DeclaredReceipt` + `recompute_analysis` `reproduced`. Semantic
+> checks `subjects_20`/`cells_pinned`/`informative_contrast`/
+> `report_identity`/`recipient_recompute`/`exploratory_label`/
+> `refusal_controls` — `AnalysisStatus::Exploratory` only, a
+> configured sample/budget never becomes a confirmation default.
+> Engineered evidence `crates/hharness/tests/r5_29.rs` 7/7 —
+> compile/missing-file red at base `4dd6159e`; negatives: stale
+> pin, wrong count (independent `expected` pin), constant fixture,
+> withheld recompute input (typed `Withheld` — never a producer-
+> side fallback), card decode refusals, expected-refusal controls
+> verbatim. Deviation: 2,564 changed source/test lines vs ≤850
+> (~3.0× — new build high-water mark) — AMEND ruling `ff31b141`
+> (`planning/2026-11-03_R5.29-split-review.md`). REQ-A-008 and
+> REQ-F-101…105 keep `planned; unmet` — achieved engineered D/E
+> recorded separately from the owed legs: primary owner R5.45's
+> AC-3 plus every R/P/actual-execution predicate — evidence
+> dependency, never dispatch dependency; this ticket never marks
+> a deferred full-target predicate MET. All six ids are stamped
+> **contributing-only** — the same rule.
