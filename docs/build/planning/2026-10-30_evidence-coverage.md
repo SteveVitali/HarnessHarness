@@ -1130,3 +1130,57 @@ ticket never marks a deferred full-target predicate MET.
 > R5.40 AC-3 (evidence dependency, never dispatch); all four targets
 > keep `planned; unmet` — this ticket never marks a deferred
 > full-target predicate MET.
+> Dated primary-owner note — 2026-11-03 (seq 207, R5.37): the
+> task-mixture sensitivity, sharp-null family and tail slice landed
+> (ADR-0415). REQ-D-008 (task-aware estimators/floors/families/tails
+> with actual declared inputs — owner-routed estimator, version,
+> target, keys, seed, actual draws, floors, refusal and interval
+> type/level): N1 — the routed kind `task_mixture_sensitivity`
+> (hh-analysis kernel arm → `hh_eval::task_mixture` at
+> `task-mixture/1`) persists `analysis_report_body/1` through the
+> R5.16/16b records-in path carrying the S.1 method metadata —
+> `routed_positive_persisted` and `changed_draws_change_computation`
+> prove declared draws are computation inputs (2,000 vs 4,000 →
+> different resample stream, body and `report_id`; `draws.used`
+> equals the declared count — the additive `bootstrap_paired_with`
+> carries the parameter while `bootstrap_paired` delegates at the
+> frozen 4,000; no metadata-only satisfaction). N2 — whole-task
+> paired bootstrap on the R5.15 `contrast_bounds` cells (one
+> counting rule; tasks are the resampling unit, never flattened
+> events/replicate n): `bca_floor_boundary` selects percentile at
+> T=29 and BCa at T=30 (a declared method contradicting the floor
+> refuses `BootstrapFloorViolation`); `signflip_mc_above_twenty`
+> shows the sharp-null leg at T=21 → seeded 8,000 Monte Carlo with
+> the +1 correction under the registered `lane_randomization`
+> exchangeability (exact enumeration at T ≤ 20);
+> `projection_feeds_binary_cells` binds the cell feed.
+> N3 — complete frozen families across split reports:
+> `split_reports_same_holm` recomputes identical Holm α=.05
+> adjustments from one frozen family under two different
+> split-report self-assignments with an unavailable member retained
+> (it can never improve another member's multiplicity); the named
+> exploratory family adjusts by BH under its own member — interval
+> coverage and multiplicity-adjusted tests stay distinct members.
+> N4 — typed refusals, no invented inference: `refusal_table`
+> exercises OneTask (one task permits raw observations only),
+> UnresolvedCell (missing keys), UnpairedTask, ShortCell (R<5),
+> DegenerateBootstrap (constant deltas), UnsupportedDependence
+> (shared_shocks), UnsupportedNull ×3 (weak_mean/practical_margin/
+> other), ExchangeabilityNotAdmitted ×4 (absent/unregistered),
+> UnsupportedVerdict (omnibus), DrawsBelowFloor (1,999),
+> UnsupportedLevel, FamilyIdentity, UnknownMethod, MetadataOnly and
+> MissingSpecRef (no bound view); signed and absolute tails are
+> separate members and the observed max is labelled
+> not-a-population-bound. Evidence `crates/hh-analysis/tests/
+> r5_37.rs` 7/7 routed through `analyze` → `analyze_and_record`.
+> Achieved **engineered D/E**; achieved layer `engineered`
+> (routed fixture recompute — actual CI execution on pushed heads
+> read at close per O-06). Owed: the R/P and actual-execution
+> predicates stay with the register and the named later contributors
+> (R5.16, R5.38, R5.40 — evidence dependency, never dispatch); this
+> note does not mark REQ-D-008 fully satisfied. REQ-D-109 /
+> REQ-D-310 / REQ-E-209 / REQ-H-010 gain R5.37 as a
+> **contributing-only** evidence row — achieved engineered D/E
+> recorded separately from the owed legs; their primary owner stays
+> R5.40 AC-3; all four targets keep `planned; unmet` — this ticket
+> never marks a deferred full-target predicate MET.
