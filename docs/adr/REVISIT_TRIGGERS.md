@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_183 ADRs: 131 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_184 ADRs: 132 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -167,6 +167,7 @@ _183 ADRs: 131 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0397 | Reopen if: (a) the R5.20 wire integration leg requires different minted members on `model.call.requested`/terminal rows — amend this record's Consequences; (b) a newly admitted primary/overhead dimension enters the cap match — `REQUIRED_BOUND_DIMS`/ `OPTIONAL_BOUND_DIMS` extend by admission, never silently; (c) a predecessor contract consumed here changes (`Account::reserve`/ `charge`/`release`/`physical_use`, `created_at_ms` origin, `retained_selection/1`, `codec::serialize`/`estimate_tokens`) — a new ADR records the corrected seam; (d) a durable row from a landed call decodes or reconciles divergently — a new ADR records the corrected protocol. |
 | ADR-0398 | - An admitted additional compaction variant → extend the admitted set and the replay/render coverage. - A live provider leg → the fixture-verified ceiling stands until the named live-evidence procedure runs. |
 | ADR-0399 | - If R5.22's closure walk needs the C-group reference sets typed (`oracle_observation_refs`, `treatment_joins`, `rows_analysis_refs`, `operational_evidence_refs`), revisit Decision 2 — today they decode as tolerated additive members under the same version. - If a profile major `2` is admitted, revisit the `unknown_profile_version` boundary — the refusal then routes through versioned negotiation, never silent decode. |
+| ADR-0400 | - If R5.23's population assembly or the R5.24–27 procedure consumers need a different edge vocabulary, verdict partition or `closure-report/<n>` member shape, amend this record's Consequences — the report is sidecar-class and evolves by version, never silently. - If a producer-crate per-owner enumerator batch is ever admitted (the conditional seam this ticket's partition row documents — "if per-owner enumerators are broad, split support-only producer batches"), re-read Decision 2: today the class-table `content_refs` declaration *is* the owner-supplied closure input and no producer-crate batch exists (C.1 item 6 forbids the crate edge). - If a successor bundle schema (`hh-bundle/2`) or profile major `≥2` is admitted, revisit the `unsupported_schema` boundary — cross-version traversal then routes through negotiation, never silent decode. |
 
 ## Fired-and-answered triggers (BL-48)
 

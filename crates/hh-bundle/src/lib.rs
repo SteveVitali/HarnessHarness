@@ -26,6 +26,7 @@
 pub mod assemble;
 pub mod attestation;
 pub mod audit;
+pub mod closure;
 pub mod codec;
 pub mod diff;
 pub mod error;
@@ -46,6 +47,10 @@ pub mod validate;
 pub use assemble::{assemble, AssembleInputs, Assembled, CompileOutcome};
 pub use attestation::{attest, sign_attestation, BundleAttestation};
 pub use audit::{audit_bundle, AuditReport};
+pub use closure::{
+    closure_walk, ClosureEdge, ClosureLimits, ClosureReport, FetchPermit, Resolution, WalkOpts,
+    CLOSURE_REPORT_SCHEMA,
+};
 pub use codec::{decode, decode_container, decode_dir, encode_container, encode_dir, Decoded};
 pub use diff::{bundle_diff, BundleDiff, MemberDelta};
 pub use error::BundleError;

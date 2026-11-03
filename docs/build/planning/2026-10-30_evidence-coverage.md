@@ -430,3 +430,36 @@ ticket never marks a deferred full-target predicate MET.
 > producer-inaccessible recipient legs and every R/P predicate —
 > evidence dependency, never dispatch dependency; this ticket
 > never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 192, R5.22): the
+> owner-typed recipient closure landed inside `hh-bundle`
+> (ADR-0400; `crates/hh-bundle/src/closure.rs` — one in-process
+> interface `closure_walk(&Decoded, WalkOpts) → ClosureReport`,
+> the `closure-report/1` sidecar codec): the owning codecs
+> enumerate every root class — manifest members, section and
+> run-manifest ordinary refs, `contains:` manifest recursion,
+> `evidence-package/1` claim/coordinate roots, trace
+> tree/pages/`blob_index`/head/checkpoint/lineage, event
+> `causes`/`refs`/`ir_refs` and class-table `content_refs` — each
+> edge carrying `{parent, role, field, media, size}` provenance +
+> owner; visited dedup on that tuple; `ClosureLimits` bounds and
+> expansion-stack cycle detection fail `traversal_limit`/`cycle`,
+> never pass partially. `present` requires the recipient's own
+> member bytes recomputing to the address (digest/size agreed);
+> `fetch` materializes only through the landed `fetch::fetch`
+> under a caller `FetchPermit` (verified arrival, never executed,
+> refusals verbatim); `redacted`/`gc` withhold; nested `contains:`
+> statuses resolve against their declaring index; no producer
+> home/store/cache/credential fallback. Engineered evidence in
+> `crates/hh-bundle/tests/r5_22.rs` (9/9 — compile-red at base
+> `79b13533`), mapping Packet C C.9 checks 1/3/4 (the typed
+> recipient traversal, truthful access/loss verdicts, and the
+> producer-inaccessible materialization legs). REQ-F-005 keeps
+> `planned; unmet` — achieved engineered D/E recorded separately
+> from the owed legs: population receipt (R5.23), R0 (R5.24),
+> recompute (R5.25), replay (R5.26), rights (R5.27), outside
+> reviewer (R5.52), the §6.3 procedure cards and every R/P/
+> actual-execution predicate — evidence dependency, never
+> dispatch dependency. REQ-A-103/REQ-E-208 are stamped
+> **contributing-only** — this ticket never marks a deferred
+> full-target predicate MET.

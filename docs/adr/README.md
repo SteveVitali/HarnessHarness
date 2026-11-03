@@ -189,3 +189,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0397](ADR-0397-r5.19-prepared-call-landing.md) | R5.19 prepared gateway call — ordering, deadline and refusal landing decisions | R5.19 (single atomic retained-view→wire ordering unit | Accepted |
 | [ADR-0398](ADR-0398-r5.20-retained-view-wire-landing.md) | R5.20 retained-view→wire integration — render consumption and refusal landing decisions | R5.20 | Accepted |
 | [ADR-0399](ADR-0399-r5.21-evidence-profile-landing.md) | R5.21 evidence-package/1 profile — record, identity and coordinate landing decisions | R5.21 (Native evidence profile and immutable snapshot | Accepted |
+| [ADR-0400](ADR-0400-r5.22-closure-landing.md) | R5.22 owner-typed reference closure — traversal, resolution and report landing decisions | R5.22 (Owner-typed reference closure and | Accepted |
