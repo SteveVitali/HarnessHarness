@@ -200,3 +200,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0408](ADR-0408-r5.30-example-ci-modes-landing.md) | R5.30 §7.3 example CI modes and bounded refresh — landing decisions | R5.30 (Example CI modes and bounded refresh workflow) | Accepted |
 | [ADR-0409](ADR-0409-r5.31-contribution-routes-landing.md) | R5.31 §8.1 ordinary contribution and failure-report routes — landing decisions | R5.31 (Ordinary contribution and failure-report routes) | Accepted |
 | [ADR-0410](ADR-0410-r5.32-observer-apparatus-landing.md) | R5.32 confined observer apparatus and Kp4 controls — landing decisions | R5.32 (Confined observer apparatus and Kp4 controls) | Accepted |
+| [ADR-0411](ADR-0411-r5.33-permission-respond-gate-landing.md) | R5.33 offered-answer respond gate and O4/O5 permission cells — landing decisions | R5.33 (Real permission wait, answer and resume matrix) | Accepted |
