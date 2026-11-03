@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.15b
-lastCompleted:   R5.15
+nextTicket:      R5.16
+lastCompleted:   R5.15b
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.15
+chainTip:        codex/harnessharness-evidence-r5.15b
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T18:42:58Z
+updatedAt:       2026-11-02T19:07:28Z
 ```
 
 ## OPEN FINDINGS
@@ -1033,3 +1033,5 @@ updatedAt:       2026-11-02T18:42:58Z
 - 2026-11-02T18:22:36Z · **R5.15 size ruling — SPLIT** — worker stopped correctly at the ≤1000 line trigger (measured 1,676, ~1.68×; context within estimate). Scoped fresh-context review verdict: **SPLIT** at the documented M-A contingency + decomposition line-150 "population contract vs consumer wiring" — second real split (after R5.14). CORRECTED seam: whole `hh-eval::population` contract (incl. `contrast_bounds`/`BoundsDecl`/`MethodMetadata` — contract per M-A, not consumer) stays leg (a) on row 184; only the hh-analysis `planned_population` adapter + battery → seq 184a `184a_R5.15b__population-adapter.md`. Leg (a) pre-ruled Deviation band ≤~1.6× (~1,342 measured); beyond → STOP again. Manifest note+row+Plan extensions (183 entry retroactively added too); decomposition dated note; review record `planning/2026-11-02_R5.15b-split-review.md`. Worker resumes as leg (a). · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-02T18:42:58Z · R5.15 done — branch `codex/harnessharness-evidence-r5.15` · PR #227 · base `codex/harnessharness-evidence-r5.14b` (@3f9ca25). Contract-owner leg (a) of the `4d13371f` SPLIT (corrected seam — bounds/metadata are contract; contract 184 rescoped; hh-analysis adapter → seq 184a/R5.15b): whole `hharness_eval::population` — records/`assemble` (required-universe `IncompleteUniverse`; first-subject + first-admissible-retry recovery; all-attempts; pinned-watermark `HistoryLeak`/`WatermarkMissing`) + three named populations beside six-class/veto/availability axes + `contrast_bounds` (per-cell [s/M,(s+u)/M]; equal-task `test_minus_control` w_t=1/T; unrun tasks retain weight; D1 golden [−.4,.5]) + `BoundsDecl` unit-only + `MethodMetadata` S.1 spine + closed 13-variant `PopulationError`; zero classes/deps, pure records-in; hh-analysis diff vs base now zero. **Verify:** fmt OK · r5_15 10/10 · hh-eval 14 targets all-ok · hh-analysis green without adapter · fails-without compile-red at `3f9ca250` · guard PASS DISPATCH R5.15 pre+post · bm 0 viol (. + --staged) · bm-tools OK · triggers in sync (178). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **ADRs:** ADR-0394 + BL-47 sources. **Deviations:** 1,342 vs ≤1000 — inside pre-ruled ≤~1.6× band under SPLIT `4d13371f`. **AC-3:** REQ-D-001/002/003/104 + REQ-A-004/102 contract-scope contributing stamps; no discharge — R/P owed R5.49/R5.43, consumer-scope owed 184a. chainTip → codex/harnessharness-evidence-r5.15 · next → R5.15b · ci: pass #227@db27cb0 (build · test · fmt · drift macos+ubuntu · cargo-deny · gitleaks 41501013637; logs/ci-r5.15.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+
+- 2026-11-02T19:07:28Z · R5.15b done — branch `codex/harnessharness-evidence-r5.15b` · PR #228 · base `codex/harnessharness-evidence-r5.15` (@45532e7). Consumer leg (b) of the `4d13371f` SPLIT: `hharness_analysis::population::planned_population(view, runs, tasks, metric, pins)` adapts `ExperimentView` plans/attempts/`launch_binding` × `EvalRun` outcome/success/`disposition:"pending"` into the R5.15 contract records and calls `hharness_eval::population::assemble` UNCHANGED (X7 — no second population predicate); `AnalysisError::Population` one-vocabulary wrap + `From`. Recovered VERBATIM from checkpoint `e6b256f9` (all four hh-analysis files diff-verified byte-identical; landed eval contract byte-identical to checkpoint's — zero adjustment); +1 additive check closing AC-1's launch-binding dedup clause (test-dead in the recovered battery). **Verify:** fmt OK · r5_15 3/3 · `cargo test -p hharness-analysis` 72 tests 0 failures · fails-without compile-red at `45532e7e` (E0432) · guard PASS DISPATCH R5.15b pre+post · bm 0 viol (. + --staged) · bm-tools OK. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **ADRs:** none new — pure composition of ADR-0394's contract seam. **Deviations:** none (~380 vs ≤500). **AC-3:** REQ-D-001/002/003/104 + REQ-A-004/102 consumer-scope contributing stamps; no discharge — contract stamps seq 184, R/P owed R5.49/R5.43. chainTip → codex/harnessharness-evidence-r5.15b · next → R5.16 · ci: pass #228@6b23a28 (build · test · fmt · drift macos+ubuntu · cargo-deny · gitleaks 41504849431; logs/ci-r5.15b.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

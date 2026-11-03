@@ -87,6 +87,9 @@ pub enum AnalysisError {
         /// The detail.
         detail: String,
     },
+    /// The R5.15 planned-population contract refused (`hharness_eval::
+    /// population` — the same refusal vocabulary, never a second rule).
+    Population(hharness_eval::population::PopulationError),
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -131,6 +134,7 @@ impl std::fmt::Display for AnalysisError {
             AnalysisError::StrataPooledUnannotated { detail } => {
                 write!(f, "StrataPooledUnannotated: {detail}")
             }
+            AnalysisError::Population(e) => write!(f, "population: {e}"),
         }
     }
 }
@@ -158,5 +162,11 @@ impl From<ResultsError> for AnalysisError {
 impl From<ExperimentError> for AnalysisError {
     fn from(e: ExperimentError) -> AnalysisError {
         AnalysisError::Experiment(e)
+    }
+}
+
+impl From<hharness_eval::population::PopulationError> for AnalysisError {
+    fn from(e: hharness_eval::population::PopulationError) -> AnalysisError {
+        AnalysisError::Population(e)
     }
 }
