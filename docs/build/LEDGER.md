@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.26
-lastCompleted:   R5.25
+nextTicket:      R5.27
+lastCompleted:   R5.26
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.25
+chainTip:         codex/harnessharness-evidence-r5.26
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T05:40:04Z
+updatedAt:        2026-11-03T06:18:08Z
 ```
 
 ## OPEN FINDINGS
@@ -1063,3 +1063,4 @@ updatedAt:        2026-11-03T05:40:04Z
 - 2026-11-03 — R5.25 done — branch codex/harnessharness-evidence-r5.25 · PR #239 · base codex/harnessharness-evidence-r5.24 · §6.3 Recompute owner interface inside hh-analysis (ADR-0403): `recompute_analysis(plan,input)` legs verify_inputs (withheld/malformed/nonfinite/wrong-pin; generated_from + report_id exact) -> population (assemble_receipt; non-closed refuses) -> rerun (analyze; kernel refusals verbatim) -> compare (identity/order/count/verdict exact; 1e-10 scalar tolerance; threshold/verdict fails inside) · **Verify:** r5_25 13/13 · hh-analysis suite 0 failed · fmt OK · fails-without compile-red at 924ec646 · guard PASS DISPATCH R5.25 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 1,468 changed source/test lines vs ≤700 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.25 · next → R5.26 · ci: pass #239@09cd29c (run 41583940143) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T06:00:30Z · **R5.26 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,823 numstat, ~2.4×; context within estimate). Scoped fresh-context review verdict: **AMEND** — partition packet R5 binds isolated-replay/R1 + fresh-procedure cards into one owner unit (no written contingency; replay-vs-fresh is real but undocumented — documentary test); AC-1 pair-separation + AC-2 single negative span both cards; shared AdmissionCard/rig load-bearing; leg (a) still over trigger. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.25 precedent); dated note on `196_R5.26__replay.md`; manifest row-196 note; review record `planning/2026-11-03_R5.26-split-review.md`; `runs/R5.26.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 — R5.26 done — branch codex/harnessharness-evidence-r5.26 · PR #240 · base codex/harnessharness-evidence-r5.25 · §6.3 isolated-replay + fresh-execution admission cards inside hh-bundle (ADR-0404): `admit_replay` legs inputs -> prefix (envelope-exact vs recomputing original; original_mutation) -> suffix (lifecycle.replay.* markers only) -> counters (card recounts appended attempt classes — declared must agree; nonzero = attempted_live_dispatch even if blocked) -> decisions (exact) -> rederivation (R1 required derived set from authoritative bytes); `admit_fresh` gates unfunded/retired/not_fresh/charging_attribution + per-level inputs + not_independent (compute_independence; author-only dir admits nothing); legs native_basis (levels::derive) + arms (n>=k>=2); cards separate — replay-card/1 + fresh-card/1, prerequisites/resources/counters/independence never folded into verdict · **Verify:** r5_26 20/20 · hh-bundle suite 0 failed · fmt OK · fails-without compile-red at d5f355fb · guard PASS DISPATCH R5.26 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 1,823 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.26 · next → R5.27 · ci: pass #240@44ef7a9 (all 4 checks 41587597711; stack #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
