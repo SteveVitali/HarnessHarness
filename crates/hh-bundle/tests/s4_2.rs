@@ -113,6 +113,7 @@ fn run_inputs<'a>(
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     }
 }
 

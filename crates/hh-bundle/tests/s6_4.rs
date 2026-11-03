@@ -155,6 +155,7 @@ fn inputs<'a>(rig: &'a Rig) -> AssembleInputs<'a> {
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     }
 }
 

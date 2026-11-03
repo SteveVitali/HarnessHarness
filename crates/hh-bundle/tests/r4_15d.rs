@@ -83,6 +83,7 @@ fn rig(tag: &str) -> Rig {
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     })
     .unwrap();
     let member = a.manifest.members[0].clone();

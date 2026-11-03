@@ -802,6 +802,13 @@ pub struct BundleManifest {
     /// `contains:<bundle_id>` member; `derived_from` is the
     /// supersession edge (`supersede_bundle`/`migrate_bundle` write it).
     pub composition: Json,
+    /// `evidence_profile` — the `evidence-package/1` typed member/role
+    /// profile section (§6.1; PADR-R5-3∗; R5.21, additive — absent on
+    /// manifests assembled before it): `{schema, profile_version,
+    /// member}`; `member` names the profile member's content address.
+    /// `Json::Null` carries no profile — pre-R5.21 manifests decode
+    /// byte-identically.
+    pub evidence_profile: Json,
     /// Registered extensions (preserved, never deciding validity).
     pub ext: BTreeMap<String, Json>,
     /// The bundle id — `idp/1` over `canonical(manifest − version_id)`.
@@ -863,6 +870,9 @@ impl BundleManifest {
             ),
         );
         m.insert("results".into(), self.results.clone());
+        if self.evidence_profile != Json::Null {
+            m.insert("evidence_profile".into(), self.evidence_profile.clone());
+        }
         if self.composition != Json::Null {
             m.insert("composition".into(), self.composition.clone());
         }
@@ -1001,6 +1011,7 @@ impl BundleManifest {
             traces,
             results: j.get("results").cloned().unwrap_or(Json::Null),
             composition: j.get("composition").cloned().unwrap_or(Json::Null),
+            evidence_profile: j.get("evidence_profile").cloned().unwrap_or(Json::Null),
             reproducibility: j.get("reproducibility").cloned().unwrap_or(Json::Null),
             members,
             unpinned,
@@ -1063,6 +1074,7 @@ mod tests {
             traces: BTreeMap::new(),
             results: Json::Null,
             composition: Json::Null,
+            evidence_profile: Json::Null,
             reproducibility: Json::Null,
             members: vec![],
             unpinned: vec![],

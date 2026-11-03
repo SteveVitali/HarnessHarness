@@ -100,6 +100,14 @@ pub struct AssembleInputs<'a> {
     /// `participant_class` override — the run manifest's class is the
     /// default.
     pub participant_class: Option<String>,
+    /// The `evidence-package/1` profile the producer mints (§6.1;
+    /// PADR-R5-3∗; R5.21). When present, the record's own closed checks
+    /// run, its declared coordinates are verified against the durable
+    /// prefix this assembly reads (subject head/watermark, lineage,
+    /// exported last event — disagreement refuses), and the record
+    /// lands as the `evidence_profile` member + manifest section.
+    /// `None` produces no profile — the member is additive.
+    pub evidence_profile: Option<crate::profile::EvidenceProfile>,
 }
 
 /// One bound extension the bundle carries — the §5g.5 §3
@@ -517,6 +525,81 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
             .unwrap_or_default(),
     };
 
+    // ── evidence-package/1 profile member (§6.1; PADR-R5-3∗; R5.21) ──
+    // The caller supplies the producer facts; the durable coordinates
+    // this assembly derives (subject head/watermark, lineage prefixes)
+    // are verified, never caller-asserted — a declared head, exported
+    // last event or watermark that disagrees with the durable prefix
+    // refuses the assembly. The snapshot is derived evidence, not a
+    // claim.
+    let mut evidence_section = Json::Null;
+    if let Some(profile) = &inputs.evidence_profile {
+        if let Some(v) = profile.check().into_iter().next() {
+            return Err(v.to_error());
+        }
+        let subject_coord = crate::profile::Coord {
+            seq: head.seq,
+            event_id: head.event_id.clone(),
+            hash: head.hash.clone(),
+        };
+        let prof_refused =
+            |code: &'static str, detail: String| BundleError::ProfileRefused { code, detail };
+        for h in &profile.native_heads {
+            if h.run_id == run_id && (h.kind != "subject" || h.coord != subject_coord) {
+                return Err(prof_refused(
+                    crate::profile::code::HEAD_MISMATCH,
+                    format!("native_heads:{run_id} ≠ the assembled subject head"),
+                ));
+            }
+            // A `lineage`-kind head must agree with the recorded prefix.
+            if h.kind == "lineage" {
+                let matches = subject.lineage.iter().any(|l| {
+                    l.get("run_id").and_then(Json::as_str) == Some(h.run_id.as_str())
+                        && l.get("up_to_seq").and_then(Json::as_int) == Some(h.coord.seq as i64)
+                        && l.get("head_hash").and_then(Json::as_str) == Some(h.coord.hash.as_str())
+                });
+                if !matches {
+                    return Err(prof_refused(
+                        crate::profile::code::HEAD_MISMATCH,
+                        format!("native_heads:{} names no recorded lineage prefix", h.run_id),
+                    ));
+                }
+            }
+        }
+        for w in &profile.watermarks {
+            if w.run_id == run_id && w.seq > head.seq {
+                return Err(prof_refused(
+                    crate::profile::code::WATERMARK_MISMATCH,
+                    format!(
+                        "watermarks:{run_id} seq {} ahead of head {}",
+                        w.seq, head.seq
+                    ),
+                ));
+            }
+        }
+        for e in &profile.exports {
+            if e.run_id == run_id && e.last_event != subject_coord {
+                return Err(prof_refused(
+                    crate::profile::code::HEAD_MISMATCH,
+                    format!("exports:{run_id} last_event ≠ the exported last event"),
+                ));
+            }
+        }
+        let bytes = profile.to_json().to_canonical_string().into_bytes();
+        let (addr, size) = add_member(&mut members, bytes, crate::profile::PROFILE_MEDIA);
+        index.push(MemberRef::present(
+            crate::profile::PROFILE_ROLE,
+            addr.clone(),
+            crate::profile::PROFILE_MEDIA,
+            size,
+        ));
+        evidence_section = Json::obj([
+            ("schema", Json::str(crate::profile::PROFILE_SCHEMA)),
+            ("profile_version", Json::Int(profile.profile_version as i64)),
+            ("member", Json::str(addr)),
+        ]);
+    }
+
     // ── materialize policy → member statuses + fetch[] ───────────────
     let mut fetch_entries = Vec::new();
     if inputs.policy.materialize != "self_contained" {
@@ -832,6 +915,9 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         // `composition` is the scoped-kind DAG section (S4.2) — a `run`
         // bundle carries none.
         composition: Json::Null,
+        // The `evidence-package/1` section — `Json::Null` when the
+        // caller mints no profile (additive; pre-R5.21 manifests).
+        evidence_profile: evidence_section,
         // Stamped below — the basis derivation reads the manifest's own
         // member index, so the section is built after the literal.
         reproducibility: Json::Null,

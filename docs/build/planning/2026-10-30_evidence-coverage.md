@@ -401,3 +401,32 @@ ticket never marks a deferred full-target predicate MET.
 > as a **contributing-only** evidence row (detector/payload joins
 > proven fixture-side; its §4 metrics predicates stay R5.36's) —
 > this ticket never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 191, R5.21): the
+> `evidence-package/1` typed member/role profile landed inside
+> `hh-bundle/1` (ADR-0399; `crates/hh-bundle/src/profile.rs` +
+> `assemble`/`validate`/`manifest` seams): the admitted versioned
+> record (R-group members required even when partial — absent is
+> `missing_required_member`), `ProfileIndex` create-if-absent
+> attempt/grade-attempt/export identities (identical bytes →
+> `Retained`; same id different bytes → `conflicting_identity`),
+> typed `native_heads`/`watermarks`/`exports[].last_event`
+> snapshot coordinates the assembler verifies against the durable
+> prefix it derives (never caller-asserted), the `check()` closed
+> set (`grade_retry_adds_n`, `build_note_as_wal`,
+> `head_mismatch`, `missing_head`, `watermark_mismatch`), and
+> `unknown_profile_version` refusing a new claim while the bundle
+> still decodes — legacy manifests validate byte-identically.
+> Engineered evidence in `crates/hh-bundle/tests/r5_21.rs` (9/9 —
+> compile-red at base `d9e2dce9`), mapping Packet C C.9 checks 2–3
+> (same-day attempts/regrades/export collision retained as unique
+> evidence; stale watermark/build-note-head substitution and
+> wrong head/last exported event refused) and the §6.5 label leg
+> (build-note never a native head). REQ-F-001/REQ-F-002 and
+> REQ-A-101/REQ-A-103 keep `planned; unmet` — achieved engineered
+> D/E recorded separately from the owed legs: owner-typed closure
+> (R5.22), population receipt (R5.23), R0 (R5.24), recompute
+> (R5.25), replay (R5.26), outside reviewer (R5.52), the C.9
+> producer-inaccessible recipient legs and every R/P predicate —
+> evidence dependency, never dispatch dependency; this ticket
+> never marks a deferred full-target predicate MET.

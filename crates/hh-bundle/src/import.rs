@@ -608,6 +608,7 @@ pub fn lift_foreign(
             ("member", Json::str(results_addr)),
         ]),
         composition: Json::Null,
+        evidence_profile: Json::Null,
         reproducibility: Json::Null,
         members: index,
         // The foreign environment/model are `unpinned{foreign_only}` —

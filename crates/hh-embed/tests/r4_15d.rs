@@ -148,6 +148,7 @@ fn fetch_bundle_dir(root: &Path, locations: &[String], expires: Option<&str>) ->
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     })
     .unwrap();
     let mut manifest = a.manifest.clone();
