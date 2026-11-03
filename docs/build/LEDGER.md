@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.36
-lastCompleted:   R5.35
+nextTicket:      R5.37
+lastCompleted:   R5.36
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.35
+chainTip:         codex/harnessharness-evidence-r5.36
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T13:03:00Z
+updatedAt:        2026-11-03T13:41:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1091,3 +1091,4 @@ updatedAt:        2026-11-03T13:03:00Z
 - 2026-11-03T13:03:00Z · R5.35 done — branch codex/harnessharness-evidence-r5.35 · PR #249 · base codex/harnessharness-evidence-r5.34 · §7.1 reader spine + evidence cards + portfolio positioning (ADR-0413): `docs/evidence.md` claim index — closed four-state vocabulary, marked spine with the three entry choices (readiness first, failure/report exit), eleven exact `### Card —` records (State/Scope/Evidence/Limits/Access; useful-task/study/operations `Not yet available`, component/interchange/evidence-access `Restricted`), selected job + inferred-demand label, maintained 22-family/9-later/6-scenario portfolio, `<!-- unmet -->` clause preserving S1/S3 under the recorded dispositions, claim→source map; README spine block; `scripts/check-position.sh` 13-leg both-modes check (canon parsed from the frozen supplement; gates fail fixture substitution; honesty bans favorable-treatment/scientific phrases); self-test 20/20; ci.yml `ci-mode: both` lane. **Verify:** check-position 13/13 + --head green · fails-without --head red at bfc0b508 · self-test 20/20 · living-docs/examples/contributing/bm-tools/ci-gating/triggers OK · fmt clean · guard PASS DISPATCH R5.35 pre+post · check-build-memory 0 viol (. + --staged) · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0413 · **Deviations:** none (587 vs ≤600) · **AC-3:** four primary ids (B-001/C-008/C-101/C-102 + merged A-001/C-001), twelve contributing-only — participant/publication + gated S1/S3/S4 predicates stay owed (R5.53/R5.54 et al.) · chainTip → codex/harnessharness-evidence-r5.35 · next → R5.36 · ci: pass #249@c609690 (all 4 checks 41639254836) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T13:23:31Z · **R5.36 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 1,564 numstat, ~1.8×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-C packet binds all six §4.2 metric families to one scope sentence (no contingency) with the explicit keep-together rule for producer-payload+math; `detect()` emits the whole 21-key map — the proposed primaries-vs-conditionals cut is mid-predicate and leg (a) alone still over; `subject_stop_seq` is the apparatus's own window bound (existing-contract projection, R5.33 class). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.34 precedent); dated note on `206_R5.36__metrics.md`; manifest row-206 note; review record `planning/2026-11-03_R5.36-split-review.md`; `runs/R5.36.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03T13:41:00Z · R5.36 done — branch codex/harnessharness-evidence-r5.36 · PR #250 · base codex/harnessharness-evidence-r5.35 · §4.2/M-C mechanism joins + versioned denominator definitions (ADR-0414): additive facts projections — `seq` on EffectRow/ArtefactRow + `subject_stop_seq` (earliest durable bound: min{phase→verify|teardown, control.decision{kind:stop}, lifecycle.run.finished}; ledger_facts/1 admits both; None ⇒ no_detector); `MECHANISM_REGISTRY` 21 versioned rows (units/bounds/direction/detector ids/reducers/windowed/required; retained non-required similarity name); closed `MechanismOutcome` (Value{num,den}|Count|NoDetector|EstimatorUndefined|Inapplicable); declared-metadata SubjectMechanism; windowed (c,event) joins; subject-ratio→task-mean→equal-task reducers (w_t=1/T, unpaired retained, coverage disclosed); family keeps unavailable required members. **Verify:** r5_36 5/5 · hharness-eval 160/0 · hh-analysis s5_3 11/11 · fmt OK · fails-without compile-red at beb979b0 · guard PASS DISPATCH R5.36 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 198 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0414 · **Deviations:** 1,564 changed source/test lines vs ≤850 flag (~1.8×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-005/106/E-004/107) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.40 AC-3 / R5.49 / R5.20 / R5.41) · chainTip → codex/harnessharness-evidence-r5.36 · next → R5.37 · ci: pass #250@ee23d25 (all 4 checks 41644737135; stack #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
