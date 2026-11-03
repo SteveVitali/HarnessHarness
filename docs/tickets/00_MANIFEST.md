@@ -412,6 +412,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 199 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; ~3.0× new high-water mark) |
 | 200 | `200_R5.30__ci.md` | Round 5 | ticket | Example CI modes and bounded refresh workflow | — |
 | 201 | `201_R5.31__contrib.md` | Round 5 | ticket | Ordinary contribution and failure-report routes | — |
+| 201 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; smallest-margin case ~1.0–1.1×) |
 | 202 | `202_R5.32__observer.md` | Round 5 | ticket | Confined observer apparatus and Kp4 controls | — |
 | 203 | `203_R5.33__permission.md` | Round 5 | ticket | Real permission wait, answer and resume matrix | — |
 | 204 | `204_R5.34__operations.md` | Round 5 | ticket | Account refusal, exhaustion and operational reporting machinery | — |
