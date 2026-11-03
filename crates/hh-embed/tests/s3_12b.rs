@@ -546,6 +546,7 @@ fn compare_arms(
         resampling_draws: 2000,
         seed: 7,
         post_amendment: false,
+        view: None,
     };
     let aspec = analysis_spec(
         &spec.experiment_id,

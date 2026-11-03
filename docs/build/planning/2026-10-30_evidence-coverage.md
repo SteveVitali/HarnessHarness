@@ -256,3 +256,24 @@ never marks a deferred full-target predicate MET.
 
 R5.16 run-time split: seq 185 lands contract-scope (support-only) evidence for REQ-D-107 (estimator + dialect member); seq **185a** (`185a_R5.16b__beta-routing.md`) is the routed-scope discharge leg for the engineered D/E claim. R/P + actual-execution remain owed to GATE-G10/R5.40/R5.49 per the GATE-G9 disposition. Single primary ownership preserved.
 
+
+## Dated note — 2026-11-02 REQ-D-107 routed-scope discharge
+
+Seq **185a** (`185a_R5.16b__beta-routing.md`, branch
+`codex/harnessharness-evidence-r5.16b`) landed the routing leg the
+2026-11-02 ownership note named: kind `finite_manifest_contrast` routes
+through `analyze` → `analyze_and_record` → persisted
+`analysis_report_body/1` (hh-analysis kind arm + `AnalysisInput.view`
+bound-experiment `ExperimentView` + `AnalysisError::Contrast` +
+`record_kind`; hh-embed `analysis_ops` view fold + strict integer param
+decode → `SchemaViolation`), consuming the seq-185 estimator contract
+UNCHANGED — engineered in `tests/r5_16.rs` batteries (hh-analysis 4,
+hh-embed 1 — each fails-without at `0b5fba98`). REQ-D-107 records `met`
+for its engineered D/E routed-scope predicates; the stamp covers the
+routed D/E legs only — R/P + actual-execution evidence stays owed to
+GATE-G10/R5.40/R5.49 per the GATE-G9 disposition. REQ-D-008 /
+REQ-D-109 / REQ-D-310 / REQ-E-209 / REQ-H-010 gain R5.16b as a
+**contributing-only** routed-scope evidence row (the typed-refusal
+surface, boundary strict decode and records-in view fold exercise
+their clauses); their primary targets keep `planned; unmet` — this
+ticket never marks a deferred full-target predicate MET.

@@ -103,6 +103,13 @@ pub struct AnalysisInput<'a> {
     /// experiment run's view (§6.3 `post_amendment`; ADR-0162). Records-in:
     /// the kernel never reads a ledger.
     pub post_amendment: bool,
+    /// The bound experiment's folded
+    /// [`ExperimentView`](hharness_experiment::view::ExperimentView) — required by the
+    /// `finite_manifest_contrast` kind (the planned-slot universe the
+    /// R5.15 population contract reconciles). Records-in: the caller
+    /// folds the experiment run's durable events; `None` for kinds that
+    /// do not consume the planned population (R5.16).
+    pub view: Option<&'a hharness_experiment::view::ExperimentView>,
 }
 
 /// Decode a required `filters` string member.
@@ -447,6 +454,20 @@ pub fn analyze(
 ) -> Result<AnalysisOutcome, AnalysisError> {
     let (runs, not_run) = project_runs(input)?;
     let filters = filters_of(spec);
+    // R5.16 metadata-only gate (S.5/§9.2): the admitted contrast method
+    // declared on a kind that does not compute it fails — the method is
+    // never a silent no-op decoration on another analysis.
+    if matches!(
+        spec.estimator_selection.method,
+        hharness_ontology::eval::IntervalMethod::FiniteManifestContrast(_)
+    ) && spec.kind != hharness_eval::finite_manifest::CONTRAST_KIND
+    {
+        return Err(AnalysisError::Contrast(
+            hharness_eval::finite_manifest::ContrastError::MetadataOnly {
+                kind: spec.kind.clone(),
+            },
+        ));
+    }
     let mut summaries = Vec::new();
     let mut comparisons: Vec<ComparisonReport> = Vec::new();
     let mut contrasts: Vec<Json> = Vec::new();
@@ -1572,6 +1593,128 @@ pub fn analyze(
                 "strata",
                 crate::ops::strata_view(&runs, &metric, by, input.suites),
             ));
+        }
+        hharness_eval::finite_manifest::CONTRAST_KIND => {
+            // R5.16 — the GATE-G9-admitted finite-manifest Bayesian
+            // efficacy method (Packet D / PADR-R5-4*): the bound
+            // experiment's planned slots reconcile through the R5.15
+            // population contract, then the independent per-cell
+            // integer-Beta posterior contrast computes over the resolved
+            // cells. `spec.estimator_selection.method` is the declared
+            // method — it must name `finite_manifest_contrast{prior}`:
+            // any other declaration is an unknown-method refusal (a
+            // pooled substitute declared through the prior name refuses
+            // inside the estimator).
+            use hharness_eval::finite_manifest as fm;
+            let prior_name = match &spec.estimator_selection.method {
+                hharness_ontology::eval::IntervalMethod::FiniteManifestContrast(p) => p.clone(),
+                other => {
+                    return Err(AnalysisError::Contrast(fm::ContrastError::UnknownMethod {
+                        declared: other.to_json().to_canonical_string(),
+                    }))
+                }
+            };
+            let (prior, prior_name) = if matches!(
+                prior_name.as_str(),
+                "pooled" | "hierarchical" | "task_population" | "population"
+            ) {
+                return Err(AnalysisError::Contrast(
+                    fm::ContrastError::PooledSubstitute {
+                        declared: prior_name,
+                    },
+                ));
+            } else {
+                match fm::parse_prior_name(&prior_name) {
+                    Some(p) => (p, prior_name),
+                    None => {
+                        return Err(AnalysisError::Contrast(fm::ContrastError::UnknownMethod {
+                            declared: prior_name,
+                        }))
+                    }
+                }
+            };
+            let view = input.view.ok_or_else(|| AnalysisError::MissingSpecRef {
+                kind: format!(
+                    "{CONTRAST} (bound experiment view)",
+                    CONTRAST = fm::CONTRAST_KIND
+                ),
+            })?;
+            let test_arm = filter_str(&filters, "test_arm")?.to_string();
+            let control_arm = filter_str(&filters, "control_arm")?.to_string();
+            let population = match opt_filter_str(&filters, "population").unwrap_or("canonical") {
+                "raw" => hharness_eval::population::PopulationKind::Raw,
+                "canonical" => hharness_eval::population::PopulationKind::Canonical,
+                "joint_task_pass_without_observed_veto" => {
+                    hharness_eval::population::PopulationKind::JointTaskPassWithoutObservedVeto
+                }
+                other => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "query.filters.population".into(),
+                        detail: format!(
+                            "unknown population {other} — raw|canonical|joint_task_pass_without_observed_veto"
+                        ),
+                    })
+                }
+            };
+            let metric_ref = opt_filter_str(&filters, "metric")
+                .or_else(|| spec.query.metrics.first().map(String::as_str))
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "finite_manifest_contrast requires a binary metric ref".into(),
+                })?
+                .to_string();
+            // Unknown metric names refuse through the declaration
+            // resolver — never silently degrade to an all-unresolved
+            // cell read when declarations were presented.
+            if !spec.query.metrics.is_empty() {
+                decls_for(input, &spec.query.metrics)?;
+            }
+            let bounds = match opt_filter_str(&filters, "bounds") {
+                None | Some("unit") => hharness_eval::population::BoundsDecl::Unit,
+                Some("unbounded") => hharness_eval::population::BoundsDecl::Unbounded {
+                    detail: "declared unbounded measure".into(),
+                },
+                Some("right_censored") | Some("censored") => {
+                    hharness_eval::population::BoundsDecl::RightCensored {
+                        detail: "declared right-censored measure".into(),
+                    }
+                }
+                Some(other) => {
+                    return Err(AnalysisError::Contrast(fm::ContrastError::NonFiniteInput {
+                        detail: format!("bounds {other}"),
+                    }))
+                }
+            };
+            // `use_as`/`verdict` carry the declared downstream use — a
+            // credible-as-TOST/equivalence/confidence use refuses (S.6).
+            let use_as = opt_filter_str(&filters, "use_as")
+                .or_else(|| opt_filter_str(&filters, "verdict"))
+                .map(str::to_string);
+            let pop = crate::population::planned_population(
+                view,
+                &runs,
+                input.tasks,
+                &metric_ref,
+                &input.watermark_set.runs,
+            )?;
+            let out = fm::finite_manifest_contrast(
+                &pop,
+                &fm::ContrastDecl {
+                    population,
+                    test_arm,
+                    control_arm,
+                    stratum: opt_filter_str(&filters, "stratum").map(str::to_string),
+                    prior,
+                    prior_name,
+                    dependence: opt_filter_str(&filters, "dependence").map(str::to_string),
+                    target: opt_filter_str(&filters, "target").map(str::to_string),
+                    use_as,
+                    bounds,
+                    level_ppm: input.confidence_ppm,
+                    seed: input.seed,
+                },
+            )?;
+            sections.push(("finite_manifest_contrast", out.to_json()));
         }
         other => {
             return Err(AnalysisError::KindNotImplemented {

@@ -110,6 +110,7 @@ pub(crate) fn record_kind(spec_kind: &str) -> &'static str {
         "fit_surface" => "fitted_surface",
         "attribution" => "attribution_report",
         "equivalence" => "equivalence_report",
+        "finite_manifest_contrast" => "finite_manifest_contrast",
         _ => "custom",
     }
 }
