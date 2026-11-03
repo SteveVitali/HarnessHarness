@@ -433,6 +433,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 211 | `211_R5.41__protocol.md` | Round 5 | ticket | Deterministic central protocol materialization | — |
 | 211 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; materialize+validate one compound predicate) |
 | 212 | `212_R5.42__quote.md` | Round 5 | ticket | Per-stage readiness and full exposure quote | — |
+| 212 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; one closed predicate; ~3.4× NEW high-water mark) |
 | 213 | `213_HUMAN-H8__inputs.md` | Round 5 | human | Bind actual backend, inputs, rights and stage resources | — |
 | 214 | `214_GATE-G18__backend-gate.md` | Round 5 | gate | Authorize narrowly quoted backend feasibility preflight | STOP |
 | 215 | `215_R5.42a__backend-preflight.md` | Round 5 | skeleton | Earn bounded native backend feasibility evidence | pending GATE-G18 |
