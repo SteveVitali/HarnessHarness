@@ -467,7 +467,7 @@ fn kl_f64(x: f64, p: f64) -> f64 {
     x * ln_det(x / p) + (1.0 - x) * ln_det((1.0 - x) / (1.0 - p))
 }
 
-/// [`kl_f64`] on ppm inputs (`0..=PPM` → `[0,1]`).
+/// `kl_f64` on ppm inputs (`0..=PPM` → `[0,1]`).
 pub fn bernoulli_kl(x_ppm: i64, p_ppm: i64) -> f64 {
     kl_f64(x_ppm as f64 / PPM as f64, p_ppm as f64 / PPM as f64)
 }
