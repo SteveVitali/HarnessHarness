@@ -1,0 +1,48 @@
+{
+  "schema": "example-card/1",
+  "case": "ex-02",
+  "card_version": "2026-11-03.r5.29",
+  "title": "EX-02 — the informative two-task offline Lab lesson",
+  "fixture_label": "synthetic Lab fixture — declared instrument verdicts over scripted-lane subjects; teaching evidence, never study or efficacy evidence",
+  "prerequisites": {
+    "rust": "1.94 (rust-toolchain.toml pin)",
+    "network": false,
+    "credentials": "none",
+    "spend_usd": 0,
+    "features": "default (tier-c1 + tier-c4)",
+    "companion": "drives hh-recipe/1 (R5.28) + finite_manifest_contrast (R5.16/17, GATE-G10) + recompute_analysis (R5.25)"
+  },
+  "pins": {
+    "fixture": {
+      "path": "scripts/examples/ex-02-fixture.json",
+      "sha256": "sha256:f21a340f966d2d21f72f424635461906dbff16e09cfb2f6d9844ad8e203300c8"
+    }
+  },
+  "checks": [
+    "subjects_20",
+    "cells_pinned",
+    "report_identity",
+    "informative_contrast",
+    "exploratory_label",
+    "refusal_controls",
+    "recipient_recompute"
+  ],
+  "negative_controls": [
+    "stale pin — a drifted card sha256 or edited fixture refuses stale_pin before any execution",
+    "wrong count/mean — durable grade recomputation must equal the pinned sequences; a fixture flip fails cells_pinned",
+    "constant fixture — a constant teaching-only table fails informative_contrast; the method still reports valid intervals",
+    "producer fallback — a withheld recompute input is a typed Withheld refusal, never a producer-side fallback",
+    "expected refusals — bad lease / missing row / duplicate settle ride the owners' typed errors verbatim"
+  ],
+  "costs": {
+    "build": "one cargo build/test of hharness + deps (minutes, existing toolchain); no added dependencies",
+    "runtime": "seconds; one scratch store, 20 scripted-lane subjects across two experiments; no network, no provider, $0"
+  },
+  "limitations": [
+    "fixture-only teaching — never satisfies S1/S3, useful-task, live or study readiness",
+    "the registered beta{1,1} arm only — the beta{2,2} prior placement is DF-R5.17-1 (owed to R5.40)",
+    "exploratory report — no configured sample/budget becomes a confirmation default; no significance claim is made",
+    "one experiment per task because a plan's grade map is arm→per-cell-replicate (a two-task experiment would force a constant fixture); the merged folded view is the recorded 20-slot universe"
+  ],
+  "run": "cargo test -p hharness --test r5_29 ex02"
+}
