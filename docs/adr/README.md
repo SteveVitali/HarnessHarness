@@ -193,3 +193,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0401](ADR-0401-r5.23-population-receipt-landing.md) | R5.23 all-planned population receipt — reconcile chain, verdict axes and record landing decisions | R5.23 (Assemble all-planned evidence from owning | Accepted |
 | [ADR-0402](ADR-0402-r5.24-r0-lifecycle-repair-landing.md) | R5.24 R0 open/finished lifecycle repair and recipient decode bounds — landing decisions | R5.24 (Repair R0 lifecycle and prove clean-recipient | Accepted |
 | [ADR-0403](ADR-0403-r5.25-recompute-landing.md) | R5.25 §6.3 recompute through the native owner — landing decisions | R5.25 (Recompute frozen analysis through the native | Accepted |
+| [ADR-0404](ADR-0404-r5.26-replay-fresh-landing.md) | R5.26 §6.3 isolated-replay and fresh-execution admission cards — landing decisions | R5.26 (Isolated replay and fresh-execution admission | Accepted |

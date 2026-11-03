@@ -572,3 +572,57 @@ ticket never marks a deferred full-target predicate MET.
 > R/P/actual-execution predicate — evidence dependency, never
 > dispatch dependency. All five are stamped **contributing-only** —
 > this ticket never marks a deferred full-target predicate MET.
+> Dated contributing note — 2026-11-03 (seq 196, R5.26): the §6.3
+> isolated-replay and fresh-execution admission cards landed inside
+> `hh-bundle` (ADR-0404; `crates/hh-bundle/src/cards.rs` — two
+> records-in/records-out owner interfaces beside `closure.rs`,
+> `admit_replay(&Decoded, run_id, &ReplayAttempt) →
+> Result<AdmissionCard, BundleError>` and
+> `admit_fresh(&Decoded, run_id, &FreshClaim) →
+> Result<AdmissionCard, BundleError>`; `replay-card/1` and
+> `fresh-card/1` records, `idp/1`-sealed — nothing executes, the
+> live replay driver stays in `hh-embed`). `admit_replay`'s legs
+> are the §6.3 row verbatim: `inputs` (definition + compiled_bundle
+> member bytes, recorded response rows, a declared
+> `control.decision`, both isolation flags — typed `CardRefused`)
+> → `prefix` (source hash/chain recompute + copy prefix
+> envelope-exact — `original_mutation`) → `suffix` (only
+> `lifecycle.replay.*` markers may append continuing the chain;
+> other classes `replay_suffix`) → `counters` (the card recounts
+> appended `model.call.*`/`action.effect.*` classes itself —
+> declared counts must agree; any nonzero attempt is
+> `attempted_live_dispatch` even when the transport blocked it) →
+> `decisions` (replayed `control.decision`/`context.assembled`
+> sequences exact — `changed_derivation`) → `rederivation` (R1:
+> `version_id` + envelope hashes + `present` member addresses + the
+> run's ledger `tree` each recomputed from authoritative bytes;
+> `n_a{not_claimed}` when not claimed). `admit_fresh` refuses
+> `unfunded`/`unavailable{model_retired}`/`not_fresh`/
+> `charging_attribution`, the per-level required inputs (R2
+> seeds/margins/validators; R3 seed_distribution/MatchSpec/
+> margins/seeds; transfer outside_relationship/no_new_phase/
+> comparison/new_question) and `not_independent` through the
+> landed `compute_independence` — an author-only clean directory
+> admits nothing — then evaluates `native_basis` through
+> `levels::derive` and `arms` (n ≥ k ≥ 2: one fresh demo awards
+> no level; R3 not cumulative R2). Cards stay separate —
+> `procedure`/`level` members with `prerequisites`/`resources`/
+> `counters`/`independence` recorded apart from `verdict`.
+> Engineered evidence in `crates/hh-bundle/tests/r5_26.rs`
+> (20/20 — compile-red at base `d5f355fb`): honest R1 and non-R1
+> replays admit, R2/R3/transfer admit, separation proven;
+> missing inputs, undeclared replay, enabled isolation, mutated/
+> truncated prefix, non-marker suffix, attempted live dispatch
+> (declared blocked or not), changed derivation, R1 gaps, every
+> fresh gate, R3 blocks, transfer independence gates and the
+> unpinned-model basis all refuse or fail as typed. Deviation:
+> 1,823 changed source/test lines vs ≤750 — AMEND ruling 7f0fbe76
+> (`planning/2026-11-03_R5.26-split-review.md`). REQ-A-005,
+> REQ-A-105, REQ-B-104, REQ-D-010 and REQ-D-202 keep `planned;
+> unmet` — achieved engineered D/E recorded separately from the
+> owed legs: the named contributor R5.45 (trace) and every
+> R/P/actual-execution predicate — evidence dependency, never
+> dispatch dependency; this ticket never marks a deferred
+> full-target predicate MET. REQ-A-103, REQ-C-003, REQ-F-005,
+> REQ-F-007, REQ-F-204 and REQ-F-205 are stamped
+> **contributing-only** — the same rule.
