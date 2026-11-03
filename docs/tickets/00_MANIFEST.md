@@ -421,6 +421,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 204 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; apparatus/battery cut rejected as impl-vs-battery) |
 | 205 | `205_R5.35__position.md` | Round 5 | ticket | Reader spine, evidence cards and portfolio positioning | — |
 | 206 | `206_R5.36__metrics.md` | Round 5 | ticket | Mechanism joins and versioned denominator definitions | — |
+| 206 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; M-C keep-together rule) |
 | 207 | `207_R5.37__taskstats.md` | Round 5 | ticket | Task-mixture sensitivity, sharp-null families and tails | — |
 | 208 | `208_R5.38__kl.md` | Round 5 | ticket | Directional KL and correctly labelled bounded equivalence | — |
 | 209 | `209_R5.39__parity-admission.md` | Round 5 | ticket | Authentic paired records and policy applicability | — |
