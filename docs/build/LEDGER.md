@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.24
-lastCompleted:   R5.23
+nextTicket:      R5.25
+lastCompleted:   R5.24
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.23
+chainTip:        codex/harnessharness-evidence-r5.24
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-03T04:29:00Z
+updatedAt:       2026-11-03T05:01:03Z
 ```
 
 ## OPEN FINDINGS
@@ -1058,3 +1058,4 @@ updatedAt:       2026-11-03T04:29:00Z
 - 2026-11-03T03:54:27Z · **R5.23 size ruling** — worker stopped correctly at the ≤950 line trigger (measured 1,527 numstat, ~1.6×; context within 28k+10k estimate). Scoped fresh-context review verdict: **AMEND** — one in-process owner interface (`assemble_receipt`; `population-receipt/1` is the legs'+verdicts' own fold); decomposition row 31 names "R5.23 assembly" one owner, partition R3 has no contingency, and the L150 contract-vs-consumer seam is consumed (R5.23 is the consumer side of the landed R5.15/184a pair; a re-cut needs the C.1-item-6-forbidden crate edge). AC-1 binds the four axes to the chain conjunctively; the weakest proposed cut leaves leg (a) over trigger while splitting AC-1 mid-predicate. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.22 precedent); dated note on `193_R5.23__population-receipt.md`; manifest row-193 note; review record `planning/2026-11-03_R5.23-split-review.md`; `runs/R5.23.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03 · R5.23 done — branch `codex/harnessharness-evidence-r5.23` · PR #237 · base `codex/harnessharness-evidence-r5.22` (@0f5246f). `population-receipt/1` — the §6.1 all-planned closure reconcile inside `hh-analysis` (Packet C C.9 checks 2/6; ADR-0401): `assemble_receipt(&ExperimentView, &[EvalRun], &[TaskContext], metric_ref, pins, &DeclaredReceipt) → Result<PopulationReceipt, AnalysisError>` — six set-equality legs slots→plans→first/all attempts→settlements/selected grades→rows→analysis (expected side = landed R5.15 contract via 184a `planned_population`, X7; refusals verbatim); records-in declared side; closed fourteen-code `receipt::code` set; four separate per-slot verdict axes (finished invocation never erases skipped/format failure; retry never counts subject n); fixed `derived_index` label — no class promotion; mismatches recorded findings, never thrown/shrunk; no crate edge (C.1 item 6). **Verify:** fmt OK · r5_23 9/9 · hh-analysis 90/0 · fails-without compile-red at `d5f6810a` · guard PASS DISPATCH R5.23 post-boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 185 · backlog (ADR-0401→BL-47). **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0401. **Deviations:** 1,527 changed source/test lines vs ≤950 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-208/F-003/F-004/F-008/C-002 D/E recorded; REQ-A-101 contributing-only; R/P/actual-execution owed (contributors R5.22/R5.24/R5.43). chainTip → codex/harnessharness-evidence-r5.23 · next → R5.24 · ci: pass #237@0f5246f (all 4 checks 41575536204; macos rerun after helper_live deadline flake; stack pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03 · R5.24 done — branch `codex/harnessharness-evidence-r5.24` · PR #238 · base `codex/harnessharness-evidence-r5.23` (@58431cf). R0 open/finished lifecycle repair — the §9.3 admitted existing-contract fix (A3 F6): `kernel.reproduce` R0 fold derives `open`/`finished` from `lifecycle.run.finished` presence (producer's own rule; outcome-plane `payload.status` never read — task failure can validate) + §6.3 `decode_dir` bounds (`MemberEscape` link/non-regular/`bundle.json` entries; `MemberExpansion` beyond declared size, blob bound when undeclared). Six R0 controls + refusals + clean-recipient verifyfixed (producer deleted → argument-file validate+R0 pass, byte-identical dir, diagnostic-equivalent old-fold derivation per §5.3/REQ-D-208). **Verify:** fmt OK · r5_24 9/9 · hh-embed suite green + hh-bundle green · fails-without 5/9 red (exact F6 signature) · guard PASS DISPATCH R5.24 pre+post · bm 0 viol (. + --staged) · bm-tools OK · living-docs 418 · triggers 186 · removability exit 1 = BL-49 pre-existing only · 699 vs ≤700 inside. **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0402. **Deviations:** none. **AC-3:** REQ-F-007/A-204/C-003/D-208 D/E recorded; 12 contributing-only stamps; R/P/actual-execution owed (R5.25/26/45/52). chainTip → codex/harnessharness-evidence-r5.24 · next → R5.25 · ci: pass #238@58431cf (all 4 checks 41580171838) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
