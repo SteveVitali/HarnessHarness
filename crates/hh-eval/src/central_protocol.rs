@@ -457,6 +457,10 @@ pub enum ProtocolError {
     LateSplit,
     /// A held-out task's stratum carries no quota.
     UndeclaredStratum { stratum: String },
+    /// A stratum appears twice in the quota table — the frozen table
+    /// declares each stratum once; a repeat would silently re-select
+    /// the same candidates (replacement).
+    DuplicateStratum { stratum: String },
     /// The quotas do not total [`TASKS`].
     QuotaMismatch { declared: u32, required: u32 },
     /// Too few eligible held-out tasks — revision or stop, never
@@ -527,6 +531,9 @@ impl std::fmt::Display for ProtocolError {
             E::LateSplit => write!(f, "split assignment does not predate access"),
             E::UndeclaredStratum { stratum } => {
                 write!(f, "held-out task in undeclared stratum {stratum}")
+            }
+            E::DuplicateStratum { stratum } => {
+                write!(f, "stratum {stratum} declared twice in quotas")
             }
             E::QuotaMismatch { declared, required } => {
                 write!(f, "quotas total {declared}, required {required}")
@@ -661,10 +668,16 @@ pub fn materialize_protocol(decl: &ProtocolDecl) -> Result<MaterializedProtocol,
         });
     }
     let mut by_strategy: BTreeMap<&str, &ArmDecl> = BTreeMap::new();
+    let mut arm_ids: BTreeSet<&str> = BTreeSet::new();
     for arm in &decl.arms {
         if arm.arm_id.is_empty() || arm.artifact_ref.is_empty() {
             return Err(E::ArmSet {
                 detail: "arm id/artifact empty".into(),
+            });
+        }
+        if !arm_ids.insert(arm.arm_id.as_str()) {
+            return Err(E::ArmSet {
+                detail: format!("arm id {} duplicated", arm.arm_id),
             });
         }
         if !ARM_STRATEGIES.contains(&arm.strategy.as_str())
@@ -772,13 +785,26 @@ pub fn materialize_protocol(decl: &ProtocolDecl) -> Result<MaterializedProtocol,
         }
     }
 
-    // ── quotas total 30; every held-out stratum declared ──────────
+    // ── quotas total 30; each stratum declared once ───────────────
     let need_total: u32 = decl.quotas.iter().map(|q| q.required).sum();
     if need_total != TASKS {
         return Err(E::QuotaMismatch {
             declared: need_total,
             required: TASKS,
         });
+    }
+    let mut quota_strata: BTreeSet<&str> = BTreeSet::new();
+    for q in &decl.quotas {
+        if q.stratum.is_empty() {
+            return Err(E::MissingKey {
+                member: "quotas[].stratum",
+            });
+        }
+        if !quota_strata.insert(q.stratum.as_str()) {
+            return Err(E::DuplicateStratum {
+                stratum: q.stratum.clone(),
+            });
+        }
     }
     let held_out: Vec<&TaskEntry> = decl
         .tasks
@@ -794,6 +820,15 @@ pub fn materialize_protocol(decl: &ProtocolDecl) -> Result<MaterializedProtocol,
     }
 
     // ── phases/family/stops identities ────────────────────────────
+    if decl.phases.len() != PHASES.len() {
+        return Err(E::PhaseIdentity {
+            detail: format!(
+                "exactly the {} frozen phases; {} declared",
+                PHASES.len(),
+                decl.phases.len()
+            ),
+        });
+    }
     let mut phase_ids: BTreeSet<&str> = BTreeSet::new();
     for phase in PHASES {
         match decl.phases.get(phase) {

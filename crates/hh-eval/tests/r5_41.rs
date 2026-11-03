@@ -401,6 +401,19 @@ fn ac2_insufficient_and_malformed_quotas_refuse() {
             stratum: "undeclared".into()
         })
     );
+    // A stratum declared twice would re-rank the same candidates and
+    // silently re-select (replacement) — the frozen table refuses.
+    let mut d = golden();
+    d.quotas[1] = Quota {
+        stratum: "low".into(),
+        required: 10,
+    };
+    assert_eq!(
+        materialize_protocol(&d),
+        Err(ProtocolError::DuplicateStratum {
+            stratum: "low".into()
+        })
+    );
 }
 
 #[test]
@@ -493,6 +506,14 @@ fn ac2_arm_set_and_policy_shape_refuse() {
         materialize_protocol(&d),
         Err(ProtocolError::ArmSet { .. })
     ));
+    // A duplicated arm id would collapse `lane_of_arm` to one entry —
+    // the arm set must carry two distinct ids.
+    let mut d = golden();
+    d.arms[1].arm_id = "arm:a".into();
+    assert!(matches!(
+        materialize_protocol(&d),
+        Err(ProtocolError::ArmSet { .. })
+    ));
     // Search budget > 0.
     let mut d = golden();
     d.search_budget = 1;
@@ -549,6 +570,14 @@ fn ac2_identity_refusals() {
     // Duplicate phase ids.
     let mut d = golden();
     d.phases.insert("pilot".into(), "phase:confirmation".into());
+    assert!(matches!(
+        materialize_protocol(&d),
+        Err(ProtocolError::PhaseIdentity { .. })
+    ));
+    // A non-frozen phase key smuggled into the record refuses — the
+    // phase set is exactly the six.
+    let mut d = golden();
+    d.phases.insert("staging".into(), "phase:staging".into());
     assert!(matches!(
         materialize_protocol(&d),
         Err(ProtocolError::PhaseIdentity { .. })
