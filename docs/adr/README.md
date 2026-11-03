@@ -199,3 +199,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0407](ADR-0407-r5.29-offline-examples-landing.md) | R5.29 §7.2 early offline examples and the informative Lab lesson — landing decisions | R5.29 (Early offline examples and informative Lab | Accepted |
 | [ADR-0408](ADR-0408-r5.30-example-ci-modes-landing.md) | R5.30 §7.3 example CI modes and bounded refresh — landing decisions | R5.30 (Example CI modes and bounded refresh workflow) | Accepted |
 | [ADR-0409](ADR-0409-r5.31-contribution-routes-landing.md) | R5.31 §8.1 ordinary contribution and failure-report routes — landing decisions | R5.31 (Ordinary contribution and failure-report routes) | Accepted |
+| [ADR-0410](ADR-0410-r5.32-observer-apparatus-landing.md) | R5.32 confined observer apparatus and Kp4 controls — landing decisions | R5.32 (Confined observer apparatus and Kp4 controls) | Accepted |
