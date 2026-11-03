@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.41
-lastCompleted:   R5.40
+nextTicket:      R5.42
+lastCompleted:   R5.41
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.40
+chainTip:         codex/harnessharness-evidence-r5.41
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T19:06:42Z
+updatedAt:        2026-11-03T19:48:21Z
 ```
 
 ## OPEN FINDINGS
@@ -1106,3 +1106,4 @@ updatedAt:        2026-11-03T19:06:42Z
 - 2026-11-03T19:06:42Z · R5.40 done — branch codex/harnessharness-evidence-r5.40 · PR #254 · base codex/harnessharness-evidence-r5.39 · M-G composed numerical validation + DF-R5.17-1 prior repair (ADR-0418): `decl.prior` parameterizes the conjugate update (mean `(c+a)/(n+a+b)`, draws `beta_inv_ppm(u, c+a, n−c+b)`; beta{1,1} byte-identical); shared-core factor — sim headline is the estimator's interval bit-identical by construction; `sim_battery/1` frozen — 42 cells S.4-complete, ≥2,000 declared/cell, derivable seeds, refusal census, diagnostic coverage, widths, sign-flip/type-I, binomial MC error, armed prior sensitivity, all-or-nothing rollup; ≤4-thread offline executor; executed record `reports/2026-11-03-r5.40-sim-battery.json` rollup `complete` (84,000 datasets, 5,916s wall vs ≤8h; first in-flight run died pre-write — deterministic protocol re-executed). **Verify:** r5_40 11/11 · eval+analysis all green · fmt OK · fails-without at base (compile-red + 142_857 defect at f5f9ae1e) · independent SplitMix64 beta{2,2} sampler ≤20_000 ppm · routed persisted `analysis_report_body/1` · guard PASS DISPATCH R5.40 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 202 · **Deferrals:** opened none, closed DF-R5.17-1 (DONE per its recipe) — carried DF-R5.1-1 · **ADRs:** ADR-0418 · **Deviations:** 1,745 changed source/test lines vs ≤750 flag (~2.3×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-109/D-310/E-209/H-010) + D-008 contributing-only — R/P + actual-execution owed R5.47/R5.49 · chainTip → codex/harnessharness-evidence-r5.40 · next → R5.41 · ci: pass #254@6482b9a (cargo-deny 41697590305; gitleaks 41697590305; build · test · fmt · drift ubuntu 41697590305; macos 41697590305; stack #253…#239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T19:28:18Z · **R5.41 size ruling** — worker stopped correctly at the ≤800 line trigger (measured 1,537 numstat, ~1.9×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-H :147 binds materialize+validate as one compound predicate (no written contingency); `materialize_protocol` is a single closed predicate (every refusal gate before selection; `protocol_id` minted last; no prefix admitted); the proposed materialize-vs-validation cut is mid-predicate and the impl leg alone ~960 still over — non-curative. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.40 precedent); dated note on `211_R5.41__protocol.md`; manifest row-211 note; review record `planning/2026-11-03_R5.41-split-review.md`; `runs/R5.41.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03T19:48:21Z · R5.41 done — branch codex/harnessharness-evidence-r5.41 · PR #255 · base codex/harnessharness-evidence-r5.40 · §4.1/M-H deterministic central protocol materialization (ADR-0419): `central_protocol.rs` `materialize_protocol` — records-in validator+materializer; seeded `idp_digest` ranks (`select`/`order`/`coin`/`slot` domains) → outcome-blind 30-task no-replacement selection under exact frozen quotas + equal within-stratum weights, task-level fair lane coin (both orientations), 5-round × 2-arm interleaved 300-slot schedule, first-slot bindings, six phase + frozen family/multiplicity/stop identities; `protocol_id` derived commitment minted last inside one Result — every refusal gate before selection, no prefix admitted; closed `ProtocolError` (30 legs incl. close-review `DuplicateStratum`, duplicate `arm_id`, exact phase set); S.1 `MethodMetadata` consumed unchanged; no new RecordKind/class/dep. **Verify:** r5_41 16/16 · hharness-eval all suites 0 failures · fmt OK · fails-without compile-red at 9aa768db · guard PASS DISPATCH R5.41 pre / DISPATCH R5.42 post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 202 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 · **ADRs:** ADR-0419 · **Deviations:** 1,601 changed source/test lines vs ≤800 flag (~2.0× — 1,537 at checkpoint + 64 close-review repair lines) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** eight primary ids (D-007/101/102/103, E-011, B-101/103/106) — full-target R/P/actual-execution predicates stay owed (R5.46+/R5.49) · chainTip → codex/harnessharness-evidence-r5.41 · next → R5.42 · ci: pass #255@e910ae0 (all 4 checks 41704445599; stack #254…#239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
