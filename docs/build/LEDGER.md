@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.15
-lastCompleted:   R5.14b
+nextTicket:      R5.15b
+lastCompleted:   R5.15
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.14b
+chainTip:        codex/harnessharness-evidence-r5.15
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T17:54:00Z
+updatedAt:       2026-11-02T18:42:58Z
 ```
 
 ## OPEN FINDINGS
@@ -1030,3 +1030,6 @@ updatedAt:       2026-11-02T17:54:00Z
 - 2026-11-02T17:34:45Z · **R5.14b size ruling** — worker stopped correctly at the ≤900 line trigger (measured 1,671, ~1.85×; context within estimate). Scoped fresh-context review verdict: **AMEND** — X7's only documented contingency (owner model before consumer wiring) consumed by the 183/183a split; b1/b2 per-consumer cut is the "not seven tiny tickets" fragmentation X7 names; AC-1/AC-2/AC-3 each span both halves. Removability deviation verified (pre-existing `hharness→hharness-varhost` baseline edge `crates/hharness/Cargo.toml:72`). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.14 precedent); dated note on `183a_R5.14b__pending-consumers.md`; manifest row-183a note; review record `planning/2026-11-02_R5.14b2-split-review.md`; `runs/R5.14b.md` ruling. Worker resumes to close. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-02T17:54Z · R5.14b done — branch `codex/harnessharness-evidence-r5.14b` · PR #225 · base `codex/harnessharness-evidence-r5.14` (@6baa09e). Consumer wiring leg (b) of the `07b6be09` SPLIT — every declared scored consumer composes the one admitted `plan_disposition_at` owner contract UNCHANGED (X7): hh-results `scoring.experiment_run` pin → `project_row` reads the admitted disposition (pending withholds `outcome_class` + stamps `outcome.disposition='pending'`; graded/oracle_failure restore the class; pin → `watermark_set`) + `Field::Disposition` query leg + `DispositionUnresolved` + export `foreign_leaderboard_submission` refusal / `outcome.disposition` no_slot entries; hh-eval `EvalRun.disposition` + `in_denominator` never denominates pending; hh-analysis `eval_run` propagates; hh-embed `lab.analysis.analyze` `Refused{grade_pending}`; step-6 agreement + old-watermark byte-identical reproduction proven. **Verify:** fmt OK · batteries 7/3/2 (results/eval/embed) · owning packages all-ok · fails-without compile-red at base (15/7/4) · guard PASS DISPATCH R5.14b pre+post · bm 0 viol (. + --staged) · bm-tools OK · triggers in sync. **Deferrals:** DF-R5.1-1 carried; none opened/closed. **ADRs:** none new — pure composition of ADR-0393's contract; BL-49 homes the removability edge. **Deviations:** 1,671 changed source/test lines vs ≤900 (~1.85×) — accepted as recorded Deviation per AMEND ruling `d4aba7ad`; `check-removability.sh` exits 1 on the pre-existing `hharness→hharness-varhost` baseline edge (`crates/hharness/Cargo.toml:72`, identical at base; BL-49). **AC-3:** REQ-E-202/REQ-E-008 discharged (met, engineered E-layer); REQ-E-102/103/201/204 contributing-only. chainTip → codex/harnessharness-evidence-r5.14b · next → R5.15 · ci: pass #225@c0d60d2 (build · test · fmt · drift macos+ubuntu · cargo-deny · gitleaks 41493327253; logs/ci-r5.14b.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-02T18:22:36Z · **R5.15 size ruling — SPLIT** — worker stopped correctly at the ≤1000 line trigger (measured 1,676, ~1.68×; context within estimate). Scoped fresh-context review verdict: **SPLIT** at the documented M-A contingency + decomposition line-150 "population contract vs consumer wiring" — second real split (after R5.14). CORRECTED seam: whole `hh-eval::population` contract (incl. `contrast_bounds`/`BoundsDecl`/`MethodMetadata` — contract per M-A, not consumer) stays leg (a) on row 184; only the hh-analysis `planned_population` adapter + battery → seq 184a `184a_R5.15b__population-adapter.md`. Leg (a) pre-ruled Deviation band ≤~1.6× (~1,342 measured); beyond → STOP again. Manifest note+row+Plan extensions (183 entry retroactively added too); decomposition dated note; review record `planning/2026-11-02_R5.15b-split-review.md`. Worker resumes as leg (a). · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-02T18:42:58Z · R5.15 done — branch `codex/harnessharness-evidence-r5.15` · PR #227 · base `codex/harnessharness-evidence-r5.14b` (@3f9ca25). Contract-owner leg (a) of the `4d13371f` SPLIT (corrected seam — bounds/metadata are contract; contract 184 rescoped; hh-analysis adapter → seq 184a/R5.15b): whole `hharness_eval::population` — records/`assemble` (required-universe `IncompleteUniverse`; first-subject + first-admissible-retry recovery; all-attempts; pinned-watermark `HistoryLeak`/`WatermarkMissing`) + three named populations beside six-class/veto/availability axes + `contrast_bounds` (per-cell [s/M,(s+u)/M]; equal-task `test_minus_control` w_t=1/T; unrun tasks retain weight; D1 golden [−.4,.5]) + `BoundsDecl` unit-only + `MethodMetadata` S.1 spine + closed 13-variant `PopulationError`; zero classes/deps, pure records-in; hh-analysis diff vs base now zero. **Verify:** fmt OK · r5_15 10/10 · hh-eval 14 targets all-ok · hh-analysis green without adapter · fails-without compile-red at `3f9ca250` · guard PASS DISPATCH R5.15 pre+post · bm 0 viol (. + --staged) · bm-tools OK · triggers in sync (178). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **ADRs:** ADR-0394 + BL-47 sources. **Deviations:** 1,342 vs ≤1000 — inside pre-ruled ≤~1.6× band under SPLIT `4d13371f`. **AC-3:** REQ-D-001/002/003/104 + REQ-A-004/102 contract-scope contributing stamps; no discharge — R/P owed R5.49/R5.43, consumer-scope owed 184a. chainTip → codex/harnessharness-evidence-r5.15 · next → R5.15b · ci: pass #227@db27cb0 (build · test · fmt · drift macos+ubuntu · cargo-deny · gitleaks 41501013637; logs/ci-r5.15.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

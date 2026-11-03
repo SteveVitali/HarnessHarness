@@ -183,3 +183,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0391](ADR-0391-r5.12-whole-vector-reserve-landing.md) | R5.12 whole-vector Account reserve — landing decisions | R5.12 | Accepted |
 | [ADR-0392](ADR-0392-r5.13-physical-use-fold-landing.md) | R5.13 deduplicated physical-use fold — landing decisions | R5.13 | Accepted |
 | [ADR-0393](ADR-0393-r5.14-required-grade-pending-owner-landing.md) | R5.14 required-grade pending — owner-model landing decisions (leg a) | R5.14 (leg a of the `07b6be09` SPLIT ruling — contract 183 | Accepted |
+| [ADR-0394](ADR-0394-r5.15-planned-population-contract-landing.md) | R5.15 planned-slot population — contract landing decisions (leg a, sole contract owner) | R5.15 (leg a of the `4d13371f` SPLIT ruling — contract 184 | Accepted |

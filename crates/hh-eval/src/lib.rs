@@ -36,6 +36,7 @@ pub mod judge;
 pub mod loss;
 pub mod opacity;
 pub mod oracle;
+pub mod population;
 pub mod runs;
 pub mod scorecard;
 pub mod security_metrics;
