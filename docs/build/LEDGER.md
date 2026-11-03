@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.32
-lastCompleted:   R5.31
+nextTicket:      R5.33
+lastCompleted:   R5.32
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.31
+chainTip:         codex/harnessharness-evidence-r5.32
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T09:59:05Z
+updatedAt:        2026-11-03T10:50:30Z
 ```
 
 ## OPEN FINDINGS
@@ -1080,3 +1080,4 @@ updatedAt:        2026-11-03T09:59:05Z
 - 2026-11-03T09:59:05Z · R5.31 done — branch codex/harnessharness-evidence-r5.31 · PR #245 · base codex/harnessharness-evidence-r5.30 · §8.1 ordinary contribution + failure-report routes (ADR-0409): CONTRIBUTING lanes — no-run report / receipt-or-loss-reason (native `hh run export`/`hh bundle validate` — suppression blocks) / attach-evidence sanitization / propose / verifyfixed (unable-to-reproduce ≠ fixed) / gated component+replication / lane→owner→checks starter map; bug form mirrored fields + required `cleared` attestation; CODEOWNERS reconcile (owner review kept); `check-contributing.sh` 12 ids (`commands_real` derives `cli.rs` dispatch arms) + `--head` clone + `live: skipped(…)`; self-test 20 legs; ci.yml `ci-mode: both` step · **Verify:** checker 12/12 · self-test 20/20 · --head red 10/12 at base 928e9287 (fails-without) · fmt clean (no Rust — tests n/a) · ci-gating OK · living-docs 425 · bm-tools OK · examples OK · triggers 193 · guard PASS DISPATCH R5.31 pre+post-boundary · check-build-memory 0 viol (. + --staged) · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0409 · **Deviations:** 552–604 changed lines vs ≤550 flag (~1.0–1.1× — smallest-margin case) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** REQ-A-205/REQ-B-004 primary D/E + REQ-C-007/G-008/G-101/102/103/105/107 contributing-only — R/P/actual-execution owed (R5.50/R5.52/R5.53) · chainTip → codex/harnessharness-evidence-r5.31 · next → R5.32 · ci: pass #245@7c697a3 (all 4 checks 41613390930; stack #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T10:28:07Z · **R5.32 size ruling** — worker stopped correctly at the ≤900 line trigger (measured 1,560 numstat, ~1.73×; context within estimate). Scoped fresh-context review verdict: **AMEND** — O1 packet binds apparatus+helpers+tests to one working set (no written contingency; §5.2/D3-F3 "Existence alone cannot pass" welds instrument to trials); the proposed apparatus-vs-battery cut is the R5.14b-rejected impl-vs-battery split in the strict form — ops.rs has zero tests, leg (a) lands a dead instrument, leg (b) IS the evidence; AC-1/AC-2 span the cut. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.31 precedent); dated note on `202_R5.32__observer.md`; manifest row-202 note; review record `planning/2026-11-03_R5.32-split-review.md`; `runs/R5.32.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03T10:50:30Z · R5.32 done — branch codex/harnessharness-evidence-r5.32 · PR #246 · base codex/harnessharness-evidence-r5.31 · §5.2/D3-F3 confined observer apparatus + Kp4 controls (ADR-0410): `crates/hh-env/src/ops.rs` `pub mod ops` read-only — `TrialMarker`/`MarkerSink` (non-idempotent durable append, disk re-read, `duplicates()`), `Sentinel` digest-pinned `intact()`, `OpsObserver` surviving `observer.jsonl` (3 intervals), probe vocabulary (`ExternalSinkZero` inadmissible), pure folds `o1_outcome`/`o8_outcome`/`kp4_outcome` over closed `TrialFailure` — `defect_detected` ≠ `pass`, `Kp4Outcome` retains `Unknown*`; battery real Store/WAL/Π/Dispatcher + R5.8 `inject_kill_point` — O1 pass, O2 kp-4→unknown{worker_lost}+probe, O8 3/3, survival, AC-2 negatives. **Verify:** r5_32 7/7 · hharness-env 191/0 · fmt OK · fails-without compile-red at 08838f54 · guard PASS DISPATCH R5.32 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · living-docs 427 · triggers 194 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0410 · **Deviations:** 1,560 changed source/test lines vs ≤900 flag (~1.7×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** ten contributing-only REQ ids (B-105/C-006/D-203–207/E-012/110/205) — R/P/actual-execution owed R5.44 AC-1 · chainTip → codex/harnessharness-evidence-r5.32 · next → R5.33 · ci: pass #246@d98cf77 (all 4 checks 41620536971; stack #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
