@@ -155,7 +155,7 @@ fn export_identity_records(dir: &Path) -> Result<(), XcheckError> {
 /// The pinned golden head (`hh-ledger/tests/acceptance.rs::
 /// golden_transcript_is_byte_stable`) — export refuses to proceed if the
 /// transcript drifts, so a stale bundle can never be committed silently.
-const GOLDEN_HEAD: &str = "sha256:e8c2c0a9ce754a4d26c4fe501d24bd71719bebbcacb46c909fc91a0275b45468";
+const GOLDEN_HEAD: &str = "sha256:db714b038805f1bf21ef2587459231c8886deeb4f7f8e8a1c0a1e6f48c69ccd4";
 
 /// The one fixed caller event of the golden transcript (same bytes as the
 /// pinned test).

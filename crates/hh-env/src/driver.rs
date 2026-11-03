@@ -52,7 +52,24 @@ pub struct EnvDriver {
     /// The registered provider adapters — `environment.class → adapter`
     /// (S4.13; one adapter per provider class).
     providers: BTreeMap<String, Box<dyn crate::provider::ProviderAdapter>>,
+    /// R5.10 (ADR-0389) — the submission-seal pin's walk budget
+    /// `(max_files, max_bytes)`; `None` ⇒ `SEAL_PIN_MAX_FILES` /
+    /// `SEAL_PIN_MAX_BYTES`. A test seam only — the production default
+    /// is the contract bound.
+    #[doc(hidden)]
+    pub seal_pin_budget: Option<(usize, u64)>,
 }
+
+/// R5.10 (ADR-0389 D7) — the submission-seal pin's budget. The seal's
+/// end-state content pin runs inside the run's fenced writer lease (the
+/// service holds a 120 s lease): an unbounded whole-tree hash of a large
+/// workspace (e.g. a repo rooted at `target/`) outlives the lease, the
+/// driver's next append fences, and the run never finishes. Over-budget
+/// workspaces report a typed `refused` leg — a failed seal yields no
+/// grade, never a leased-time stall or a partial pin.
+pub(crate) const SEAL_PIN_MAX_FILES: usize = 16_384;
+/// See [`SEAL_PIN_MAX_FILES`].
+pub(crate) const SEAL_PIN_MAX_BYTES: u64 = 128 * 1024 * 1024;
 
 /// `preserve_until(ttl)` offered to the helper on `hello` — §05a
 /// `reconcile_detached` requires `ttl ≥ writer_lease.ttl + recovery_grace`
@@ -186,6 +203,63 @@ fn register_declared_canaries(
     Ok(())
 }
 
+/// `WorkspaceSeal` — one bound handle's R5.10 (REQ-E-203) submission-seal
+/// record, produced by [`EnvDriver::seal_workspace`]. `status` is the
+/// truth spelling:
+///
+/// - `sealed` — this pass landed the end-state pin
+///   (`action.environment.snapshot{purpose:"submission_seal"}`), the
+///   participant-access revocation (`action.environment.detached
+///   {reason:"submission_seal"}`) and the final `meters_sampled` row.
+/// - `prior` — the handle was already detached *by a prior seal pass*
+///   (crash between seal and finish): the durable pair is re-cited,
+///   nothing re-appended.
+/// - `refused` — a leg refused (`detail` names the legs); the refs that
+///   did land stay cited — a grader sees `end_state_ref: None` for a
+///   submission that never sealed (no grading a mutable workspace).
+/// - `unavailable` — the handle could not seal (`detail` names the
+///   state): detached without a seal pair, suspended/failed/torn down,
+///   unreachable.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorkspaceSeal {
+    /// The bound handle.
+    pub env_handle_id: String,
+    /// `sealed` | `prior` | `refused` | `unavailable`.
+    pub status: String,
+    /// The leg/state detail when `status` is `refused`/`unavailable`.
+    pub detail: Option<String>,
+    /// The content-addressed end-state pin (`snapshot_ref`).
+    pub end_state_ref: Option<String>,
+    /// The `action.environment.snapshot` row's event id.
+    pub end_state_event_ref: Option<String>,
+    /// The `action.environment.detached` row's event id.
+    pub access_event_ref: Option<String>,
+    /// The final `action.environment.meters_sampled` row's event id.
+    pub usage_event_ref: Option<String>,
+}
+
+impl WorkspaceSeal {
+    /// Canonical member form for the finish record's `submission_seal`
+    /// member — absent members are omitted, never spelled `null`.
+    pub fn to_json(&self) -> Json {
+        let mut m = std::collections::BTreeMap::new();
+        m.insert("env_handle".to_string(), Json::str(&self.env_handle_id));
+        m.insert("status".to_string(), Json::str(&self.status));
+        for (k, v) in [
+            ("detail", &self.detail),
+            ("end_state_ref", &self.end_state_ref),
+            ("end_state_event_ref", &self.end_state_event_ref),
+            ("access_event_ref", &self.access_event_ref),
+            ("usage_event_ref", &self.usage_event_ref),
+        ] {
+            if let Some(v) = v {
+                m.insert(k.to_string(), Json::str(v));
+            }
+        }
+        Json::Obj(m)
+    }
+}
+
 impl EnvDriver {
     /// A driver for `run_id`.
     pub fn new(run_id: &str) -> Self {
@@ -195,6 +269,7 @@ impl EnvDriver {
             sessions: BTreeMap::new(),
             containers: BTreeMap::new(),
             providers: BTreeMap::new(),
+            seal_pin_budget: None,
         }
     }
 
@@ -891,6 +966,20 @@ impl EnvDriver {
         lease: &Lease,
         env_handle_id: &str,
     ) -> Result<(), EnvError> {
+        self.detach_inner(store, lease, env_handle_id, "released")
+    }
+
+    /// The `detach` body under a caller-named `reason` — `"released"` is
+    /// the lifecycle spelling; the `submission_seal` producer names its
+    /// revocation leg so a post-crash seal pass recovers *its* pair from
+    /// the durable set (R5.10/REQ-E-203).
+    fn detach_inner(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        reason: &str,
+    ) -> Result<(), EnvError> {
         let now = store.now_ms();
         let h = self
             .handles
@@ -917,7 +1006,7 @@ impl EnvDriver {
         }
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.detached",
-            events::detached_payload(h, "released", env_ms),
+            events::detached_payload(h, reason, env_ms),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         // S4.13 (R-2.2.5¹) — provider detach semantics: `remote_persistent`
@@ -936,6 +1025,148 @@ impl EnvDriver {
             }
         }
         Ok(())
+    }
+
+    /// `seal_workspace(store, lease) → Vec<WorkspaceSeal>` — the R5.10
+    /// (REQ-E-203; PADR-R5-1 A.1 item 3) owner seam for the subject run's
+    /// finish: per handle, pin the immutable end-state (`path_baseline`
+    /// marked `purpose:"submission_seal"`), revoke participant access
+    /// (`detach` marked `reason:"submission_seal"`), then land the final
+    /// `meters_sampled` usage row over the finalized buckets.
+    ///
+    /// Ordering rationale: the caller's stop/drain barrier already
+    /// drained participant work to observed/unknown, so a ready-time
+    /// baseline is the honest end-state; revoking first would gate the
+    /// baseline out (detached handles refuse `verify_environment`).
+    /// Revocation is unconditional on the pin leg — a failed seal never
+    /// leaves participant access live.
+    ///
+    /// Resume truth: a `Detached` handle recovers the durable
+    /// `submission_seal` pair (a pre-crash pass's pin + revocation);
+    /// detached-for-another-reason and non-ready states report
+    /// `unavailable{…}` — never a fabricated pin. Leg failures land as
+    /// `refused{…}` with the durable refs that *did* land; the caller's
+    /// seal member is the truth record either way.
+    pub fn seal_workspace(&mut self, store: &mut Store, lease: &Lease) -> Vec<WorkspaceSeal> {
+        let mut out = Vec::new();
+        for id in self.handle_ids() {
+            out.push(self.seal_handle(store, lease, &id));
+        }
+        out
+    }
+
+    /// One handle's seal pass (see [`EnvDriver::seal_workspace`]).
+    fn seal_handle(&mut self, store: &mut Store, lease: &Lease, id: &str) -> WorkspaceSeal {
+        let state = self.handle(id).map(|h| h.state);
+        let mut seal = WorkspaceSeal {
+            env_handle_id: id.to_string(),
+            status: "unavailable".to_string(),
+            detail: None,
+            end_state_ref: None,
+            end_state_event_ref: None,
+            access_event_ref: None,
+            usage_event_ref: None,
+        };
+        match state {
+            Some(HandleState::Ready) => {
+                let mut legs: Vec<String> = Vec::new();
+                let budget = self
+                    .seal_pin_budget
+                    .unwrap_or((SEAL_PIN_MAX_FILES, SEAL_PIN_MAX_BYTES));
+                // ── end-state pin ────────────────────────────────────
+                match self.path_baseline_budgeted_inner(
+                    store,
+                    lease,
+                    id,
+                    Some("submission_seal"),
+                    Some(budget),
+                ) {
+                    Ok((rec, _)) => {
+                        seal.end_state_ref = Some(rec.snapshot_ref.clone());
+                        seal.end_state_event_ref =
+                            self.seal_event_ref(store, id, "action.environment.snapshot");
+                    }
+                    Err(e) => legs.push(format!("seal:{e:?}")),
+                }
+                // ── revocation (unconditional) ───────────────────────
+                match self.detach_inner(store, lease, id, "submission_seal") {
+                    Ok(()) => {
+                        seal.access_event_ref =
+                            self.seal_event_ref(store, id, "action.environment.detached");
+                    }
+                    Err(e) => legs.push(format!("revoke:{e:?}")),
+                }
+                // ── final usage ──────────────────────────────────────
+                match self.sample_meters(store, lease, id) {
+                    Ok(()) => {
+                        seal.usage_event_ref =
+                            self.seal_event_ref(store, id, "action.environment.meters_sampled");
+                    }
+                    Err(e) => legs.push(format!("usage:{e:?}")),
+                }
+                if legs.is_empty() {
+                    seal.status = "sealed".to_string();
+                } else {
+                    seal.status = "refused".to_string();
+                    seal.detail = Some(legs.join(";"));
+                }
+            }
+            Some(HandleState::Detached) => {
+                // Recovery: a prior `submission_seal` pair is the seal
+                // this run already landed — re-cite, never re-append.
+                let events = store.events(&self.run_id).unwrap_or(&[]);
+                let prior_detach = events.iter().rev().find(|e| {
+                    e.class == "action.environment.detached"
+                        && e.payload.get("env_handle").and_then(Json::as_str) == Some(id)
+                        && e.payload.get("reason").and_then(Json::as_str) == Some("submission_seal")
+                });
+                let prior_snap = events.iter().rev().find(|e| {
+                    e.class == "action.environment.snapshot"
+                        && e.payload.get("env_handle").and_then(Json::as_str) == Some(id)
+                        && e.payload.get("purpose").and_then(Json::as_str)
+                            == Some("submission_seal")
+                });
+                match (prior_snap, prior_detach) {
+                    (snap, Some(det)) => {
+                        seal.status = "prior".to_string();
+                        seal.access_event_ref = Some(det.event_id.clone());
+                        if let Some(s) = snap {
+                            seal.end_state_ref = s
+                                .payload
+                                .get("snapshot_ref")
+                                .and_then(Json::as_str)
+                                .map(str::to_string);
+                            seal.end_state_event_ref = Some(s.event_id.clone());
+                        }
+                    }
+                    _ => {
+                        seal.detail = Some("detached without a submission_seal pair".to_string());
+                    }
+                }
+            }
+            Some(s) => {
+                seal.detail = Some(format!("handle {}", s.as_str()));
+            }
+            None => {
+                seal.detail = Some("handle missing".to_string());
+            }
+        }
+        seal
+    }
+
+    /// The newest durable event id of `class` naming `env_handle` — the
+    /// seal leg's own record (the caller cites ids, not classes).
+    fn seal_event_ref(&self, store: &Store, env_handle_id: &str, class: &str) -> Option<String> {
+        store
+            .events(&self.run_id)
+            .ok()?
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == class
+                    && e.payload.get("env_handle").and_then(Json::as_str) == Some(env_handle_id)
+            })
+            .map(|e| e.event_id.clone())
     }
 
     /// `suspend(env_handle_id, on_idle?)` — `ready → suspended` (S4.13;
@@ -2859,6 +3090,36 @@ impl EnvDriver {
         lease: &Lease,
         env_handle_id: &str,
     ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
+        self.path_baseline_inner(store, lease, env_handle_id, None)
+    }
+
+    /// The `path_baseline` body plus the `purpose` member — `None` keeps
+    /// the row byte-identical to a cadence/manual take; the
+    /// `submission_seal` producer names itself so a post-crash seal pass
+    /// can recover *its* pin from the durable set (R5.10/REQ-E-203).
+    fn path_baseline_inner(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        purpose: Option<&str>,
+    ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
+        self.path_baseline_budgeted_inner(store, lease, env_handle_id, purpose, None)
+    }
+
+    /// [`path_baseline_inner`] with an optional `(max_files, max_bytes)`
+    /// walk budget — the submission seal's leg carries one (ADR-0389 D7)
+    /// so the pin cannot outlive the fenced writer lease; other callers
+    /// stay unbounded (legacy behavior unchanged). Over-budget walks
+    /// refuse `Unavailable`, never partial.
+    fn path_baseline_budgeted_inner(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        purpose: Option<&str>,
+        budget: Option<(usize, u64)>,
+    ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
         // R2.14 (M13) — the take window's measured open (`snapshot_ms`).
         let snap_t0 = store.now_ms();
         let (roots, image_base) = {
@@ -2880,7 +3141,29 @@ impl EnvDriver {
         };
         let mut paths = Vec::new();
         for r in &roots {
-            collect_files(r, &mut paths);
+            match budget {
+                Some((max_files, _)) => {
+                    if !collect_files_bounded(r, &mut paths, max_files) {
+                        return Err(EnvError::Unavailable {
+                            env_handle_id: env_handle_id.to_string(),
+                            state: "seal pin file budget exceeded",
+                        });
+                    }
+                }
+                None => collect_files(r, &mut paths),
+            }
+        }
+        if let Some((_, max_bytes)) = budget {
+            let mut total = 0u64;
+            for p in &paths {
+                total = total.saturating_add(std::fs::metadata(p).map(|m| m.len()).unwrap_or(0));
+                if total > max_bytes {
+                    return Err(EnvError::Unavailable {
+                        env_handle_id: env_handle_id.to_string(),
+                        state: "seal pin byte budget exceeded",
+                    });
+                }
+            }
         }
         let baseline = PathBaseline::take(&|p| std::fs::read(p).ok(), &paths);
         let at_seq = store.head(&self.run_id).map(|h| h.seq).unwrap_or(0);
@@ -2900,22 +3183,24 @@ impl EnvDriver {
         rec.snapshot_ref = rec.compute_ref();
         let h = self.handles.get_mut(env_handle_id).unwrap();
         h.snapshots.push(rec.snapshot_ref.clone());
-        let ev = EventMinter::new(store, &self.run_id).mint(
-            "action.environment.snapshot",
-            events::snapshot_payload(
-                h,
-                &rec.snapshot_ref,
-                "path_baseline",
-                at_seq,
-                None,
-                rec.taken_by,
-                rec.quiesced,
-                h.session
-                    .as_ref()
-                    .map(|s| store.now_ms().saturating_sub(s.attached_at_ms)),
-                Some(store.now_ms().saturating_sub(snap_t0)),
-            ),
-        )?;
+        let mut payload = events::snapshot_payload(
+            h,
+            &rec.snapshot_ref,
+            "path_baseline",
+            at_seq,
+            None,
+            rec.taken_by,
+            rec.quiesced,
+            h.session
+                .as_ref()
+                .map(|s| store.now_ms().saturating_sub(s.attached_at_ms)),
+            Some(store.now_ms().saturating_sub(snap_t0)),
+        );
+        if let (Some(p), Json::Obj(m)) = (purpose, &mut payload) {
+            m.insert("purpose".to_string(), Json::str(p));
+        }
+        let ev =
+            EventMinter::new(store, &self.run_id).mint("action.environment.snapshot", payload)?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok((rec, baseline))
     }
@@ -3368,6 +3653,30 @@ fn collect_files(root: &str, out: &mut Vec<String>) {
             }
         }
     }
+}
+
+/// Bounded [`collect_files`] — returns `false` the moment `out` reaches
+/// `max` (the caller refuses; the partial walk is never pinned).
+fn collect_files_bounded(root: &str, out: &mut Vec<String>, max: usize) -> bool {
+    if out.len() >= max {
+        return false;
+    }
+    if let Ok(rd) = std::fs::read_dir(root) {
+        for e in rd.flatten() {
+            if out.len() >= max {
+                return false;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                if !collect_files_bounded(&p.to_string_lossy(), out, max) {
+                    return false;
+                }
+            } else {
+                out.push(p.to_string_lossy().to_string());
+            }
+        }
+    }
+    true
 }
 
 /// `blob_by_id(store, "sha256:<hex>")` — resolve a manifest content

@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.10
-lastCompleted:   R5.9
+nextTicket:      R5.11
+lastCompleted:   R5.10
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.9
+chainTip:        codex/harnessharness-evidence-r5.10
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T07:20:19Z
+updatedAt:       2026-11-02T09:29:10Z
 ```
 
 ## OPEN FINDINGS
@@ -1015,3 +1015,5 @@ updatedAt:       2026-11-02T07:20:19Z
 - 2026-11-02T06:43:24Z · **R5.8 size ruling** — trigger fired (~2,594 vs ≤1000, ~2.6×; context within 28k+10k estimate). Worker completed and closed carrying the flag conspicuously rather than stopping pre-close — ruling post-hoc (missed stop recorded). Scoped fresh-context review verdict: **AMEND** — single atomic `DurableEffectRef*` dispatch↔gate↔arm unit (PADR-R5-2 B.2; X3 split condition never triggered); every cut unenforced. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7 precedent); dated note on `177_R5.8__effect.md`; manifest row-177 note; `runs/R5.8.md` ruling. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-02T07:04:15Z · **R5.9 size ruling** — worker stopped correctly at the ≤800 line trigger (measured 959, ~1.2×; context within 24k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic X6 selection/revision contract (PADR-R5-1 A.2 owner seam; partition X6 "must land callable contract first" admits no sub-seam); proposed leg cut would land AC-2 refusals unexercised or a non-callable partial. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7/R5.8 precedent); dated note on contract; manifest row-178 note; `runs/R5.9.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-02 · R5.9 done — branch `codex/harnessharness-evidence-r5.9` · PR #219 · base `codex/harnessharness-evidence-r5.8` (@d8c5162). Landed the admitted PADR-R5-1 shared pure grade-selection contract once in `hharness_eval::selection` (REQ-E-204/REQ-E-103 primary; REQ-E-102 contributing): `ValidGradeSet` frozen pins + content-addressed `eligible_set_ref`; `GradeAttempt`/`GradeOutcome` owner-validated facts (Decided | OracleFailure; n/a unavailable); `SelectionRevision` + append-only `RevisionLog` (UnauthorizedCorrection/MissingWatermarks/SetMismatch/UnknownSupersedes/ImmutableRecord refusals — named authority is the accepted proof; no new principal/endpoint); `select_grade`/`select_grade_at` first-valid-per-member durable order (NotFirst/Duplicate/ConflictingCoordinate/PinMismatch/SetMiss/Uncited+ForeignCauses/Unavailable exclusions; historical-watermark reproduction + `WatermarkMissing`); `plan_disposition` restores stop-derived class incl. `budget_exhausted`, grade+veto separate axes, `Pending` admission state, all-unavailable → `OracleFailure`. **Verify:** fmt OK · `cargo test -p hharness-eval` 12/12 targets ok (r5_9 7/7) · guard PASS DISPATCH R5.9 pre+post · bm-tools OK · revisit-triggers in sync · ci-boundary/1 recorded. **Deferrals:** none opened/closed; DF-R5.1-1 carried; full predicates + consumer wiring (`plan_disposition_at`/pending gates/revision home) → R5.10/R5.11/R5.13/R5.14 owed, unclaimed. **Deviations:** 959 changed source/test lines vs ≤800 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling (44d1c7ed); ADR-0388 (7 decisions). · chainTip → codex/harnessharness-evidence-r5.9 · next → R5.10 · ci: pass #219@ef71db7 (cargo-deny · gitleaks · build·test·fmt·drift ubuntu+macos 41404230269) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-02T07:41:59Z · **R5.10 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 1,084, ~1.3×; context within 24k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic X4 quiesce/seal→finish + created-origin M1 unit (PADR-R5-1 A.1 item 3 / A.2; REQ-E-203/REQ-E-102 dual-primary; no documented sub-seam); leg cut lands unenforced intermediates. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7/R5.8/R5.9 precedent); dated note on contract; manifest row-179 note; `runs/R5.10.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-02T09:29Z · R5.10 done — branch `codex/harnessharness-evidence-r5.10` · PR https://github.com/SteveVitali/HarnessHarness/pull/220 · base `codex/harnessharness-evidence-r5.9` (@c96a471a). Landed the admitted PADR-R5-1 X4 slice (REQ-E-203/REQ-E-102 primary): `EnvDriver::seal_workspace`/`WorkspaceSeal` — end-state `snapshot{purpose:"submission_seal"}` → `detached{reason:"submission_seal"}` (unconditional on pin failure) → final `meters_sampled`, durable before `lifecycle.run.finished` cites `submission_seal`; `prior` recovery; `unavailable`/`refused{legs}` typed refusals; seq-0 `created_at_ms` member + `wall_ms` rebased created→finished (`na{observability}`/`na{untrustworthy_origin}`, never backdated); seal-pin walk budget (16,384/128 MiB) → typed refusal, never a writer-lease overrun. **Verify:** fmt OK · hh-ledger 34+44 · hh-control 152 · env r5_10 8/8 · cap_2/r2_4 · cli · xcheck corpus+answers regenerated · guard PASS pre+post · bm 0 viol/8w · bm-tools OK · triggers in sync. **Deferrals:** none opened/closed; DF-R5.1-1 carried; contributor evidence → R5.11/R5.13/R5.14/R5.9/R5.43 owed, unclaimed. **Deviations:** 1,084 changed source/test lines vs ≤850 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling (184e4840); ADR-0389 (7 decisions incl. seal budget). · chainTip → codex/harnessharness-evidence-r5.10 · next → R5.11 · ci: pass #220@489b7be (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41419273375) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
