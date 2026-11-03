@@ -971,8 +971,11 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
         // ── counts: subjects ≠ pairs ──────────────────────────────
         let mut counts: BTreeMap<String, u64> = BTreeMap::new();
         if s.tasks > 0 && s.repeats > 0 {
+            // u32·u32 < u64::MAX — n_pairs always fits; the doubled
+            // subject count saturates rather than panicking on an
+            // absurd declaration (totality — R5.42 pass-2 repair).
             let n_pairs = s.tasks as u64 * s.repeats as u64;
-            let n_subjects = 2 * n_pairs;
+            let n_subjects = n_pairs.saturating_mul(2);
             match stage {
                 "confirmation" => {
                     if n_subjects < 10 * s.tasks as u64 {
@@ -1132,13 +1135,15 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
                     }
                 }
                 if let (Some(q), true) = (l.quantity, stage == "confirmation") {
-                    let computed = 2 * s.tasks as u64 * s.repeats as u64;
-                    if s.tasks > 0 && s.repeats > 0 && q != computed {
+                    // u128: the honest 2·T·R can exceed u64 — compare
+                    // wide, saturate only the reported field.
+                    let computed = 2u128 * s.tasks as u128 * s.repeats as u128;
+                    if s.tasks > 0 && s.repeats > 0 && q as u128 != computed {
                         return Err(E::CountMismatch {
                             stage: s.stage.clone(),
                             member: "subjects_first",
                             declared: q,
-                            computed,
+                            computed: computed.min(u64::MAX as u128) as u64,
                         });
                     }
                 }
@@ -1181,6 +1186,15 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
             if n == 0 {
                 blockers.insert("precision:design_unfixed".into());
                 precision_state = "unresolved".into();
+            } else if n > i64::MAX as u64 {
+                // `kl_directional_bound` takes i64 — a wrapped
+                // negative N would silently misreport; refuse the
+                // out-of-domain declaration instead (pass-2 repair).
+                return Err(E::ExposureMalformed {
+                    stage: s.stage.clone(),
+                    component: "declared_pairs".into(),
+                    detail: format!("N {n} exceeds the i64 diagnostic domain"),
+                });
             } else {
                 let mut scenarios: Vec<u64> = vec![0];
                 scenarios.extend(s.discordances.iter().copied());
@@ -1194,7 +1208,7 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
                             detail: format!("c {c} exceeds N {n}"),
                         });
                     }
-                    let x_ppm = (c * 1_000_000 / n) as i64;
+                    let x_ppm = (c as u128 * 1_000_000 / n as u128) as i64;
                     let Some(iv) = kl_directional_bound(x_ppm, n as i64, ETA_TOST_PPM) else {
                         return Err(E::ExposureMalformed {
                             stage: s.stage.clone(),
@@ -1212,7 +1226,14 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
                     });
                     for e in &s.endpoints {
                         match e.margin_ppm {
-                            None => precision_state = "unresolved".into(),
+                            // Severity is order-independent:
+                            // `infeasible` is sticky — a later
+                            // unresolved margin never downgrades a
+                            // proven infeasible endpoint (R5.42
+                            // pass-2 repair).
+                            None if precision_state == "attainable" => {
+                                precision_state = "unresolved".into()
+                            }
                             Some(m) if half > m => precision_state = "infeasible".into(),
                             _ => {}
                         }

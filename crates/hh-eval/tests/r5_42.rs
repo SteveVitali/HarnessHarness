@@ -707,3 +707,105 @@ fn ac2_vocabulary_and_shape_refusals() {
         .blockers
         .contains(&"exposure:runner_unquoted:original-runner".to_string()));
 }
+
+// ── pass-2 self-review repairs ────────────────────────────────────
+
+#[test]
+fn ac2_infeasible_dominates_an_unresolved_margin() {
+    // Severity is order-independent: an unresolved margin never
+    // downgrades a proven infeasible endpoint. The reversed order
+    // reported `unresolved` before the pass-2 repair.
+    for order in [
+        vec![("capability", Some(50_000)), ("efficiency", None)],
+        vec![("efficiency", None), ("capability", Some(50_000))],
+    ] {
+        let mut d = complete();
+        for s in &mut d.stages {
+            if s.stage == "parity" {
+                s.endpoints = order
+                    .iter()
+                    .map(|(dim, m)| EndpointQuote {
+                        dimension: dim.to_string(),
+                        margin_ppm: *m,
+                        assumed_margin: false,
+                    })
+                    .collect();
+            }
+        }
+        let q = build_quote(&d).unwrap();
+        let p = stage(&q, "parity");
+        assert_eq!(p.precision_state, "infeasible", "order {order:?}");
+        assert_eq!(p.state, "infeasible");
+        assert!(p.blockers.contains(&"precision:infeasible".to_string()));
+        // The unresolved margin is still named, not hidden.
+        assert!(p
+            .blockers
+            .contains(&"precision:margin_unresolved:efficiency".to_string()));
+    }
+}
+
+#[test]
+fn ac2_pathological_counts_stay_total() {
+    // Totality: absurd declared counts never panic — the doubled
+    // subject count saturates and the 2·T·R / c·1e6 products are
+    // computed wide (u128). Every leg panicked before the repair.
+    let mut d = complete();
+    for s in &mut d.stages {
+        if s.stage == "confirmation" {
+            // N = T·R ≈ 1.2e19 — 2·N overflows u64.
+            s.tasks = 4_000_000_000;
+            s.repeats = 3_000_000_000;
+            for l in &mut s.resources {
+                if l.component == "subjects_first" {
+                    l.quantity = Some(300); // ≤ ceiling → count check
+                }
+            }
+        }
+    }
+    assert!(matches!(
+        build_quote(&d),
+        Err(QuoteError::CountMismatch {
+            member: "subjects_first",
+            declared: 300,
+            computed: u64::MAX, // saturated, not wrapped
+            ..
+        })
+    ));
+    // Parity N > i64::MAX exceeds the diagnostic's domain — a typed
+    // refusal, never a wrapped negative n into kl_directional_bound.
+    let mut d = complete();
+    for s in &mut d.stages {
+        if s.stage == "parity" {
+            s.tasks = 4_000_000_000;
+            s.repeats = 3_000_000_000;
+            s.declared_pairs = Some(12_000_000_000_000_000_000);
+            s.discordances = vec![6_000_000_000_000_000_000];
+        }
+    }
+    assert!(matches!(
+        build_quote(&d),
+        Err(QuoteError::ExposureMalformed { component, .. })
+            if component == "declared_pairs"
+    ));
+    // Parity at a representable-but-huge N still computes (the
+    // c·1e6 numerator needs u128); replication at u32::MAX² keeps
+    // its saturated subject count and stays ready.
+    let mut d = complete();
+    for s in &mut d.stages {
+        if s.stage == "parity" {
+            s.tasks = 3_000_000_000;
+            s.repeats = 3_000_000_000;
+            s.declared_pairs = Some(9_000_000_000_000_000_000);
+            s.discordances = vec![4_500_000_000_000_000_000];
+        }
+        if s.stage == "replication" {
+            s.tasks = u32::MAX;
+            s.repeats = u32::MAX;
+        }
+    }
+    let q = build_quote(&d).expect("huge counts stay total");
+    let p = stage(&q, "parity");
+    assert_eq!(p.counts["ho_pairs"], 9_000_000_000_000_000_000);
+    assert_eq!(p.precision[1].x_ppm, 500_000);
+    assert_eq!(stage(&q, "replication").state, "ready_for_gate");
+}
