@@ -25,6 +25,13 @@ fn request(args_hash: &str) -> ApprovalRequest {
                 id: ApprovalOptionId::AllowOnce,
                 label: "Allow once".to_string(),
             },
+            // `allow_lease` is offered — the R5.33 fold-level offered-
+            // answer gate refuses a conferring answer the durable offer
+            // never named; the lease legs honestly offer it.
+            ApprovalOption {
+                id: ApprovalOptionId::AllowLease,
+                label: "Allow lease".to_string(),
+            },
             ApprovalOption {
                 id: ApprovalOptionId::Deny,
                 label: "Deny".to_string(),

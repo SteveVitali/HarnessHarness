@@ -594,3 +594,194 @@ pub fn kp4_outcome(cell: &Kp4Cell, effect_id: &str) -> Kp4Outcome {
         },
     }
 }
+
+// ── O4/O5 — the permission wait/answer/resume cells ─────────────────────────
+//
+// The permission cells' evidence is the *interval*: the suspended effect
+// must show no prepare/commit/executor entry and no sink mutation at two
+// observed points while its `pending` is owed; only an offered, authority-
+// checked answer may resolve it; and the wakeup/resume must land exactly
+// one marker on the *same* effect. `input_required`/`resume_paused` is no
+// substitute — that effect may already be committed.
+
+/// `PermissionFailure` — the O4/O5 closed negative set. Every member
+/// blocks the cell; none can be laundered into a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PermissionFailure {
+    /// The durable `security.permission.pending` is absent or its offered
+    /// set was not preserved.
+    MissingPending,
+    /// A sink delta, executor entry, or `prepared`/`committed` row landed
+    /// while the permission was owed — the wait was not a real wait.
+    MutationDuringWait,
+    /// Fewer than two clean observer intervals cover the wait.
+    MissingWaitInterval,
+    /// The restart/restore did not preserve the pending
+    /// (`RestoreReport.pending_permissions` lacks the id).
+    LostPending,
+    /// `control.wakeup.occurred`/`fired` for `permission_decided` never
+    /// landed — the resume was not wakeup-driven.
+    MissingWakeup,
+    /// No final `security.permission.decided` resolved the pending.
+    MissingDecision,
+    /// The resume produced anything but exactly one marker on the same
+    /// effect (0 = never resumed; >1 = a second dispatch/mutation).
+    SecondMutation,
+    /// The marker/sink digest disagrees with the observed control path
+    /// (the O1 comparator).
+    DigestMismatch,
+    /// An identical re-answer minted a second `decided`/grant — the
+    /// response was not idempotent.
+    NonIdempotentAnswer,
+    /// A conflicting later answer produced a grant or a mutation.
+    ConflictingGrant,
+    /// An unoffered answer was admitted (decided/granted/mutated).
+    UnofferedAdmitted,
+    /// An answer from an endorser without authority was admitted.
+    UnauthorizedAdmitted,
+    /// The deny path left `prepared`/`committed`/entry or a sink delta.
+    DenyMutated,
+    /// The denied/read-only target was mutated.
+    SentinelMutation,
+}
+
+impl PermissionFailure {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PermissionFailure::MissingPending => "missing_pending",
+            PermissionFailure::MutationDuringWait => "mutation_during_wait",
+            PermissionFailure::MissingWaitInterval => "missing_wait_interval",
+            PermissionFailure::LostPending => "lost_pending",
+            PermissionFailure::MissingWakeup => "missing_wakeup",
+            PermissionFailure::MissingDecision => "missing_decision",
+            PermissionFailure::SecondMutation => "second_mutation",
+            PermissionFailure::DigestMismatch => "digest_mismatch",
+            PermissionFailure::NonIdempotentAnswer => "non_idempotent_answer",
+            PermissionFailure::ConflictingGrant => "conflicting_grant",
+            PermissionFailure::UnofferedAdmitted => "unoffered_admitted",
+            PermissionFailure::UnauthorizedAdmitted => "unauthorized_admitted",
+            PermissionFailure::DenyMutated => "deny_mutated",
+            PermissionFailure::SentinelMutation => "sentinel_mutation",
+        }
+    }
+}
+
+/// `PermissionOutcome` — the O4/O5 label set: `pass` only when every
+/// required interval and transition holds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PermissionOutcome {
+    /// The cell's expected outcome held with full evidence.
+    Pass,
+    /// The cell cannot pass — the named negative held.
+    Failed(PermissionFailure),
+}
+
+/// `PermissionWaitCell` — the O4 fold's required evidence
+/// (pending→suspend→offered/authority-checked answer→wakeup/resume on the
+/// same effect, one mutation; restart preserves the pending; the identical
+/// answer is idempotent; a conflicting key refuses).
+#[derive(Debug)]
+pub struct PermissionWaitCell {
+    /// The durable `security.permission.pending` landed (and carried the
+    /// offered set/cause coordinates).
+    pub pending_durable: bool,
+    /// The two observed no-mutation intervals held (zero sink delta and
+    /// no prepare/commit/executor entry at each).
+    pub wait_intervals_clean: u8,
+    /// The restart/restore preserved the owed pending.
+    pub restart_preserved: bool,
+    /// `permission_decided` produced `occurred` then `fired`.
+    pub wakeup_fired: bool,
+    /// A final `decided` resolved the pending.
+    pub decided_durable: bool,
+    /// Durable markers the sink holds for the effect — must be exactly 1.
+    pub marker_count: usize,
+    /// The marker digest matches the O1-path observed digest.
+    pub digest_matches: bool,
+    /// An identical re-answer returned the recorded decision with no
+    /// second `decided`/grant.
+    pub idempotent_replay: bool,
+    /// A conflicting new-key answer left no second grant/mutation.
+    pub conflicting_refused: bool,
+    /// The sentinel's intact bit.
+    pub sentinel_intact: bool,
+}
+
+/// `o4_outcome(cell)` — the O4 permission-allow fold.
+pub fn o4_outcome(cell: &PermissionWaitCell) -> PermissionOutcome {
+    if !cell.pending_durable {
+        return PermissionOutcome::Failed(PermissionFailure::MissingPending);
+    }
+    if cell.wait_intervals_clean < 2 {
+        return PermissionOutcome::Failed(PermissionFailure::MissingWaitInterval);
+    }
+    if !cell.restart_preserved {
+        return PermissionOutcome::Failed(PermissionFailure::LostPending);
+    }
+    if !cell.wakeup_fired {
+        return PermissionOutcome::Failed(PermissionFailure::MissingWakeup);
+    }
+    if !cell.decided_durable {
+        return PermissionOutcome::Failed(PermissionFailure::MissingDecision);
+    }
+    if cell.marker_count != 1 {
+        return PermissionOutcome::Failed(PermissionFailure::SecondMutation);
+    }
+    if !cell.digest_matches {
+        return PermissionOutcome::Failed(PermissionFailure::DigestMismatch);
+    }
+    if !cell.idempotent_replay {
+        return PermissionOutcome::Failed(PermissionFailure::NonIdempotentAnswer);
+    }
+    if !cell.conflicting_refused {
+        return PermissionOutcome::Failed(PermissionFailure::ConflictingGrant);
+    }
+    if !cell.sentinel_intact {
+        return PermissionOutcome::Failed(PermissionFailure::SentinelMutation);
+    }
+    PermissionOutcome::Pass
+}
+
+/// `PermissionDenyCell` — the O5 fold's required evidence (pending→
+/// offered deny→refusal; no prepare/commit/entry/mutation; a conflicting
+/// later answer cannot authorize).
+#[derive(Debug)]
+pub struct PermissionDenyCell {
+    /// The durable `security.permission.pending` landed.
+    pub pending_durable: bool,
+    /// A final `decided{deny}` resolved the pending.
+    pub deny_decided: bool,
+    /// The effect closed refused (the recorded deny served the resume).
+    pub refused: bool,
+    /// No `prepared`/`committed`/executor entry and a zero sink delta for
+    /// the effect — deny cannot mutate.
+    pub no_mutation: bool,
+    /// A conflicting later answer produced no grant/mutation.
+    pub conflicting_refused: bool,
+    /// The sentinel's intact bit.
+    pub sentinel_intact: bool,
+}
+
+/// `o5_outcome(cell)` — the O5 permission-deny fold.
+pub fn o5_outcome(cell: &PermissionDenyCell) -> PermissionOutcome {
+    if !cell.pending_durable {
+        return PermissionOutcome::Failed(PermissionFailure::MissingPending);
+    }
+    if !cell.deny_decided {
+        return PermissionOutcome::Failed(PermissionFailure::MissingDecision);
+    }
+    if !cell.no_mutation {
+        return PermissionOutcome::Failed(PermissionFailure::DenyMutated);
+    }
+    if !cell.refused {
+        return PermissionOutcome::Failed(PermissionFailure::MissingDecision);
+    }
+    if !cell.conflicting_refused {
+        return PermissionOutcome::Failed(PermissionFailure::ConflictingGrant);
+    }
+    if !cell.sentinel_intact {
+        return PermissionOutcome::Failed(PermissionFailure::SentinelMutation);
+    }
+    PermissionOutcome::Pass
+}

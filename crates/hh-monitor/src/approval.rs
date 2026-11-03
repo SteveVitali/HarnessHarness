@@ -1547,6 +1547,14 @@ pub enum ApprovalError {
         /// The detail.
         detail: String,
     },
+    /// The response consumes an option the durable `pending` never offered
+    /// (R5.33; evidence spec §5.2 O4 — the offered-answer authority reads
+    /// `request.options`/`request.remedies` from the folded row). The
+    /// pending is restored — an unoffered answer decides nothing.
+    UnofferedOption {
+        /// The unoffered option id.
+        option_id: String,
+    },
 }
 
 /// `ApproverGrant` — the §5g.7 §4 delegated-approval record (ADR-0070; OQ-177):
@@ -2159,6 +2167,40 @@ impl ApprovalState {
             .ok_or_else(|| ApprovalError::UnknownPermission {
                 permission_id: response.permission_id.clone(),
             })?;
+        // The offered-answer authority (R5.33; evidence spec §5.2 O4):
+        // when the durable offer is non-empty, a conferring or
+        // option-consuming answer must be a member — `allow_once`,
+        // `allow_lease`, `modify` and `more_info` against `request.options`,
+        // `remedy` against `request.remedies`. An unoffered answer restores
+        // the pending and refuses — it can neither grant nor mutate.
+        // `deny`/`cancelled` decide-against answers are exempt: a refusal
+        // confers nothing, and the wire's deny spellings (`deny_once`/
+        // `deny_lease`, `abort_run`) predate the closed option-id set.
+        if !pending.request.options.is_empty() {
+            let chosen = match &response.choice {
+                ResponseChoice::AllowOnce => Some(ApprovalOptionId::AllowOnce),
+                ResponseChoice::AllowLease(_) => Some(ApprovalOptionId::AllowLease),
+                ResponseChoice::Modify { .. } => Some(ApprovalOptionId::Modify),
+                ResponseChoice::MoreInfo => Some(ApprovalOptionId::MoreInfo),
+                ResponseChoice::Deny { .. } | ResponseChoice::Remedy(_) => None,
+            };
+            if let Some(id) = chosen {
+                if !pending.request.options.iter().any(|o| o.id == id) {
+                    self.pending.insert(response.permission_id.clone(), pending);
+                    return Err(ApprovalError::UnofferedOption {
+                        option_id: id.as_str().to_string(),
+                    });
+                }
+            }
+            if let ResponseChoice::Remedy(r) = &response.choice {
+                if !pending.request.remedies.iter().any(|o| o == r) {
+                    self.pending.insert(response.permission_id.clone(), pending);
+                    return Err(ApprovalError::UnofferedOption {
+                        option_id: format!("remedy:{}", r.kind()),
+                    });
+                }
+            }
+        }
         // The legitimacy gate — `allow*` and `modify` require `principal`
         // or an ApproverGrant; a delegate endorser never confers nor
         // decides the owed-decision row (AC-3; ADR-0343 D1 — a `modify`
@@ -2562,7 +2604,33 @@ impl ApprovalState {
                                 request: ApprovalRequest {
                                     permission_id: pid.to_string(),
                                     request,
-                                    options: Vec::new(),
+                                    // The offered option ids fold from the
+                                    // durable `request.options` (R5.33;
+                                    // ADR-0343 D4 — the offered-answer
+                                    // authority is honest only over the
+                                    // record; an unparsed id drops, never
+                                    // widens; an absent member folds empty
+                                    // — pre-R2.11 rows stay ungated).
+                                    options: rq
+                                        .get("options")
+                                        .and_then(|o| match o {
+                                            Json::Arr(items) => Some(items),
+                                            _ => None,
+                                        })
+                                        .map(|items| {
+                                            items
+                                                .iter()
+                                                .filter_map(|o| {
+                                                    o.as_str()
+                                                        .and_then(ApprovalOptionId::parse)
+                                                        .map(|id| ApprovalOption {
+                                                            id,
+                                                            label: id.as_str().to_string(),
+                                                        })
+                                                })
+                                                .collect()
+                                        })
+                                        .unwrap_or_default(),
                                     mode,
                                     timeout: p
                                         .get("timeout")
