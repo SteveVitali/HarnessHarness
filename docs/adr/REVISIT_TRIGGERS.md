@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_174 ADRs: 122 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_175 ADRs: 123 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -158,6 +158,7 @@ _174 ADRs: 122 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0388 | - If R5.14/R5.11 need the selection bound to a different identity discipline than `(instrument_run_id, seq)` coordinates (e.g. event-id pins), revisit the dedup/conflict and `attempt_ref` convention. - If a revision ever needs to invalidate a member wholesale rather than a named attempt ref, revisit the `supersedes` grammar (currently attempt ref \| prior revision id). |
 | ADR-0389 | - If R5.19/B3 need the created origin bound to a different authority (e.g. HLC or a lease record rather than the seq-0 member), revisit the `created_at_ms` member shape. - If a later owner needs seal legs that span multiple environments atomically (a failed leg currently still revokes the ready ones and records `refused`), revisit per-handle independence. - If instrument/observer runs ever need end-state pins without access revocation, revisit the single `seal_workspace` verb (a `taken_by` leg already distinguishes subject vs instrument snapshots). |
 | ADR-0390 | - If R5.14 needs per-attempt cost attribution beyond `cost_ref` binding (actual Account debit rows), revisit the verdict's cost members when B1/B2's Account seam lands. - If a hosted-verifier isolation mode needs separate evidence members (rather than shared-mode `no_detector`), revisit the isolation payload for `hosted`. - If a later consumer needs attempt discovery without a full event scan, revisit whether an index/projection should fold `verification.oracle.*` rows. |
+| ADR-0391 | - If R5.19's prepared-call ordering requires reservations to admit on a node that is already over an *unrelated* bounded key (dispatch under an acknowledged breach rather than refusal), revisit the untouched-key clause (Decision 3). - If gauge admission semantics move from E5 increment checks into the vector path (e.g. gauge-aware reservations), revisit the gauge skip (Decision 4). - If the affine `slice_held` fold is relaxed for derived keys (component-wise worst-case hold → whole-vector hold), revisit the expected `level` arithmetic in `tests/r5_12.rs`'s slice legs. |
 
 ## Fired-and-answered triggers (BL-48)
 

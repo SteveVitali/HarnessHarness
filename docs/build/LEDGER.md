@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.12
-lastCompleted:   R5.11
+nextTicket:      R5.13
+lastCompleted:   R5.12
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.11
+chainTip:        codex/harnessharness-evidence-r5.12
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-02T10:15:00Z
+updatedAt:       2026-11-02T10:42:33Z
 ```
 
 ## OPEN FINDINGS
@@ -1020,3 +1020,6 @@ updatedAt:       2026-11-02T10:15:00Z
 - 2026-11-02T09:55:13Z · **R5.11 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,797, ~2.4×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic X5 instrument-oracle invoked→verdict unit (PADR-R5-1 A.1 item 5 / A.2 owner map; REQ-E-007; no documented sub-seam); proposed leg cut lands unexercised AC-2 refusal machinery or execution without mandated refusals — invoked-without-verdict or verdict-without-refusals. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7/R5.8/R5.9/R5.10 precedent); dated note on `180_R5.11__oracle.md`; manifest row-180 note; `runs/R5.11.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-02 · R5.11 done — branch `codex/harnessharness-evidence-r5.11` · PR #221 · base `codex/harnessharness-evidence-r5.10` (@cad96e5). Executed instrument oracle + durable attempt evidence (X5; REQ-E-007 primary, REQ-E-102/103/204 contributing): `hh-bench::oracle` — invoked row persists before the pinned oracle runs on the sealed submission (structural `submission_seal` proof, invoked<verdict seq, append-failure ⇒ no execution); durable-derived `attempt_no` enforces frozen `max_attempts`; `wall_ms`/output bounds enforced on the raw observation; unchanged `grade()`/infra/typed-reward mapping — empty/nonfinite/crash/timeout/refused/over-bound ⇒ `oracle_failure`; pin/digest/seal refusals with zero rows; `shared` keeps `separate_verifier:false`+`tamper:n/a{no_detector}`; instrument-only charge, subject stream untouched; `to_grade_attempt` producer fact. Two new `verification.oracle.*` classes registered (existing plane, `hint` lowering). **Verify:** fmt OK · bench 14 targets (r5_11 10/10) · ledger 21 targets · fails-without compile-red at base · guard PASS DISPATCH R5.11 pre+post · check-build-memory 0 viol/8 scoped · bm-tools OK · triggers in sync · ci: pass #221@5b0dca4 (build·test·fmt·drift ubuntu+macos · cargo-deny · gitleaks 41425091432; logs/ci-r5.11.json). **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 1,797 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling · chainTip → codex/harnessharness-evidence-r5.11 · next → R5.12 · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-02T10:27:13Z · **R5.12 size ruling** — worker stopped correctly at the ≤600 line trigger (measured 645, ~1.08×; context within 18k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic whole-vector Account `reserve` admission unit (PADR-R5-2 B.1 item 3 / B.2 owner map "derived-cap checks | budget/control"; decomposition row 28; REQ-E-207/REQ-D-006 contributing; no documented sub-seam); proposed leg cut lands AC-2 refusal clauses unexercised — enforcement without its mandated battery — or refusal tests against behavior that does not exist. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6/R5.7/R5.8/R5.9/R5.10/R5.11 precedent); dated note on `181_R5.12__reserve.md`; manifest row-181 note; `runs/R5.12.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-02 · R5.12 done — branch `codex/harnessharness-evidence-r5.12` · PR #222 · base `codex/harnessharness-evidence-r5.11` (@b9abf37). Atomic whole-vector Account cap admission (PADR-R5-2 B.1 item 3; REQ-D-006/REQ-E-207 contributing — primary R5.19 AC-3): `Account::reserve` projects the vector at the node and every ancestor — each non-gauge hard key, primary or derived, as `level + quantity.key_total > hard` through the owning fold (consumed + outstanding + slice_held); derived `tokens.*.total` ceilings now bind; exact boundary admits; any refusal holds nothing (`reserved{outcome:"refused"}` ledgered); gauge dims `DimensionNotBudgetable`; WAL-recovered holds enforced. **Verify:** fmt OK · budget 5 targets (r5_12 7/7) · consumer sweep 62 targets (gateway/env/subagent/fleet/control/orchestrator/debt) · fails-without 3/7 red at base · guard PASS DISPATCH R5.12 pre+post · check-build-memory 0 viol/8 scoped · bm-tools OK · triggers in sync (175 ADRs) · ADR-0391 + BL-47 sources. **Deferrals:** none opened/closed; DF-R5.1-1 carried. **Deviations:** 645 changed source/test lines vs ≤600 flag — accepted as recorded Deviation per Amended 2026-11-02 ruling · chainTip → codex/harnessharness-evidence-r5.12 · next → R5.13 · ci: pass #222@97bcb1c (build · test · fmt · drift ubuntu+macos · cargo-deny · gitleaks 41429239235; logs/ci-r5.12.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

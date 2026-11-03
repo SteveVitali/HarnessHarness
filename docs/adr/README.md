@@ -180,3 +180,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0388](ADR-0388-r5.9-first-valid-grade-selection-landing.md) | R5.9 shared first-valid grade selection and immutable revisions — landing decisions | R5.9 | Accepted |
 | [ADR-0389](ADR-0389-r5.10-submission-seal-created-origin-m1-landing.md) | R5.10 submission seal and created-origin M1 — landing decisions | R5.10 | Accepted |
 | [ADR-0390](ADR-0390-r5.11-instrument-oracle-attempt-landing.md) | R5.11 instrument oracle attempt — landing decisions | R5.11 | Accepted |
+| [ADR-0391](ADR-0391-r5.12-whole-vector-reserve-landing.md) | R5.12 whole-vector Account reserve — landing decisions | R5.12 | Accepted |
