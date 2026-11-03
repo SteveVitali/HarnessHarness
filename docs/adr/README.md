@@ -194,3 +194,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0402](ADR-0402-r5.24-r0-lifecycle-repair-landing.md) | R5.24 R0 open/finished lifecycle repair and recipient decode bounds — landing decisions | R5.24 (Repair R0 lifecycle and prove clean-recipient | Accepted |
 | [ADR-0403](ADR-0403-r5.25-recompute-landing.md) | R5.25 §6.3 recompute through the native owner — landing decisions | R5.25 (Recompute frozen analysis through the native | Accepted |
 | [ADR-0404](ADR-0404-r5.26-replay-fresh-landing.md) | R5.26 §6.3 isolated-replay and fresh-execution admission cards — landing decisions | R5.26 (Isolated replay and fresh-execution admission | Accepted |
+| [ADR-0405](ADR-0405-r5.27-rights-handoff-landing.md) | R5.27 §6.4 rights, losses, quotas and recipient handoff validation — landing decisions | R5.27 (Rights, losses, quotas and recipient handoff | Accepted |
