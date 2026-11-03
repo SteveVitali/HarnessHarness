@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.42
-lastCompleted:   R5.41
+nextTicket:      HUMAN-H8
+lastCompleted:   R5.42
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.41
+chainTip:         codex/harnessharness-evidence-r5.42
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T19:48:21Z
+updatedAt:        2026-11-03T20:50:21Z
 ```
 
 ## OPEN FINDINGS
@@ -1109,3 +1109,4 @@ updatedAt:        2026-11-03T19:48:21Z
 - 2026-11-03T19:48:21Z · R5.41 done — branch codex/harnessharness-evidence-r5.41 · PR #255 · base codex/harnessharness-evidence-r5.40 · §4.1/M-H deterministic central protocol materialization (ADR-0419): `central_protocol.rs` `materialize_protocol` — records-in validator+materializer; seeded `idp_digest` ranks (`select`/`order`/`coin`/`slot` domains) → outcome-blind 30-task no-replacement selection under exact frozen quotas + equal within-stratum weights, task-level fair lane coin (both orientations), 5-round × 2-arm interleaved 300-slot schedule, first-slot bindings, six phase + frozen family/multiplicity/stop identities; `protocol_id` derived commitment minted last inside one Result — every refusal gate before selection, no prefix admitted; closed `ProtocolError` (30 legs incl. close-review `DuplicateStratum`, duplicate `arm_id`, exact phase set); S.1 `MethodMetadata` consumed unchanged; no new RecordKind/class/dep. **Verify:** r5_41 16/16 · hharness-eval all suites 0 failures · fmt OK · fails-without compile-red at 9aa768db · guard PASS DISPATCH R5.41 pre / DISPATCH R5.42 post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 202 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 · **ADRs:** ADR-0419 · **Deviations:** 1,601 changed source/test lines vs ≤800 flag (~2.0× — 1,537 at checkpoint + 64 close-review repair lines) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** eight primary ids (D-007/101/102/103, E-011, B-101/103/106) — full-target R/P/actual-execution predicates stay owed (R5.46+/R5.49) · chainTip → codex/harnessharness-evidence-r5.41 · next → R5.42 · ci: pass #255@e910ae0 (all 4 checks 41704445599; stack #254…#239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T20:23:48Z · **R5.42 size ruling** — worker stopped correctly at the ≤600 line trigger (measured 2,029 numstat, ~3.4× — **new build high-water mark**; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-I packet binds the readiness/quote packet to one owner (no written contingency); `build_quote` is one closed predicate (every refusal gate before compute; `quote_id` minted last); all three cuts fail standing tests; L150's seams consumed or inter-ticket. Magnitude alone does not change the calculus — recorded explicitly as a fresh high-water Deviation, not a silent band extension. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.41 precedent); dated note on `212_R5.42__quote.md`; manifest row-212 note; review record `planning/2026-11-03_R5.42-split-review.md`; `runs/R5.42.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03T20:50:21Z · R5.42 done — branch codex/harnessharness-evidence-r5.42 · PR #256 · base codex/harnessharness-evidence-r5.41 · §4.5/§9.2 M-I per-stage readiness + full exposure quote (ADR-0420): `exposure_quote.rs` `build_quote` — records-in, supplied binding inputs only; five closed vocabularies (STAGES/PREREQUISITES/PINS/COMPONENTS/ENVELOPE_COMPONENTS); per-stage ready_for_gate/blocked{typed blockers}/infeasible — unset currency $0 + funding block, unbound/unpriced/unbounded inputs block only the dependent action; ab_subjects=2TR vs ho_pairs=TR distinct + floor 2TR≥10T; parity `kl_directional_bound` η=.025 attainable-precision diagnostics (sticky infeasible>unresolved>attainable); frozen §9.2 ceilings; five forbidden-construct refusals; dispatch gate_pending{GATE-G12/13/14/unscheduled} never an authorization; quote_id minted last inside one Result; closed QuoteError (23 legs); S.1 MethodMetadata unchanged, no new dep/RecordKind/class/arm. **Verify:** r5_42 17/17 · hharness-eval all suites 0 failures · fmt OK · fails-without compile-red at 2670df8e · guard PASS DISPATCH R5.42 pre / HOLD human HUMAN-H8 pending post (RETURN PASS) · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 204 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 · **ADRs:** ADR-0420 · **Deviations:** 2,152 changed source/test lines vs ≤600 flag (~3.6× — 2,029 at checkpoint + 123 close-review repair lines; the ~3.4× ruling measure is a new build high-water mark, exceeding the prior ~3.0× band) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** six primary ids (D-105/D-110/D-309/C-004/C-105/C-106) — full-target R/P/actual-execution predicates stay owed (HUMAN-H8, GATE-G18/R5.42a, GATE-G11–G14, R5.47, R5.49) · chainTip → codex/harnessharness-evidence-r5.42 · next → HUMAN-H8 · ci: pass #256@2eb891e (all 4 checks 41713807117; stack #255…#239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
