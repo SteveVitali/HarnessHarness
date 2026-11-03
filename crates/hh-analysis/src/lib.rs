@@ -49,6 +49,7 @@ pub mod ops;
 pub mod population;
 pub mod project;
 pub mod receipt;
+pub mod recompute;
 pub mod report;
 
 pub use engine::analyze_and_record;
@@ -59,5 +60,9 @@ pub use receipt::{
     assemble_receipt, AnalysisDecl, DeclaredReceipt, GradeDecl, GradeStatus, PopulationReceipt,
     ReceiptFailure, ReconcileLeg, RowDecl, SettlementDecl, EVIDENCE_CLASS, RECEIPT_SCHEMA,
     RECEIPT_VERSION,
+};
+pub use recompute::{
+    recompute_analysis, within_tolerance, PopulationPins, RecomputeDrift, RecomputeError,
+    RecomputeLeg, RecomputePlan, RecomputeReport, RECOMPUTE_SCHEMA,
 };
 pub use report::AnalysisOutcome;
