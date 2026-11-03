@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.27
-lastCompleted:   R5.26
+nextTicket:      R5.28
+lastCompleted:   R5.27
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.26
+chainTip:         codex/harnessharness-evidence-r5.27
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T06:18:08Z
+updatedAt:        2026-11-03T06:57:30Z
 ```
 
 ## OPEN FINDINGS
@@ -1066,3 +1066,4 @@ updatedAt:        2026-11-03T06:18:08Z
 - 2026-11-03 — R5.26 done — branch codex/harnessharness-evidence-r5.26 · PR #240 · base codex/harnessharness-evidence-r5.25 · §6.3 isolated-replay + fresh-execution admission cards inside hh-bundle (ADR-0404): `admit_replay` legs inputs -> prefix (envelope-exact vs recomputing original; original_mutation) -> suffix (lifecycle.replay.* markers only) -> counters (card recounts appended attempt classes — declared must agree; nonzero = attempted_live_dispatch even if blocked) -> decisions (exact) -> rederivation (R1 required derived set from authoritative bytes); `admit_fresh` gates unfunded/retired/not_fresh/charging_attribution + per-level inputs + not_independent (compute_independence; author-only dir admits nothing); legs native_basis (levels::derive) + arms (n>=k>=2); cards separate — replay-card/1 + fresh-card/1, prerequisites/resources/counters/independence never folded into verdict · **Verify:** r5_26 20/20 · hh-bundle suite 0 failed · fmt OK · fails-without compile-red at d5f355fb · guard PASS DISPATCH R5.26 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 1,823 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.26 · next → R5.27 · ci: pass #240@44ef7a9 (all 4 checks 41587597711; stack #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T06:37:22Z · **R5.27 size ruling** — worker stopped correctly at the ≤650 line trigger (measured 1,502 numstat, ~2.3×; context within estimate). Scoped fresh-context review verdict: **AMEND** — packet A1 has no written contingency; §6.4 is one conjunctive clause (interfaces, not separate procedures — weaker than R5.26's still-AMEND replay/fresh); AC-1/AC-2 span both interfaces; leg (a) ~1,060 alone still over — non-curative. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.26 precedent); dated note on `197_R5.27__rights.md`; manifest row-197 note; review record `planning/2026-11-03_R5.27-split-review.md`; `runs/R5.27.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 — R5.27 done — branch codex/harnessharness-evidence-r5.27 · PR #241 · base codex/harnessharness-evidence-r5.26 · §6.4 rights/losses/quotas/handoff validation inside hh-bundle (ADR-0405): `admit_handoff` plan legs authority (optional_hosting/S3/account → separate_authority) -> metadata (contact/region; dates ≤ now — missing_input/future_date) -> grant (≤30d/≤1h/no w-d-l — quota_breach/grant_overreach) -> quotas -> per-item withheld/refused rows (unknown rights withheld; restricted-in-public scope_mismatch; unauthorized_recipient; expiry; held-out roles; secret/sensitive scans; fetch legs via trust::admit; redacted/gc) -> departures (marker_not_deletion; tombstones + disabled procedures); retention effective_until = min(item expiry, review_before); `sanitize_replace` new identity + supersession + recalculated claims + per-procedure losses · **Verify:** r5_27 18/18 · hh-bundle suite 0 failed · fmt OK · fails-without compile-red at bc446fb7 · guard PASS DISPATCH R5.27 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 1,502 changed source/test lines vs ≤650 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.27 · next → R5.28 · ci: pass #241@412e390 (all 4 checks 41591574880; stack #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
