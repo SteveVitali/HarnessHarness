@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.25
-lastCompleted:   R5.24
+nextTicket:      R5.26
+lastCompleted:   R5.25
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.24
+chainTip:         codex/harnessharness-evidence-r5.25
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-03T05:01:03Z
+updatedAt:        2026-11-03T05:40:04Z
 ```
 
 ## OPEN FINDINGS
@@ -1060,4 +1060,4 @@ updatedAt:       2026-11-03T05:01:03Z
 - 2026-11-03 · R5.23 done — branch `codex/harnessharness-evidence-r5.23` · PR #237 · base `codex/harnessharness-evidence-r5.22` (@0f5246f). `population-receipt/1` — the §6.1 all-planned closure reconcile inside `hh-analysis` (Packet C C.9 checks 2/6; ADR-0401): `assemble_receipt(&ExperimentView, &[EvalRun], &[TaskContext], metric_ref, pins, &DeclaredReceipt) → Result<PopulationReceipt, AnalysisError>` — six set-equality legs slots→plans→first/all attempts→settlements/selected grades→rows→analysis (expected side = landed R5.15 contract via 184a `planned_population`, X7; refusals verbatim); records-in declared side; closed fourteen-code `receipt::code` set; four separate per-slot verdict axes (finished invocation never erases skipped/format failure; retry never counts subject n); fixed `derived_index` label — no class promotion; mismatches recorded findings, never thrown/shrunk; no crate edge (C.1 item 6). **Verify:** fmt OK · r5_23 9/9 · hh-analysis 90/0 · fails-without compile-red at `d5f6810a` · guard PASS DISPATCH R5.23 post-boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 185 · backlog (ADR-0401→BL-47). **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0401. **Deviations:** 1,527 changed source/test lines vs ≤950 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-208/F-003/F-004/F-008/C-002 D/E recorded; REQ-A-101 contributing-only; R/P/actual-execution owed (contributors R5.22/R5.24/R5.43). chainTip → codex/harnessharness-evidence-r5.23 · next → R5.24 · ci: pass #237@0f5246f (all 4 checks 41575536204; macos rerun after helper_live deadline flake; stack pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03 · R5.24 done — branch `codex/harnessharness-evidence-r5.24` · PR #238 · base `codex/harnessharness-evidence-r5.23` (@58431cf). R0 open/finished lifecycle repair — the §9.3 admitted existing-contract fix (A3 F6): `kernel.reproduce` R0 fold derives `open`/`finished` from `lifecycle.run.finished` presence (producer's own rule; outcome-plane `payload.status` never read — task failure can validate) + §6.3 `decode_dir` bounds (`MemberEscape` link/non-regular/`bundle.json` entries; `MemberExpansion` beyond declared size, blob bound when undeclared). Six R0 controls + refusals + clean-recipient verifyfixed (producer deleted → argument-file validate+R0 pass, byte-identical dir, diagnostic-equivalent old-fold derivation per §5.3/REQ-D-208). **Verify:** fmt OK · r5_24 9/9 · hh-embed suite green + hh-bundle green · fails-without 5/9 red (exact F6 signature) · guard PASS DISPATCH R5.24 pre+post · bm 0 viol (. + --staged) · bm-tools OK · living-docs 418 · triggers 186 · removability exit 1 = BL-49 pre-existing only · 699 vs ≤700 inside. **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0402. **Deviations:** none. **AC-3:** REQ-F-007/A-204/C-003/D-208 D/E recorded; 12 contributing-only stamps; R/P/actual-execution owed (R5.25/26/45/52). chainTip → codex/harnessharness-evidence-r5.24 · next → R5.25 · ci: pass #238@58431cf (all 4 checks 41580171838) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T05:24:23Z · **R5.25 size ruling** — worker stopped correctly at the ≤700 line trigger (measured 1,468 numstat, ~2.1×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — one in-process owner interface (`recompute_analysis`; `analysis-recompute/1` is the legs'+drifts' own fold); §6.3 Recompute card / partition R4 / decomposition row 31 name no seam inside the procedure and L150's four weak seams are consumed or other tickets' boundaries. AC-1's conjunctive verify→population→rerun→compare predicate spans every cut — each leg alone is a dead path or unverifiable partial; the interface alone (658, 94% of trigger) precedes its irreducible EX-02 fixture battery. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.23 precedent); dated note on `195_R5.25__recompute.md`; manifest row-195 note; review record `planning/2026-11-03_R5.25-split-review.md`; `runs/R5.25.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
-
+- 2026-11-03 — R5.25 done — branch codex/harnessharness-evidence-r5.25 · PR #239 · base codex/harnessharness-evidence-r5.24 · §6.3 Recompute owner interface inside hh-analysis (ADR-0403): `recompute_analysis(plan,input)` legs verify_inputs (withheld/malformed/nonfinite/wrong-pin; generated_from + report_id exact) -> population (assemble_receipt; non-closed refuses) -> rerun (analyze; kernel refusals verbatim) -> compare (identity/order/count/verdict exact; 1e-10 scalar tolerance; threshold/verdict fails inside) · **Verify:** r5_25 13/13 · hh-analysis suite 0 failed · fmt OK · fails-without compile-red at 924ec646 · guard PASS DISPATCH R5.25 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 1,468 changed source/test lines vs ≤700 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.25 · next → R5.26 · ci: pass #239@09cd29c (run 41583940143) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
