@@ -87,6 +87,15 @@ pub enum BundleError {
     ProfileRefused { code: &'static str, detail: String },
     /// A malformed record decode.
     Malformed { detail: String },
+    /// A `members/` entry (or the `bundle.json` root) that is not a
+    /// regular file inside the delivered tree — a link/dir/special
+    /// entry escapes the archive's bounds; refused before the bytes are
+    /// materialized (§6.3 recipient rule; R5.24).
+    MemberEscape { member: String },
+    /// A member file larger than its declared index `size` (or, with no
+    /// declared size, the native blob bound) — refused before the bytes
+    /// are materialized (§6.3 recipient expansion rule; R5.24).
+    MemberExpansion { member: String, limit: u64 },
 }
 
 impl fmt::Display for BundleError {
@@ -163,6 +172,12 @@ impl fmt::Display for BundleError {
                 write!(f, "profile_refused[{code}]: {detail}")
             }
             BundleError::Malformed { detail } => write!(f, "malformed: {detail}"),
+            BundleError::MemberEscape { member } => {
+                write!(f, "member_escape: {member}")
+            }
+            BundleError::MemberExpansion { member, limit } => {
+                write!(f, "member_expansion: {member} exceeds {limit} bytes")
+            }
         }
     }
 }

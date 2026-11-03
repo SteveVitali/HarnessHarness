@@ -503,3 +503,34 @@ ticket never marks a deferred full-target predicate MET.
 > predicate — evidence dependency, never dispatch dependency.
 > REQ-A-101 is stamped **contributing-only** — this ticket never
 > marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 194, R5.24): the §9.3
+> admitted *existing-contract fix* "R0 open/finished mapping
+> (R-2.9.3)" landed inside `hh-embed` (ADR-0402;
+> `crates/hh-embed/src/bundle_ops.rs` `kernel_reproduce` — the R0
+> fold derives `open`/`finished` from `lifecycle.run.finished`
+> presence, the producer's own rule, independent of the
+> outcome-plane `payload.status` — A3 F6) plus the §6.3 recipient
+> decode bounds inside `hh-bundle` (`crates/hh-bundle/src/codec.rs`
+> `decode_dir` — `MemberEscape` on non-regular/`bundle.json` link
+> entries, `MemberExpansion` beyond the declared index `size`, the
+> native blob bound when undeclared; `BundleError` variants in
+> `error.rs`). Engineered evidence in
+> `crates/hh-embed/tests/r5_24.rs` (9/9 — the six R0 controls:
+> `succeeded`/`failed_honest`→`finished`, `open`→`open`, changed
+> bytes/`manifest_version` drift, absent member/`ledger_page_missing`,
+> resealed wrong lifecycle/`lifecycle_status` drift — verdict fails
+> at exit zero; link escape + expansion refuse; clean-recipient
+> verifyfixed: producer store deleted, argument-file `validate`+R0
+> pass over byte-identical delivered dir, old-fold derivation
+> recorded as labelled diagnostic equivalent per §5.3 REQ-D-208 —
+> the original A3 bytes are unavailable, never an original-rerun
+> claim). REQ-F-007, REQ-A-204, REQ-C-003 and REQ-D-208 keep
+> `planned; unmet` — achieved engineered D/E recorded separately
+> from the owed legs: the named contributors R5.25 (recompute),
+> R5.26 (replay), R5.45 (trace) and R5.52 (outside review), and
+> every R/P/actual-execution predicate — evidence dependency, never
+> dispatch dependency. REQ-A-103, REQ-C-007, REQ-E-208 (+ aliases
+> REQ-E-010/108/109), REQ-F-201, REQ-F-202, REQ-G-101/102/103/104/
+> 105/107 and REQ-G-203 are stamped **contributing-only** — this
+> ticket never marks a deferred full-target predicate MET.
