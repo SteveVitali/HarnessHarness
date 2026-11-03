@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_184 ADRs: 132 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_185 ADRs: 133 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -168,6 +168,7 @@ _184 ADRs: 132 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0398 | - An admitted additional compaction variant → extend the admitted set and the replay/render coverage. - A live provider leg → the fixture-verified ceiling stands until the named live-evidence procedure runs. |
 | ADR-0399 | - If R5.22's closure walk needs the C-group reference sets typed (`oracle_observation_refs`, `treatment_joins`, `rows_analysis_refs`, `operational_evidence_refs`), revisit Decision 2 — today they decode as tolerated additive members under the same version. - If a profile major `2` is admitted, revisit the `unknown_profile_version` boundary — the refusal then routes through versioned negotiation, never silent decode. |
 | ADR-0400 | - If R5.23's population assembly or the R5.24–27 procedure consumers need a different edge vocabulary, verdict partition or `closure-report/<n>` member shape, amend this record's Consequences — the report is sidecar-class and evolves by version, never silently. - If a producer-crate per-owner enumerator batch is ever admitted (the conditional seam this ticket's partition row documents — "if per-owner enumerators are broad, split support-only producer batches"), re-read Decision 2: today the class-table `content_refs` declaration *is* the owner-supplied closure input and no producer-crate batch exists (C.1 item 6 forbids the crate edge). - If a successor bundle schema (`hh-bundle/2`) or profile major `≥2` is admitted, revisit the `unsupported_schema` boundary — cross-version traversal then routes through negotiation, never silent decode. |
+| ADR-0401 | - If a successor receipt schema (`population-receipt/2`) is admitted — e.g. a different declared-side shape once a producer export binding lands (the C.1-item-6 seam this ticket leaves to its named owner) — amend this record's Decision 1/6; the record evolves by version, never silently. - If R5.24's R0 lifecycle repair or the R5.25/R5.26 recompute/ replay consumers need a different leg partition, verdict-axis vocabulary or failure-code set, re-read Decisions 3–4 — the fourteen-code set and the four axes are the contract the downstream consumers read. - If the pinned cost-view/selection identity stops being a single comparable version/ref (multi-version settlement or selection histories), revisit the `stale_cost_version`/`stale_selection` single-pin rule — the pin is the frozen read the declaration asserts, not a ceiling. - If `population::planned_population` (the X7 contract fold) changes its member-resolution or counting semantics, re-run the whole r5_23 battery — the expected side is that fold verbatim and this record's reconcile inherits its refusals. |
 
 ## Fired-and-answered triggers (BL-48)
 

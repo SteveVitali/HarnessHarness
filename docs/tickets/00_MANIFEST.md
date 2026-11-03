@@ -398,6 +398,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 192 | `192_R5.22__closure.md` | Round 5 | ticket | Owner-typed reference closure and materialization | — |
 | 192 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 193 | `193_R5.23__population-receipt.md` | Round 5 | ticket | Assemble all-planned evidence from owning projections | — |
+| 193 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 194 | `194_R5.24__r0.md` | Round 5 | ticket | Repair R0 lifecycle and prove clean-recipient verifyfixed | — |
 | 195 | `195_R5.25__recompute.md` | Round 5 | ticket | Recompute frozen analysis through the native owner | — |
 | 196 | `196_R5.26__replay.md` | Round 5 | ticket | Isolated replay and fresh-execution admission cards | — |

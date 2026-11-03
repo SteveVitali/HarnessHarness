@@ -48,10 +48,16 @@ pub mod multiplicity;
 pub mod ops;
 pub mod population;
 pub mod project;
+pub mod receipt;
 pub mod report;
 
 pub use engine::analyze_and_record;
 pub use error::AnalysisError;
 pub use kernel::{analyze, AnalysisInput};
 pub use project::eval_run;
+pub use receipt::{
+    assemble_receipt, AnalysisDecl, DeclaredReceipt, GradeDecl, GradeStatus, PopulationReceipt,
+    ReceiptFailure, ReconcileLeg, RowDecl, SettlementDecl, EVIDENCE_CLASS, RECEIPT_SCHEMA,
+    RECEIPT_VERSION,
+};
 pub use report::AnalysisOutcome;
