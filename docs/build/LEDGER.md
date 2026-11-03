@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.29
-lastCompleted:   R5.28
+nextTicket:      R5.30
+lastCompleted:   R5.29
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.28
+chainTip:         codex/harnessharness-evidence-r5.29
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T07:54:42Z
+updatedAt:        2026-11-03T08:47:14Z
 ```
 
 ## OPEN FINDINGS
@@ -1072,3 +1072,4 @@ updatedAt:        2026-11-03T07:54:42Z
 - 2026-11-03 — R5.28 done — branch codex/harnessharness-evidence-r5.28 · PR #242 · base codex/harnessharness-evidence-r5.27 · §2.1/§7.1 one supported native recipe + exact CLI forwarding (ADR-0406): `hh-recipe/1` `run_recipe(&mut EmbedService,&RecipePlan)` — hello -> register/expand/open -> bounded next/claim/launch drain -> adopt_subject (launch_binding re-folded durable; subject_writer re-presented) -> submit scripted lane -> durable finish+submission_ref gate -> declared grade via surface_commit_row (persisted writer generation; grade_unspecified never defaults) -> settle/close -> project_and_record -> analyze (rows[] derived) -> notifications or n/a{no_callback_channels} -> assemble_receipt over actual-fact DeclaredReceipt; RecipePlan inputs-only (authored members unsupported_shape); K-2 repair forwards run_plan_id/lease_id/holder/subject_holder/partial/bundle_id/reason/probe verbatim + compare report/scorecard on real report_id (wrapper shapes removed); post-open repair f5952a1 (readers-scan seam token) · **Verify:** r5_28 5/5 · in_process 71/71 · hh-embed+hh-analysis 0 failed · fmt OK · fails-without compile/assertion-red at a2bed920 · guard PASS DISPATCH R5.28 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · triggers 190 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 2,005 changed source/test lines vs ≤850 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.28 · next → R5.29 · ci: pass #242@f5952a1 (all 4 checks 41597805269; stack #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T08:27:22Z · **R5.29 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 2,564 numstat, ~3.0× — **new build high-water mark**; context within 24k+10k estimate). Scoped fresh-context review verdict: **AMEND** — conjunctive example-card/runner unit (OFFLINE packet binds EX-01/EX-02 one owner, no contingency vs items 1/4 verbatim clauses; documented boundary is EX-01/02-vs-EX-03/04; L150 omits per-example); shared ~578-line card surface + AC-1 conjunct spans the cut; every proposed leg stays over trigger (non-curative; band is precedent-not-limit — vs packet estimate ~2.8–4.3× is in-family). Accepted as recorded Deviation; dated note on `199_R5.29__offline.md`; manifest row-199 note; review record `planning/2026-11-03_R5.29-split-review.md`; `runs/R5.29.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 — R5.29 done — branch codex/harnessharness-evidence-r5.29 · PR #243 · base codex/harnessharness-evidence-r5.28 · §7.2 early offline examples + informative Lab lesson (ADR-0407): `example-card/1` committed cards (scripts/examples/) + `hh-examples/1` `run_example` checked runner in hharness::examples — closed-member decode, sha256 pins refuse stale_pin pre-exec, semantic ExampleReport (expected_refusal verbatim, never a pass); EX-01 hello→open_session(pinned def)→submit→attach-by-run-id→6 excerpt checks (actual ids/seq/payload/causes)→kernel.bundle→clean-recipient check_completeness+reproduce R0→admit_replay typed CardRefused{missing_input} expected_refusal + tampered control; EX-02 ex-02-fixture/1 (pinned grades + independent expected)→run_recipe×2 tasks (20 subjects)→both receipts closed→fresh recipient rebuild→merged ExperimentView→analyze_and_record fmc beta{1,1}→persisted report (idempotent id)→DeclaredReceipt+recompute_analysis reproduced; checks subjects_20/cells_pinned/informative_contrast/report_identity/recipient_recompute/exploratory_label/refusal_controls · **Verify:** r5_29 7/7 · hharness 12/0/0 · fmt OK · fails-without compile/missing-file red at 4dd6159e · guard PASS DISPATCH R5.29 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · triggers 191 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 2,564 changed source/test lines vs ≤850 flag (~3.0× — new build high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.29 · next → R5.30 · ci: pass #243@0c28168 (all 4 checks 41603990679; stack #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
