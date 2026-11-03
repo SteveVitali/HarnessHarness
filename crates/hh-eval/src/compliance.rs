@@ -377,6 +377,7 @@ mod tests {
 
     fn art(id: &str) -> ArtefactRow {
         ArtefactRow {
+            seq: 0,
             artefact_id: id.into(),
             delivery_id: None,
             detector: None,
@@ -422,12 +423,14 @@ mod tests {
         assert_eq!(attribution_completeness(&f).ppm(), Some(500_000));
         f.effects_intended = vec![
             crate::facts::EffectRow {
+                seq: 0,
                 effect_id: "e1".into(),
                 idempotency_key: None,
                 compensates: None,
                 reverts: None,
             },
             crate::facts::EffectRow {
+                seq: 0,
                 effect_id: "e2".into(),
                 idempotency_key: None,
                 compensates: None,

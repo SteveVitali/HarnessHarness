@@ -704,12 +704,14 @@ mod tests {
         let f = LedgerFacts {
             effects_committed: vec![
                 EffectRow {
+                    seq: 0,
                     effect_id: "e1".into(),
                     idempotency_key: Some("k".into()),
                     compensates: None,
                     reverts: None,
                 },
                 EffectRow {
+                    seq: 0,
                     effect_id: "e2".into(),
                     idempotency_key: Some("k".into()),
                     compensates: None,
@@ -816,6 +818,7 @@ mod tests {
     fn held_out_leak_trips() {
         let mut f = LedgerFacts::default();
         f.artefacts_delivered.push(crate::facts::ArtefactRow {
+            seq: 0,
             artefact_id: "secret-fixture".into(),
             delivery_id: None,
             detector: None,

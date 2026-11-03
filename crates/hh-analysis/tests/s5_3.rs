@@ -881,6 +881,7 @@ fn strata_view_refuses_silent_pooling() {
 
 fn artefact(id: &str, detector: Option<&str>) -> ArtefactRow {
     ArtefactRow {
+        seq: 0,
         artefact_id: id.to_string(),
         delivery_id: Some(format!("d-{id}")),
         detector: detector.map(str::to_string),
