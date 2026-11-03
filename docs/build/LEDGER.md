@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.35
-lastCompleted:   R5.34
+nextTicket:      R5.36
+lastCompleted:   R5.35
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.34
+chainTip:         codex/harnessharness-evidence-r5.35
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T12:32:00Z
+updatedAt:        2026-11-03T13:03:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1088,3 +1088,4 @@ updatedAt:        2026-11-03T12:32:00Z
 - 2026-11-03T11:57:05Z · **R5.34 size ruling** — worker stopped correctly at the ≤800 line trigger (measured 1,851 numstat, ~2.3×; context within estimate). Scoped fresh-context review verdict: **AMEND** — O3 packet binds O6/O7 cells + 8×3 seeded permutation + reporting to one working set (no written contingency; L150's seams consumed/other tickets'); the report machinery is the cells' own fold (OpsReport enumerates OPS_CELLS); the proposed apparatus-vs-battery cut is the rejected impl-vs-battery split (ops.rs zero tests — leg (a) dead instrument, leg (b) IS the evidence); leg (b) alone still over. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.33 precedent); dated note on `204_R5.34__operations.md`; manifest row-204 note; review record `planning/2026-11-03_R5.34-split-review.md`; `runs/R5.34.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03T12:32:00Z · R5.34 done — branch codex/harnessharness-evidence-r5.34 · PR #248 · base codex/harnessharness-evidence-r5.33 · §5.2/D3-F4 O6/O7 Account cells + §5.3/D3-F5 8×3 stage-count report (ADR-0412): closed 19-member `AccountFailure` + `o6_outcome`/`o7_outcome` pure folds (O6 same-path positive + durable `reserved{refused}` + zero transport entries + no exhaustion spelling; O7 committed-behind-bounded-barrier, expiry-before-commit unreachable, durable deadline reached, dispatch blocked, drain+stop, no later marker, no double charge, committed preserved on rebuild) + `OpsReport` machinery (frozen seeded 8×3 permutation, retained outcome kinds, append-only records/new-identity rerun cap, zero-denominator `undefined`, `[V/P,(V+U)/P]` bound, O8 `detected/3`, `ops_report/1`); battery real Store/WAL + ManualClock + real Account + prepared path behind counting diagnostic Transport + MarkerSink/Sentinel/OpsObserver. **Verify:** r5_34 7/7 · hharness-env 202/0 · fmt OK · fails-without compile-red at d0898bb8 · guard PASS DISPATCH R5.34 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 196 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0412 · **Deviations:** 1,851 changed source/test lines vs ≤800 flag (~2.3×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** ten contributing-only REQ ids (B-105/C-006/D-203–207/E-012/110/205) — R/P/actual-execution owed R5.44 AC-1 · chainTip → codex/harnessharness-evidence-r5.34 · next → R5.35 · ci: pass #248@05376c1 (all 4 checks 41634383902; stack #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T13:03:00Z · R5.35 done — branch codex/harnessharness-evidence-r5.35 · PR #249 · base codex/harnessharness-evidence-r5.34 · §7.1 reader spine + evidence cards + portfolio positioning (ADR-0413): `docs/evidence.md` claim index — closed four-state vocabulary, marked spine with the three entry choices (readiness first, failure/report exit), eleven exact `### Card —` records (State/Scope/Evidence/Limits/Access; useful-task/study/operations `Not yet available`, component/interchange/evidence-access `Restricted`), selected job + inferred-demand label, maintained 22-family/9-later/6-scenario portfolio, `<!-- unmet -->` clause preserving S1/S3 under the recorded dispositions, claim→source map; README spine block; `scripts/check-position.sh` 13-leg both-modes check (canon parsed from the frozen supplement; gates fail fixture substitution; honesty bans favorable-treatment/scientific phrases); self-test 20/20; ci.yml `ci-mode: both` lane. **Verify:** check-position 13/13 + --head green · fails-without --head red at bfc0b508 · self-test 20/20 · living-docs/examples/contributing/bm-tools/ci-gating/triggers OK · fmt clean · guard PASS DISPATCH R5.35 pre+post · check-build-memory 0 viol (. + --staged) · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0413 · **Deviations:** none (587 vs ≤600) · **AC-3:** four primary ids (B-001/C-008/C-101/C-102 + merged A-001/C-001), twelve contributing-only — participant/publication + gated S1/S3/S4 predicates stay owed (R5.53/R5.54 et al.) · chainTip → codex/harnessharness-evidence-r5.35 · next → R5.36 · ci: pass #249@c609690 (all 4 checks 41639254836) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
