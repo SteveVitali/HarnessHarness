@@ -390,6 +390,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 188 | `188_R5.18__retained.md` | Round 5 | ticket | Persist retained context and replay its selection | — |
 | 188 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 189 | `189_R5.19__gateway.md` | Round 5 | ticket | Prepared gateway reservations and persistent deadline | — |
+| 189 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 190 | `190_R5.20__wire.md` | Round 5 | ticket | Prove retained treatment reaches exact provider bytes | — |
 | 191 | `191_R5.21__profile.md` | Round 5 | ticket | Native evidence profile and immutable snapshot coordinates | — |
 | 192 | `192_R5.22__closure.md` | Round 5 | ticket | Owner-typed reference closure and materialization | — |

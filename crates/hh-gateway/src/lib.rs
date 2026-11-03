@@ -55,6 +55,7 @@ pub mod layout;
 pub mod message;
 pub mod openai;
 pub mod plan;
+pub mod prepared;
 pub mod probes;
 pub mod router;
 pub mod snapshot;

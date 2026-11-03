@@ -327,3 +327,42 @@ ticket never marks a deferred full-target predicate MET.
 > assembly→sealed-request→actual-wire joins) stays owed to the
 > targets' owner R5.20 AC-3; all three targets keep `planned; unmet` —
 > this ticket never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 189, R5.19): the
+> retained-view→wire call ordering landed through
+> `crates/hh-gateway/src/prepared.rs` (`PreparedCall` — Packet B B.1
+> item 5's fixed order / B.2's one gateway owner; ADR-0397): the owned
+> `retained_selection/1` member serialized by the existing codec
+> (`view_ref` idp address), every admitted primary role/overhead bound
+> (five token primaries + `model_calls` required ≥ 1;
+> `retries`/`time.wall_ms` admitted when declared; `estimate_tokens`
+> input floor — `tokens.*.total` stay derived, never charged),
+> whole-vector `Account::reserve` (R5.12 consumed unchanged), sealed
+> plan carrying `budget_reservation_id` → `request_bytes`/`request_ref`,
+> and the created-origin deadline (`created_at_ms` + tightest path
+> `time.wall_ms` hard cap, recomputed on durable inputs — identical
+> across resume/approval/drain). Dispatch gates deadline → sealed-byte
+> verify → outstanding reservation → durable `model.call.requested`
+> (once per `model_call_id`; `view_hash`/`plan_hash`/`request_ref`/
+> `budget_reservation_id`) → bounded `run_attempts` over the prepared
+> bytes (same reservation) → durable attempt/terminal rows →
+> `Account::charge` per admitted primary with `reservation_id` +
+> terminal-event source (idempotent dedup) / `release` / expiry drain.
+> Engineered evidence in `crates/hh-gateway/tests/r5_19.rs` (9/9 —
+> compile-red at base `5caeb304`), mapping §2's REQ-E-207 cap
+> match/whole-vector/derived-total and REQ-D-006 enforce-dimensions
+> predicates + dossier B.9's AC-2-3 checks 3–4 (every admitted cap;
+> actual ≠ reserved; failed/ambiguous usage; logical reversal after
+> real spend; cache/model drift; restart/approval delay; expiry with
+> committed work; zero dispatch when unbounded/unfunded; no
+> replenished physical capacity) and REQ-E-006's requested/served
+> identity + role/binding record (`served_model_mismatch` under
+> `substitution_allowed=false`). REQ-E-207 / REQ-E-006 / REQ-D-006
+> and merged aliases REQ-E-005 / REQ-E-105 / REQ-E-106 gain R5.19 as
+> a **contributing-only** evidence row — achieved engineered D/E
+> recorded separately from the owed legs: fixture-vs-live
+> enforcement separation, cold-start snapshot match, actual provider
+> execution, and the R5.20 wire-join predicate stay owed to their
+> named later owners (evidence dependency, never dispatch
+> dependency); all six targets keep `planned; unmet` — this ticket
+> never marks a deferred full-target predicate MET.
