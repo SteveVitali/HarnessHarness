@@ -209,3 +209,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0417](ADR-0417-r5.39-parity-admission-landing.md) | R5.39 parity admission — landing decisions | R5.39 (Authentic paired records and policy | Accepted |
 | [ADR-0418](ADR-0418-r5.40-numerical-validation-landing.md) | R5.40 composed numerical validation — DF-R5.17-1 prior repair + frozen `sim_battery/1` protocol (landing decisions) | R5.40 | Accepted |
 | [ADR-0419](ADR-0419-r5.41-central-protocol-landing.md) | R5.41 central protocol materialization — landing decisions | R5.41 (Deterministic central protocol materialization) | Accepted |
+| [ADR-0420](ADR-0420-r5.42-exposure-quote-landing.md) | R5.42 per-stage readiness and full exposure quote — landing decisions | R5.42 (Per-stage readiness and full exposure quote) | Accepted |
