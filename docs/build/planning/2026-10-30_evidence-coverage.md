@@ -252,3 +252,7 @@ evidence row (the pending-consumer legs exercise freeze ordering,
 regrade revision coherence, one-subject ownership and immutable
 selection); their primary targets keep `planned; unmet` — this ticket
 never marks a deferred full-target predicate MET.
+## Dated note — 2026-11-02 REQ-D-107 ownership
+
+R5.16 run-time split: seq 185 lands contract-scope (support-only) evidence for REQ-D-107 (estimator + dialect member); seq **185a** (`185a_R5.16b__beta-routing.md`) is the routed-scope discharge leg for the engineered D/E claim. R/P + actual-execution remain owed to GATE-G10/R5.40/R5.49 per the GATE-G9 disposition. Single primary ownership preserved.
+

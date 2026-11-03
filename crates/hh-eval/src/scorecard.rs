@@ -214,6 +214,10 @@ pub fn cell_interval(
             )
             .map(|i| (i.lo, i.hi)),
             IntervalMethod::Wilson | IntervalMethod::BayesianBeta(_) => rate_interval(m),
+            // A contrast-level method is never a per-cell interval — the
+            // cell reports `n/a{estimator_undefined}` (R5.16; Packet D:
+            // metadata-only method support fails, never fabricates).
+            IntervalMethod::FiniteManifestContrast(_) => None,
         }
     };
     // Rate methods need (c, n); value methods need per-task values. A method

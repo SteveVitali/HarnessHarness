@@ -340,8 +340,9 @@ pub struct PlannedPopulation {
 }
 
 /// One resolved member's `(s,f,u)` contribution under `kind` — the
-/// single rule `assemble`'s counts and `contrast_bounds`' cells share.
-fn contrib(kind: PopulationKind, res: &SlotResolution) -> (u64, u64, u64) {
+/// single rule `assemble`'s counts, `contrast_bounds`' cells and the
+/// `finite_manifest` estimator's cells share (one counting rule — X7).
+pub(crate) fn contrib(kind: PopulationKind, res: &SlotResolution) -> (u64, u64, u64) {
     let vetoed = !res.veto_tripped.is_empty();
     match kind {
         PopulationKind::Raw => match res.success {

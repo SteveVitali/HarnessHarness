@@ -576,10 +576,17 @@ impl BootstrapPairedMethod {
 }
 
 /// `IntervalMethod` — `interval_method ∈ {clt, clustered_clt(task), wilson,
-/// bootstrap, bootstrap_paired{bca | percentile}, bayesian_beta{prior}}`
-/// (ADR-0045 D1 + CF-337 growth). `clt` is admissible only via the ADR-0158
-/// selection rule and **never** for `unit ∈ {tokens, money, ms}` — the schema
-/// half is [`crate::compliance::MetricDeclaration::validate`].
+/// bootstrap, bootstrap_paired{bca | percentile}, bayesian_beta{prior},
+/// finite_manifest_contrast{prior}}`
+/// (ADR-0045 D1 + CF-337 growth; ADR-0158 D9 dialect bump). `clt` is
+/// admissible only via the ADR-0158 selection rule and **never** for
+/// `unit ∈ {tokens, money, ms}` — the schema half is
+/// [`crate::compliance::MetricDeclaration::validate`].
+/// `finite_manifest_contrast{prior}` is the GATE-G9-admitted Packet D
+/// (PADR-R5-4*) member: a *contrast-level* method, never a per-cell
+/// interval — a cell declaration naming it reports
+/// `n/a{estimator_undefined}`; it computes only through the analysis
+/// kernel's `finite_manifest_contrast` kind (R5.16).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IntervalMethod {
     /// `clt` — a central-limit interval (restricted: see `validate`).
@@ -594,6 +601,10 @@ pub enum IntervalMethod {
     BootstrapPaired(BootstrapPairedMethod),
     /// `bayesian_beta{prior}` — a named/pinned prior ref.
     BayesianBeta(String),
+    /// `finite_manifest_contrast{prior}` — the admitted finite-manifest
+    /// Bayesian efficacy method's declared prior ref (`beta{1,1}`
+    /// registered; `beta{2,2}` predeclared exploratory sensitivity).
+    FiniteManifestContrast(String),
 }
 
 impl IntervalMethod {
@@ -608,6 +619,9 @@ impl IntervalMethod {
                 Json::obj([("bootstrap_paired", Json::str(m.as_str()))])
             }
             IntervalMethod::BayesianBeta(prior) => Json::obj([("bayesian_beta", Json::str(prior))]),
+            IntervalMethod::FiniteManifestContrast(prior) => {
+                Json::obj([("finite_manifest_contrast", Json::str(prior))])
+            }
         }
     }
 
@@ -629,6 +643,9 @@ impl IntervalMethod {
                     "bootstrap_paired" => BootstrapPairedMethod::parse(v.as_str()?)
                         .map(IntervalMethod::BootstrapPaired),
                     "bayesian_beta" => Some(IntervalMethod::BayesianBeta(v.as_str()?.to_string())),
+                    "finite_manifest_contrast" => Some(IntervalMethod::FiniteManifestContrast(
+                        v.as_str()?.to_string(),
+                    )),
                     _ => None,
                 }
             }

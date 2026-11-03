@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_178 ADRs: 126 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_179 ADRs: 127 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -162,6 +162,7 @@ _178 ADRs: 126 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0392 | - If R5.19's enforced matching needs physical exposure to *refuse* dispatch (not merely expose it), revisit the read-only view decision (Decision 1) — the view is the owning record such a check would read. - If terminal call rows gain further usage-ambiguous states (e.g. an `unknown`/`in-flight` class or a probed ambiguity distinct from failed-no-usage), revisit the two-class unknown fold (Decision 4). - If a future charge path emits unequal `amount`s for one `(source_event, dimension)` across propagation nodes, revisit the leaf-most count-once rule (Decisions 2, 7) — it assumes the batch's copies are identical, which `Account::charge` guarantees today. |
 | ADR-0393 | - If a future event-id scheme admits colon-bearing event ids, revisit the last-segment `cause_run` parse (Decision 7) — the unambiguous form then needs an escaped or length-prefixed coordinate; the R5.9 revisit flag on member-qualified coordinates is the owning record. - If the admitted contract admits multi-member eligible sets sharing one `(instrument_run, seq)` coordinate, revisit the member-qualified coordinate seam (Decision 7) — currently a typed `ConflictingCoordinate` refusal. - If consumers need pending enumerated in a *completed* (non-partial) close, revisit Decision 6 — today unresolved slots force the close to refuse or go partial by design. - If seq 183a needs the overlay revision watermarks named by callers rather than self-computed, revisit the `DispositionPins` shape (Decision 1) — the experiment pin is caller-named, overlay pins are caller-named `(run, until)` pairs. |
 | ADR-0394 | - If seq 184a or a later method ticket needs additional slot members (e.g., split weighting, further availability spellings), revisit the record shape — additive members land by amendment, never as a second predicate. - If an admitted non-unit finite-bound measure needs contrast bounds, revisit `BoundsDecl` — today a non-unit `Bounded` refuses `UnsupportedBounds` as a separately owned target. - If a fourth named population is admitted, revisit `PopulationKind` — the three spellings are the S.1 contract. - If the contrast direction convention changes (control-minus-test or normalized contrasts), revisit the explicit `test_minus_control` direction member — today the target is never implied. |
+| ADR-0395 | Reopen if: (a) the 185a routed leg requires a different `finite_manifest_contrast` payload member or refusal name — amend this record's Consequences; (b) the numerical/routing review (R5.17/GATE-G10/R5.40) finds the ladder or inverse-CDF grid out of tolerance — a new ADR records the corrected protocol; (c) a later admitted prior/draw/floor set changes — the frozen constants move with their admission, never silently. |
 
 ## Fired-and-answered triggers (BL-48)
 

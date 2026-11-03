@@ -30,6 +30,7 @@ pub mod context_metrics;
 pub mod critic_experiment;
 pub mod facts;
 pub mod faults;
+pub mod finite_manifest;
 pub mod hosted_metrics;
 pub mod interventions;
 pub mod judge;
