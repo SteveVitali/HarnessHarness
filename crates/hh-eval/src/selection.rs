@@ -150,9 +150,14 @@ pub struct GradeAttempt {
     pub outcome: GradeOutcome,
 }
 
-/// The run a cause coordinate cites (the `run_id:` prefix).
+/// The run a cause coordinate cites — the `run_id:event_id` coordinate
+/// splits on the LAST separator: run ids are themselves colon-bearing
+/// (`subj-<idp…>`, `sha256:…` content addresses) while event ids are
+/// colon-free, so the rightmost segment is the event id (R5.14 landing
+/// fix — the naive prefix split made a `subj-*` subject uncitable;
+/// ADR-0393, R5.9 revisit flag).
 fn cause_run(cause: &str) -> &str {
-    cause.split(':').next().unwrap_or(cause)
+    cause.rsplit_once(':').map(|(r, _)| r).unwrap_or(cause)
 }
 
 /// `SelectionRevision` — the authorized append-only invalidation record

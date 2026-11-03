@@ -225,3 +225,8 @@ The frozen upstream table retains exact note/finding/candidate history. This pro
 | OL-22 | [brief/notes/spec mapping](../../OUTLINE_TRACE.md) | REQ-H-005 → [R5.1](../../tickets/169_R5.1__guard.md); REQ-H-008 → [R5.2](../../tickets/170_R5.2__dispatch.md); REQ-H-011 → [R5.1](../../tickets/169_R5.1__guard.md) | specification covered; implementation/evidence unmet |
 | OL-23 | [brief/notes/spec mapping](../../OUTLINE_TRACE.md) | REQ-H-002 → [R5.1](../../tickets/169_R5.1__guard.md); REQ-H-003 → [R5.1](../../tickets/169_R5.1__guard.md); REQ-H-008 → [R5.2](../../tickets/170_R5.2__dispatch.md) | specification covered; implementation/evidence unmet |
 | OL-24 | [brief/notes/spec mapping](../../OUTLINE_TRACE.md) | REQ-C-108 → [R5.1](../../tickets/169_R5.1__guard.md); REQ-H-008 → [R5.2](../../tickets/170_R5.2__dispatch.md); REQ-H-010 → [R5.40](../../tickets/210_R5.40__numerics.md); REQ-H-011 → [R5.1](../../tickets/169_R5.1__guard.md) | specification covered; implementation/evidence unmet |
+
+## Dated note — 2026-11-02 REQ-E-202 / REQ-E-008 ownership
+
+R5.14 run-time split: seq 183 lands support-only producer evidence for REQ-E-202 and REQ-E-008 (owner-model numbered checks); seq **183a** (`183a_R5.14b__pending-consumers.md`) is the discharging leg for both targets' full D/E predicates (consumer legs + step-6 agreement + report reproduction). Single primary ownership is preserved: no second ticket may stamp a satisfied claim for these targets.
+

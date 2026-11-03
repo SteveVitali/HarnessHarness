@@ -182,3 +182,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0390](ADR-0390-r5.11-instrument-oracle-attempt-landing.md) | R5.11 instrument oracle attempt — landing decisions | R5.11 | Accepted |
 | [ADR-0391](ADR-0391-r5.12-whole-vector-reserve-landing.md) | R5.12 whole-vector Account reserve — landing decisions | R5.12 | Accepted |
 | [ADR-0392](ADR-0392-r5.13-physical-use-fold-landing.md) | R5.13 deduplicated physical-use fold — landing decisions | R5.13 | Accepted |
+| [ADR-0393](ADR-0393-r5.14-required-grade-pending-owner-landing.md) | R5.14 required-grade pending — owner-model landing decisions (leg a) | R5.14 (leg a of the `07b6be09` SPLIT ruling — contract 183 | Accepted |

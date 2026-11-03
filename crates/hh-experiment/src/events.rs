@@ -77,6 +77,25 @@ pub mod class {
     /// record stamp on the experiment run (§6.5 §2.3 `record_analysis`;
     /// §6.4 §6 audit events — ADR-0162 D3/D6).
     pub const ANALYSIS_RECORDED: &str = "measurement.analysis.recorded";
+    /// `measurement.experiment.execution_settled` — the required-mode
+    /// exactly-once execution-cost settlement record (PADR-R5-1 A.1 item 4,
+    /// A.3): `{run_plan_id, run_id, settled_cost_ref, returned_funding_ref,
+    /// dedup_key}`. Minted at `settle` only when the frozen `grade_binding`
+    /// carries `mode:"required"` — legacy settles never emit it.
+    pub const EXECUTION_SETTLED: &str = "measurement.experiment.execution_settled";
+    /// `measurement.experiment.plan_disposition` — the recorded graded
+    /// disposition (REQ-E-202/REQ-E-008; A.1 item 6): `{run_plan_id, run_id,
+    /// disposition ∈ {graded, oracle_failure}, outcome_class, grades{},
+    /// selected_refs{}, veto_tripped[], revisions[], watermarks{},
+    /// eligible_set_ref}`. `grade_pending` is admission state — it is never
+    /// persisted as a row of its own (A.3).
+    pub const PLAN_DISPOSITION: &str = "measurement.experiment.plan_disposition";
+    /// `measurement.experiment.selection_revision` — the durable home of an
+    /// authorized grade-correction record `{run_plan_id, revision_id,
+    /// reason, supersedes, authority, watermarks{}, eligible_set_ref}`
+    /// (A.3/A.4; ADR-0388's consumer-ticket decision). Immutable — the
+    /// append is validated through `RevisionLog` semantics before landing.
+    pub const SELECTION_REVISION: &str = "measurement.experiment.selection_revision";
 }
 
 /// The closed `pause` reason set (§6.3 §2.2; ADR-0155 D2).
@@ -322,17 +341,33 @@ pub fn run_bound_mirror(
 /// The `grade_binding` member the admitted `launch_bound` contract carries
 /// (PADR-R5-1 A.3): `{mode, pins_ref, selection_policy_ref?,
 /// instrument_budget_ref}`. `mode` records the grade mode frozen at launch
-/// — `"legacy"` while the required-grade opt-in freeze lands with the
-/// R5.9/R5.10/R5.14 owners; `pins_ref` is the `CellPlan` content address
-/// (the frozen task/oracle/config pins); `selection_policy_ref` stays
-/// absent in legacy mode; `instrument_budget_ref` names the spec's
-/// instrument budget.
+/// — `"legacy"` (absent `selection_policy_ref`) or `"required"` (R5.14's
+/// opt-in freeze carries the policy ref); `pins_ref` is the `CellPlan`
+/// content address (the frozen task/oracle/config pins);
+/// `instrument_budget_ref` names the spec's instrument budget.
 pub fn grade_binding(mode: &str, pins_ref: &str, instrument_budget_ref: &str) -> Json {
-    Json::obj([
-        ("mode", Json::str(mode)),
-        ("pins_ref", Json::str(pins_ref)),
-        ("instrument_budget_ref", Json::str(instrument_budget_ref)),
-    ])
+    grade_binding_frozen(mode, pins_ref, instrument_budget_ref, None)
+}
+
+/// `grade_binding` with the optional `selection_policy_ref` member (R5.14 —
+/// emitted only in required mode; absent keeps the legacy bytes).
+pub fn grade_binding_frozen(
+    mode: &str,
+    pins_ref: &str,
+    instrument_budget_ref: &str,
+    selection_policy_ref: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("mode".into(), Json::str(mode));
+    m.insert("pins_ref".into(), Json::str(pins_ref));
+    if let Some(r) = selection_policy_ref {
+        m.insert("selection_policy_ref".into(), Json::str(r));
+    }
+    m.insert(
+        "instrument_budget_ref".into(),
+        Json::str(instrument_budget_ref),
+    );
+    Json::Obj(m)
 }
 
 /// The frozen launch inputs — the `inputs` member of `launch_bound{intent}`:
@@ -516,25 +551,152 @@ pub fn component_bound_hosting_adapter(
 /// final for the plan but awaits a regrade overlay — the subject is never
 /// re-run (AC-R-2.10.3-6; ADR-0155 D5).
 pub fn run_settled(outcome: &RunOutcome, pool_released: &[String]) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("run_plan_id".into(), Json::str(&outcome.run_plan_id));
+    m.insert("run_id".into(), Json::str(&outcome.run_id));
+    m.insert(
+        "outcome_class".into(),
+        Json::str(outcome.outcome_class.as_str()),
+    );
+    m.insert("accepted".into(), Json::Bool(outcome.accepted));
+    m.insert("superseded".into(), Json::Bool(outcome.superseded));
+    m.insert("plan_final".into(), Json::Bool(outcome.plan_final));
+    m.insert("attempt_no".into(), Json::Int(outcome.attempt_no as i64));
+    m.insert(
+        "budget_utilization".into(),
+        outcome.budget_utilization.clone(),
+    );
+    m.insert(
+        "veto_tripped".into(),
+        Json::Arr(outcome.veto_tripped.iter().map(Json::str).collect()),
+    );
+    m.insert("regrade".into(), Json::Bool(outcome.regrade_pending));
+    m.insert(
+        "pool_released".into(),
+        Json::Arr(pool_released.iter().map(Json::str).collect()),
+    );
+    if outcome.grade_pending {
+        // Required-mode scored settle: `grade_pending` is the admission
+        // state — the member lands only then (legacy bytes unchanged).
+        m.insert("grade_pending".into(), Json::Bool(true));
+    }
+    Json::Obj(m)
+}
+
+/// `execution_settled{run_plan_id, run_id, settled_cost_ref,
+/// returned_funding_ref, dedup_key}` — the required-mode exactly-once
+/// execution-cost settlement record (A.3). `dedup_key` is deterministic
+/// over `{run_plan_id, run_id, settled_cost_ref}` — a replayed settle
+/// derives the identical key and can never record the transfer twice.
+pub fn execution_settled(
+    run_plan_id: &str,
+    run_id: &str,
+    settled_cost_ref: &str,
+    returned_funding_ref: &str,
+) -> Json {
+    let dedup_key = hharness_identity::idp::idp_id(
+        "execution_settled",
+        format!("{run_plan_id}|{run_id}|{settled_cost_ref}").as_bytes(),
+    );
     Json::obj([
-        ("run_plan_id", Json::str(&outcome.run_plan_id)),
-        ("run_id", Json::str(&outcome.run_id)),
-        ("outcome_class", Json::str(outcome.outcome_class.as_str())),
-        ("accepted", Json::Bool(outcome.accepted)),
-        ("superseded", Json::Bool(outcome.superseded)),
-        ("plan_final", Json::Bool(outcome.plan_final)),
-        ("attempt_no", Json::Int(outcome.attempt_no as i64)),
-        ("budget_utilization", outcome.budget_utilization.clone()),
-        (
-            "veto_tripped",
-            Json::Arr(outcome.veto_tripped.iter().map(Json::str).collect()),
-        ),
-        ("regrade", Json::Bool(outcome.regrade_pending)),
-        (
-            "pool_released",
-            Json::Arr(pool_released.iter().map(Json::str).collect()),
-        ),
+        ("run_plan_id", Json::str(run_plan_id)),
+        ("run_id", Json::str(run_id)),
+        ("settled_cost_ref", Json::str(settled_cost_ref)),
+        ("returned_funding_ref", Json::str(returned_funding_ref)),
+        ("dedup_key", Json::str(&dedup_key)),
     ])
+}
+
+/// `plan_disposition{run_plan_id, run_id, disposition, outcome_class,
+/// grades{}, selected_refs{}, veto_tripped[], revisions[], watermarks{},
+/// eligible_set_ref, regrade?}` — the recorded graded disposition a
+/// `settle_graded` lands (REQ-E-202; the `grade_pending` admission state
+/// is never written — a pending call returns without a row).
+#[allow(clippy::too_many_arguments)]
+pub fn plan_disposition(
+    run_plan_id: &str,
+    run_id: &str,
+    disposition: &str,
+    outcome_class: Option<&str>,
+    grades: &BTreeMap<String, Json>,
+    selected_refs: &BTreeMap<String, String>,
+    veto_tripped: &[String],
+    revisions: &[String],
+    watermarks: &BTreeMap<String, u64>,
+    eligible_set_ref: &str,
+    regrade: bool,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("run_plan_id".into(), Json::str(run_plan_id));
+    m.insert("run_id".into(), Json::str(run_id));
+    m.insert("disposition".into(), Json::str(disposition));
+    if let Some(oc) = outcome_class {
+        m.insert("outcome_class".into(), Json::str(oc));
+    }
+    m.insert("grades".into(), Json::Obj(grades.clone()));
+    m.insert(
+        "selected_refs".into(),
+        Json::Obj(
+            selected_refs
+                .iter()
+                .map(|(k, v)| (k.clone(), Json::str(v)))
+                .collect(),
+        ),
+    );
+    m.insert(
+        "veto_tripped".into(),
+        Json::Arr(veto_tripped.iter().map(Json::str).collect()),
+    );
+    m.insert(
+        "revisions".into(),
+        Json::Arr(revisions.iter().map(Json::str).collect()),
+    );
+    m.insert(
+        "watermarks".into(),
+        Json::Obj(
+            watermarks
+                .iter()
+                .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                .collect(),
+        ),
+    );
+    m.insert("eligible_set_ref".into(), Json::str(eligible_set_ref));
+    if regrade {
+        m.insert("regrade".into(), Json::Bool(true));
+    }
+    Json::Obj(m)
+}
+
+/// `selection_revision{run_plan_id, revision_id, reason, supersedes,
+/// authority, watermarks{}, eligible_set_ref}` — the durable home of an
+/// authorized correction (A.3/A.4). Immutable — the writer validates the
+/// append through `RevisionLog` semantics before minting.
+pub fn selection_revision(
+    run_plan_id: &str,
+    revision: &hharness_eval::selection::SelectionRevision,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("run_plan_id".into(), Json::str(run_plan_id));
+    for (k, v) in [
+        ("revision_id", &revision.revision_id),
+        ("reason", &revision.reason),
+        ("supersedes", &revision.supersedes),
+        ("authority", &revision.authority),
+        ("eligible_set_ref", &revision.eligible_set_ref),
+    ] {
+        m.insert(k.into(), Json::str(v));
+    }
+    m.insert(
+        "watermarks".into(),
+        Json::Obj(
+            revision
+                .watermarks
+                .iter()
+                .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                .collect(),
+        ),
+    );
+    Json::Obj(m)
 }
 
 /// `run_excluded{run_plan_id, run_id, reason, evidence?, authority}`.
@@ -685,6 +847,12 @@ pub fn closed(report: &ExperimentReport) -> Json {
     );
     m.insert("na_cells".into(), Json::Arr(report.na_cells.clone()));
     m.insert("utilization".into(), report.utilization.clone());
+    if !report.pending.is_empty() {
+        m.insert(
+            "pending".into(),
+            Json::Arr(report.pending.iter().map(Json::str).collect()),
+        );
+    }
     Json::Obj(m)
 }
 
@@ -770,6 +938,11 @@ pub struct RunOutcome {
     /// is final for the plan and a regrade overlay follows; the subject is
     /// never re-run (AC-R-2.10.3-6; ADR-0155 D5).
     pub regrade_pending: bool,
+    /// Required-mode scored settle: the plan is in the `grade_pending`
+    /// admission state — execution cost settled once; the scored-success
+    /// interpretation awaits `settle_graded` (R5.14; A.1 item 4). Never a
+    /// seventh outcome class.
+    pub grade_pending: bool,
 }
 
 /// The `close` result — `ExperimentReport{status, coverage, outcome_counts,
@@ -806,6 +979,9 @@ pub struct ExperimentReport {
     /// `{arm_id → {dim → {median, min, max, n}}}` in ppm of the slice cap
     /// over counted runs (ADR-0041 M1). Additive member.
     pub utilization: Json,
+    /// The `grade_pending` run plans at close — unresolved slots a partial
+    /// close enumerates (R5.14; empty = member absent — legacy bytes).
+    pub pending: Vec<String>,
 }
 
 /// `closed.status ∈ {completed, partial, aborted}`.

@@ -146,6 +146,16 @@ pub enum ExperimentError {
         /// The orphan slice budget id(s).
         detail: String,
     },
+    /// An unknown required-grade feature was requested (R5.14; PADR-R5-1
+    /// A.6): the `required_grade` freeze names a mode/member/task pin the
+    /// admitted contract does not carry — a typed refusal, never a silent
+    /// downgrade to legacy.
+    UnknownRequiredFeature {
+        /// The offending member (`required_grade.*`/`grade_binding.*`).
+        member: String,
+        /// The detail.
+        detail: String,
+    },
 }
 
 impl ExperimentError {
@@ -176,6 +186,7 @@ impl ExperimentError {
             ExperimentError::ExclusionRefused { .. } => "ExclusionRefused",
             ExperimentError::LaunchBindingConflict { .. } => "LaunchBindingConflict",
             ExperimentError::OrphanLaunchFunding { .. } => "OrphanLaunchFunding",
+            ExperimentError::UnknownRequiredFeature { .. } => "UnknownRequiredFeature",
         }
     }
 }
@@ -277,6 +288,9 @@ impl std::fmt::Display for ExperimentError {
                 detail,
             } => {
                 write!(f, "orphan launch funding on {run_plan_id}: {detail}")
+            }
+            ExperimentError::UnknownRequiredFeature { member, detail } => {
+                write!(f, "unknown required feature {member}: {detail}")
             }
         }
     }

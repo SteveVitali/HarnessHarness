@@ -178,3 +178,7 @@ Initial independent reviews found scoped ownership/order gaps; repairs add bound
 The [partition rereview](2026-10-30_evidence-partition-rereview.md) closes IP-01–04/IP-N1; the [coverage rereview](2026-10-30_evidence-coverage-rereview.md) closes COV-01–04. Both are clean at planning scope after the recorded repairs. No runtime/guard/participant proof or operator acceptance is inferred. The exact reviewed plan bytes before this status-only addendum have SHA-256 `8ade4d28950d976c51c0781b3e259aa7f74251174ed852c0006deb478d4e5664`; the coverage rereview records the contract/coverage aggregate. The 79 contracts, exact coverage and invariants are unchanged by this addendum.
 
 [Review guide](2026-10-30_evidence-review.md), [readiness](2026-10-30_evidence-readiness.md) and [validation](2026-10-30_evidence-validation.md) are the current handoff. Initial draft/pending language above is the reviewed history, superseded only in status by this dated disposition. GATE-G8 remains pending.
+
+## Dated note — 2026-11-02 row 183
+
+Seq 183 (R5.14) split at run time per X7's documented contingency: owner-model leg (a) stays on row 183 (rescoped by dated contract note); consumer-wiring leg (b) = new seq 183a (`183a_R5.14b__pending-consumers.md`). Review record: `2026-11-02_R5.14b-split-review.md`.
