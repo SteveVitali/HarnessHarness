@@ -12,6 +12,12 @@ executed by `crates/hharness/tests/r5_29.rs`.
 
 - **Offline only:** scratch stores, the scripted `EmbedModel` lane, no
   network/provider/credentials, $0. Fixture labels stay on every report.
+- **Checks (R5.30):** `scripts/check-examples.sh` validates the cards,
+  their pins and the displayed docs block in the working tree;
+  `scripts/check-examples.sh --head` runs the same check on committed
+  HEAD in a clean clone — uncommitted edits are never the tested HEAD.
+  `scripts/run-examples.sh` is the bounded full-offline lane; live legs
+  record `skipped(…)` — ADR-0363 owns them, never a pass.
 - **Costs (separate):** build = one `cargo test -p hharness` compile of
   the existing tree (no added dependencies); runtime = seconds.
 - **Limitations:** fixture-verified only — never S1/S3, useful-task,

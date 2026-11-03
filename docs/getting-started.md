@@ -96,6 +96,27 @@ as an absolute path before starting either executable, and reuse that path
 when inspecting a run. The [reference](reference.md)
 covers additional commands and configuration.
 
+## Learn offline: the checked example cards
+
+Two committed `example-card/1` records under
+[scripts/examples](../scripts/examples/) teach the lifecycle above plus a
+two-task offline Lab lesson — checked runners with semantic verdicts,
+pinned inputs, and stated costs and limitations on the record itself.
+They are fixture-verified teaching evidence only: no live provider, task
+efficacy, or study claim.
+
+<!-- examples:begin -->
+```sh
+cargo test -p hharness --test r5_29 ex01
+cargo test -p hharness --test r5_29 ex02
+```
+<!-- examples:end -->
+
+The displayed commands are the cards' recorded `run` members;
+[check-examples.sh](../scripts/check-examples.sh) fails when they drift
+from the canonical cards, and [MAINTAINING.md](../MAINTAINING.md) documents
+when a change must refresh or supersede a card.
+
 ## Connect a local model
 
 The [README's local-model block](../README.md#connect-a-local-model) uses the
