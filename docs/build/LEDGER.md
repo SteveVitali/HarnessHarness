@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.19
-lastCompleted:   R5.18
+nextTicket:      R5.20
+lastCompleted:   R5.19
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.18
+chainTip:        codex/harnessharness-evidence-r5.19
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-03T00:19:45Z
+updatedAt:       2026-11-03T01:31:46Z
 ```
 
 ## OPEN FINDINGS
@@ -1047,3 +1047,4 @@ updatedAt:       2026-11-03T00:19:45Z
 - 2026-11-03 · R5.18 done — branch `codex/harnessharness-evidence-r5.18` · PR #232 · base `codex/harnessharness-evidence-r5.17` (@3c07e28). `retained_selection/1` — the additive `selection` member on `context.compaction.completed` (hh-context; Packet B B.2 owner seam; ADR-0396): `RetainedSelection{input, retained, omitted, status, pipeline_index, fallback_variant}` — `SelectionInput` is the shared input representation the prepared call consumes (policy{variant_ref,parameters} + assessed envelope + legal cut points + flattened pair/batch/required/tool join rows); `selection_parameters()` (ClearToolResults persists the completion-age join); `replay_selection`/`verify_selection` re-run the production assess/propose/execute path — Reproduced / Diverged / 9 typed refusals; outcomes Untriggered/Applied/Ineffective/Failed + via_fallback distinct. **Verify:** fmt OK · hh-context 122/0 (r5_18 6/6) · hh-embed/hh-control compile clean · fails-without compile-red at 3c07e282 · guard PASS DISPATCH R5.18 pre+post+boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 180 · backlog 180 (ADR-0396→BL-47). **Deferrals:** none opened/closed; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0396. **Deviations:** ~1,691 changed source/test lines vs ≤700 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-206 + aliases REQ-E-003/E-104 contributing-only; predicate owner R5.20 AC-3 stays owed. chainTip → codex/harnessharness-evidence-r5.18 · next → R5.19 · ci: pass #232@f6557cf (all 4 checks 41550291153) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T00:46:09Z · **R5.19 size ruling** — worker stopped correctly at the ≤1000 line trigger (measured 1,933 numstat, ~1.93×; context within 28k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic retained-view→wire ordering unit (Packet B B.1 item 5 fixed order / B.2 one seam-owner gateway; B3's sole documented contingency — support-only deadline ticket sharing X4 origin — consumed by the R5.10/R5.19 boundary, `created_at_ms` unchanged; L150 weak seam is that same boundary; partition T1/B3/T2 names B3→T2 = R5.20). Proposed prepare/dispatch cut splits AC-1/AC-2 mid-predicate (cross-phase verification; B.5 retry-reservation spans both) and leg (b) ~1,230 still exceeds — split buys an over-trigger leg by fragmenting the admitted unit. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.18 precedent); dated note on `189_R5.19__gateway.md`; manifest row-189 note; review record `planning/2026-11-03_R5.19-split-review.md`; `runs/R5.19.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 · R5.19 done — branch `codex/harnessharness-evidence-r5.19` · PR #233 · base `codex/harnessharness-evidence-r5.18` (@5caeb30). `hharness_gateway::prepared` — the retained-view→wire call ordering (Packet B B.1 item 5 / B.2 one owner; ADR-0397): `prepare` serializes the owned `retained_selection/1` member via the existing codec (`view_ref` idp), bounds every admitted primary/overhead (5 token primaries + `model_calls` ≥ 1; `retries`/`time.wall_ms` admitted; `estimate_tokens` floor; totals stay derived), whole-vector `Account::reserve` (R5.12), sealed plan carrying `budget_reservation_id` → `request_ref`; created-origin deadline `created_at_ms` + tightest path `time.wall_ms` cap recomputed on durable inputs (OriginMissing/UntrustworthyOrigin/DeadlineExpired). `dispatch` deadline → sealed-byte verify (`PreparedBytesMutated`) → outstanding reservation → durable `model.call.requested` once → bounded `run_attempts` (same reservation) → `completed`/`failed` (timeout stays timeout; deadline stop = local `cancelled`; `served_model_mismatch`) → `charge` per admitted primary (dedup) / `release` / expiry drain — unknown usage never zero; release never refunds. + rustdoc private-link fix `a2939cf6` (CI-caught). **Verify:** fmt OK · r5_19 9/9 · hh-gateway 135/0/1-ignored · fails-without compile-red at `5caeb304` · guard PASS DISPATCH R5.19 pre+post+boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 181 · backlog 181 (ADR-0397→BL-47). **Deferrals:** none opened/closed; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0397. **Deviations:** 1,933 changed source/test lines vs ≤1000 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-207/REQ-E-006/REQ-D-006 + aliases REQ-E-005/105/106 contributing-only; full-target predicates stay owed. chainTip → codex/harnessharness-evidence-r5.19 · next → R5.20 · ci: pass #233@a2939cf (all 4 checks 41557100284) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
