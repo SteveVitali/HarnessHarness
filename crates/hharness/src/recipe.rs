@@ -567,7 +567,7 @@ pub fn run_recipe(svc: &mut EmbedService, plan: &RecipePlan) -> Result<RecipeRec
         .ok_or_else(|| refused(code::TYPE_MISMATCH, "open: no experiment_run_id"))?
         .to_string();
     let docs = LabDocs::open(svc.store().root()).map_err(|e| RecipeError::Owner {
-        seam: "docs",
+        seam: "labdocs",
         detail: format!("{e:?}"),
     })?;
 
