@@ -28,7 +28,6 @@ use hharness_env::events::{EventMinter, ScopeChain};
 use hharness_env::executor::ToolExecutor;
 use hharness_env::handle::{OnLoss, Roots};
 use hharness_env::helper::helper_binary;
-use hharness_env::observe::EffectOutcome;
 use hharness_env::ops::{MarkerSink, ObservationPoint, OpsObserver, Sentinel, TrialMarker};
 use hharness_env::preflight::{
     assemble, check_pins, evaluate_backend, evaluate_mediation, evaluate_observer, evaluate_policy,
