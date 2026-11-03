@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_181 ADRs: 129 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_182 ADRs: 130 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -165,6 +165,7 @@ _181 ADRs: 129 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0395 | Reopen if: (a) the 185a routed leg requires a different `finite_manifest_contrast` payload member or refusal name — amend this record's Consequences; (b) the numerical/routing review (R5.17/GATE-G10/R5.40) finds the ladder or inverse-CDF grid out of tolerance — a new ADR records the corrected protocol; (c) a later admitted prior/draw/floor set changes — the frozen constants move with their admission, never silently. |
 | ADR-0396 | Reopen if: (a) the R5.19/R5.20 prepared-call or wire legs require a different `selection` member, join vocabulary or refusal name — amend this record's Consequences; (b) a newly admitted compaction variant needs persisted parameters beyond `selection_parameters()`'s shape — the vocabulary extends by admission, never silently; (c) a decode or replay divergence surfaces on a landed durable row — a new ADR records the corrected protocol. |
 | ADR-0397 | Reopen if: (a) the R5.20 wire integration leg requires different minted members on `model.call.requested`/terminal rows — amend this record's Consequences; (b) a newly admitted primary/overhead dimension enters the cap match — `REQUIRED_BOUND_DIMS`/ `OPTIONAL_BOUND_DIMS` extend by admission, never silently; (c) a predecessor contract consumed here changes (`Account::reserve`/ `charge`/`release`/`physical_use`, `created_at_ms` origin, `retained_selection/1`, `codec::serialize`/`estimate_tokens`) — a new ADR records the corrected seam; (d) a durable row from a landed call decodes or reconciles divergently — a new ADR records the corrected protocol. |
+| ADR-0398 | - An admitted additional compaction variant → extend the admitted set and the replay/render coverage. - A live provider leg → the fixture-verified ceiling stands until the named live-evidence procedure runs. |
 
 ## Fired-and-answered triggers (BL-48)
 

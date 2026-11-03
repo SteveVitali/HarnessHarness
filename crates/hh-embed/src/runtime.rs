@@ -763,8 +763,10 @@ const ASSEMBLER_ESTIMATOR_REF: &str = "est/canonical_bytes_div4@1";
 /// declaration set).
 const ASSEMBLER_LAYOUT_REF: &str = "layout/default";
 /// `idp/1` domain for the projection's `context_item_id`s — the content
-/// address of the observation payload.
-const OBSERVATION_ITEM_IDP: &str = "hh.embed.context_item/1";
+/// address of the observation payload. The constant lives with the
+/// render that consumes the retained selection (`gateway_model`);
+/// this mint and that join must never diverge (R5.20).
+use crate::gateway_model::OBSERVATION_ITEM_IDP;
 /// `DefaultPolicy::old_after_turns` — mirrored here for the declared
 /// `Optional` class (the policy derives age only for `Required`; an
 /// evictable observation declares its own class).

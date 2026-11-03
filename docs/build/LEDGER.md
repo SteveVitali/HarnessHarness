@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.20
-lastCompleted:   R5.19
+nextTicket:      R5.21
+lastCompleted:   R5.20
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.19
+chainTip:        codex/harnessharness-evidence-r5.20
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-03T01:31:46Z
+updatedAt:       2026-11-03T02:08:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1048,3 +1048,5 @@ updatedAt:       2026-11-03T01:31:46Z
 - 2026-11-03T00:46:09Z · **R5.19 size ruling** — worker stopped correctly at the ≤1000 line trigger (measured 1,933 numstat, ~1.93×; context within 28k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic retained-view→wire ordering unit (Packet B B.1 item 5 fixed order / B.2 one seam-owner gateway; B3's sole documented contingency — support-only deadline ticket sharing X4 origin — consumed by the R5.10/R5.19 boundary, `created_at_ms` unchanged; L150 weak seam is that same boundary; partition T1/B3/T2 names B3→T2 = R5.20). Proposed prepare/dispatch cut splits AC-1/AC-2 mid-predicate (cross-phase verification; B.5 retry-reservation spans both) and leg (b) ~1,230 still exceeds — split buys an over-trigger leg by fragmenting the admitted unit. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.18 precedent); dated note on `189_R5.19__gateway.md`; manifest row-189 note; review record `planning/2026-11-03_R5.19-split-review.md`; `runs/R5.19.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03 · R5.19 done — branch `codex/harnessharness-evidence-r5.19` · PR #233 · base `codex/harnessharness-evidence-r5.18` (@5caeb30). `hharness_gateway::prepared` — the retained-view→wire call ordering (Packet B B.1 item 5 / B.2 one owner; ADR-0397): `prepare` serializes the owned `retained_selection/1` member via the existing codec (`view_ref` idp), bounds every admitted primary/overhead (5 token primaries + `model_calls` ≥ 1; `retries`/`time.wall_ms` admitted; `estimate_tokens` floor; totals stay derived), whole-vector `Account::reserve` (R5.12), sealed plan carrying `budget_reservation_id` → `request_ref`; created-origin deadline `created_at_ms` + tightest path `time.wall_ms` cap recomputed on durable inputs (OriginMissing/UntrustworthyOrigin/DeadlineExpired). `dispatch` deadline → sealed-byte verify (`PreparedBytesMutated`) → outstanding reservation → durable `model.call.requested` once → bounded `run_attempts` (same reservation) → `completed`/`failed` (timeout stays timeout; deadline stop = local `cancelled`; `served_model_mismatch`) → `charge` per admitted primary (dedup) / `release` / expiry drain — unknown usage never zero; release never refunds. + rustdoc private-link fix `a2939cf6` (CI-caught). **Verify:** fmt OK · r5_19 9/9 · hh-gateway 135/0/1-ignored · fails-without compile-red at `5caeb304` · guard PASS DISPATCH R5.19 pre+post+boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 181 · backlog 181 (ADR-0397→BL-47). **Deferrals:** none opened/closed; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0397. **Deviations:** 1,933 changed source/test lines vs ≤1000 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-207/REQ-E-006/REQ-D-006 + aliases REQ-E-005/105/106 contributing-only; full-target predicates stay owed. chainTip → codex/harnessharness-evidence-r5.19 · next → R5.20 · ci: pass #233@a2939cf (all 4 checks 41557100284) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T01:52:22Z · **R5.20 size ruling** — worker stopped correctly at the ≤700 line trigger (measured 1,606 numstat, ~2.3×; context within 22k+10k estimate). Scoped fresh-context review verdict: **AMEND** — single atomic retained-view→wire integration unit (Packet B B.2 one seam/owner — gateway + hh-embed render; durable fact spans serialized bytes AND sealed plan/request refs; partition T1/B3→T2 = this ticket, final wire integration; L150 omits render-vs-seal). Proposed render/prepared cut splits AC-1 mid-predicate (sealed-request byte-exact join unenforced either way) and the render leg alone still exceeds — split buys an over-trigger leg by fragmenting the admitted unit. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.19 precedent); dated note on `190_R5.20__wire.md`; manifest row-190 note; review record `planning/2026-11-03_R5.20-split-review.md`; `runs/R5.20.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-03 · R5.20 done — branch `codex/harnessharness-evidence-r5.20` · PR #234 · base `codex/harnessharness-evidence-r5.19` (@828ea64). Retained view → exact provider bytes (Packet B B.2; ADR-0398): hh-embed render consumes the latest durable `retained_selection/1` — strict decode + `verify_selection` (R5.18), Reproduced-only, `omitted` dropped, malformed/diverged → `MalformedHistory`; `view_hash` = member idp = `prepare` `view_ref`; sealed `request_bytes`/`request_ref` = literal socket bytes at loopback capture. **Verify:** fmt OK · r5_20 5/5 (both policies; restart/fallback/retry; AC-2 negatives) · hh-embed 51/0 · fails-without 5/5 red at base stash · guard PASS DISPATCH R5.20 pre+boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 182 · backlog (ADR-0398→BL-47). **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0398. **Deviations:** 1,606 changed source/test lines vs ≤700 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-E-206/REQ-A-007 + aliases REQ-E-003/E-104 D/E recorded; REQ-D-005 contributing-only; R/P/actual-execution owed. chainTip → codex/harnessharness-evidence-r5.20 · next → R5.21 · ci: pass #234@828ea64 (all 4 checks 41562619356) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
