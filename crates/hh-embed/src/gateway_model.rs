@@ -20,8 +20,9 @@
 //! `grammar::decode_frame` → `collect`); nothing in this module
 //! re-implements classification, grammar, or framing.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
+use hharness_context::retained::{self, RetainedSelection, SelectionVerdict};
 use hharness_control::driver::{ModelOutcome, ModelPort};
 use hharness_control::output::ParsedCall;
 use hharness_control::output::SurfaceSpec;
@@ -34,10 +35,66 @@ use hharness_gateway::http_transport::Family;
 use hharness_gateway::message::{ModelBlock, ToolArgs};
 use hharness_gateway::plan::{CachePlan, Capabilities, ProviderRequestPlan};
 use hharness_gateway::vocab::{ModelError, ModelErrorClass, StopReason};
+use hharness_identity::idp::{self, idp_id};
 use hharness_ledger::event::EventEnvelope;
 use hharness_wire::json::Json;
 
 use hharness_embed_schema::errors::EmbedError;
+
+/// `idp/1` domain for the projection's `context_item_id`s — the content
+/// address of the observation payload (`hh.embed.context_item/1`). One
+/// home for the assembler's mint (runtime.rs) and this render's join:
+/// the retained selection's ids are derived over the same payload
+/// bytes, so the join is exact by construction.
+pub(crate) const OBSERVATION_ITEM_IDP: &str = "hh.embed.context_item/1";
+
+/// `selected_view(prefix)` — the durable retained view the wire must
+/// serialize (R5.20; REQ-E-206; Packet B B.2 "retained-view→wire |
+/// gateway + hh-embed render"). The *latest* `context.compaction.
+/// completed` `selection` member in the prefix is strict-decoded
+/// (`retained_selection/1`) and replay-verified through the R5.18
+/// machinery — a malformed record, an unknown/unbound variant, or a
+/// recorded selection the production path cannot reproduce is a typed
+/// `MalformedHistory` plan refusal (a "strategy label without
+/// execution" never dispatches), never a silently-resurrected
+/// transcript. `Ok(None)` — the member is absent: the legacy
+/// full-view render (fidelity unavailable — no treatment is claimed,
+/// and no `view_hash` is stamped). On `Reproduced` the returned pair
+/// is the member's own `view_hash` (the idp address of its canonical
+/// bytes — the same derivation `prepared::prepare` computes as
+/// `view_ref` over the same member) plus the recorded `omitted`
+/// `context_item_id`s.
+fn selected_view(
+    prefix: &[EventEnvelope],
+) -> Result<Option<(String, BTreeSet<String>)>, ModelError> {
+    let Some(member) = prefix
+        .iter()
+        .rev()
+        .filter(|e| e.class == "context.compaction.completed")
+        .find_map(|e| e.payload.get("selection"))
+    else {
+        return Ok(None);
+    };
+    let refuse = |detail: String| {
+        ModelError::new(
+            ModelErrorClass::MalformedHistory,
+            format!("retained_selection: {detail}"),
+        )
+    };
+    let sel = RetainedSelection::from_json(member).map_err(|r| refuse(r.to_string()))?;
+    match retained::verify_selection(&sel) {
+        SelectionVerdict::Reproduced { .. } => {
+            let view_hash =
+                idp::address(member.to_canonical_string().as_bytes(), "application/json").id();
+            Ok(Some((
+                view_hash,
+                sel.omitted.iter().cloned().collect::<BTreeSet<String>>(),
+            )))
+        }
+        SelectionVerdict::Refused(r) => Err(refuse(r.to_string())),
+        SelectionVerdict::Diverged { detail } => Err(refuse(format!("diverged: {detail}"))),
+    }
+}
 
 /// `ModelLane` — the realized live binding a `model_port` slot declares:
 /// the dialect coordinate, the resolved endpoint, the provider model id,
@@ -451,6 +508,12 @@ struct PendingPlan {
     wire_to_surface: BTreeMap<String, String>,
     /// The request body (re-recorded on the `model_io` blob).
     body: Json,
+    /// The `view_hash` member `model.call.requested` carries when a
+    /// durable `retained_selection/1` informed this render — the
+    /// consumed member's own idp address (`None` ⇒ no selected view
+    /// informed the call; fidelity unavailable, never a treatment
+    /// claim).
+    view_hash: Option<String>,
     /// The bound credential — `binding_id` + `provided` only, resolved at
     /// `requested_members` and handed to the transport at `call`. The
     /// handle never carries material (ADR-0366 D4).
@@ -643,14 +706,22 @@ impl GatewayModel {
     }
 
     /// The transcript render — instruction + recorded rounds from the
-    /// durable prefix. `model.call.completed` rows replay as
+    /// durable prefix, restricted to the durable retained view (R5.20;
+    /// REQ-E-206): the latest `retained_selection/1` is decoded +
+    /// replay-verified and its `omitted` items never re-enter the
+    /// render — the wire serializes the *selected* view, never the
+    /// resurrected transcript. `model.call.completed` rows replay as
     /// `assistant{tool_calls}` + `tool{}` pairs (the kernel tool_call_id
     /// carries the pair — each request stands alone, the wire id is
     /// consistent within the body); `context.observation.recorded` joins
     /// on `scope.tool_call_id`; `model.call.refused`/`format_failure`/
     /// `call.failed` render `kernel_note` user messages — a declined call
     /// is explained, never silently resubmitted.
-    fn transcript(&self, prefix: &[EventEnvelope]) -> Vec<Json> {
+    fn transcript(
+        &self,
+        prefix: &[EventEnvelope],
+    ) -> Result<(Vec<Json>, Option<String>), ModelError> {
+        let selected = selected_view(prefix)?;
         let mut messages = Vec::new();
         if let Some((cap, args)) = &self.invoke {
             messages.push(self.text_msg(
@@ -663,11 +734,25 @@ impl GatewayModel {
         } else {
             messages.push(self.text_msg("user", &self.instruction));
         }
-        // Observation rows keyed by the kernel tool_call_id.
+        // Observation rows keyed by the kernel tool_call_id. An item the
+        // durable selection omitted never joins — the `context_item_id`
+        // derivation is the assembler's own (`OBSERVATION_ITEM_IDP` over
+        // the canonical payload), so the join is exact; a pair whose
+        // result was omitted renders the honest `no_observation_recorded`
+        // placeholder below, never a fabricated result.
         let mut observations: BTreeMap<String, Vec<Json>> = BTreeMap::new();
         for e in prefix {
             if e.class == "context.observation.recorded" {
                 if let Some(tc) = &e.scope.tool_call_id {
+                    if let Some((_, omitted)) = &selected {
+                        let item_id = idp_id(
+                            OBSERVATION_ITEM_IDP,
+                            e.payload.to_canonical_string().as_bytes(),
+                        );
+                        if omitted.contains(&item_id) {
+                            continue;
+                        }
+                    }
                     observations
                         .entry(tc.clone())
                         .or_default()
@@ -759,7 +844,7 @@ impl GatewayModel {
                 _ => {}
             }
         }
-        messages
+        Ok((messages, selected.map(|(view_hash, _)| view_hash)))
     }
 
     /// Render `tools[]` from the armed surfaces + build the `wire→surface`
@@ -821,7 +906,7 @@ impl GatewayModel {
         mc: &str,
         prefix: &[EventEnvelope],
     ) -> Result<PendingPlan, ModelError> {
-        let messages = self.transcript(prefix);
+        let (messages, view_hash) = self.transcript(prefix)?;
         let (tools, wire_to_surface) = self.render_tools()?;
         let mut params = self.lane.provider_params.clone();
         // The family's own augmentations: chat-completions requests
@@ -882,6 +967,7 @@ impl GatewayModel {
             plan,
             wire_to_surface,
             credential,
+            view_hash,
         })
     }
 
@@ -1078,6 +1164,7 @@ impl GatewayModel {
                 binding_id: None,
                 provided: false,
             },
+            view_hash: None,
         }
     }
 
@@ -1309,8 +1396,9 @@ impl ModelPort for GatewayModel {
                     .binding_id
                     .clone()
                     .unwrap_or_else(|| "credentials:none".to_string());
+                let view_hash = p.view_hash.clone();
                 self.pending.insert(mc.to_string(), p);
-                vec![
+                let mut members = vec![
                     ("plan_hash", Json::str(plan_hash)),
                     ("endpoint_ref", Json::str(self.lane.endpoint_ref.clone())),
                     ("model_ref", model_ref),
@@ -1323,7 +1411,17 @@ impl ModelPort for GatewayModel {
                             ("confidence", Json::str(estimate.confidence.as_str())),
                         ]),
                     ),
-                ]
+                ];
+                // §5b.1's `view_hash` member — the durable
+                // `retained_selection/1` this render serialized (the
+                // consumed member's own idp address — the same value the
+                // prepared call's `view_ref` carries over the same
+                // member). Absent ⇒ no selection informed the render;
+                // fidelity is unavailable, never a treatment claim.
+                if let Some(h) = view_hash {
+                    members.push(("view_hash", Json::str(h)));
+                }
+                members
             }
             Err(e) => {
                 // A plan that can't build lands the refusal on the row —

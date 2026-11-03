@@ -366,3 +366,38 @@ ticket never marks a deferred full-target predicate MET.
 > named later owners (evidence dependency, never dispatch
 > dependency); all six targets keep `planned; unmet` — this ticket
 > never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 190, R5.20): the
+> retained-view→wire integration landed through
+> `crates/hh-embed/src/gateway_model.rs` (ADR-0398): the render
+> consumes the *latest* durable `context.compaction.completed
+> {selection}` member — strict `retained_selection/1` decode +
+> `verify_selection` replay (R5.18 consumed unchanged) — and drops
+> every recorded `omitted` `context_item_id` from the rendered
+> observation join (one shared `hh.embed.context_item/1`
+> derivation, `pub(crate)` constant — the assembler's mint and the
+> render's join cannot diverge); an omitted pair's result renders
+> the honest `no_observation_recorded` placeholder. A malformed,
+> unknown-variant, unverifiable or divergent record is a typed
+> `MalformedHistory` plan refusal — a strategy label without
+> execution never dispatches. `view_hash` (the landed §5b.1 member)
+> is stamped on `model.call.requested` when a selection informed
+> the render — the consumed member's own idp address, identical to
+> `prepare`'s `view_ref` derivation. Engineered evidence in
+> `crates/hh-embed/tests/r5_20.rs` (5/5 — compile/assertion-red at
+> base `f99d806c`), mapping dossier B.9's AC-2-2 checks 1–2
+> (both admitted policies change the captured payload bytes and
+> preserve required/legal groups; unknown policies, label-without-
+> execution, fallback, retry, restart covered; exact
+> policy→selection→assembly→sealed-request→actual-wire joins;
+> no omitted-item resurrection on literal socket bytes) and
+> REQ-A-007's port/capability pin (unlisted endpoint, unadmitted
+> capability refuse at `prepare`). REQ-E-206 and merged aliases
+> REQ-E-003 / REQ-E-104, and REQ-A-007, keep `planned; unmet` —
+> achieved engineered D/E recorded separately from the owed legs:
+> fixture-vs-live separation, actual provider execution, and the
+> R/P legs stay owed to their named later owners (evidence
+> dependency, never dispatch dependency); REQ-D-005 gains R5.20
+> as a **contributing-only** evidence row (detector/payload joins
+> proven fixture-side; its §4 metrics predicates stay R5.36's) —
+> this ticket never marks a deferred full-target predicate MET.
