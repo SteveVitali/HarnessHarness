@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.22
-lastCompleted:   R5.21
+nextTicket:      R5.23
+lastCompleted:   R5.22
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-evidence-r5.21
+chainTip:        codex/harnessharness-evidence-r5.22
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-03T02:57:00Z
+updatedAt:       2026-11-03T03:38:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1054,3 +1054,4 @@ updatedAt:       2026-11-03T02:57:00Z
 - 2026-11-03 · R5.21 done — branch `codex/harnessharness-evidence-r5.21` · PR #235 · base `codex/harnessharness-evidence-r5.20` (@d9e2dce). `evidence-package/1` — additive versioned typed member/role profile inside `hh-bundle/1` (Packet C C.1 items 1–2,5; ADR-0399): `EvidenceProfile` + typed coordinate records (Coord/NativeHead/Watermark/AttemptRef/GradeAttemptRef/ExportRef); strict required-member decode + tolerant additive decode; `check()` closed violations; `ProfileIndex` create-if-absent (identical→Retained, divergent→conflicting_identity); assemble verifies declared coords vs derived prefix then deposits member + manifest section; S2 decode/check/agreement fail rows; legacy manifests byte-identical; retries never count subject n; build-note barred as WAL head; callsites pass None. **Verify:** fmt OK · r5_21 9/9 · hh-bundle 86/0 · hh-embed r4_15d 7/0 · fails-without compile-red at `d9e2dce9` · guard PASS DISPATCH R5.21 post-boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 183 · backlog (ADR-0399→BL-47). **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0399. **Deviations:** 1,830 changed source/test lines vs ≤750 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-F-001/REQ-F-002/REQ-A-101/REQ-A-103 contributing-only stamps; closure/procedure/rights legs owed R5.22–27/R5.52; R/P owed. chainTip → codex/harnessharness-evidence-r5.21 · next → R5.22 · ci: pass #235@5d631c0 (all 4 checks 41566646892; macos rerun after helper_live deadline flake) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-03T03:19:14Z · **R5.22 size ruling** — worker stopped correctly at the ≤1000 line trigger (measured 2,073 numstat, ~2.0×; context within estimate). Scoped fresh-context review verdict: **AMEND** — one in-process owner interface (Packet C C.1 items 3–4 / C.4; `closure_report` is the walk's own fold); the ticket's own partition row documents a conditional enumerator-seam but its antecedent is unmet (~360 compact lines of owner-typed reads, no producer-crate batch, C.1 item 6 forbids a crate edge) and the retained composition leg still exceeds; an interface-first leg mis-reports closure for AC-2's payload/IR/cause losses. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.21 precedent); dated note on `192_R5.22__closure.md`; manifest row-192 note; review record `planning/2026-11-03_R5.22-split-review.md`; `runs/R5.22.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-03 · R5.22 done — branch `codex/harnessharness-evidence-r5.22` · PR #236 · base `codex/harnessharness-evidence-r5.21` (@ee21b81). Owner-typed reference closure + materialization (§6.2; Packet C C.1 items 3–4/C.4; ADR-0400): `closure_walk(&Decoded, WalkOpts) → ClosureReport` — owning codecs enumerate member/section/`contains:`/profile-claim+coordinate/trace/event/class-table roots with `{parent, role, field, media, size}` provenance; visited dedup + `ClosureLimits` + expansion-stack cycle detection; `present` = recipient bytes recompute (digest/size); `fetch` via landed `fetch::fetch` under `FetchPermit` (verified arrival, never executes, refusals verbatim); `redacted`/`gc` withhold; declaring-index statuses; `closure-report/1` sidecar (closed/withheld/failed) never joins levels. **Verify:** fmt OK · r5_22 9/9 · hh-bundle 95/0 · fails-without compile-red at `79b13533` · guard PASS DISPATCH R5.22 post-boundary · bm 0 viol (. + --staged) · bm-tools OK · triggers 184 · backlog (ADR-0400→BL-47). **Deferrals:** none; DF-R5.1-1 + DF-R5.17-1 carried. **ADRs:** ADR-0400. **Deviations:** 2,073 changed source/test lines vs ≤1000 flag — accepted as recorded Deviation per Amended 2026-11-03 ruling. **AC-3:** REQ-F-005 primary D/E recorded; REQ-A-103/REQ-E-208 contributing-only stamps; closure/procedure/rights legs owed R5.23–27/R5.52; R/P/actual-execution owed. chainTip → codex/harnessharness-evidence-r5.22 · next → R5.23 · ci: pass #236@ee21b81 (all 4 checks 41571905384; stack pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
