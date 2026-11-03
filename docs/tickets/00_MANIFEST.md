@@ -375,6 +375,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 183 | `183_R5.14__pending.md` | Round 5 | ticket | Required-grade pending across every scored consumer | — |
 | 183 note | | | | | run-time split 2026-11-02 (## Plan extensions): owner-model leg rescoped by appended dated note; consumer wiring → row 183a/R5.14b |
 | 183a | `183a_R5.14b__pending-consumers.md` | Round 5 | ticket | Required-grade pending: consumer wiring (hh-results withhold/export, hh-eval compare, hh-embed analysis) — run-time split 2026-11-02 leg (b) of row 183 | — |
+| 183a note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 184 | `184_R5.15__population.md` | Round 5 | ticket | Planned-slot population and historical analysis coordinates | — |
 | 185 | `185_R5.16__beta.md` | Round 5 | ticket | Early routed finite-manifest Bayesian efficacy | — |
 | 186 | `186_R5.17__early-numeric.md` | Round 5 | ticket | Verify the early offline efficacy route | — |

@@ -57,6 +57,7 @@ fn run(arm: &str, task: &str, rep: u64, metric_name: &str, value: MetricValueKin
         cache_state: CacheState::ColdStart,
         comparable: true,
         outcome_class: OutcomeClass::Scored,
+        disposition: None,
         budget_consumed: INTERVENTION_MATCH_DIMS.iter().map(|d| (*d, 5)).collect(),
         veto_tripped: vec![],
         values: vec![MetricValue {

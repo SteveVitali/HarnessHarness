@@ -158,6 +158,19 @@ pub enum ResultsError {
         /// Why.
         detail: String,
     },
+    /// `scoring.experiment_run` pinned the required-grade admission read
+    /// but it could not resolve — no plan binds this subject on the pinned
+    /// experiment run, the `LabDocs` resolver is absent, or the owner's
+    /// `plan_disposition_at` refused (`DispositionUnresolved` — a typed
+    /// refusal, never a silent legacy downgrade; R5.14b).
+    DispositionUnresolved {
+        /// The subject run.
+        run_id: String,
+        /// The pinned experiment run (`""` when the pin itself is malformed).
+        experiment_run_id: String,
+        /// What is wrong.
+        detail: String,
+    },
     /// `set_status` refused — an illegal transition or a failed evidence
     /// gate (`StatusGateFailed`; §5h.3 §2, S4.2).
     StatusGateFailed {

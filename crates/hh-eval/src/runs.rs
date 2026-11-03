@@ -106,6 +106,12 @@ pub struct EvalRun {
     /// The derived outcome class (`eval::derive_outcome_class` / the settled
     /// `StopReason` projection — never a metric value).
     pub outcome_class: hharness_ontology::control::OutcomeClass,
+    /// The admitted `plan_disposition_at` kind the run's row projected
+    /// under — `pending | graded | oracle_failure`, caller-set data
+    /// (records-in; R5.14b). `"pending"` is the `grade_pending` admission
+    /// state: `compare` never denominates it, whatever `outcome_class`
+    /// the record claims.
+    pub disposition: Option<String>,
     /// Per-dimension consumed quantities (`control.budget.consumed` settled).
     pub budget_consumed: BTreeMap<DimensionId, i64>,
     /// The veto ids this run tripped (`vetoes::evaluate_vetoes` output —
@@ -229,6 +235,9 @@ impl EvalRun {
             "outcome_class".into(),
             Json::str(self.outcome_class.as_str()),
         );
+        if let Some(d) = &self.disposition {
+            m.insert("disposition".into(), Json::str(d));
+        }
         m.insert(
             "budget_consumed".into(),
             Json::Obj(
@@ -319,6 +328,7 @@ impl EvalRun {
                 "cache_state",
                 "comparable",
                 "outcome_class",
+                "disposition",
                 "budget_consumed",
                 "veto_tripped",
                 "values",
@@ -418,6 +428,7 @@ impl EvalRun {
                 REC,
             )?)
             .ok_or_else(|| SchemaError::v("outcome_class", "unknown class"))?,
+            disposition: opt_str_at(m, "disposition")?.map(str::to_string),
             budget_consumed,
             veto_tripped: str_vec_at(m, "veto_tripped", REC)?,
             values,

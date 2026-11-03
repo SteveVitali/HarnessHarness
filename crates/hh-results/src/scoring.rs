@@ -57,6 +57,13 @@ pub struct ScoringContext {
     pub validator_set: Vec<String>,
     /// The overlay (regrade) runs folded into this projection.
     pub overlay_runs: Vec<OverlayRef>,
+    /// The experiment run the row's required-grade admission read pins
+    /// (R5.14b — the `scoring_ref`'s experiment leg): when present, the
+    /// projection composes the owner's `plan_disposition_at` at this
+    /// watermark — a `grade_pending` read withholds `outcome_class` and
+    /// stamps `outcome.disposition = "pending"`. `None` = the legacy read
+    /// (byte-identical).
+    pub experiment_run: Option<OverlayRef>,
     /// The pinned metric registry version (`hharness_eval::catalogue`'s
     /// `metric_registry_version` at Stage 3 — the only registry this build
     /// carries; anything else is `RegistryVersionUnknown`).
@@ -76,6 +83,7 @@ impl ScoringContext {
         ScoringContext {
             validator_set: Vec::new(),
             overlay_runs: Vec::new(),
+            experiment_run: None,
             metric_registry_version: hharness_eval::catalogue::check_catalogue()
                 .metric_registry_version,
             pricing_ref: None,
@@ -107,6 +115,9 @@ impl ScoringContext {
             "overlay_runs".into(),
             Json::Arr(self.overlay_runs.iter().map(|o| o.to_json()).collect()),
         );
+        if let Some(e) = &self.experiment_run {
+            m.insert("experiment_run".into(), e.to_json());
+        }
         m.insert(
             "metric_registry_version".into(),
             Json::str(&self.metric_registry_version),
@@ -150,6 +161,10 @@ impl ScoringContext {
                 .ok_or_else(|| bad("overlay_runs"))?,
             _ => Vec::new(),
         };
+        let experiment_run = match m.get("experiment_run") {
+            Some(v) => Some(OverlayRef::from_json(v).ok_or_else(|| bad("experiment_run"))?),
+            None => None,
+        };
         let metric_registry_version = m
             .get("metric_registry_version")
             .and_then(Json::as_str)
@@ -167,6 +182,7 @@ impl ScoringContext {
         Ok(ScoringContext {
             validator_set,
             overlay_runs,
+            experiment_run,
             metric_registry_version,
             pricing_ref,
             view_policy_version,

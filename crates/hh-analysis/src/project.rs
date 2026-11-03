@@ -328,6 +328,11 @@ pub fn eval_run(
         cache_state,
         comparable,
         outcome_class,
+        // R5.14b — the row's admitted `plan_disposition_at` kind rides
+        // the eval record (caller-set data; `pending` is unreachable
+        // here — a pending row withholds `outcome_class` and the
+        // `outcome_class` decode above already refused).
+        disposition: row.outcome.disposition.clone(),
         budget_consumed,
         veto_tripped: row.outcome.veto_tripped.clone(),
         values,

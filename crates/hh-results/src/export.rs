@@ -185,6 +185,17 @@ fn lower_row(row: &ResultsRow, loss: &mut Vec<LossEntry>) -> Vec<Json> {
             });
         }
     }
+    // The admitted disposition member carries no slot on a lowered target
+    // — pending admission included — and is listed, never silently dropped
+    // (R5.14b; T-LCD-11).
+    if let Some(d) = &row.outcome.disposition {
+        loss.push(LossEntry {
+            run_id: row.key.run_id.clone(),
+            field: "outcome.disposition".into(),
+            reason: "no_slot".into(),
+            detail: format!("admission disposition `{d}` has no foreign slot"),
+        });
+    }
     // The members a foreign leaderboard submission carries no slot for —
     // every one is listed, never silently dropped (T-LCD-11).
     loss.push(LossEntry {
@@ -223,6 +234,24 @@ pub fn export_rows(
     target: ExportTarget,
     policy: &Json,
 ) -> Result<ExportOutcome, ResultsError> {
+    // R5.14b — a `grade_pending` row blocks every scored-success/
+    // completion interpretation: a `foreign_leaderboard_submission` is a
+    // scored claim surface, so a pending row refuses it outright (typed
+    // refusal — lowered targets instead list `outcome.disposition` as a
+    // `no_slot` loss entry).
+    if target == ExportTarget::ForeignLeaderboardSubmission {
+        if let Some(r) = rows
+            .iter()
+            .find(|r| r.outcome.disposition.as_deref() == Some("pending"))
+        {
+            return Err(ResultsError::LeaderboardRefused {
+                detail: format!(
+                    "run {} is grade_pending — a pending admission never exports a scored submission",
+                    r.key.run_id
+                ),
+            });
+        }
+    }
     let mut entries: Vec<LossEntry> = Vec::new();
     let body = if target.lossless() {
         Json::obj([

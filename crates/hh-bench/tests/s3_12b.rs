@@ -449,6 +449,7 @@ fn eval_run(
         cache_state: CacheState::ColdStart,
         comparable: true,
         outcome_class: OutcomeClass::Scored,
+        disposition: None,
         budget_consumed: [(DimensionId::ModelCalls, model_calls)]
             .into_iter()
             .collect(),

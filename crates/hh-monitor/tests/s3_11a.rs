@@ -1492,6 +1492,7 @@ mod compare_fixtures {
             cache_state: CacheState::ColdStart,
             comparable: true,
             outcome_class: OutcomeClass::Scored,
+            disposition: None,
             budget_consumed: BTreeMap::from([(DimensionId::ModelCalls, 1)]),
             veto_tripped: vec![],
             values: vec![MetricValue {

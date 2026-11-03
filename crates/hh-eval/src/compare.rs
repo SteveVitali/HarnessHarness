@@ -314,7 +314,15 @@ fn numeric(v: &MetricValueKind) -> Option<i64> {
 }
 
 /// Whether the run's outcome class enters the metric's denominator.
+/// R5.14b — the `grade_pending` admission state is never a scored
+/// interpretation: a run whose caller-set `disposition` is `"pending"`
+/// enters no denominator, whatever `outcome_class` the record claims
+/// (the same `plan_disposition_at` admission decision every consumer
+/// composes — never a divergent predicate).
 fn in_denominator(decl: &MetricDeclaration, run: &EvalRun) -> bool {
+    if run.disposition.as_deref() == Some("pending") {
+        return false;
+    }
     decl.outcome_class_policy.in_denominator(run.outcome_class)
 }
 

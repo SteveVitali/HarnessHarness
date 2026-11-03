@@ -277,8 +277,14 @@ impl Coordinates {
 pub struct OutcomeSection {
     /// `finished | open`.
     pub status: String,
-    /// The derived outcome class (`None` while open).
+    /// The derived outcome class (`None` while open — and withheld while
+    /// the required-grade admission is `grade_pending`: pending is an
+    /// admission state, never an outcome class — R5.14b).
     pub outcome_class: Option<String>,
+    /// The admitted `plan_disposition_at` kind the row projected under —
+    /// `pending | graded | oracle_failure` (`None` on the legacy read;
+    /// R5.14b). A `pending` row carries no scored-success interpretation.
+    pub disposition: Option<String>,
     /// The recorded stop reason.
     pub stop_reason: Option<String>,
     /// Veto ids tripped (annotate-only — ADR-0047; rows store them at every
@@ -299,6 +305,9 @@ impl OutcomeSection {
         m.insert("status".into(), Json::str(&self.status));
         if let Some(o) = &self.outcome_class {
             m.insert("outcome_class".into(), Json::str(o));
+        }
+        if let Some(d) = &self.disposition {
+            m.insert("disposition".into(), Json::str(d));
         }
         if let Some(s) = &self.stop_reason {
             m.insert("stop_reason".into(), Json::str(s));
@@ -325,6 +334,7 @@ impl OutcomeSection {
         Ok(OutcomeSection {
             status: str_member(m, "status")?,
             outcome_class: opt_str(m, "outcome_class"),
+            disposition: opt_str(m, "disposition"),
             stop_reason: opt_str(m, "stop_reason"),
             veto_tripped: match m.get("veto_tripped") {
                 Some(Json::Arr(items)) => items
