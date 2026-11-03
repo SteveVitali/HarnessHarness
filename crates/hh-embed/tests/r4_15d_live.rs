@@ -94,6 +94,7 @@ fn fetch_bundle_dir(root: &Path) -> PathBuf {
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     })
     .unwrap();
     let mut manifest = a.manifest.clone();

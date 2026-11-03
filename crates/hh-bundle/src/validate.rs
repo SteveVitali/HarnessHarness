@@ -592,6 +592,183 @@ fn validate_stages(
             &mut s2,
         );
     }
+
+    // ── evidence-package/1 profile member (§6.1; PADR-R5-3∗; R5.21) ──
+    // Additive: manifests minted before the profile's admission carry
+    // no section and validate byte-identically. When the section names
+    // a materialized member, the record must decode (an unknown
+    // mandatory version refuses the new claim while legacy inspection
+    // is preserved), pass its own closed checks, and agree with the
+    // bundle's durable coordinates — the snapshot asserts the heads
+    // the export carries, never fresher ones.
+    if manifest.evidence_profile != Json::Null {
+        let mut profile_checked = false;
+        // The section's own schema declaration must name the admitted
+        // member family — an unknown mandatory profile refuses the new
+        // claim (the bundle still decodes; inspection is preserved).
+        match manifest
+            .evidence_profile
+            .get("schema")
+            .and_then(Json::as_str)
+        {
+            Some(crate::profile::PROFILE_SCHEMA) => {}
+            Some(other) if other.starts_with("evidence-package/") => s2.push(CheckRow::fail(
+                "profile.schema",
+                crate::profile::code::UNKNOWN_PROFILE_VERSION,
+                format!("section declares {other}"),
+            )),
+            _ => s2.push(CheckRow::fail(
+                "profile.schema",
+                crate::profile::code::MALFORMED,
+                "section schema is not evidence-package/<n>",
+            )),
+        }
+        match manifest
+            .evidence_profile
+            .get("member")
+            .and_then(Json::as_str)
+        {
+            Some(addr) => match members.get(addr) {
+                Some(bytes) => {
+                    let parsed = std::str::from_utf8(bytes)
+                        .ok()
+                        .and_then(|t| hharness_wire::json::parse(t).ok());
+                    match parsed
+                        .as_ref()
+                        .map(crate::profile::EvidenceProfile::from_json)
+                    {
+                        Some(Ok(p)) => {
+                            profile_checked = true;
+                            for v in p.check() {
+                                s2.push(CheckRow::fail(
+                                    format!("profile.{}", v.code),
+                                    v.code,
+                                    v.detail,
+                                ));
+                            }
+                            // Agreement with the bundle's own durable
+                            // coordinates.
+                            for h in &p.native_heads {
+                                if let Some(sh) = manifest.subject.heads.get(&h.run_id) {
+                                    let expected = crate::profile::Coord {
+                                        seq: sh.get("seq").and_then(Json::as_int).unwrap_or(-1)
+                                            as u64,
+                                        event_id: sh
+                                            .get("event_id")
+                                            .and_then(Json::as_str)
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        hash: sh
+                                            .get("hash")
+                                            .and_then(Json::as_str)
+                                            .unwrap_or("")
+                                            .to_string(),
+                                    };
+                                    if h.kind != "subject" || h.coord != expected {
+                                        s2.push(CheckRow::fail(
+                                            format!("profile.native_heads:{}", h.run_id),
+                                            crate::profile::code::HEAD_MISMATCH,
+                                            format!("profile head ≠ subject.heads[{}]", h.run_id),
+                                        ));
+                                    }
+                                }
+                                if h.kind == "lineage" {
+                                    let matches = manifest.subject.lineage.iter().any(|l| {
+                                        l.get("run_id").and_then(Json::as_str)
+                                            == Some(h.run_id.as_str())
+                                            && l.get("up_to_seq").and_then(Json::as_int)
+                                                == Some(h.coord.seq as i64)
+                                            && l.get("head_hash").and_then(Json::as_str)
+                                                == Some(h.coord.hash.as_str())
+                                    });
+                                    if !matches {
+                                        s2.push(CheckRow::fail(
+                                            format!("profile.native_heads:{}", h.run_id),
+                                            crate::profile::code::HEAD_MISMATCH,
+                                            format!(
+                                                "lineage head for {} names no recorded prefix",
+                                                h.run_id
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                            for w in &p.watermarks {
+                                if let Some(&wm) = manifest.subject.watermarks.get(&w.run_id) {
+                                    if w.seq > wm {
+                                        s2.push(CheckRow::fail(
+                                            format!("profile.watermarks:{}", w.run_id),
+                                            crate::profile::code::WATERMARK_MISMATCH,
+                                            format!(
+                                                "projection seq {} ahead of watermark {}",
+                                                w.seq, wm
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                            for e in &p.exports {
+                                if let Some(t) = manifest.traces.get(&e.run_id) {
+                                    let head =
+                                        crate::profile::Coord::from_json(&t.head, "traces.head");
+                                    if head.map(|h| h != e.last_event).unwrap_or(true) {
+                                        s2.push(CheckRow::fail(
+                                            format!("profile.exports:{}", e.run_id),
+                                            crate::profile::code::HEAD_MISMATCH,
+                                            format!(
+                                                "exported last event ≠ traces.{}.head",
+                                                e.run_id
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                            // Every included subject run carries its
+                            // coordinate (§6.1 "for every included
+                            // subject prefix").
+                            for run in &manifest.subject.run_ids {
+                                if !p
+                                    .native_heads
+                                    .iter()
+                                    .any(|h| h.run_id == *run && h.kind == "subject")
+                                {
+                                    s2.push(CheckRow::fail(
+                                        format!("profile.native_heads:{run}"),
+                                        crate::profile::code::MISSING_HEAD,
+                                        format!("subject run {run} has no recorded head"),
+                                    ));
+                                }
+                            }
+                        }
+                        Some(Err(e)) => {
+                            let (c, d) = match e {
+                                BundleError::ProfileRefused { code, detail } => (code, detail),
+                                other => (crate::profile::code::MALFORMED, other.to_string()),
+                            };
+                            s2.push(CheckRow::fail("profile.decode", c, d));
+                        }
+                        None => s2.push(CheckRow::fail(
+                            "profile.decode",
+                            crate::profile::code::MALFORMED,
+                            "member bytes do not parse as canonical JSON",
+                        )),
+                    }
+                }
+                None => s2.push(CheckRow::unmaterialized(
+                    "profile.member",
+                    format!("{addr} not materialized"),
+                )),
+            },
+            None => s2.push(CheckRow::fail(
+                "profile.member",
+                crate::profile::code::MISSING_REQUIRED,
+                "evidence_profile section carries no member ref",
+            )),
+        }
+        if profile_checked {
+            s2.push(CheckRow::pass("profile.checks"));
+        }
+    }
     if want(2) {
         stages.push(StageReport {
             stage: 2,

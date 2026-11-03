@@ -502,6 +502,7 @@ pub fn assemble_scoped(inputs: &ScopedInputs<'_>) -> Result<Assembled, BundleErr
         traces,
         results: results_doc,
         composition,
+        evidence_profile: Json::Null,
         reproducibility: Json::Null,
         members: index,
         unpinned: vec![],

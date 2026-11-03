@@ -48,6 +48,9 @@ pub mod roles {
     pub const LEDGER_TREE: &str = "ledger_tree:";
     /// The `LedgerExport` page member prefix.
     pub const LEDGER_PAGE: &str = "ledger_page:";
+    /// The `evidence-package/1` profile member (R5.21; additive —
+    /// never a required role).
+    pub const EVIDENCE_PROFILE: &str = crate::profile::PROFILE_ROLE;
 }
 
 /// The address a role's member carries — `None` when the role is absent
@@ -423,6 +426,7 @@ pub fn section_member_refs(manifest: &BundleManifest) -> Vec<String> {
         &manifest.model,
         &manifest.instrument,
         &manifest.results,
+        &manifest.evidence_profile,
     ] {
         if let Some(a) = section_member(section) {
             refs.push(a);
@@ -538,6 +542,7 @@ mod tests {
                 t
             },
             results: Json::Null,
+            evidence_profile: Json::Null,
             reproducibility: Json::obj([("nondeterminism", Json::str("sha256:nd"))]),
             members: vec![
                 MemberRef::present(roles::SUBJECT, "sha256:sub".into(), "", 1),

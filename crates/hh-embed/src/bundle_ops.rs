@@ -490,6 +490,10 @@ impl EmbedService {
             images,
             nondeterminism: vec![],
             participant_class: None,
+            // R5.21: the kernel op mints no `evidence-package/1`
+            // profile — producer wiring is the later owner's seam
+            // (decomposition row 31: R5.21 data owner, R5.23 assembly).
+            evidence_profile: None,
         };
         let assembled = assemble(&inputs).map_err(bundle_err)?;
 

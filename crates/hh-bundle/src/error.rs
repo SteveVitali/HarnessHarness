@@ -78,6 +78,13 @@ pub enum BundleError {
         format: String,
         direction: &'static str,
     },
+    /// An `evidence-package/1` refusal — `code` is one of
+    /// `profile::code`'s closed set (`conflicting_identity`,
+    /// `missing_required_member`, `head_mismatch`, `missing_head`,
+    /// `watermark_mismatch`, `grade_retry_adds_n`, `build_note_as_wal`,
+    /// `unknown_profile_version`, `profile_malformed`); §6.1/§6.5,
+    /// PADR-R5-3∗.
+    ProfileRefused { code: &'static str, detail: String },
     /// A malformed record decode.
     Malformed { detail: String },
 }
@@ -152,6 +159,9 @@ impl fmt::Display for BundleError {
                 )
             }
             BundleError::Io { detail } => write!(f, "io: {detail}"),
+            BundleError::ProfileRefused { code, detail } => {
+                write!(f, "profile_refused[{code}]: {detail}")
+            }
             BundleError::Malformed { detail } => write!(f, "malformed: {detail}"),
         }
     }

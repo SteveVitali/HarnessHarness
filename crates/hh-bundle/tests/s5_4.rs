@@ -86,6 +86,7 @@ fn inputs<'a>(rig: &'a Rig, profile_refs: Vec<Json>, images: Vec<Json>) -> Assem
         images,
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     }
 }
 

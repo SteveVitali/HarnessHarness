@@ -110,6 +110,7 @@ fn decoded(rig: &Rig) -> Decoded {
         images: vec![],
         nondeterminism: vec![],
         participant_class: None,
+        evidence_profile: None,
     })
     .unwrap();
     Decoded {

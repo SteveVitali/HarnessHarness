@@ -36,6 +36,7 @@ pub mod import;
 pub mod levels;
 pub mod lifecycle;
 pub mod manifest;
+pub mod profile;
 pub mod repro;
 pub mod runrefs;
 pub mod scoped;
@@ -57,6 +58,11 @@ pub use manifest::{
     BasisSatisfaction, BlobIndexEntry, BundleManifest, BundlePolicy, Claim, FetchEntry,
     LedgerExport, LevelBasis, MemberRef, MemberStatus, ReproLevel, SubjectSection, Unpinned,
     BUNDLE_IDP, BUNDLE_SCHEMA,
+};
+pub use profile::{
+    AttemptRef, Coord, EvidenceProfile, ExportRef, GradeAttemptRef, IdentityOutcome, NativeHead,
+    ProfileIndex, ProfileViolation, Watermark, BUILD_NOTE_LABEL, PROFILE_MEDIA, PROFILE_ROLE,
+    PROFILE_SCHEMA, PROFILE_VERSION, WAL_HEAD_KINDS,
 };
 pub use repro::{
     budget_limits_equal, fingerprint_drift, snapshot_fingerprint, ReproOutcome, ReproReport,
