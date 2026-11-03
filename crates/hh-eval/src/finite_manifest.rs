@@ -17,7 +17,11 @@
 //! check recomputed at 16,000/32,000/64,000 draws and the max
 //! endpoint delta recorded as `numerical_error` — a fact, never a
 //! silent retry or redraw (S.3). `Beta{2,2}` is the predeclared
-//! exploratory sensitivity and never replaces the registered prior.
+//! exploratory sensitivity and never replaces the registered prior —
+//! the declared prior parameterizes the conjugate update (posterior
+//! mean `(c+a)/(n+a+b)`, draws `beta_inv(u, c+a, n−c+b)`); a `beta{2,2}`
+//! label over `Beta(1,1)` math was the DF-R5.17-1 defect, repaired at
+//! R5.40.
 //!
 //! Task pairing is stratification, not correlated-replicate modelling:
 //! a declared dependence, a pooled/hierarchical substitute, an unknown
@@ -494,6 +498,123 @@ pub fn finite_manifest_contrast(
     pop: &PlannedPopulation,
     decl: &ContrastDecl,
 ) -> Result<FiniteManifestContrast, ContrastError> {
+    // ── declared-input validation + cell derivation (shared core) ─
+    let core = resolve_core(pop, decl)?;
+
+    // ── posterior draws — the frozen ladder through the cap ───────────
+    let mut rng = XorShift64::seeded(&core.seed_material);
+    let deltas = draw_deltas(&core.cells, decl.prior, &mut rng, CAP_DRAWS);
+
+    // ── equal-tail endpoints per ladder level + the doubling record ───
+    let mut levels = Vec::new();
+    let mut d = BASE_DRAWS;
+    while d <= CAP_DRAWS {
+        levels.push(d);
+        d = d.saturating_mul(2).min(CAP_DRAWS + 1);
+    }
+    let mut endpoints: Vec<Interval> = Vec::with_capacity(levels.len());
+    for &n in &levels {
+        let draws = &deltas[..n as usize];
+        endpoints.push(Interval {
+            lo: quantile(draws, TAIL_PPM).unwrap_or(0),
+            hi: quantile(draws, PPM - TAIL_PPM).unwrap_or(0),
+        });
+    }
+    let mut doubling: Vec<DoublingStep> = Vec::with_capacity(levels.len());
+    let mut numerical_error_ppm = 0i64;
+    for (i, &n) in levels.iter().enumerate() {
+        let delta = if i == 0 {
+            0
+        } else {
+            (endpoints[i].lo - endpoints[i - 1].lo)
+                .abs()
+                .max((endpoints[i].hi - endpoints[i - 1].hi).abs())
+        };
+        numerical_error_ppm = numerical_error_ppm.max(delta);
+        doubling.push(DoublingStep {
+            draws: n,
+            max_delta_ppm: delta,
+        });
+    }
+
+    let mut keys = BTreeMap::new();
+    keys.insert("population".into(), decl.population.as_str().to_string());
+    keys.insert("test_arm".into(), decl.test_arm.clone());
+    keys.insert("control_arm".into(), decl.control_arm.clone());
+    if let Some(st) = &decl.stratum {
+        keys.insert("stratum".into(), st.clone());
+    }
+    Ok(FiniteManifestContrast {
+        direction: "test_minus_control".to_string(),
+        test_arm: decl.test_arm.clone(),
+        control_arm: decl.control_arm.clone(),
+        population: decl.population.as_str().to_string(),
+        stratum: decl.stratum.clone(),
+        stratum_membership: core.stratum_membership.clone(),
+        prior: decl.prior,
+        prior_name: decl.prior_name.clone(),
+        sensitivity: decl.prior != REGISTERED_PRIOR,
+        cells: core.cells,
+        observed_contrast_ppm: core.observed_contrast_ppm,
+        posterior_mean_ppm: core.posterior_mean_ppm,
+        interval: endpoints[0], // the declared BASE_DRAWS estimate
+        draws_requested: BASE_DRAWS,
+        draws_used: CAP_DRAWS,
+        doubling,
+        numerical_error_ppm,
+        tol_ppm: INVCDF_TOL_PPM,
+        seed: decl.seed,
+        metadata: MethodMetadata {
+            estimator: CONTRAST_KIND.to_string(),
+            version: CONTRAST_VERSION.to_string(),
+            target: "finite_manifest_equal_task_contrast:test_minus_control".to_string(),
+            assumptions: vec![
+                "independent Bernoulli runs within cells; independent posteriors across task/arm cells".into(),
+                "task pairing is stratification, not correlated-replicate modelling".into(),
+                "equal within-stratum task weights w_t=1/T; first-slot coverage".into(),
+                "finite-manifest target only — no population, original-runner or catalogue extrapolation".into(),
+            ],
+            prior: Some(decl.prior_name.clone()),
+            keys,
+            stratum_membership: core.stratum_membership,
+            seed: decl.seed,
+            draws_requested: BASE_DRAWS,
+            draws_used: CAP_DRAWS,
+            floors: vec![
+                format!("cell_replicates>={CELL_REPLICATE_FLOOR}"),
+                "tasks>=2".to_string(),
+                format!("posterior_draws_base={BASE_DRAWS}"),
+                format!("doubling_cap={CAP_DRAWS}"),
+            ],
+            interval: ("credible".to_string(), Some(LEVEL_PPM)),
+            refusal: None,
+        },
+    })
+}
+
+/// The shared validated core — declaration validation, cell derivation
+/// (the population contract's one counting rule), the observed/mean
+/// contrasts and the canonical seed material. `finite_manifest_contrast`
+/// and [`finite_manifest_headline`] share it: the headline is the
+/// estimator's **reported** interval by construction (same seed stream,
+/// same first [`BASE_DRAWS`] draws, same quantile — never a second
+/// implementation; the 16k–64k doubling ladder is the report's own
+/// numerical-error instrumentation, not part of the interval).
+struct ContrastCore {
+    cells: Vec<ContrastCell>,
+    stratum_membership: Vec<String>,
+    observed_contrast_ppm: i64,
+    posterior_mean_ppm: i64,
+    seed_material: String,
+}
+
+/// `resolve_core` — the front half of the estimator: every declared-input
+/// validation (unchanged order, unchanged refusals), cell derivation and
+/// the analytic/observed contrasts. Never draws.
+fn resolve_core(
+    pop: &PlannedPopulation,
+    decl: &ContrastDecl,
+) -> Result<ContrastCore, ContrastError> {
     // ── declared-input validation (all before any draw) ──────────────
     if !(0..PPM).contains(&decl.level_ppm) {
         return Err(ContrastError::NonFiniteInput {
@@ -587,7 +708,6 @@ pub fn finite_manifest_contrast(
         });
     }
 
-    // ── cell derivation (the population contract's one counting rule) ─
     let strata: BTreeSet<String> = pop
         .slots
         .iter()
@@ -692,15 +812,22 @@ pub fn finite_manifest_contrast(
             i128::from(c.control_n),
         );
         obs_sum += i128::from(round_div((tc * cn - cc * tn) * i128::from(PPM), tn * cn));
+        // Posterior mean under the DECLARED prior (a,b): E[p]=(c+a)/(n+a+b)
+        // — the DF-R5.17-1 repair; beta{1,1} reduces to (c+1)/(n+2)
+        // byte-identically.
+        let (pa, pab) = (
+            i128::from(decl.prior.0),
+            i128::from(decl.prior.0 + decl.prior.1),
+        );
         pm_sum += i128::from(round_div(
-            ((tc + 1) * (cn + 2) - (cc + 1) * (tn + 2)) * i128::from(PPM),
-            (tn + 2) * (cn + 2),
+            ((tc + pa) * (cn + pab) - (cc + pa) * (tn + pab)) * i128::from(PPM),
+            (tn + pab) * (cn + pab),
         ));
     }
     let observed_contrast_ppm = round_div(obs_sum, t_n);
     let posterior_mean_ppm = round_div(pm_sum, t_n);
 
-    // ── posterior draws — the frozen ladder through the cap ───────────
+    // ── canonical seed material (declared inputs + resolved cells) ───
     let stratum_membership: Vec<String> = selected_strata.into_iter().collect();
     let seed_material = Json::obj([
         ("estimator", Json::str(CONTRAST_KIND)),
@@ -735,104 +862,80 @@ pub fn finite_manifest_contrast(
         ),
     ])
     .to_canonical_string();
-    let mut rng = XorShift64::seeded(&seed_material);
-    let mut deltas: Vec<i64> = Vec::with_capacity(CAP_DRAWS as usize);
-    for _ in 0..CAP_DRAWS {
+    Ok(ContrastCore {
+        cells,
+        stratum_membership,
+        observed_contrast_ppm,
+        posterior_mean_ppm,
+        seed_material,
+    })
+}
+
+/// `draw_deltas` — `n` posterior contrast draws under the declared prior
+/// `(a,b)`: per cell `p ~ Beta(c+a, n−c+a+b)` via the seeded inverse-CDF
+/// (interior uniforms — the CDF endpoints are never drawn), equal-task
+/// mean `Σ w_t (p_Bt − p_At)`, `w_t = 1/T`.
+fn draw_deltas(
+    cells: &[ContrastCell],
+    prior: (u64, u64),
+    rng: &mut XorShift64,
+    n: u64,
+) -> Vec<i64> {
+    let (a, b) = prior;
+    let t_n = cells.len() as i128;
+    let mut deltas: Vec<i64> = Vec::with_capacity(n as usize);
+    for _ in 0..n {
         let mut sum: i128 = 0;
-        for c in &cells {
-            // Interior uniforms — the CDF endpoints are never drawn.
+        for c in cells {
             let u_b = 1 + rng.below((PPM - 1) as usize) as i64;
-            let p_b = beta_inv_ppm(u_b, c.test_c + 1, c.test_n - c.test_c + 1);
+            let p_b = beta_inv_ppm(u_b, c.test_c + a, c.test_n - c.test_c + b);
             let u_a = 1 + rng.below((PPM - 1) as usize) as i64;
-            let p_a = beta_inv_ppm(u_a, c.control_c + 1, c.control_n - c.control_c + 1);
+            let p_a = beta_inv_ppm(u_a, c.control_c + a, c.control_n - c.control_c + b);
             sum += i128::from(p_b) - i128::from(p_a);
         }
         deltas.push(round_div(sum, t_n));
     }
+    deltas
+}
 
-    // ── equal-tail endpoints per ladder level + the doubling record ───
-    let mut levels = Vec::new();
-    let mut d = BASE_DRAWS;
-    while d <= CAP_DRAWS {
-        levels.push(d);
-        d = d.saturating_mul(2).min(CAP_DRAWS + 1);
-    }
-    let mut endpoints: Vec<Interval> = Vec::with_capacity(levels.len());
-    for &n in &levels {
-        let draws = &deltas[..n as usize];
-        endpoints.push(Interval {
-            lo: quantile(draws, TAIL_PPM).unwrap_or(0),
-            hi: quantile(draws, PPM - TAIL_PPM).unwrap_or(0),
-        });
-    }
-    let mut doubling: Vec<DoublingStep> = Vec::with_capacity(levels.len());
-    let mut numerical_error_ppm = 0i64;
-    for (i, &n) in levels.iter().enumerate() {
-        let delta = if i == 0 {
-            0
-        } else {
-            (endpoints[i].lo - endpoints[i - 1].lo)
-                .abs()
-                .max((endpoints[i].hi - endpoints[i - 1].hi).abs())
-        };
-        numerical_error_ppm = numerical_error_ppm.max(delta);
-        doubling.push(DoublingStep {
-            draws: n,
-            max_delta_ppm: delta,
-        });
-    }
+/// The estimator's reported headline — identical validation, cells,
+/// observed contrast, analytic posterior mean and the declared
+/// [`BASE_DRAWS`] equal-tail **credible** interval as
+/// [`finite_manifest_contrast`] produces them (same seed stream, same
+/// first `BASE_DRAWS` draws, same quantile — verified bit-identical by
+/// the R5.40 battery; the 16k–64k doubling ladder stays the report's
+/// own numerical-error instrumentation). Used by the offline
+/// `sim_battery` validation apparatus so the ≥2,000-datasets/scenario
+/// execution stays inside the D2 numerical envelope; never a second
+/// implementation and never a report path.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Headline {
+    /// The resolved per-task cells.
+    pub cells: Vec<ContrastCell>,
+    /// The observed equal-task contrast.
+    pub observed_contrast_ppm: i64,
+    /// The analytic posterior mean under the declared prior.
+    pub posterior_mean_ppm: i64,
+    /// The 95% equal-tail credible interval at [`BASE_DRAWS`].
+    pub interval: Interval,
+}
 
-    let mut keys = BTreeMap::new();
-    keys.insert("population".into(), decl.population.as_str().to_string());
-    keys.insert("test_arm".into(), decl.test_arm.clone());
-    keys.insert("control_arm".into(), decl.control_arm.clone());
-    if let Some(st) = &decl.stratum {
-        keys.insert("stratum".into(), st.clone());
-    }
-    Ok(FiniteManifestContrast {
-        direction: "test_minus_control".to_string(),
-        test_arm: decl.test_arm.clone(),
-        control_arm: decl.control_arm.clone(),
-        population: decl.population.as_str().to_string(),
-        stratum: decl.stratum.clone(),
-        stratum_membership: stratum_membership.clone(),
-        prior: decl.prior,
-        prior_name: decl.prior_name.clone(),
-        sensitivity: decl.prior != REGISTERED_PRIOR,
-        cells,
-        observed_contrast_ppm,
-        posterior_mean_ppm,
-        interval: endpoints[0], // the declared BASE_DRAWS estimate
-        draws_requested: BASE_DRAWS,
-        draws_used: CAP_DRAWS,
-        doubling,
-        numerical_error_ppm,
-        tol_ppm: INVCDF_TOL_PPM,
-        seed: decl.seed,
-        metadata: MethodMetadata {
-            estimator: CONTRAST_KIND.to_string(),
-            version: CONTRAST_VERSION.to_string(),
-            target: "finite_manifest_equal_task_contrast:test_minus_control".to_string(),
-            assumptions: vec![
-                "independent Bernoulli runs within cells; independent posteriors across task/arm cells".into(),
-                "task pairing is stratification, not correlated-replicate modelling".into(),
-                "equal within-stratum task weights w_t=1/T; first-slot coverage".into(),
-                "finite-manifest target only — no population, original-runner or catalogue extrapolation".into(),
-            ],
-            prior: Some(decl.prior_name.clone()),
-            keys,
-            stratum_membership: stratum_membership.clone(),
-            seed: decl.seed,
-            draws_requested: BASE_DRAWS,
-            draws_used: CAP_DRAWS,
-            floors: vec![
-                format!("cell_replicates>={CELL_REPLICATE_FLOOR}"),
-                "tasks>=2".to_string(),
-                format!("posterior_draws_base={BASE_DRAWS}"),
-                format!("doubling_cap={CAP_DRAWS}"),
-            ],
-            interval: ("credible".to_string(), Some(LEVEL_PPM)),
-            refusal: None,
+/// `finite_manifest_headline(pop, decl)` — the estimator's reported
+/// interval/mean/observed without the doubling-ladder instrumentation.
+pub fn finite_manifest_headline(
+    pop: &PlannedPopulation,
+    decl: &ContrastDecl,
+) -> Result<Headline, ContrastError> {
+    let core = resolve_core(pop, decl)?;
+    let mut rng = XorShift64::seeded(&core.seed_material);
+    let deltas = draw_deltas(&core.cells, decl.prior, &mut rng, BASE_DRAWS);
+    Ok(Headline {
+        cells: core.cells,
+        observed_contrast_ppm: core.observed_contrast_ppm,
+        posterior_mean_ppm: core.posterior_mean_ppm,
+        interval: Interval {
+            lo: quantile(&deltas, TAIL_PPM).unwrap_or(0),
+            hi: quantile(&deltas, PPM - TAIL_PPM).unwrap_or(0),
         },
     })
 }
