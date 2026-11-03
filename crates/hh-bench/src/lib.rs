@@ -9,6 +9,7 @@ pub mod env;
 pub mod foreign;
 pub mod grade;
 pub mod infra;
+pub mod oracle;
 pub mod parity;
 pub mod records;
 
@@ -20,5 +21,9 @@ pub use foreign::{
 };
 pub use grade::{grade, parse_typed_reward, GradeError, GradeRequest, GradeResult};
 pub use infra::{detect_infrastructure_failure, InfraClass, InfraReport};
+pub use oracle::{
+    AttemptOutcome, AttemptSpec, InstrumentPolicy, OracleAttempt, OracleError, OracleExecutor,
+    OracleObservation, OraclePin, OracleRunner, SealedSubmission, ORACLE_INVOKED, ORACLE_VERDICT,
+};
 pub use parity::parity_report;
 pub use records::{BenchTask, EnvironmentHandle, ExposedTask, Submission, Surface};

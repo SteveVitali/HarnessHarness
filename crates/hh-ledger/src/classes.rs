@@ -1527,6 +1527,10 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("verification.completion.proposed", "hint"),
     // ── verification:gate ──
     ("verification.gate.evaluated", "hint"),
+    // R5.11 — the instrument-run oracle-attempt rows lower as hints like
+    // the rest of the verification family.
+    ("verification.oracle.invoked", "hint"),
+    ("verification.oracle.verdict", "hint"),
     // ── verification:validator ──
     ("verification.validator.invoked", "hint"),
     ("verification.validator.verdict", "hint"),
@@ -2285,6 +2289,14 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // audit-grade (§5g.6 §3) — the gate verdicts are consequential decisions.
     row_audit("verification.gate.evaluated",      O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("verification.completion.decided",  O::Events, true,  OPEN_AUDIT, &[], None, None),
+    // R5.11 (REQ-E-007; PADR-R5-1 A.1 item 5 + A.3 — admitted GATE-G9): the
+    // instrument oracle-attempt family on the instrument run. `invoked`
+    // persists before the pinned oracle executes on the sealed submission;
+    // `verdict` retains the mapped attempt outcome. Durable +
+    // provenance-mandatory like the validator rows; `default_charged_to`
+    // resolves `instrument` from the `verification.*` prefix (R-ACC-3).
+    row_prov("verification.oracle.invoked",     Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.oracle.verdict",     Led, O::Events, false, false, true,  None, None),
 
     // ── bundle (§5h.3; R4.15d; OQ-332; the GATE-G7-adopted
     // §trust-fields set) — `bundle.member.fetched{address,
