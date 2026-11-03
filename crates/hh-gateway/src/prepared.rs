@@ -94,8 +94,8 @@ pub struct PrepareInputs {
     /// The provider plan the sealed request is built on.
     pub plan: ProviderRequestPlan,
     /// Bounds over every admitted input/output role and overhead
-    /// (every [`REQUIRED_BOUND_DIMS`] member present;
-    /// [`OPTIONAL_BOUND_DIMS`] admitted when declared; anything else
+    /// (every `REQUIRED_BOUND_DIMS` member present;
+    /// `OPTIONAL_BOUND_DIMS` admitted when declared; anything else
     /// refuses `UnadmittedBound`).
     pub bounds: ResourceVector,
     /// The `model_ref` stamped on `model.call.requested` and matched
