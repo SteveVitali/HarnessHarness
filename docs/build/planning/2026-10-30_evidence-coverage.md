@@ -463,3 +463,43 @@ ticket never marks a deferred full-target predicate MET.
 > dispatch dependency. REQ-A-103/REQ-E-208 are stamped
 > **contributing-only** — this ticket never marks a deferred
 > full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 193, R5.23): the
+> §6.1 all-planned reconcile landed inside `hh-analysis`
+> (ADR-0401; `crates/hh-analysis/src/receipt.rs` — one in-process
+> interface `assemble_receipt(&ExperimentView, &[EvalRun],
+> &[TaskContext], metric_ref, pins, &DeclaredReceipt) →
+> Result<PopulationReceipt, AnalysisError>`, the
+> `population-receipt/1` canonical derived-index record): six
+> set-equality legs `slots→plans→first/all
+> attempts→settlements/selected grades→rows→analysis` over the
+> pinned owner views, the expected side folded by the landed
+> R5.15/15b population contract verbatim (`planned_population`,
+> X7 — never a second rule, `PopulationError` refusals propagated),
+> records-in declared side (frozen slots, per-plan attempts,
+> settlement `{run, settlement_ref, cost_version}`, grade `{run,
+> grade_ref, selection_ref, ordinal, counts_subject, status}`,
+> row `{run, version_id, plan_ref}`, analysis
+> `{protocol_ref, prices, method, seed, draws, weights, …}`),
+> the closed fourteen-code set under `receipt::code`
+> (`dropped_slot`/`extra_slot`/`orphan_launch`/
+> `dropped_attempt`/`missing_settlement`/`missing_row`/
+> `duplicate_grade`/`duplicate_record`/`grade_retry_adds_n`/
+> `grade_status_violation`/`stale_selection`/
+> `stale_cost_version`/`wrong_member_join`/
+> `missing_analysis_pin`), four separate per-slot verdict axes
+> (prerequisite/invocation/task/veto — a finished invocation never
+> erases a skipped/format failure, a grade retry never counts
+> subject n), the fixed `derived_index` label — no evidence-class
+> promotion from hash or process success. Engineered evidence in
+> `crates/hh-analysis/tests/r5_23.rs` (9/9 — compile-red at base
+> `d5f6810a`), mapping Packet C C.9 checks 2/6 (the all-planned
+> set-equality reconcile and the retained-not-run/refused/pending
+> retention legs). REQ-E-208 (+ merged-with aliases
+> REQ-E-010/108/109), REQ-F-003, REQ-F-004, REQ-F-008 and
+> REQ-C-002 keep `planned; unmet` — achieved engineered D/E
+> recorded separately from the owed legs: the named contributors
+> R5.22 (landed), R5.24 and R5.43, and every R/P/actual-execution
+> predicate — evidence dependency, never dispatch dependency.
+> REQ-A-101 is stamped **contributing-only** — this ticket never
+> marks a deferred full-target predicate MET.
