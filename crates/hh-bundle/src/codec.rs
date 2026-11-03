@@ -71,15 +71,47 @@ pub fn encode_dir(
 }
 
 /// `decode(dir)`.
+///
+/// Recipient-side materialization bounds (§6.3 — "reject archive
+/// escaping paths/links and excessive expansion before execution"):
+/// `bundle.json` and every `members/` entry must be regular files
+/// inside the tree (`MemberEscape`); a member larger than its declared
+/// index `size` refuses `MemberExpansion` before it is read —
+/// undeclared/zero sizes bind at the native blob bound. A *smaller*
+/// member is not expansion: it materializes and the staged checks
+/// report it.
 pub fn decode_dir(dir: &Path) -> Result<Decoded, BundleError> {
     let io = |e: std::io::Error| BundleError::Io {
         detail: format!("{}: {e}", dir.display()),
     };
-    let text = std::fs::read_to_string(dir.join(MANIFEST_NAME)).map_err(io)?;
+    let manifest_path = dir.join(MANIFEST_NAME);
+    // `symlink_metadata` — the manifest itself must not ride a link out
+    // of the tree.
+    if std::fs::symlink_metadata(&manifest_path)
+        .map_err(io)?
+        .file_type()
+        .is_symlink()
+    {
+        return Err(BundleError::MemberEscape {
+            member: MANIFEST_NAME.to_string(),
+        });
+    }
+    let text = std::fs::read_to_string(&manifest_path).map_err(io)?;
     let doc = hharness_wire::json::parse(&text).map_err(|e| BundleError::Malformed {
         detail: format!("{MANIFEST_NAME}: {e}"),
     })?;
     let manifest = BundleManifest::from_json(&doc)?;
+    // The declared per-member expansion bound — the index's `size`
+    // (zero/unset or an unlisted name binds at the native blob bound).
+    let expansion_bound = |addr: &str| -> u64 {
+        manifest
+            .members
+            .iter()
+            .find(|m| m.address == addr)
+            .map(|m| m.size)
+            .filter(|s| *s != 0)
+            .unwrap_or(hharness_ledger::store::DEFAULT_BLOB_MAX_BYTES as u64)
+    };
     let mut members = MemberBytes::new();
     let mdir = dir.join(MEMBERS_DIR);
     if mdir.is_dir() {
@@ -87,6 +119,19 @@ pub fn decode_dir(dir: &Path) -> Result<Decoded, BundleError> {
             let entry = entry.map_err(io)?;
             let name = entry.file_name().to_string_lossy().to_string();
             if let Some(addr) = member_address(&name) {
+                // `DirEntry::file_type` does not traverse links — a link,
+                // directory or special entry is an escape, refused.
+                if !entry.file_type().map_err(io)?.is_file() {
+                    return Err(BundleError::MemberEscape { member: name });
+                }
+                let bound = expansion_bound(&addr);
+                let len = entry.metadata().map_err(io)?.len();
+                if len > bound {
+                    return Err(BundleError::MemberExpansion {
+                        member: addr.clone(),
+                        limit: bound,
+                    });
+                }
                 members.insert(addr, std::fs::read(entry.path()).map_err(io)?);
             }
         }

@@ -1367,8 +1367,13 @@ impl EmbedService {
     /// - **every level**: `manifest.version_id` recompute (the identity
     ///   leg of AC-4);
     /// - **R0**: the `ledger_export` pages' `lifecycle.run.*` rows fold
-    ///   to the manifest's recorded `subject.status` (a mismatch is a
-    ///   `lifecycle_status` drift row);
+    ///   to the native `open`/`finished` lifecycle — `finished` iff a
+    ///   `lifecycle.run.finished` row landed — and compare against the
+    ///   manifest's recorded `subject.status` (a mismatch is a
+    ///   `lifecycle_status` drift row). The fold is independent of the
+    ///   task outcome: `payload.status`/`stop_reason`/`outcome_class`
+    ///   ride the outcome plane (§6.3 R0; I-06; the §9.3 admitted fix
+    ///   "R0 open/finished mapping (R-2.9.3)" — A3 F6);
     /// - **R1**: + the sealed `definition` member re-`accept`s and
     ///   re-`compile`s; the recomputed `bundle_id` must equal the
     ///   `compiled_bundle` member's;
@@ -1568,20 +1573,28 @@ impl EmbedService {
             ]));
         }
 
-        // R0 — lifecycle fold vs the recorded status.
-        let derived_status = envelopes
+        // R0 — lifecycle fold vs the recorded status. The vocabulary is
+        // `open`/`finished` (§6.3; I-06), the same presence rule the
+        // producer's `subject.status` fold (hh-bundle `assemble`) uses:
+        // `finished` iff a `lifecycle.run.finished` row landed. The
+        // finished row's `payload.status`/`stop_reason`/`outcome_class`
+        // carry the *task outcome* plane and are never read — reading
+        // them was the A3 F6 defect (`declared finished` vs `derived
+        // succeeded` on every completed run).
+        let lifecycle_rows = envelopes
             .iter()
             .filter(|e| e.class.starts_with("lifecycle.run."))
-            .filter_map(|e| {
-                e.payload
-                    .get("status")
-                    .and_then(Json::as_str)
-                    .map(String::from)
-                    .or_else(|| {
-                        (e.class == "lifecycle.run.finished").then(|| "finished".to_string())
-                    })
-            })
-            .next_back();
+            .count();
+        let derived_status = if envelopes
+            .iter()
+            .any(|e| e.class == "lifecycle.run.finished")
+        {
+            Some("finished".to_string())
+        } else if lifecycle_rows > 0 {
+            Some("open".to_string())
+        } else {
+            None
+        };
         if let Some(st) = &derived_status {
             if st != &m.subject.status {
                 drift.push(Json::obj([
