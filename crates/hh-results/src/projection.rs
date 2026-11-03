@@ -75,6 +75,10 @@ pub fn project_row(
         ..OutcomeSection::default()
     };
     let mut consumed: BTreeMap<String, i64> = BTreeMap::new();
+    // `(source_event.event_id, dimension)` → amount — the dedup table for
+    // propagated leaf/ancestor copies of one charge (merged into
+    // `consumed` after the fold).
+    let mut consumed_keyed: BTreeMap<(String, String), i64> = BTreeMap::new();
     let mut vetoes: BTreeSet<String> = BTreeSet::new();
     let mut metrics: BTreeMap<String, Vec<(u64, MetricValue, Vec<String>)>> = BTreeMap::new();
     let mut checkpoint_ref: Option<String> = None;
@@ -108,11 +112,32 @@ pub fn project_row(
                 }
             }
             "control.budget.consumed" => {
+                // Propagated leaf/ancestor copies count once (PADR-R5-2
+                // B.1 item 4 / B.3; REQ-E-207): `Account::charge` emits one
+                // row per node on the charged node's ancestor path, each
+                // carrying the same `amount` — keyed rows deduplicate on
+                // `(source_event.event_id, dimension)` (the Account's own
+                // dedup key). Legacy rows without `source_event` count
+                // individually — already the one-row-per-charge form.
                 if let (Some(d), Some(a)) = (
                     e.payload.get("dimension").and_then(Json::as_str),
                     e.payload.get("amount").and_then(Json::as_int),
                 ) {
-                    *consumed.entry(d.to_string()).or_insert(0) += a;
+                    match e
+                        .payload
+                        .get("source_event")
+                        .and_then(|s| s.get("event_id"))
+                        .and_then(Json::as_str)
+                    {
+                        Some(src) => {
+                            consumed_keyed
+                                .entry((src.to_string(), d.to_string()))
+                                .or_insert(a);
+                        }
+                        None => {
+                            *consumed.entry(d.to_string()).or_insert(0) += a;
+                        }
+                    }
                 }
             }
             "measurement.metric.emitted" => {
@@ -558,6 +583,12 @@ pub fn project_row(
             .clone()
             .or_else(|| binding.and_then(|b| b.registry_snapshot_id.clone())),
     };
+
+    // Merge the deduplicated propagated copies — one `(source, dim)`
+    // charge counted once.
+    for ((_, dim), a) in consumed_keyed {
+        *consumed.entry(dim).or_insert(0) += a;
+    }
 
     let mut watermark_set = WatermarkSet::new();
     watermark_set.pin(run_id, until);

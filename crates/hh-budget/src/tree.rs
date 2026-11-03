@@ -31,6 +31,7 @@
 use hharness_ledger::event::EventEnvelope;
 use hharness_ledger::manifest::EventRef;
 use hharness_ontology::dimensions::{DimensionId, DimensionKey};
+use hharness_wire::json::Json;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::errors::BudgetError;
@@ -53,6 +54,112 @@ pub struct Exceeded {
     pub value: i64,
     /// The hard limit.
     pub limit: i64,
+}
+
+/// Why a terminal call row contributes unknown — never zero — physical
+/// exposure (PADR-R5-2 B.1 item 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnknownExposureReason {
+    /// `model.call.completed{usage.available:false}` — the call completed
+    /// but the provider's usage record was unavailable (`n/a`, never 0).
+    UsageUnavailable,
+    /// `model.call.failed` carrying no `usage` member — an ambiguous
+    /// failed response: the physical outcome of the wire is unknown.
+    AmbiguousFailure,
+}
+
+impl UnknownExposureReason {
+    /// The closed spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            UnknownExposureReason::UsageUnavailable => "usage_unavailable",
+            UnknownExposureReason::AmbiguousFailure => "ambiguous_failure",
+        }
+    }
+}
+
+/// One unknown-exposure record — a durable terminal call row whose actual
+/// usage is not known. A member is evidence the exposure is *unknown*,
+/// never evidence it is zero.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnknownExposure {
+    /// The call's durable id (`model_call_id`).
+    pub model_call_id: String,
+    /// The terminal row's event id.
+    pub event_id: String,
+    /// Why the exposure is unknown.
+    pub reason: UnknownExposureReason,
+}
+
+/// The deduplicated physical-use view (PADR-R5-2 B.1 item 4; REQ-E-207) —
+/// physical incurred/billed/unknown use, exposed **beside** the logical
+/// scope totals (`remaining`/`check`/`totals`), never merged into them.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PhysicalUse {
+    /// Physically incurred counter use per primary dimension: each
+    /// `(source_event, dimension)` charge counted **once** at its leaf-most
+    /// node — propagated ancestor copies and repeated reconciles
+    /// deduplicate to the charge. Reverted-effect charges stay (physical
+    /// spend survives logical reversal); over-reservation amounts count
+    /// in full (actual above reserve, never clamped).
+    pub incurred: ResourceVector,
+    /// `incurred` split by `charged_to` stratum (`subject`/`instrument`,
+    /// R-ACC-3) — subject and instrument charges never merge; instrument
+    /// roots stay separate.
+    pub incurred_by_charged_to: BTreeMap<String, ResourceVector>,
+    /// Billed use — deduplicated `measurement.cost.attributed`
+    /// micro-units per currency (`confidence`/`provenance`/`coverage`
+    /// stay on the source [`crate::pricing::SpendRow`]s).
+    pub billed_micro_units: BTreeMap<String, i64>,
+    /// Unknown physical exposure — durable terminal call rows whose
+    /// actual usage is not known. Never summed into `incurred` and never
+    /// reported as zero.
+    pub unknown: Vec<UnknownExposure>,
+}
+
+impl PhysicalUse {
+    /// Canonical JSON — `{incurred{dim:amount},
+    /// incurred_by_charged_to{stratum:{dim:amount}},
+    /// billed_micro_units{currency:micro_units},
+    /// unknown[{model_call_id,event_id,reason}]}`.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("incurred", self.incurred.to_json()),
+            (
+                "incurred_by_charged_to",
+                Json::Obj(
+                    self.incurred_by_charged_to
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.to_json()))
+                        .collect(),
+                ),
+            ),
+            (
+                "billed_micro_units",
+                Json::Obj(
+                    self.billed_micro_units
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                ),
+            ),
+            (
+                "unknown",
+                Json::Arr(
+                    self.unknown
+                        .iter()
+                        .map(|u| {
+                            Json::obj([
+                                ("model_call_id", Json::str(&u.model_call_id)),
+                                ("event_id", Json::str(&u.event_id)),
+                                ("reason", Json::str(u.reason.as_str())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ])
+    }
 }
 
 /// Per-node projection state.
@@ -123,6 +230,10 @@ pub struct BudgetTree {
     pub probe_verdicts: BTreeMap<String, String>,
     /// The recorded stop decision, if any (a stop decision is made once).
     pub stop_decision: Option<DecisionRow>,
+    /// Unknown physical exposure — terminal `model.call.*` rows whose
+    /// actual usage is not known (PADR-R5-2 B.1 item 4; deduplicated on
+    /// the terminal row's `event_id`). Read by [`BudgetTree::physical_use`].
+    pub unknown_exposures: Vec<UnknownExposure>,
 }
 
 /// Invariant 4 (ADR-0030 §1; ADR-0238 §1): a `not_applied` settlement stays
@@ -151,7 +262,9 @@ impl BudgetTree {
     ///
     /// Unknown classes are ignored — the tree only reads the budget/accounting
     /// family, the effect terminals (revert exclusion, open-effect drain), the
-    /// `control.decision` rows and `context.observation.recorded` reminders.
+    /// `control.decision` rows, `context.observation.recorded` reminders and
+    /// the `model.call.{completed,failed}` usage-availability terminals
+    /// (the physical-use view's unknown-exposure fold — PADR-R5-2 B.1 item 4).
     pub fn project(
         run_id: impl Into<String>,
         envelopes: &[EventEnvelope],
@@ -325,9 +438,52 @@ impl BudgetTree {
                     self.reminders.push(r);
                 }
             }
+            // Unknown physical exposure (PADR-R5-2 B.1 item 4): the terminal
+            // call rows whose actual usage is not known. `available = false`
+            // is `n/a`, never zero (ADR-0118 d.7); a `usage` member absent
+            // entirely is conservatively unknown too.
+            "model.call.completed" => {
+                let available = matches!(
+                    e.payload.get("usage").and_then(|u| u.get("available")),
+                    Some(Json::Bool(true))
+                );
+                if !available {
+                    self.fold_unknown(e, UnknownExposureReason::UsageUnavailable);
+                }
+            }
+            // A failed response carries `usage` only when it is known;
+            // absent ⇒ the physical outcome of the wire is ambiguous —
+            // unknown exposure, never an implied zero.
+            "model.call.failed" => {
+                if e.payload.get("usage").is_none() {
+                    self.fold_unknown(e, UnknownExposureReason::AmbiguousFailure);
+                }
+            }
             _ => {}
         }
         Ok(())
+    }
+
+    /// Fold one unknown-exposure record — deduplicated on the terminal
+    /// row's `event_id` so a replayed prefix re-folds to the same set.
+    fn fold_unknown(&mut self, e: &EventEnvelope, reason: UnknownExposureReason) {
+        if self
+            .unknown_exposures
+            .iter()
+            .any(|u| u.event_id == e.event_id)
+        {
+            return;
+        }
+        self.unknown_exposures.push(UnknownExposure {
+            model_call_id: e
+                .payload
+                .get("model_call_id")
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            event_id: e.event_id.clone(),
+            reason,
+        });
     }
 
     /// Fold an `allocated` row (outcome = allocated).
@@ -660,6 +816,65 @@ impl BudgetTree {
     /// The reservation by id.
     pub fn reservation(&self, reservation_id: &str) -> Option<&Reservation> {
         self.reservations.get(reservation_id)
+    }
+
+    /// The deduplicated physical-use view (PADR-R5-2 B.1 item 4) —
+    /// physical incurred/billed/unknown use **beside** the logical fold;
+    /// see [`PhysicalUse`].
+    ///
+    /// `incurred` applies `totals`' leaf-most rule *without* the revert
+    /// exclusion: propagated ancestor copies of one `(source_event,
+    /// dimension)` charge count once at the leaf-most node — physical
+    /// spend survives logical reversal, release and completion
+    /// (`released` rows never subtract physical use). `billed` is the
+    /// deduplicated `measurement.cost.attributed` sum per currency.
+    /// `unknown` is the folded unknown-exposure set — evidence the
+    /// exposure is unknown, never a numeric zero.
+    pub fn physical_use(&self) -> PhysicalUse {
+        let mut incurred = ResourceVector::zero();
+        let mut by_charged_to: BTreeMap<String, ResourceVector> = BTreeMap::new();
+        for rows in self.charges_by_source.values() {
+            // One charge batch's propagated rows share `(source, dim)`;
+            // group by dimension, then take the leaf-most row — the row
+            // whose budget is an ancestor of no other row's budget (the
+            // same rule `totals` applies; no revert exclusion here).
+            let mut dims: BTreeMap<DimensionId, Vec<&ConsumedRow>> = BTreeMap::new();
+            for r in rows {
+                dims.entry(r.dimension).or_default().push(r);
+            }
+            for group in dims.values() {
+                let leaf = group
+                    .iter()
+                    .copied()
+                    .find(|r| {
+                        group.iter().all(|o| {
+                            o.budget_id == r.budget_id
+                                || !self
+                                    .path(&o.budget_id)
+                                    .map(|p| p.contains(&r.budget_id))
+                                    .unwrap_or(false)
+                        })
+                    })
+                    .unwrap_or(group[0]);
+                incurred.add(leaf.dimension, leaf.amount);
+                by_charged_to
+                    .entry(leaf.attribution.charged_to.as_str().to_string())
+                    .or_default()
+                    .add(leaf.dimension, leaf.amount);
+            }
+        }
+        let mut billed_micro_units: BTreeMap<String, i64> = BTreeMap::new();
+        for s in &self.spend_rows {
+            *billed_micro_units
+                .entry(s.money.currency.clone())
+                .or_insert(0) += s.money.micro_units;
+        }
+        PhysicalUse {
+            incurred,
+            incurred_by_charged_to: by_charged_to,
+            billed_micro_units,
+            unknown: self.unknown_exposures.clone(),
+        }
     }
 }
 

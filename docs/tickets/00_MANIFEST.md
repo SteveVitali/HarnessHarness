@@ -371,6 +371,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 181 | `181_R5.12__reserve.md` | Round 5 | ticket | Atomic whole-vector Account cap admission | — |
 | 181 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 182 | `182_R5.13__physical.md` | Round 5 | ticket | Deduplicated incurred-use and unknown-exposure views | — |
+| 182 note | | | | | size-deviation ruling 2026-11-02 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 183 | `183_R5.14__pending.md` | Round 5 | ticket | Required-grade pending across every scored consumer | — |
 | 184 | `184_R5.15__population.md` | Round 5 | ticket | Planned-slot population and historical analysis coordinates | — |
 | 185 | `185_R5.16__beta.md` | Round 5 | ticket | Early routed finite-manifest Bayesian efficacy | — |
