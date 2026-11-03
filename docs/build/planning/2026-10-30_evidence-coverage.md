@@ -1007,3 +1007,55 @@ ticket never marks a deferred full-target predicate MET.
 > their primary owner R5.44 AC-1 (evidence dependency, never
 > dispatch); all ten targets keep `planned; unmet` — this ticket
 > never marks a deferred full-target predicate MET.
+
+> Dated primary-owner note — 2026-11-03 (seq 205, R5.35): the §7.1
+> reader spine, evidence cards and portfolio positioning landed
+> (ADR-0413). REQ-B-001 (one selected audience/job, prerequisites,
+> secondary roles, first-wave exclusions, inferred-demand label): N1 —
+> `docs/evidence.md` names the technically prepared harness evaluator
+> job with prerequisites, secondary roles, the deliberate exclusions
+> and the explicit demand-is-a-hypothesis label; the `portfolio` leg
+> of `scripts/check-position.sh` fails if the job or the label is
+> dropped. REQ-C-008 (preserve unmet objectives + recorded rescope):
+> N2 — the `<!-- unmet -->` partial-release clause names S1/S3 unmet,
+> cites the GATE-G8/G9/G10 dispositions and the partition, and forbids
+> fixture substitution; the `unmet` leg pins it. REQ-C-101 (separate
+> task/teaching/study gates; checked-task minimum retained): N3 —
+> eleven `### Card —` records carry the closed four-state vocabulary;
+> the `gates` leg requires useful-task/study/operations =
+> `Not yet available`, component/interchange/evidence-access =
+> `Restricted`, setup/EX-01/EX-02/receipt/contribute = `Available`;
+> the `labels` leg refuses invented states. REQ-C-102 (preserve 22
+> families / nine later groups / optional ceilings / explicit
+> disposition changes — merged REQ-A-001 coverage table + REQ-C-001
+> primary job): N4 — the maintained capability table retains all 22
+> family names with leading disposition class, all nine L-groups, all
+> six scenarios and the one job; `portfolio` derives the canon from
+> the frozen supplement §1 tables — a silent deletion or flipped
+> disposition fails; N5 — the `sources` leg requires the
+> benefit/overlap/exclusion/revisit claim map to resolve to real
+> dated sources; N6 — `entries`/`spine_page`/`nav` pin the three
+> entry choices (readiness first, failure/report exit) in README and
+> docs/evidence.md plus the docs/README rows; `honesty` bans
+> favorable-treatment/scientific-claim phrases on the surface.
+> Evidence `scripts/ci/test-check-position.sh` 20/20 —
+> `check-position.sh --head` red at base `bfc0b508` (entries/
+> spine_page/nav legs: page and spine absent); negatives: entry
+> renamed, exit removed, invented state, fixture-substitution
+> (useful-task marked available), dropped field, family/later/
+> scenario deleted, job unnamed, demand label dropped, unmet clause
+> weakened, nonexistent source, banned phrase, nav drift,
+> working-tree dirt invisible to `--head`, committed drift failing
+> `--head`, stripped `ci-mode: both` annotation failing
+> check-ci-gating. Achieved **engineered D/E**; achieved layer
+> `engineered` (self-tested lint + fixture drives — actual CI
+> execution on pushed heads read at close per O-06). Owed: the R/P
+> and actual-execution predicates stay with the register — S1's real
+> task/study evidence (R5.43 skeleton under GATE-G11), S3 collection
+> (later numeric/protocol owners + funding), the §8 participant
+> records (R5.53) and publication record (R5.54) for the
+> contributing-only ids (evidence dependency, never dispatch); this
+> note does not mark REQ-B-001/REQ-C-008/REQ-C-101/REQ-C-102 fully
+> satisfied. REQ-A-201, REQ-B-002, REQ-B-107, REQ-G-001, REQ-G-003,
+> REQ-G-005, REQ-G-008, REQ-G-009, REQ-G-201, REQ-G-202, REQ-G-207,
+> REQ-G-209 are stamped **contributing-only** — the same rule.

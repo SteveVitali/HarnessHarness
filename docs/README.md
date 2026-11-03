@@ -17,6 +17,7 @@ history behind it.
 | Understand the design | [Architecture](architecture.md) — kernel, Laboratory, components, and contracts |
 | Find a command or integration surface | [Reference](reference.md) — CLI, configuration, APIs, and source entry points |
 | Assess readiness | [Status and limitations](status.md) — available distribution, evidence, and known limits |
+| Check evidence and the portfolio | [Evidence and readiness](evidence.md) — per-surface cards, gate states, the selected job, and the capability catalogue |
 | Contribute | [Contributing](../CONTRIBUTING.md) — development workflow and verification |
 | Work with a coding agent | [Agent instructions](../AGENTS.md) — repository rules and scoped guidance |
 | Maintain or release the project | [Maintaining](../MAINTAINING.md) and [governance](../GOVERNANCE.md) |
@@ -54,6 +55,7 @@ entries under the applicable record protocol.
 | [architecture.md](architecture.md) | living | An explanation of the system and its main contracts |
 | [reference.md](reference.md) | living | Commands, configuration, and integration entry points |
 | [status.md](status.md) | living | A current account of availability, evidence, and limitations |
+| [evidence.md](evidence.md) | living | Per-surface evidence cards, readiness states, the selected job, and the capability portfolio |
 | [brief.md](brief.md) | frozen | Evidence and adoption founding intent; later changes are dated addenda. Charter approved; see its dated addendum. |
 | [protocol-resource-review.md](protocol-resource-review.md) | living checkpoint summary | Accepted research/design recommendations and Q-3–Q-6 review; decisions are recorded in the research ledger |
 | [spec-ratification-review.md](spec-ratification-review.md) | living checkpoint summary | Concise Q-7 scope, independent review outcome and recorded ratification; exact decisions remain in the frozen research ledger |

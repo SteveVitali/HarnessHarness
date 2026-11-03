@@ -2,7 +2,9 @@
 
 This guide takes you from a source checkout to a completed offline run, then
 to a local model. Start with the offline example to check the runtime and
-learn how to inspect its output.
+learn how to inspect its output. For the readiness state of each route —
+what is available, gated, or restricted — see
+[evidence and readiness](evidence.md).
 
 ## What you need
 
