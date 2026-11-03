@@ -436,7 +436,8 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 212 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; one closed predicate; ~3.4× NEW high-water mark) |
 | 213 | `213_HUMAN-H8__inputs.md` | Round 5 | human | Bind actual backend, inputs, rights and stage resources | — |
 | 214 | `214_GATE-G18__backend-gate.md` | Round 5 | gate | Authorize narrowly quoted backend feasibility preflight | STOP |
-| 215 | `215_R5.42a__backend-preflight.md` | Round 5 | skeleton | Earn bounded native backend feasibility evidence | pending GATE-G18 |
+| 215 | `215_R5.42a__backend-preflight.md` | Round 5 | ticket | Earn bounded native backend feasibility evidence | — |
+| 215 note | | | | | fleshed 2026-11-03 — skeleton → ticket under GATE-G18 PASSED (operator verbatim "passed. proceed" 23:19:09Z); contract rewritten with Run line, concrete pins/probes/stops and numbered ACs bound to the admitted scope (AC-1 anchor retained); decision rows for HUMAN-H8/GATE-G18 appended verbatim to LEDGER GATE DECISIONS |
 | 216 | `216_GATE-G11__execute-gate.md` | Round 5 | gate | Authorize exact S1 and S4 executions | STOP |
 | 217 | `217_R5.43__useful.md` | Round 5 | skeleton | Execute two fixed useful-task subjects | pending GATE-G11 |
 | 218 | `218_R5.44__ops-live.md` | Round 5 | skeleton | Execute the confined operational proof matrix | pending GATE-G11 |

@@ -73,6 +73,11 @@ hharness-helper = { path = "../hh-helper", version = "0.1.0" }
 # path / O7 committed-effect drain) against the real `Account`. Dev-deps
 # do not ship and gateway's normal graph never reaches env (no cycle).
 hharness-gateway = { path = "../hh-gateway" }
+# R5.42a (tests/r5_42a.rs): the worksheet leg folds the landed
+# `exposure_quote::build_quote` output over the declared HUMAN-H8
+# worksheet into the preflight's worksheet leg. Dev-deps do not ship
+# and eval never reaches env (no cycle).
+hharness-eval = { path = "../hh-eval" }
 
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]
