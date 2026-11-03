@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_179 ADRs: 127 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_180 ADRs: 128 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -163,6 +163,7 @@ _179 ADRs: 127 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0393 | - If a future event-id scheme admits colon-bearing event ids, revisit the last-segment `cause_run` parse (Decision 7) — the unambiguous form then needs an escaped or length-prefixed coordinate; the R5.9 revisit flag on member-qualified coordinates is the owning record. - If the admitted contract admits multi-member eligible sets sharing one `(instrument_run, seq)` coordinate, revisit the member-qualified coordinate seam (Decision 7) — currently a typed `ConflictingCoordinate` refusal. - If consumers need pending enumerated in a *completed* (non-partial) close, revisit Decision 6 — today unresolved slots force the close to refuse or go partial by design. - If seq 183a needs the overlay revision watermarks named by callers rather than self-computed, revisit the `DispositionPins` shape (Decision 1) — the experiment pin is caller-named, overlay pins are caller-named `(run, until)` pairs. |
 | ADR-0394 | - If seq 184a or a later method ticket needs additional slot members (e.g., split weighting, further availability spellings), revisit the record shape — additive members land by amendment, never as a second predicate. - If an admitted non-unit finite-bound measure needs contrast bounds, revisit `BoundsDecl` — today a non-unit `Bounded` refuses `UnsupportedBounds` as a separately owned target. - If a fourth named population is admitted, revisit `PopulationKind` — the three spellings are the S.1 contract. - If the contrast direction convention changes (control-minus-test or normalized contrasts), revisit the explicit `test_minus_control` direction member — today the target is never implied. |
 | ADR-0395 | Reopen if: (a) the 185a routed leg requires a different `finite_manifest_contrast` payload member or refusal name — amend this record's Consequences; (b) the numerical/routing review (R5.17/GATE-G10/R5.40) finds the ladder or inverse-CDF grid out of tolerance — a new ADR records the corrected protocol; (c) a later admitted prior/draw/floor set changes — the frozen constants move with their admission, never silently. |
+| ADR-0396 | Reopen if: (a) the R5.19/R5.20 prepared-call or wire legs require a different `selection` member, join vocabulary or refusal name — amend this record's Consequences; (b) a newly admitted compaction variant needs persisted parameters beyond `selection_parameters()`'s shape — the vocabulary extends by admission, never silently; (c) a decode or replay divergence surfaces on a landed durable row — a new ADR records the corrected protocol. |
 
 ## Fired-and-answered triggers (BL-48)
 

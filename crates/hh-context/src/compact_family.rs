@@ -1062,6 +1062,7 @@ pub fn compact_model_owned(
                 &unchanged,
                 0,
                 None,
+                Json::obj([]),
             );
             crate::compact::emit_completed(input, sink, &record);
             return Err(e);
@@ -1086,6 +1087,7 @@ pub fn compact_model_owned(
         &view,
         0,
         None,
+        Json::obj([]),
     );
     crate::compact::emit_completed(input, sink, &record);
     Ok(CompactOutcome {

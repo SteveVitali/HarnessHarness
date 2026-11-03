@@ -921,6 +921,15 @@ pub trait CompactionStrategy {
     fn declare(&self) -> crate::compact_family::VariantDeclaration {
         crate::compact_family::VariantDeclaration::minimal(self.variant_ref())
     }
+    /// `selection_parameters()` — the exact bound parameters the durable
+    /// `selection` member records (R5.18; REQ-E-206's "persist exact
+    /// admitted policy/parameters"). The default is `{}` — a
+    /// parameter-free variant; `clear_tool_results` records
+    /// `{capabilities[], older_than, completed_invocations{ref → seq}}`
+    /// — the completion-age join the variant consumed.
+    fn selection_parameters(&self) -> Json {
+        Json::obj([])
+    }
 }
 
 /// The kernel's own `evict_oldest` — the deterministic, model-call-free C0
@@ -1207,6 +1216,30 @@ impl CompactionStrategy for ClearToolResults {
             None,
             freed,
         ))
+    }
+
+    fn selection_parameters(&self) -> Json {
+        Json::obj([
+            (
+                "capabilities",
+                Json::Arr(
+                    self.capabilities
+                        .iter()
+                        .map(|c| Json::str(c.clone()))
+                        .collect(),
+                ),
+            ),
+            ("older_than", Json::Int(self.older_than as i64)),
+            (
+                "completed_invocations",
+                Json::Obj(
+                    self.completed_invocations
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                        .collect(),
+                ),
+            ),
+        ])
     }
 }
 
@@ -2237,6 +2270,11 @@ pub struct CompactionRecord {
     /// `provider_compact` op could not report the forgotten set (§5c.2
     /// ADR-0076 d8); the ids still list what left the view.
     pub forgotten_range: Option<String>,
+    /// `selection` — the durable retained-selection member (R5.18;
+    /// REQ-E-206): the exact policy/parameters and the retained/
+    /// omitted content/pair/batch/required-group joins, replayable
+    /// from the row alone (`retained_selection/1`).
+    pub selection: crate::retained::RetainedSelection,
     /// The record's provenance — `derive(compaction, forgotten, kernel)`.
     pub provenance: Option<ProvenanceRecord>,
 }
@@ -2287,6 +2325,7 @@ pub fn compact(
             &view,
             0,
             None,
+            EvictOldest.selection_parameters(),
         );
         return Ok(CompactOutcome {
             applied: false,
@@ -2325,6 +2364,13 @@ pub fn compact(
             );
             match try_proposal(input, &p, &assessment) {
                 Ok((view, status)) if status == CompactionStatus::Applied => {
+                    // The applying ops were the declaring variant's
+                    // fallback — its parameters are the recorded ones.
+                    let params = ladder
+                        .iter()
+                        .find(|v| v.variant_ref() == p.variant_ref.as_str())
+                        .map(|v| v.selection_parameters())
+                        .unwrap_or_else(|| Json::obj([]));
                     let record = mint_record(
                         input,
                         &assessment,
@@ -2334,6 +2380,7 @@ pub fn compact(
                         &view,
                         i as u64,
                         fallback_variant.clone(),
+                        params,
                     );
                     emit_completed(input, sink, &record);
                     return Ok(CompactOutcome {
@@ -2367,6 +2414,7 @@ pub fn compact(
                     &view,
                     i as u64,
                     None,
+                    variant.selection_parameters(),
                 );
                 emit_completed(input, sink, &record);
                 return Ok(CompactOutcome {
@@ -2400,6 +2448,10 @@ pub fn compact(
         &unchanged,
         ladder.len() as u64,
         fallback_variant,
+        ladder
+            .last()
+            .map(|v| v.selection_parameters())
+            .unwrap_or_else(|| Json::obj([])),
     );
     emit_completed(input, sink, &record);
     match assessment.requirement {
@@ -2470,6 +2522,7 @@ pub fn mint_record(
     view: &CompactedView,
     pipeline_index: u64,
     fallback_variant: Option<String>,
+    selection_parameters: Json,
 ) -> CompactionRecord {
     let inputs: Vec<DerivationInput> = view
         .forgotten
@@ -2566,6 +2619,15 @@ pub fn mint_record(
             .map(|r| r.kind().to_string()),
         duration_ms: 0,
         pipeline_index,
+        selection: crate::retained::RetainedSelection::mint(
+            input,
+            view,
+            status,
+            variant_ref,
+            selection_parameters,
+            pipeline_index,
+            fallback_variant.clone(),
+        ),
         fallback_variant,
         forgotten_range: view.forgotten_range.clone(),
         provenance,
