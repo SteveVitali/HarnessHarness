@@ -299,3 +299,31 @@ ticket never marks a deferred full-target predicate MET.
 > the four targets keep `planned; unmet` — this ticket never marks a
 > deferred full-target predicate MET and makes no numerical/study
 > validation claim (GATE-G9 exclusion stands; owed to GATE-G10/R5.40).
+
+> Dated contributing note — 2026-11-03 (seq 188, R5.18): the durable
+> retained-selection slice landed through
+> `crates/hh-context/src/retained.rs` (`retained_selection/1` — the
+> additive `selection` member on `context.compaction.completed`,
+> ADR-0396): the exact admitted policy/parameters
+> (`CompactionStrategy::selection_parameters()` — `clear_tool_results`
+> persists `{capabilities, older_than, completed_invocations}`, the
+> completion-age join it consumed), retained/omitted content ids plus
+> the pair/batch/required-group/tool joins, the shared `SelectionInput`
+> representation the prepared call consumes, and rebuild equality —
+> `replay_selection` re-runs the production `assess`/`propose`/`execute`
+> path and `verify_selection` reports `Reproduced`/`Diverged`/typed
+> `SelectionRefusal` (nine distinct refusals; `Untriggered`/`Applied`/
+> `Ineffective`/`Failed` outcomes with `via_fallback` kept distinct).
+> Engineered evidence in `crates/hh-context/tests/r5_18.rs` (6/6 —
+> compile-red at base `3c07e282`), mapping §2.3's "persist … joins;
+> rebuild from this durable selection" + dossier B.9's AC-2-2 checks
+> 1–2 (policy→selection joins; unknown policies, no trigger,
+> ineffective reduction and fallback keep explicit distinct results).
+> REQ-E-206 and merged aliases REQ-E-003 / REQ-E-104 gain R5.18 as a
+> **contributing-only** evidence row — achieved engineered D/E recorded
+> separately from the owed legs: the retained-view→wire predicate
+> (existing-renderer serialization of exactly the selected view, no
+> omitted-item resurrection, capturing-transport policy→selection→
+> assembly→sealed-request→actual-wire joins) stays owed to the
+> targets' owner R5.20 AC-3; all three targets keep `planned; unmet` —
+> this ticket never marks a deferred full-target predicate MET.
