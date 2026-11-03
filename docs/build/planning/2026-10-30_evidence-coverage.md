@@ -1184,3 +1184,46 @@ ticket never marks a deferred full-target predicate MET.
 > recorded separately from the owed legs; their primary owner stays
 > R5.40 AC-3; all four targets keep `planned; unmet` — this ticket
 > never marks a deferred full-target predicate MET.
+
+> 2026-11-03 · R5.38 acceptance note (REQ-D-304/305/306/307 primary;
+> REQ-D-108 alias → D-304 only). Numbered checks → actual evidence,
+> all routed through `analyze` → `analyze_and_record` → persisted
+> `analysis_report_body/1` (battery `crates/hh-analysis/tests/
+> r5_38.rs` 9/9):
+> N1 — REQ-D-304 (declared KL bounds/TOST levels):
+> `kl_known_answers` reproduces spec §4.5 pinned widths (N10/30/150
+> zero-discordance .308497/.115703/.024293; N=150 equal counts
+> {1,3,8,38} → .042944/.065355/.100601/.190899 ±≤3 ppm), x=0/x=1
+> continuous conventions, monotonicity and domain refusals;
+> `routed_binary_equivalent_touching` (strict band — touching stays
+> inconclusive); `bounded_absolute_units_and_sign_reversal` (sign
+> reversal negates).
+> N2 — REQ-D-305 (planned missingness/veto populations):
+> `completion_envelope_preserves_n` — u=10 uncertain pairs widen
+> `[K(c/N).L, K((c+u)/N).U]` at preserved N=150 → conservative
+> inconclusive; `completion_envelope{c,u,n}` member recorded.
+> N3 — REQ-D-306 (bounded relative-mean tests):
+> `relative_mean_and_zero_reference` — C−/C+ ratio-of-means legs
+> equivalent; zero-containing reference refuses `ZeroReference`;
+> frozen `absolute` convention runs the registered
+> `{endpoint}:absolute` fallback. `bounded_absolute_*` covers the
+> normalized-mean absolute construction.
+> N4 — REQ-D-307 (all-endpoint vs selected-claim multiplicity):
+> `iut_conjunction_unknown_members` — all-equivalent members pass;
+> never-supplied member listed `unknown_members[]` and blocks;
+> required endpoint absent → `FamilyIdentity`. `refusal_table` —
+> selected_claims under-declaration, efficacy-Holm fusion
+> (`UnsupportedVerdict`), MissingKey/ReusedSubject/PairIdentity/
+> UnequalDesign/UnsupportedDependence/InvalidCounts/UnknownRange/
+> MissingMargin/MarginKindMismatch/UnsupportedLevel/UnknownMethod/
+> MetadataOnly/MissingSpecRef.
+> N5 — S11 negative/reporting split:
+> `s11_negative_requires_reporting_interval` — .90 disjoint alone
+> is descriptive (note member); .95 wholly-outside ⇒
+> `not_equivalent`.
+> Achieved **engineered D/E** (routed fixture recompute — actual CI
+> on pushed head read at close per O-06). Owed: R/P and
+> actual-execution legs stay with R5.47 (parity-live) and R5.49
+> (study report) — evidence dependency, never dispatch; REQ-D-309/
+> 310 dependencies kept as contributing-only. This note does not
+> mark any target fully satisfied.
