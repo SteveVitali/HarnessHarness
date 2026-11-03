@@ -44,6 +44,7 @@ pub mod scorecard;
 pub mod security_metrics;
 pub mod selection;
 pub mod stats;
+pub mod task_mixture;
 pub mod vetoes;
 
 pub use benefits::{

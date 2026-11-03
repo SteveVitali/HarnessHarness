@@ -95,6 +95,12 @@ pub enum AnalysisError {
     /// unresolved cells, dependence, nonfinite, metadata-only,
     /// credible-as-TOST; the same typed vocabulary).
     Contrast(hharness_eval::finite_manifest::ContrastError),
+    /// The R5.37 task-mixture estimator refused (`hharness_eval::
+    /// task_mixture` — one task, unresolved/short cells, degenerate
+    /// bootstrap, floor/draws violations, dependence, unadmitted
+    /// null/exchangeability/verdict, malformed family; the same typed
+    /// vocabulary).
+    TaskMixture(hharness_eval::task_mixture::TaskMixtureError),
     /// The R5.25 §6.3 recompute verify stage refused (withheld/malformed
     /// input, nonfinite pin, wrong selector/price/weight/family/draw
     /// pin, unclosed frozen selection, declared-side drift; the same
@@ -146,6 +152,7 @@ impl std::fmt::Display for AnalysisError {
             }
             AnalysisError::Population(e) => write!(f, "population: {e}"),
             AnalysisError::Contrast(e) => write!(f, "finite_manifest_contrast: {e}"),
+            AnalysisError::TaskMixture(e) => write!(f, "task_mixture_sensitivity: {e}"),
             AnalysisError::Recompute(e) => write!(f, "recompute: {e}"),
         }
     }
@@ -186,6 +193,12 @@ impl From<hharness_eval::population::PopulationError> for AnalysisError {
 impl From<hharness_eval::finite_manifest::ContrastError> for AnalysisError {
     fn from(e: hharness_eval::finite_manifest::ContrastError) -> AnalysisError {
         AnalysisError::Contrast(e)
+    }
+}
+
+impl From<hharness_eval::task_mixture::TaskMixtureError> for AnalysisError {
+    fn from(e: hharness_eval::task_mixture::TaskMixtureError) -> AnalysisError {
+        AnalysisError::TaskMixture(e)
     }
 }
 
