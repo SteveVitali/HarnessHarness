@@ -26,6 +26,7 @@
 pub mod assemble;
 pub mod attestation;
 pub mod audit;
+pub mod cards;
 pub mod closure;
 pub mod codec;
 pub mod diff;
@@ -47,6 +48,10 @@ pub mod validate;
 pub use assemble::{assemble, AssembleInputs, Assembled, CompileOutcome};
 pub use attestation::{attest, sign_attestation, BundleAttestation};
 pub use audit::{audit_bundle, AuditReport};
+pub use cards::{
+    admit_fresh, admit_replay, AdmissionCard, CardVerdict, FreshClaim, FreshLevel, Isolation,
+    RederivedObject, ReplayAttempt, FRESH_CARD_SCHEMA, REPLAY_CARD_SCHEMA, REPLAY_MARKER_PREFIX,
+};
 pub use closure::{
     closure_walk, ClosureEdge, ClosureLimits, ClosureReport, FetchPermit, Resolution, WalkOpts,
     CLOSURE_REPORT_SCHEMA,
