@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.43
-lastCompleted:   R5.42a
+nextTicket:      R5.44
+lastCompleted:   R5.43
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.42a
+chainTip:         codex/harnessharness-evidence-r5.43
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
@@ -1126,3 +1126,4 @@ updatedAt:        2026-11-04T00:07:40Z
 - 2026-11-04T01:35Z · **R5.43 fleshed — skeleton → ticket** under GATE-G11 PASSED (readouts/GATE-G11.md; block sha256 `9bdf5c27d044`): contract 217 rewritten — Run line, frozen binds subject-1 → a-hello / subject-2 → a-sum (first two in committed suite order; preselected before outcomes; no substitutions), podman backend (alpine:3.20 local image, `/work` mount, `$HOME`-only `target/` workspaces, unique `hh-env-<env_handle_id>` containers), concrete legs/stops, numbered ACs (AC-1 anchor retained; NC-1…NC-9) bound to the admitted scope and the carried probe predicate (recorded verbatim — probe evidence withheld at bind until the verb verifies; machinery repair owed, not fixed here). GATE DECISIONS row for GATE-G11 appended verbatim (was in PHASE LOG only); manifest rows 216 (PASSED) + 217 (skeleton → ticket + note). · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T01:34:54Z · **R5.43 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,915 numstat, ~2.6×; context within 24k+10k estimate). Scoped fresh-context review verdict: **AMEND** — seq 217 one owner row (no written contingency); GATE-G11 admitted scope is one conjunctive packet (`assemble()` refuses incomplete leg sets, `packet_id` minted over all seven); ~1,210-line live-drive scaffold is the irreducible cost of "actual execution, not a simulated pass"; subject-vs-subject violates "Retain both"; all cuts non-curative/mid-predicate. Accepted as recorded Deviation; dated note on `217_R5.43__useful.md`; manifest row-217 note; review record `planning/2026-11-04_R5.43-split-review.md`; `runs/R5.43.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T02:30Z · R5.43 done — branch codex/harnessharness-evidence-r5.43 · PR #258 · base codex/harnessharness-evidence-r5.42a · GATE-G11-admitted bounded S1 execution (hh-s1-useful/1): useful.rs records-in evaluators over supplied facts only — closed 7-member LEGS; typed verdicts; executed|failed|inconclusive fold; useful_acceptance marked iff independent Decided 1e6 else withheld; carried_predicates [probe_verb_enoent, exec_backend_hello_clobber] verbatim; assemble() refuses partials — packet_id minted last; two real podman cells + real hh-bench-adapter oracle (invoked before verdict) + controls + join + worksheet. Packet reports/2026-11-04-r5.43-s1-useful.json disposition=failed — subjects inconclusive{dispatch_outcome:unknown:executor_error}; controls/observer/worksheet verified; join refused{join:submission_digest}. **Pass-2 root cause (recorded, unresolved — machinery debt):** hh-helper Hello{policy} re-derives srv.backend="seatbelt" when seatbelt available, discarding spawned --backend podman (S2.1-era — exec ran host-side; /work ENOENT => exit 1 => ToolError{executor_error} => unknown; executor_backend:"seatbelt" verbatim; earlier podman-lane exec evidence predates real policy-attached container exec). Probe ENOENT narrowed to connect()'s /bin/true placeholder spawn absent on host — journal never reached. **Verify:** r5_43 6/6 · hharness-env suites 0 failures (helper_live podman lane same diagnosed inconclusive) · fmt OK · fails-without legs present · guard PASS DISPATCH R5.43 · bm 0 viol (. + --staged) · bm-tools OK · **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** 1,915 vs ≤750 (~2.6×) — recorded Deviation per ruling 9df8f122 · **AC:** primary REQ-A-003/104 + REQ-D-201 — R-layer/downstream predicates stay owed · chainTip → codex/harnessharness-evidence-r5.43 · next → R5.44 · ci: pending #258 (logs/ci-r5.43.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
