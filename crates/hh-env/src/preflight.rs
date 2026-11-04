@@ -68,7 +68,10 @@ impl LegVerdict {
     pub fn is_verified(&self) -> bool {
         matches!(self, LegVerdict::Verified)
     }
-    fn to_json(&self) -> Json {
+    /// The verdict's canonical JSON (`{verdict[, detail]}`) — shared
+    /// with `useful`'s `hh-s1-useful/1` record (one verdict codec,
+    /// never duplicated).
+    pub(crate) fn to_json(&self) -> Json {
         let mut pairs = vec![("verdict", Json::str(self.name()))];
         if let Some(d) = self.detail() {
             pairs.push(("detail", Json::str(d)));
