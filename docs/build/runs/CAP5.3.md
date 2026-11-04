@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-04T21:32:04Z (`date -u` at SETUP)
-- Closed: (pending)
+- Closed: 2026-11-04T21:44Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 24k + 10k reserve; loaded = contract 240 + invariants I-01–I-08/O-01–O-08 + coverage register rows (REQ-C-005/H-009 + bounded heads) + decomposition rows 238–246 + CAP5.1/CAP5.2 run ledgers + CAPSTONE_GAP_ANALYSIS/COVERAGE_MATRIX/COMPOSED_E2E_REPORT + both capstone packets + GATE DECISIONS + readouts G15/G16 + LEDGER OPEN FINDINGS + DEFERRALS rows DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 + BUILD_INDEX tail + historical CAPSTONE_CLOSURE/GATE-ACCEPT precedent ≈ at estimate; ≤600 changed source/test lines split trigger watched.
 
 ## Deferrals read
@@ -208,5 +208,5 @@ entries each carry a control record; 3 waiver requests each name the
 operator-quoting requirement. CAP5.1 findings F-1…F-4 verified repaired;
 CC4 nit adjudicated no-action-accepted; GATE-G1 carried items
 re-surface for fresh signature. The build is not DONE — next GATE-G17.
-ci: (recorded at §6.5 close below).
+ci: pass #273@20bdd7d — `ci-boundary/1` at 2026-11-04: all 4 checks pass (run 41918289769); stack #272…#260 pass; `docs/build/logs/ci-cap5.3.json`.
 
