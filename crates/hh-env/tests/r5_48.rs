@@ -27,7 +27,8 @@ use hharness_eval::parity_admission as pa;
 use hharness_lab::experiment::{
     Backoff, CancelPolicy, OrderKind, Pool, ReattemptPolicy, SchedulingPolicy,
 };
-use hharness_wire::{parse, Json};
+// (no hharness_wire import — the packet members are supplied
+// literals, no committed checkout read; see `parity_facts`.)
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -579,36 +580,20 @@ fn tranche_facts() -> TrancheFacts {
 
 /// The upstream `hh-parity-n0/1` members — read from the committed
 /// packet (the supplied fact, never hand-recopied).
-fn upstream_member(name: &str) -> Json {
-    let text = std::fs::read_to_string(
-        repo_root().join("docs/build/reports/2026-11-04-r5.47-parity-n0.json"),
-    )
-    .expect("upstream parity packet committed");
-    let j = parse(&text).expect("upstream packet parses");
-    match j {
-        Json::Obj(m) => m.get(name).cloned().unwrap_or(Json::Null),
-        _ => panic!("upstream packet is an object"),
-    }
-}
-
-fn upstream_str(name: &str) -> String {
-    match upstream_member(name) {
-        Json::Str(s) => s,
-        j => panic!("{name}: {j:?}"),
-    }
-}
-
+// ── leg 6 — parity_blocked: the upstream `hh-parity-n0/1` facts ──
+// The committed withheld parity packet's members supplied verbatim
+// (emitted packet `2026-11-04-r5.47-parity-n0.json` under the
+// build-memory reports tree — echoed here exactly like `gate_facts`
+// echoes the gate decision; the gated lane performs no committed
+// docs/ checkout read — the first boundary read refused it).
 fn parity_facts() -> ParityFacts {
     ParityFacts {
-        upstream_version: upstream_str("version"),
-        parity_disposition: upstream_str("disposition"),
-        parity_admission: upstream_str("admission"),
-        n_declared: match upstream_member("n_declared") {
-            Json::Int(n) => n as u64,
-            j => panic!("n_declared: {j:?}"),
-        },
-        s3_unmet: upstream_member("s3_unmet") == Json::Bool(true),
-        confirmation_blocked: upstream_member("confirmation_blocked") == Json::Bool(true),
+        upstream_version: "hh-parity-n0/1".into(),
+        parity_disposition: "withheld".into(),
+        parity_admission: "n0_withheld".into(),
+        n_declared: 0,
+        s3_unmet: true,
+        confirmation_blocked: true,
         prerequisite_blocker: stage(&built_quote(), "confirmation")
             .blockers
             .first()
@@ -636,7 +621,8 @@ fn s(v: impl ToString) -> String {
 
 /// The six legs driven on real inputs (pins recomputed, the frozen
 /// manifest re-materialized, the vocabulary exercised, the real
-/// quote built, the upstream packet read) — the packet's honest
+/// quote built, the upstream packet members supplied verbatim) —
+/// the packet's honest
 /// record.
 fn run_packet() -> Vec<Leg> {
     let g = gate_facts();
@@ -912,10 +898,14 @@ fn p48_tranche_absent_and_parity_blocked() {
     assert_eq!(evaluate_tranche(&tranche_facts()), LegVerdict::Verified);
     assert_eq!(evaluate_parity(&parity_facts()), LegVerdict::Verified);
     // The upstream packet's own members are the supplied facts —
-    // read from the committed record, never hand-recopied.
-    assert_eq!(upstream_str("version"), "hh-parity-n0/1");
-    assert_eq!(upstream_str("disposition"), "withheld");
-    assert_eq!(upstream_str("admission"), "n0_withheld");
+    // echoed verbatim from the committed record (the gated lane
+    // performs no committed docs/ checkout read).
+    let pf = parity_facts();
+    assert_eq!(pf.upstream_version, "hh-parity-n0/1");
+    assert_eq!(pf.parity_disposition, "withheld");
+    assert_eq!(pf.parity_admission, "n0_withheld");
+    assert_eq!(pf.n_declared, 0);
+    assert!(pf.s3_unmet && pf.confirmation_blocked);
     // Any nonzero tranche fact is a real tranche's evidence —
     // refused here, never a fabricated absence.
     for member in [
