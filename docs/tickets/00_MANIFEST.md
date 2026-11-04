@@ -448,7 +448,8 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 220 | `220_GATE-G12__activation-gate.md` | Round 5 | gate | Authorize activation then fixed pilot | STOP |
 | 221 | `221_R5.46__pilot.md` | Round 5 | ticket | Collect bounded activation evidence (pilot leg withheld pending GATE-G12 Reading 2) | GATE-G12 Reading 1 PASSED |
 | 222 | `222_GATE-G13__parity-gate.md` | Round 5 | gate | Freeze and fund authentic original-runner parity | STOP |
-| 223 | `223_R5.47__parity-live.md` | Round 5 | skeleton | Collect one authentic fixed-N parity tranche | pending GATE-G13 |
+| 223 | `223_R5.47__parity-live.md` | Round 5 | ticket | Record the declared N=0 parity disposition (tranche withheld) | GATE-G13 PASSED — N=0 declared |
+| 223 note | | | | | fleshed 2026-11-04 — skeleton → ticket under GATE-G13 PASSED — N=0 declared (operator verbatim "confirm, proceed" 07:12:23Z; block sha256 `29be1faa6511`); contract rewritten with Run line + numbered ACs bound to the N=0 scope (AC-1 anchor retained): the skeleton's execute-at-frozen-N scope has nothing to execute at N=0 — the honest record is a typed withheld/N=0 packet (`hh-parity-n0/1`), never a fabricated tranche; tranche absent, machinery exercised without execution, parity quote `not_requested`, S3 unmet, dependent confirmation blocked; GATE-G13 decision row appended verbatim to LEDGER GATE DECISIONS |
 | 224 | `224_GATE-G14__confirm-gate.md` | Round 5 | gate | Preregister and authorize held-out confirmation | STOP |
 | 225 | `225_R5.48__confirm.md` | Round 5 | skeleton | Execute the frozen held-out confirmation | pending GATE-G14 |
 | 226 | `226_R5.49__study-report.md` | Round 5 | skeleton | Report and recompute admitted study results | pending GATE-G14 |
