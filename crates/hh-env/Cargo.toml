@@ -92,6 +92,13 @@ hharness-lab = { path = "../hh-lab" }
 # an `EvalPoint` owned here. Dev-deps do not ship and plugin never
 # reaches env (no cycle — hh-plugin is a leaf contract crate).
 hharness-plugin = { path = "../hh-plugin" }
+# R5.51 (tests/r5_51.rs): the unselected interchange packet's
+# `format_vocabulary`/`refusal_vocabulary` legs drive the real
+# `ForeignFormat`/`lift_foreign`/`export_target`/`lift` machinery —
+# the direction/unknown refusals fire before any artifact is
+# produced. Dev-deps do not ship and bundle never reaches env
+# (no cycle — bundle's deps stop below env's layer).
+hharness-bundle = { path = "../hh-bundle" }
 
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]
