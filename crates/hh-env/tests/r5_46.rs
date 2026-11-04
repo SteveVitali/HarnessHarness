@@ -1,14 +1,22 @@
-//! R5.46 — bounded one-task activation execution (GATE-G12 Reading 1).
-//! Two real podman first-subject cells (`a-hello`, one per frozen arm)
-//! + the real `compact()` ladder per arm under an eligible pressure
-//! opportunity + all-first/all-attempt costs + declared §9.2 worksheet
-//! + the withheld pilot leg. Fails-without: `activation` does not exist
-//! at base `0d4325d1` — this file compiles red there.
+//! R5.46 — bounded one-task activation execution (GATE-G12 Reading 1)
+//! + the fixed N=10 pilot execution (Reading 2). Two real podman
+//! first-subject cells (`a-hello`, one per frozen arm) + the real
+//! `compact()` ladder per arm under an eligible pressure opportunity +
+//! all-first/all-attempt costs + declared §9.2 worksheet + the
+//! withheld pilot leg; then the Reading-2-admitted pilot: 2·T·R=10
+//! first subjects (5 replicates per arm, same frozen members + the
+//! honored activation `freeze_id`), §4.2 fidelity over all ten, the
+//! §3.2 `[s/M,(s+u)/M]` missingness bound, nearest-rank tail +
+//! censoring, §9.2-envelope feasibility and all-attempt costs.
+//! Fails-without: `activation`/`pilot` do not exist at base `0d4325d1`
+//! — this file compiles red there.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::Instant;
 
 use hharness_compiler::equiv::{ArgMapEntry, ArgTransform, SurfaceBinding};
 use hharness_compiler::plan::PinnedRef;
@@ -37,6 +45,12 @@ use hharness_env::events::{EventMinter, ScopeChain};
 use hharness_env::executor::ToolExecutor;
 use hharness_env::handle::{OnLoss, Roots};
 use hharness_env::ops::{MarkerSink, ObservationPoint, OpsObserver, Sentinel};
+use hharness_env::pilot::{
+    assemble_pilot, evaluate_feasibility, evaluate_missingness, evaluate_pilot_fidelity,
+    evaluate_pilot_freeze, evaluate_pilot_subject, evaluate_variance_tail, ArmTail,
+    FeasibilityFacts, MissingnessFacts, PilotFidelityFacts, PilotFreezeFacts, PilotSubject,
+    VarianceTailFacts,
+};
 use hharness_env::preflight::{evaluate_worksheet, Leg, LegVerdict, WorksheetFacts};
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_eval::exposure_quote::{
@@ -460,7 +474,34 @@ fn plan_of(cands: &[Candidate], run_id: &str) -> (ContextPlan, BTreeMap<String, 
     (plan, candidates)
 }
 
+/// The pilot's per-subject measures beyond the activation
+/// `ArmOutcome` — wall time, dispatch count, token/byte measures and
+/// the artifact flag the feasibility/tail folds consume.
+#[derive(Debug, Default)]
+struct CellExtras {
+    wall_ms: Option<u64>,
+    calls: u64,
+    input_tokens: u64,
+    output_bytes: u64,
+    artifact_collected: bool,
+}
+
+/// One live cell per `hh-env-*` name at a time — the sweep removes
+/// every `hh-env-*` container, so parallel live legs would destroy each
+/// other's cells.
+static LIVE_LOCK: Mutex<()> = Mutex::new(());
+
 fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOutcome {
+    drive_cell(subject, arm_id, strategy, retry).0
+}
+
+fn drive_cell(
+    subject: &str,
+    arm_id: &str,
+    strategy: &str,
+    retry: bool,
+) -> (ArmOutcome, CellExtras) {
+    let mut extras = CellExtras::default();
     let mut out = ArmOutcome {
         arm_id: arm_id.to_string(),
         strategy: strategy.to_string(),
@@ -490,9 +531,10 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
         failure: None,
     };
     if !hharness_helper::podman::is_available() || hharness_env::helper::helper_binary().is_none() {
-        return out;
+        return (out, extras);
     }
     sweep_hh_env_containers();
+    let t0 = Instant::now();
     let tries = if retry { 2 } else { 1 };
     for attempt in 0..tries {
         let cell_id = format!("{subject}-c{attempt}");
@@ -509,12 +551,13 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
         })) {
             Ok(id) => id,
             Err(_) => {
+                extras.wall_ms = Some(t0.elapsed().as_millis() as u64);
                 if attempt == 0 && tries == 2 {
                     out.setup_retries += 1;
                     continue;
                 }
                 out.failure = Some("cell_setup_panicked".to_string());
-                return out;
+                return (out, extras);
             }
         };
         let ops_dir = ws.join("ops");
@@ -561,6 +604,7 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
                 &lease,
             )
         };
+        extras.calls += 1;
         out.pre_dispatch = Some(match res {
             Ok(DispatchOutcome::Observed(o)) => format!("observed:{}", o.outcome.as_str()),
             Ok(DispatchOutcome::Refused { .. }) => "refused".to_string(),
@@ -570,7 +614,8 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
                 out.failure = Some(format!("dispatch:{e}"));
                 let _ = driver.return_executor(&env_id, exec);
                 let _ = driver.teardown(&mut store, &lease, &env_id);
-                return out;
+                extras.wall_ms = Some(t0.elapsed().as_millis() as u64);
+                return (out, extras);
             }
         });
         observer
@@ -597,6 +642,7 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
             .collect();
         let (plan, cmap) = plan_of(&tool_items, &run);
         out.pressure_opportunity = plan.occupancy_estimate > 400;
+        extras.input_tokens = plan.occupancy_estimate;
         let input_c = CompactInput {
             plan: &plan,
             candidates: cmap,
@@ -699,6 +745,7 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
                 &lease,
             )
         };
+        extras.calls += 1;
         out.next_dispatch_after = Some(matches!(res2, Ok(DispatchOutcome::Observed(_))));
         if let Err(e) = res2 {
             out.failure = Some(format!("next_dispatch:{e}"));
@@ -722,11 +769,17 @@ fn drive_arm(subject: &str, arm_id: &str, strategy: &str, retry: bool) -> ArmOut
         out.observer_survived = observer.rows().map(|r| !r.is_empty()).unwrap_or(false);
         if let Ok(b) = std::fs::read(ws.join("submission.json")) {
             out.artifact_sha256 = Some(sha256_hex(&b));
+            extras.output_bytes += b.len() as u64;
+            extras.artifact_collected = true;
+        }
+        if let Ok(b) = std::fs::read(ws.join("work.log")) {
+            extras.output_bytes += b.len() as u64;
         }
         let _ = driver.teardown(&mut store, &lease, &env_id);
-        return out;
+        extras.wall_ms = Some(t0.elapsed().as_millis() as u64);
+        return (out, extras);
     }
-    out
+    (out, extras)
 }
 
 // ── freeze + worksheet declarations ──────────────────────────────────
@@ -916,7 +969,7 @@ fn study(stage: &str, tasks: u32, repeats: u32, dispatch: bool) -> StageDecl {
         dispatch_requested: dispatch,
     }
 }
-fn worksheet_decl() -> QuoteDecl {
+fn worksheet_decl(pilot_dispatch: bool) -> QuoteDecl {
     QuoteDecl {
         currency: Some("USD".into()),
         prerequisites: PREREQUISITES
@@ -927,15 +980,15 @@ fn worksheet_decl() -> QuoteDecl {
             })
             .collect(),
         stages: vec![
-            study("activation", 1, 0, true),
-            study("pilot", 1, 5, false),
+            study("activation", 1, 0, !pilot_dispatch),
+            study("pilot", 1, 5, pilot_dispatch),
             study("parity", 0, 0, false),
             study("confirmation", 0, 0, false),
         ],
     }
 }
-fn worksheet_facts() -> WorksheetFacts {
-    let q = build_quote(&worksheet_decl()).expect("declared worksheet builds");
+fn worksheet_facts(pilot_dispatch: bool) -> WorksheetFacts {
+    let q = build_quote(&worksheet_decl(pilot_dispatch)).expect("declared worksheet builds");
     let mut facts = WorksheetFacts {
         currency: q.currency.clone(),
         total_micros: q.total_micros,
@@ -1099,7 +1152,11 @@ fn run_activation() -> (Vec<Leg>, Vec<String>, Json) {
                 ("attempts", attempts.len().to_string()),
             ],
         ),
-        leg("worksheet", evaluate_worksheet(&worksheet_facts()), &[]),
+        leg(
+            "worksheet",
+            evaluate_worksheet(&worksheet_facts(false)),
+            &[],
+        ),
         leg(
             "pilot_withheld",
             evaluate_pilot_withheld(&pilot),
@@ -1124,6 +1181,7 @@ fn act2_first_subjects_execute_on_podman() {
         eprintln!("podman/helper absent — live legs inconclusive (honest)");
         return;
     }
+    let _g = LIVE_LOCK.lock().unwrap();
     let (legs, _attempts, _fj) = run_activation();
     let get = |n: &str| legs.iter().find(|l| l.name == n).unwrap();
     assert!(
@@ -1145,6 +1203,7 @@ fn act2_packet_executed_honest() {
         eprintln!("podman/helper absent — packet emit skipped (honest)");
         return;
     }
+    let _g = LIVE_LOCK.lock().unwrap();
     let (legs, attempts, fj) = run_activation();
     let report = assemble(legs, fj, attempts).expect("packet assembles");
     let j = report.to_json().to_canonical_string();
@@ -1316,5 +1375,822 @@ fn act3_pilot_withheld_never_executed() {
 fn act5_freeze_and_worksheet_legs() {
     let (ff, _fj) = freeze_facts();
     assert_eq!(evaluate_freeze(&ff), LegVerdict::Verified);
-    assert_eq!(evaluate_worksheet(&worksheet_facts()), LegVerdict::Verified);
+    assert_eq!(
+        evaluate_worksheet(&worksheet_facts(false)),
+        LegVerdict::Verified
+    );
+}
+
+// ── the pilot leg (GATE-G12 Reading 2 — N=10 at T=1, R=5) ───────────
+//
+// The same frozen members as the activation freeze under the pilot
+// phase identity; the honored parent `freeze_id` is verified against
+// the committed `hh-activation/1` packet, never re-declared.
+
+const ACTIVATION_PACKET: &str = "docs/build/reports/2026-11-04-r5.46-activation-podman.json";
+
+fn activation_freeze_id() -> String {
+    let p = repo_root().join(ACTIVATION_PACKET);
+    let bytes = std::fs::read_to_string(&p).unwrap_or_default();
+    let j = hharness_wire::json::parse(&bytes).unwrap_or(Json::Null);
+    j.get("freeze_id")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string()
+}
+
+fn pilot_freeze_facts(act_fid: &str) -> (PilotFreezeFacts, Json) {
+    let (af, _aj) = freeze_facts();
+    let f = PilotFreezeFacts {
+        task_id: af.task_id,
+        task_sha256_ok: af.task_sha256_ok,
+        split: af.split,
+        split_predates_access: af.split_predates_access,
+        arms: af.arms.clone(),
+        arms_ok: af.arms_ok,
+        caps_declared: af.caps_declared,
+        oracle_ref_bound: af.oracle_ref_bound,
+        detectors: af.detectors.clone(),
+        family_id: af.family_id,
+        stops: af.stops.clone(),
+        search_budget_zero: af.search_budget_zero,
+        phase: "pilot".to_string(),
+        warmth: af.warmth,
+        artificial_pressure_absent: af.artificial_pressure_absent,
+        tasks: 1,
+        repeats_per_arm: 5,
+        declared_first: 10,
+        floor_met: 2 * 1 * 5 >= 10 * 1,
+        ceiling_respected: 10 <= 60,
+        reading_2: "passed".to_string(),
+        activation_freeze_id: act_fid.to_string(),
+        activation_freeze_verified: act_fid.len() == 64
+            && act_fid.chars().all(|c| c.is_ascii_hexdigit()),
+    };
+    let j = Json::obj([
+        ("schema", Json::str("pilot-freeze/1")),
+        (
+            "task",
+            Json::obj([
+                ("task_id", Json::str(&f.task_id)),
+                ("sha256", Json::str(TASK_SHA256)),
+                ("split", Json::str(&f.split)),
+            ]),
+        ),
+        ("arms", Json::Arr(f.arms.iter().map(Json::str).collect())),
+        ("search_budget", Json::Int(0)),
+        ("warmth", Json::str(&f.warmth)),
+        ("phase", Json::str(&f.phase)),
+        ("tasks", Json::Int(f.tasks as i64)),
+        ("repeats_per_arm", Json::Int(f.repeats_per_arm as i64)),
+        ("declared_first", Json::Int(f.declared_first as i64)),
+        ("oracle", Json::str("adapter_a:hh-bench-adapter")),
+        (
+            "detectors",
+            Json::Arr(f.detectors.iter().map(|d| Json::str(d)).collect()),
+        ),
+        ("family_id", Json::str(&f.family_id)),
+        (
+            "stops",
+            Json::Arr(f.stops.iter().map(|s| Json::str(s)).collect()),
+        ),
+        (
+            "roles",
+            Json::obj([
+                ("subject", Json::str("fp:subject-a")),
+                ("summarizer_profile", Json::str("fp:summarizer-unused")),
+            ]),
+        ),
+        ("inherits_freeze_id", Json::str(&f.activation_freeze_id)),
+        ("reading_2", Json::str(&f.reading_2)),
+    ]);
+    (f, j)
+}
+
+/// The §3.1 outcome class from the subject's actual drive verdict —
+/// `completed` only when the drive verified *and* the artifact landed;
+/// a refusal is a refusal, an environment failure is infrastructure,
+/// anything undetermined stays unresolved.
+fn outcome_class(o: &ArmOutcome, verdict: &LegVerdict, artifact: bool) -> String {
+    if !o.cell_attempted {
+        return "unresolved".to_string();
+    }
+    if matches!(verdict, LegVerdict::Refused(_)) {
+        return "refused".to_string();
+    }
+    if matches!(verdict, LegVerdict::Unsupported(_)) || o.failure.is_some() {
+        return "infrastructure_failure".to_string();
+    }
+    if verdict.is_verified() && artifact {
+        "completed".to_string()
+    } else {
+        "unresolved".to_string()
+    }
+}
+
+fn subject_facts(s: &PilotSubject) -> Vec<(&'static str, String)> {
+    let mut f = arm_facts(&s.outcome);
+    f.extend([
+        ("outcome_class", s.outcome_class.clone()),
+        (
+            "wall_ms",
+            s.wall_ms
+                .map(|w| w.to_string())
+                .unwrap_or_else(|| "censored".to_string()),
+        ),
+        ("calls", s.calls.to_string()),
+        ("input_tokens", s.input_tokens.to_string()),
+        ("output_bytes", s.output_bytes.to_string()),
+        ("artifact", s.artifact_collected.to_string()),
+    ]);
+    f
+}
+
+fn arm_tail(subjects: &[PilotSubject], arm: &str) -> ArmTail {
+    let mut walls: Vec<u64> = subjects
+        .iter()
+        .filter(|s| s.outcome.arm_id == arm)
+        .filter_map(|s| s.wall_ms)
+        .collect();
+    walls.sort_unstable();
+    let n = walls.len() as u64;
+    // Nearest-rank percentile: rank ceil(p·n/100), 1-based.
+    let rank = |p: u64| -> u64 {
+        if n == 0 {
+            return 0;
+        }
+        let k = ((p * n + 99) / 100).max(1).min(n);
+        walls[(k - 1) as usize]
+    };
+    let toks: Vec<u64> = subjects
+        .iter()
+        .filter(|s| s.outcome.arm_id == arm && s.wall_ms.is_some())
+        .map(|s| s.outcome.tokens_freed)
+        .collect();
+    ArmTail {
+        n,
+        wall_p50_ms: rank(50),
+        wall_p95_ms: rank(95),
+        wall_max_ms: walls.last().copied().unwrap_or(0),
+        tokens_min: toks.iter().copied().min().unwrap_or(0),
+        tokens_max: toks.iter().copied().max().unwrap_or(0),
+    }
+}
+
+fn run_pilot() -> (Vec<Leg>, Vec<String>, Json, String) {
+    let act_fid = activation_freeze_id();
+    let (pf, pj) = pilot_freeze_facts(&act_fid);
+    let mut subjects: Vec<PilotSubject> = vec![];
+    for (tag, arm_id, strategy) in [
+        ("a", "arm:a", "evict_oldest"),
+        ("b", "arm:b", "clear_tool_results"),
+    ] {
+        for r in 1..=5u8 {
+            let sid = format!("subject_{tag}_r{r}");
+            let (outcome, ex) = drive_cell(&format!("pilot_{tag}_r{r}"), arm_id, strategy, true);
+            let verdict = evaluate_arm(&outcome);
+            subjects.push(PilotSubject {
+                outcome_class: outcome_class(&outcome, &verdict, ex.artifact_collected),
+                subject_id: sid,
+                outcome,
+                wall_ms: ex.wall_ms,
+                calls: ex.calls,
+                input_tokens: ex.input_tokens,
+                output_bytes: ex.output_bytes,
+                artifact_collected: ex.artifact_collected,
+            });
+        }
+    }
+    let attempts: Vec<String> = subjects
+        .iter()
+        .flat_map(|s| s.outcome.attempts.clone())
+        .collect();
+    let fid = PilotFidelityFacts {
+        opportunities: subjects
+            .iter()
+            .filter(|s| s.outcome.pressure_opportunity)
+            .count() as u64,
+        starts: subjects.iter().filter(|s| s.outcome.started).count() as u64,
+        completions: subjects.iter().filter(|s| s.outcome.completed).count() as u64,
+        changed_requests: subjects
+            .iter()
+            .filter(|s| {
+                s.outcome.request_changed == Some(true)
+                    && s.outcome.next_dispatch_after == Some(true)
+            })
+            .count() as u64,
+        triggered_first: subjects.iter().filter(|s| s.outcome.triggered).count() as u64,
+        all_first: 10,
+        declared_first: 10,
+        served_deviations: subjects
+            .iter()
+            .filter(|s| {
+                let intended = if s.outcome.arm_id == "arm:a" {
+                    "hh/evict-oldest@1"
+                } else {
+                    "hh/clear-tool-results@1"
+                };
+                s.outcome.served_variant.is_some()
+                    && s.outcome.served_variant.as_deref() != Some(intended)
+            })
+            .count() as u64,
+    };
+    let completed = subjects
+        .iter()
+        .filter(|s| s.outcome_class == "completed")
+        .count() as u64;
+    let failed = subjects
+        .iter()
+        .filter(|s| s.outcome_class == "infrastructure_failure" || s.outcome_class == "refused")
+        .count() as u64;
+    let unresolved = subjects
+        .iter()
+        .filter(|s| s.outcome_class == "unresolved")
+        .count() as u64;
+    let miss = MissingnessFacts {
+        planned: 10,
+        completed,
+        failed,
+        unresolved,
+        lower_ppm: completed * 1_000_000 / 10,
+        upper_ppm: (completed + unresolved) * 1_000_000 / 10,
+        unplanned_attempted: 0,
+    };
+    let measured = |s: &&PilotSubject| s.wall_ms.is_some();
+    let vt = VarianceTailFacts {
+        arm_a: arm_tail(&subjects, "arm:a"),
+        arm_b: arm_tail(&subjects, "arm:b"),
+        censored_wall: subjects
+            .iter()
+            .filter(|s| s.outcome.cell_attempted && s.wall_ms.is_none())
+            .count() as u64,
+        sign_pos: subjects
+            .iter()
+            .filter(|s| measured(s) && s.outcome.tokens_freed > 0)
+            .count() as u64,
+        sign_zero: subjects
+            .iter()
+            .filter(|s| measured(s) && s.outcome.tokens_freed == 0)
+            .count() as u64,
+        sign_neg: 0,
+        contrast_claimed: false,
+        tuning_performed: false,
+    };
+    let feas = FeasibilityFacts {
+        subjects_declared: 10,
+        subjects_run: subjects.iter().filter(|s| s.outcome.cell_attempted).count() as u64,
+        cells_attempted: attempts.len() as u64,
+        cells_provisioned: subjects
+            .iter()
+            .filter(|s| s.outcome.executor_backend.is_some())
+            .count() as u64,
+        dispatches_applied: subjects
+            .iter()
+            .filter(|s| s.outcome.pre_dispatch.as_deref() == Some("observed:applied"))
+            .count() as u64
+            + subjects
+                .iter()
+                .filter(|s| s.outcome.next_dispatch_after == Some(true))
+                .count() as u64,
+        seals: subjects
+            .iter()
+            .filter(|s| s.outcome.seal.as_deref() == Some("sealed"))
+            .count() as u64,
+        compactions_applied: subjects
+            .iter()
+            .filter(|s| s.outcome.compaction_status.as_deref() == Some("applied"))
+            .count() as u64,
+        max_setup_retries: subjects
+            .iter()
+            .map(|s| s.outcome.setup_retries)
+            .max()
+            .unwrap_or(0),
+        max_calls: subjects.iter().map(|s| s.calls).max().unwrap_or(0),
+        max_input_tokens: subjects.iter().map(|s| s.input_tokens).max().unwrap_or(0),
+        max_output_bytes: subjects.iter().map(|s| s.output_bytes).max().unwrap_or(0),
+        max_wall_ms: subjects.iter().filter_map(|s| s.wall_ms).max().unwrap_or(0),
+        max_concurrent: 1,
+    };
+    let costs = CostFacts {
+        first_subjects_match: subjects.iter().filter(|s| s.outcome.cell_attempted).count() == 10,
+        attempts_reconciled: attempts.len() >= 10
+            && subjects.iter().all(|s| !s.outcome.attempts.is_empty()),
+        seal_meters_present: subjects
+            .iter()
+            .all(|s| s.outcome.seal.as_deref() == Some("sealed")),
+        exposure_micros: 0,
+        unknown_exposure_bounded: true,
+        charge_attribution_ok: true,
+    };
+    let ws = worksheet_facts(true);
+    let pilot_dispatch = build_quote(&worksheet_decl(true))
+        .ok()
+        .and_then(|q| {
+            q.stages
+                .iter()
+                .find(|s| s.stage == "pilot")
+                .map(|s| s.dispatch.clone())
+        })
+        .unwrap_or_default();
+    let mut legs = vec![leg(
+        "freeze",
+        evaluate_pilot_freeze(&pf),
+        &[
+            ("task", pf.task_id.clone()),
+            ("sha256_ok", pf.task_sha256_ok.to_string()),
+            ("split", pf.split.clone()),
+            ("phase", pf.phase.clone()),
+            ("declared_first", pf.declared_first.to_string()),
+            ("repeats_per_arm", pf.repeats_per_arm.to_string()),
+            ("floor_met", pf.floor_met.to_string()),
+            ("ceiling_respected", pf.ceiling_respected.to_string()),
+            ("reading_2", pf.reading_2.clone()),
+            ("inherits_freeze_id", pf.activation_freeze_id.clone()),
+            ("search_budget", "0".to_string()),
+        ],
+    )];
+    for s in &subjects {
+        legs.push(leg(
+            &s.subject_id,
+            evaluate_pilot_subject(s),
+            &subject_facts(s),
+        ));
+    }
+    legs.extend([
+        leg(
+            "fidelity",
+            evaluate_pilot_fidelity(&fid),
+            &[
+                ("opportunities", fid.opportunities.to_string()),
+                ("starts", fid.starts.to_string()),
+                ("completions", fid.completions.to_string()),
+                ("changed_requests", fid.changed_requests.to_string()),
+                ("triggered_first", fid.triggered_first.to_string()),
+                ("all_first", fid.all_first.to_string()),
+                ("served_deviations", fid.served_deviations.to_string()),
+            ],
+        ),
+        leg(
+            "variance_tail",
+            evaluate_variance_tail(&vt),
+            &[
+                ("a_n", vt.arm_a.n.to_string()),
+                ("a_wall_p50_ms", vt.arm_a.wall_p50_ms.to_string()),
+                ("a_wall_p95_ms", vt.arm_a.wall_p95_ms.to_string()),
+                ("a_wall_max_ms", vt.arm_a.wall_max_ms.to_string()),
+                ("a_tokens_min", vt.arm_a.tokens_min.to_string()),
+                ("a_tokens_max", vt.arm_a.tokens_max.to_string()),
+                ("b_n", vt.arm_b.n.to_string()),
+                ("b_wall_p50_ms", vt.arm_b.wall_p50_ms.to_string()),
+                ("b_wall_p95_ms", vt.arm_b.wall_p95_ms.to_string()),
+                ("b_wall_max_ms", vt.arm_b.wall_max_ms.to_string()),
+                ("b_tokens_min", vt.arm_b.tokens_min.to_string()),
+                ("b_tokens_max", vt.arm_b.tokens_max.to_string()),
+                ("censored_wall", vt.censored_wall.to_string()),
+                ("sign_pos", vt.sign_pos.to_string()),
+                ("sign_zero", vt.sign_zero.to_string()),
+                ("contrast_claimed", vt.contrast_claimed.to_string()),
+                ("tuning_performed", vt.tuning_performed.to_string()),
+            ],
+        ),
+        leg(
+            "missingness",
+            evaluate_missingness(&miss),
+            &[
+                ("planned", miss.planned.to_string()),
+                ("completed", miss.completed.to_string()),
+                ("failed", miss.failed.to_string()),
+                ("unresolved", miss.unresolved.to_string()),
+                ("bound", format!("[{},{}]", miss.lower_ppm, miss.upper_ppm)),
+                ("unplanned_attempted", miss.unplanned_attempted.to_string()),
+            ],
+        ),
+        leg(
+            "feasibility",
+            evaluate_feasibility(&feas),
+            &[
+                ("subjects_run", feas.subjects_run.to_string()),
+                ("cells_attempted", feas.cells_attempted.to_string()),
+                ("cells_provisioned", feas.cells_provisioned.to_string()),
+                ("dispatches_applied", feas.dispatches_applied.to_string()),
+                ("seals", feas.seals.to_string()),
+                ("compactions_applied", feas.compactions_applied.to_string()),
+                ("max_setup_retries", feas.max_setup_retries.to_string()),
+                ("max_calls", feas.max_calls.to_string()),
+                ("max_input_tokens", feas.max_input_tokens.to_string()),
+                ("max_output_bytes", feas.max_output_bytes.to_string()),
+                ("max_wall_ms", feas.max_wall_ms.to_string()),
+                ("max_concurrent", feas.max_concurrent.to_string()),
+            ],
+        ),
+        leg(
+            "costs",
+            evaluate_costs(&costs),
+            &[
+                ("exposure_micros", costs.exposure_micros.to_string()),
+                ("attempts", attempts.len().to_string()),
+                (
+                    "first_subjects",
+                    subjects
+                        .iter()
+                        .filter(|s| s.outcome.cell_attempted)
+                        .count()
+                        .to_string(),
+                ),
+            ],
+        ),
+        leg(
+            "worksheet",
+            evaluate_worksheet(&ws),
+            &[
+                ("pilot_state", ws.pilot_state.clone()),
+                ("pilot_dispatch", pilot_dispatch),
+                ("pilot_subjects", format!("{:?}", ws.pilot_subjects)),
+                ("total_micros", ws.total_micros.to_string()),
+            ],
+        ),
+    ]);
+    (legs, attempts, pj, act_fid)
+}
+
+// ── the pilot battery ────────────────────────────────────────────────
+
+#[test]
+fn pilot1_freeze_and_worksheet_legs() {
+    let act_fid = activation_freeze_id();
+    assert_eq!(act_fid.len(), 64, "activation packet freeze_id unreadable");
+    let (pf, _pj) = pilot_freeze_facts(&act_fid);
+    assert_eq!(evaluate_pilot_freeze(&pf), LegVerdict::Verified);
+    assert_eq!(
+        evaluate_worksheet(&worksheet_facts(true)),
+        LegVerdict::Verified
+    );
+    // The owed gate is echoed, never authorized — dispatch reports
+    // gate_pending:GATE-G12 while Reading 2's pass is a recorded fact.
+    let q = build_quote(&worksheet_decl(true)).unwrap();
+    let p = q.stages.iter().find(|s| s.stage == "pilot").unwrap();
+    assert_eq!(p.state, "ready_for_gate");
+    assert_eq!(p.dispatch, "gate_pending:GATE-G12");
+}
+
+#[test]
+fn pilot2_ten_subjects_execute_on_podman() {
+    if !hharness_helper::podman::is_available() || hharness_env::helper::helper_binary().is_none() {
+        eprintln!("podman/helper absent — live legs inconclusive (honest)");
+        return;
+    }
+    let _g = LIVE_LOCK.lock().unwrap();
+    let (legs, _attempts, _pj, _fid) = run_pilot();
+    let get = |n: &str| legs.iter().find(|l| l.name == n).unwrap();
+    for r in 1..=5 {
+        for arm in ["a", "b"] {
+            let n = format!("subject_{arm}_r{r}");
+            assert!(get(&n).verdict.is_verified(), "{n}: {:?}", get(&n).verdict);
+        }
+    }
+    assert!(get("fidelity").verdict.is_verified());
+    assert!(get("missingness").verdict.is_verified());
+    assert!(get("feasibility").verdict.is_verified());
+}
+
+#[test]
+fn pilot2_packet_executed_honest() {
+    if !hharness_helper::podman::is_available() || hharness_env::helper::helper_binary().is_none() {
+        eprintln!("podman/helper absent — packet emit skipped (honest)");
+        return;
+    }
+    let _g = LIVE_LOCK.lock().unwrap();
+    let (legs, attempts, pj, act_fid) = run_pilot();
+    let report = assemble_pilot(legs, pj, attempts, &act_fid).expect("pilot packet assembles");
+    let j = report.to_json().to_canonical_string();
+    assert_eq!(report.version, "hh-pilot/1");
+    assert_eq!(report.admission, "bounded_pilot_execution");
+    assert_eq!(report.activation_freeze_id, act_fid);
+    assert!(report.freeze_id.chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(report.packet_id.chars().all(|c| c.is_ascii_hexdigit()));
+    if let Ok(path) = std::env::var("HH_PILOT_EMIT") {
+        let path = repo_root().join(path);
+        std::fs::File::create(&path)
+            .unwrap()
+            .write_all(j.as_bytes())
+            .unwrap();
+        eprintln!(
+            "emitted {} disposition={}",
+            path.display(),
+            report.disposition.name()
+        );
+    }
+}
+
+fn blank_subject(arm_id: &str, strategy: &str) -> PilotSubject {
+    PilotSubject {
+        subject_id: format!("subject_{}", arm_id.replace(':', "_")),
+        outcome: ArmOutcome {
+            arm_id: arm_id.into(),
+            strategy: strategy.into(),
+            cell_attempted: false,
+            backend: "podman".into(),
+            pre_dispatch: None,
+            executor_backend: None,
+            intervals: 0,
+            sentinel_intact: None,
+            observer_survived: false,
+            probe: None,
+            seal: None,
+            artifact_sha256: None,
+            pressure_opportunity: false,
+            started: false,
+            completed: false,
+            compaction_status: None,
+            served_variant: None,
+            fallback_variant: None,
+            forgotten_count: 0,
+            tokens_freed: 0,
+            request_changed: None,
+            next_dispatch_after: None,
+            triggered: false,
+            setup_retries: 0,
+            attempts: vec![],
+            failure: None,
+        },
+        outcome_class: "unresolved".into(),
+        wall_ms: None,
+        calls: 0,
+        input_tokens: 0,
+        output_bytes: 0,
+        artifact_collected: false,
+    }
+}
+
+fn pilot_leg_set() -> Vec<Leg> {
+    [
+        "freeze",
+        "subject_a_r1",
+        "subject_a_r2",
+        "subject_a_r3",
+        "subject_a_r4",
+        "subject_a_r5",
+        "subject_b_r1",
+        "subject_b_r2",
+        "subject_b_r3",
+        "subject_b_r4",
+        "subject_b_r5",
+        "fidelity",
+        "variance_tail",
+        "missingness",
+        "feasibility",
+        "costs",
+        "worksheet",
+    ]
+    .iter()
+    .map(|n| leg(n, LegVerdict::Verified, &[]))
+    .collect()
+}
+
+#[test]
+fn pilot3_evaluators_refuse_and_inconclusive_never_executes() {
+    let act_fid = activation_freeze_id();
+    let (pf, pj) = pilot_freeze_facts(&act_fid);
+    assert_eq!(evaluate_pilot_freeze(&pf), LegVerdict::Verified);
+    let mut bad = pf.clone();
+    bad.phase = "activation".into();
+    assert!(matches!(
+        evaluate_pilot_freeze(&bad),
+        LegVerdict::Refused(_)
+    ));
+    let mut bad = pf.clone();
+    bad.reading_2 = "pending".into();
+    assert!(matches!(
+        evaluate_pilot_freeze(&bad),
+        LegVerdict::Refused(_)
+    ));
+    let mut bad = pf.clone();
+    bad.activation_freeze_verified = false;
+    assert!(matches!(
+        evaluate_pilot_freeze(&bad),
+        LegVerdict::Refused(_)
+    ));
+    let mut bad = pf.clone();
+    bad.search_budget_zero = false;
+    assert!(matches!(
+        evaluate_pilot_freeze(&bad),
+        LegVerdict::Refused(_)
+    ));
+    let mut bad = pf.clone();
+    bad.declared_first = 61;
+    bad.ceiling_respected = false;
+    assert!(matches!(
+        evaluate_pilot_freeze(&bad),
+        LegVerdict::Refused(_)
+    ));
+    // An unattempted cell is inconclusive — never verified; a
+    // fabricated outcome class refuses.
+    let blank = blank_subject("arm:a", "evict_oldest");
+    assert!(matches!(
+        evaluate_pilot_subject(&blank),
+        LegVerdict::Inconclusive(_)
+    ));
+    let mut fab = blank.clone();
+    fab.outcome_class = "scored".into();
+    assert!(matches!(
+        evaluate_pilot_subject(&fab),
+        LegVerdict::Refused(_)
+    ));
+    let mut over = blank.clone();
+    over.outcome.cell_attempted = true;
+    over.outcome.setup_retries = 2;
+    assert!(matches!(
+        evaluate_pilot_subject(&over),
+        LegVerdict::Refused(_)
+    ));
+    // Fidelity: wrong all_first count + inconsistent counts refuse.
+    let f = PilotFidelityFacts {
+        opportunities: 2,
+        starts: 3,
+        completions: 0,
+        changed_requests: 0,
+        triggered_first: 0,
+        all_first: 9,
+        declared_first: 10,
+        served_deviations: 0,
+    };
+    assert!(matches!(
+        evaluate_pilot_fidelity(&f),
+        LegVerdict::Refused(_)
+    ));
+    // Missingness: a shortfall that doesn't reconcile refuses; so does
+    // an unplanned extra subject and a mismatched bound.
+    let m = MissingnessFacts {
+        planned: 10,
+        completed: 9,
+        failed: 0,
+        unresolved: 0,
+        lower_ppm: 900_000,
+        upper_ppm: 900_000,
+        unplanned_attempted: 0,
+    };
+    assert!(matches!(evaluate_missingness(&m), LegVerdict::Refused(_)));
+    let m = MissingnessFacts {
+        planned: 10,
+        completed: 10,
+        failed: 0,
+        unresolved: 0,
+        lower_ppm: 1_000_000,
+        upper_ppm: 1_000_000,
+        unplanned_attempted: 1,
+    };
+    assert!(matches!(evaluate_missingness(&m), LegVerdict::Refused(_)));
+    // Tail: unordered percentiles refuse; a contrast/tuning claim
+    // refuses (the pilot cannot become inference).
+    let t = ArmTail {
+        n: 3,
+        wall_p50_ms: 200,
+        wall_p95_ms: 100,
+        wall_max_ms: 300,
+        tokens_min: 0,
+        tokens_max: 1,
+    };
+    let vt = VarianceTailFacts {
+        arm_a: t,
+        arm_b: ArmTail {
+            n: 0,
+            wall_p50_ms: 0,
+            wall_p95_ms: 0,
+            wall_max_ms: 0,
+            tokens_min: 0,
+            tokens_max: 0,
+        },
+        censored_wall: 0,
+        sign_pos: 3,
+        sign_zero: 0,
+        sign_neg: 0,
+        contrast_claimed: false,
+        tuning_performed: false,
+    };
+    assert!(matches!(
+        evaluate_variance_tail(&vt),
+        LegVerdict::Refused(_)
+    ));
+    let mut vt2 = vt.clone();
+    vt2.arm_a.wall_p95_ms = 200;
+    vt2.contrast_claimed = true;
+    assert!(matches!(
+        evaluate_variance_tail(&vt2),
+        LegVerdict::Refused(_)
+    ));
+    // Feasibility: an envelope breach refuses; zero attempts are
+    // inconclusive (backend absent), never a fabricated failure.
+    let feas_ok = FeasibilityFacts {
+        subjects_declared: 10,
+        subjects_run: 10,
+        cells_attempted: 10,
+        cells_provisioned: 10,
+        dispatches_applied: 20,
+        seals: 10,
+        compactions_applied: 10,
+        max_setup_retries: 0,
+        max_calls: 2,
+        max_input_tokens: 600,
+        max_output_bytes: 40,
+        max_wall_ms: 60_000,
+        max_concurrent: 1,
+    };
+    assert_eq!(evaluate_feasibility(&feas_ok), LegVerdict::Verified);
+    let mut breach = feas_ok.clone();
+    breach.max_calls = 101;
+    assert!(matches!(
+        evaluate_feasibility(&breach),
+        LegVerdict::Refused(_)
+    ));
+    let mut breach = feas_ok.clone();
+    breach.max_wall_ms = 1_800_001;
+    assert!(matches!(
+        evaluate_feasibility(&breach),
+        LegVerdict::Refused(_)
+    ));
+    let mut breach = feas_ok.clone();
+    breach.max_concurrent = 3;
+    assert!(matches!(
+        evaluate_feasibility(&breach),
+        LegVerdict::Refused(_)
+    ));
+    let mut none = feas_ok.clone();
+    none.cells_attempted = 0;
+    none.cells_provisioned = 0;
+    assert!(matches!(
+        evaluate_feasibility(&none),
+        LegVerdict::Inconclusive(_)
+    ));
+    // Packet fold: a refused leg keeps the packet out of `executed`;
+    // an inconclusive leg leaves it inconclusive; a missing leg
+    // refuses assembly.
+    let mut legs = pilot_leg_set();
+    legs[3].verdict = LegVerdict::Refused("x".into());
+    let r = assemble_pilot(legs, pj.clone(), vec![], &act_fid).unwrap();
+    assert_eq!(r.disposition.name(), "failed");
+    let mut legs = pilot_leg_set();
+    legs[3].verdict = LegVerdict::Inconclusive("x".into());
+    let r = assemble_pilot(legs, pj.clone(), vec![], &act_fid).unwrap();
+    assert_eq!(r.disposition.name(), "inconclusive");
+    let legs = vec![leg("freeze", LegVerdict::Verified, &[])];
+    assert!(assemble_pilot(legs, pj, vec![], &act_fid).is_err());
+}
+
+#[test]
+fn pilot3_nearest_rank_tail_and_bounds() {
+    // Golden reducers: nearest-rank over 5 sorted samples picks
+    // ceil(p·n/100); the missingness bound is [s/M,(s+u)/M].
+    let subjects: Vec<PilotSubject> = [100u64, 120, 140, 160, 200]
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            let mut s = blank_subject("arm:a", "evict_oldest");
+            s.subject_id = format!("subject_a_r{}", i + 1);
+            s.wall_ms = Some(*w);
+            s.outcome.tokens_freed = (i as u64) * 10;
+            s
+        })
+        .collect();
+    let t = arm_tail(&subjects, "arm:a");
+    assert_eq!(t.n, 5);
+    assert_eq!(t.wall_p50_ms, 140);
+    assert_eq!(t.wall_p95_ms, 200);
+    assert_eq!(t.wall_max_ms, 200);
+    assert_eq!(t.tokens_min, 0);
+    assert_eq!(t.tokens_max, 40);
+    // s=9, f=0, u=1 → [900000, 1000000] ppm.
+    let m = MissingnessFacts {
+        planned: 10,
+        completed: 9,
+        failed: 0,
+        unresolved: 1,
+        lower_ppm: 900_000,
+        upper_ppm: 1_000_000,
+        unplanned_attempted: 0,
+    };
+    assert_eq!(evaluate_missingness(&m), LegVerdict::Verified);
+    // A completed-with-artifact drive classifies `completed`; the
+    // others keep their honest classes.
+    let mut s = blank_subject("arm:a", "evict_oldest");
+    s.outcome.cell_attempted = true;
+    s.outcome.pre_dispatch = Some("observed:applied".into());
+    s.outcome.intervals = 3;
+    s.outcome.sentinel_intact = Some(true);
+    s.outcome.observer_survived = true;
+    s.outcome.pressure_opportunity = true;
+    s.outcome.started = true;
+    s.outcome.completed = true;
+    s.outcome.compaction_status = Some("applied".into());
+    s.outcome.request_changed = Some(true);
+    s.outcome.next_dispatch_after = Some(true);
+    s.outcome.seal = Some("sealed".into());
+    assert_eq!(
+        outcome_class(&s.outcome, &evaluate_arm(&s.outcome), true),
+        "completed"
+    );
+    s.outcome.failure = Some("x".into());
+    assert_eq!(
+        outcome_class(&s.outcome, &evaluate_arm(&s.outcome), false),
+        "infrastructure_failure"
+    );
 }
