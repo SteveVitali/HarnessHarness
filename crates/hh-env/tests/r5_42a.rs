@@ -435,7 +435,15 @@ fn probe_backend() -> BackendProbe {
         return probe;
     }
     let sock_dir = dir("pf-podman");
-    match hharness_env::helper::HelperClient::spawn(&sock_dir, "podman", &[]) {
+    let workspace = repo_root().join("target/pf-podman-work");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let args = vec![
+        "--container".to_string(),
+        "hh-env-pf-probe".to_string(),
+        "--workspace".to_string(),
+        workspace.display().to_string(),
+    ];
+    match hharness_env::helper::HelperClient::spawn(&sock_dir, "podman", &args) {
         Ok(mut client) => {
             match client.hello(
                 hharness_helper::protocol::OnKernelLoss::PreserveUntil { ttl_ms: 60_000 },

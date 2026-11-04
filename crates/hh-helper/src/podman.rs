@@ -21,7 +21,7 @@ use std::process::{Command, Output};
 /// `podman-machine-default` VM).
 pub fn is_available() -> bool {
     Command::new("podman")
-        .args(["info", "--format", "{{.Host.Os}}"])
+        .args(["info"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
