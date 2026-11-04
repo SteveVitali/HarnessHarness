@@ -415,6 +415,130 @@ pub fn regularized_beta(x: f64, a: f64, b: f64) -> f64 {
     sum.clamp(0.0, 1.0)
 }
 
+// ── Bernoulli KL inversion (R5.38; Packet F / PADR-R5-6*) ─────────────────────
+
+/// `ln(v)` for `v > 0` evaluated by repeated square roots plus the
+/// atanh series — only `+ − × ÷ √`, deterministic everywhere (the
+/// module contract: no libm transcendentals). `v` is reduced toward 1
+/// until `|y − 1| ≤ 0.02` (each `√` halves `|ln y|`); then
+/// `ln(y) = 2·Σ t^(2j+1)/(2j+1)` with `t = (y−1)/(y+1)` converges to
+/// ~1e-34, and `ln(v) = 2^k · ln(y)`.
+fn ln_det(v: f64) -> f64 {
+    debug_assert!(v > 0.0);
+    let mut y = v;
+    let mut k: u32 = 0;
+    while (y - 1.0).abs() > 0.02 {
+        y = y.sqrt();
+        k += 1;
+    }
+    let t = (y - 1.0) / (y + 1.0);
+    let t2 = t * t;
+    let mut term = t;
+    let mut sum = 0.0f64;
+    for j in 0..40u64 {
+        sum += term / (2.0 * j as f64 + 1.0);
+        term *= t2;
+        if term.abs() < 1e-20 {
+            break;
+        }
+    }
+    (1u64 << k) as f64 * 2.0 * sum
+}
+
+/// `kl(x, p) = x·ln(x/p) + (1−x)·ln((1−x)/(1−p))` in nats — the
+/// continuous Bernoulli KL divergence (`x = 0`/`1` use the continuous
+/// endpoint conventions; `p ∈ {0,1}` diverges to `f64::INFINITY`,
+/// never clamped). Full-`f64` form shared by the ppm-facing wrapper
+/// and the inversion bisection (no ppm quantization mid-computation).
+fn kl_f64(x: f64, p: f64) -> f64 {
+    if x <= 0.0 {
+        return if p >= 1.0 {
+            f64::INFINITY
+        } else {
+            -ln_det(1.0 - p)
+        };
+    }
+    if x >= 1.0 {
+        return if p <= 0.0 { f64::INFINITY } else { -ln_det(p) };
+    }
+    if p <= 0.0 || p >= 1.0 {
+        return f64::INFINITY;
+    }
+    x * ln_det(x / p) + (1.0 - x) * ln_det((1.0 - x) / (1.0 - p))
+}
+
+/// `kl_f64` on ppm inputs (`0..=PPM` → `[0,1]`).
+pub fn bernoulli_kl(x_ppm: i64, p_ppm: i64) -> f64 {
+    kl_f64(x_ppm as f64 / PPM as f64, p_ppm as f64 / PPM as f64)
+}
+
+/// `η^(1/n)` as an `f64` by bisection on `u^n = η` (`powi` is
+/// integer multiplication — deterministic; the root lives in the
+/// well-conditioned region even when `u^n` underflows below it).
+fn eta_nth_root(eta_ppm: i64, n: i64) -> f64 {
+    let eta = eta_ppm as f64 / PPM as f64;
+    let (mut lo, mut hi) = (eta, 1.0f64);
+    for _ in 0..200 {
+        let mid = (lo + hi) / 2.0;
+        if mid.powi(n as i32) < eta {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo + hi) / 2.0
+}
+
+/// `K_η(x, N) = [L, U]` — the directional Bernoulli KL bound by
+/// continuous inversion `N·kl(x, p) = ln(1/η)` with `L ≤ x ≤ U`
+/// (R5.38; Packet F: concentration, never CP/binomial inversion).
+/// `x = 0 ⇒ [0, 1−η^(1/N)]`; `x = 1 ⇒ [η^(1/N), 1]` (continuous
+/// endpoint conventions). Returned endpoints are integer ppm,
+/// **rounded outward** (`L` floored, `U` ceiled) so the stored
+/// interval never overstates coverage (S.2/S.3). `None` on an
+/// out-of-domain input (`x ∉ [0,1M]`, `n < 1`, `η ∉ (0,1M)`).
+pub fn kl_directional_bound(x_ppm: i64, n: i64, eta_ppm: i64) -> Option<Interval> {
+    if !(0..=PPM).contains(&x_ppm) || n < 1 || !(1..PPM).contains(&eta_ppm) {
+        return None;
+    }
+    let x = x_ppm as f64 / PPM as f64;
+    let eta = eta_ppm as f64 / PPM as f64;
+    let tgt = -ln_det(eta) / n as f64;
+    let (l, u) = if x_ppm == 0 {
+        (0.0, 1.0 - eta_nth_root(eta_ppm, n))
+    } else if x_ppm == PPM {
+        (eta_nth_root(eta_ppm, n), 1.0)
+    } else {
+        let kl_at = |p: f64| kl_f64(x, p);
+        // Lower endpoint: kl(x, p) is decreasing in p on (0, x].
+        let (mut lo, mut hi) = (0.0f64, x);
+        for _ in 0..200 {
+            let mid = (lo + hi) / 2.0;
+            if kl_at(mid) < tgt {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        let l = (lo + hi) / 2.0;
+        // Upper endpoint: increasing in p on [x, 1).
+        let (mut lo, mut hi) = (x, 1.0f64);
+        for _ in 0..200 {
+            let mid = (lo + hi) / 2.0;
+            if kl_at(mid) < tgt {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        (l, (lo + hi) / 2.0)
+    };
+    Some(Interval {
+        lo: (l * PPM as f64).floor() as i64,
+        hi: (u * PPM as f64).ceil() as i64,
+    })
+}
+
 // ── pass^k / pass@k ──────────────────────────────────────────────────────────
 
 /// `C(n, k)` in `u128` — exact, deterministic.

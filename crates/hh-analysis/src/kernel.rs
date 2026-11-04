@@ -468,6 +468,20 @@ pub fn analyze(
             },
         ));
     }
+    // R5.38 metadata-only gate (S.5/§9.2, same rule): the admitted
+    // directional-KL method declared on a kind that does not compute
+    // it fails — never a silent decoration.
+    if matches!(
+        spec.estimator_selection.method,
+        hharness_ontology::eval::IntervalMethod::KlDirectional
+    ) && spec.kind != hharness_eval::directional_kl::KIND
+    {
+        return Err(AnalysisError::KlEquivalence(
+            hharness_eval::directional_kl::KlEquivalenceError::MetadataOnly {
+                kind: spec.kind.clone(),
+            },
+        ));
+    }
     let mut summaries = Vec::new();
     let mut comparisons: Vec<ComparisonReport> = Vec::new();
     let mut contrasts: Vec<Json> = Vec::new();
@@ -1877,6 +1891,214 @@ pub fn analyze(
                 },
             )?;
             sections.push((tm::KIND, out.to_json()));
+        }
+        hharness_eval::directional_kl::KIND => {
+            // R5.38 — the GATE-G9-admitted Packet F (PADR-R5-6*):
+            // directional KL and correctly labelled bounded
+            // equivalence over declared H/O first-attempt pairs.
+            // Margins come only from the pre-registration
+            // (`benefits::registered_margins` — never the caller);
+            // pair records arrive via `filters.endpoints` (synthetic
+            // declarations admissible before Packet E's authentic
+            // binding lands with R5.39).
+            use hharness_eval::directional_kl as kl;
+            if !matches!(
+                spec.estimator_selection.method,
+                hharness_ontology::eval::IntervalMethod::KlDirectional
+            ) {
+                return Err(AnalysisError::KlEquivalence(
+                    kl::KlEquivalenceError::UnknownMethod {
+                        declared: spec
+                            .estimator_selection
+                            .method
+                            .to_json()
+                            .to_canonical_string(),
+                    },
+                ));
+            }
+            let prereg = input
+                .pre_registration
+                .ok_or_else(|| AnalysisError::MissingSpecRef {
+                    kind: format!("{} (pre_registration margins)", kl::KIND),
+                })?;
+            let margins = hharness_eval::benefits::registered_margins(prereg).map_err(|e| {
+                AnalysisError::KlEquivalence(kl::KlEquivalenceError::MarginAuthority {
+                    detail: format!("{e}"),
+                })
+            })?;
+            let endpoints_json = match filters.get("endpoints") {
+                Some(Json::Arr(a)) => a,
+                Some(_) => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "query.filters.endpoints".into(),
+                        detail: "endpoints must be an array".into(),
+                    })
+                }
+                None => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "query.filters.endpoints".into(),
+                        detail: "directional_kl_equivalence requires declared endpoints".into(),
+                    })
+                }
+            };
+            let int_at = |j: &Json, member: &str| -> Result<i64, AnalysisError> {
+                j.get(member)
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| AnalysisError::BadSpec {
+                        member: member.into(),
+                        detail: "expected integer".into(),
+                    })
+            };
+            let str_at = |j: &Json, member: &str| -> Result<String, AnalysisError> {
+                Ok(j.get(member)
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string())
+            };
+            let opt_range = |j: &Json, member: &str| -> Result<Option<(i64, i64)>, AnalysisError> {
+                match j.get(member) {
+                    None | Some(Json::Null) => Ok(None),
+                    Some(Json::Arr(a)) if a.len() == 2 => Ok(Some((
+                        a[0].as_int().ok_or_else(|| AnalysisError::BadSpec {
+                            member: member.into(),
+                            detail: "range bound must be integer".into(),
+                        })?,
+                        a[1].as_int().ok_or_else(|| AnalysisError::BadSpec {
+                            member: member.into(),
+                            detail: "range bound must be integer".into(),
+                        })?,
+                    ))),
+                    Some(_) => Err(AnalysisError::BadSpec {
+                        member: member.into(),
+                        detail: "range must be [lo, hi] integers".into(),
+                    }),
+                }
+            };
+            let mut endpoints = Vec::with_capacity(endpoints_json.len());
+            for e in endpoints_json {
+                let kind = match str_at(e, "kind")?.as_str() {
+                    "binary" => kl::EndpointKind::Binary,
+                    "bounded" => kl::EndpointKind::Bounded,
+                    "relative" => kl::EndpointKind::Relative,
+                    other => {
+                        return Err(AnalysisError::BadSpec {
+                            member: "endpoints[].kind".into(),
+                            detail: format!("unknown endpoint kind {other}"),
+                        })
+                    }
+                };
+                let pairs_json = match e.get("pairs") {
+                    Some(Json::Arr(a)) => a,
+                    _ => {
+                        return Err(AnalysisError::BadSpec {
+                            member: "endpoints[].pairs".into(),
+                            detail: "pairs must be an array".into(),
+                        })
+                    }
+                };
+                let mut pairs = Vec::with_capacity(pairs_json.len());
+                for p in pairs_json {
+                    pairs.push(kl::PairDecl {
+                        task_id: str_at(p, "task_id")?,
+                        repeat: int_at(p, "repeat")?.try_into().map_err(|_| {
+                            AnalysisError::BadSpec {
+                                member: "pairs[].repeat".into(),
+                                detail: "repeat must be a non-negative integer".into(),
+                            }
+                        })?,
+                        pair_id: str_at(p, "pair_id")?,
+                        subject: str_at(p, "subject")?,
+                        phase: str_at(p, "phase")?,
+                        stratum: str_at(p, "stratum")?,
+                        h: match p.get("h") {
+                            None | Some(Json::Null) => None,
+                            Some(v) => Some(v.as_int().ok_or_else(|| AnalysisError::BadSpec {
+                                member: "pairs[].h".into(),
+                                detail: "h must be int or null".into(),
+                            })?),
+                        },
+                        o: match p.get("o") {
+                            None | Some(Json::Null) => None,
+                            Some(v) => Some(v.as_int().ok_or_else(|| AnalysisError::BadSpec {
+                                member: "pairs[].o".into(),
+                                detail: "o must be int or null".into(),
+                            })?),
+                        },
+                    });
+                }
+                endpoints.push(kl::EndpointDecl {
+                    endpoint: str_at(e, "endpoint")?,
+                    stratum: str_at(e, "stratum")?,
+                    required: matches!(e.get("required"), Some(Json::Bool(true))),
+                    kind,
+                    range_h: opt_range(e, "range_h")?,
+                    range_o: opt_range(e, "range_o")?,
+                    zero_reference: e
+                        .get("zero_reference")
+                        .and_then(Json::as_str)
+                        .map(str::to_string),
+                    tasks: int_at(e, "tasks")?
+                        .try_into()
+                        .map_err(|_| AnalysisError::BadSpec {
+                            member: "endpoints[].tasks".into(),
+                            detail: "tasks must be a positive integer".into(),
+                        })?,
+                    repeats: int_at(e, "repeats")?.try_into().map_err(|_| {
+                        AnalysisError::BadSpec {
+                            member: "endpoints[].repeats".into(),
+                            detail: "repeats must be a positive integer".into(),
+                        }
+                    })?,
+                    pairs,
+                });
+            }
+            let conjunction = match filters.get("conjunction") {
+                None | Some(Json::Null) => None,
+                Some(c) => Some(kl::ConjunctionDecl {
+                    claim_ref: c
+                        .get("claim_ref")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    members: match c.get("members") {
+                        Some(Json::Arr(a)) => a
+                            .iter()
+                            .map(|m| {
+                                m.as_str().map(str::to_string).ok_or_else(|| {
+                                    AnalysisError::BadSpec {
+                                        member: "conjunction.members[]".into(),
+                                        detail: "member ids must be strings".into(),
+                                    }
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                        _ => Vec::new(),
+                    },
+                }),
+            };
+            let out = kl::kl_equivalence(
+                &kl::KlEquivalenceDecl {
+                    endpoints,
+                    conjunction,
+                    selected_claims: filters
+                        .get("selected_claims")
+                        .and_then(Json::as_int)
+                        .unwrap_or(1)
+                        .try_into()
+                        .map_err(|_| AnalysisError::BadSpec {
+                            member: "query.filters.selected_claims".into(),
+                            detail: "selected_claims must be a positive integer".into(),
+                        })?,
+                    dependence: opt_filter_str(&filters, "dependence").map(str::to_string),
+                    weights: opt_filter_str(&filters, "weights").map(str::to_string),
+                    use_as: opt_filter_str(&filters, "use_as")
+                        .or_else(|| opt_filter_str(&filters, "verdict"))
+                        .map(str::to_string),
+                    level_ppm: input.confidence_ppm,
+                },
+                &margins,
+            )?;
+            sections.push((kl::KIND, out.to_json()));
         }
         other => {
             return Err(AnalysisError::KindNotImplemented {

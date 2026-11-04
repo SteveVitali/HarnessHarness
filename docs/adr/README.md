@@ -205,3 +205,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0413](ADR-0413-r5.35-reader-spine-evidence-cards-landing.md) | R5.35 §7.1 reader spine, evidence cards and portfolio positioning — landing decisions | R5.35 (Reader spine, evidence cards and portfolio positioning) | Accepted |
 | [ADR-0414](ADR-0414-r5.36-mechanism-joins-denominators-landing.md) | R5.36 §4.2 mechanism joins and versioned denominator definitions — landing decisions | R5.36 (Mechanism joins and versioned denominator definitions) | Accepted |
 | [ADR-0415](ADR-0415-r5.37-task-mixture-landing.md) | R5.37 task-mixture sensitivity, sharp-null families and tails — landing decisions | R5.37 (Task-mixture sensitivity, sharp-null families and tails) | Accepted |
+| [ADR-0416](ADR-0416-r5.38-directional-kl-landing.md) | R5.38 directional KL and bounded equivalence — landing decisions | R5.38 (Directional KL and correctly labelled bounded | Accepted |

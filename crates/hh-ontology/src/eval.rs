@@ -605,6 +605,13 @@ pub enum IntervalMethod {
     /// Bayesian efficacy method's declared prior ref (`beta{1,1}`
     /// registered; `beta{2,2}` predeclared exploratory sensitivity).
     FiniteManifestContrast(String),
+    /// `kl_directional` — the GATE-G9-admitted Packet F (PADR-R5-6*)
+    /// directional-KL equivalence method's declared form: a
+    /// *contrast-level* concentration bound, never a per-cell
+    /// interval — a cell declaration naming it reports
+    /// `n/a{estimator_undefined}`; it computes only through the
+    /// analysis kernel's `directional_kl_equivalence` kind (R5.38).
+    KlDirectional,
 }
 
 impl IntervalMethod {
@@ -622,6 +629,7 @@ impl IntervalMethod {
             IntervalMethod::FiniteManifestContrast(prior) => {
                 Json::obj([("finite_manifest_contrast", Json::str(prior))])
             }
+            IntervalMethod::KlDirectional => Json::str("kl_directional"),
         }
     }
 
@@ -632,6 +640,7 @@ impl IntervalMethod {
                 "clt" => Some(IntervalMethod::Clt),
                 "wilson" => Some(IntervalMethod::Wilson),
                 "bootstrap" => Some(IntervalMethod::Bootstrap),
+                "kl_directional" => Some(IntervalMethod::KlDirectional),
                 _ => None,
             },
             Json::Obj(m) if m.len() == 1 => {

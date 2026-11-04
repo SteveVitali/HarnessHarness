@@ -218,6 +218,10 @@ pub fn cell_interval(
             // cell reports `n/a{estimator_undefined}` (R5.16; Packet D:
             // metadata-only method support fails, never fabricates).
             IntervalMethod::FiniteManifestContrast(_) => None,
+            // cell reports `n/a{estimator_undefined}` (R5.38; Packet F:
+            // the directional-KL bound is contrast-level, never a
+            // per-cell interval).
+            IntervalMethod::KlDirectional => None,
         }
     };
     // Rate methods need (c, n); value methods need per-task values. A method

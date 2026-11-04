@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.38
-lastCompleted:   R5.37
+nextTicket:      R5.39
+lastCompleted:   R5.38
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.37
+chainTip:         codex/harnessharness-evidence-r5.38
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T14:29:04Z
+updatedAt:        2026-11-03T15:32:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1095,3 +1095,6 @@ updatedAt:        2026-11-03T14:29:04Z
 - 2026-11-03T14:07:12Z · **R5.37 size ruling** — worker stopped correctly at the ≤950 line trigger (measured 2,058 numstat, ~2.2×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-D packet binds the slice to one scope sentence (keep-together rule: "common task clusters/family routing are one shared decision"); D.2 owner map names finite_manifest_contrast* only (consumed by R5.16/16b); `task_mixture()` is one function — the estimator-vs-route cut is mid-predicate and BOTH legs stay over trigger; task_mixture.rs has zero tests — estimator-first leg is the rejected impl-vs-battery cut. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.36 precedent); dated note on `207_R5.37__taskstats.md`; manifest row-207 note; review record `planning/2026-11-03_R5.37-split-review.md`; `runs/R5.37.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03T14:29:04Z · R5.37 done — branch codex/harnessharness-evidence-r5.37 · PR #251 · base codex/harnessharness-evidence-r5.36 · §3/§4 M-D task-mixture sensitivity + sharp-null families + tails (ADR-0415): `task_mixture()` `task-mixture/1` over R5.15 `contrast_bounds` cells — whole-task paired bootstrap at declared draws/seed (`bootstrap_paired_with`; BCa T>=30/percentile below; >=2,000 floor); sharp-null sign flip under registered `lane_randomization` (exact <=20/8,000 MC +1); frozen-family Holm .05 + separate exploratory BH; signed/absolute tails (max never a bound); closed `TaskMixtureError` (16 legs); routed kind `task_mixture_sensitivity` (TaskMixture error arm + record_kind + embed view fold/strict params). **Verify:** r5_37 7/7 · eval+analysis+embed 586/0 · fmt OK · fails-without compile-red at 12b851e3 · guard PASS DISPATCH R5.37 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 199 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0415 · **Deviations:** 2,058 changed source/test lines vs ≤950 flag (~2.2×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** one primary id (D-008) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.16/R5.38/R5.40) · chainTip → codex/harnessharness-evidence-r5.37 · next → R5.38 · ci: pass #251@6522193 (all 4 checks 41651868269; stack #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T15:00:16Z · **R5.38 size ruling** — worker stopped correctly at the ≤1000 line trigger (measured 2,989 numstat, ~3.0× — ties the R5.29 high-water mark; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-E :103 keep-together rule (label/margin-vs-math separation "recreates current raw-unit/relative and confidence mistakes"); Packet F's F.2 owner map names the estimator-vs-persistence seam but the cut is non-curative — both legs stay over (~1,829/~1,127) and directional_kl.rs has zero tests (R5.22 precedent); `kl_equivalence()` indivisible (IUT conjunction spans all kinds). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.37 precedent); dated note on `208_R5.38__kl.md`; manifest row-208 note; review record `planning/2026-11-03_R5.38-split-review.md`; `runs/R5.38.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-03T15:32:00Z · R5.38 done — branch codex/harnessharness-evidence-r5.38 · PR #252 · base codex/harnessharness-evidence-r5.37 · §4 Packet-F directional-KL equivalence (ADR-0416): additive `stats.rs` (`ln_det`/`kl_f64`/`bernoulli_kl`/`eta_nth_root`/`kl_directional_bound` — continuous Bernoulli KL inversion, outward-rounded ppm, x=0/1 conventions, no libm); `directional_kl.rs` estimator over declared H/O pairs — strict TOST η=.025 ⇒ joint .90, .95 reporting η=.0125, planned-N envelope, bounded absolute + relative-mean contrasts, frozen `absolute` zero-reference, IUT conjunction, selected-claim η/m, closed `KlEquivalenceError`, S.1 `concentration_bound` .90; routed kind `directional_kl_equivalence` (margins only `PreRegistration.equivalence_margin`; `AnalysisError::KlEquivalence`; `record_kind`; `MetadataOnly`; `IntervalMethod::KlDirectional`). **Verify:** r5_38 9/9 · eval+analysis+ontology all green · fmt OK · fails-without compile-red at be470636 · rustdoc gate repair a641295a · guard PASS DISPATCH R5.38 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 200 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0416 · **Deviations:** 2,989 changed source/test lines vs ≤1000 flag (~3.0× — ties the R5.29 high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-304/305/306/307) + REQ-D-108 alias→D-304; five contributing-only (D-008/D-109/D-310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.47/R5.49) · chainTip → codex/harnessharness-evidence-r5.38 · next → R5.39 · ci: pass #252@a641295 (all 4 checks 41662416011; first read red — ubuntu rustdoc private-link, repaired a641295a; stack #251 #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
