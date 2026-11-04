@@ -401,6 +401,7 @@ dependencies = [
  "hharness-ledger",
  "hharness-monitor",
  "hharness-ontology",
+ "hharness-plugin",
  "hharness-provenance",
  "hharness-registry",
  "hharness-secrets",
