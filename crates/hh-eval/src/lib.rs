@@ -30,6 +30,7 @@ pub mod compliance;
 pub mod context_metrics;
 pub mod critic_experiment;
 pub mod directional_kl;
+pub mod exposure_quote;
 pub mod facts;
 pub mod faults;
 pub mod finite_manifest;
