@@ -403,6 +403,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 195 | `195_R5.25__recompute.md` | Round 5 | ticket | Recompute frozen analysis through the native owner | — |
 | 195 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 196 | `196_R5.26__replay.md` | Round 5 | ticket | Isolated replay and fresh-execution admission cards | — |
+| 196 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 197 | `197_R5.27__rights.md` | Round 5 | ticket | Rights, losses, quotas and recipient handoff validation | — |
 | 198 | `198_R5.28__recipe.md` | Round 5 | ticket | One supported native recipe and exact CLI forwarding | — |
 | 199 | `199_R5.29__offline.md` | Round 5 | ticket | Early offline examples and informative Lab lesson | — |

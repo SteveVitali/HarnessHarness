@@ -96,6 +96,13 @@ pub enum BundleError {
     /// declared size, the native blob bound) — refused before the bytes
     /// are materialized (§6.3 recipient expansion rule; R5.24).
     MemberExpansion { member: String, limit: u64 },
+    /// A §6.3 procedure-card refusal — `code` is one of
+    /// `cards::code`'s closed set (`missing_input`, `unsupported`,
+    /// `isolation_disabled`, `unfunded`, `not_fresh`,
+    /// `charging_attribution`, `unavailable`, `not_independent`,
+    /// `outside_relationship`, `no_new_phase`, `new_question`);
+    /// §6.3 Replay/Fresh/transfer admission (R5.26).
+    CardRefused { code: &'static str, detail: String },
 }
 
 impl fmt::Display for BundleError {
@@ -177,6 +184,9 @@ impl fmt::Display for BundleError {
             }
             BundleError::MemberExpansion { member, limit } => {
                 write!(f, "member_expansion: {member} exceeds {limit} bytes")
+            }
+            BundleError::CardRefused { code, detail } => {
+                write!(f, "card_refused[{code}]: {detail}")
             }
         }
     }
