@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-04T20:25:24Z (`date -u` at SETUP)
-- Closed: (pending)
+- Closed: 2026-11-04T20:37Z
 
 ## Deferrals read
 
@@ -113,4 +113,4 @@ checks pass post-repair; 4 real findings found and repaired append-only
 correction row; DF-CAP5.1-1 minted for the orphaned S1 residual).
 Matrix: MET 78 / MET-ENGINEERED 29 / PARTIAL 73 / 0 MISSING — engineering
 closed 107, requirement satisfied 78. Remaining residuals all carry live
-homes (DF-R5.1-1, DF-H9-1, DF-CAP5.1-1, GATE-G17). ci: pending.
+homes (DF-R5.1-1, DF-H9-1, DF-CAP5.1-1, GATE-G17). ci: pending #271@b2b560e (gitleaks · build·test·fmt·drift ubuntu+macos · cargo-deny pending at read_at 2026-11-04T20:36:47Z — logs/ci-cap5.1.json).

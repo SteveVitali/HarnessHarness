@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      CAP5.1
-lastCompleted:   R5.55
+nextTicket:      CAP5.2
+lastCompleted:   CAP5.1
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.55
+chainTip:         codex/harnessharness-evidence-cap5.1
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T20:25:00Z
+updatedAt:        2026-11-04T20:37:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1201,3 +1201,4 @@ updatedAt:        2026-11-04T20:25:00Z
 - 2026-11-04T20:25Z · R5.55 done — branch codex/harnessharness-evidence-r5.55 · PR #270 · base codex/harnessharness-evidence-r5.54 · GATE-G16 PASSED — out-of-scope disposition ("confirm and proceed" 2026-11-04T18:53:32Z; block sha256 1b88c0ef16ba): `hh-value-withheld/1` withheld{stage_voided}/no_observation record — records-in evaluators over supplied facts only; closed seven-member LEGS; withheld|failed|inconclusive fold; assemble() refuses partials, packet_id minted last. Emitted reports/2026-11-04-r5.55-value-withheld.json disposition=withheld admission=withheld_stage_voided — gate verbatim + H10/H11 withheld acts_approved:none, eleven pins byte-verified (nine H8 + byte-copy fixtures of hh-study-report/1 6e83dcf8… + hh-publication-withheld/1 e7f55414…), §8.3/§8.4 review/rubric vocabulary verbatim, eight exercised → verbatim typed outcomes via real machinery (adoption-inflation gate/claim/echo tamper+inflation/spend/nonzero day30/never-guess — machinery stands, nothing admitted), predecessors carried verbatim (study re-echo verified unmet{efficacy_unavailable;parity_withheld} + adoption:unavailable{not_started}; publication members verbatim + legs re-fold verified), observation_absent 26 members 0, df_h9_1:open claim_awarded:false adoption_absence:observed_not_achieved deletion_obligation:none_arose — I-08, USD $0.00. **Verify:** r5_55 5/5 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at b73aab11 · guard PASS DISPATCH R5.55 post-fleshing+boundary · bm 0 viol (. + --staged) · bm-tools OK · pass-2 clean. **Deferrals:** none — carried DF-R5.1-1; DF-H9-1 open. **ADRs:** (none) · **Deviations:** 1,724 vs ≤750 (~2.30×) — AMEND ruling 1d3e92da · chainTip → codex/harnessharness-evidence-r5.55 · next → CAP5.1 · ci: pass #270@1bfd95a all 4 checks (run 41903325163); stack #269…#260 pass — logs/ci-r5.55.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-04T20:40Z · **CAP5.1 fleshed — capstone contract bound to concrete checks** (no gate needed — records-in capstone; offline-only live stage): contract 238 appended dated note — twelve records-in checks NC-1…NC-12 (packet inventory + leg-fold re-computation vs declared dispositions; gate↔record verbatim vs GATE DECISIONS/readouts; deferral-reference integrity; 180-row coverage register ownership/anchor/contributor integrity; BUILD_INDEX + PHASE LOG consistency; withheld over-claim scan; coverage⇄contributor binding; owed-work homes; readout completeness); manifest row-238 note; REQ anchors unmoved (contributing slice only — no primary ids). Guard `PASS route DISPATCH — CAP5.1` (counts 82 rows / 180 candidates / 0 violations / 8 scoped warnings). · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-04T20:37Z · CAP5.1 done — branch `codex/harnessharness-evidence-cap5.1` · PR #271 · base `codex/harnessharness-evidence-r5.55` (@27699a4). Independent whole-scope gap hunt, records-in: `cap5_gap_hunt.py` twelve checks NC-1…NC-12 — 17 packets inventoried + leg-folds recomputed vs declared dispositions; gate↔record verbatim vs GATE DECISIONS/readouts; deferral-reference integrity (104 cited ids); 180-row register ownership/anchor/contributor checks; BUILD_INDEX/PHASE-LOG consistency; withheld over-claim scan; coverage⇄contributor binding; owed-work homes; readout completeness — **12/12 pass**. **Findings (4, all repaired append-only):** DF-H9-1 phantom row minted verbatim (H9 readout owner/trigger/control); G12 reading-2 GATE DECISIONS row appended; G15 decided_at correction row; DF-CAP5.1-1 minted (failed S1 residual → GATE-G17). Artifacts `reports/round5/COVERAGE_MATRIX.csv` (180 rows: MET 78 / MET-ENGINEERED 29 / PARTIAL 73) + `CAPSTONE_GAP_ANALYSIS.md` + `reports/2026-11-04-cap5.1-gap-hunt.json`. **Verify:** checker 12/12 · check-bm-tools OK · living-docs 438 OK · bm `.` 0 viol · guard PASS DISPATCH CAP5.1 · fmt n/a (no Rust) · 701 source lines ≤750 no trigger. **Deferrals:** opened DF-H9-1, DF-CAP5.1-1 — carried DF-R5.1-1 · **Deviations:** none · chainTip → codex/harnessharness-evidence-cap5.1 · next → CAP5.2 · ci: pending #271@b2b560e (4 checks started; logs/ci-cap5.1.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
