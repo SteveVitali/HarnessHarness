@@ -19,6 +19,7 @@
 
 pub mod activation;
 pub mod capture;
+pub mod confirm;
 pub mod deadline;
 pub mod dispatch;
 pub mod driver;
