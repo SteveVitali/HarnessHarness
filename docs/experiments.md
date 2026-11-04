@@ -67,8 +67,8 @@ them.
 - **Semantic checks:** packet, matrix (P=A=R=T=3, V=0; honest
   `undeterminable` probes verbatim; `discharged_predicates`),
   exhaustion (`control.budget.exceeded` → `decision{stop}`), and the
-  typed refusals suspend/resume/respond/amend. Input-required is not
-  approval; scratch is not sandbox.
+  typed refusals suspend/resume/respond/amend — input-required is not approval;
+  scratch is not sandbox.
 - **Failure route / next:** an untyped packet verdict or mutated
   discharged predicate fails `packet`/`matrix`.
 

@@ -123,7 +123,22 @@ fn ex04_fake_packet_event_fails() {
     // packet leg's own checks when the forged file replaces it… rather
     // than mutating the committed artifact, decode+flip in-memory and
     // write a forged copy the pin can't match: assert stale_pin fires.
-    let src = repo().join("docs/build/reports/2026-11-04-r5.44-ops-live-second.json");
+    // The source path comes from the card's own pin record — the
+    // declared, sha-checked contract — never a duplicated literal in
+    // this test (a literal could drift from the pin unchecked).
+    let mut c = card("ex-04.json");
+    let Json::Obj(pin_map) = c.pins.clone() else {
+        panic!()
+    };
+    let Json::Obj(pin_rec) = pin_map.get("packet").cloned().unwrap() else {
+        panic!()
+    };
+    let src = repo().join(
+        pin_rec
+            .get("path")
+            .and_then(Json::as_str)
+            .expect("card.pins.packet.path"),
+    );
     let mut text = std::fs::read_to_string(&src).unwrap();
     text = text.replacen("\"verdict\":\"verified\"", "\"verdict\":\"bogus-fake\"", 1);
     let forged = root.join("forged.json");
@@ -131,7 +146,6 @@ fn ex04_fake_packet_event_fails() {
     // A card pinning the forged packet: the pin sha recomputes — point
     // the pin at the forged path so pin verification passes and the
     // *packet check* must catch the mutated verdict.
-    let mut c = card("ex-04.json");
     let sha = format!(
         "sha256:{}",
         hharness_wire::sha256::sha256_hex(std::fs::read(&forged).unwrap().as_slice())
