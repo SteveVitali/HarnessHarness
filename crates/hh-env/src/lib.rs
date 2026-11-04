@@ -35,6 +35,7 @@ pub mod local;
 pub mod observe;
 pub mod ops;
 pub mod opslive;
+pub mod outside;
 pub mod parity;
 pub mod pilot;
 pub mod plugin;
