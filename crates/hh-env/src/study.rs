@@ -263,7 +263,9 @@ pub struct PreflightStageFacts {
 /// `evaluate_preflight` — both records refold `inconclusive`, the
 /// reprobe's `backend_candidate` verifies and its `observer_probe`
 /// stays `inconclusive{probe_absent}`; the first record's
-/// `backend_candidate` stays `inconclusive{backend_unavailable}`.
+/// `backend_candidate`/`observer_probe` stay
+/// `inconclusive{backend_unavailable:podman}`/`inconclusive{probe_absent}`
+/// — the committed detail spellings, byte-echoed.
 pub fn evaluate_preflight(f: &PreflightStageFacts) -> LegVerdict {
     for (which, echo) in [("first", &f.first), ("reprobe", &f.reprobe)] {
         if echo.version != crate::preflight::VERSION {
@@ -274,8 +276,11 @@ pub fn evaluate_preflight(f: &PreflightStageFacts) -> LegVerdict {
             return v;
         }
     }
-    if f.first.verdict_of("backend_candidate") != Some("inconclusive") {
-        return LegVerdict::Refused("first_backend:unexpected".to_string());
+    if f.first.verdict_of("backend_candidate") != Some("inconclusive")
+        || f.first.detail_of("backend_candidate") != Some("backend_unavailable:podman")
+        || f.first.detail_of("observer_probe") != Some("probe_absent")
+    {
+        return LegVerdict::Refused("first_record:unexpected".to_string());
     }
     if f.reprobe.verdict_of("backend_candidate") != Some("verified") {
         return LegVerdict::Refused("reprobe_backend:unverified".to_string());

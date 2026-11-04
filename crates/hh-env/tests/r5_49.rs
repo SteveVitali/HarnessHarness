@@ -871,6 +871,11 @@ fn p49_freeze_and_preflight() {
     // here because the observer_probe member no longer carries its
     // absent detail.
     assert!(matches!(evaluate_preflight(&bad), LegVerdict::Refused(_)));
+    // A drifted first-record detail spelling refuses — the committed
+    // member is byte-echoed, never approximated.
+    let mut drift = preflight_facts();
+    drift.first.details[0].1 = "backend_unavailable:kubernetes".into();
+    assert!(matches!(evaluate_preflight(&drift), LegVerdict::Refused(_)));
 }
 
 #[test]
