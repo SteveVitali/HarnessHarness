@@ -11,17 +11,104 @@ for assigned build tickets is described below.
 
 ## Report a problem or propose a change
 
-Use the [issue templates](https://github.com/SteveVitali/HarnessHarness/issues/new/choose).
-For a bug, include the command you ran, expected and actual output, commit or
-release version, operating system, and architecture. `hh doctor` output can help
-identify configuration problems. Remove credentials and private data before
-posting logs or a reproduction.
+Use the [issue templates](https://github.com/SteveVitali/HarnessHarness/issues/new/choose)
+and pick the lane that matches what you have. **No lane below needs a built
+binary, a finished run, a bundle, a paid account, or a prior issue — and none
+needs the project's internal question register, build ledger, or manifest
+ticket ritual.** Maintainers own program traceability and merging; the
+manifest-ticket workflow further down applies to assigned build tickets only.
 
-For a feature or substantial design change, explain the problem, the behavior you
-want, and alternatives you considered. Changes to a contract or the dependency
-set require an architecture decision record (ADR); discussing the proposal first
-helps establish its scope. Report security vulnerabilities privately through
+### Report a failure without a run
+
+A build, install, or startup failure is reportable as soon as it is precise.
+Include:
+
+- the exact command you ran;
+- expected versus actual output, including the exit code or signal;
+- the commit (`git rev-parse HEAD`) and whether the checkout was dirty;
+- the operating system and architecture;
+- the Rust toolchain (`cargo --version`) plus relevant feature flags,
+  backend, and prerequisites;
+- sanitized stderr — see [Before you attach evidence](#before-you-attach-evidence).
+
+Run `hh doctor` only if the binary actually starts; it can help identify
+configuration problems, but it is never a prerequisite for reporting.
+
+### Report a wrong run or receipt
+
+When a run or its receipt disagrees with the contract, include everything
+above plus:
+
+- run, attempt, configuration, and input identifiers;
+- the relevant event, grade, or procedure identifiers;
+- the semantic field that is wrong, expected versus observed;
+- a permitted native receipt, **or** the access/loss reason you cannot
+  produce one — a withheld input, expired access, or a failed validation is
+  reportable in its own right; suppressing the reason is what blocks the
+  report.
+
+`hh run export <run-id> --out <dir>` produces a native export and prints its
+locator; `hh bundle validate <path>` checks staged completeness. Use the
+locator the command actually returns — the export is the receipt and the
+issue text is its cover note.
+
+### Before you attach evidence
+
+Inspect logs, bundles, and output for credentials, signed URLs, private
+paths or content, model I/O, task solutions or oracles, and material whose
+redistribution rights you do not hold. Attach only cleared data; withhold
+sensitive identifiers and hashes where needed. A minimal synthetic
+reproducer is welcome — state its limits. **A report that attaches uncleared
+secrets is blocked until the material is removed.** Never post a secret
+publicly; report security vulnerabilities privately through
 [the security policy](SECURITY.md).
+
+### Propose a change
+
+For a feature, documentation fix, or substantial design change, explain the
+problem, the behavior you want, and alternatives you considered. Changes to
+a contract or the dependency set require an architecture decision record
+(ADR); discussing the proposal first helps establish its scope. Documentation
+changes are ordinary PRs — run the documentation row of the checks table in
+[Make and check a change](#make-and-check-a-change).
+
+### Show a fix works: verifyfixed
+
+A fix keeps the original failure on the record and shows comparable evidence
+on the candidate revision:
+
+- pin the reported revision, input, recipe, and rights;
+- preserve the original failure report and bytes; copy only permitted
+  evidence into scratch;
+- add a regression test that fails without the fix, then run the same case
+  on the candidate revision;
+- disclose any changed input or backend — a missing prerequisite is
+  **unable to reproduce**, not fixed;
+- reporter confirmation, maintainer reproduction, and outside verification
+  are distinct outcomes; one does not stand in for another.
+
+### Two routes that are not open yet
+
+- **The optional packaged component** — the bounded
+  `hharness-compact-evict-oldest` extension exercise — stays gated until its
+  checked recipe lands in this repository. When it opens it will require
+  observed build, seal, load, bind, and invoke phases, not a green exit
+  code alone.
+- **Scientific replication** is a separately admitted and separately
+  resourced protocol — fresh attempts under frozen methods, pins, and
+  margins — not an ordinary contribution route.
+
+### Where a contribution lands
+
+The maintainer reviews every path and keeps program integration; the rows
+below map a starter to its owning area and the checks its PR runs.
+
+| Starter | Owning area | Checks the PR runs |
+|---|---|---|
+| Setup or failure guidance | `docs/getting-started.md`, `docs/reference.md`, this file | `bash scripts/check-living-docs.sh`; the commands you changed |
+| CLI or run/receipt mismatch | `crates/hh-cli`, `crates/hh-embed` | `cargo test -p <package>` plus a regression that fails without the fix |
+| Bundle or receipt member defect | `crates/hh-bundle` | `cargo test -p hharness-bundle`; pins and losses stay on the record |
+| Documentation and examples | `docs/`, `scripts/examples/` | `check-living-docs.sh` and the changed links or commands |
 
 ## Set up a checkout
 
