@@ -1387,19 +1387,20 @@ fn act5_freeze_and_worksheet_legs() {
 // phase identity; the honored parent `freeze_id` is verified against
 // the committed `hh-activation/1` packet, never re-declared.
 
-const ACTIVATION_PACKET: &str = "docs/build/reports/2026-11-04-r5.46-activation-podman.json";
+/// The recorded activation `freeze_id` — declared pin (the committed
+/// `hh-activation/1` packet's `freeze_id` field). Recomputed from the
+/// freeze record below — the committed packet is never read (gated
+/// tests may not read committed `docs/` content).
+const ACTIVATION_FREEZE_ID: &str =
+    "0be644f7f7a2b7ac626d126dc67034d522f9f4c8a7dd861dbad83a5b94274666";
 
-fn activation_freeze_id() -> String {
-    let p = repo_root().join(ACTIVATION_PACKET);
-    let bytes = std::fs::read_to_string(&p).unwrap_or_default();
-    let j = hharness_wire::json::parse(&bytes).unwrap_or(Json::Null);
-    j.get("freeze_id")
-        .and_then(Json::as_str)
-        .unwrap_or("")
-        .to_string()
+fn activation_freeze_id() -> (String, bool) {
+    let (_af, aj) = freeze_facts();
+    let recomputed = hharness_env::activation::freeze_id(&aj);
+    (recomputed.clone(), recomputed == ACTIVATION_FREEZE_ID)
 }
 
-fn pilot_freeze_facts(act_fid: &str) -> (PilotFreezeFacts, Json) {
+fn pilot_freeze_facts(act_fid: &str, act_verified: bool) -> (PilotFreezeFacts, Json) {
     let (af, _aj) = freeze_facts();
     let f = PilotFreezeFacts {
         task_id: af.task_id,
@@ -1424,8 +1425,7 @@ fn pilot_freeze_facts(act_fid: &str) -> (PilotFreezeFacts, Json) {
         ceiling_respected: 10 <= 60,
         reading_2: "passed".to_string(),
         activation_freeze_id: act_fid.to_string(),
-        activation_freeze_verified: act_fid.len() == 64
-            && act_fid.chars().all(|c| c.is_ascii_hexdigit()),
+        activation_freeze_verified: act_verified,
     };
     let j = Json::obj([
         ("schema", Json::str("pilot-freeze/1")),
@@ -1538,8 +1538,8 @@ fn arm_tail(subjects: &[PilotSubject], arm: &str) -> ArmTail {
 }
 
 fn run_pilot() -> (Vec<Leg>, Vec<String>, Json, String) {
-    let act_fid = activation_freeze_id();
-    let (pf, pj) = pilot_freeze_facts(&act_fid);
+    let (act_fid, act_ok) = activation_freeze_id();
+    let (pf, pj) = pilot_freeze_facts(&act_fid, act_ok);
     let mut subjects: Vec<PilotSubject> = vec![];
     for (tag, arm_id, strategy) in [
         ("a", "arm:a", "evict_oldest"),
@@ -1817,9 +1817,10 @@ fn run_pilot() -> (Vec<Leg>, Vec<String>, Json, String) {
 
 #[test]
 fn pilot1_freeze_and_worksheet_legs() {
-    let act_fid = activation_freeze_id();
-    assert_eq!(act_fid.len(), 64, "activation packet freeze_id unreadable");
-    let (pf, _pj) = pilot_freeze_facts(&act_fid);
+    let (act_fid, act_ok) = activation_freeze_id();
+    assert!(act_ok, "activation freeze_id recompute drifted");
+    assert_eq!(act_fid, ACTIVATION_FREEZE_ID);
+    let (pf, _pj) = pilot_freeze_facts(&act_fid, act_ok);
     assert_eq!(evaluate_pilot_freeze(&pf), LegVerdict::Verified);
     assert_eq!(
         evaluate_worksheet(&worksheet_facts(true)),
@@ -1949,8 +1950,8 @@ fn pilot_leg_set() -> Vec<Leg> {
 
 #[test]
 fn pilot3_evaluators_refuse_and_inconclusive_never_executes() {
-    let act_fid = activation_freeze_id();
-    let (pf, pj) = pilot_freeze_facts(&act_fid);
+    let (act_fid, act_ok) = activation_freeze_id();
+    let (pf, pj) = pilot_freeze_facts(&act_fid, act_ok);
     assert_eq!(evaluate_pilot_freeze(&pf), LegVerdict::Verified);
     let mut bad = pf.clone();
     bad.phase = "activation".into();
