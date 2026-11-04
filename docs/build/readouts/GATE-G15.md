@@ -1,5 +1,5 @@
 # GATE-G15 — Admit cleared recipient and participant procedures · readout
-Status: BLOCKED — precondition withheld (DF-H9-1)
+Status: PASSED — stage scope dispositioned out-of-scope (DF-H9-1 stays open)
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is approval.
 
@@ -37,4 +37,4 @@ recorded deferral — they touch no participant/outreach predicate.
 
 ## Signature
 
-(blocked — no operator decision recorded; the gate stays unpassed while DF-H9-1 is open)
+**PASSED — out-of-scope disposition** — operator words (verbatim, interactive, 2026-11-04T14:32:29Z): "accept, continue" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: the participation stage is dispositioned **out-of-scope for this round** (the operator's accepted option-2) — no cleared recipient, no participant procedures, no reviewer/participant acts admitted; every participant/outreach predicate in the checklist stays **withheld** (DF-H9-1 stays open — the deferral is not discharged by voiding the stage). Dependent skeletons (R5.50–R5.53) land honest withheld packets per the R5.47/R5.48 pattern; nothing executes. Agent-drafted block sha256 `0e5bd136858c` confirmed.
