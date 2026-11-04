@@ -57,6 +57,32 @@ fallback surface, not the Podman candidate.
 - Spend beyond the declared worksheet floor.
 - Public/participant/publication claims.
 
+
+
+### Update — backend supplied + re-probe (2026-11-04T00:12:24Z, commit `80820a5b`)
+
+Operator supplied the backend (option a): podman machine init+start
+(applehv, 2 CPU/2 GiB/30 GiB — local VM, USD $0.00). The re-probe
+surfaced and repaired three real defects (stale `.Host.Os` probe
+against podman 6.x, missing `--container`/`--workspace` spawn args,
+TMPDIR workspace unreachable inside the VM — $HOME-only mounts),
+then ran the real handshake:
+
+- `backend_candidate` → **verified** — real podman handshake: helper
+  binds, `hello` + declaration over alpine:3.20 container with
+  `/work` mounted (network off)
+- `tb2_lifecycle` / `mediation` / `acquisition_network` / `worksheet`
+  → verified (as before)
+- `observer_probe` → `inconclusive{probe_absent}` — the read-only
+  probe re-hello finds no socket on the seatbelt lane's one-shot
+  helper (ENOENT — the helper exits with the exec; a real lane fact,
+  never simulated)
+
+Disposition: `inconclusive` — one leg open, `scope_return=true`.
+Packet: `docs/build/reports/2026-11-04-r5.42a-backend-preflight-reprobe.json`.
+The residual gap is now a single lane property (probe on seatbelt's
+one-shot helper), not the missing backend the earlier packet carried.
+
 ### Your decision
 PASSED only authorizes the exact scoped executions above — which the
 inconclusive backend currently cannot satisfy. Your real choices:
