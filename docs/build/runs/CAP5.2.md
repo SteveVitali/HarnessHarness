@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-04T20:40Z (`date -u` at SETUP)
-- Closed: (pending)
+- Closed: 2026-11-04T21:24Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 28k + 10k reserve; loaded = contract 239 + invariants I-01–I-08/O-01–O-08 + coverage register (no CAP5.2 primary rows — contributing slice only) + decomposition rows 238–246 + CAP5.1 run ledger + gap-hunt packet + CAPSTONE_GAP_ANALYSIS/COVERAGE_MATRIX + runs R5.24/R5.28/R5.29/R5.42–R5.55 (bounded heads) + 17 disposition-bearing + capstone packets + baseline symbols (hharness::examples run_example/ExampleCard/ExampleReport/verify_pins/CheckRecord; hharness::recipe run_recipe; hh-env packet idp_digest mint pattern; supplement_guard load_decisions/failed-gate; ex-01…ex-04 cards + pins) ≈ at estimate; ≤700 changed source/test lines split trigger watched.
 
 ## Deferrals read
@@ -254,8 +254,11 @@ clean, no repair):
   AC-5 met (deferrals carried OPEN verbatim; run/PR/BUILD_INDEX/LEDGER
   agree at close; Deviation conspicuous: **884 vs ≤700 ~1.26×, AMEND
   ruling `4e677760`**).
-- ci: (recorded at close from `logs/ci-cap5.2.json` — green only;
-  a pending/not-green state is recorded honestly, never claimed pass).
+- ci: pass #272@f06fe1b — `ci-boundary/1` at 2026-11-04T21:23:15Z:
+  all 4 checks pass (run 41913118485); stack #271…#260 pass;
+  `docs/build/logs/ci-cap5.2.json`. First read on #272@3b2e0075 was
+  RED (readers scan, this ticket's — repaired at f06fe1b8 and
+  re-read green; never claimed pass on the red head).
 
 ## Ruling — 2026-11-04 (orchestrator records)
 
