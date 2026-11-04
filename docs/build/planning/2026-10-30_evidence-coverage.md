@@ -1293,3 +1293,48 @@ ticket never marks a deferred full-target predicate MET.
 > never dispatch; REQ-D-109/310, REQ-E-209, REQ-H-010 remain
 > contributing-only. This note does not mark any target fully
 > satisfied.
+> Dated primary-owner note — 2026-11-03 (seq 210, R5.40): the
+> composed numerical-validation and independent-method-evidence slice
+> landed (ADR-0418). Numbered checks → actual evidence (battery
+> `crates/hh-analysis/tests/r5_40.rs` 11/11; executed record
+> `docs/build/reports/2026-11-03-r5.40-sim-battery.json`):
+> N1 — REQ-D-109 (frozen simulations/families/stops/reporting): the
+> S.4 proposed grid pinned execute-grade as `sim_battery/1` (42
+> cells — T{10,20,30}×R{5,10}×effect{0,±.05,±.10} easy; hard
+> T=20/R=10×5; heterogeneous ×4; three mechanism legs; beta{2,2}
+> diagnostic arms), ≥2,000 declared datasets/cell, seed rule
+> `H(canonical(scenario ∥ version ∥ replicate))`,
+> `protocol_table_frozen` + `dataset_determinism`; generator → real
+> `population::assemble` → estimator-identical headline
+> (`headline_is_estimator` — never a second implementation); executed
+> record retained with availability/refusal-census/diagnostic-
+> coverage/width/verdict/MC-error/prior-shift members.
+> N2 — REQ-D-310 (existing-owner admission/routing): the exploratory
+> arm persists through `analyze`→`analyze_and_record`→
+> `analysis_report_body/1` (`routed_beta_2_2_persisted`);
+> `metadata_only_still_refuses` keeps the metadata-only gate;
+> DF-R5.17-1 repaired at the owning admission — `decl.prior`
+> parameterizes the conjugate update, EX-02 beta{2,2} posterior mean
+> 111_111 vs registered 142_857 byte-identical
+> (`beta_2_2_known_answer_and_independent` — the "changing metadata
+> without changing computation fails" leg).
+> N3 — REQ-E-209 (method/routing review): retained independent
+> derivation evidence — SplitMix64 + order-statistic beta{2,2}
+> sampler reproduces 95% endpoints ≤20_000 ppm at 60k draws (a
+> different generator/sampler/quantile than the seeded inverse-CDF
+> path); probe legs cover zero-activation/informative-missingness-
+> veto/shared-shock designed refusals (`probe_scenario_legs`).
+> N4 — REQ-H-010 + AC-2 negatives: all-or-nothing `battery_rollup` —
+> unrun/short/`Stopped`/`Failed`/generator-failure cells can never
+> count as method admission, partial aggregates retained, no
+> favorable subset (`stopped_budget_retains_partial_not_admitted`,
+> `rollup_never_counts_unrun_failed_or_short`,
+> `record_is_integer_canonical` — diagnostic-labelled coverage,
+> `Json::Int` only); D2 envelope cited per stage, never pooled.
+> Achieved **engineered D/E** (routed fixture recompute + offline
+> executed record — actual CI on pushed head read at close per
+> O-06). Owed: R/P and actual-execution legs stay with R5.47/R5.49
+> and the contributor rows (R5.16/R5.17/R5.36/R5.37/R5.38/R5.39 —
+> evidence dependency, never dispatch); REQ-D-008 stays
+> contributing-only. This note does not mark any target fully
+> satisfied.

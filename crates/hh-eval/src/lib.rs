@@ -45,6 +45,7 @@ pub mod runs;
 pub mod scorecard;
 pub mod security_metrics;
 pub mod selection;
+pub mod sim_battery;
 pub mod stats;
 pub mod task_mixture;
 pub mod vetoes;
