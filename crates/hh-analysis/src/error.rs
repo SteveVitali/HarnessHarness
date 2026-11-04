@@ -95,6 +95,11 @@ pub enum AnalysisError {
     /// unresolved cells, dependence, nonfinite, metadata-only,
     /// credible-as-TOST; the same typed vocabulary).
     Contrast(hharness_eval::finite_manifest::ContrastError),
+    /// The R5.25 §6.3 recompute verify stage refused (withheld/malformed
+    /// input, nonfinite pin, wrong selector/price/weight/family/draw
+    /// pin, unclosed frozen selection, declared-side drift; the same
+    /// typed vocabulary, never a warning).
+    Recompute(crate::recompute::RecomputeError),
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -141,6 +146,7 @@ impl std::fmt::Display for AnalysisError {
             }
             AnalysisError::Population(e) => write!(f, "population: {e}"),
             AnalysisError::Contrast(e) => write!(f, "finite_manifest_contrast: {e}"),
+            AnalysisError::Recompute(e) => write!(f, "recompute: {e}"),
         }
     }
 }
@@ -180,5 +186,11 @@ impl From<hharness_eval::population::PopulationError> for AnalysisError {
 impl From<hharness_eval::finite_manifest::ContrastError> for AnalysisError {
     fn from(e: hharness_eval::finite_manifest::ContrastError) -> AnalysisError {
         AnalysisError::Contrast(e)
+    }
+}
+
+impl From<crate::recompute::RecomputeError> for AnalysisError {
+    fn from(e: crate::recompute::RecomputeError) -> AnalysisError {
+        AnalysisError::Recompute(e)
     }
 }

@@ -534,3 +534,41 @@ ticket never marks a deferred full-target predicate MET.
 > REQ-E-010/108/109), REQ-F-201, REQ-F-202, REQ-G-101/102/103/104/
 > 105/107 and REQ-G-203 are stamped **contributing-only** — this
 > ticket never marks a deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 195, R5.25): the §6.3
+> Recompute procedure landed inside `hh-analysis` (ADR-0403;
+> `crates/hh-analysis/src/recompute.rs` — one in-process owner
+> interface `recompute_analysis(&RecomputePlan, &AnalysisInput) →
+> Result<RecomputeReport, AnalysisError>`, the derived
+> `analysis-recompute/1` record). Legs are the §6.3 row verbatim:
+> `verify_inputs` (withheld/malformed/nonfinite refusals; declared
+> `spec_ref`/`prices`/`method`/`weights`/`seed`/`draws` member-wise
+> against the frozen reference and the rebuilt input;
+> `generated_from` + `report_id` recomputed exactly — no rerun under
+> altered selector/price/weight/family/draw pins) → `population`
+> (frozen grade selection + all-planned reconcile through the
+> landed `assemble_receipt`; non-`closed` is a verify-first
+> `SelectionNotClosed` refusal, never a drift) → `rerun` (the one
+> `analyze` kernel; `UnknownMethod`/`UnsupportedPrior`/
+> `NonFiniteInput` refusals verbatim) → `compare` (identities,
+> membership/order, counts/missingness, categorical verdicts exact;
+> estimate scalars under the frozen `abs(new−reference) ≤ 1e−10 ×
+> max(1,abs(reference))` tolerance; the closed exact-member set —
+> pins/counts/ordinals/levels — never rides it: a threshold/verdict
+> change fails even inside tolerance). `reproduced` is arithmetic
+> agreement only — never a hidden-history/oracle/R-level claim.
+> Engineered evidence in `crates/hh-analysis/tests/r5_25.rs`
+> (13/13 — compile-red at base `924ec646`): wrong
+> selector/price/weight/family/draw, withheld input, unsupported
+> estimator and nonfinite refusals; verdict/threshold/scalar/
+> identity/order drifts fail the verdict at exit zero; unclosed
+> selection and declared-side drift refuse. Deviation: 1,468
+> changed source/test lines vs ≤700 — AMEND ruling f2dd2fac
+> (`planning/2026-11-03_R5.25-split-review.md`). REQ-F-203,
+> REQ-F-005, REQ-F-007, REQ-C-003 and REQ-A-103 keep `planned;
+> unmet` — achieved engineered D/E recorded separately from the
+> owed legs: the named contributors R5.26 (replay), R5.28 (recipe/
+> CLI), R5.45 (trace) and R5.52 (outside review), and every
+> R/P/actual-execution predicate — evidence dependency, never
+> dispatch dependency. All five are stamped **contributing-only** —
+> this ticket never marks a deferred full-target predicate MET.
