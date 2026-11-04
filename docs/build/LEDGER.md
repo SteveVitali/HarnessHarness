@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.39
-lastCompleted:   R5.38
+nextTicket:      R5.40
+lastCompleted:   R5.39
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.38
+chainTip:         codex/harnessharness-evidence-r5.39
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T15:32:00Z
+updatedAt:        2026-11-03T16:37:56Z
 ```
 
 ## OPEN FINDINGS
@@ -1098,3 +1098,6 @@ updatedAt:        2026-11-03T15:32:00Z
 - 2026-11-03T15:00:16Z · **R5.38 size ruling** — worker stopped correctly at the ≤1000 line trigger (measured 2,989 numstat, ~3.0× — ties the R5.29 high-water mark; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-E :103 keep-together rule (label/margin-vs-math separation "recreates current raw-unit/relative and confidence mistakes"); Packet F's F.2 owner map names the estimator-vs-persistence seam but the cut is non-curative — both legs stay over (~1,829/~1,127) and directional_kl.rs has zero tests (R5.22 precedent); `kl_equivalence()` indivisible (IUT conjunction spans all kinds). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.37 precedent); dated note on `208_R5.38__kl.md`; manifest row-208 note; review record `planning/2026-11-03_R5.38-split-review.md`; `runs/R5.38.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03T15:32:00Z · R5.38 done — branch codex/harnessharness-evidence-r5.38 · PR #252 · base codex/harnessharness-evidence-r5.37 · §4 Packet-F directional-KL equivalence (ADR-0416): additive `stats.rs` (`ln_det`/`kl_f64`/`bernoulli_kl`/`eta_nth_root`/`kl_directional_bound` — continuous Bernoulli KL inversion, outward-rounded ppm, x=0/1 conventions, no libm); `directional_kl.rs` estimator over declared H/O pairs — strict TOST η=.025 ⇒ joint .90, .95 reporting η=.0125, planned-N envelope, bounded absolute + relative-mean contrasts, frozen `absolute` zero-reference, IUT conjunction, selected-claim η/m, closed `KlEquivalenceError`, S.1 `concentration_bound` .90; routed kind `directional_kl_equivalence` (margins only `PreRegistration.equivalence_margin`; `AnalysisError::KlEquivalence`; `record_kind`; `MetadataOnly`; `IntervalMethod::KlDirectional`). **Verify:** r5_38 9/9 · eval+analysis+ontology all green · fmt OK · fails-without compile-red at be470636 · rustdoc gate repair a641295a · guard PASS DISPATCH R5.38 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 200 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0416 · **Deviations:** 2,989 changed source/test lines vs ≤1000 flag (~3.0× — ties the R5.29 high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-304/305/306/307) + REQ-D-108 alias→D-304; five contributing-only (D-008/D-109/D-310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.47/R5.49) · chainTip → codex/harnessharness-evidence-r5.38 · next → R5.39 · ci: pass #252@a641295 (all 4 checks 41662416011; first read red — ubuntu rustdoc private-link, repaired a641295a; stack #251 #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T15:55:30Z · **R5.39 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 2,527 numstat, ~3.0× — ties the R5.29/R5.38 high-water mark; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-F :117 one scope sentence (admit predicate, no contingency); `parity_admission()` is one function over a closed 30-leg error union — no prefix is an admitted state; F.2/E.2 owner maps name durable-fact homes but the cut is non-curative (both legs stay over; zero tests in validator — R5.22/R5.38 precedent). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.38 precedent); dated note on `209_R5.39__parity-admission.md`; manifest row-209 note; review record `planning/2026-11-03_R5.39-split-review.md`; `runs/R5.39.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-03T16:37:56Z · R5.39 done — branch codex/harnessharness-evidence-r5.39 · PR #253 · base codex/harnessharness-evidence-r5.38 · §4 Packet-E/M-F parity admission (ADR-0417): `parity_admission.rs` records-in validator — `authentic_first_attempt` H/O pair manifest (actual run/verdict/replay identities, equal T/R/weights, distinct subjects, adapter >=3/S3 >=5 floors, first attempts) + signed pre-data dimension→metric/estimand/population/range/unit/margin/applicability/evidence map + both-policy or predeclared identical-bridge; closed `AdmissionEvidence` union (5 known-inadequate shapes + Other → InauthenticEvidence), `AdmissionError` 30 legs, `TransferDecl` refusals, seeds recorded never required; routed kind `parity_admission` (margins only `PreRegistration`; `AnalysisError::ParityAdmission`; `record_kind`; `MetadataOnly`; `IntervalMethod::ParityAdmission` → cell `estimator_undefined`); admitted pair ids feed `directional_kl_equivalence` unchanged. **Verify:** r5_39 12/12 · eval+analysis+ontology all green · fmt OK · fails-without compile-red at 73171738 · guard PASS DISPATCH R5.39 pre / DISPATCH R5.40 post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 201 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0417 · **Deviations:** 2,527 changed source/test lines vs ≤850 flag (~3.0× — ties the R5.29/R5.38 high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** five primary ids (D-004/301/302/303/308) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.47/R5.49) · chainTip → codex/harnessharness-evidence-r5.39 · next → R5.40 · ci: pass #253@3c9d256 (all 4 checks 41673526036; first read red — ubuntu rustdoc private-link, repaired 3c9d256a; stack #252 #251 #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

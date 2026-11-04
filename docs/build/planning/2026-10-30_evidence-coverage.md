@@ -1227,3 +1227,69 @@ ticket never marks a deferred full-target predicate MET.
 > (study report) — evidence dependency, never dispatch; REQ-D-309/
 > 310 dependencies kept as contributing-only. This note does not
 > mark any target fully satisfied.
+> 2026-11-03 · R5.39 acceptance note (REQ-D-004/301/302/303/308
+> primary). Numbered checks → actual evidence, all routed through
+> `analyze` → `analyze_and_record` → persisted
+> `analysis_report_body/1` (battery `crates/hh-analysis/tests/
+> r5_39.rs` 12/12):
+> N1 — REQ-D-301 (authentic admission — same
+> participant/configuration, pinned first attempts):
+> `admitted_full_fixture` — the pinned T=4·R=5 fixture admits
+> through the routed kind (`admission=admitted`,
+> design{4,5,N=20}, adapter ≥3 + S3 ≥5 floors on the report);
+> `admitted_pairs_route_to_kl_unchanged` — the admitted pair ids
+> drive R5.38's `directional_kl_equivalence` unchanged (M-E
+> route); `persisted_report_route` — `analysis_report_body/1`
+> section + `record.kind = "parity_admission"` + idempotent
+> replay.
+> N2 — REQ-D-302 (preassigned H/O first-attempt grouping,
+> independent-across-pairs): `manifest_integrity_refusals` —
+> pairs ≠ T·R / unequal weights (`UnequalDesign`), (task,repeat)
+> collision and phase/stratum/policy mismatches (`PairIdentity`,
+> `MissingIdentity`), `attempt ≠ 1` (`NotFirstAttempt`), reused
+> subjects (`ReusedSubject`), honoured-seed coupling
+> (`UnsupportedDependence` — the grouping exception grants no
+> CRN/honoured-seed/R2 claim; `FORBIDDEN_USES` in
+> `unavailable_and_unknown_members`).
+> N3 — REQ-D-303 (signed pre-data dimension map):
+> `late_or_absent_map_refused` (MissingMap / LateMap at
+> map_seq ≥ first_outcome_seq / unsigned map);
+> `dropped_and_inapplicable_dimensions` — required dimension
+> dropped (`MissingDimension`), required typed-inapplicable
+> (`RequiredInapplicable` — reason recorded, never a pass),
+> non-required inapplicable recorded `status=inapplicable`;
+> `unavailable_and_unknown_members` — `pass^k`/
+> `conditional_eligible` stay `UnavailableMethod`; unknown
+> dimension/estimand/applicability (`DimensionIdentity`);
+> unregistered margin (`MissingMargin`) — margins bind only the
+> pre-registration authority.
+> N4 — REQ-D-308 + REQ-D-004 (both-policy applicability /
+  transfer):
+> `baseline_only_policy_refused` — `baseline_only` covered=[A]
+> and `both_policies` missing B evidence both refuse
+> `PolicyScope{policy:"B"}` (the b_A=−.10/b_B=.10 counterexample
+> — baseline bias alone leaves treatment bias unknown);
+> `identical_bridge_predeclared_admits` — predeclared bridge
+> (seq 50 < 200) admits, late bridge (`LateBridge`);
+> `transfer_claims_refused` — `MixedUncertainty` (Bayesian +
+> frequentist legs), `BaselineOnlyTransfer` (b_A alone),
+> `TransferBudget` (|b_A|+|b_B| > κ), `UnsupportedTransfer`
+> (no certificate admitted here).
+> N5 — inauthentic evidence shapes (spec §4.4 "empty maps,
+> wrappers, supplied model-I/O fixtures or oracle transport
+> equality alone fail"): `inauthentic_shapes_refused` —
+> `recorded_model_io` (the s3_12b corpus shape),
+> `artifact_benefit_wrapper`, `model_snapshot_maps` (equal
+> empty maps), `oracle_transport_equality`, `seed_presence`
+> and unknown spellings all refuse `InauthenticEvidence`;
+> `routing_refusals` — `MetadataOnly` (method on wrong kind),
+> `UnknownMethod`, `MissingSpecRef` (margin authority
+> mandatory); seed records are counted on the report, never an
+> admission basis.
+> Achieved **engineered D/E** (routed fixture recompute — actual
+> CI on pushed head read at close per O-06). Owed: R/P and
+> actual-execution legs stay with R5.47 (parity-live under
+> GATE-G13) and R5.49 (study report) — evidence dependency,
+> never dispatch; REQ-D-109/310, REQ-E-209, REQ-H-010 remain
+> contributing-only. This note does not mark any target fully
+> satisfied.
