@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.47
-lastCompleted:   R5.46
+nextTicket:      GATE-G14
+lastCompleted:   R5.47
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.46
+chainTip:         codex/harnessharness-evidence-r5.47
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T06:53:45Z
+updatedAt:        2026-11-04T08:00:53Z
 ```
 
 ## OPEN FINDINGS
@@ -1147,3 +1147,4 @@ updatedAt:        2026-11-04T06:53:45Z
 - 2026-11-04T07:20Z · **R5.47 fleshed — skeleton → ticket (N=0 withheld disposition)** under GATE-G13 PASSED — N=0 declared (readouts/GATE-G13.md; operator verbatim "confirm, proceed" 2026-11-04T07:12:23Z; block sha256 `29be1faa6511` confirmed): contract 223 rewritten — Run line, declared N=0 scope (the skeleton's execute-at-frozen-N predicates have nothing to execute — the parity worksheet stays quote-only per HUMAN-H8 and no funded tranche exists), `hh-parity-n0/1` withheld packet legs `gate_readout|pins_frozen|admission_vocabulary|quote_worksheet|tranche_absent|dependent_blocked`, nine pinned artifacts verbatim, numbered ACs bound to the N=0 scope (AC-1 anchor unmoved); tranche absent, admission machinery exercised without execution, parity quote `not_requested`, S3 unmet, dependent confirmation blocked — never a fabricated tranche. GATE-G13 decision row appended verbatim to GATE DECISIONS (was PHASE LOG only — same repair shape as G11/G12); manifest row 223 skeleton → ticket. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T07:29:00Z · **R5.47 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,041 numstat under `crates/`, ~1.39×). Scoped fresh-context review verdict: **AMEND** — seq 223 one owner row; conjunctive `hh-parity-n0/1` packet; no documented seam; all cuts non-curative. Accepted as recorded Deviation; dated note on `223_R5.47__parity-live.md`; manifest row-223 note; review record `planning/2026-11-04_R5.47-split-review.md`; `runs/R5.47.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T08:00:53Z · R5.47 done — branch codex/harnessharness-evidence-r5.47 · PR #262 · base codex/harnessharness-evidence-r5.46 · GATE-G13 PASSED — N=0 declared: `hh-parity-n0/1` withheld record (`parity.rs` — records-in evaluators over supplied facts only, never manufacturing a pair/admission/execution/verdict): closed six-member LEGS; typed verdicts (preflight codec); withheld|failed|inconclusive fold; assemble() refuses partials — packet_id minted last. Emitted reports/2026-11-04-r5.47-parity-n0.json disposition=withheld admission=n0_withheld — gate verbatim (N=0, "confirm, proceed", block sha 29be1faa6511, s3 unmet), nine H8 pins byte-verified via check_pins, six exercised admission decls → typed refusals verbatim (machinery stands), parity quote not_requested+blocked{precision:design_unfixed} both runners $0.00 (assumed_margin⇒GuessedMargin), tranche_absent n_declared=0 kl_verdicts=none, dependent_blocked — no claim either sign. **Verify:** r5_47 5/5 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at ac942db3 · guard PASS DISPATCH R5.47 pre+post · bm 0 viol (. + --staged) · bm-tools OK. **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** 1,041 vs ≤750 (~1.39×) — AMEND ruling cf162b78 (stopped at trigger) · chainTip → codex/harnessharness-evidence-r5.47 · next → GATE-G14 · ci: fail-on-stack — #262@26c77b5 all 4 checks pass (cargo-deny · gitleaks · build·test·fmt·drift ubuntu+macos; run 41793640433); stack #258 ubuntu-latest pending (known-slow leg), #257 ubuntu-latest cancelled at the ~6h hosted-runner ceiling (inherited — not this change), #259/#260/#261 pass — `logs/ci-r5.47.json` · layer: engineered · harness: devin-desktop/swe-2-high/subagent
