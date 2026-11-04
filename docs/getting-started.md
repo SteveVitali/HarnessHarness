@@ -111,6 +111,8 @@ efficacy, or study claim.
 ```sh
 cargo test -p hharness --test r5_29 ex01
 cargo test -p hharness --test r5_29 ex02
+cargo test -p hharness --test r5_45 ex03
+cargo test -p hharness --test r5_45 ex04
 ```
 <!-- examples:end -->
 

@@ -98,6 +98,7 @@ jobs:
           bash scripts/ci/test-check-examples.sh
           bash scripts/ci/test-check-contributing.sh
           bash scripts/ci/test-check-position.sh
+          bash scripts/ci/test-check-trace.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -161,6 +162,15 @@ jobs:
           bash scripts/check-position.sh
           bash scripts/check-position.sh --head
 
+      # ci-mode: both — reads committed trace/experiments docs plus the
+      # pinned executed packets and card run members; a docs-only head that
+      # drifts an excerpt, a cited coordinate or a family card must not
+      # take the fast path green.
+      - name: Annotated trace + example families static check
+        run: |
+          bash scripts/check-trace.sh
+          bash scripts/check-trace.sh --head
+
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain
         if: steps.path.outputs.mode != 'fast'
@@ -221,7 +231,7 @@ jobs:
       # cards executed on one Linux leg after the build — scratch stores,
       # no credentials/services, canonical inputs only (never a committed
       # docs/research read). The live lane is recorded skipped, never run.
-      - name: Offline example cards (EX-01/EX-02)
+      - name: Offline example cards (EX-01–04)
         if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
         run: bash scripts/run-examples.sh
 

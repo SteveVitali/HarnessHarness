@@ -1,0 +1,51 @@
+{
+  "schema": "example-card/1",
+  "case": "ex-04",
+  "card_version": "2026-11-04.r5.45",
+  "title": "EX-04 — confined effect matrix, exhaustion and typed refusals",
+  "fixture_label": "offline scripted-lane legs + the pinned actual-execution packet (hh-ops-live/1, R5.44); input-required is not approval; scratch is not sandbox; live legs owed to ADR-0363",
+  "prerequisites": {
+    "rust": "1.94 (rust-toolchain.toml pin)",
+    "network": false,
+    "credentials": "none",
+    "spend_usd": 0,
+    "features": "default (tier-c1 + tier-c4)",
+    "companion": "the actual §5 matrix evidence is the pinned R5.44 packet (allow/Kp4, deny, pause/respond/resume, exhaustion on podman); the card verifies it and drives the deterministic exhaustion/refusal legs"
+  },
+  "pins": {
+    "packet": {
+      "path": "docs/build/reports/2026-11-04-r5.44-ops-live-second.json",
+      "sha256": "sha256:25c4432ee706e39181e79d77799609fd42b7b2a6cc742aec2af9a2b72b1a133f"
+    },
+    "definition": {
+      "path": "clients/ts/fixture-definition.json",
+      "sha256": "sha256:732af9f584a9f321d347f6f027ebd82a3376a33bb9580f63b2fcd6602865d0f8"
+    }
+  },
+  "checks": [
+    "packet",
+    "matrix",
+    "exhaustion",
+    "refusal_suspend",
+    "refusal_resume",
+    "refusal_respond",
+    "refusal_amend"
+  ],
+  "negative_controls": [
+    "stale pin — a drifted card sha256 or edited packet refuses stale_pin before any execution",
+    "absent/fake event — a packet leg outside the closed set, an untyped verdict, a missing denominator or a mutated discharged predicate fails packet/matrix",
+    "unsupported command/recovery — env.suspend/env.resume/respond_permission/amend answer typed refusals verbatim; none becomes an approval",
+    "fixture promoted to task/study — the card's fixture_label and the packet's honest dispositions are retained verbatim; no live or study claim follows"
+  ],
+  "costs": {
+    "build": "one cargo build/test of hharness + deps (minutes, existing toolchain); no added dependencies",
+    "runtime": "seconds; one scripted-lane run parked on the cap + four typed refusal calls; no network, no provider, $0"
+  },
+  "limitations": [
+    "the packet leg verifies the retained hh-ops-live/1 record verbatim — the real pause/respond/resume and Kp4 cells ran on podman under R5.44's authorized scope; the card does not re-run them",
+    "the exhaustion leg drives the scripted lane's own model_calls cap — the same typed control.budget.exceeded/decision vocabulary, not the podman O6/O7 drive",
+    "scratch is not sandbox — no confinement claim follows from the scripted lane",
+    "fixture/scratch posture — never S1/S3, useful-task, live or study evidence"
+  ],
+  "run": "cargo test -p hharness --test r5_45 ex04"
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "example-card/1",
+  "case": "ex-03",
+  "card_version": "2026-11-04.r5.45",
+  "title": "EX-03 — useful task, sealed submission, oracle and the bounded cap edit",
+  "fixture_label": "offline scripted-lane legs + the pinned actual-execution packet (hh-s1-useful/1, R5.43); scratch store is not a sandbox; live/provider legs remain owed to ADR-0363",
+  "prerequisites": {
+    "rust": "1.94 (rust-toolchain.toml pin)",
+    "network": false,
+    "credentials": "none",
+    "spend_usd": 0,
+    "features": "default (tier-c1 + tier-c4)",
+    "companion": "the actual S1 execution evidence is the pinned R5.43 packet; the card verifies it and drives the deterministic legs — prerecorded inspection is not execution"
+  },
+  "pins": {
+    "packet": {
+      "path": "docs/build/reports/2026-11-04-r5.43-s1-useful.json",
+      "sha256": "sha256:d8ed46d9a7950436efbbf949cd69eece44a7e7d4bc610f1108722b322e870a07"
+    },
+    "definition": {
+      "path": "clients/ts/fixture-definition.json",
+      "sha256": "sha256:732af9f584a9f321d347f6f027ebd82a3376a33bb9580f63b2fcd6602865d0f8"
+    }
+  },
+  "checks": [
+    "packet",
+    "sealed_submission",
+    "oracle_chain",
+    "field_edit",
+    "edit_refusal",
+    "receipt"
+  ],
+  "negative_controls": [
+    "stale pin — a drifted card sha256 or edited packet refuses stale_pin before any execution",
+    "absent/fake event — a packet leg outside the closed set, an untyped verdict, a missing seal or a mutated disposition fails packet/sealed_submission",
+    "wrong semantic output — the unchanged oracle maps the wrong candidate to C (task fail), never a pass",
+    "unsupported edit/recovery — a malformed cap kind is refused typed at open_session (edit_refusal records the verbatim error)",
+    "missing recipient bytes — an incomplete or tampered export fails the receipt completeness leg"
+  ],
+  "costs": {
+    "build": "one cargo build/test of hharness + deps (minutes, existing toolchain); no added dependencies",
+    "runtime": "seconds; two scripted-lane runs (baseline + edited cap) + one export/recipient store; no network, no provider, $0"
+  },
+  "limitations": [
+    "the packet leg verifies the retained hh-s1-useful/1 record verbatim — live useful-task execution stays gated (disposition/carried_predicates honest, never relabelled)",
+    "the field-edit leg proves the cap is consumed and enforced (budget_id joins the node's content address) — adaptation, not a causal-efficacy claim",
+    "the oracle legs are the deterministic oracle boundary — no provider, judge or human oracle executes",
+    "fixture/scratch posture — never S1/S3, useful-task, live or study evidence"
+  ],
+  "run": "cargo test -p hharness --test r5_45 ex03"
+}

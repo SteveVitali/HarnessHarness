@@ -256,7 +256,7 @@ impl ExampleCard {
             .as_str()
             .ok_or_else(|| refused(code::TYPE_MISMATCH, "card.case"))?
             .to_string();
-        if !matches!(case.as_str(), "ex-01" | "ex-02") {
+        if !matches!(case.as_str(), "ex-01" | "ex-02" | "ex-03" | "ex-04") {
             return Err(refused(code::UNKNOWN_CASE, case));
         }
         let str_list = |k: &str| -> Result<Vec<String>, ExampleError> {
@@ -443,6 +443,8 @@ pub fn run_example(
     let (checks, records) = match card.case.as_str() {
         "ex-01" => ex01(svc, card, work, &pins)?,
         "ex-02" => ex02(svc, card, work, &pins)?,
+        "ex-03" => ex03(svc, card, work, &pins)?,
+        "ex-04" => ex04(svc, card, work, &pins)?,
         other => return Err(refused(code::UNKNOWN_CASE, other.to_string())),
     };
     // The card's declared checks must each have been produced —
@@ -2124,5 +2126,787 @@ fn ex02(
         ("analysis_record", Json::str(&outcome.record.analysis_id)),
         ("recompute", rec.to_json()),
     ]);
+    Ok((checks, records))
+}
+
+// ── EX-03 / EX-04 — actual-execution packets + deterministic legs ─────
+//
+// EX-03 (new useful task + sealed submission/unchanged oracle +
+// consumed-field edit + EX-01 receipt) and EX-04 (shared confined
+// sink/effect §5 matrix) close on the *actual* executed packets —
+// `hh-s1-useful/1` and `hh-ops-live/1`, committed under
+// `docs/build/reports/` and sha-pinned by the cards. The card legs
+// verify the retained record byte-for-byte and then drive the admitted
+// deterministic controls on the scripted lane (prerecorded inspection
+// is never execution — the offline legs are the card's own drive;
+// `fixture_label`/`scratch is not sandbox` stay on every report). Live
+// legs remain owed to ADR-0363 — never re-run here.
+
+/// The closed packet-leg verdict vocabulary both packets use.
+const PACKET_VERDICTS: &[&str] = &[
+    "executed",
+    "failed",
+    "inconclusive",
+    "verified",
+    "refused",
+    "withheld",
+];
+
+/// `hello` + `open_session{new}` + `submit{hh.submit}` on the scripted
+/// lane; `budget` is the `spec.budget{kind:"node"}` inline cap input.
+/// Returns `(run_id, events)` — the durable stream, never a summary.
+/// `open_scripted` — the tag scopes the idempotency keys; repeated
+/// drives (two cap configs) must never collapse onto one cached result.
+fn open_scripted(
+    svc: &mut EmbedService,
+    card: &ExampleCard,
+    document: &Json,
+    budget: Option<Json>,
+    tag: &str,
+) -> Result<(String, Vec<EventEnvelope>), ExampleError> {
+    call(
+        svc,
+        "hello",
+        Json::obj([
+            ("contract_major", Json::Int(1)),
+            (
+                "client",
+                Json::obj([
+                    ("name", Json::str(&card.case)),
+                    ("version", Json::str(&card.card_version)),
+                    ("kind", Json::str("test")),
+                ]),
+            ),
+            (
+                "capabilities",
+                Json::obj([
+                    ("experimental", Json::Bool(true)),
+                    ("serves_measurement", Json::Bool(true)),
+                    ("accepts_ephemeral_frames", Json::Bool(true)),
+                    ("serves_permission_channel", Json::Bool(true)),
+                ]),
+            ),
+        ]),
+    )?;
+    let mut spec = vec![
+        ("kind", Json::str("new")),
+        (
+            "definition",
+            Json::obj([
+                ("kind", Json::str("document")),
+                ("document", document.clone()),
+            ]),
+        ),
+        (
+            "environment",
+            Json::obj([
+                ("kind", Json::str("connection_info")),
+                (
+                    "connection_info",
+                    Json::obj([("class", Json::str("local_host"))]),
+                ),
+            ]),
+        ),
+        (
+            "attendance",
+            Json::obj([
+                ("value", Json::str("async")),
+                ("source", Json::str("declared")),
+            ]),
+        ),
+    ];
+    if let Some(node) = budget {
+        spec.push((
+            "budget",
+            Json::obj([("kind", Json::str("node")), ("node", node)]),
+        ));
+    }
+    let opened = call(
+        svc,
+        "open_session",
+        Json::obj([
+            (
+                "spec",
+                Json::Obj(spec.into_iter().map(|(k, v)| (k.to_string(), v)).collect()),
+            ),
+            ("idempotency_key", Json::str(format!("ex-open-{tag}"))),
+        ]),
+    )?;
+    let session_id = str_at(&opened, "session_id")
+        .ok_or_else(|| refused(code::TYPE_MISMATCH, "open_session: no session_id"))?
+        .to_string();
+    let run_id = str_at(&opened, "run_id")
+        .ok_or_else(|| refused(code::TYPE_MISMATCH, "open_session: no run_id"))?
+        .to_string();
+    call(
+        svc,
+        "submit",
+        Json::obj([
+            ("session_id", Json::str(&session_id)),
+            (
+                "input",
+                Json::Arr(vec![Json::obj([
+                    ("kind", Json::str("invoke")),
+                    ("capability", Json::str("hh.submit")),
+                    ("args", Json::obj([])),
+                ])]),
+            ),
+            ("idempotency_key", Json::str(format!("ex-submit-{tag}"))),
+        ]),
+    )?;
+    let evs = svc
+        .store()
+        .events(&run_id)
+        .map_err(|e| ExampleError::Owner {
+            seam: "store",
+            detail: format!("{run_id}: {e:?}"),
+        })?;
+    Ok((run_id, evs.to_vec()))
+}
+
+/// Verify a committed executed packet (`hh-<kind>/1`): schema version,
+/// closed leg-name set, per-leg typed verdict in [`PACKET_VERDICTS`].
+/// Returns the decoded packet for the caller's own fact legs.
+fn packet_check(
+    bytes: &[u8],
+    version: &str,
+    legs: &[&str],
+) -> Result<(bool, Json, Json), ExampleError> {
+    let p = hharness_wire::json::parse(
+        std::str::from_utf8(bytes)
+            .map_err(|e| refused(code::TYPE_MISMATCH, format!("packet utf8: {e}")))?,
+    )
+    .map_err(|e| refused(code::TYPE_MISMATCH, format!("packet json: {e}")))?;
+    let mut bad: Vec<String> = Vec::new();
+    if str_at(&p, "version") != Some(version) {
+        bad.push(format!("version {:?} != {version}", str_at(&p, "version")));
+    }
+    let mut names: Vec<String> = Vec::new();
+    if let Some(Json::Arr(ls)) = p.get("legs") {
+        for l in ls {
+            let n = str_at(l, "name").unwrap_or("").to_string();
+            if !legs.contains(&n.as_str()) {
+                bad.push(format!("leg {n} outside the closed set"));
+            }
+            // `leg.verdict` is the typed `{verdict, detail?}` record.
+            let v = l
+                .get("verdict")
+                .and_then(|v| v.get("verdict"))
+                .and_then(Json::as_str)
+                .unwrap_or("");
+            if !PACKET_VERDICTS.contains(&v) {
+                bad.push(format!("leg {n} verdict {v} untyped"));
+            }
+            names.push(n);
+        }
+    } else {
+        bad.push("legs absent".to_string());
+    }
+    for want in legs {
+        if !names.iter().any(|n| n == want) {
+            bad.push(format!("leg {want} missing"));
+        }
+    }
+    let pid = str_at(&p, "packet_id").unwrap_or("");
+    if pid.len() != 64 || !pid.bytes().all(|b| b.is_ascii_hexdigit()) {
+        bad.push("packet_id not 64-hex".to_string());
+    }
+    let detail = Json::obj([
+        ("packet_id", Json::str(pid)),
+        (
+            "disposition",
+            p.get("disposition").cloned().unwrap_or(Json::Null),
+        ),
+        ("legs", Json::Arr(names.iter().map(Json::str).collect())),
+        ("bad", Json::Arr(bad.iter().map(Json::str).collect())),
+    ]);
+    Ok((bad.is_empty(), detail, p))
+}
+
+/// The `spec.budget` node for a `model_calls` hard cap — the one
+/// bounded cap field this integration edits (see the run ledger for
+/// why the open-spec input, not the doc's `Budget` node, is the field
+/// the driver actually enforces).
+fn model_calls_budget(hard: i64) -> Json {
+    Json::obj([(
+        "dimensions",
+        Json::obj([("model_calls", Json::obj([("hard", Json::Int(hard))]))]),
+    )])
+}
+
+/// Drive the scripted lane under a `model_calls` cap. Returns
+/// `(run_id, events, budget_addr)` where `budget_addr` is the cap
+/// node's own content address — the join `control.budget.exceeded.
+/// budget_id` must carry verbatim for the field to count as consumed.
+fn cap_drive(
+    svc: &mut EmbedService,
+    card: &ExampleCard,
+    document: &Json,
+    hard: i64,
+) -> Result<(String, Vec<EventEnvelope>, String), ExampleError> {
+    let node = model_calls_budget(hard);
+    let addr =
+        hharness_identity::address(node.to_canonical_string().as_bytes(), "application/json").id();
+    let (run_id, evs) = open_scripted(svc, card, document, Some(node), &format!("cap{hard}"))?;
+    Ok((run_id, evs, addr))
+}
+
+/// The typed exhaustion fold: `control.budget.exceeded` carrying the
+/// cap's own `budget_id`, a `control.decision`, and
+/// `lifecycle.turn.finished`. Anything else is a fail — an absent or
+/// fake exhaustion event never passes.
+fn exhausted(evs: &[EventEnvelope], want_budget: &str) -> (bool, Json) {
+    let ex = all(evs, "control.budget.exceeded");
+    let classes: Vec<&str> = evs.iter().map(|e| e.class.as_str()).collect();
+    let ex_payloads: Vec<Json> = ex.iter().map(|e| e.payload.clone()).collect();
+    let hit = ex
+        .iter()
+        .any(|e| e.payload.get("budget_id").and_then(Json::as_str) == Some(want_budget));
+    let decided = first(evs, "control.decision").is_some();
+    let stopped = all(evs, "lifecycle.turn.finished")
+        .iter()
+        .any(|e| e.payload.get("stop_reason").is_some());
+    (
+        hit && decided && stopped,
+        Json::obj([
+            ("budget_id", Json::str(want_budget)),
+            ("dimension", Json::str("model_calls")),
+            ("events", Json::Int(evs.len() as i64)),
+            ("exceeded_hit", Json::Bool(hit)),
+            ("decision", Json::Bool(decided)),
+            ("stopped", Json::Bool(stopped)),
+            (
+                "classes",
+                Json::Arr(classes.iter().map(|c| Json::str(*c)).collect()),
+            ),
+            ("exceeded", Json::Arr(ex_payloads)),
+        ]),
+    )
+}
+
+fn ex03(
+    svc: &mut EmbedService,
+    card: &ExampleCard,
+    work: &Path,
+    pins: &BTreeMap<String, (PathBuf, Vec<u8>)>,
+) -> Result<(Vec<CheckRecord>, Json), ExampleError> {
+    let mut checks: Vec<CheckRecord> = Vec::new();
+    // ── the actual executed packet — pinned byte-for-byte ──────────
+    let packet_bytes = &pins
+        .get("packet")
+        .ok_or_else(|| refused(code::MISSING_FIELD, "card.pins.packet"))?
+        .1;
+    let (packet_ok, packet_detail, packet) = packet_check(
+        packet_bytes,
+        "hh-s1-useful/1",
+        &[
+            "subject_a",
+            "subject_b",
+            "oracle_chain",
+            "controls",
+            "observer_probe",
+            "evidence_join",
+            "worksheet",
+        ],
+    )?;
+    checks.push(if packet_ok {
+        pass("packet", packet_detail)
+    } else {
+        fail_json("packet", packet_detail)
+    });
+    // sealed submissions + verbatim predicates/acceptance — the actual
+    // EX-03 facts retained, never relabelled.
+    let mut detail_bad: Vec<String> = Vec::new();
+    if let Some(Json::Arr(ls)) = packet.get("legs") {
+        for l in ls {
+            let n = str_at(l, "name").unwrap_or("");
+            if (n == "subject_a" || n == "subject_b")
+                && l.get("facts")
+                    .and_then(|f| f.get("seal"))
+                    .and_then(Json::as_str)
+                    != Some("sealed")
+            {
+                detail_bad.push(format!("{n}.facts.seal != sealed"));
+            }
+        }
+    }
+    let carried: Vec<String> = match packet.get("carried_predicates") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .filter_map(Json::as_str)
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    };
+    for want in ["exec_backend_hello_clobber", "probe_verb_enoent"] {
+        if !carried.iter().any(|c| c == want) {
+            detail_bad.push(format!("carried_predicates missing {want}"));
+        }
+    }
+    if packet.get("useful_acceptance").is_none() {
+        detail_bad.push("useful_acceptance absent".to_string());
+    }
+    checks.push(if detail_bad.is_empty() {
+        pass(
+            "sealed_submission",
+            Json::obj([
+                ("subjects", Json::Int(2)),
+                (
+                    "carried_predicates",
+                    Json::Arr(carried.iter().map(Json::str).collect()),
+                ),
+                (
+                    "useful_acceptance",
+                    packet
+                        .get("useful_acceptance")
+                        .cloned()
+                        .unwrap_or(Json::Null),
+                ),
+            ]),
+        )
+    } else {
+        fail_json(
+            "sealed_submission",
+            Json::obj([("bad", Json::Arr(detail_bad.iter().map(Json::str).collect()))]),
+        )
+    });
+
+    // ── sealed submission + the unchanged deterministic oracle ──────
+    let def_bytes = &pins
+        .get("definition")
+        .ok_or_else(|| refused(code::MISSING_FIELD, "card.pins.definition"))?
+        .1;
+    let document = hharness_wire::json::parse(
+        std::str::from_utf8(def_bytes)
+            .map_err(|e| refused(code::TYPE_MISMATCH, format!("definition utf8: {e}")))?,
+    )
+    .map_err(|e| refused(code::TYPE_MISMATCH, format!("definition json: {e}")))?;
+    let oracle = hharness_ontology::eval::OracleDeclaration {
+        oracle_id: "ex-03-oracle".to_string(),
+        class: hharness_ontology::eval::OracleClass::OutputCheck,
+        deterministic: true,
+        requires_observability: BTreeSet::new(),
+        verdict_type: hharness_ontology::eval::VerdictType::Lattice,
+        evidence_out: Vec::new(),
+        charged_to: hharness_ontology::eval::ChargedTo::Instrument,
+        calibration_ref: None,
+        provenance: hharness_provenance::ProvenanceRecord::kernel("ex-03", 0),
+    };
+    let artifact = b"ex-03-artifact".to_vec();
+    let verdict_of = |actual: &[u8]| {
+        hharness_eval::oracle::run_oracle(&hharness_eval::oracle::OracleRequest {
+            oracle: oracle.clone(),
+            criterion: "submission.output".to_string(),
+            expected: Some(artifact.clone()),
+            actual: actual.to_vec(),
+            transcript: None,
+        })
+    };
+    let good = verdict_of(b"ex-03-artifact");
+    let wrong = verdict_of(b"ex-03-wrong");
+    let crashed = hharness_eval::oracle::run_oracle(&hharness_eval::oracle::OracleRequest {
+        oracle: hharness_ontology::eval::OracleDeclaration {
+            class: hharness_ontology::eval::OracleClass::Judge,
+            deterministic: false,
+            ..oracle.clone()
+        },
+        criterion: "submission.output".to_string(),
+        expected: Some(artifact.clone()),
+        actual: artifact.clone(),
+        transcript: None,
+    });
+    let ok_n = matches!(
+        &good,
+        Ok(v) if v.verdict == hharness_ontology::eval::LatticeValue::N
+    );
+    let fail_c = matches!(
+        &wrong,
+        Ok(v) if v.verdict == hharness_ontology::eval::LatticeValue::C
+    );
+    let unavailable = crashed.is_err();
+    checks.push(if ok_n && fail_c && unavailable {
+        pass(
+            "oracle_chain",
+            Json::obj([
+                ("correct", Json::str("N")),
+                ("wrong_output", Json::str("C — task fail")),
+                (
+                    "oracle_unavailable",
+                    Json::str(format!(
+                        "{}",
+                        crashed.err().map(|e| e.to_string()).unwrap_or_default()
+                    )),
+                ),
+            ]),
+        )
+    } else {
+        fail_json(
+            "oracle_chain",
+            Json::obj([
+                ("correct_ok", Json::Bool(ok_n)),
+                ("wrong_fails", Json::Bool(fail_c)),
+                ("unavailable_typed", Json::Bool(unavailable)),
+            ]),
+        )
+    });
+
+    // ── the bounded editable cap field — validate → compile → rerun ─
+    // Two attempts, both configs retained: the only difference between
+    // them is `budget.dimensions.model_calls.hard`. Attempt A (hard:8)
+    // completes its scripted model calls; attempt B (hard:0) parks on
+    // `control.budget.exceeded{budget_id == address(cap-node)}` →
+    // `control.decision{stop}` → `lifecycle.turn.finished`. The cap is
+    // consumed (the node's own content address lands in the durable
+    // exceeded row) and enforced (the turn stops). This is adaptation —
+    // enforcement of the edited field, never a causal-efficacy claim.
+    let (run_a, evs_a, addr_a) = cap_drive(svc, card, &document, 8)?;
+    let ok_a = first(&evs_a, "model.call.completed").is_some()
+        && first(&evs_a, "lifecycle.run.finished").is_some();
+    let (run_b, evs_b, addr_b) = cap_drive(svc, card, &document, 0)?;
+    let (enforced, enforced_detail) = exhausted(&evs_b, &addr_b);
+    checks.push(if ok_a && enforced {
+        pass(
+            "field_edit",
+            Json::obj([
+                ("field", Json::str("budget.dimensions.model_calls.hard")),
+                (
+                    "config_a",
+                    Json::obj([
+                        ("hard", Json::Int(8)),
+                        ("budget_id", Json::str(&addr_a)),
+                        ("run_id", Json::str(&run_a)),
+                    ]),
+                ),
+                (
+                    "config_b",
+                    Json::obj([
+                        ("hard", Json::Int(0)),
+                        ("budget_id", Json::str(&addr_b)),
+                        ("run_id", Json::str(&run_b)),
+                    ]),
+                ),
+                ("kind", Json::str("adaptation — no causal-efficacy claim")),
+            ]),
+        )
+    } else {
+        fail_json(
+            "field_edit",
+            Json::obj([
+                ("baseline_completed", Json::Bool(ok_a)),
+                ("enforced", enforced_detail),
+            ]),
+        )
+    });
+
+    // ── unsupported edit refuses — malformed budget kind is typed ───
+    let bad = call_err(
+        svc,
+        "open_session",
+        Json::obj([
+            (
+                "spec",
+                Json::obj([
+                    ("kind", Json::str("new")),
+                    (
+                        "definition",
+                        Json::obj([
+                            ("kind", Json::str("document")),
+                            ("document", document.clone()),
+                        ]),
+                    ),
+                    (
+                        "budget",
+                        Json::obj([("kind", Json::str("not-a-cap")), ("node", Json::Null)]),
+                    ),
+                ]),
+            ),
+            ("idempotency_key", Json::str("ex-bad-budget")),
+        ]),
+    );
+    checks.push(if matches!(bad, Json::Null) {
+        fail("edit_refusal", "a malformed cap kind opened a session")
+    } else {
+        expected_refusal("edit_refusal", bad)
+    });
+
+    // ── plus the EX-01 receipt — bundle → clean-recipient complete ──
+    let sink = work.join("bundle");
+    let bundle = call(
+        svc,
+        "kernel.bundle",
+        Json::obj([
+            ("run_id", Json::str(&run_a)),
+            ("deliver_sink", Json::str(sink.to_string_lossy())),
+        ]),
+    )?;
+    let recip_root = work.join("recipient");
+    let mut recip = EmbedService::open(ServiceConfig {
+        store_root: recip_root.join("store"),
+        kernel_version_id: "hh-kernel/0.1.0".to_string(),
+        workspace_root: recip_root.join("ws"),
+        holder: "ex-03-recipient".to_string(),
+    })
+    .map_err(|e| ExampleError::Owner {
+        seam: "recipient",
+        detail: format!("{e:?}"),
+    })?;
+    call(
+        &mut recip,
+        "hello",
+        Json::obj([
+            ("contract_major", Json::Int(1)),
+            (
+                "client",
+                Json::obj([
+                    ("name", Json::str("ex-03-recipient")),
+                    ("version", Json::str(&card.card_version)),
+                    ("kind", Json::str("test")),
+                ]),
+            ),
+            (
+                "capabilities",
+                Json::obj([
+                    ("experimental", Json::Bool(true)),
+                    ("serves_measurement", Json::Bool(true)),
+                ]),
+            ),
+        ]),
+    )?;
+    let completeness = call(
+        &mut recip,
+        "kernel.check_completeness",
+        Json::obj([("path", Json::str(sink.to_string_lossy()))]),
+    )?;
+    let complete = matches!(completeness.get("complete"), Some(Json::Bool(true)));
+    checks.push(if complete {
+        pass(
+            "receipt",
+            Json::obj([
+                ("run_id", Json::str(&run_a)),
+                (
+                    "bundle",
+                    bundle.get("manifest").cloned().unwrap_or(Json::Null),
+                ),
+                ("completeness", completeness.clone()),
+            ]),
+        )
+    } else {
+        fail_json(
+            "receipt",
+            Json::obj([("completeness", completeness.clone())]),
+        )
+    });
+
+    let records = Json::obj([
+        ("run_a", Json::str(&run_a)),
+        ("run_b", Json::str(&run_b)),
+        (
+            "packet_id",
+            str_at(&packet, "packet_id")
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+    ]);
+    Ok((checks, records))
+}
+
+fn ex04(
+    svc: &mut EmbedService,
+    card: &ExampleCard,
+    work: &Path,
+    pins: &BTreeMap<String, (PathBuf, Vec<u8>)>,
+) -> Result<(Vec<CheckRecord>, Json), ExampleError> {
+    let _ = work;
+    let mut checks: Vec<CheckRecord> = Vec::new();
+    // ── the actual executed §5-matrix packet — pinned byte-for-byte ─
+    let packet_bytes = &pins
+        .get("packet")
+        .ok_or_else(|| refused(code::MISSING_FIELD, "card.pins.packet"))?
+        .1;
+    let (packet_ok, packet_detail, packet) = packet_check(
+        packet_bytes,
+        "hh-ops-live/1",
+        &[
+            "o1",
+            "o2",
+            "o3",
+            "o4",
+            "o5",
+            "o6",
+            "o7",
+            "o8",
+            "stage_report",
+            "repairs",
+            "worksheet",
+        ],
+    )?;
+    checks.push(if packet_ok {
+        pass("packet", packet_detail)
+    } else {
+        fail_json("packet", packet_detail)
+    });
+    // §5 full-matrix facts + honest unknowns, retained verbatim.
+    let mut bad: Vec<String> = Vec::new();
+    let mut probes: Vec<(String, String)> = Vec::new();
+    if let Some(Json::Arr(ls)) = packet.get("legs") {
+        for l in ls {
+            let n = str_at(l, "name").unwrap_or("").to_string();
+            let Some(f) = l.get("facts") else { continue };
+            if n.starts_with('o') && n.len() == 2 {
+                for (dim, want) in [("P", "3"), ("A", "3"), ("R", "3"), ("T", "3"), ("V", "0")] {
+                    if f.get(dim).and_then(Json::as_str) != Some(want) {
+                        bad.push(format!("{n}.{dim} != {want}"));
+                    }
+                }
+            }
+            if let Json::Obj(m) = f {
+                for (k, v) in m {
+                    if k.ends_with("_probe") {
+                        if let Some(s) = v.as_str() {
+                            probes.push((k.clone(), s.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if packet.get("disposition").and_then(Json::as_str) != Some("executed") {
+        bad.push("disposition != executed".to_string());
+    }
+    let discharged: Vec<String> = match packet.get("discharged_predicates") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .filter_map(Json::as_str)
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    };
+    for want in ["exec_backend_hello_clobber", "probe_verb_enoent"] {
+        if !discharged.iter().any(|c| c == want) {
+            bad.push(format!("discharged_predicates missing {want}"));
+        }
+    }
+    if packet
+        .get("stage_report")
+        .and_then(|s| s.get("acceptance_blocked"))
+        != Some(&Json::Bool(false))
+    {
+        bad.push("stage_report.acceptance_blocked != false".to_string());
+    }
+    let undeterminable = probes
+        .iter()
+        .any(|(k, v)| k.starts_with("o2") && v == "undeterminable");
+    let applied = probes
+        .iter()
+        .any(|(k, v)| k.starts_with("o1") && v == "applied");
+    if !undeterminable {
+        bad.push("no honest `undeterminable` probe (o2)".to_string());
+    }
+    checks.push(if bad.is_empty() && applied {
+        pass(
+            "matrix",
+            Json::obj([
+                ("cells", Json::Int(8)),
+                ("denominators", Json::str("P=A=R=T=3, V=0")),
+                (
+                    "honest_unknown",
+                    Json::str("o2 probe undeterminable — verbatim"),
+                ),
+                (
+                    "discharged_predicates",
+                    Json::Arr(discharged.iter().map(Json::str).collect()),
+                ),
+            ]),
+        )
+    } else {
+        fail_json(
+            "matrix",
+            Json::obj([("bad", Json::Arr(bad.iter().map(Json::str).collect()))]),
+        )
+    });
+
+    // ── deterministic exhaustion on the scripted lane — same typed
+    //    vocabulary the packet's O6/O7 legs carried on podman; the
+    //    card's own drive (prerecorded ≠ execution). ────────────────
+    let def_bytes = &pins
+        .get("definition")
+        .ok_or_else(|| refused(code::MISSING_FIELD, "card.pins.definition"))?
+        .1;
+    let document = hharness_wire::json::parse(
+        std::str::from_utf8(def_bytes)
+            .map_err(|e| refused(code::TYPE_MISMATCH, format!("definition utf8: {e}")))?,
+    )
+    .map_err(|e| refused(code::TYPE_MISMATCH, format!("definition json: {e}")))?;
+    let (_run, evs, addr) = cap_drive(svc, card, &document, 0)?;
+    let (ex_ok, ex_detail) = exhausted(&evs, &addr);
+    checks.push(if ex_ok {
+        pass("exhaustion", ex_detail)
+    } else {
+        fail_json("exhaustion", ex_detail)
+    });
+
+    // ── typed refusal legs — input-required is not approval; scratch
+    //    is not sandbox. Each records the boundary's verbatim error. ─
+    let err = call_err(
+        svc,
+        "env.suspend",
+        Json::obj([("session_id", Json::str("sess-1"))]),
+    );
+    checks.push(if matches!(err, Json::Null) {
+        fail("refusal_suspend", "the control was not refused")
+    } else {
+        expected_refusal("refusal_suspend", err)
+    });
+    let err = call_err(
+        svc,
+        "env.resume",
+        Json::obj([("session_id", Json::str("sess-1"))]),
+    );
+    checks.push(if matches!(err, Json::Null) {
+        fail("refusal_resume", "the control was not refused")
+    } else {
+        expected_refusal("refusal_resume", err)
+    });
+    let err = call_err(
+        svc,
+        "respond_permission",
+        Json::obj([
+            ("session_id", Json::str("sess-1")),
+            ("permission_id", Json::str("perm:none")),
+            (
+                "outcome",
+                Json::obj([
+                    ("kind", Json::str("selected")),
+                    ("option_id", Json::str("allow_once")),
+                ]),
+            ),
+        ]),
+    );
+    checks.push(if matches!(err, Json::Null) {
+        fail("refusal_respond", "the control was not refused")
+    } else {
+        expected_refusal("refusal_respond", err)
+    });
+    let err = call_err(
+        svc,
+        "amend",
+        Json::obj([
+            ("session_id", Json::str("sess-1")),
+            ("target", Json::str("budget")),
+            ("value", Json::obj([("model_calls", Json::Int(9))])),
+        ]),
+    );
+    checks.push(if matches!(err, Json::Null) {
+        fail("refusal_amend", "the control was not refused")
+    } else {
+        expected_refusal("refusal_amend", err)
+    });
+
+    let records = Json::obj([(
+        "packet_id",
+        str_at(&packet, "packet_id")
+            .map(Json::str)
+            .unwrap_or(Json::Null),
+    )]);
     Ok((checks, records))
 }

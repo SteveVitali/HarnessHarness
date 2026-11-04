@@ -412,7 +412,7 @@ fn ex02_withheld_recompute_input_refuses_no_fallback() {
 fn card_decode_refusals() {
     let mut j = Json::obj([
         ("schema", Json::str("example-card/1")),
-        ("case", Json::str("ex-03")),
+        ("case", Json::str("ex-99")),
     ]);
     assert!(matches!(
         ExampleCard::from_json(&j).unwrap_err(),

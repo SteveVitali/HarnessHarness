@@ -39,11 +39,13 @@ have and what each route can actually show.
   produces a durable, inspectable run you can read, export, and replay
   ([fixture-verified](status.md#how-to-read-the-evidence); see the
   [receipt card](#card--inspect-a-recorded-result-replay-and-r0-receipt)).
-- **Learn offline** — `Available`. Two versioned example cards run
+- **Learn offline** — `Available`. Four versioned example cards run
   without a provider, credentials, or spend: setup→inspect→replay→verify
-  (EX-01) and a two-task, two-arm Lab lesson (EX-02). Both are labelled
-  fixtures; they teach the workflow and cannot satisfy a task or study
-  objective.
+  (EX-01), a two-task two-arm Lab lesson (EX-02), a useful-task drive
+  with sealed submission, oracle and the bounded cap-field edit (EX-03),
+  and the confined-effect matrix with exhaustion/refusal controls
+  (EX-04). All are labelled fixtures; the executed packets they pin
+  retain their own evidence class.
 
 Experienced integrators may enter the [reference](reference.md) directly.
 No model, environment, or budget means a labelled receipt/fixture path —
@@ -109,6 +111,41 @@ behind it, its limits, and the access or exit route.
 - **Limits:** synthetic inputs — the contrast is a plumbing lesson, not
   an efficacy or study result; a one-task variant correctly reports
   `n/a{estimator_undefined}`.
+- **Access:** [the examples index](../scripts/examples/README.md).
+
+### Card — Learn offline: useful task, oracle and the bounded edit [ex-03]
+
+- **State:** Available — scoped evidence
+- **Scope:** [`scripts/examples/ex-03.json`](../scripts/examples/ex-03.json):
+  a scripted-lane useful-task drive with a sealed submission, the
+  unchanged deterministic oracle (wrong output → task fail; unavailable
+  oracle → typed failure), the bounded `model_calls` cap-field edit
+  through validate/compile/rerun, and the EX-01 receipt join — plus the
+  pinned executed
+  [hh-s1-useful/1 packet](build/reports/2026-11-04-r5.43-s1-useful.json),
+  verified byte-for-byte.
+- **Evidence:** `cargo test -p hharness --test r5_45 ex03`; static and
+  offline lanes as EX-01.
+- **Limits:** fixture/scratch posture — the cap edit proves the field
+  is consumed and enforced (adaptation), never a causal-efficacy or
+  live claim; the packet's honest dispositions are retained verbatim.
+- **Access:** [the examples index](../scripts/examples/README.md) and
+  [inspect a run](inspect-a-run.md).
+
+### Card — Learn offline: the confined effect matrix [ex-04]
+
+- **State:** Available — scoped evidence
+- **Scope:** [`scripts/examples/ex-04.json`](../scripts/examples/ex-04.json):
+  the §5 confined sink/effect matrix verified on the pinned executed
+  [hh-ops-live/1 packet](build/reports/2026-11-04-r5.44-ops-live-second.json)
+  (allow/Kp4, deny, pause/respond/resume, exhaustion; honest
+  `undeterminable` probes; `discharged_predicates`), plus deterministic
+  exhaustion and typed refusal legs on the scripted lane.
+- **Evidence:** `cargo test -p hharness --test r5_45 ex04`; static and
+  offline lanes as EX-01.
+- **Limits:** input-required is not approval; scratch is not sandbox —
+  the real podman cells ran under R5.44's authorized scope and the card
+  does not re-run them.
 - **Access:** [the examples index](../scripts/examples/README.md).
 
 ### Card — Inspect a recorded result: replay and R0 [receipt]
