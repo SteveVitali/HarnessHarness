@@ -298,6 +298,15 @@ impl HelperClient {
     /// `request_json(j)` — send an arbitrary `Json` frame (the malformed-/
     /// unknown-verb probe path — the typed refusal is the answer).
     pub fn request_json(&mut self, j: &Json) -> Result<Json, EnvError> {
+        self.chan_roundtrip(j)
+    }
+
+    /// `chan_roundtrip(j)` — the one NDJSON round-trip on the mutex'd
+    /// channel, shared by `request`/`request_json`/`session_request`:
+    /// send the canonical frame, read one reply line, fold `ok`/`err`
+    /// into the `Ok(payload)`/`HelperRefused` halves. `Err(Transport)`
+    /// marks a dead channel — never an answered refusal.
+    fn chan_roundtrip(&self, j: &Json) -> Result<Json, EnvError> {
         let mut chan = self.chan.lock().map_err(|_| EnvError::Transport {
             detail: "helper channel lock poisoned".into(),
         })?;
@@ -356,39 +365,7 @@ impl HelperClient {
     /// `Err(Transport)` when the channel is dead (kernel loss → the
     /// caller's reconnect path); a live refusal stays `HelperRefused`.
     pub fn session_request(&self, req: &HelperRequest) -> Result<Json, EnvError> {
-        let mut chan = self.chan.lock().map_err(|_| EnvError::Transport {
-            detail: "helper channel lock poisoned".into(),
-        })?;
-        let line = req.to_json().to_canonical_string();
-        chan.writer
-            .write_all(line.as_bytes())
-            .and_then(|_| chan.writer.write_all(b"\n"))
-            .and_then(|_| chan.writer.flush())
-            .map_err(|e| EnvError::Transport {
-                detail: format!("helper send: {e}"),
-            })?;
-        let mut buf = String::new();
-        chan.reader
-            .read_line(&mut buf)
-            .map_err(|e| EnvError::Transport {
-                detail: format!("helper recv: {e}"),
-            })?;
-        if buf.is_empty() {
-            return Err(EnvError::Transport {
-                detail: "helper closed the channel".into(),
-            });
-        }
-        let j = json::parse(buf.trim_end()).map_err(|e| EnvError::Transport {
-            detail: format!("helper frame decode: {e}"),
-        })?;
-        match HelperResponse::from_json(&j).map_err(|e| EnvError::Transport {
-            detail: format!("helper response decode: {e}"),
-        })? {
-            HelperResponse::Ok(payload) => Ok(payload),
-            HelperResponse::Error { class, detail } => {
-                Err(EnvError::HelperRefused { class, detail })
-            }
-        }
+        self.chan_roundtrip(&req.to_json())
     }
 
     /// `shutdown` — the driver's teardown path.

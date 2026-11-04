@@ -2759,6 +2759,25 @@ fn r44_evaluator_negatives_never_pass() {
         evaluate_cell(OpsCell::O2, std::slice::from_ref(&u)),
         LegVerdict::Verified
     );
+    // O2's `failed:<kind>` fold — the retained violation spelling the
+    // drive actually emits (`kp4_outcome_str`) — is refused, never
+    // folded to pass (a counted violation blocks; pass-2 regression —
+    // the prior blocklist's bare literals never matched the prefix).
+    let mut v = t.clone();
+    v.outcome = "failed:sink_delta".to_string();
+    v.violation = true;
+    assert!(matches!(
+        evaluate_cell(OpsCell::O2, std::slice::from_ref(&v)),
+        LegVerdict::Refused(_)
+    ));
+    // A `violation` flag fails closed even on a retained classification —
+    // an inconsistent record never verifies.
+    let mut w = u.clone();
+    w.violation = true;
+    assert!(matches!(
+        evaluate_cell(OpsCell::O2, std::slice::from_ref(&w)),
+        LegVerdict::Refused(_)
+    ));
     // The repairs leg refuses honest-but-absent evidence.
     let r = RepairsFacts {
         backend_honest: false,

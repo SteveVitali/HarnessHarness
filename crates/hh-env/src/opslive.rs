@@ -96,11 +96,22 @@ pub fn evaluate_cell(cell: OpsCell, trials: &[TrialOutcomeRecord]) -> LegVerdict
         }
         let ok = match cell {
             OpsCell::O8 => t.outcome.starts_with("defect_detected"),
+            // O2's `ok` set is the *closed* retained Kp4 vocabulary
+            // (`kp4_outcome_str` — `unknown_*`/`resolved_*` are the
+            // honest classifications, never a pass). `failed:<kind>` —
+            // and any spelling outside the set — never verifies; a
+            // counted `violation` fails closed the same way (pass-2
+            // repair: a bare-literal blocklist never matched the
+            // `failed:<kind>` prefix the fold actually emits).
             OpsCell::O2 => {
-                !matches!(
+                matches!(
                     t.outcome.as_str(),
-                    "failed" | "refusal" | "missing_observer" | "unreached_fault"
-                ) && t.boundary_observed
+                    "unknown_unprobed"
+                        | "unknown_undeterminable"
+                        | "resolved_applied"
+                        | "resolved_not_applied"
+                ) && !t.violation
+                    && t.boundary_observed
             }
             _ => t.outcome == TrialOutcome::Pass.as_str(),
         };
