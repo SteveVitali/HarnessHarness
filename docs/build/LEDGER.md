@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.44
-lastCompleted:   R5.43
+nextTicket:      R5.45
+lastCompleted:   R5.44
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.43
+chainTip:         codex/harnessharness-evidence-r5.44
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T00:07:40Z
+updatedAt:        2026-11-04T04:26:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1129,3 +1129,4 @@ updatedAt:        2026-11-04T00:07:40Z
 - 2026-11-04T02:30Z · R5.43 done — branch codex/harnessharness-evidence-r5.43 · PR #258 · base codex/harnessharness-evidence-r5.42a · GATE-G11-admitted bounded S1 execution (hh-s1-useful/1): useful.rs records-in evaluators over supplied facts only — closed 7-member LEGS; typed verdicts; executed|failed|inconclusive fold; useful_acceptance marked iff independent Decided 1e6 else withheld; carried_predicates [probe_verb_enoent, exec_backend_hello_clobber] verbatim; assemble() refuses partials — packet_id minted last; two real podman cells + real hh-bench-adapter oracle (invoked before verdict) + controls + join + worksheet. Packet reports/2026-11-04-r5.43-s1-useful.json disposition=failed — subjects inconclusive{dispatch_outcome:unknown:executor_error}; controls/observer/worksheet verified; join refused{join:submission_digest}. **Pass-2 root cause (recorded, unresolved — machinery debt):** hh-helper Hello{policy} re-derives srv.backend="seatbelt" when seatbelt available, discarding spawned --backend podman (S2.1-era — exec ran host-side; /work ENOENT => exit 1 => ToolError{executor_error} => unknown; executor_backend:"seatbelt" verbatim; earlier podman-lane exec evidence predates real policy-attached container exec). Probe ENOENT narrowed to connect()'s /bin/true placeholder spawn absent on host — journal never reached. **Verify:** r5_43 6/6 · hharness-env suites 0 failures (helper_live podman lane same diagnosed inconclusive) · fmt OK · fails-without legs present · guard PASS DISPATCH R5.43 · bm 0 viol (. + --staged) · bm-tools OK · **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** 1,915 vs ≤750 (~2.6×) — recorded Deviation per ruling 9df8f122 · **AC:** primary REQ-A-003/104 + REQ-D-201 — R-layer/downstream predicates stay owed · chainTip → codex/harnessharness-evidence-r5.43 · next → R5.44 · ci: pending #258 (logs/ci-r5.43.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-04T03:57:54Z · **R5.44 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 3,440 numstat under `crates/`, ~4.6× — **new build high-water mark, recorded explicitly**). Scoped fresh-context review verdict: **AMEND** — seq 218 one owner row (no contingency); machinery repairs are the matrix's own precondition (G11-carried predicates discharge inside the conjunctive `hh-ops-live/1` packet — `packet_id` mints `discharged_predicates`); `repairs` is a closed LEGS member; repairs-only leg non-curative (matrix stays ~3.9×) + mid-predicate; 24-trial drive one frozen permutation. Accepted as recorded Deviation; dated note on `218_R5.44__ops-live.md`; manifest row-218 note; review record `planning/2026-11-04_R5.44-split-review.md`; `runs/R5.44.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T04:26Z · R5.44 done — branch codex/harnessharness-evidence-r5.44 · PR #259 · base codex/harnessharness-evidence-r5.43 · GATE-G11-admitted bounded S4 operational-proof execution (hh-ops-live/1): opslive.rs records-in evaluators over supplied facts only — closed 11-member LEGS; typed verdicts; executed|failed|inconclusive fold; discharged_predicates verbatim; assemble() refuses partials — packet_id minted last. Machinery repairs discharged (fails-without): Hello{policy} no longer clobbers spawned --backend podman (direct-only promotion kept); probe() reaches the journal on the live channel + preserve_until reconnect (no /bin/true placeholder); surfaced+repaired: accept-loop flag read after serve; store-root-hashed hh-env-* container names; O3Cell/o3_outcome landed. 24-trial live drive — real podman exec-bearing cells, native Account O6/O7; ≤1 setup retry/cell, all attempts retained. Packet reports/2026-11-04-r5.44-ops-live-second.json disposition=executed — all legs verified; probes applied/undeterminable verbatim; o8 3/3; denominators 3/3/cell V=0. **Pass-2 close repair:** evaluate_cell O2 ok now the closed retained vocabulary (failed:<kind> never folded to pass — the blocklist never matched the emitted spelling); chan_roundtrip dedup. **Verify:** r5_44 4/4 · hharness-env 222/222 all suites 0 failures · hharness-helper 9/9 · fmt OK · guard PASS DISPATCH R5.44 · bm 0 viol (. + --staged) · bm-tools OK · **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** 3,440 vs ≤750 (~4.6× — **new build high-water mark, recorded explicitly**) + 7 net close-review lines = 3,447 — recorded Deviation per ruling 80fa1690 · **AC:** primary REQ-B-105/C-006/D-203–207 + REQ-E-012/110/205 — R-layer/later legs stay owed · chainTip → codex/harnessharness-evidence-r5.44 · next → R5.45 · ci: pending — #259@537e8b8 all 4 checks pass; stack #258 #257 ubuntu-latest pending (logs/ci-r5.44.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
