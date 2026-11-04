@@ -107,7 +107,7 @@ pub const PINS_TOTAL: u64 = 10;
 /// declared inputs, plus the study-report digest echoed verbatim.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PinsFacts {
-    /// The pinned-input count (`13`).
+    /// The pinned-input count (`10` — [`PINS_TOTAL`]).
     pub pins: u64,
     /// The `check_pins` verdict name (`verified`).
     pub pins_verdict: String,
