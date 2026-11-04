@@ -1059,3 +1059,74 @@ ticket never marks a deferred full-target predicate MET.
 > satisfied. REQ-A-201, REQ-B-002, REQ-B-107, REQ-G-001, REQ-G-003,
 > REQ-G-005, REQ-G-008, REQ-G-009, REQ-G-201, REQ-G-202, REQ-G-207,
 > REQ-G-209 are stamped **contributing-only** — the same rule.
+> Dated primary-owner note — 2026-11-03 (seq 206, R5.36): the §4.2
+> mechanism joins and versioned denominator definitions landed
+> (ADR-0414). REQ-D-005 (policy-to-payload and versioned
+> detector/rates): N1 — `MECHANISM_REGISTRY`
+> (crates/hh-eval/src/mechanism.rs) declares 21 rows at `version: 1`
+> before collection — name/family/unit/bounds/direction/
+> detector-extractor id/reducer/windowed/required; the exact
+> idempotency-key join `reliability.repeated_action_rate` and the
+> retained approximation `reliability.repeated_action_similarity`
+> (`required: false`, the old `repeated_action_count` oracle keeps
+> its name) are distinct rows — `ac2_missing_key_extractor_and_
+> zero_denominators` pins both spellings; fallback counts the
+> started rows whose `variant_ref` differs from the declared
+> intended variant (assigned-arm deviation, never a relabelled arm).
+> REQ-D-106 (registered rate windows/joins/coverage): N2 — for
+> every completed compaction c the subject window is
+> `(completion_seq(c), subject_execution_stop_seq]`; golden
+> `ac1_overlapping_windows_retain_joins_and_intensity` shows the
+> seq-18 read joining BOTH c8 and c16 windows (overlapping
+> `(c,event)` membership retained — joins `(8,10,x) (8,12,x)
+> (8,18,x) (16,18,x) (16,18,z)`) and the seq-28 post-execution
+> delivery never joining; `subject_stop_seq` is the projected
+> earliest durable boundary (first phase→verify|teardown, first
+> `control.decision{kind:"stop"}`, `lifecycle.run.finished`) —
+> `ac2_post_execution_grade_cannot_enter_windows` proves the
+> boundary, not the row class, does the excluding; coverage is
+> disclosed per task×arm cell (`TaskMean.available/total`, unpaired
+> tasks retained beside in `MetricContrast.unpaired`, never folded).
+> REQ-E-004 (declared control/trigger semantics and exact
+> detector/denominator mapping): N3 — every registry row binds a
+> named detector id; missing required inputs are typed, never
+> guessed: missing `idempotency_key` / absent extractor / undeclared
+> totals ⇒ `no_detector`, zero denominator ⇒ `estimator_undefined`,
+> absent or inapplicable summary ⇒ `inapplicable`
+> (`ac2_missing_key_extractor_and_zero_denominators`); no-trigger /
+> no-detector / fallback / ineffective outcomes stay distinct in the
+> fold (`trigger_first_subject_rate` non-first ⇒ inapplicable).
+> REQ-E-107 (declared mechanism detectors, eligible denominators
+> and missingness before native counts→rates): N4 —
+> `mechanism.eligible_count` carries the declared eligible pressure
+> opportunities separately from starts/completions; unavailable
+> required members stay in the family report
+> (`ac2_unavailable_required_members_stay_in_family` — family rows
+> enumerate the whole registry, `unavailable` status, never
+> dropped); `subject_ratio→task_mean→equal_task` reducers average
+> *available* subject ratios within task then weight `w_t = 1/T` —
+> `ac1_subject_ratio_task_mean_equal_task_contrast` hand-counts the
+> −0.625 two-task contrast in declared `ratio` units; events are
+> never pooled and tasks never weighted by opportunities.
+> Evidence `crates/hh-eval/tests/r5_36.rs` 5/5 — the golden
+> fixtures hand-count Value{5,4} reacquisition intensity (>1,
+> unclamped), Value{1,1} exact-idempotency repeated action, Value
+> {2,3}/{2,2}/{2,2}/{1,2}/{1,1}/{2,2}/{40,100} activation/fidelity/
+> request-change/ineffective/trigger/recall/overhead, and the
+> distinct eligible(3)/starts(2)/completions(2)/ineffective(1)/
+> fallback(0)/compaction(2) counts. Achieved **engineered D/E**;
+> achieved layer `engineered` (golden-fixture recompute over
+> projected durable rows — actual CI execution on pushed heads read
+> at close per O-06). Owed: the R/P and actual-execution predicates
+> stay with the register — the registered protocol freeze of
+> detector/extractor versions and windows before any collection
+> (R5.41), the study report legs (primary contributor REQ-D-106 →
+> R5.49) and the wire contract (REQ-D-005 → R5.20, evidence
+> dependency never dispatch); this note does not mark
+> REQ-D-005/REQ-D-106/REQ-E-004/REQ-E-107 fully satisfied.
+> REQ-D-109 / REQ-D-310 / REQ-E-209 / REQ-H-010 gain R5.36 as a
+> **contributing-only** evidence row — achieved engineered D/E
+> recorded separately from the owed legs; their primary owner stays
+> R5.40 AC-3 (evidence dependency, never dispatch); all four targets
+> keep `planned; unmet` — this ticket never marks a deferred
+> full-target predicate MET.

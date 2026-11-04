@@ -72,6 +72,8 @@ pub struct PhaseChange {
 /// One `action.effect.*` row projection.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EffectRow {
+    /// The ledger seq (the §4.2 mechanism windows' join coordinate).
+    pub seq: u64,
     /// The effect id.
     pub effect_id: String,
     /// The declared `idempotency_key`.
@@ -184,6 +186,8 @@ pub struct AssembledItem {
 /// One `context.artefact.*` delivery row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArtefactRow {
+    /// The ledger seq (the §4.2 mechanism windows' join coordinate).
+    pub seq: u64,
     /// The artefact id.
     pub artefact_id: String,
     /// The delivery id.
@@ -532,6 +536,15 @@ pub struct LedgerFacts {
     pub run_created: bool,
     /// `lifecycle.run.finished` observed (with the stop-reason JSON).
     pub finished: Option<Json>,
+    /// `subject_execution_stop_seq` — the earliest durable post-execution
+    /// boundary the §4.2 mechanism windows close at: the first
+    /// `action.environment.phase.changed{to: verify|teardown}` (the agent
+    /// phase ends — grading begins), the first
+    /// `control.decision{kind:"stop"}` (the context producer's
+    /// execution-stop row), or the run's own `lifecycle.run.finished`.
+    /// `None` = no recorded stop; windowed detectors then report
+    /// `no_detector`, never an unbounded guess.
+    pub subject_stop_seq: Option<u64>,
     /// The egress rows (request + joined decision).
     pub egress: Vec<EgressRow>,
     /// The phase timeline.
@@ -649,8 +662,9 @@ fn b(j: &Json, member: &str) -> Option<bool> {
     }
 }
 
-fn effect_row(j: &Json) -> EffectRow {
+fn effect_row(seq: u64, j: &Json) -> EffectRow {
     EffectRow {
+        seq,
         effect_id: s(j, "effect_id").unwrap_or_default(),
         idempotency_key: s(j, "idempotency_key"),
         compensates: s(j, "compensates"),
@@ -658,8 +672,9 @@ fn effect_row(j: &Json) -> EffectRow {
     }
 }
 
-fn artefact_row(j: &Json) -> ArtefactRow {
+fn artefact_row(seq: u64, j: &Json) -> ArtefactRow {
     ArtefactRow {
+        seq,
         artefact_id: s(j, "artefact_id").unwrap_or_default(),
         delivery_id: s(j, "delivery_id"),
         detector: s(j, "detector"),
@@ -825,8 +840,8 @@ impl LedgerFacts {
                         rule_ref: d.and_then(|(_, r, _)| r.clone()),
                     });
                 }
-                "action.effect.intended" => f.effects_intended.push(effect_row(p)),
-                "action.effect.committed" => f.effects_committed.push(effect_row(p)),
+                "action.effect.intended" => f.effects_intended.push(effect_row(seq, p)),
+                "action.effect.committed" => f.effects_committed.push(effect_row(seq, p)),
                 "action.effect.unattributed" => {
                     f.unattributed_signals.push(UnattributedSignal {
                         seq,
@@ -917,9 +932,9 @@ impl LedgerFacts {
                             .map(str::to_string),
                     });
                 }
-                "context.artefact.delivered" => f.artefacts_delivered.push(artefact_row(p)),
-                "context.artefact.activated" => f.artefacts_activated.push(artefact_row(p)),
-                "verification.artefact.followed" => f.artefacts_followed.push(artefact_row(p)),
+                "context.artefact.delivered" => f.artefacts_delivered.push(artefact_row(seq, p)),
+                "context.artefact.activated" => f.artefacts_activated.push(artefact_row(seq, p)),
+                "verification.artefact.followed" => f.artefacts_followed.push(artefact_row(seq, p)),
                 "context.assembled" => {
                     let call = s(p, "model_call_id").unwrap_or_default();
                     let mut items = Vec::new();
@@ -1237,6 +1252,32 @@ impl LedgerFacts {
                 _ => {}
             }
         }
+        // The subject-execution-stop projection (§4.2): the earliest
+        // durable evidence the subject's execution ended — post-execution
+        // grading rows land above it and can never join a window.
+        let phase_stop = f
+            .phases
+            .iter()
+            .filter(|c| matches!(c.to.as_str(), "verify" | "teardown"))
+            .map(|c| c.seq)
+            .min();
+        let mut decision_stop = None;
+        let mut finished_seq = None;
+        for r in events {
+            match r.class.as_str() {
+                "control.decision" if s(&r.payload, "kind").as_deref() == Some("stop") => {
+                    decision_stop = Some(decision_stop.map_or(r.seq, |e: u64| e.min(r.seq)));
+                }
+                "lifecycle.run.finished" => {
+                    finished_seq = Some(finished_seq.map_or(r.seq, |e: u64| e.min(r.seq)));
+                }
+                _ => {}
+            }
+        }
+        f.subject_stop_seq = [phase_stop, decision_stop, finished_seq]
+            .into_iter()
+            .flatten()
+            .min();
         f
     }
 
@@ -1259,6 +1300,7 @@ impl LedgerFacts {
             .collect();
         let effect = |e: &EffectRow| {
             let mut m = BTreeMap::new();
+            m.insert("seq".into(), Json::Int(e.seq as i64));
             m.insert("effect_id".into(), Json::str(&e.effect_id));
             insert_opt(
                 &mut m,
@@ -1275,6 +1317,7 @@ impl LedgerFacts {
         };
         let artefact = |a: &ArtefactRow| {
             let mut m = BTreeMap::new();
+            m.insert("seq".into(), Json::Int(a.seq as i64));
             m.insert("artefact_id".into(), Json::str(&a.artefact_id));
             insert_opt(
                 &mut m,
@@ -1302,6 +1345,11 @@ impl LedgerFacts {
         m.insert("schema".into(), Json::str("ledger_facts/1"));
         m.insert("run_created".into(), Json::Bool(self.run_created));
         insert_opt(&mut m, "finished", self.finished.clone());
+        insert_opt(
+            &mut m,
+            "subject_stop_seq",
+            self.subject_stop_seq.map(|v| Json::Int(v as i64)),
+        );
         m.insert("egress".into(), Json::Arr(egress));
         m.insert(
             "phases".into(),
@@ -1958,6 +2006,7 @@ impl LedgerFacts {
                 "schema",
                 "run_created",
                 "finished",
+                "subject_stop_seq",
                 "egress",
                 "phases",
                 "effects_intended",
@@ -2004,6 +2053,7 @@ impl LedgerFacts {
         let mut f = LedgerFacts {
             run_created: opt_bool_at(m, "run_created")?.unwrap_or(false),
             finished: m.get("finished").cloned(),
+            subject_stop_seq: opt_int_at(m, "subject_stop_seq")?.map(|x| x as u64),
             ..LedgerFacts::default()
         };
         if let Some(Json::Arr(es)) = m.get("egress") {
@@ -2029,12 +2079,14 @@ impl LedgerFacts {
             }
         }
         let effect = |e: &Json| EffectRow {
+            seq: e.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
             effect_id: s(e, "effect_id").unwrap_or_default(),
             idempotency_key: s(e, "idempotency_key"),
             compensates: s(e, "compensates"),
             reverts: s(e, "reverts"),
         };
         let artefact = |a: &Json| ArtefactRow {
+            seq: a.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
             artefact_id: s(a, "artefact_id").unwrap_or_default(),
             delivery_id: s(a, "delivery_id"),
             detector: s(a, "detector"),

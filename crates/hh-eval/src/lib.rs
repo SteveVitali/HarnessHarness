@@ -35,6 +35,7 @@ pub mod hosted_metrics;
 pub mod interventions;
 pub mod judge;
 pub mod loss;
+pub mod mechanism;
 pub mod opacity;
 pub mod oracle;
 pub mod population;
