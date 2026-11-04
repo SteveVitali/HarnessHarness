@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.49
-lastCompleted:   R5.48
+nextTicket:      HUMAN-H9
+lastCompleted:   R5.49
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.48
+chainTip:         codex/harnessharness-evidence-r5.49
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T08:54:30Z
+updatedAt:        2026-11-04T09:56:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1159,3 +1159,4 @@ updatedAt:        2026-11-04T08:54:30Z
 - 2026-11-04T09:00Z · **R5.49 fleshed — skeleton → ticket (admitted-study recompute report)** under GATE-G14 PASSED — quote-only confirmation (readouts/GATE-G14.md; operator verbatim "confirmed, please continue fully autonomously" 2026-11-04T08:04:17Z; block sha256 `640d68742873` confirmed): contract 226 rewritten — Run line, recompute scope (the skeleton's "actual native finite-manifest efficacy, task-mixture, sharp-null, parity and mechanism report" binds to what exists — nine committed packets: activation/pilot/ops-live-second executed, ops-live-first/s1-useful failed, pre-flight ×2 inconclusive, parity/confirmation withheld; **no confirmation evidence exists to report** — unavailable families recorded unavailable, never fabricated), `hh-study-report/1` packet legs `freeze_identities|pre_flight|useful_s1|ops_live|activation|pilot|parity|confirmation|families|costs`, committed packet ids + freeze/`protocol_id` recompute pins verbatim, numbered ACs bound to the recompute scope (AC-1 REQ-D-009 anchor unmoved); USD $0.00; S1/S3/S4 unmet. Manifest row 226 skeleton → ticket. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T09:13:33Z · **R5.49 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 2,376 numstat under `crates/`, ~3.17×). Scoped fresh-context review verdict: **AMEND** — seq 226 one owner row; conjunctive `hh-study-report/1` packet (closed 10-member LEGS); impl-vs-battery rejected AND numerically non-curative (each half alone ~1.57×/~1.60×); all cuts non-curative or undocumented. Accepted as recorded Deviation; dated note on `226_R5.49__study-report.md`; manifest row-226 note; review record `planning/2026-11-04_R5.49-split-review.md`; `runs/R5.49.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T09:56Z · R5.49 done — branch codex/harnessharness-evidence-r5.49 · PR #264 · base codex/harnessharness-evidence-r5.48 · GATE-G14 PASSED — quote-only confirmation: `hh-study-report/1` admitted-study recompute report (`study.rs` — records-in recompute evaluators over supplied facts only, never manufacturing a stage/execution/verdict): closed ten-member LEGS; `check_echo` byte-equality refold; typed verdicts (preflight codec); reported|failed|inconclusive fold; assemble() refuses partials — packet_id minted last. Emitted reports/2026-11-04-r5.49-study-report.json disposition=reported admission=recompute_only — golden() re-materialized protocol_id byte-equals committed manifest_frozen fact + pilot inherits_freeze_id byte-equals activation freeze, nine committed packets refolded byte-equal (preflight ×2 inconclusive/s1-useful failed/ops-live failed+executed/activation+pilot executed/parity+confirm withheld), §4.2 denominators + nearest-rank tails + §3.2 bound + §9.2 maxima re-derived equal, REQ-D-009 nine-family separation (unavailable stays unavailable, no claim either sign), $0.00 rollup subjects_first=12, study: unmet{efficacy_unavailable;parity_withheld} s1/s3/s4 unmet. **Verify:** r5_49 8/8 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at b1a8644d · guard PASS DISPATCH R5.49 pre+post · bm 0 viol (. + --staged) · bm-tools OK · pass-2 repair: first-record detail spellings byte-asserted (packet byte-identical). **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** 2,376 vs ≤750 (~3.17×) → 2,386 net post pass-2 repair (~3.18×) — AMEND ruling 3f0c4c12 (stopped at trigger) · chainTip → codex/harnessharness-evidence-r5.49 · next → HUMAN-H9 · ci: pass — #264@02b7360 all 4 checks pass (run 41807513984; macos rerun after recorded helper_live deadline flake); stack #263/#262/#261/#260 pass — logs/ci-r5.49.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent
