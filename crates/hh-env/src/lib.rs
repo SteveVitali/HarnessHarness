@@ -30,6 +30,7 @@ pub mod helper;
 pub mod leaf_admission;
 pub mod local;
 pub mod observe;
+pub mod ops;
 pub mod protocol;
 pub mod provider;
 pub mod record;

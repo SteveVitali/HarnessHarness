@@ -888,3 +888,41 @@ ticket never marks a deferred full-target predicate MET.
 > never dispatch); this note does not mark REQ-A-205/REQ-B-004
 > fully satisfied. REQ-C-007, REQ-G-008, REQ-G-101/102/103/105/107
 > are stamped **contributing-only** — the same rule.
+
+> Dated contributing note — 2026-11-03 (seq 202, R5.32): the
+> §5.2/D3-F3 confined observer apparatus and Kp4 controls landed
+> through `crates/hh-env/src/ops.rs` (`pub mod ops`, ADR-0410) —
+> `TrialMarker`/`MarkerSink` (the durable append-only marker log
+> standing in for the external world: one fixed non-idempotent
+> append, flush+fsync, disk re-read `markers()`/`count_for`/
+> `duplicates()`/`digest()`), `Sentinel` (denied/read-only target,
+> digest-pinned `intact()`), `OpsObserver` (independently surviving
+> `observer.jsonl` on its own path — re-open retains rows,
+> `before_launch`/`at_boundary`/`after_quiescence` snapshots),
+> the probe vocabulary (`ProbeSource`/`RecordedProbe`/
+> `probe_authorization` — `ExternalSinkZero` inadmissible, terminal
+> `Refused`), and the pure verdict folds (`o1_outcome`,
+> `o8_outcome`, `kp4_outcome`; closed `TrialFailure` set;
+> `defect_detected` ≠ `pass`; `Kp4Outcome` retains `Unknown*`,
+> never `pass`). Engineered evidence in
+> `crates/hh-env/tests/r5_32.rs` (7/7 — compile-red at base
+> `08838f54`) driving the real Store/WAL, Π `Monitor` allow rows,
+> `Dispatcher` and the R5.8 `inject_kill_point` seam: O1 allowed
+> control passes with complete evidence (one marker, matching
+> digests, three intervals, intact sentinel); O2 kp-4 injected →
+> boundary sink delta 0 → new-fence restore →
+> `unknown{worker_lost}` + probe obligation, repeated restoration
+> adds no commit/dispatch, outcome retained unknown; O8 seeded
+> duplicate `defect_detected` 3/3; observer record survives
+> subject death; the AC-2 negative matrix (missing observer,
+> unreached fault, duplicate restoration, stale fence, no valid
+> probe, undeterminable, sentinel mutation, external-zero
+> inadmissible) cannot pass. REQ-B-105 / REQ-C-006 / REQ-D-203 /
+> REQ-D-204 / REQ-D-205 / REQ-D-206 / REQ-D-207 / REQ-E-012 /
+> REQ-E-110 / REQ-E-205 gain R5.32 as a **contributing-only**
+> evidence row — achieved engineered D/E recorded separately from
+> the owed legs: the O×3 real-trial / R / P / actual-execution
+> predicates stay owed to their primary owner R5.44 AC-1 (evidence
+> dependency, never dispatch); all ten targets keep
+> `planned; unmet` — this ticket never marks a deferred
+> full-target predicate MET.
