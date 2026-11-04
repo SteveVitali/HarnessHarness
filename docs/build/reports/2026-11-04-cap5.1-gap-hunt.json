@@ -1,0 +1,116 @@
+{
+  "schema": "hh-capstone-gap-hunt/1",
+  "version": "1.0.0",
+  "generated_by": "docs/build/tools/cap5_gap_hunt.py",
+  "base": "27699a432bea06a9fd30f88f087d4f42943a813e",
+  "scope": "round-5 landed record vs coverage register/gate decisions/deferrals",
+  "checks": [
+    {
+      "check": "NC-1",
+      "name": "packet inventory",
+      "verdict": "pass",
+      "detail": "17 files parsed; expected 17; missing=[] extra=[]"
+    },
+    {
+      "check": "NC-2",
+      "name": "disposition fold consistency",
+      "verdict": "pass",
+      "detail": "re-folded 16 packets; mismatches=[]"
+    },
+    {
+      "check": "NC-3",
+      "name": "gate\u2194record verbatim",
+      "verdict": "pass",
+      "detail": "gate_readout legs cross-checked; structural problems=[]"
+    },
+    {
+      "check": "NC-4",
+      "name": "deferral integrity",
+      "verdict": "pass",
+      "detail": "105 DEFERRALS ids; 104 cited; missing=[]"
+    },
+    {
+      "check": "NC-5",
+      "name": "coverage register integrity",
+      "verdict": "pass",
+      "detail": "180 rows; dispositions={'merged-with': 12, 'adopted': 167, 'superseded-by': 1}; problems=0"
+    },
+    {
+      "check": "NC-6",
+      "name": "register status honesty",
+      "verdict": "pass",
+      "detail": "inflated=[]"
+    },
+    {
+      "check": "NC-7",
+      "name": "BUILD_INDEX consistency",
+      "verdict": "pass",
+      "detail": "250 rows; dup_prs={}; problems=[]"
+    },
+    {
+      "check": "NC-8",
+      "name": "ledger machine-state + phase log",
+      "verdict": "pass",
+      "detail": "missing done=[]; current_state_ok=True"
+    },
+    {
+      "check": "NC-9",
+      "name": "over-claim scan",
+      "verdict": "pass",
+      "detail": "problems=[]"
+    },
+    {
+      "check": "NC-10",
+      "name": "coverage anchor \u21c4 contributing record",
+      "verdict": "pass",
+      "detail": "problems=0; bad req stamps=set()"
+    },
+    {
+      "check": "NC-11",
+      "name": "owed-work homes",
+      "verdict": "pass",
+      "detail": "orphan findings=0"
+    },
+    {
+      "check": "NC-12",
+      "name": "human/gate readouts",
+      "verdict": "pass",
+      "detail": "missing=[]"
+    }
+  ],
+  "findings": [],
+  "findings_repaired_this_run": [
+    {
+      "finding": "DF-H9-1 cited by six withheld/unselected packets, GATE-G15/G16 decisions, H9/H10/H11 readouts and manifest notes, but no DEFERRALS.md row existed \u2014 'a deferral not in that file did not happen'",
+      "repair": "minted DF-H9-1 verbatim (owner/trigger/control from readouts/HUMAN-H9.md) \u2014 record repair, not a new decision",
+      "severity_was": "high"
+    },
+    {
+      "finding": "GATE DECISIONS GATE-G12 row still read 'Reading 2 PENDING' though Reading 2 PASSED 2026-11-04T05:44:42Z (readouts/GATE-G12.md; pilot packet executed on it)",
+      "repair": "appended the verbatim reading-2 GATE DECISIONS row; the old row's PENDING text is history per append-only rules",
+      "severity_was": "medium"
+    },
+    {
+      "finding": "GATE DECISIONS GATE-G15 decided_at reads 2026-11-04T14:32:56Z; readouts/GATE-G15.md + six packets' gate_readout.decided_at + PHASE LOG + BUILD_INDEX all carry 2026-11-04T14:32:29Z",
+      "repair": "appended a dated correction row naming the verbatim value (timestamp record corrected, decision untouched)",
+      "severity_was": "medium"
+    },
+    {
+      "finding": "failed S1 useful execution (REQ-A-003/A-104 + R5.43 contributor legs on REQ-A-004/A-102) had no owed-work home \u2014 packet disposition=failed, 'primary only' contributors, no DEFERRALS row",
+      "repair": "minted DF-CAP5.1-1 \u2014 residual routed to GATE-G17 scope disposition or an earlier named re-execution admission",
+      "severity_was": "high"
+    }
+  ],
+  "counts": {
+    "checks": 12,
+    "checks_failed": 0,
+    "findings": 0,
+    "findings_repaired": 4,
+    "matrix_rows": 180,
+    "verdict_rollup": {
+      "MET": 78,
+      "PARTIAL": 73,
+      "MET-ENGINEERED": 29
+    }
+  }
+}
