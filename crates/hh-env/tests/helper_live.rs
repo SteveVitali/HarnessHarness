@@ -1240,12 +1240,11 @@ fn ac_s2_local_container_exec_runs_inside_podman() {
     let out = disp
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)
         .unwrap();
-    // The session's verbatim backend: `hh-helper`'s `Hello{policy}`
-    // re-derives `srv.backend = "seatbelt"` when seatbelt is available,
-    // discarding the spawned `--backend podman` — the
-    // `exec_backend_hello_clobber` machinery gap diagnosed at R5.43
-    // (named machinery debt; a typed inconclusive on this host, never a
-    // simulated container exec).
+    // The session's verbatim backend: R5.44 repaired
+    // `exec_backend_hello_clobber` — the spawned `--backend podman`
+    // selection now survives `Hello{policy}` (`container` reported;
+    // before the repair the hello re-derived `seatbelt` and the exec ran
+    // host-side — a typed inconclusive on this host).
     let reported_backend = exec.client.backend.clone();
     driver.return_executor(&h.env_handle_id, exec);
     if reported_backend != "container" {

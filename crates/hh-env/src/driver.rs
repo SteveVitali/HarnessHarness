@@ -831,8 +831,15 @@ impl EnvDriver {
                         })
                     }
                 };
+                // The name carries a store-root hash so parallel drivers
+                // (and a leaked container) can't collide on the same
+                // per-store `env-NNNNNN` id — the same uniqueness the
+                // socket dir derives below (R5.44's live matrix surfaced
+                // the collision — a SIGKILLed helper leaves the container
+                // running and the next run's identical name refuses
+                // `podman create`).
                 let container = format!(
-                    "hh-env-{}",
+                    "hh-env-{}-{}",
                     h.env_handle_id
                         .chars()
                         .map(|c| if c.is_ascii_alphanumeric() || c == '-' {
@@ -840,7 +847,11 @@ impl EnvDriver {
                         } else {
                             '-'
                         })
-                        .collect::<String>()
+                        .collect::<String>(),
+                    &hharness_identity::idp::idp_digest(
+                        "container_name",
+                        store.root().to_string_lossy().as_bytes(),
+                    )[..8]
                 );
                 let ws = h.roots.cwd.clone();
                 std::fs::create_dir_all(&ws)

@@ -922,12 +922,14 @@ fn ac2_mediation_observer_real_drive() {
     assert_eq!(o.intervals, 3);
     assert_eq!(o.sentinel_intact, Some(true));
     assert!(o.survived);
-    // The surviving-observer folds verified on this host; the live
-    // `probe()` re-hello returned `Err` (recorded `probe_absent`) — a
-    // typed inconclusive leg, never a simulated verdict.
+    // The surviving-observer folds verified on this host; the repaired
+    // `probe()` verb (R5.44's `probe_verb_enoent` discharge) now reaches
+    // the journal on the live channel and answers `undeterminable` for
+    // the never-executed probe id — a typed inconclusive leg, never a
+    // simulated verdict (pre-repair this was `probe_absent`/ENOENT).
     assert_eq!(
         evaluate_observer(&o),
-        LegVerdict::Inconclusive("probe_absent".to_string()),
+        LegVerdict::Inconclusive("probe_undeterminable".to_string()),
         "observer {o:?}"
     );
 }

@@ -186,8 +186,18 @@ fn dispatch(
                 match serde_policy(pj) {
                     Ok(p) => {
                         *srv.policy.lock().unwrap() = Some(p);
-                        if seatbelt::is_available() {
-                            *srv.backend.lock().unwrap() = "seatbelt";
+                        // The *spawned* backend wins: an explicit
+                        // `--backend podman`/`seatbelt` selection is never
+                        // clobbered by a policy hello (R5.44 repairs
+                        // `exec_backend_hello_clobber` — a podman cell's
+                        // policy hello re-derived `seatbelt`, running the
+                        // contained exec host-side). Only the unselected
+                        // `direct` lane still promotes when seatbelt
+                        // exists — a policy arriving without a containment
+                        // backend keeps its containment semantic.
+                        let mut b = srv.backend.lock().unwrap();
+                        if *b == "direct" && seatbelt::is_available() {
+                            *b = "seatbelt";
                         }
                     }
                     Err(e) => {

@@ -31,6 +31,7 @@ pub mod leaf_admission;
 pub mod local;
 pub mod observe;
 pub mod ops;
+pub mod opslive;
 pub mod preflight;
 pub mod protocol;
 pub mod provider;

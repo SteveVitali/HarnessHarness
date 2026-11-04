@@ -1353,14 +1353,22 @@ fn ac2_ac3_controls_and_oracle_chain_real() {
     // `useful_acceptance` withheld — never a forced `executed`.
     let controls_leg = report.legs.iter().find(|l| l.name == "controls").unwrap();
     assert_eq!(controls_leg.verdict, LegVerdict::Verified, "{report:?}");
-    if d.oracle_outcomes
+    // `marked` iff a *subject* artifact independently graded Decided 1e6 —
+    // the same predicate `assemble` folds (the correct control always
+    // scores 1e6; it never marks). Post-R5.44 the repaired machinery lets
+    // the subjects execute for real, so their honest grades flow through.
+    let marked = d
+        .oracle_outcomes
         .iter()
-        .any(|o| o.reward_ppm == Some(1_000_000))
-    {
+        .filter(|o| o.subject_id.starts_with("subject_"))
+        .any(|o| o.outcome.as_deref() == Some("decided") && o.reward_ppm == Some(1_000_000));
+    if marked {
         assert_eq!(report.disposition, Disposition::Executed, "{report:?}");
         assert_eq!(report.useful_acceptance, "marked");
     } else {
-        assert_ne!(report.disposition, Disposition::Executed, "{report:?}");
+        // `executed` + withheld is honest: the cells ran and the oracle
+        // graded the artifacts — subjects simply didn't independently
+        // reach 1e6 (never upgraded to `marked`).
         assert!(
             report.useful_acceptance.starts_with("withheld"),
             "{report:?}"

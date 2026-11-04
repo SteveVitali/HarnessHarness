@@ -24,6 +24,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use hharness_containment::policy::IsolationClass;
@@ -78,14 +79,27 @@ pub fn helper_binary() -> Option<PathBuf> {
     None
 }
 
-/// `HelperClient` — a live session to one spawned `hh-helper`.
-pub struct HelperClient {
-    /// The helper process (kept for teardown; `kill` on drop).
-    child: Child,
-    /// The session channel (NDJSON over the unix socket).
+/// `Chan` — the two halves of the session channel, mutex'd so the
+/// read-only `probe(&self)` instrument can ask the journal on the open
+/// channel without taking `&mut self` (R5.44's `probe_verb_enoent`
+/// repair — the verb resolves to the journal directly, never through a
+/// placeholder spawn).
+struct Chan {
+    /// The read half.
     reader: BufReader<UnixStream>,
     /// The write half.
     writer: UnixStream,
+}
+
+/// `HelperClient` — a live session to one spawned `hh-helper`.
+pub struct HelperClient {
+    /// The helper process (kept for teardown; `kill` on drop). `None` on
+    /// `connect` — a resumed session's helper is not our child (the
+    /// `/bin/true` placeholder was the `probe_verb_enoent` defect: absent
+    /// on this host, the spawn never let the verb reach the channel).
+    child: Option<Child>,
+    /// The session channel (NDJSON over the unix socket).
+    chan: Mutex<Chan>,
     /// The session id (`hello`'s reply).
     pub session_id: String,
     /// The session nonce (the `commit_proof` recompute key — kernel-held,
@@ -202,9 +216,11 @@ impl HelperClient {
                 .map_err(|e| EnvError::Blob(format!("helper channel: {e}")))?,
         );
         Ok(HelperClient {
-            child,
-            reader,
-            writer: stream,
+            child: Some(child),
+            chan: Mutex::new(Chan {
+                reader,
+                writer: stream,
+            }),
             session_id: String::new(),
             session_nonce: String::new(),
             backend: backend.to_string(),
@@ -214,7 +230,10 @@ impl HelperClient {
     }
 
     /// `connect(socket)` — attach to a *running* helper (the reattach path —
-    /// kernel death ≠ environment death; the session resumes).
+    /// kernel death ≠ environment death; the session resumes). The helper
+    /// process is not ours on resume: `child` stays `None` — no placeholder
+    /// spawn (the `/bin/true` placeholder was the `probe_verb_enoent`
+    /// defect — absent on this host, `connect` died before the channel).
     pub fn connect(socket: &Path) -> Result<HelperClient, EnvError> {
         let stream = UnixStream::connect(socket)
             .map_err(|e| EnvError::Blob(format!("helper reconnect: {e}")))?;
@@ -223,17 +242,12 @@ impl HelperClient {
                 .try_clone()
                 .map_err(|e| EnvError::Blob(format!("helper channel: {e}")))?,
         );
-        // The child handle is not ours on resume — a reaped pid placeholder.
-        let child = Command::new("/bin/true")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| EnvError::Blob(e.to_string()))?;
         Ok(HelperClient {
-            child,
-            reader,
-            writer: stream,
+            child: None,
+            chan: Mutex::new(Chan {
+                reader,
+                writer: stream,
+            }),
             session_id: String::new(),
             session_nonce: String::new(),
             backend: "resumed".to_string(),
@@ -284,16 +298,19 @@ impl HelperClient {
     /// `request_json(j)` — send an arbitrary `Json` frame (the malformed-/
     /// unknown-verb probe path — the typed refusal is the answer).
     pub fn request_json(&mut self, j: &Json) -> Result<Json, EnvError> {
+        let mut chan = self.chan.lock().map_err(|_| EnvError::Transport {
+            detail: "helper channel lock poisoned".into(),
+        })?;
         let line = j.to_canonical_string();
-        self.writer
+        chan.writer
             .write_all(line.as_bytes())
-            .and_then(|_| self.writer.write_all(b"\n"))
-            .and_then(|_| self.writer.flush())
+            .and_then(|_| chan.writer.write_all(b"\n"))
+            .and_then(|_| chan.writer.flush())
             .map_err(|e| EnvError::Transport {
                 detail: format!("helper send: {e}"),
             })?;
         let mut buf = String::new();
-        self.reader
+        chan.reader
             .read_line(&mut buf)
             .map_err(|e| EnvError::Transport {
                 detail: format!("helper recv: {e}"),
@@ -322,20 +339,77 @@ impl HelperClient {
         self.request(&HelperRequest::ListDetached).is_ok()
     }
 
+    /// `sever_channel()` — the kernel-loss seam (test/resume surface):
+    /// close the session channel *without* touching the helper process —
+    /// `preserve_until` keeps the session servable for the reconnecting
+    /// `probe`/`resume_helper` paths. Requests on the severed channel
+    /// fail at the transport plane.
+    pub fn sever_channel(&mut self) {
+        if let Ok(chan) = self.chan.lock() {
+            let _ = chan.writer.shutdown(std::net::Shutdown::Both);
+        }
+    }
+
+    /// `session_request(req)` — one request on the *open* session channel
+    /// under `&self` (the mutex'd channel) — the probe verb's live path:
+    /// the journal answers directly, no reconnect, no placeholder.
+    /// `Err(Transport)` when the channel is dead (kernel loss → the
+    /// caller's reconnect path); a live refusal stays `HelperRefused`.
+    pub fn session_request(&self, req: &HelperRequest) -> Result<Json, EnvError> {
+        let mut chan = self.chan.lock().map_err(|_| EnvError::Transport {
+            detail: "helper channel lock poisoned".into(),
+        })?;
+        let line = req.to_json().to_canonical_string();
+        chan.writer
+            .write_all(line.as_bytes())
+            .and_then(|_| chan.writer.write_all(b"\n"))
+            .and_then(|_| chan.writer.flush())
+            .map_err(|e| EnvError::Transport {
+                detail: format!("helper send: {e}"),
+            })?;
+        let mut buf = String::new();
+        chan.reader
+            .read_line(&mut buf)
+            .map_err(|e| EnvError::Transport {
+                detail: format!("helper recv: {e}"),
+            })?;
+        if buf.is_empty() {
+            return Err(EnvError::Transport {
+                detail: "helper closed the channel".into(),
+            });
+        }
+        let j = json::parse(buf.trim_end()).map_err(|e| EnvError::Transport {
+            detail: format!("helper frame decode: {e}"),
+        })?;
+        match HelperResponse::from_json(&j).map_err(|e| EnvError::Transport {
+            detail: format!("helper response decode: {e}"),
+        })? {
+            HelperResponse::Ok(payload) => Ok(payload),
+            HelperResponse::Error { class, detail } => {
+                Err(EnvError::HelperRefused { class, detail })
+            }
+        }
+    }
+
     /// `shutdown` — the driver's teardown path.
     pub fn shutdown(&mut self) {
         let _ = self.request(&HelperRequest::Shutdown);
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(mut c) = self.child.take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
         let _ = std::fs::remove_file(&self.socket);
     }
 
     /// `kill_now()` — SIGKILL the helper without the `shutdown` verb (the
     /// crash-injection seam — a dead helper is the `environment_unavailable`
     /// / `unknown{executor_error}` path, never a silent redispatch).
+    /// `None` on a resumed session — that helper is not ours to kill.
     pub fn kill_now(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(mut c) = self.child.take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
     }
 }
 
@@ -344,8 +418,11 @@ impl Drop for HelperClient {
         // Dropping the client without `shutdown` still reaps the child —
         // `on_kernel_loss` semantics belong to the helper (it saw the
         // channel close); here we just don't leak a process we spawned.
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        // A `connect`ed client owns none.
+        if let Some(mut c) = self.child.take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
     }
 }
 
@@ -662,9 +739,26 @@ impl ToolExecutor for HelperExecutor {
 
     fn probe(&self, effect_id: &str, attempt_no: u64) -> Result<ProbeVerdict, EnvError> {
         // `probe` resolves to the journal — the durable exec record is the
-        // probe's answer (did the lapsed-window effect apply?). The journal
-        // verbs require a session, so a probe re-hello's on the same nonce
-        // (resume) over a fresh channel — `probe` takes `&self`.
+        // probe's answer (did the lapsed-window effect apply?). The verb
+        // asks the *live* session channel first (the journal is served on
+        // the open channel — R5.44's `probe_verb_enoent` repair); a dead
+        // channel (kernel loss) falls to the `preserve_until` reconnect:
+        // `connect` + `hello{resume}` + `Probe` on a fresh channel.
+        let req = HelperRequest::Probe {
+            effect_id: effect_id.to_string(),
+            attempt_no,
+        };
+        match self.client.session_request(&req) {
+            Ok(r) => return Ok(probe_fold(&r)),
+            // The session answered: the journal has no execution for this
+            // coordinate — `undeterminable`, never a fabricated verdict.
+            Err(EnvError::HelperRefused { .. }) => {
+                return Ok(ProbeVerdict::Undeterminable);
+            }
+            // The channel is dead (kernel loss) — the reconnect path.
+            Err(EnvError::Transport { .. }) => {}
+            Err(e) => return Err(e),
+        }
         let mut client = HelperClient::connect(&self.client.socket)?;
         client.hello(
             OnKernelLoss::PreserveUntil {
@@ -676,24 +770,24 @@ impl ToolExecutor for HelperExecutor {
             None,
             !self.client.session_id.is_empty(),
         )?;
-        match client.request(&HelperRequest::Probe {
-            effect_id: effect_id.to_string(),
-            attempt_no,
-        }) {
-            Ok(r) => {
-                if matches!(r.get("exited"), Some(Json::Bool(true))) {
-                    if r.get("exit_status").and_then(Json::as_int) == Some(0)
-                        && r.get("failure").is_none()
-                    {
-                        Ok(ProbeVerdict::Applied)
-                    } else {
-                        Ok(ProbeVerdict::NotApplied)
-                    }
-                } else {
-                    Ok(ProbeVerdict::Undeterminable)
-                }
-            }
+        match client.request(&req) {
+            Ok(r) => Ok(probe_fold(&r)),
             Err(_) => Ok(ProbeVerdict::Undeterminable),
         }
+    }
+}
+
+/// `probe_fold(reply)` — the journal reply → the closed verdict set:
+/// exited + exit 0 + no failure ⇒ `applied`; exited otherwise ⇒
+/// `not_applied`; anything else ⇒ `undeterminable`.
+fn probe_fold(r: &Json) -> ProbeVerdict {
+    if matches!(r.get("exited"), Some(Json::Bool(true))) {
+        if r.get("exit_status").and_then(Json::as_int) == Some(0) && r.get("failure").is_none() {
+            ProbeVerdict::Applied
+        } else {
+            ProbeVerdict::NotApplied
+        }
+    } else {
+        ProbeVerdict::Undeterminable
     }
 }
