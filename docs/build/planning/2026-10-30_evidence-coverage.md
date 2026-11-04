@@ -626,3 +626,73 @@ ticket never marks a deferred full-target predicate MET.
 > full-target predicate MET. REQ-A-103, REQ-C-003, REQ-F-005,
 > REQ-F-007, REQ-F-204 and REQ-F-205 are stamped
 > **contributing-only** — the same rule.
+
+> Dated contributing note — 2026-11-03 (seq 197, R5.27): the §6.4
+> rights, losses, quotas and recipient handoff validation landed
+> inside `hh-bundle` (ADR-0405; `crates/hh-bundle/src/rights.rs` —
+> two records-in/records-out owner interfaces beside
+> `closure.rs`/`cards.rs`,
+> `admit_handoff(&Decoded, &HandoffPlan, now_ms) →
+> Result<HandoffReport, BundleError>` and
+> `sanitize_replace(&Decoded, member, new_bytes,
+> &SanitizeTransform) → Result<SanitizedItem, BundleError>`;
+> `rights-record/1` per-item binding inputs, `handoff-report/1` +
+> `rights-tombstone/1` + `rights-supersession/1` records,
+> `idp/1`-sealed — nothing executes or materializes).
+> `admit_handoff`'s legs are the §6.4 clause verbatim:
+> `authority` (`optional_hosting` scope or an
+> `s3:`/`account:`/`http(s)://` host → `separate_authority` —
+> provisioning needs its own operator decision) → `metadata`
+> (contact/region bound; `quoted_at`/`decided_at` parse and are ≤
+> now — `missing_input`/`future_date`; `review_before` must
+> parse) → `grant` (`access_grant` only — ≤30 days, links ≤1 h →
+> `quota_breach`; write/delete/list → `grant_overreach`) →
+> `quotas` (compressed/expanded/first-wave declarations vs the
+> scope ceilings — `quota_breach`, never discard to fit); the
+> per-item loop records withheld/refused rows — unknown member,
+> absent rights record or `decision: unknown` → withheld
+> `unknown_rights`; `withheld` → withheld; `restricted` in
+> `public_review` → refused `scope_mismatch` (controlled closure
+> is not public closure); restricted/release without the named
+> recipient → withheld `unauthorized_recipient`; record expiry ≤
+> now → withheld `fetch_expired`; held-out
+> `solution`/`oracle`/`model_io` roles without license/consent
+> evidence → withheld — default restricted; over-ceiling asset →
+> `quota_breach` refusal; `present` bytes scanned —
+> `hharness_secrets::detect` → `secret_material`, a declared
+> restricted identifier → `sensitive_identifier` (hard refusals);
+> `fetch` members re-admit each location leg through
+> `trust::admit` (`fetch_expired`/`unauthorized_fetch`);
+> `redacted`/`gc` withhold by status. Departures need a real
+> disposition, evidence and an actual date ≤ now — a bare marker
+> is `marker_not_deletion`; each emits `rights-tombstone/1` plus
+> the role→procedure `disabled_procedures` set. Verdict
+> `admitted`/`withheld`/`refused`; `retention` records
+> `effective_until` = min(earliest item expiry, declared
+> `review_before`) — shorter rights override honestly.
+> `sanitize_replace` requires kind/version +
+> `mapping_permitted` (`unpermitted_mapping` refuses), scans the
+> new bytes, mints a NEW `hh-identity` address (identical →
+> `unchanged_bytes` — changed bytes never retain native
+> hashes/R1), recalculates dependent claims `{field, from, to}`
+> and emits `{procedure, native_identity, R0}` losses plus the
+> sealed supersession. Engineered evidence in
+> `crates/hh-bundle/tests/r5_27.rs` (18/18 — compile-red at base
+> `bc446fb7`): public/controlled/fetch admits, tombstoned
+> departures disabling dependent procedures, shorter-rights
+> retention, sanitize new-identity/supersession/recalculation;
+> every AC-2 refusal typed — unknown/withheld rights, secret or
+> sensitive bytes, unauthorized/expired fetch, quota/expansion
+> breach, marker-only deletion, restricted-in-public and
+> controlled-as-public, optional hosting/S3 authority,
+> missing/future dates, grant ceilings/overreach, held-out
+> defaults, sanitize refusals. Deviation: 1,502 changed
+> source/test lines vs ≤650 — AMEND ruling 963ff8f5
+> (`planning/2026-11-03_R5.27-split-review.md`). REQ-F-006,
+> REQ-F-207 and REQ-F-208 keep `planned; unmet` — achieved
+> engineered D/E recorded separately from the owed legs: the
+> named contributor R5.52 (outside review) and every
+> R/P/actual-execution predicate — evidence dependency, never
+> dispatch dependency; this ticket never marks a deferred
+> full-target predicate MET. REQ-F-201, REQ-F-202, REQ-G-104 and
+> REQ-G-203 are stamped **contributing-only** — the same rule.

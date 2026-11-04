@@ -103,6 +103,15 @@ pub enum BundleError {
     /// `outside_relationship`, `no_new_phase`, `new_question`);
     /// §6.3 Replay/Fresh/transfer admission (R5.26).
     CardRefused { code: &'static str, detail: String },
+    /// A §6.4 rights/handoff refusal — `code` is one of
+    /// `rights::code`'s closed set (`unknown_rights`, `withheld`,
+    /// `secret_material`, `sensitive_identifier`, `unauthorized_fetch`,
+    /// `fetch_expired`, `quota_breach`, `grant_overreach`,
+    /// `marker_not_deletion`, `scope_mismatch`, `separate_authority`,
+    /// `unauthorized_recipient`, `missing_input`, `future_date`,
+    /// `unchanged_bytes`, `unpermitted_mapping`, `malformed`); §6.4
+    /// rights/retention/recipient-handoff validation (R5.27).
+    RightsRefused { code: &'static str, detail: String },
 }
 
 impl fmt::Display for BundleError {
@@ -187,6 +196,9 @@ impl fmt::Display for BundleError {
             }
             BundleError::CardRefused { code, detail } => {
                 write!(f, "card_refused[{code}]: {detail}")
+            }
+            BundleError::RightsRefused { code, detail } => {
+                write!(f, "rights_refused[{code}]: {detail}")
             }
         }
     }
