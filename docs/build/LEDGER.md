@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.33
-lastCompleted:   R5.32
+nextTicket:      R5.34
+lastCompleted:   R5.33
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.32
+chainTip:         codex/harnessharness-evidence-r5.33
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T10:50:30Z
+updatedAt:        2026-11-03T11:37:05Z
 ```
 
 ## OPEN FINDINGS
@@ -1081,3 +1081,7 @@ updatedAt:        2026-11-03T10:50:30Z
 - 2026-11-03T10:28:07Z · **R5.32 size ruling** — worker stopped correctly at the ≤900 line trigger (measured 1,560 numstat, ~1.73×; context within estimate). Scoped fresh-context review verdict: **AMEND** — O1 packet binds apparatus+helpers+tests to one working set (no written contingency; §5.2/D3-F3 "Existence alone cannot pass" welds instrument to trials); the proposed apparatus-vs-battery cut is the R5.14b-rejected impl-vs-battery split in the strict form — ops.rs has zero tests, leg (a) lands a dead instrument, leg (b) IS the evidence; AC-1/AC-2 span the cut. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.31 precedent); dated note on `202_R5.32__observer.md`; manifest row-202 note; review record `planning/2026-11-03_R5.32-split-review.md`; `runs/R5.32.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03T10:50:30Z · R5.32 done — branch codex/harnessharness-evidence-r5.32 · PR #246 · base codex/harnessharness-evidence-r5.31 · §5.2/D3-F3 confined observer apparatus + Kp4 controls (ADR-0410): `crates/hh-env/src/ops.rs` `pub mod ops` read-only — `TrialMarker`/`MarkerSink` (non-idempotent durable append, disk re-read, `duplicates()`), `Sentinel` digest-pinned `intact()`, `OpsObserver` surviving `observer.jsonl` (3 intervals), probe vocabulary (`ExternalSinkZero` inadmissible), pure folds `o1_outcome`/`o8_outcome`/`kp4_outcome` over closed `TrialFailure` — `defect_detected` ≠ `pass`, `Kp4Outcome` retains `Unknown*`; battery real Store/WAL/Π/Dispatcher + R5.8 `inject_kill_point` — O1 pass, O2 kp-4→unknown{worker_lost}+probe, O8 3/3, survival, AC-2 negatives. **Verify:** r5_32 7/7 · hharness-env 191/0 · fmt OK · fails-without compile-red at 08838f54 · guard PASS DISPATCH R5.32 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · living-docs 427 · triggers 194 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0410 · **Deviations:** 1,560 changed source/test lines vs ≤900 flag (~1.7×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** ten contributing-only REQ ids (B-105/C-006/D-203–207/E-012/110/205) — R/P/actual-execution owed R5.44 AC-1 · chainTip → codex/harnessharness-evidence-r5.32 · next → R5.33 · ci: pass #246@d98cf77 (all 4 checks 41620536971; stack #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T11:18:20Z · **R5.33 size ruling** — worker stopped correctly at the ≤600 line trigger (measured 1,425 numstat, ~2.4×; context within 20k+10k estimate). Scoped fresh-context review verdict: **AMEND** — O2 packet binds env dispatcher + monitor responder + apparatus case tests to one owner working set (no written contingency); the monitor fold+`UnofferedOption` gate is an existing-contract repair (ADR-0343 D4 durable `request.options` written but fold dropped them; §5.2/D3 O4 "reject unoffered answer" definitional; R5.24 R0/R5.28 K-2 class); leg (b) alone ~1,348 still ~2.2× over; proposed cut is the rejected impl-vs-battery split. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.32 precedent); dated note on `203_R5.33__permission.md`; manifest row-203 note; review record `planning/2026-11-03_R5.33-split-review.md`; `runs/R5.33.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+
+- 2026-11-03T11:37:05Z · R5.33 done — branch codex/harnessharness-evidence-r5.33 · PR #247 · base codex/harnessharness-evidence-r5.32 · §5.2/D3-O4/O5 real permission wait/answer/resume matrix (ADR-0411): monitor fold folds durable `request.options` (ADR-0343 D4; absent→empty, unparseable drops never widens) + `respond_inner` offered-membership gate — unoffered conferring answer restores pending + typed `UnofferedOption` (deny/cancelled exempt); env O4/O5 closed `PermissionFailure` + `o4_outcome`/`o5_outcome` (read-only); battery real Store/WAL/Π/Dispatcher + fenced decided mint + wakeup occurred→fired + same-input re-dispatch — O4 one-marker resume, O5 zero-mutation deny, unoffered/unauthorized typed refusals, `input_required` ≠ wait; service.rs:1967 scan = contained finding (later owner). **Verify:** r5_33 4/4 · hharness-env 195/0 · hharness-monitor 111/0 · fmt OK · fails-without compile-red at 0550e6f5 · guard PASS DISPATCH R5.33 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 195 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0411 · **Deviations:** 1,425 changed source/test lines vs ≤600 flag (~2.4×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** ten contributing-only REQ ids (B-105/C-006/D-203–207/E-012/110/205) — R/P/actual-execution owed R5.44 AC-1 · chainTip → codex/harnessharness-evidence-r5.33 · next → R5.34 · ci: pass #247@a89bb21 (all 4 checks 41627140422; stack #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

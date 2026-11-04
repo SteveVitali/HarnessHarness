@@ -926,3 +926,44 @@ ticket never marks a deferred full-target predicate MET.
 > dependency, never dispatch); all ten targets keep
 > `planned; unmet` — this ticket never marks a deferred
 > full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 203, R5.33): the real
+> permission wait/answer/resume matrix landed through the monitor's
+> fold-level **offered-answer gate** (ADR-0411 —
+> `crates/hh-monitor/src/approval.rs`): `ApprovalState::fold` now
+> folds the durable `request.options[]` ids (ADR-0343 D4 — absent
+> member folds empty, pre-R2.11 rows ungated; unparseable id drops,
+> never widens) and `respond_inner` refuses a conferring/
+> option-consuming answer outside the durable offer with typed
+> `ApprovalError::UnofferedOption{option_id}` — pending restored,
+> never decided, never minted (`deny`/`cancelled` exempt — a refusal
+> confers nothing; the wire's deny spellings predate the closed id
+> set); `remedy` checked against `request.remedies`. The env O4/O5
+> cells gained the closed `PermissionFailure` set and the pure
+> `o4_outcome`/`o5_outcome` folds in `crates/hh-env/src/ops.rs`
+> (read-only, ADR-0410 confinement unchanged). Engineered evidence
+> in `crates/hh-env/tests/r5_33.rs` (4/4) driving the real
+> Store/WAL, Π `Monitor`, `Dispatcher` irreversible
+> `PermissionRequest` ask, `MarkerSink`/`OpsObserver`/`Sentinel`,
+> real `respond_with_ctx` + `decided` mint under the fenced writer,
+> `deliver_wakeup` (occurred→fired) and same-input re-dispatch:
+> O4 allow — durable pending carrying the offered set, two clean
+> no-mutation intervals, restart-preserved pending, offered
+> authority-checked `allow_once` → `decided` → wakeup → resume on
+> the same effect with exactly one marker + matching digest,
+> idempotent identical re-answer, conflicting new-key refusal; O5
+> deny — offered `deny` → `decided{deny}` → refused resume, zero
+> prepare/commit/entry/sink delta, conflicting later answer cannot
+> authorize; unoffered (`allow_lease`/`modify`/`more_info`/
+> `remedy` outside the offer) and unauthorized (delegate endorser,
+> uncovered grant) answers refuse typed and mutate nothing; the
+> paused `input_required` label alone is no permission wait (the
+> effect may already be committed). REQ-B-105 / REQ-C-006 /
+> REQ-D-203 / REQ-D-204 / REQ-D-205 / REQ-D-206 / REQ-D-207 /
+> REQ-E-012 / REQ-E-110 / REQ-E-205 gain R5.33 as a
+> **contributing-only** evidence row — achieved engineered D/E
+> recorded separately from the owed legs: the O×3 real-trial /
+> R / P / actual-execution predicates stay owed to their primary
+> owner R5.44 AC-1 (evidence dependency, never dispatch); all ten
+> targets keep `planned; unmet` — this ticket never marks a
+> deferred full-target predicate MET.
