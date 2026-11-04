@@ -543,6 +543,13 @@ fn p50_manifest_decl_and_vocabulary() {
             admit_detail: "registry/1 offered 1.0".into(),
             ..manifest_decl_facts()
         },
+        // A near-miss drifted detail spelling (same dialect and
+        // offered version, a different supported set) is not the
+        // committed verbatim — refused, never verified.
+        ManifestDeclFacts {
+            admit_detail: "dialect:hir/1 offered 1.0 vs supported [1, 2]".into(),
+            ..manifest_decl_facts()
+        },
         ManifestDeclFacts {
             code_pointer_zero: false,
             ..manifest_decl_facts()

@@ -234,7 +234,11 @@ pub fn evaluate_decl(f: &ManifestDeclFacts) -> LegVerdict {
         // never relabelled.
         return LegVerdict::Refused(format!("admit:{}", f.admit));
     }
-    if !f.admit_detail.starts_with("dialect:hir/1") || !f.admit_detail.contains("1.0") {
+    // Byte-assert the committed verbatim spelling — a drifted
+    // detail (a different supported set or phrasing) is not the
+    // machinery's recorded outcome on this tree; refused, never
+    // relabelled.
+    if f.admit_detail != "dialect:hir/1 offered 1.0 vs supported [1]" {
         return LegVerdict::Refused(format!("admit_detail:{}", f.admit_detail));
     }
     LegVerdict::Verified
