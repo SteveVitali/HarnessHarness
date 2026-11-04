@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.46
-lastCompleted:   R5.45
+nextTicket:      GATE-G13
+lastCompleted:   R5.46
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.45
+chainTip:         codex/harnessharness-evidence-r5.46
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T04:59:16Z
+updatedAt:        2026-11-04T06:53:45Z
 ```
 
 ## OPEN FINDINGS
@@ -1140,3 +1140,4 @@ updatedAt:        2026-11-04T04:59:16Z
 - 2026-11-04T05:44:42Z · **GATE-G12 Reading 2 PASSED** — operator words verbatim "passed, I confirm/authorize. proceed autonomously without interruption" (interactive, 2026-11-04T05:44:42Z); scoped decision = fixed pilot authorized at the declared **N=10 floor** (2·T·R≥10T at T=1, R=5, ≤60 ceiling respected) on the same frozen set after the operator reviewed the activation result (`hh-activation/1`, disposition `executed`, 7/7 legs verified). Both readings PASSED — the R5.46 pilot leg is admitted; carried predicates = none new (probe verb discharged at R5.44). `nextTicket` stays `R5.46` (its pilot leg completes the ticket). · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T05:46:34Z · **R5.46 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,816 numstat under `crates/`, ~2.4×). Scoped fresh-context review verdict: **AMEND** — seq 221 one owner row; GATE-G12's two readings are staged authorization, not a seam; cut non-curative (zero pilot implementation yet); conjunctive `hh-activation/1` packet. The Reading-2-admitted pilot lands on this same ticket with its own trigger measurement. Accepted as recorded Deviation; dated note on `221_R5.46__pilot.md`; manifest row-221 note; review record `planning/2026-11-04_R5.46-split-review.md`; `runs/R5.46.md` ruling. Worker resumes for the pilot leg + close. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T06:53:45Z · R5.46 done — branch codex/harnessharness-evidence-r5.46 · PR #261 · base codex/harnessharness-evidence-r5.45 · GATE-G12 both readings PASSED: `hh-activation/1` (7 legs, disposition executed — 2 first subjects real podman, `pilot=withheld{reading_2_pending}`) then `hh-pilot/1` (17 legs, disposition executed — 2·T·R=10 first subjects at N=10 floor T=1 R=5, same frozen members + honored `activation_freeze_id=0be644f7…` reproduced by recompute; fidelity 10/10/10/10/10; missingness [10/10,10/10]; nearest-rank tail+censoring; §9.2-envelope feasibility all maxima inside; USD $0.00; `contrast_claimed=false`; Reading-2 recorded as fact, `gate_pending:GATE-G12` echoed). **Verify:** r5_46 11/11 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at 0d4325d1 · guard PASS DISPATCH R5.46 pre+post · bm 0 viol (. + --staged) · bm-tools OK · boundary repairs: docs/-read → freeze-digest recompute + ARM_STRATEGIES rustdoc links (41782825651/41783277088 → a6874f64). **Deferrals:** none — carried DF-R5.1-1 · **ADRs:** (none) · **Deviations:** activation 1,816 vs ≤750 (~2.4×) AMEND fe95e9c1; pilot increment +1,546 → **new total 3,326 (~4.4×) — second crossing recorded for orchestrator** · **AC-4:** NC-1…NC-16 bound (contributing slice; GATE-G13/G14, R5.47, R5.49 stay owed) · chainTip → codex/harnessharness-evidence-r5.46 · next → GATE-G13 · ci: pending — #261@a6874f6 all 4 checks pass; stack #258 ubuntu-latest pending (known-slow) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
