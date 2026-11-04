@@ -1,5 +1,5 @@
 # GATE-G12 — Authorize activation then fixed pilot · readout
-Status: READING-1 PASSED · READING-2 PENDING
+Status: PASSED — both readings
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is approval.
 
@@ -61,4 +61,4 @@ Confirm the agent-drafted block by its sha256 prefix.
 
 **Reading 1 — PASSED** — operator words (verbatim, interactive, 2026-11-04T05:30:08Z): "approve. proceed" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: the separate §5 one-task activation quote is authorized (declared §9.2 minimum-admission worksheet; frozen tasks/splits/policies/caps/oracle/detectors/analysis/stops before data; no implied permission for the pilot). Agent-drafted block sha256 `4d59d34fdc1f` confirmed.
 
-**Reading 2 — PENDING** — the fixed pilot authorization is not answerable until the activation produces a result for review. It will be recorded verbatim separately when supplied.
+**Reading 2 — PASSED** — operator words (verbatim, interactive, 2026-11-04T05:44:42Z): "passed, I confirm/authorize. proceed autonomously without interruption" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: the fixed pilot is authorized at the **declared N=10 floor** (2·T·R≥10T at T=1, R=5, inside the ≤60 ceiling), same frozen set (tasks/splits/policies/caps/oracle/detectors/analysis/stops), fixed native arms, zero search, all-first/all-attempt costs, ≤1 setup retry per cell. The activation result (`hh-activation/1`, disposition `executed`, all 7 legs verified, `pilot=withheld{reading_2_pending}`) was reviewed by the operator before this reading. Agent-drafted block sha256 `4d59d34fdc1f` confirmed.
