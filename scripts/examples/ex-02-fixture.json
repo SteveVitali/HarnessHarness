@@ -1,0 +1,42 @@
+{
+  "schema": "ex-02-fixture/1",
+  "title": "EX-02 informative two-task fixture — pinned binary sequences",
+  "tasks": ["task:t1", "task:t2"],
+  "arms": {
+    "control": "arm:a",
+    "test": "arm:b"
+  },
+  "replicates": 5,
+  "metric": "task_success",
+  "prior": "beta{1,1}",
+  "seed": 17,
+  "price_table_version": "prices.r5.29",
+  "suite": {
+    "suite_id": "ex02.suite",
+    "split_label": "dev",
+    "split_hash": "ex02.split",
+    "stratum": "public_dated",
+    "family": "coding_terminal"
+  },
+  "grades": {
+    "task:t1": {
+      "arm:a": [false, false, false, false, true],
+      "arm:b": [true, true, true, true, false]
+    },
+    "task:t2": {
+      "arm:a": [true, true, true, false, false],
+      "arm:b": [true, true, false, false, false]
+    }
+  },
+  "expected": {
+    "task:t1": {
+      "arm:a": 1,
+      "arm:b": 4
+    },
+    "task:t2": {
+      "arm:a": 3,
+      "arm:b": 2
+    }
+  },
+  "notes": "Pinned sequences per §7.2 EX-02: task t1 control 1/5, test 4/5; task t2 control 3/5, test 2/5 — unequal nondegenerate contrasts, no significance requirement. A constant table replacing this is a defect the informative check must catch, never a valid fixture."
+}

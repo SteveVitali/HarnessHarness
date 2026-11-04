@@ -1,0 +1,21 @@
+# scripts/examples — versioned offline example cards
+
+Two committed `example-card/1` records (R5.29; spec §7.2). The cards are
+the versioned reader-facing records; the checked runner and semantic
+controls live in the owning composition crate (`hharness::examples`),
+executed by `crates/hharness/tests/r5_29.rs`.
+
+| Card | Family | Run |
+|---|---|---|
+| `ex-01.json` | setup/inspect/replay/receipt | `cargo test -p hharness --test r5_29 ex01` |
+| `ex-02.json` + `ex-02-fixture.json` | offline Lab lesson (2 tasks × 2 arms × 5 reps = 20) | `cargo test -p hharness --test r5_29 ex02` |
+
+- **Offline only:** scratch stores, the scripted `EmbedModel` lane, no
+  network/provider/credentials, $0. Fixture labels stay on every report.
+- **Costs (separate):** build = one `cargo test -p hharness` compile of
+  the existing tree (no added dependencies); runtime = seconds.
+- **Limitations:** fixture-verified only — never S1/S3, useful-task,
+  live, parity or study evidence. The verbatim README quickstart leg is
+  `scripts/check-quickstart.sh` (reads committed HEAD), not this runner.
+- EX-03/EX-04 obligations stay with the final example integration
+  tickets; nothing here executes tasks, providers or operations.

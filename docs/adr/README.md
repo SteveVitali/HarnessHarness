@@ -196,3 +196,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0404](ADR-0404-r5.26-replay-fresh-landing.md) | R5.26 §6.3 isolated-replay and fresh-execution admission cards — landing decisions | R5.26 (Isolated replay and fresh-execution admission | Accepted |
 | [ADR-0405](ADR-0405-r5.27-rights-handoff-landing.md) | R5.27 §6.4 rights, losses, quotas and recipient handoff validation — landing decisions | R5.27 (Rights, losses, quotas and recipient handoff | Accepted |
 | [ADR-0406](ADR-0406-r5.28-recipe-cli-forwarding-landing.md) | R5.28 §2.1/§7.1 one supported native recipe and exact CLI forwarding — landing decisions | R5.28 (One supported native recipe and exact CLI | Accepted |
+| [ADR-0407](ADR-0407-r5.29-offline-examples-landing.md) | R5.29 §7.2 early offline examples and the informative Lab lesson — landing decisions | R5.29 (Early offline examples and informative Lab | Accepted |
