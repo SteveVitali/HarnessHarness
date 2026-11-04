@@ -110,6 +110,7 @@ jobs:
           bash scripts/ci/test-live-verify.sh
           bash scripts/ci/test-live-verify-workflow.sh
           bash scripts/ci/test-check-living-docs.sh
+          bash scripts/ci/test-check-examples.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -143,6 +144,15 @@ jobs:
           [ "$mode" = fast ] || mode=full
           printf '%s\n' "$decide_out" | grep '^::notice' || true
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      # ci-mode: both — reads committed displayed/canonical example records
+      # (the docs/getting-started.md displayed block plus the
+      # scripts/examples/ cards and their pins); a docs-only head that
+      # drifts them must not take the fast path green.
+      - name: Example cards static check
+        run: |
+          bash scripts/check-examples.sh
+          bash scripts/check-examples.sh --head
 
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain
@@ -199,6 +209,14 @@ jobs:
       - name: Quickstart (clean clone, verbatim)
         if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
         run: bash scripts/check-quickstart.sh
+
+      # §7.3 "full offline" lane (R5.30): the committed offline example
+      # cards executed on one Linux leg after the build — scratch stores,
+      # no credentials/services, canonical inputs only (never a committed
+      # docs/research read). The live lane is recorded skipped, never run.
+      - name: Offline example cards (EX-01/EX-02)
+        if: steps.path.outputs.mode != 'fast' && matrix.os == 'ubuntu-latest'
+        run: bash scripts/run-examples.sh
 
       - name: Schema drift check (CC7)
         if: steps.path.outputs.mode != 'fast'

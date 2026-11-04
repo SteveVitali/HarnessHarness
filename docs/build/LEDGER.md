@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.30
-lastCompleted:   R5.29
+nextTicket:      R5.31
+lastCompleted:   R5.30
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.29
+chainTip:         codex/harnessharness-evidence-r5.30
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T08:47:14Z
+updatedAt:        2026-11-03T09:18:23Z
 ```
 
 ## OPEN FINDINGS
@@ -1073,3 +1073,5 @@ updatedAt:        2026-11-03T08:47:14Z
 - 2026-11-03T08:27:22Z · **R5.29 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 2,564 numstat, ~3.0× — **new build high-water mark**; context within 24k+10k estimate). Scoped fresh-context review verdict: **AMEND** — conjunctive example-card/runner unit (OFFLINE packet binds EX-01/EX-02 one owner, no contingency vs items 1/4 verbatim clauses; documented boundary is EX-01/02-vs-EX-03/04; L150 omits per-example); shared ~578-line card surface + AC-1 conjunct spans the cut; every proposed leg stays over trigger (non-curative; band is precedent-not-limit — vs packet estimate ~2.8–4.3× is in-family). Accepted as recorded Deviation; dated note on `199_R5.29__offline.md`; manifest row-199 note; review record `planning/2026-11-03_R5.29-split-review.md`; `runs/R5.29.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03 — R5.29 done — branch codex/harnessharness-evidence-r5.29 · PR #243 · base codex/harnessharness-evidence-r5.28 · §7.2 early offline examples + informative Lab lesson (ADR-0407): `example-card/1` committed cards (scripts/examples/) + `hh-examples/1` `run_example` checked runner in hharness::examples — closed-member decode, sha256 pins refuse stale_pin pre-exec, semantic ExampleReport (expected_refusal verbatim, never a pass); EX-01 hello→open_session(pinned def)→submit→attach-by-run-id→6 excerpt checks (actual ids/seq/payload/causes)→kernel.bundle→clean-recipient check_completeness+reproduce R0→admit_replay typed CardRefused{missing_input} expected_refusal + tampered control; EX-02 ex-02-fixture/1 (pinned grades + independent expected)→run_recipe×2 tasks (20 subjects)→both receipts closed→fresh recipient rebuild→merged ExperimentView→analyze_and_record fmc beta{1,1}→persisted report (idempotent id)→DeclaredReceipt+recompute_analysis reproduced; checks subjects_20/cells_pinned/informative_contrast/report_identity/recipient_recompute/exploratory_label/refusal_controls · **Verify:** r5_29 7/7 · hharness 12/0/0 · fmt OK · fails-without compile/missing-file red at 4dd6159e · guard PASS DISPATCH R5.29 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · triggers 191 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** 2,564 changed source/test lines vs ≤850 flag (~3.0× — new build high-water mark) — accepted as recorded Deviation per Amended 2026-11-03 ruling · chainTip → codex/harnessharness-evidence-r5.29 · next → R5.30 · ci: pass #243@0c28168 (all 4 checks 41603990679; stack #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+
+- 2026-11-03 — R5.30 done — branch codex/harnessharness-evidence-r5.30 · PR #244 · base codex/harnessharness-evidence-r5.29 · §7.3 example CI modes + bounded refresh (ADR-0408): `scripts/check-examples.sh` static both-modes check — card decode vs contract extracted from canonical `examples.rs` (CARD_MEMBERS + admitted case set), `sha256:` pin recompute (traversal refused), check-id→runner-literal mapping, unpinned fixture JSON refused, `docs/getting-started.md` `<!-- examples:… -->` + `scripts/examples/README.md` ↔ card `run` equivalence, section links resolve, `live: skipped(…)` honest record; `--head` clean-clone committed-HEAD mode (check-quickstart precedent — uncommitted edits never the tested head); `scripts/run-examples.sh` bounded full-offline lane (scratch stores, r5_29, canonical inputs only — gated-step readers scan enforces zero docs/research reads); ci.yml: self-test leg + `# ci-mode: both` step + gated `mode != 'fast'` ubuntu step, anchor pair untouched; MAINTAINING.md 'Example checks and refresh' (3 check classes, trigger→action table, card-version supersession, 30-day refresh-due) · **Verify:** r5_29 7/7 via run-examples · hharness 12/0/0 · test-check-examples 14/14 · fmt OK · fails-without missing-file red at c989088a · guard PASS DISPATCH R5.30 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools/living-docs OK · triggers 192 · ci-gating/drift in sync · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **Deviations:** check-removability exit 1 on pre-existing BL-49 `hharness → hharness-varhost` edge (R5.14b ruling-verified, not introduced here) · chainTip → codex/harnessharness-evidence-r5.30 · next → R5.31 · ci: pass #244@012217f (all 4 checks 41607995259) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

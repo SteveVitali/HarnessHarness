@@ -806,3 +806,40 @@ ticket never marks a deferred full-target predicate MET.
 > dependency, never dispatch dependency; this ticket never marks
 > a deferred full-target predicate MET. All six ids are stamped
 > **contributing-only** — the same rule.
+
+> Dated primary-owner note — 2026-11-03 (seq 200, R5.30): the §7.3
+> CI-and-refresh lanes landed (ADR-0408). REQ-F-106 (both-mode
+> equivalence / full execution under ADR-0362): N1 —
+> `scripts/check-examples.sh` decodes every committed
+> `example-card/1` against the contract extracted from the canonical
+> runner (`CARD_MEMBERS`, the admitted `case` set — no second
+> table), recomputes each `sha256:` pin over the pinned bytes,
+> resolves every declared check id to a runner-emitted literal and
+> refuses unpinned committed fixture data; N2 — displayed↔canonical
+> equivalence between the `docs/getting-started.md`
+> `<!-- examples:… -->` block / `scripts/examples/README.md` and the
+> cards' `run` members; N3 — the `ci.yml` `ci-mode: both` step plus
+> the gated `mode != 'fast'` ubuntu leg running
+> `scripts/run-examples.sh` (`cargo test -p hharness --test r5_29`,
+> scratch stores, canonical inputs only — the gated-step readers
+> scan enforces zero committed docs/research reads).
+> REQ-F-107 (separate working-tree/HEAD/live checks): N4 —
+> `check-examples.sh` (working tree) vs `--head` (clean clone of
+> committed HEAD; uncommitted edits are never the tested head);
+> N5 — the live lane recorded `skipped(…)` on every run, never a
+> pass. REQ-F-108 (code/freshness/study refresh with supersession):
+> N6 — MAINTAINING.md "Example checks and refresh": the three check
+> classes, the trigger→action table, card-version supersession,
+> preserved historical negatives and the 30-day refresh-due rule.
+> Evidence `scripts/ci/test-check-examples.sh` 14/14 — missing-file
+> red at base `c989088a`; negatives: extra/missing member,
+> unadmitted case, drifted sha256, edited pinned file, stale or
+> absent displayed block, runner-unmapped check id, stray fixture
+> data, working-tree dirt invisible to `--head`, committed drift
+> failing `--head`, and the stripped `ci-mode: both` annotation
+> failing `check-ci-gating.sh`. Achieved **engineered D/E**;
+> achieved layer `engineered` (self-tested lint + fixture drives —
+> the actual CI execution on pushed heads is read at close per
+> O-06). Owed: none beyond this ticket and the common closure audit
+> — full-target R/P predicates per the register; this note does not
+> mark REQ-F-106/107/108 fully satisfied.

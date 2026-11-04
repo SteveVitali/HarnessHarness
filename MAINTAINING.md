@@ -80,6 +80,40 @@ and record a fresh `hh-live-evidence/1` when:
 A lapsed leg is never quietly dropped: it is re-run, or its claim is
 downgraded with a dated note.
 
+## Example checks and refresh
+
+The committed `example-card/1` records under `scripts/examples/` (R5.29,
+ADR-0407) are verified by three separate checks (R5.30, REQ-F-106/107/108):
+
+| Check | What it proves |
+|---|---|
+| `scripts/check-examples.sh` | Working tree: card contract, recomputed `sha256:` pins, runner check-id mapping, displayed↔canonical command equivalence with `docs/getting-started.md`'s `<!-- examples:begin -->` block, resolving links. |
+| `scripts/check-examples.sh --head` | Committed HEAD: the same check inside a clean clone of `HEAD` — uncommitted edits are reviewed statically, never counted as a tested head (the `check-quickstart.sh` precedent). |
+| `scripts/run-examples.sh` | Full-offline execution: the committed cards' checked battery on scratch stores, no credentials/services; the live lane records `skipped(<reason>)` — ADR-0363 legs only, the unset allowance is zero. |
+
+In CI (`ci.yml`) the static check runs in both path modes — it reads the
+committed `docs/` displayed block, so its step carries `# ci-mode: both`;
+the offline lane is gated `mode != 'fast'` on one Linux leg; the live
+lane has no routine PR calls. A docs-only head that drifts the displayed
+block or a card fails the fast path.
+
+**Refresh triggers and supersession.** A change refreshes or supersedes a
+card by its own kind — never a blanket docs edit:
+
+| Trigger | Required action |
+|---|---|
+| Command/schema/runtime/checker/toolchain/feature change | Scoped regressions plus the affected offline cards; a new runnable revision lands only after they pass. |
+| Artifact access/expiry/redaction change | New closure/loss/supersession record; dependent procedures become restricted or unavailable — never silently refreshed. |
+| Provider/model/price/environment drift | Fresh-run claims go stale; only a separately authorized diagnostic proposal may run — connectivity never renews useful-task or study claims. |
+| Oracle/grade/method/cohort error | Follow the spec §2.2 correction path; a material change needs a new protocol or cohort, not a documentation refresh. |
+
+Cards carry `card_version`; a re-pin or recipe change is a card-version
+amendment, not an in-place edit — superseded versions stay in history and
+historical negative results are preserved. At release and the 30-day
+launch metadata review, live-dependent "current" cards older than 30 days
+become **refresh due** — not false and not permission to spend; no
+automatic collection or schedule is created by this rule.
+
 ## Write integrity
 
 Two standing rules — formerly BL-41 / LEDGER-OF-1…6 (the findings behind
