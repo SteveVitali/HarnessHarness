@@ -1,5 +1,5 @@
 # GATE-G11 — Authorize exact S1 and S4 executions · readout
-Status: PENDING
+Status: PASSED
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is approval.
 
@@ -113,4 +113,4 @@ Confirm the agent-drafted block by its sha256 prefix.
 
 ## Signature
 
-(pending — operator words recorded verbatim here and in GATE DECISIONS when supplied)
+**PASSED** — operator words (verbatim, interactive, 2026-11-04T01:13:12Z): "Confirm, please resume and continue autonomously" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: PASSED per the presented option — the surviving-observer proof accepted as the confinement/observer/probe proof; carried unmet predicate: **the instrument `probe()` verb must be live (journal resolution repaired) at S1/S4 bind before any cell's probe evidence counts** — compensating control: no cell's probe evidence counts until the verb verifies on the actual backend; the verb's ENOENT-on-both-lanes gap is a recorded machinery repair, never a simulated pass. Agent-drafted block sha256 `9bdf5c27d044` confirmed.
