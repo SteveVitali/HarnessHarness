@@ -17,6 +17,7 @@
 //! helper protocol schema/seam (`protocol` — the out-of-process helper is
 //! S2.1).
 
+pub mod activation;
 pub mod capture;
 pub mod deadline;
 pub mod dispatch;
