@@ -112,6 +112,7 @@ jobs:
           bash scripts/ci/test-check-living-docs.sh
           bash scripts/ci/test-check-examples.sh
           bash scripts/ci/test-check-contributing.sh
+          bash scripts/ci/test-check-position.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -164,6 +165,16 @@ jobs:
         run: |
           bash scripts/check-contributing.sh
           bash scripts/check-contributing.sh --head
+
+      # ci-mode: both — reads committed reader-spine/evidence-card docs
+      # (the README spine block, docs/evidence.md, docs/README.md) and the
+      # frozen supplement's §1 portfolio tables; a docs-only head that
+      # drifts an entry choice, a card's gate state, a family disposition
+      # or a claim→source link must not take the fast path green.
+      - name: Reader spine + evidence cards static check
+        run: |
+          bash scripts/check-position.sh
+          bash scripts/check-position.sh --head
 
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain

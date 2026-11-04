@@ -202,3 +202,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0410](ADR-0410-r5.32-observer-apparatus-landing.md) | R5.32 confined observer apparatus and Kp4 controls — landing decisions | R5.32 (Confined observer apparatus and Kp4 controls) | Accepted |
 | [ADR-0411](ADR-0411-r5.33-permission-respond-gate-landing.md) | R5.33 offered-answer respond gate and O4/O5 permission cells — landing decisions | R5.33 (Real permission wait, answer and resume matrix) | Accepted |
 | [ADR-0412](ADR-0412-r5.34-account-cells-ops-report-landing.md) | R5.34 O6/O7 Account cells and the fixed 8×3 stage-count report — landing decisions | R5.34 (Account refusal, exhaustion and operational reporting machinery) | Accepted |
+| [ADR-0413](ADR-0413-r5.35-reader-spine-evidence-cards-landing.md) | R5.35 §7.1 reader spine, evidence cards and portfolio positioning — landing decisions | R5.35 (Reader spine, evidence cards and portfolio positioning) | Accepted |

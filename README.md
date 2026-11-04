@@ -21,6 +21,31 @@ program. Start with the [architecture](docs/architecture.md) for the design,
 and [status and limitations](docs/status.md) for what has been tested and the
 current boundaries of support.
 
+<!-- spine:begin -->
+## Where to start
+
+Readiness first — each route names its current state before you invest:
+
+- **Run a useful task** — *not yet available*: there is no verified
+  useful-task recipe yet. The scripted run below exercises the runtime
+  with a fixture model; it does not produce a useful artifact or a
+  study result. The useful-task objective stays open until a real,
+  independently checked task receipt lands.
+- **Inspect a recorded result** — *available with scoped evidence*:
+  the offline example below produces a durable, inspectable run
+  (fixture-verified); [evidence and readiness](docs/evidence.md)
+  explains what its receipt does and does not prove.
+- **Learn offline** — *available with scoped evidence*: two versioned
+  [example cards](scripts/examples/README.md) run without a provider —
+  setup/inspect/replay/verify (EX-01) and a two-arm Lab lesson (EX-02);
+  both are labelled fixtures.
+
+Experienced integrators can enter the [reference](docs/reference.md)
+directly. A failure, refusal, or wrong output routes to
+[troubleshooting](docs/getting-started.md#troubleshooting) or a
+[report](CONTRIBUTING.md) — no successful setup is required to file.
+<!-- spine:end -->
+
 ## Try an offline run
 
 You need Git, a shell, a platform C compiler and linker, and [Rust with rustup](https://www.rust-lang.org/tools/install).

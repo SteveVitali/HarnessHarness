@@ -93,6 +93,11 @@ disabling facade defaults alone does not remove all transitive tiers.
 
 ## How to read the evidence
 
+Per-surface gate states — what is available with scoped evidence, not
+yet available, restricted, or unsupported, and why — live in
+[Evidence and readiness](evidence.md); those states sit on top of the
+evidence classes below.
+
 | Label | Meaning in this repository |
 |---|---|
 | `fixture-verified` | Exercised against controlled fixtures |
