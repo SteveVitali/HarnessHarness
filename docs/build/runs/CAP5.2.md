@@ -161,14 +161,42 @@ container/participant execution; USD 0.
 
 ## Gap table
 
-(filled during Phase 4)
-
 | item | required | achieved | status | evidence |
 |---|---|---|---|---|
+| AC-1 composed spine + controls + counts + receipts + access | D/E | engineered | met | `composed.rs` run_composed; packet `2026-11-04-cap5.2-composed.json` — 8 stages verified, counts 4/23/7/0/20/2, probe podman 6.1.0 |
+| AC-2 fixture-only cannot close S1/S4/R/P; missing byte/pending oracle blocks | D/E | engineered | met | `cap5_2.rs` missing_residual_byte_blocks / tampered_pinned_packet_refuses / withheld_residual_never_closes — residual closures all `pending`/`recorded`, live_authorization `pending{not_claimed}` |
+| AC-3 predicates→checks+evidence; achieved vs owed | D/E | engineered | met | CC-1…CC-8 bound at SETUP; 16 residual legs verbatim + homes resolved; no primary targets — contributing slice only |
+| AC-4 scoped verification; fails-without; commands+counts | E/D | engineered | met | cap5_2 7/7 (compile-red at base); guard fixture battery 14/14; fmt clean; `cargo test -p hharness` 0 failures |
+| AC-5 phase gate; owed items are D-rows; no predicate promoted | D/E | engineered | met-at-checkpoint | DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 carried OPEN verbatim; residual legs carry the same owed homes; BUILD_INDEX/LEDGER at close (post-ruling) |
+| F-1 guard `correction`-row indexing | — | repaired | closed-this-run | `supplement_guard.py` load_decisions skip + `cases/correction-mask` |
+| F-2 stale `skeleton-dispatch` fixture | — | repaired | closed-this-run | patch flips manifest kind (post-fleshing contract carries Run line) |
+| SIZE TRIGGER | ≤700 | 884 | **STOP — ruling owed** | checkpoint 31dd95cd; seam proposal above |
 
 ## Evidence log
 
-(filled during Phase 5)
+- `AGENT_SKILLS_ROOT=$HOME/agent-skills bash docs/build/tools/check-supplement-guard.sh`
+  pre-repair: **FAIL** `[failed-gate] GATE-G15 … not PASSED` +
+  `[nextticket] CAP5.2 ≠ first unlanded (GATE-G15)` — F-1 root cause:
+  `load_decisions` last-row-wins indexed the appended `| GATE-G15 | … |
+  correction |` row over the PASSED decision row.
+  post-repair: `PASS route: DISPATCH — CAP5.2` (82 active rows /
+  180 candidates / 0 violations / 8 scoped warnings).
+- `bash docs/build/fixtures/supplement-guard/run-fixtures.sh` →
+  14 rejected / 0 failures (incl. new `correction-mask` and repointed
+  `skeleton-dispatch`).
+- `cargo test -p hharness --test cap5_2` → 7 passed / 0 failed (~28 s).
+- `cargo test -p hharness` → all suites 0 failures
+  (cap5_2 7 · r5_28 5 · r5_29 7 · r5_45 6 · r5_53 5).
+- `cargo fmt --all --check` → clean.
+- `HH_CAP5_COMPOSED_EMIT=docs/build/reports/2026-11-04-cap5.2-composed.json
+  cargo test -p hharness --test cap5_2 composed_emit` → emitted
+  `hh-cap5-composed/1` disposition `executed`,
+  `packet_id 727e514f…`; stages 8/8 verified; counts
+  {cards:4, pass:23, expected_refusal:7, fail:0, subjects:20,
+  receipts:2}; 16/16 residuals `recorded` + homes `resolved`;
+  access `podman version 6.1.0` @ unix 1793825360; `unmapped` [].
+- Changed source/test lines: **884** (`crates/` 841 + tools/fixtures
+  43) — ≤700 trigger crossed → STOP checkpoint.
 
 ## Evidence report
 
