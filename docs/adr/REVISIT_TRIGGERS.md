@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_202 ADRs: 150 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_203 ADRs: 151 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -186,6 +186,7 @@ _202 ADRs: 150 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0416 | - If the registered dependence/exchangeability set grows, re-read the `UnsupportedDependence`/`ReusedSubject` legs. - If any frozen level is amended (`η_tost=.025`, `η_report=.0125`, neg-branch `.025`, level `.95`, reporting `.90`), re-read the constants and strict-boundary legs. - If Packet E pair binding lands (R5.39), re-read the declared-pairs input — authentic capture supersedes synthetic declarations, never a second input path. - If `IntervalMethod` or the margin authority changes, re-read the kind arm's method gate and margin binding. |
 | ADR-0417 | - If the admitted evidence-shape vocabulary grows (a second admissible manifest form), re-read the `InauthenticEvidence` legs. - If Packet E pair binding lands a durable capture path (R5.47/GATE-G13), re-read the records-in manifest shape — authentic capture supersedes declared fixtures, never a second input path. - If a transfer design is separately admitted, re-read the `UnsupportedTransfer` legs — the registered claim spelling changes with that admission. - If `IntervalMethod`, the margin authority or the dimension set changes, re-read the kind arm's method gate, margin binding and `DIMENSIONS`. |
 | ADR-0418 | - If a later admitted prior/draw/floor set changes, the frozen table and headline factor move with their admission — amend this record's Decision 1–3, never silently (quiet-conditional → BL-47). - If the executed battery reports systematic under-coverage, unavailable endpoints or generator failures, the method-admission claim stops for review; the record keeps the failing cells. - If the D2 envelope interpretation changes (cores/wall accounting), re-check the executor's ≤4-thread cap and the recorded wall/core hours. |
+| ADR-0419 | - The actual gated inputs arrive (tasks/seeds/quotas/margins/ tariffs — R5.42 quote or a later stage): re-materialize under the real decl and re-run the battery. - A `RecordKind`/event-class admission for protocol records lands: migrate `protocol_id` to the admitted kind. - `ReattemptPolicy`/`SchedulingPolicy` dialect gains members the frozen predicates must inspect (e.g. a lane/pool binding): re-validate the one-per-arm and retry-class checks. |
 
 ## Fired-and-answered triggers (BL-48)
 

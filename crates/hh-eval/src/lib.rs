@@ -24,6 +24,7 @@ mod json_util;
 pub mod accounting;
 pub mod benefits;
 pub mod catalogue;
+pub mod central_protocol;
 pub mod compare;
 pub mod compliance;
 pub mod context_metrics;
