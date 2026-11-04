@@ -43,5 +43,6 @@ pub mod record;
 pub mod recovery;
 pub mod seal;
 pub mod snapshot;
+pub mod study;
 pub mod tokens;
 pub mod useful;
