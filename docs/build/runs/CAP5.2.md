@@ -200,7 +200,36 @@ container/participant execution; USD 0.
 
 ## Evidence report
 
-(filled at close)
+Post-ruling close pass (2026-11-04, resumed worker — pass 2 self-review
+clean, no repair):
+
+- `AGENT_SKILLS_ROOT=$HOME/agent-skills bash docs/build/tools/check-supplement-guard.sh`
+  → **PASS route: DISPATCH — CAP5.2** post-boundary (82 active rows /
+  180 candidates / 0 violations / 8 scoped warnings) — F-1/F-2 repairs hold.
+- `bash "$AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh" .`
+  → **0 violations** (8 warnings, all legacy/pre-existing);
+  `. --staged` → **0 violations**, exit 0.
+- `bash scripts/check-bm-tools.sh` → **OK** (3 open deferrals, each one row).
+- `cargo fmt --all --check` → **clean**.
+- `cargo test -p hharness --test cap5_2` → **7 passed / 0 failed** (~27 s);
+  `cargo test -p hharness` → **all suites 0 failures** (cap5_2 7 ·
+  r5_28 5 · r5_29 7 · r5_45 6 · r5_53 5).
+- Committed packet `docs/build/reports/2026-11-04-cap5.2-composed.json`
+  re-verified: `hh-cap5-composed/1` `disposition: executed`, stages 8/8
+  verified, counts {cards:4, pass:23, expected_refusal:7, fail:0,
+  subjects:20, receipts:2}, 16/16 residuals `recorded` + homes
+  `resolved`, `unmapped` [], `live_authorization: pending{not_claimed}`,
+  `spend_usd: 0`, `packet_id 727e514f…`.
+- AC verdicts: AC-1 met (composed spine + controls + counts + receipts +
+  access); AC-2 met (missing byte blocks → failed; tampered pin refuses;
+  pending never closes; live auth never borrowed); AC-3 met (CC-1…CC-8
+  bound, contributing slice only — no primary claimed); AC-4 met
+  (fails-without compile-red at base; commands+counts recorded);
+  AC-5 met (deferrals carried OPEN verbatim; run/PR/BUILD_INDEX/LEDGER
+  agree at close; Deviation conspicuous: **884 vs ≤700 ~1.26×, AMEND
+  ruling `4e677760`**).
+- ci: pending #<n>@<sha> — recorded at `logs/ci-cap5.2.json`
+  (green only — pending recorded honestly, never claimed pass).
 
 ## Ruling — 2026-11-04 (orchestrator records)
 
