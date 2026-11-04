@@ -51,7 +51,7 @@ pub struct FreezeFacts {
     pub split_predates_access: bool,
     /// The declared arm strategies (verbatim).
     pub arms: Vec<String>,
-    /// The declared arms equal the frozen [`ARM_STRATEGIES`] set, each
+    /// The declared arms equal the frozen `ARM_STRATEGIES` set, each
     /// with a bound artifact ref and the fixed model roles.
     pub arms_ok: bool,
     /// The §2.4 four caps declared.

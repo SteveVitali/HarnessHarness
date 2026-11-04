@@ -76,7 +76,7 @@ pub struct PilotFreezeFacts {
     pub split_predates_access: bool,
     /// The declared arm strategies (verbatim).
     pub arms: Vec<String>,
-    /// The declared arms equal the frozen [`ARM_STRATEGIES`] set.
+    /// The declared arms equal the frozen `ARM_STRATEGIES` set.
     pub arms_ok: bool,
     /// The §2.4 four caps declared.
     pub caps_declared: bool,
