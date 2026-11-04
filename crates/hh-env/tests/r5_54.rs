@@ -51,7 +51,13 @@ fn repo_root() -> PathBuf {
 // `hh-study-report/1` packet — a frozen dated report, the
 // claim→receipt spine that stays internal, carried verbatim; the
 // GATE-G16/H10/H11 readouts are echoed verbatim as leg facts,
-// never pinned — living append-only records, BM-TEST-01) ────
+// never pinned — living append-only records, BM-TEST-01). Pin 10
+// targets the byte-copy fixture under tests/fixtures/ — the CI
+// readers gate bars gated test sources from reading committed
+// documentation/research content; the fixture is byte-identical
+// to the canonical report under the build reports dir (same
+// sha256 `6e83dcf8…`, an append-only protected record —
+// corrections land as new dated records, never in-place edits) ──
 const ARTIFACTS: &str = "\
 a-count crates/hh-bench/fixtures/benchset/stage3_v1/suite.tb2/tasks/a-count.json 9f6d4f11695efff5671745015f7f7c87d9e4e95f049364e027e6a60fc4124ce6
 a-echo crates/hh-bench/fixtures/benchset/stage3_v1/suite.tb2/tasks/a-echo.json 9fdc327157877c3fdbb124a0a5f98b5a2df0d22a7889c4da9e11319559977b40
@@ -62,9 +68,9 @@ ex-01 scripts/examples/ex-01.json 0d4cec8dea92168636d2224ecb392628c69b28bc733536
 ex-02 scripts/examples/ex-02.json 8e35aac7c68aba68d3d2ff1c9abf23bf5ff7f6bff372f948eede02f1eea46285
 ex-02-fixture scripts/examples/ex-02-fixture.json f21a340f966d2d21f72f424635461906dbff16e09cfb2f6d9844ad8e203300c8
 fixture-definition clients/ts/fixture-definition.json 732af9f584a9f321d347f6f027ebd82a3376a33bb9580f63b2fcd6602865d0f8
-study-report docs/build/reports/2026-11-04-r5.49-study-report.json 6e83dcf8ddd6c7fa47f5f4859ed53ed15c372f04eef7e9cbb88b0cc55b09f9f3";
+study-report crates/hh-env/tests/fixtures/r5_54-study-report.json 6e83dcf8ddd6c7fa47f5f4859ed53ed15c372f04eef7e9cbb88b0cc55b09f9f3";
 
-const STUDY_PATH: &str = "docs/build/reports/2026-11-04-r5.49-study-report.json";
+const STUDY_PATH: &str = "crates/hh-env/tests/fixtures/r5_54-study-report.json";
 
 fn artifact_pins() -> Vec<PinnedArtifact> {
     ARTIFACTS
