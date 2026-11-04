@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.55
-lastCompleted:   R5.54
+nextTicket:      CAP5.1
+lastCompleted:   R5.55
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.54
+chainTip:         codex/harnessharness-evidence-r5.55
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T19:50:00Z
+updatedAt:        2026-11-04T20:25:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1195,3 +1195,4 @@ updatedAt:        2026-11-04T19:50:00Z
 - 2026-11-04T19:52Z · **R5.55 fleshed — skeleton → ticket (withheld{stage_voided}/no_observation disposition)** under GATE-G16 PASSED — out-of-scope disposition (readouts/GATE-G16.md; operator verbatim "confirm and proceed" 2026-11-04T18:53:32Z; block sha256 `1b88c0ef16ba` confirmed; GATE DECISIONS row present verbatim) + HUMAN-H11 recorded WITHHELD (readouts/HUMAN-H11.md — no day-30/+90 dates exist, the calendar derives from actual publication which did not occur): contract 237 rewritten — Run line, withheld scope (nothing published → no review dates → nothing to compile; no contacts/raw observations were ever created — nothing to delete; no earlier-withdrawal evidence exists; the honest record is a typed `withheld{stage_voided}`/`no_observation` packet, never a fabricated review; absence of adoption recorded `observed_not_achieved`, never hidden success), `hh-value-withheld/1` packet legs `gate_readout|pins_frozen|review_vocabulary|refusal_vocabulary|predecessors_carried|observation_absent|claims_withheld`, eleven pins (nine H8 artifacts + byte-copy fixtures of the committed `hh-study-report/1` and `hh-publication-withheld/1` packets — the frozen dated records carried verbatim), §8.3/§8.4 review/rubric vocabulary verbatim + typed refusals exercised through the real `evaluate_families`/`check_echo`/`evaluate_costs`/`evaluate_publication`/`AuthorityClass::parse` machinery, numbered ACs bound to the withheld scope (AC-1 REQ-G-206 anchor unmoved, bound NC-1…NC-7 at AC-4); manifest row 237 skeleton → ticket + dated note. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T20:00:48Z · **R5.55 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,724 numstat under `crates/`, ~2.30×). Scoped fresh-context review verdict: **AMEND** — seq 237 one owner row; conjunctive `hh-value-withheld/1` packet (closed 7-member LEGS); impl-vs-battery rejected AND non-curative (battery alone ~1.30×); all cuts non-curative. Accepted as recorded Deviation; dated note on `237_R5.55__value.md`; manifest row-237 note; review record `planning/2026-11-04_R5.55-split-review.md`; `runs/R5.55.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T20:25Z · R5.55 done — branch codex/harnessharness-evidence-r5.55 · PR #270 · base codex/harnessharness-evidence-r5.54 · GATE-G16 PASSED — out-of-scope disposition ("confirm and proceed" 2026-11-04T18:53:32Z; block sha256 1b88c0ef16ba): `hh-value-withheld/1` withheld{stage_voided}/no_observation record — records-in evaluators over supplied facts only; closed seven-member LEGS; withheld|failed|inconclusive fold; assemble() refuses partials, packet_id minted last. Emitted reports/2026-11-04-r5.55-value-withheld.json disposition=withheld admission=withheld_stage_voided — gate verbatim + H10/H11 withheld acts_approved:none, eleven pins byte-verified (nine H8 + byte-copy fixtures of hh-study-report/1 6e83dcf8… + hh-publication-withheld/1 e7f55414…), §8.3/§8.4 review/rubric vocabulary verbatim, eight exercised → verbatim typed outcomes via real machinery (adoption-inflation gate/claim/echo tamper+inflation/spend/nonzero day30/never-guess — machinery stands, nothing admitted), predecessors carried verbatim (study re-echo verified unmet{efficacy_unavailable;parity_withheld} + adoption:unavailable{not_started}; publication members verbatim + legs re-fold verified), observation_absent 26 members 0, df_h9_1:open claim_awarded:false adoption_absence:observed_not_achieved deletion_obligation:none_arose — I-08, USD $0.00. **Verify:** r5_55 5/5 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at b73aab11 · guard PASS DISPATCH R5.55 post-fleshing+boundary · bm 0 viol (. + --staged) · bm-tools OK · pass-2 clean. **Deferrals:** none — carried DF-R5.1-1; DF-H9-1 open. **ADRs:** (none) · **Deviations:** 1,724 vs ≤750 (~2.30×) — AMEND ruling 1d3e92da · chainTip → codex/harnessharness-evidence-r5.55 · next → CAP5.1 · ci: pass #270@1bfd95a all 4 checks (run 41903325163); stack #269…#260 pass — logs/ci-r5.55.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
