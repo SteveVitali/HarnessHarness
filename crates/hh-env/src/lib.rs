@@ -42,6 +42,7 @@ pub mod plugin;
 pub mod preflight;
 pub mod protocol;
 pub mod provider;
+pub mod publication;
 pub mod record;
 pub mod recovery;
 pub mod seal;
