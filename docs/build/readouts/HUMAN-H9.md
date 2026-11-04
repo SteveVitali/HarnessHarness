@@ -1,5 +1,5 @@
 # HUMAN-H9 — Authorize recipient, optional exercises and formative participation · readout
-Status: PENDING
+Status: WITHHELD — no formative participation named (DF-H9-1)
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is approval.
 
@@ -53,4 +53,4 @@ Confirm the agent-drafted block by its sha256 prefix.
 
 ## Signature
 
-(pending — operator words recorded verbatim here and in the ledger GATE DECISIONS when supplied)
+**WITHHELD** — operator words (verbatim, interactive, 2026-11-04T13:00:31Z): "continue" — recorded verbatim. No participant/reviewer names, consent materials, scope/dates, access or numeric resources were supplied; the only honest disposition is the DEFERRALS-rule path: the row stays OPEN, all execution/access/participant/publication/follow-up claims in the checklist stay **withheld**, and no outreach of any kind occurs. DF-H9-1 is recorded in the ledger: owner = operator (Steven Vitali, @SteveVitali); trigger = when actual named participants/reviewer + consent/scope/access/resources exist; compensating control = every checklist claim withheld — dependent gates (G15+) stay blocked on the row itself, never on the deferral. Agent-drafted block sha256 `8706a1002c05` confirmed.
