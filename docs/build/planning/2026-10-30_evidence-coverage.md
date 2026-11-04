@@ -696,3 +696,63 @@ ticket never marks a deferred full-target predicate MET.
 > dispatch dependency; this ticket never marks a deferred
 > full-target predicate MET. REQ-F-201, REQ-F-202, REQ-G-104 and
 > REQ-G-203 are stamped **contributing-only** — the same rule.
+
+> Dated contributing note — 2026-11-03 (seq 198, R5.28): the §2.1
+> one supported native recipe and the §7.1 exact CLI forwarding
+> landed (ADR-0406; `crates/hharness/src/recipe.rs` —
+> `hh-recipe/1`, `run_recipe(&mut EmbedService, &RecipePlan) →
+> Result<RecipeReceipt, RecipeError>` — records-in/records-out
+> over binding (a)'s `handle` plus the owner seams; no public RPC,
+> no second runner/store/codec, no `hharness → hharness-cli`
+> edge). `RecipePlan` is inputs-only over a closed member set —
+> authored records (`slots`/`attempts`/`rows`/`metrics`/
+> `analysis.rows`/…) refuse `unsupported_shape`, absent required
+> members `missing_field`, wrong types `type_mismatch`. The phase
+> chain composes the landed owners verbatim: `hello` →
+> `lab.experiment.{register, expand, open_experiment}` → bounded
+> `next`/`claim`/`launch` drain (`drain_stalled`) → `adopt_subject`
+> (`launch_binding` re-folded durable through `ExperimentView::fold`,
+> the launch's `subject_writer` re-presented) → `submit` driving the
+> scripted `EmbedModel` lane → the durable evidence gate
+> (`lifecycle.run.finished` + observed `hh.submit` submission ref —
+> `execution_incomplete`/`no_submission`; process-only success never
+> grades) → the declared grade committed `measurement.metric.emitted`
+> through `surface_commit_row` under the persisted writer generation
+> (`oracle_ref = hh-recipe/1`, `evidence_ref` = the submission ref;
+> a bound slot with no entry → `grade_unspecified`) → `settle` →
+> `close` → `ResultsStore::project_and_record` →
+> `lab.analysis.analyze` (`rows[]` = the projected row key ids,
+> never supplied) → `drain_notifications` verbatim or
+> `n/a{no_callback_channels}` → `assemble_receipt` over the folded
+> view + `project_runs` EvalRuns + an actual-fact `DeclaredReceipt`
+> (settlement/grade/row refs are the durable event/version ids).
+> `RecipeReceipt` records the negotiated `hello` verbatim, every
+> `{method, outcome}` request, every `{seam, outcome}` owner call,
+> per-slot coordinates and the `population-receipt/1`. The K-2 CLI
+> repair forwards `run_plan_id`/`lease_id`/`holder`/
+> `subject_holder`/`partial`/`bundle_id`/`reason`/`probe` verbatim
+> on `experiment` ops (absent flags stay absent — the boundary owns
+> required-member refusal); `compare report` takes the canonical
+> analyze params-file then `render{report_id, view:"report"}`;
+> `compare scorecard <report-id>` → `render{report_id,
+> view:"scorecard"}` — the `{baseline,candidate}`/`{view,
+> experiment_id}` wrapper shapes removed (unsupported inventions;
+> the §9.3 existing-contract-fix class). Engineered evidence in
+> `crates/hharness/tests/r5_28.rs` (5/5 — compile-red at base
+> `a2bed920`): the full recipe reconciles `closed` on a scratch
+> store; authored/unknown members, missing required members,
+> process-only execution and an unspecified bound-slot grade all
+> refuse typed; `crates/hh-cli/tests/in_process.rs` boundary-shape
+> regressions (2 — assertion-red at base) pin the exact forwarded
+> members. Deviation: 2,005 changed source/test lines vs ≤850 —
+> AMEND ruling `6ff01462`
+> (`planning/2026-11-03_R5.28-split-review.md`). REQ-E-009,
+> REQ-A-002, REQ-A-202 and REQ-A-106 keep `planned; unmet` —
+> achieved engineered D/E recorded separately from the owed legs:
+> the named contributors R5.50 (plugin) and R5.45 (trace) and every
+> R/P/actual-execution predicate — evidence dependency, never
+> dispatch dependency; this ticket never marks a deferred
+> full-target predicate MET. REQ-A-201, REQ-B-002, REQ-F-201,
+> REQ-F-202, REQ-G-001, REQ-G-003, REQ-G-005, REQ-G-008, REQ-G-009,
+> REQ-G-104 and REQ-G-203 are stamped **contributing-only** — the
+> same rule.

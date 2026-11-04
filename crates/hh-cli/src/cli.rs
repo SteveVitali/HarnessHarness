@@ -314,6 +314,14 @@ const VALUE_FLAGS: &[&str] = &[
     "cell",
     "run",
     "holder",
+    // R5.28 — the `lab.experiment.{claim,launch,settle}`/pause-resume/
+    // close members the selected wrapper must forward verbatim (K-2
+    // repair; the boundary owns all semantics).
+    "plan",
+    "lease",
+    "subject-holder",
+    "bundle-id",
+    "probe",
     // ── S4.12 — `async`/`defer` (§7.1 D-2; ADR-0304) ──
     "defer",
     // `hh acp`/`hh serve`/`leaderboard`/`profile`/`participant` operands ──
@@ -330,6 +338,9 @@ const VALUE_FLAGS: &[&str] = &[
 
 const SWITCHES: &[&str] = &[
     "no-input", "bypass", "takeover", "follow", "cancel", "help", "dry-run",
+    // R5.28 — `experiment close --partial` forwards `partial: true`
+    // verbatim (the boundary's partial-close member).
+    "partial",
     // S4.12 — the detached-async invocation switch (`--defer` carries
     // the notification-sink value and is a VALUE flag).
     "async", "drive",

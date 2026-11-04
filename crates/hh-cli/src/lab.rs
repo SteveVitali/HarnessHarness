@@ -759,6 +759,15 @@ pub fn cmd_experiment_open(
 /// `experiment next|claim|launch|settle|pause|resume|close
 /// <experiment-id>` → the same-named Group L op. `close` returns the
 /// `ExperimentReport` (bundle-bearing) per the verb table.
+///
+/// R5.28 — the selected wrapper now forwards *every* member the ops
+/// require, verbatim (K-2 repair; the boundary owns all semantics):
+/// `--plan` → `run_plan_id` (claim/launch/settle's required coordinate),
+/// `--lease` → `lease_id` (launch's required ticket), `--holder` /
+/// `--subject-holder` → the holder members, `--partial`/`--bundle-id` →
+/// close's members, `--reason`/`--probe` → pause/resume's. Absent flags
+/// stay absent — a missing required member answers the boundary's own
+/// `SchemaViolation`, never a CLI-side default.
 pub fn cmd_experiment_op(
     b: &mut dyn Boundary,
     io: &mut Io,
@@ -767,14 +776,24 @@ pub fn cmd_experiment_op(
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
     let id = require_pos(p, 0, "<experiment-id>")?;
     let mut params = Json::obj([("experiment_id", Json::str(id))]);
-    if let Some(v) = p.flag("cell") {
-        if let Json::Obj(m) = &mut params {
-            m.insert("cell".to_string(), Json::str(v));
+    if let Json::Obj(m) = &mut params {
+        for (flag, member) in [
+            ("cell", "cell"),
+            ("run", "run_id"),
+            ("plan", "run_plan_id"),
+            ("lease", "lease_id"),
+            ("holder", "holder"),
+            ("subject-holder", "subject_holder"),
+            ("bundle-id", "bundle_id"),
+            ("reason", "reason"),
+            ("probe", "probe"),
+        ] {
+            if let Some(v) = p.flag(flag) {
+                m.insert(member.to_string(), Json::str(v));
+            }
         }
-    }
-    if let Some(v) = p.flag("run") {
-        if let Json::Obj(m) = &mut params {
-            m.insert("run_id".to_string(), Json::str(v));
+        if p.has("partial") {
+            m.insert("partial".to_string(), Json::Bool(true));
         }
     }
     let r = call(b, &format!("lab.experiment.{verb}"), params)?;
@@ -908,54 +927,73 @@ pub fn cmd_results_export(
 
 // ── compare — Group L `lab.analysis.*` (service lands S3.4c) ───────────
 
-/// `compare report <baseline> <candidate>` → `lab.analysis.analyze`
-/// then `lab.analysis.render{view = report}` — the `ComparisonReport`
-/// with `benefit_kind` + `budget_match.status` (the verb table's
-/// two-op sequence).
+/// `compare report <params-file>` → `lab.analysis.analyze` with the
+/// file's canonical-JSON params body verbatim, then
+/// `lab.analysis.render{report_id, view = report}` on the persisted
+/// report — the `ComparisonReport` with `benefit_kind` +
+/// `budget_match.status` (the verb table's two-op sequence). R5.28:
+/// the analyze op's required members (`spec`, `rows[]`, `tasks[]`) are
+/// caller-supplied inputs — the old `{baseline, candidate}` pair was an
+/// unsupported wrapper shape the boundary could never accept (K-2: the
+/// CLI invents no selectors, spec or tasks). The params-file convention
+/// is the same one `eval <verb>` already uses.
 pub fn cmd_compare_report(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let baseline = require_pos(p, 0, "<baseline>")?;
-    let candidate = require_pos(p, 1, "<candidate>")?;
-    let analysis = call(
-        b,
-        "lab.analysis.analyze",
-        Json::obj([
-            ("baseline", Json::str(baseline)),
-            ("candidate", Json::str(candidate)),
-        ]),
-    )?;
-    let analysis_ref = analysis
-        .get("analysis_ref")
-        .or_else(|| analysis.get("id"))
-        .cloned()
-        .unwrap_or(analysis.clone());
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hharness_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let analysis = call(b, "lab.analysis.analyze", params)?;
+    // The persisted report's id — the durable ref `render` resolves
+    // (a missing `body.report_id` is a malformed boundary answer,
+    // surfaced verbatim, never synthesized).
+    let report_id = analysis
+        .get("body")
+        .and_then(|b| b.get("report_id"))
+        .and_then(Json::as_str)
+        .ok_or_else(|| {
+            CliError::Invocation(InvocationError::at(
+                "malformed_response",
+                "lab.analysis.analyze/body.report_id",
+                "analyze returned no persisted report id",
+            ))
+        })?
+        .to_string();
     let rendered = call(
         b,
         "lab.analysis.render",
-        Json::obj([("analysis", analysis_ref), ("view", Json::str("report"))]),
+        Json::obj([
+            ("report_id", Json::str(report_id)),
+            ("view", Json::str("report")),
+        ]),
     )?;
     ok_outcome("compare_report", rendered, fmt(p, io)?)
 }
 
-/// `compare scorecard [--experiment <id>]` →
-/// `lab.analysis.render{view = scorecard}`.
+/// `compare scorecard <report-id>` →
+/// `lab.analysis.render{report_id, view = scorecard}`. R5.28: `render`
+/// resolves a persisted `analysis_report` doc by id — the previous
+/// `{view, experiment_id}` request named no report and could only
+/// fail `/report_id` required.
 pub fn cmd_compare_scorecard(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let report_id = require_pos(p, 0, "<report-id>")?;
     let r = call(
         b,
         "lab.analysis.render",
         Json::obj([
+            ("report_id", Json::str(report_id)),
             ("view", Json::str("scorecard")),
-            (
-                "experiment_id",
-                p.flag("experiment").map(Json::str).unwrap_or(Json::Null),
-            ),
         ]),
     )?;
     ok_outcome("compare_scorecard", r, fmt(p, io)?)

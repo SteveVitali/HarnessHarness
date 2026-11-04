@@ -3170,10 +3170,24 @@ fn s31_lab_nouns_route_to_group_l_and_dry_run_is_the_planning_half() {
     // `registry catalog` → lab.registry.catalog (implemented — S2.12).
     let (class, out, _) = hh(&mut rec, &["registry", "catalog"], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::Ok, "{out}");
-    // `compare report` → analyze then render(view=report).
+    // `compare report <params-file>` → analyze then render(view=report)
+    // (R5.28: the file carries the boundary's own params body — the
+    // old `{baseline, candidate}` pair was an unsupported shape).
+    let analyze_path = test_dir("s31-analyze").join("params.json");
+    std::fs::create_dir_all(analyze_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &analyze_path,
+        Json::obj([
+            ("spec", Json::obj([("kind", Json::str("summarize"))])),
+            ("rows", Json::Arr(vec![])),
+            ("tasks", Json::Arr(vec![])),
+        ])
+        .to_canonical_string(),
+    )
+    .unwrap();
     let _ = hh(
         &mut rec,
-        &["compare", "report", "a", "b"],
+        &["compare", "report", &analyze_path.to_string_lossy()],
         NO_TTY,
         None,
         &[],
@@ -3977,4 +3991,153 @@ fn s412_profile_verbs_over_registry() {
     // `profile report` on a non-report record refuses honestly.
     let (class, out, _) = hh(&mut b, &["profile", "report", &vid], NO_TTY, None, &[]);
     assert_ne!(class, ExitClass::Ok, "{out}");
+}
+
+// ── R5.28 — exact experiment/compare forwarding (K-2 repair) ────────────
+//
+// The selected wrapper forwards every member the `lab.experiment.*` /
+// `lab.analysis.*` ops require, verbatim. These shape assertions fail
+// against the pre-R5.28 wrapper (`run_plan_id`/`lease_id` never sent;
+// `compare report` posted `{baseline,candidate}`; `compare scorecard`
+// named no report).
+#[test]
+fn r5_28_experiment_ops_forward_required_members() {
+    let mut rec = RecordingBoundary {
+        inner: &mut ServiceBoundary::new("r528-forward"),
+        calls: Vec::new(),
+    };
+    let _ = hh(
+        &mut rec,
+        &["experiment", "claim", "exp-1", "--plan", "rp-1"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &[
+            "experiment",
+            "launch",
+            "exp-1",
+            "--plan",
+            "rp-1",
+            "--lease",
+            "lease-1",
+            "--subject-holder",
+            "subj",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &["experiment", "settle", "exp-1", "--plan", "rp-1"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &[
+            "experiment",
+            "close",
+            "exp-1",
+            "--partial",
+            "--bundle-id",
+            "bun-1",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &[
+            "experiment",
+            "pause",
+            "exp-1",
+            "--reason",
+            "operator",
+            "--probe",
+            "p-1",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let get = |i: usize, k: &str| {
+        rec.calls[i]
+            .1
+            .get(k)
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    assert_eq!(rec.calls[0].0, "lab.experiment.claim");
+    assert_eq!(get(0, "experiment_id"), "exp-1");
+    assert_eq!(get(0, "run_plan_id"), "rp-1");
+    assert_eq!(rec.calls[1].0, "lab.experiment.launch");
+    assert_eq!(get(1, "run_plan_id"), "rp-1");
+    assert_eq!(get(1, "lease_id"), "lease-1");
+    assert_eq!(get(1, "subject_holder"), "subj");
+    assert_eq!(rec.calls[2].0, "lab.experiment.settle");
+    assert_eq!(get(2, "run_plan_id"), "rp-1");
+    assert_eq!(rec.calls[3].0, "lab.experiment.close");
+    assert_eq!(get(3, "bundle_id"), "bun-1");
+    assert!(matches!(
+        rec.calls[3].1.get("partial"),
+        Some(Json::Bool(true))
+    ));
+    assert_eq!(rec.calls[4].0, "lab.experiment.pause");
+    assert_eq!(get(4, "reason"), "operator");
+    assert_eq!(get(4, "probe"), "p-1");
+    assert_eq!(rec.calls.len(), 5, "{:?}", rec.calls);
+}
+
+#[test]
+fn r5_28_compare_verbs_forward_real_fields() {
+    let dir = test_dir("r528-compare");
+    std::fs::create_dir_all(&dir).unwrap();
+    let params_path = dir.join("analyze.json");
+    let body = Json::obj([
+        ("spec", Json::obj([("kind", Json::str("summarize"))])),
+        ("rows", Json::Arr(vec![Json::str("row:1")])),
+        ("tasks", Json::Arr(vec![])),
+    ]);
+    std::fs::write(&params_path, body.to_canonical_string()).unwrap();
+
+    let mut rec = RecordingBoundary {
+        inner: &mut ServiceBoundary::new("r528-compare"),
+        calls: Vec::new(),
+    };
+    let _ = hh(
+        &mut rec,
+        &["compare", "report", &params_path.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &["compare", "scorecard", "report:abc"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    // `compare report <params-file>` → the analyze op receives the file
+    // body verbatim (the boundary's own required-member shape).
+    assert_eq!(rec.calls[0].0, "lab.analysis.analyze", "{:?}", rec.calls);
+    assert_eq!(rec.calls[0].1, body, "params forwarded verbatim");
+    // `compare scorecard <report-id>` → render names the report.
+    assert_eq!(rec.calls[1].0, "lab.analysis.render", "{:?}", rec.calls);
+    assert_eq!(
+        rec.calls[1].1.get("report_id").and_then(Json::as_str),
+        Some("report:abc")
+    );
+    assert_eq!(
+        rec.calls[1].1.get("view").and_then(Json::as_str),
+        Some("scorecard")
+    );
+    assert_eq!(rec.calls.len(), 2, "{:?}", rec.calls);
 }

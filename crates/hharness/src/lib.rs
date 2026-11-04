@@ -72,6 +72,11 @@ pub use hharness_fleet_adapter as fleet_adapter;
 
 // The surfaces and the cross-implementation checker.
 pub use hharness_acp as acp;
+/// `hh-recipe/1` — the one supported versioned in-process recipe
+/// (R5.28): launch → adopt → execute → grade → project → analyze →
+/// receipt, composed through the boundary ops and owner interfaces —
+/// never a second runner or store.
+pub mod recipe;
 pub use hharness_cli as cli;
 pub use hharness_mcp as mcp;
 pub use hharness_mcp_lab as mcp_lab;

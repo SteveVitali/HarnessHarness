@@ -407,6 +407,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 197 | `197_R5.27__rights.md` | Round 5 | ticket | Rights, losses, quotas and recipient handoff validation | — |
 | 197 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 198 | `198_R5.28__recipe.md` | Round 5 | ticket | One supported native recipe and exact CLI forwarding | — |
+| 198 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict) |
 | 199 | `199_R5.29__offline.md` | Round 5 | ticket | Early offline examples and informative Lab lesson | — |
 | 200 | `200_R5.30__ci.md` | Round 5 | ticket | Example CI modes and bounded refresh workflow | — |
 | 201 | `201_R5.31__contrib.md` | Round 5 | ticket | Ordinary contribution and failure-report routes | — |
