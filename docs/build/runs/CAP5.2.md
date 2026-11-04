@@ -201,3 +201,7 @@ container/participant execution; USD 0.
 ## Evidence report
 
 (filled at close)
+
+## Ruling — 2026-11-04 (orchestrator records)
+
+Scoped split review adjudicated the ≤700 trigger stop: **AMEND** — seq 239 one owner row; `hh-cap5-composed/1` conjunctive (`packet_id` minted last over the whole canonical record); impl-vs-battery the R5.32-rejected mid-predicate cut (battery compile-red standalone); in-run guard repair F-1/F-2 contract-bound and non-curative (`crates/` stays 841). Verified count 884 (~1.26×). Review record: `docs/build/planning/2026-11-04_CAP5.2-split-review.md`. Worker resumed to close; deviation conspicuous in PHASE LOG / BUILD_INDEX / PR.
