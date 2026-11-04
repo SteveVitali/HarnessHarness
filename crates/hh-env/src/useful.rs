@@ -34,8 +34,22 @@ pub const LEGS: [&str; 7] = [
 /// The GATE-G11 carried predicate, recorded verbatim: the instrument
 /// `probe()` verb is ENOENT on both lanes — a machinery repair owed to a
 /// named owner; until it verifies at bind, no cell's probe evidence
-/// counts (`withheld`, never a simulated pass).
+/// counts (`withheld`, never a simulated pass). The R5.43 pass-2
+/// diagnosis narrowed the verb's failure to `HelperClient::connect`'s
+/// `/bin/true` placeholder-child spawn (this host lacks `/bin/true`) —
+/// the helper's journal is never reached.
 pub const PROBE_CARRIED: &str = "probe_verb_enoent";
+
+/// The second carried predicate, diagnosed at R5.43 pass 2 verbatim:
+/// `hh-helper`'s `Hello{policy}` handler re-derives `srv.backend =
+/// "seatbelt"` whenever a containment policy attaches and seatbelt is
+/// available — silently discarding the spawned `--backend podman`
+/// (`container`) declaration, so a contained exec runs on the host
+/// through seatbelt, never inside the cell. Until repaired, a podman
+/// cell's dispatch answers `unknown{executor_error}` (the `/work`-rooted
+/// act fails ENOENT on the host fs) — recorded, never forced to
+/// `observed:applied`.
+pub const EXEC_BACKEND_CLOBBER: &str = "exec_backend_hello_clobber";
 
 // ── subject cells ────────────────────────────────────────────────────
 
@@ -55,6 +69,11 @@ pub struct SubjectOutcome {
     pub backend: String,
     /// The mediated dispatch's terminal outcome (`observed:applied`).
     pub dispatch: Option<String>,
+    /// The backend string the executor's live session reported verbatim
+    /// (`hh-helper`'s hello reply — `seatbelt` here is the recorded
+    /// evidence of the `exec_backend_hello_clobber` machinery gap: the
+    /// spawned `--backend podman` was re-derived on policy hello).
+    pub executor_backend: Option<String>,
     /// The collected artifact's sha256 (`None` — a scored failure,
     /// retained, not infrastructure).
     pub artifact_sha256: Option<String>,
@@ -447,7 +466,7 @@ pub fn assemble(
         } else {
             "withheld{no_independent_correct_artifact}".to_string()
         },
-        carried_predicates: vec![PROBE_CARRIED.to_string()],
+        carried_predicates: vec![PROBE_CARRIED.to_string(), EXEC_BACKEND_CLOBBER.to_string()],
         attempts,
         admission: "bounded_s1_execution".to_string(),
         disposition,
