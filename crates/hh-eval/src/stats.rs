@@ -263,21 +263,37 @@ pub fn bootstrap(xs: &[i64], confidence_ppm: i64, seed: &str) -> Option<Interval
 
 /// The paired bootstrap interval over per-task deltas — `deltas` are the
 /// paired (task-matched) effect sizes; resampling is over tasks (the pairing
-/// unit), never over flattened runs. `Percentile` | `Bca` per the selection.
+/// unit), never over flattened runs. `Percentile` | `Bca` per the selection
+/// at the fixed [`BOOTSTRAP_RESAMPLES`] draw count.
 pub fn bootstrap_paired(
     deltas: &[i64],
     confidence_ppm: i64,
     bca: bool,
     seed: &str,
 ) -> Option<Interval> {
-    if deltas.is_empty() {
+    bootstrap_paired_with(deltas, confidence_ppm, bca, seed, BOOTSTRAP_RESAMPLES)
+}
+
+/// [`bootstrap_paired`] at a declared `resamples` count — the R5.37
+/// task-mixture estimator's actual declared draws drive the computation
+/// (declared draws ≠ frozen 4,000 ⇒ a different resample stream and
+/// potentially different endpoints; the count is a report fact, never a
+/// silent constant).
+pub fn bootstrap_paired_with(
+    deltas: &[i64],
+    confidence_ppm: i64,
+    bca: bool,
+    seed: &str,
+    resamples: u32,
+) -> Option<Interval> {
+    if deltas.is_empty() || resamples == 0 {
         return None;
     }
     let mut rng = XorShift64::seeded(seed);
     let n = deltas.len();
     let theta_hat = mean(deltas)?;
-    let mut thetas = Vec::with_capacity(BOOTSTRAP_RESAMPLES as usize);
-    for _ in 0..BOOTSTRAP_RESAMPLES {
+    let mut thetas = Vec::with_capacity(resamples as usize);
+    for _ in 0..resamples {
         let mut sum: i128 = 0;
         for _ in 0..n {
             sum += deltas[rng.below(n)] as i128;
@@ -297,7 +313,7 @@ pub fn bootstrap_paired(
     // jackknife. Then the adjusted quantile levels feed the same resample
     // distribution — deterministic under the seeded stream.
     let below = thetas.iter().filter(|&&t| t < theta_hat).count() as i64;
-    let z0 = normal_quantile(((below * PPM) / BOOTSTRAP_RESAMPLES as i64).clamp(1, PPM - 1));
+    let z0 = normal_quantile(((below * PPM) / resamples as i64).clamp(1, PPM - 1));
     // Jackknife acceleration.
     let mut jk = Vec::with_capacity(n);
     for i in 0..n {

@@ -295,7 +295,11 @@ impl EmbedService {
         // reads the same durable events `post_amendment` already reads;
         // an unbound/mixed selection supplies `None` and the kernel
         // refuses (records-in — never a fabricated universe).
-        let experiment_view = if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND {
+        // R5.37 — `task_mixture_sensitivity` consumes the same bound
+        // `ExperimentView` (one planned-population contract).
+        let experiment_view = if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND
+            || spec.kind == hharness_eval::task_mixture::KIND
+        {
             bound_eid
                 .as_ref()
                 .and_then(|eid| self.store.events(eid).ok())
@@ -306,8 +310,11 @@ impl EmbedService {
 
         // R5.16 — for the contrast kind the numeric analysis params are
         // declared inputs: a present-but-non-integer member is a
-        // nonfinite input and refuses (never a silent default).
-        if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND {
+        // nonfinite input and refuses (never a silent default). R5.37's
+        // kind declares the same params.
+        if spec.kind == hharness_eval::finite_manifest::CONTRAST_KIND
+            || spec.kind == hharness_eval::task_mixture::KIND
+        {
             for k in ["confidence_ppm", "resampling_draws", "seed"] {
                 if let Some(v) = params.get(k) {
                     if v.as_int().is_none() {

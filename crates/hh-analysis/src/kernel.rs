@@ -1716,6 +1716,168 @@ pub fn analyze(
             )?;
             sections.push(("finite_manifest_contrast", out.to_json()));
         }
+        hharness_eval::task_mixture::KIND => {
+            // R5.37 — the GATE-G9-admitted Packet D companions
+            // (REQ-D-008): whole-task paired bootstrap (task-mixture
+            // sensitivity), sharp-null sign flips under registered
+            // exchangeability, frozen-family Holm + separate
+            // exploratory BH, and signed/absolute tails over the
+            // R5.15 planned population's cells.
+            use hharness_eval::task_mixture as tm;
+            let bootstrap = match &spec.estimator_selection.method {
+                hharness_ontology::eval::IntervalMethod::BootstrapPaired(m) => {
+                    m.as_str().to_string()
+                }
+                other => {
+                    return Err(AnalysisError::TaskMixture(
+                        tm::TaskMixtureError::UnknownMethod {
+                            declared: other.to_json().to_canonical_string(),
+                        },
+                    ))
+                }
+            };
+            let view = input.view.ok_or_else(|| AnalysisError::MissingSpecRef {
+                kind: format!("{} (bound experiment view)", tm::KIND),
+            })?;
+            let test_arm = filter_str(&filters, "test_arm")?.to_string();
+            let control_arm = filter_str(&filters, "control_arm")?.to_string();
+            let population = match opt_filter_str(&filters, "population").unwrap_or("canonical") {
+                "raw" => hharness_eval::population::PopulationKind::Raw,
+                "canonical" => hharness_eval::population::PopulationKind::Canonical,
+                "joint_task_pass_without_observed_veto" => {
+                    hharness_eval::population::PopulationKind::JointTaskPassWithoutObservedVeto
+                }
+                other => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "query.filters.population".into(),
+                        detail: format!("unknown population {other}"),
+                    })
+                }
+            };
+            let metric_ref = opt_filter_str(&filters, "metric")
+                .or_else(|| spec.query.metrics.first().map(String::as_str))
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "task_mixture_sensitivity requires a binary metric ref".into(),
+                })?
+                .to_string();
+            if !spec.query.metrics.is_empty() {
+                decls_for(input, &spec.query.metrics)?;
+            }
+            let bounds = match opt_filter_str(&filters, "bounds") {
+                None | Some("unit") => hharness_eval::population::BoundsDecl::Unit,
+                Some("unbounded") => hharness_eval::population::BoundsDecl::Unbounded {
+                    detail: "declared unbounded measure".into(),
+                },
+                Some("right_censored") | Some("censored") => {
+                    hharness_eval::population::BoundsDecl::RightCensored {
+                        detail: "declared right-censored measure".into(),
+                    }
+                }
+                Some(other) => {
+                    return Err(AnalysisError::TaskMixture(
+                        tm::TaskMixtureError::NonFiniteInput {
+                            detail: format!("bounds {other}"),
+                        },
+                    ))
+                }
+            };
+            // Frozen-family decode: `{id, member?, members:[{member,
+            // raw_p_ppm?}]}` — a malformed shape is a bad spec; the
+            // family-identity rules are the estimator's.
+            let family_members = |j: &Json| -> Result<Vec<tm::FamilyMember>, AnalysisError> {
+                let arr = match j {
+                    Json::Arr(a) => a,
+                    _ => {
+                        return Err(AnalysisError::BadSpec {
+                            member: "family.members".into(),
+                            detail: "members must be an array".into(),
+                        })
+                    }
+                };
+                arr.iter()
+                    .map(|m| {
+                        Ok(tm::FamilyMember {
+                            member: m
+                                .get("member")
+                                .and_then(Json::as_str)
+                                .ok_or_else(|| AnalysisError::BadSpec {
+                                    member: "family.members[].member".into(),
+                                    detail: "missing member id".into(),
+                                })?
+                                .to_string(),
+                            raw_p_ppm: match m.get("raw_p_ppm") {
+                                None | Some(Json::Null) => None,
+                                Some(v) => {
+                                    Some(v.as_int().ok_or_else(|| AnalysisError::BadSpec {
+                                        member: "family.members[].raw_p_ppm".into(),
+                                        detail: "raw_p_ppm must be int or null".into(),
+                                    })?)
+                                }
+                            },
+                        })
+                    })
+                    .collect()
+            };
+            let family = match filters.get("family") {
+                None => None,
+                Some(f) => Some(tm::FamilyDecl {
+                    id: f
+                        .get("id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    member: f
+                        .get("member")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    members: family_members(f.get("members").unwrap_or(&Json::Null))?,
+                }),
+            };
+            let exploratory = match filters.get("exploratory_family") {
+                None => None,
+                Some(f) => Some(tm::NamedFamily {
+                    id: f
+                        .get("id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    members: family_members(f.get("members").unwrap_or(&Json::Null))?,
+                }),
+            };
+            let pop = crate::population::planned_population(
+                view,
+                &runs,
+                input.tasks,
+                &metric_ref,
+                &input.watermark_set.runs,
+            )?;
+            let out = tm::task_mixture(
+                &pop,
+                &tm::TaskMixtureDecl {
+                    population,
+                    test_arm,
+                    control_arm,
+                    stratum: opt_filter_str(&filters, "stratum").map(str::to_string),
+                    bootstrap,
+                    null: opt_filter_str(&filters, "null").map(str::to_string),
+                    exchangeability: opt_filter_str(&filters, "exchangeability")
+                        .map(str::to_string),
+                    dependence: opt_filter_str(&filters, "dependence").map(str::to_string),
+                    verdict: opt_filter_str(&filters, "verdict")
+                        .or_else(|| opt_filter_str(&filters, "use_as"))
+                        .map(str::to_string),
+                    bounds,
+                    level_ppm: input.confidence_ppm,
+                    draws: input.resampling_draws,
+                    seed: input.seed,
+                    family,
+                    exploratory,
+                },
+            )?;
+            sections.push((tm::KIND, out.to_json()));
+        }
         other => {
             return Err(AnalysisError::KindNotImplemented {
                 kind: other.to_string(),

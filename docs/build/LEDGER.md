@@ -16,8 +16,8 @@
 
 ```
 projectStatus:   IN_PROGRESS
-nextTicket:      R5.37
-lastCompleted:   R5.36
+nextTicket:      R5.38
+lastCompleted:   R5.37
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.36
+chainTip:         codex/harnessharness-evidence-r5.37
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-03T13:41:00Z
+updatedAt:        2026-11-03T14:29:04Z
 ```
 
 ## OPEN FINDINGS
@@ -1092,3 +1092,6 @@ updatedAt:        2026-11-03T13:41:00Z
 - 2026-11-03T13:23:31Z · **R5.36 size ruling** — worker stopped correctly at the ≤850 line trigger (measured 1,564 numstat, ~1.8×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-C packet binds all six §4.2 metric families to one scope sentence (no contingency) with the explicit keep-together rule for producer-payload+math; `detect()` emits the whole 21-key map — the proposed primaries-vs-conditionals cut is mid-predicate and leg (a) alone still over; `subject_stop_seq` is the apparatus's own window bound (existing-contract projection, R5.33 class). Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.34 precedent); dated note on `206_R5.36__metrics.md`; manifest row-206 note; review record `planning/2026-11-03_R5.36-split-review.md`; `runs/R5.36.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-03T13:41:00Z · R5.36 done — branch codex/harnessharness-evidence-r5.36 · PR #250 · base codex/harnessharness-evidence-r5.35 · §4.2/M-C mechanism joins + versioned denominator definitions (ADR-0414): additive facts projections — `seq` on EffectRow/ArtefactRow + `subject_stop_seq` (earliest durable bound: min{phase→verify|teardown, control.decision{kind:stop}, lifecycle.run.finished}; ledger_facts/1 admits both; None ⇒ no_detector); `MECHANISM_REGISTRY` 21 versioned rows (units/bounds/direction/detector ids/reducers/windowed/required; retained non-required similarity name); closed `MechanismOutcome` (Value{num,den}|Count|NoDetector|EstimatorUndefined|Inapplicable); declared-metadata SubjectMechanism; windowed (c,event) joins; subject-ratio→task-mean→equal-task reducers (w_t=1/T, unpaired retained, coverage disclosed); family keeps unavailable required members. **Verify:** r5_36 5/5 · hharness-eval 160/0 · hh-analysis s5_3 11/11 · fmt OK · fails-without compile-red at beb979b0 · guard PASS DISPATCH R5.36 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 198 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0414 · **Deviations:** 1,564 changed source/test lines vs ≤850 flag (~1.8×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** four primary ids (D-005/106/E-004/107) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.40 AC-3 / R5.49 / R5.20 / R5.41) · chainTip → codex/harnessharness-evidence-r5.36 · next → R5.37 · ci: pass #250@ee23d25 (all 4 checks 41644737135; stack #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-03T14:07:12Z · **R5.37 size ruling** — worker stopped correctly at the ≤950 line trigger (measured 2,058 numstat, ~2.2×; context within estimate). Scoped fresh-context review verdict: **AMEND** — M-D packet binds the slice to one scope sentence (keep-together rule: "common task clusters/family routing are one shared decision"); D.2 owner map names finite_manifest_contrast* only (consumed by R5.16/16b); `task_mixture()` is one function — the estimator-vs-route cut is mid-predicate and BOTH legs stay over trigger; task_mixture.rs has zero tests — estimator-first leg is the rejected impl-vs-battery cut. Accepted as recorded Deviation (R4.4b/R4.5b/R5.6–R5.36 precedent); dated note on `207_R5.37__taskstats.md`; manifest row-207 note; review record `planning/2026-11-03_R5.37-split-review.md`; `runs/R5.37.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-03T14:29:04Z · R5.37 done — branch codex/harnessharness-evidence-r5.37 · PR #251 · base codex/harnessharness-evidence-r5.36 · §3/§4 M-D task-mixture sensitivity + sharp-null families + tails (ADR-0415): `task_mixture()` `task-mixture/1` over R5.15 `contrast_bounds` cells — whole-task paired bootstrap at declared draws/seed (`bootstrap_paired_with`; BCa T>=30/percentile below; >=2,000 floor); sharp-null sign flip under registered `lane_randomization` (exact <=20/8,000 MC +1); frozen-family Holm .05 + separate exploratory BH; signed/absolute tails (max never a bound); closed `TaskMixtureError` (16 legs); routed kind `task_mixture_sensitivity` (TaskMixture error arm + record_kind + embed view fold/strict params). **Verify:** r5_37 7/7 · eval+analysis+embed 586/0 · fmt OK · fails-without compile-red at 12b851e3 · guard PASS DISPATCH R5.37 pre+post · check-build-memory 0 viol (. + --staged) · bm-tools OK · triggers 199 · **Deferrals:** opened none, closed none — carried DF-R5.1-1 + DF-R5.17-1 · **ADRs:** ADR-0415 · **Deviations:** 2,058 changed source/test lines vs ≤950 flag (~2.2×) — accepted as recorded Deviation per Amended 2026-11-03 ruling · **AC-3:** one primary id (D-008) + four contributing-only (D-109/310/E-209/H-010) — full-target R/P/actual-execution predicates stay owed (R5.16/R5.38/R5.40) · chainTip → codex/harnessharness-evidence-r5.37 · next → R5.38 · ci: pass #251@6522193 (all 4 checks 41651868269; stack #250 #249 #248 #247 #246 #245 #244 #243 #242 #241 #240 #239 pass) · layer: engineered · harness: devin-desktop/swe-2-high/subagent

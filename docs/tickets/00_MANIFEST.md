@@ -423,6 +423,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 206 | `206_R5.36__metrics.md` | Round 5 | ticket | Mechanism joins and versioned denominator definitions | — |
 | 206 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; M-C keep-together rule) |
 | 207 | `207_R5.37__taskstats.md` | Round 5 | ticket | Task-mixture sensitivity, sharp-null families and tails | — |
+| 207 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; M-D keep-together rule; both legs over) |
 | 208 | `208_R5.38__kl.md` | Round 5 | ticket | Directional KL and correctly labelled bounded equivalence | — |
 | 209 | `209_R5.39__parity-admission.md` | Round 5 | ticket | Authentic paired records and policy applicability | — |
 | 210 | `210_R5.40__numerics.md` | Round 5 | ticket | Composed numerical validation and independent method evidence | — |
