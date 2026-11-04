@@ -83,6 +83,22 @@ Packet: `docs/build/reports/2026-11-04-r5.42a-backend-preflight-reprobe.json`.
 The residual gap is now a single lane property (probe on seatbelt's
 one-shot helper), not the missing backend the earlier packet carried.
 
+
+
+### Update — probe verb exercised on the podman lane (2026-11-04T01:10:02Z)
+
+The probe-verb question was exercised for real on the podman lane
+(spawn + hello + `exec.probe()`): the helper's socket persists
+(verified — process + socket survive idle, unlike the seatbelt
+one-shot lane), but the `probe()` verb itself returns
+`error:blob: ENOENT` on podman as well — a genuine cross-lane gap in
+the probe path (the verb's journal/exec-record resolution is not
+live on either lane), recorded honestly as `probe_verb:
+error:blob: ENOENT` in the packet facts. The surviving observer
+still proves (verified); the instrument probe verb is the open
+predicate — a machinery repair owed to a named owner, never a
+simulated pass.
+
 ### Your decision
 PASSED only authorizes the exact scoped executions above — which the
 inconclusive backend currently cannot satisfy. Your real choices:

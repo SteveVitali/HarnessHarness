@@ -439,7 +439,14 @@ fn probe_backend() -> BackendProbe {
     std::fs::create_dir_all(&workspace).unwrap();
     let args = vec![
         "--container".to_string(),
-        "hh-env-pf-probe".to_string(),
+        format!(
+            "hh-env-pf-probe-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ),
         "--workspace".to_string(),
         workspace.display().to_string(),
     ];
@@ -468,6 +475,20 @@ fn probe_backend() -> BackendProbe {
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
                     );
+                    // Exercise the actual `probe()` verb on the podman
+                    // lane — the persistent helper keeps the socket, so
+                    // the re-hello can connect (the seatbelt lane's
+                    // one-shot helper could not). A non-existent effect
+                    // answers cleanly if the verb is supported.
+                    if let Some(d) = probe.declaration.as_mut() {
+                        d.insert(
+                            "probe_verb".to_string(),
+                            match exec.probe("pf-probe-eid", 0) {
+                                Ok(v) => format!("ok:{}", v.as_str()),
+                                Err(e) => format!("error:{e}"),
+                            },
+                        );
+                    }
                 }
                 Err(e) => {
                     probe.handshake = Some(false);
@@ -825,6 +846,14 @@ fn run_preflight() -> Vec<Leg> {
                 ("backend", probe.backend.clone()),
                 ("runtime_available", probe.runtime_available.to_string()),
                 ("helper_binary", probe.helper_binary.to_string()),
+                (
+                    "probe_verb",
+                    probe
+                        .declaration
+                        .as_ref()
+                        .and_then(|d| d.get("probe_verb").cloned())
+                        .unwrap_or_else(|| "unexercised".to_string()),
+                ),
             ],
         ),
         leg(
