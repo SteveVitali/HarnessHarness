@@ -967,3 +967,43 @@ ticket never marks a deferred full-target predicate MET.
 > owner R5.44 AC-1 (evidence dependency, never dispatch); all ten
 > targets keep `planned; unmet` — this ticket never marks a
 > deferred full-target predicate MET.
+
+> Dated contributing note — 2026-11-03 (seq 204, R5.34): the
+> Account refusal/exhaustion cells and the §5.3 stage-count report
+> machinery landed as the read-only instrument's third packet
+> (ADR-0412 — `crates/hh-env/src/ops.rs`): the closed
+> `AccountFailure` set + `AccountOutcome` with the pure
+> `o6_outcome`/`o7_outcome` folds — O6 requires the identical O1
+> positive path demonstrated, the starved `model_calls` reserve
+> refused durably (`reserved{refused}`/`InsufficientBudget`), zero
+> independently counted transport entries, no dependent mutation and
+> no terminal-exhaustion spelling; O7 requires a committed fact
+> behind a declared bounded barrier (bound+interval+fail-safe before
+> execution, grace=0), expiry-before-commit checked first as the
+> unreachable precondition, a durable-origin deadline actually
+> reached, new dispatch blocked, drain to released/unknown,
+> exceeded+stop landed, no later marker, no duplicate charge and
+> committed work preserved on rebuild — plus the report machinery
+> (`OpsCell`/`OPS_CELLS`, frozen seeded 8×3 permutation, retained
+> `TrialOutcome` kinds, append-only `TrialRecord`s refusing
+> `ReplacedOriginal`, ≤1 new-identity setup rerun, ppm ratios with
+> zero-denominator `undefined`, the `[V/P,(V+U)/P]` missingness
+> bound, O8 `detected/3` separate, failed-control/integrity-stop
+> acceptance blocks, `ops_report/1` render). Engineered evidence in
+> `crates/hh-env/tests/r5_34.rs` (7/7) over the real Store/WAL,
+> `ManualClock`, real `Account` (root + instrument budgets), the
+> landed `prepared` path behind a counting diagnostic `Transport`
+> (hh-gateway dev-dep — fixture only, dev-deps do not ship) and
+> MarkerSink/Sentinel/OpsObserver: O6 zero-model_calls refusal
+> before transport, O7 wall-expiry drain-then-stop with
+> rebuild/reopen preservation and dedup, both negative matrices,
+> expiry-before-commit unreachable, and the report's counts/bounds/
+> O8/replaced-original/excess-retry/failed-control legs.
+> REQ-B-105 / REQ-C-006 / REQ-D-203 / REQ-D-204 / REQ-D-205 /
+> REQ-D-206 / REQ-D-207 / REQ-E-012 / REQ-E-110 / REQ-E-205 gain
+> R5.34 as a **contributing-only** evidence row — achieved
+> engineered D/E recorded separately from the owed legs: the O×3
+> real-trial / R / P / actual-execution predicates stay owed to
+> their primary owner R5.44 AC-1 (evidence dependency, never
+> dispatch); all ten targets keep `planned; unmet` — this ticket
+> never marks a deferred full-target predicate MET.

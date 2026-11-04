@@ -418,6 +418,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 203 | `203_R5.33__permission.md` | Round 5 | ticket | Real permission wait, answer and resume matrix | — |
 | 203 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; fold gate is the O4 cell's own precondition) |
 | 204 | `204_R5.34__operations.md` | Round 5 | ticket | Account refusal, exhaustion and operational reporting machinery | — |
+| 204 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND, scoped-split review verdict; apparatus/battery cut rejected as impl-vs-battery) |
 | 205 | `205_R5.35__position.md` | Round 5 | ticket | Reader spine, evidence cards and portfolio positioning | — |
 | 206 | `206_R5.36__metrics.md` | Round 5 | ticket | Mechanism joins and versioned denominator definitions | — |
 | 207 | `207_R5.37__taskstats.md` | Round 5 | ticket | Task-mixture sensitivity, sharp-null families and tails | — |

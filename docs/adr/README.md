@@ -201,3 +201,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0409](ADR-0409-r5.31-contribution-routes-landing.md) | R5.31 §8.1 ordinary contribution and failure-report routes — landing decisions | R5.31 (Ordinary contribution and failure-report routes) | Accepted |
 | [ADR-0410](ADR-0410-r5.32-observer-apparatus-landing.md) | R5.32 confined observer apparatus and Kp4 controls — landing decisions | R5.32 (Confined observer apparatus and Kp4 controls) | Accepted |
 | [ADR-0411](ADR-0411-r5.33-permission-respond-gate-landing.md) | R5.33 offered-answer respond gate and O4/O5 permission cells — landing decisions | R5.33 (Real permission wait, answer and resume matrix) | Accepted |
+| [ADR-0412](ADR-0412-r5.34-account-cells-ops-report-landing.md) | R5.34 O6/O7 Account cells and the fixed 8×3 stage-count report — landing decisions | R5.34 (Account refusal, exhaustion and operational reporting machinery) | Accepted |

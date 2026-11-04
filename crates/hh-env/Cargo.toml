@@ -67,6 +67,13 @@ hharness-verification = { path = "../hh-verification", version = "0.1.0" }
 # spawned per contained environment and driven over the bridged channel).
 hharness-helper = { path = "../hh-helper", version = "0.1.0" }
 
+[dev-dependencies]
+# R5.34 (tests/r5_34.rs): the O6/O7 fixture battery drives the landed
+# `prepared` retained-view→wire path (the O6 identical positive transport
+# path / O7 committed-effect drain) against the real `Account`. Dev-deps
+# do not ship and gateway's normal graph never reaches env (no cycle).
+hharness-gateway = { path = "../hh-gateway" }
+
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]
 all-features = true

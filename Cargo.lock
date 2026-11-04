@@ -391,6 +391,7 @@ dependencies = [
  "hharness-compiler",
  "hharness-containment",
  "hharness-context",
+ "hharness-gateway",
  "hharness-helper",
  "hharness-hir",
  "hharness-identity",

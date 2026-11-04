@@ -785,3 +785,691 @@ pub fn o5_outcome(cell: &PermissionDenyCell) -> PermissionOutcome {
     }
     PermissionOutcome::Pass
 }
+
+// ── O6/O7 — the Account refusal/exhaustion cells ────────────────────────────
+//
+// O6 is the reservation-refusal cell: a real `Account` with zero remaining
+// `model_calls` refuses the attempted whole-vector reserve on the *identical*
+// positive transport path before any independently counted transport entry and
+// before any dependent mutation — a pre-dispatch refusal, never terminal
+// exhaustion. O7 is the exhaustion/drain cell: an already committed effect
+// waits behind a declared bounded barrier until the real `time.wall_ms`
+// reaches the Account bound; new dispatch is then blocked, the committed
+// claim drains to released/unknown, exhaustion lands the stop, no later
+// marker lands and committed work is not prevented retroactively. Expiry
+// before commit is `unreachable`, never a pass.
+
+/// `AccountFailure` — the O6/O7 closed negative set. Every member blocks
+/// the cell; none can be laundered into a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountFailure {
+    /// The supervisor record lacks a required interval/observation.
+    MissingObserver,
+    /// The denied/read-only target was mutated.
+    SentinelMutation,
+    /// O6's comparator: the identical positive reserve/dispatch path was
+    /// never demonstrated reachable.
+    SamePathUnproven,
+    /// No `control.budget.reserved{outcome:refused}` landed for the
+    /// starved call — the reservation did not refuse.
+    MissingRefusal,
+    /// A transport entry or `model.call.requested` landed for the refused
+    /// call — a dispatch slipped past the refused reserve.
+    DispatchOnRefusal,
+    /// A sink delta, marker or dependent durable row landed for the
+    /// refused call — refusal must mutate nothing.
+    DependentMutation,
+    /// Refusal spelled terminal: `control.budget.exceeded`/a stop
+    /// decision landed on the O6 cell. O6 is refusal, not exhaustion.
+    ExhaustionMislabel,
+    /// The barrier had no declared bound, observation interval and
+    /// fail-safe — an unbounded wait is not the O7 barrier.
+    UnboundedBarrier,
+    /// No committed fact (held reservation / durable request) preceded
+    /// the barrier — nothing was committed to wait.
+    CommittedMissing,
+    /// The bound was reached before the effect committed — the cell's
+    /// precondition is `unreachable`, never a pass.
+    ExpiryBeforeCommit,
+    /// No durable-origin deadline existed on the path to enforce.
+    MissingDeadline,
+    /// The declared bound was never actually reached (an armed-but-
+    /// unreached condition cannot pass).
+    UnreachedBound,
+    /// A new dispatch, durable request or successful prepare landed
+    /// after the bound — expiry must block new dispatch.
+    NewDispatchAfterStop,
+    /// The committed claim never drained — no `released`, terminal
+    /// `failed{cancelled}` or `unknown` row closed it.
+    MissingDrain,
+    /// The bound passed without `control.budget.exceeded` +
+    /// `control.decision{stop}` — the exhaustion never stopped the run.
+    MissingStop,
+    /// A marker appended after the stop — a mutation slipped past the
+    /// exhaustion.
+    LaterMarker,
+    /// Two `control.budget.consumed` rows for the same
+    /// (source event, dimension) — a reconciliation double-charge.
+    DuplicateCharge,
+    /// A rebuild shows committed/incurred work gone — the drain
+    /// retroactively prevented committed work.
+    CommittedReverted,
+    /// A detector/count row the cell requires is absent.
+    MissingDetector,
+}
+
+impl AccountFailure {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AccountFailure::MissingObserver => "missing_observer",
+            AccountFailure::SentinelMutation => "sentinel_mutation",
+            AccountFailure::SamePathUnproven => "same_path_unproven",
+            AccountFailure::MissingRefusal => "missing_refusal",
+            AccountFailure::DispatchOnRefusal => "dispatch_on_refusal",
+            AccountFailure::DependentMutation => "dependent_mutation",
+            AccountFailure::ExhaustionMislabel => "exhaustion_mislabel",
+            AccountFailure::UnboundedBarrier => "unbounded_barrier",
+            AccountFailure::CommittedMissing => "committed_missing",
+            AccountFailure::ExpiryBeforeCommit => "expiry_before_commit",
+            AccountFailure::MissingDeadline => "missing_deadline",
+            AccountFailure::UnreachedBound => "unreached_bound",
+            AccountFailure::NewDispatchAfterStop => "new_dispatch_after_stop",
+            AccountFailure::MissingDrain => "missing_drain",
+            AccountFailure::MissingStop => "missing_stop",
+            AccountFailure::LaterMarker => "later_marker",
+            AccountFailure::DuplicateCharge => "duplicate_charge",
+            AccountFailure::CommittedReverted => "committed_reverted",
+            AccountFailure::MissingDetector => "missing_detector",
+        }
+    }
+}
+
+/// `AccountOutcome` — the O6/O7 label set: `pass` only when every
+/// required fact holds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccountOutcome {
+    /// The cell's expected outcome held with full evidence.
+    Pass,
+    /// The cell cannot pass — the named negative held.
+    Failed(AccountFailure),
+}
+
+/// `O6Cell` — the reservation-refusal fold's required evidence: the
+/// identical positive path demonstrated, the refused reserve ledgered,
+/// zero independent transport entries, no dependent mutation and no
+/// terminal-exhaustion spelling.
+#[derive(Debug)]
+pub struct O6Cell {
+    /// The supervisor record is present.
+    pub observer_present: bool,
+    /// The sentinel's intact bit.
+    pub sentinel_intact: bool,
+    /// The identical positive reserve/dispatch path completed (the O1
+    /// comparator — the ungated path was reachable).
+    pub same_path_positive: bool,
+    /// The starved call's reserve refused durably
+    /// (`control.budget.reserved{outcome:refused}`, `InsufficientBudget`
+    /// on `model_calls`).
+    pub reserve_refused: bool,
+    /// Independently counted transport entries on the refused call —
+    /// must be 0.
+    pub transport_entries: usize,
+    /// A sink delta, marker or `model.call.requested` landed for the
+    /// refused call.
+    pub dependent_mutation: bool,
+    /// `control.budget.exceeded`/a stop decision landed on this cell —
+    /// refusal is not terminal exhaustion.
+    pub terminal_exhaustion: bool,
+}
+
+/// `o6_outcome(cell)` — the O6 reservation-refusal fold.
+pub fn o6_outcome(cell: &O6Cell) -> AccountOutcome {
+    if !cell.observer_present {
+        return AccountOutcome::Failed(AccountFailure::MissingObserver);
+    }
+    if !cell.sentinel_intact {
+        return AccountOutcome::Failed(AccountFailure::SentinelMutation);
+    }
+    if !cell.same_path_positive {
+        return AccountOutcome::Failed(AccountFailure::SamePathUnproven);
+    }
+    if !cell.reserve_refused {
+        return AccountOutcome::Failed(AccountFailure::MissingRefusal);
+    }
+    if cell.transport_entries > 0 {
+        return AccountOutcome::Failed(AccountFailure::DispatchOnRefusal);
+    }
+    if cell.dependent_mutation {
+        return AccountOutcome::Failed(AccountFailure::DependentMutation);
+    }
+    if cell.terminal_exhaustion {
+        return AccountOutcome::Failed(AccountFailure::ExhaustionMislabel);
+    }
+    AccountOutcome::Pass
+}
+
+/// `O7Cell` — the exhaustion/drain fold's required evidence (committed
+/// effect behind a declared bounded barrier; real `time.wall_ms` reaches
+/// the Account bound; new dispatch blocked; drain to released/unknown;
+/// exhaustion stop; no later marker; committed work preserved).
+#[derive(Debug)]
+pub struct O7Cell {
+    /// The supervisor record is present.
+    pub observer_present: bool,
+    /// The sentinel's intact bit.
+    pub sentinel_intact: bool,
+    /// The barrier carried a declared bound, an observation interval and
+    /// a fail-safe before execution (grace = 0).
+    pub barrier_bounded: bool,
+    /// A committed fact (the held reservation / durable request) landed
+    /// before the bound — the effect was already committed when it
+    /// waited.
+    pub committed_before_expiry: bool,
+    /// The bound was reached before any commit — unreachable, never a
+    /// pass (checked before every positive leg).
+    pub expiry_before_commit: bool,
+    /// A durable-origin deadline was actually enforced on the path.
+    pub deadline_enforced: bool,
+    /// The real `time.wall_ms` reached the Account bound (the dispatch
+    /// gate saw `now ≥ deadline` on durable inputs).
+    pub bound_reached: bool,
+    /// New dispatch is blocked past the bound (prepare refuses
+    /// `DeadlineExpired` / dispatch lands no new call).
+    pub new_dispatch_blocked: bool,
+    /// The committed claim drained — `released{release}`, a terminal
+    /// `failed{cancelled}`, or a recorded `unknown`.
+    pub drain_landed: bool,
+    /// `control.budget.exceeded` + `control.decision{stop,
+    /// budget_exhausted{time.wall_ms}}` landed.
+    pub stop_landed: bool,
+    /// A marker appended after the stop.
+    pub later_marker: bool,
+    /// A second consumed row for the same (source, dimension) — a
+    /// reconciliation double-charge.
+    pub duplicate_charge: bool,
+    /// The rebuilt Account still shows the committed/incurred work —
+    /// the drain did not retroactively prevent committed work.
+    pub committed_preserved: bool,
+    /// A detector/count row the cell requires is present.
+    pub detector_present: bool,
+}
+
+/// `o7_outcome(cell)` — the O7 exhaustion/drain fold.
+pub fn o7_outcome(cell: &O7Cell) -> AccountOutcome {
+    if !cell.observer_present {
+        return AccountOutcome::Failed(AccountFailure::MissingObserver);
+    }
+    if !cell.sentinel_intact {
+        return AccountOutcome::Failed(AccountFailure::SentinelMutation);
+    }
+    if !cell.barrier_bounded {
+        return AccountOutcome::Failed(AccountFailure::UnboundedBarrier);
+    }
+    if cell.expiry_before_commit {
+        return AccountOutcome::Failed(AccountFailure::ExpiryBeforeCommit);
+    }
+    if !cell.committed_before_expiry {
+        return AccountOutcome::Failed(AccountFailure::CommittedMissing);
+    }
+    if !cell.deadline_enforced {
+        return AccountOutcome::Failed(AccountFailure::MissingDeadline);
+    }
+    if !cell.bound_reached {
+        return AccountOutcome::Failed(AccountFailure::UnreachedBound);
+    }
+    if !cell.new_dispatch_blocked {
+        return AccountOutcome::Failed(AccountFailure::NewDispatchAfterStop);
+    }
+    if !cell.drain_landed {
+        return AccountOutcome::Failed(AccountFailure::MissingDrain);
+    }
+    if !cell.stop_landed {
+        return AccountOutcome::Failed(AccountFailure::MissingStop);
+    }
+    if cell.later_marker {
+        return AccountOutcome::Failed(AccountFailure::LaterMarker);
+    }
+    if cell.duplicate_charge {
+        return AccountOutcome::Failed(AccountFailure::DuplicateCharge);
+    }
+    if !cell.committed_preserved {
+        return AccountOutcome::Failed(AccountFailure::CommittedReverted);
+    }
+    if !cell.detector_present {
+        return AccountOutcome::Failed(AccountFailure::MissingDetector);
+    }
+    AccountOutcome::Pass
+}
+
+// ── §5.3 / D3-F5 — the fixed 8×3 stage-count report ─────────────────────────
+//
+// Eight cells × three repetitions = 24 planned trials under a frozen
+// seeded permutation with balanced controls per block. Per cell the
+// record counts planned P → invoked A → boundary-observed R → fully
+// observable T plus violations V and expected verdicts; the report
+// publishes A/P, R/A, T/R, V/T — a zero denominator is `undefined`,
+// never a rate — and U = P − T gives the planned-slot missingness bound
+// `[V/P, (V+U)/P]` (a bound, not a confidence interval). O8 reports
+// `detected/3` separately: it is detector sensitivity, not an invariant
+// pass. Refusals, tier-off, unreachable, missing-detector, timeout,
+// oracle-failure, unknown and cancellation are retained outcome kinds —
+// no post-outcome exclusions. At most one setup diagnostic rerun per
+// cell within cap, a new identity, never a replacement of the original
+// record; a failed negative control blocks acceptance and an
+// integrity/confinement/destination/resource breach stops the matrix
+// immediately. Records are append-only: an already-recorded trial id
+// refuses `ReplacedOriginal`.
+
+/// `OpsCell` — the eight operational cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OpsCell {
+    /// O1 — allowed control (positive path).
+    O1,
+    /// O2 — Kp4 commit-before-entry classification.
+    O2,
+    /// O3 — monitor deny.
+    O3,
+    /// O4 — permission wait/answer/resume.
+    O4,
+    /// O5 — permission deny.
+    O5,
+    /// O6 — Account reservation refusal.
+    O6,
+    /// O7 — Account exhaustion/drain.
+    O7,
+    /// O8 — seeded duplicate detection (detector sensitivity).
+    O8,
+}
+
+/// The full cell set, in declaration order.
+pub const OPS_CELLS: [OpsCell; 8] = [
+    OpsCell::O1,
+    OpsCell::O2,
+    OpsCell::O3,
+    OpsCell::O4,
+    OpsCell::O5,
+    OpsCell::O6,
+    OpsCell::O7,
+    OpsCell::O8,
+];
+
+/// Repetitions per cell — the fixed 8×3 = 24 planned trials.
+pub const OPS_REPETITIONS: u8 = 3;
+
+/// The setup diagnostic rerun cap per cell (`≤ 1`, new identity, no
+/// replacement).
+pub const OPS_SETUP_RERUN_CAP: u8 = 1;
+
+impl OpsCell {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OpsCell::O1 => "o1",
+            OpsCell::O2 => "o2",
+            OpsCell::O3 => "o3",
+            OpsCell::O4 => "o4",
+            OpsCell::O5 => "o5",
+            OpsCell::O6 => "o6",
+            OpsCell::O7 => "o7",
+            OpsCell::O8 => "o8",
+        }
+    }
+}
+
+/// `TrialOutcome` — the retained outcome vocabulary (§5.3). Every kind
+/// is kept; none is dropped post-outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrialOutcome {
+    /// The trial's expected outcome held.
+    Pass,
+    /// The observer flagged a seeded defect (O8 — detector sensitivity,
+    /// never an invariant pass).
+    DefectDetected,
+    /// The dispatch refused (`refusal`).
+    Refused,
+    /// The cell ran with a required tier absent (`tier_off`).
+    TierOff,
+    /// The cell's precondition was never reached (`unreachable` — e.g.
+    /// expiry before commit).
+    Unreachable,
+    /// A detector the cell requires was absent (`missing_detector`).
+    MissingDetector,
+    /// The trial timed out (`timeout`).
+    Timeout,
+    /// The oracle/instrument failed (`oracle_failure`).
+    OracleFailure,
+    /// The outcome could not be determined (`unknown`).
+    Unknown,
+    /// The trial was cancelled (`cancellation`).
+    Cancelled,
+    /// The trial's expected verdict did not hold.
+    Failed,
+}
+
+impl TrialOutcome {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TrialOutcome::Pass => "pass",
+            TrialOutcome::DefectDetected => "defect_detected",
+            TrialOutcome::Refused => "refusal",
+            TrialOutcome::TierOff => "tier_off",
+            TrialOutcome::Unreachable => "unreachable",
+            TrialOutcome::MissingDetector => "missing_detector",
+            TrialOutcome::Timeout => "timeout",
+            TrialOutcome::OracleFailure => "oracle_failure",
+            TrialOutcome::Unknown => "unknown",
+            TrialOutcome::Cancelled => "cancellation",
+            TrialOutcome::Failed => "failed",
+        }
+    }
+}
+
+/// `TrialRecord` — one planned trial's retained record. `trial_id` is
+/// unique and append-only; a setup rerun lands under a *new* identity.
+#[derive(Debug, Clone)]
+pub struct TrialRecord {
+    /// The unique trial identity (`o{cell}r{rep}` or the rerun's new id).
+    pub trial_id: String,
+    /// The cell this trial belongs to.
+    pub cell: OpsCell,
+    /// The repetition index (0..OPS_REPETITIONS).
+    pub rep: u8,
+    /// A — the trial's dispatch was actually invoked.
+    pub invoked: bool,
+    /// R — the trial's declared boundary was reached/assessable.
+    pub boundary_observed: bool,
+    /// T — the trial was fully observable.
+    pub fully_observable: bool,
+    /// The retained outcome.
+    pub outcome: TrialOutcome,
+    /// V — a counted violation.
+    pub violation: bool,
+    /// This trial is the cell's negative-control leg.
+    pub negative_control: bool,
+    /// The negative control failed — blocks acceptance.
+    pub control_failed: bool,
+}
+
+/// `StageCounts` — a cell's P/A/R/T/V fold.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StageCounts {
+    /// P — planned trials (records retained for the cell).
+    pub planned: u64,
+    /// A — invoked trials.
+    pub invoked: u64,
+    /// R — boundary-observed trials.
+    pub boundary_observed: u64,
+    /// T — fully observable trials.
+    pub fully_observable: u64,
+    /// V — counted violations.
+    pub violations: u64,
+}
+
+/// `Ratio` — a published stage ratio in parts-per-million; a zero
+/// denominator is `undefined`, never a fabricated rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ratio {
+    /// `num / den` in ppm.
+    Ppm(u64),
+    /// The denominator was zero — undefined.
+    Undefined(&'static str),
+}
+
+/// `stage_ratio(num, den)` — ppm or `Undefined{zero_denominator}`.
+pub fn stage_ratio(num: u64, den: u64) -> Ratio {
+    if den == 0 {
+        return Ratio::Undefined("zero_denominator");
+    }
+    Ratio::Ppm(num.saturating_mul(1_000_000) / den)
+}
+
+/// `missingness_bound(counts)` — the planned-slot violation-fraction
+/// bound `[V/P, (V+U)/P]` where `U = P − T`; a bound, not a confidence
+/// interval. A zero P renders both endpoints `undefined`.
+pub fn missingness_bound(c: &StageCounts) -> (Ratio, Ratio) {
+    let u = c.planned.saturating_sub(c.fully_observable);
+    (
+        stage_ratio(c.violations, c.planned),
+        stage_ratio(c.violations.saturating_add(u), c.planned),
+    )
+}
+
+/// `ReportError` — the report machinery's typed refusals.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReportError {
+    /// A record already exists under this trial id — the original is
+    /// never replaced.
+    ReplacedOriginal {
+        /// The colliding trial id.
+        trial_id: String,
+    },
+    /// The cell already consumed its one setup diagnostic rerun.
+    SetupRerunCapExceeded {
+        /// The cell.
+        cell: OpsCell,
+    },
+    /// A rerun was requested for a trial id outside the frozen plan.
+    UnplannedTrial {
+        /// The offending trial id.
+        trial_id: String,
+    },
+}
+
+/// `OpsReport` — the fixed 8×3 stage-count report: a frozen seeded
+/// permutation of the 24 planned trials, append-only trial records, the
+/// per-cell P/A/R/T/V folds and published ratios, the `[V/P,(V+U)/P]`
+/// missingness bound, the separate O8 `detected/3` detector line and
+/// the immediate-stop flag.
+pub struct OpsReport {
+    seed: u64,
+    plan: Vec<(OpsCell, u8)>,
+    records: BTreeMap<String, TrialRecord>,
+    setup_reruns: BTreeMap<OpsCell, u8>,
+    stopped: Option<String>,
+}
+
+/// A tiny deterministic mixer (splitmix64) — the seeded permutation's
+/// PRNG. No dependency; the seed is the whole entropy source.
+fn mix64(mut z: u64) -> u64 {
+    z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+impl OpsReport {
+    /// `plan(seed)` — the frozen seeded permutation: three blocks
+    /// (repetition rounds), each a seeded shuffle of all eight cells —
+    /// balanced controls per block by construction.
+    pub fn plan(seed: u64) -> Self {
+        let mut plan = Vec::with_capacity(24);
+        for rep in 0..OPS_REPETITIONS {
+            let mut cells = OPS_CELLS;
+            // Seeded Fisher–Yates over the block.
+            let mut state = mix64(seed ^ (rep as u64).wrapping_mul(0xD1B5_4A32_D192_ED03));
+            for i in (1..cells.len()).rev() {
+                state = mix64(state);
+                let j = (state % (i as u64 + 1)) as usize;
+                cells.swap(i, j);
+            }
+            for cell in cells {
+                plan.push((cell, rep));
+            }
+        }
+        OpsReport {
+            seed,
+            plan,
+            records: BTreeMap::new(),
+            setup_reruns: BTreeMap::new(),
+            stopped: None,
+        }
+    }
+
+    /// The frozen 24-trial permutation (`(cell, rep)` in run order).
+    pub fn permutation(&self) -> &[(OpsCell, u8)] {
+        &self.plan
+    }
+
+    /// The planned trial id for a (cell, rep) slot.
+    pub fn trial_id(cell: OpsCell, rep: u8) -> String {
+        format!("{}r{}", cell.as_str(), rep)
+    }
+
+    /// `record(record)` — retain one trial record. Append-only: an
+    /// already-recorded id refuses `ReplacedOriginal` and the original
+    /// row survives.
+    pub fn record(&mut self, rec: TrialRecord) -> Result<(), ReportError> {
+        if self.records.contains_key(&rec.trial_id) {
+            return Err(ReportError::ReplacedOriginal {
+                trial_id: rec.trial_id,
+            });
+        }
+        self.records.insert(rec.trial_id.clone(), rec);
+        Ok(())
+    }
+
+    /// `setup_rerun(cell, rep)` — mint the rerun's *new* trial identity
+    /// for a cell whose original setup failed. At most one per cell; the
+    /// original record is never replaced (its retained row stands).
+    pub fn setup_rerun(&mut self, cell: OpsCell, rep: u8) -> Result<String, ReportError> {
+        let original = Self::trial_id(cell, rep);
+        if !self.plan.iter().any(|(c, r)| *c == cell && *r == rep) {
+            return Err(ReportError::UnplannedTrial { trial_id: original });
+        }
+        let used = self.setup_reruns.entry(cell).or_insert(0);
+        if *used >= OPS_SETUP_RERUN_CAP {
+            return Err(ReportError::SetupRerunCapExceeded { cell });
+        }
+        *used += 1;
+        Ok(format!("{original}s{used}"))
+    }
+
+    /// `integrity_stop(reason)` — an integrity/confinement/unexpected-
+    /// destination/resource breach stops the matrix immediately.
+    pub fn integrity_stop(&mut self, reason: &str) {
+        if self.stopped.is_none() {
+            self.stopped = Some(reason.to_string());
+        }
+    }
+
+    /// The cell's retained records.
+    pub fn cell_records(&self, cell: OpsCell) -> Vec<&TrialRecord> {
+        self.records.values().filter(|r| r.cell == cell).collect()
+    }
+
+    /// `counts(cell)` — the P/A/R/T/V fold over the cell's records.
+    pub fn counts(&self, cell: OpsCell) -> StageCounts {
+        let mut c = StageCounts::default();
+        for r in self.cell_records(cell) {
+            c.planned += 1;
+            if r.invoked {
+                c.invoked += 1;
+            }
+            if r.boundary_observed {
+                c.boundary_observed += 1;
+            }
+            if r.fully_observable {
+                c.fully_observable += 1;
+            }
+            if r.violation {
+                c.violations += 1;
+            }
+        }
+        c
+    }
+
+    /// O8's separate detector sensitivity: seeded duplicates detected of
+    /// three seeded (`defect_detected` outcomes on O8 records).
+    pub fn o8_detected(&self) -> (u64, u64) {
+        let detected = self
+            .cell_records(OpsCell::O8)
+            .iter()
+            .filter(|r| r.outcome == TrialOutcome::DefectDetected)
+            .count() as u64;
+        (detected, OPS_REPETITIONS as u64)
+    }
+
+    /// Whether acceptance is blocked: an immediate stop landed, or any
+    /// negative control failed.
+    pub fn acceptance_blocked(&self) -> bool {
+        self.stopped.is_some() || self.records.values().any(|r| r.control_failed)
+    }
+
+    /// `render()` — the publishable per-cell stage report plus the
+    /// missingness bound, outcome tallies and the O8 detector line.
+    pub fn render(&self) -> Json {
+        let mut cells = Vec::new();
+        for cell in OPS_CELLS {
+            let c = self.counts(cell);
+            let (lo, hi) = missingness_bound(&c);
+            cells.push(Json::obj([
+                ("cell", Json::str(cell.as_str())),
+                ("planned", Json::Int(c.planned as i64)),
+                ("invoked", Json::Int(c.invoked as i64)),
+                ("boundary_observed", Json::Int(c.boundary_observed as i64)),
+                ("fully_observable", Json::Int(c.fully_observable as i64)),
+                ("violations", Json::Int(c.violations as i64)),
+                (
+                    "invoked_per_planned",
+                    ratio_json(stage_ratio(c.invoked, c.planned)),
+                ),
+                (
+                    "boundary_per_invoked",
+                    ratio_json(stage_ratio(c.boundary_observed, c.invoked)),
+                ),
+                (
+                    "observable_per_boundary",
+                    ratio_json(stage_ratio(c.fully_observable, c.boundary_observed)),
+                ),
+                (
+                    "violations_per_observable",
+                    ratio_json(stage_ratio(c.violations, c.fully_observable)),
+                ),
+                (
+                    "violation_bound",
+                    Json::obj([("low", ratio_json(lo)), ("high", ratio_json(hi))]),
+                ),
+            ]));
+        }
+        let mut tally_map = BTreeMap::new();
+        for r in self.records.values() {
+            *tally_map
+                .entry(r.outcome.as_str().to_string())
+                .or_insert(0i64) += 1;
+        }
+        let tallies = Json::Obj(
+            tally_map
+                .into_iter()
+                .map(|(k, n)| (k, Json::Int(n)))
+                .collect(),
+        );
+        let (detected, seeded) = self.o8_detected();
+        Json::obj([
+            ("schema", Json::str("ops_report/1")),
+            ("seed", Json::Int(self.seed as i64)),
+            ("cells", Json::Arr(cells)),
+            ("outcomes", tallies),
+            (
+                "o8_detector",
+                Json::obj([
+                    ("detected", Json::Int(detected as i64)),
+                    ("seeded", Json::Int(seeded as i64)),
+                ]),
+            ),
+            ("acceptance_blocked", Json::Bool(self.acceptance_blocked())),
+            (
+                "stopped",
+                self.stopped.as_deref().map(Json::str).unwrap_or(Json::Null),
+            ),
+        ])
+    }
+}
+
+fn ratio_json(r: Ratio) -> Json {
+    match r {
+        Ratio::Ppm(ppm) => Json::obj([("ppm", Json::Int(ppm as i64))]),
+        Ratio::Undefined(reason) => Json::obj([("undefined", Json::str(reason))]),
+    }
+}
