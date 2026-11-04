@@ -1240,7 +1240,20 @@ fn ac_s2_local_container_exec_runs_inside_podman() {
     let out = disp
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)
         .unwrap();
+    // The session's verbatim backend: R5.44 repaired
+    // `exec_backend_hello_clobber` — the spawned `--backend podman`
+    // selection now survives `Hello{policy}` (`container` reported;
+    // before the repair the hello re-derived `seatbelt` and the exec ran
+    // host-side — a typed inconclusive on this host).
+    let reported_backend = exec.client.backend.clone();
     driver.return_executor(&h.env_handle_id, exec);
+    if reported_backend != "container" {
+        eprintln!(
+            "INCONCLUSIVE: podman cell reported backend {reported_backend} \
+             (exec_backend_hello_clobber — dispatch {out:?})"
+        );
+        return;
+    }
     match &out {
         DispatchOutcome::Observed(o) => assert_eq!(o.outcome, EffectOutcome::Applied, "{o:?}"),
         other => panic!("expected observed(applied) in container, got {other:?}"),

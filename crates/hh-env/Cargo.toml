@@ -73,6 +73,19 @@ hharness-helper = { path = "../hh-helper", version = "0.1.0" }
 # path / O7 committed-effect drain) against the real `Account`. Dev-deps
 # do not ship and gateway's normal graph never reaches env (no cycle).
 hharness-gateway = { path = "../hh-gateway" }
+# R5.42a (tests/r5_42a.rs): the worksheet leg folds the landed
+# `exposure_quote::build_quote` output over the declared HUMAN-H8
+# worksheet into the preflight's worksheet leg. Dev-deps do not ship
+# and eval never reaches env (no cycle).
+hharness-eval = { path = "../hh-eval" }
+# R5.43 (tests/r5_43.rs): the S1 oracle chain drives the landed
+# `OracleRunner`/`SealedSubmission`/`grade` machinery plus the committed
+# `hh-bench-adapter` oracle over the TB2 corpus. Dev-deps do not ship
+# and bench never reaches env (no cycle).
+hharness-bench = { path = "../hh-bench" }
+# R5.43: the `TaskRecord` the `OracleRunner` attempt spec carries —
+# lab records only, dev-only, no cycle (lab never reaches env).
+hharness-lab = { path = "../hh-lab" }
 
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]

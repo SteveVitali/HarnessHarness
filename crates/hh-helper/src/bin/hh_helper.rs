@@ -117,15 +117,18 @@ fn main() {
     };
     // Accept loop — a dropped channel returns here; `preserve_until`
     // sessions resume on the next accept (`terminate` sessions exit).
+    // The flag is read *after* `serve` — the session that just ended
+    // decides; reading it before would apply the stale (default-true)
+    // posture and kill the resume path outright (R5.44's
+    // `probe_verb_enoent` repair surfaced this on the reconnect leg).
     for conn in listener.incoming() {
         match conn {
             Ok(stream) => {
                 let srv2 = Arc::clone(&srv);
-                let was_terminated = *srv2.shared.on_kernel_loss_terminate.lock().unwrap();
                 if serve(stream, &srv2).is_err() {
                     break;
                 }
-                if was_terminated {
+                if *srv2.shared.on_kernel_loss_terminate.lock().unwrap() {
                     break;
                 }
             }

@@ -436,10 +436,13 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 212 note | | | | | size-deviation ruling 2026-11-03 — appended dated note on the contract (AMEND; one closed predicate; ~3.4× NEW high-water mark) |
 | 213 | `213_HUMAN-H8__inputs.md` | Round 5 | human | Bind actual backend, inputs, rights and stage resources | — |
 | 214 | `214_GATE-G18__backend-gate.md` | Round 5 | gate | Authorize narrowly quoted backend feasibility preflight | STOP |
-| 215 | `215_R5.42a__backend-preflight.md` | Round 5 | skeleton | Earn bounded native backend feasibility evidence | pending GATE-G18 |
-| 216 | `216_GATE-G11__execute-gate.md` | Round 5 | gate | Authorize exact S1 and S4 executions | STOP |
-| 217 | `217_R5.43__useful.md` | Round 5 | skeleton | Execute two fixed useful-task subjects | pending GATE-G11 |
-| 218 | `218_R5.44__ops-live.md` | Round 5 | skeleton | Execute the confined operational proof matrix | pending GATE-G11 |
+| 215 | `215_R5.42a__backend-preflight.md` | Round 5 | ticket | Earn bounded native backend feasibility evidence | — |
+| 215 note | | | | | fleshed 2026-11-03 — skeleton → ticket under GATE-G18 PASSED (operator verbatim "passed. proceed" 23:19:09Z); contract rewritten with Run line, concrete pins/probes/stops and numbered ACs bound to the admitted scope (AC-1 anchor retained); decision rows for HUMAN-H8/GATE-G18 appended verbatim to LEDGER GATE DECISIONS |
+| 216 | `216_GATE-G11__execute-gate.md` | Round 5 | gate | Authorize exact S1 and S4 executions | PASSED 2026-11-04T01:13:12Z |
+| 216 note | | | | | PASSED per the presented option (operator verbatim "Confirm, please resume and continue autonomously"; block sha256 `9bdf5c27d044`): surviving-observer proof accepted for confinement/observer/probe; backend verified on the real podman handshake; carried unmet predicate = instrument `probe()` verb live at S1/S4 bind before any cell's probe evidence counts (compensating control: probe evidence withheld until the verb verifies; ENOENT-on-both-lanes machinery repair recorded, never simulated); GATE DECISIONS row appended verbatim |
+| 217 | `217_R5.43__useful.md` | Round 5 | ticket | Execute two fixed useful-task subjects | — |
+| 217 note | | | | | fleshed 2026-11-04 — skeleton → ticket under GATE-G11 PASSED; contract rewritten with Run line, frozen binds (subject-1 → a-hello, subject-2 → a-sum, first two in committed suite order), podman backend, concrete pins/legs/stops and numbered ACs bound to the admitted scope (AC-1 anchor retained; NC-1…NC-9 incl. the carried probe predicate + ≤1 retry bound + §9.2 worksheet); GATE DECISIONS row for GATE-G11 appended verbatim to LEDGER |
+| 218 | `218_R5.44__ops-live.md` | Round 5 | ticket | Execute the confined operational proof matrix | GATE-G11 PASSED |
 | 219 | `219_R5.45__trace.md` | Round 5 | ticket | Actual task trace, bounded edit and example integration | — |
 | 220 | `220_GATE-G12__activation-gate.md` | Round 5 | gate | Authorize activation then fixed pilot | STOP |
 | 221 | `221_R5.46__pilot.md` | Round 5 | skeleton | Collect bounded activation and pilot evidence | pending GATE-G12 |

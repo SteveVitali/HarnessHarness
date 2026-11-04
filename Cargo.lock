@@ -387,14 +387,17 @@ dependencies = [
 name = "hharness-env"
 version = "0.1.0"
 dependencies = [
+ "hharness-bench",
  "hharness-budget",
  "hharness-compiler",
  "hharness-containment",
  "hharness-context",
+ "hharness-eval",
  "hharness-gateway",
  "hharness-helper",
  "hharness-hir",
  "hharness-identity",
+ "hharness-lab",
  "hharness-ledger",
  "hharness-monitor",
  "hharness-ontology",

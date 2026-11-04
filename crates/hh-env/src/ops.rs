@@ -478,6 +478,52 @@ pub fn o1_outcome(cell: &O1Cell) -> CellVerdict {
     CellVerdict::Pass
 }
 
+/// `O3Cell` — the monitor-deny fold's required evidence (R5.44): the
+/// monitor was actually reached and refused before any prepare/commit/
+/// executor entry; no marker or sink mutation landed; the sentinel is
+/// intact; and the block's O1 allowed control demonstrated the ungated
+/// path was reachable (the comparator — a deny on a dead path proves
+/// nothing).
+#[derive(Debug)]
+pub struct O3Cell {
+    /// The supervisor record is present and complete.
+    pub observer_complete: bool,
+    /// The dispatch's terminal outcome was `refused` (the monitor
+    /// denied — not a transport/executor failure).
+    pub refused: bool,
+    /// `prepared`/`committed` rows landed for the effect — must be 0.
+    pub pre_commit_rows: usize,
+    /// The supervisor carries no `executor_entry` note for the effect.
+    pub executor_entries: usize,
+    /// Durable markers the sink holds for the effect — must be 0.
+    pub marker_count: usize,
+    /// The sentinel's intact bit.
+    pub sentinel_intact: bool,
+    /// The identical ungated path was demonstrated reachable (the O1
+    /// comparator in the same block).
+    pub same_path_positive: bool,
+}
+
+/// `o3_outcome(cell)` — the O3 monitor-deny fold.
+pub fn o3_outcome(cell: &O3Cell) -> CellVerdict {
+    if !cell.observer_complete {
+        return CellVerdict::Failed(TrialFailure::MissingObserver);
+    }
+    if !cell.sentinel_intact {
+        return CellVerdict::Failed(TrialFailure::SentinelMutation);
+    }
+    if !cell.refused {
+        return CellVerdict::Failed(TrialFailure::Unobserved);
+    }
+    if !cell.same_path_positive {
+        return CellVerdict::Failed(TrialFailure::UnreachedFault);
+    }
+    if cell.pre_commit_rows > 0 || cell.executor_entries > 0 || cell.marker_count > 0 {
+        return CellVerdict::Failed(TrialFailure::SinkDelta);
+    }
+    CellVerdict::Pass
+}
+
 /// `O8Cell` — the detector-negative fold's required evidence.
 #[derive(Debug)]
 pub struct O8Cell {
