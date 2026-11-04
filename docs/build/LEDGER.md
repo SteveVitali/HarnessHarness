@@ -16,9 +16,9 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      GATE-G15
+nextTicket:      R5.50
 lastCompleted:   R5.49
-blockedOn: DF-H9-1
+blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -203,6 +203,7 @@ updatedAt:        2026-11-04T09:56:00Z
 | 2026-11-04T07:12:23Z | GATE-G13 | freeze and fund authentic original-runner parity | disposition | "confirm, proceed" (operator verbatim, interactive, 2026-11-04T07:12:23Z — recorded in readouts/GATE-G13.md; agent-drafted block sha256 29be1faa6511 confirmed) | **PASSED — N=0 declared** — scoped decision: the parity freeze is recorded (R5.39's admitted method/routing machinery stands); the parity tranche stays **N=0 — quote-only per the HUMAN-H8-declared worksheet** (no parity endpoints/margins/N were supplied, so no funded tranche is authorized — consistent with the declared minimum-admission posture). S3 stays unmet honestly; no tranche executes; no guessed margin/transfer; no favorable top-up or CP fallback. next → seq 223 | decision |
 
 | 2026-11-04T08:04:17Z | GATE-G14 | preregister and authorize held-out confirmation | disposition | "confirmed, please continue fully autonomously" (operator verbatim, interactive, 2026-11-04T08:04:17Z — recorded in readouts/GATE-G14.md; agent-drafted block sha256 640d68742873 confirmed) | **PASSED — quote-only confirmation** — scoped decision: the confirmation freeze is recorded (the exact 30-task held-out manifest committed at R5.41 `protocol_id`; methods/detectors/oracle declared); **no confirmation tranche executes** — full actual parity is absent (GATE-G13 N=0, `confirmation_blocked:true` per the contract's own dependency) and the HUMAN-H8-declared worksheet is quote-only; S4 stays unmet honestly; no automatic transfer/default/publication claim. next → seq 225 | decision |
+| 2026-11-04T14:32:56Z | GATE-G15 | admit cleared recipient and participant procedures | disposition | "accept, continue" (operator verbatim, interactive, 2026-11-04T14:32:56Z — recorded in readouts/GATE-G15.md; agent-drafted block sha256 0e5bd136858c confirmed) | **PASSED — out-of-scope disposition** — scoped decision: the participation stage is dispositioned out-of-scope for this round (the operator's accepted option-2): no cleared recipient, no participant procedures, no reviewer/participant acts admitted; every participant/outreach predicate in the checklist stays **withheld** — DF-H9-1 stays open (the deferral is not discharged by voiding the stage). Dependent skeletons (R5.50–R5.53) land honest withheld packets per the R5.47/R5.48 pattern; nothing executes. next → seq 229 | decision |
 
 ## RETURN PASS
 
