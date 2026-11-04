@@ -138,6 +138,26 @@ container/participant execution; USD 0.
   emitted `reports/2026-11-04-cap5.2-composed.json` disposition
   `executed` (counts 4 cards · 23 pass · 7 expected_refusal · 0 fail ·
   20 subjects · 2 receipts); `COMPOSED_E2E_REPORT.md` written.
+- 2026-11-04T21:00Z — post-ruling resume: pass-2 clean; guard PASS
+  DISPATCH CAP5.2; bm `.`/`--staged` 0 viol; bm-tools OK; fmt clean;
+  cap5_2 7/7; hharness suites 0 failures. PR #272 opened → first
+  ci-boundary read **RED**: `build · test · fmt · drift (ubuntu-latest)`
+  — `check-ci-gating` readers scan flagged 10 hits: real `docs/` reads
+  in `composed.rs`/`cap5_2.rs` (never allowlistable; this ticket's —
+  repair owed here).
+- 2026-11-04T21:05Z — **CI repair (readers gate):** `run_composed`
+  takes a `RecordsIn` input root (reports dir / deferrals rows /
+  tickets dir); records-in reads moved off the protected trees to
+  committed fixtures `crates/hharness/tests/fixtures/cap5_2/` — 16
+  residual packets byte-identical (sha256 verified per file),
+  `deferrals.md` verbatim DF-H9-1/DF-CAP5.1-1 rows, `tickets/
+  241_GATE-G17__accept.md` filename stub (the GATE home check is
+  presence-based). Scratch staging reads pin paths off the card
+  records themselves — no protected-tree literal in any test source.
+  Emitted packet identical modulo the per-run probe timestamp
+  (stages/residuals/counts byte-equal). cap5_2 7/7; hharness 0
+  failures; `check-ci-gating` OK; fmt clean. Net 884 → ~1000
+  changed source/test lines (~1.43×) — recorded Deviation stands.
 - 2026-11-04T20:52Z — **SIZE TRIGGER CROSSED — STOP for scoped ruling.**
   Measured: 841 changed source/test lines under `crates/`
   (`composed.rs` 534 + `cap5_2.rs` 300 + `lib.rs` 7); +43
@@ -211,9 +231,15 @@ clean, no repair):
   `. --staged` → **0 violations**, exit 0.
 - `bash scripts/check-bm-tools.sh` → **OK** (3 open deferrals, each one row).
 - `cargo fmt --all --check` → **clean**.
-- `cargo test -p hharness --test cap5_2` → **7 passed / 0 failed** (~27 s);
+- `cargo test -p hharness --test cap5_2` → **7 passed / 0 failed** (~26 s);
   `cargo test -p hharness` → **all suites 0 failures** (cap5_2 7 ·
   r5_28 5 · r5_29 7 · r5_45 6 · r5_53 5).
+- `bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml` →
+  **OK** (readers scan clean, 14 hits / 14 allowlisted) — post
+  readers-gate repair: `run_composed(repo, records, work)` takes a
+  `RecordsIn` root; all committed-record reads moved to
+  `crates/hharness/tests/fixtures/cap5_2/` byte-identical/verbatim
+  fixtures (first #272 read RED on the scan — this ticket's, repaired).
 - Committed packet `docs/build/reports/2026-11-04-cap5.2-composed.json`
   re-verified: `hh-cap5-composed/1` `disposition: executed`, stages 8/8
   verified, counts {cards:4, pass:23, expected_refusal:7, fail:0,
@@ -228,8 +254,8 @@ clean, no repair):
   AC-5 met (deferrals carried OPEN verbatim; run/PR/BUILD_INDEX/LEDGER
   agree at close; Deviation conspicuous: **884 vs ≤700 ~1.26×, AMEND
   ruling `4e677760`**).
-- ci: pending #<n>@<sha> — recorded at `logs/ci-cap5.2.json`
-  (green only — pending recorded honestly, never claimed pass).
+- ci: (recorded at close from `logs/ci-cap5.2.json` — green only;
+  a pending/not-green state is recorded honestly, never claimed pass).
 
 ## Ruling — 2026-11-04 (orchestrator records)
 

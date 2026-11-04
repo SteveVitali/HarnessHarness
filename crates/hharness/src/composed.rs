@@ -18,7 +18,7 @@
 //! closes an absent later research/participant predicate, and live
 //! authorization stays `pending{not_claimed}`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use hharness_embed::service::{EmbedService, ServiceConfig};
 use hharness_identity::idp::idp_digest;
@@ -181,6 +181,24 @@ fn svc(root: &Path) -> Result<EmbedService, ExampleError> {
     })
 }
 
+/// The committed-record roots a composed run re-reads (records-in).
+/// The canonical append-only records live under the build reports and
+/// tickets trees; the CI readers gate bars gated test sources from
+/// opening those living documentation trees, so callers pass
+/// byte-identical fixture roots (same sha256 on every carried byte)
+/// under `tests/fixtures/` — see `tests/cap5_2.rs`.
+pub struct RecordsIn {
+    /// Directory of the sixteen residual packets — byte-copies of the
+    /// canonical append-only reports.
+    pub reports: PathBuf,
+    /// The deferral rows used to resolve `DF-*` homes — a verbatim
+    /// row excerpt of the append-only register (rows never rewritten).
+    pub deferrals: PathBuf,
+    /// Directory scanned for a `GATE-*` home's committed ticket
+    /// filename (presence, never content).
+    pub tickets: PathBuf,
+}
+
 /// One residual leg — a disposition-bearing committed packet carried
 /// verbatim, or `blocked{inaccessible}` when its byte cannot be read.
 #[derive(Debug)]
@@ -235,8 +253,14 @@ pub struct ComposedReport {
 }
 
 /// Recompute `state`/`closure`/`home` for one residual leg (records-in).
-fn residual_leg(repo: &Path, file: &str, claim: &str, home: &str) -> Residual {
-    let path = repo.join("docs/build/reports").join(file);
+fn residual_leg(
+    reports: &Path,
+    records: &RecordsIn,
+    file: &str,
+    claim: &str,
+    home: &str,
+) -> Residual {
+    let path = reports.join(file);
     let blocked = |why: String| Residual {
         claim: claim.to_string(),
         file: file.to_string(),
@@ -247,7 +271,7 @@ fn residual_leg(repo: &Path, file: &str, claim: &str, home: &str) -> Residual {
         admission: "absent".to_string(),
         closure: "pending",
         home: home.to_string(),
-        home_resolved: home_state(repo, home),
+        home_resolved: home_state(records, home),
     };
     let bytes = match std::fs::read(&path) {
         Ok(b) => b,
@@ -283,25 +307,25 @@ fn residual_leg(repo: &Path, file: &str, claim: &str, home: &str) -> Residual {
         admission,
         closure,
         home: home.to_string(),
-        home_resolved: home_state(repo, home),
+        home_resolved: home_state(records, home),
     }
 }
 
-/// `resolved` iff the home's committed row/file exists (records-in).
-fn home_state(repo: &Path, home: &str) -> &'static str {
+/// `resolved` iff the home's committed row/file exists (records-in —
+/// the verbatim fixture roots under [`RecordsIn`]).
+fn home_state(records: &RecordsIn, home: &str) -> &'static str {
     if let Some(df) = home.strip_prefix("DF-") {
-        let p = repo.join("docs/tickets/DEFERRALS.md");
-        let ok = std::fs::read_to_string(&p)
+        let ok = std::fs::read_to_string(&records.deferrals)
             .map(|t| t.contains(&format!("| DF-{df}")))
             .unwrap_or(false);
         return if ok { "resolved" } else { "missing" };
     }
-    if home == "GATE-G17" {
-        let ok = repo.join("docs/tickets").is_dir()
-            && std::fs::read_dir(repo.join("docs/tickets"))
+    if home.starts_with("GATE-") {
+        let ok = records.tickets.is_dir()
+            && std::fs::read_dir(&records.tickets)
                 .map(|d| {
                     d.flatten()
-                        .any(|e| e.file_name().to_string_lossy().contains("GATE-G17"))
+                        .any(|e| e.file_name().to_string_lossy().contains(home))
                 })
                 .unwrap_or(false);
         return if ok { "resolved" } else { "missing" };
@@ -344,10 +368,16 @@ fn access_probe() -> Json {
     ])
 }
 
-/// `run_composed(repo, work)` — drive the four committed cards through
-/// the landed runner (a fresh scratch `EmbedService` per card), fold the
-/// stage spine, carry the residual legs verbatim, mint `packet_id` last.
-pub fn run_composed(repo: &Path, work: &Path) -> Result<ComposedReport, ExampleError> {
+/// `run_composed(repo, records, work)` — drive the four committed cards
+/// through the landed runner (a fresh scratch `EmbedService` per card;
+/// `repo` resolves the card records and their pinned inputs), fold the
+/// stage spine, carry the residual legs verbatim off `records`, mint
+/// `packet_id` last.
+pub fn run_composed(
+    repo: &Path,
+    records: &RecordsIn,
+    work: &Path,
+) -> Result<ComposedReport, ExampleError> {
     std::fs::create_dir_all(work).map_err(|e| ExampleError::Owner {
         seam: "work",
         detail: format!("{}: {e}", work.display()),
@@ -431,7 +461,7 @@ pub fn run_composed(repo: &Path, work: &Path) -> Result<ComposedReport, ExampleE
     // Residual legs — verbatim, homes resolved, bytes recomputed.
     let residuals: Vec<Residual> = RESIDUALS
         .iter()
-        .map(|(f, c, h)| residual_leg(repo, f, c, h))
+        .map(|(f, c, h)| residual_leg(&records.reports, records, f, c, h))
         .collect();
     let access = Json::obj([
         ("backend", access_probe()),

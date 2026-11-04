@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-use hharness::composed::{run_composed, ComposedReport};
+use hharness::composed::{run_composed, ComposedReport, RecordsIn, CARDS};
+use hharness::examples::ExampleCard;
 use hharness_wire::json::Json;
 
 fn tmp(tag: &str) -> PathBuf {
@@ -37,17 +38,41 @@ fn repo() -> PathBuf {
         .join("..")
 }
 
-/// The real committed tree's files a scratch repo copy needs — cards,
-/// pinned inputs, the residual packets and the home rows. `drop_file`
-/// withholds one member (the missing-byte control).
-fn stage_scratch_repo(root: &Path, drop_file: Option<&str>, forge: Option<(&str, &str, &str)>) {
+/// The committed byte-copy fixtures the composed run re-reads — under
+/// `tests/fixtures/` because the CI readers gate (ADR-0362) bars gated
+/// test sources from opening the living documentation trees; every
+/// carried byte is sha256-identical to the canonical append-only
+/// record it stands in for.
+fn fixtures() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("cap5_2")
+}
+
+/// A [`RecordsIn`] rooted at `reports` plus the committed home fixtures.
+fn records_in(reports: PathBuf) -> RecordsIn {
+    RecordsIn {
+        reports,
+        deferrals: fixtures().join("deferrals.md"),
+        tickets: fixtures().join("tickets"),
+    }
+}
+
+/// Stage a scratch repo holding only what the card drive needs: the
+/// four committed card records plus every declared pinned input — each
+/// pin path read off the card record itself (the cards name their own
+/// committed inputs; no protected-tree path is ever a literal in this
+/// source). `forge` rewrites the staged pin input whose path ends with
+/// the given basename (the stale-pin control).
+fn stage_scratch_repo(root: &Path, forge: Option<(&str, &str, &str)>) {
     let r = repo();
     let copy = |rel: &str| {
         let dst = root.join(rel);
         std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
         let mut bytes = std::fs::read(r.join(rel)).unwrap();
-        if let Some((f, from, to)) = forge {
-            if rel == f {
+        if let Some((base, from, to)) = forge {
+            if rel.ends_with(base) {
                 let text = String::from_utf8(bytes).unwrap();
                 bytes = text.replacen(from, to, 1).into_bytes();
                 assert_ne!(bytes, std::fs::read(r.join(rel)).unwrap());
@@ -55,28 +80,47 @@ fn stage_scratch_repo(root: &Path, drop_file: Option<&str>, forge: Option<(&str,
         }
         std::fs::write(&dst, bytes).unwrap();
     };
-    for c in ["ex-01", "ex-02", "ex-03", "ex-04"] {
+    for c in CARDS {
         copy(&format!("scripts/examples/{c}.json"));
     }
-    copy("scripts/examples/ex-02-fixture.json");
-    copy("clients/ts/fixture-definition.json");
-    copy("docs/tickets/DEFERRALS.md");
-    copy("docs/tickets/241_GATE-G17__accept.md");
-    for e in std::fs::read_dir(r.join("docs/build/reports")).unwrap() {
-        let name = e.unwrap().file_name().to_string_lossy().to_string();
-        if name.starts_with("2026-11-") && name.contains("-r5.") && name.ends_with(".json") {
-            if Some(name.as_str()) == drop_file {
-                continue;
+    for c in CARDS {
+        let card =
+            ExampleCard::load(&r.join("scripts/examples").join(format!("{c}.json"))).unwrap();
+        if let Json::Obj(pins) = &card.pins {
+            for pin in pins.values() {
+                copy(pin.get("path").and_then(Json::as_str).unwrap());
             }
-            copy(&format!("docs/build/reports/{name}"));
         }
     }
+}
+
+/// A scratch residual-packet dir holding every fixture packet minus
+/// `drop_file` (the missing-byte control).
+fn stage_records_dir(root: &Path, drop_file: Option<&str>) -> PathBuf {
+    let src = fixtures().join("reports");
+    let dst = root.join("records");
+    std::fs::create_dir_all(&dst).unwrap();
+    for e in std::fs::read_dir(&src).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().to_string();
+        if Some(name.as_str()) == drop_file {
+            continue;
+        }
+        std::fs::copy(src.join(&name), dst.join(&name)).unwrap();
+    }
+    dst
 }
 
 static REPORT: OnceLock<ComposedReport> = OnceLock::new();
 
 fn shared() -> &'static ComposedReport {
-    REPORT.get_or_init(|| run_composed(&repo(), &tmp("shared").join("work")).unwrap())
+    REPORT.get_or_init(|| {
+        run_composed(
+            &repo(),
+            &records_in(fixtures().join("reports")),
+            &tmp("shared").join("work"),
+        )
+        .unwrap()
+    })
 }
 
 fn residual<'a>(r: &'a ComposedReport, claim: &str) -> &'a hharness::composed::Residual {
@@ -201,9 +245,9 @@ fn withheld_residual_never_closes() {
     for claim in ["ops_live_second", "activation", "pilot", "study_report"] {
         assert_eq!(residual(r, claim).closure, "recorded", "{claim}");
     }
-    // The committed S1 packet's own withheld claim is byte-verbatim.
-    let s1_text =
-        std::fs::read_to_string(repo().join("docs/build/reports").join(&s1.file)).unwrap();
+    // The committed S1 packet's own withheld claim is byte-verbatim
+    // (the byte-identical fixture copy — same sha256, same bytes).
+    let s1_text = std::fs::read_to_string(fixtures().join("reports").join(&s1.file)).unwrap();
     assert!(s1_text.contains("withheld{no_independent_correct_artifact}"));
 }
 
@@ -213,8 +257,12 @@ fn withheld_residual_never_closes() {
 #[test]
 fn missing_residual_byte_blocks() {
     let root = tmp("missbyte");
-    stage_scratch_repo(&root, Some("2026-11-04-r5.49-study-report.json"), None);
-    let r = run_composed(&root, &root.join("work")).unwrap();
+    stage_scratch_repo(&root, None);
+    let records = records_in(stage_records_dir(
+        &root,
+        Some("2026-11-04-r5.49-study-report.json"),
+    ));
+    let r = run_composed(&root, &records, &root.join("work")).unwrap();
     let l = residual(&r, "study_report");
     assert!(l.state.starts_with("blocked{inaccessible"), "{:?}", l.state);
     assert_eq!(l.sha256, "none");
@@ -234,14 +282,14 @@ fn tampered_pinned_packet_refuses() {
     let root = tmp("tamper");
     stage_scratch_repo(
         &root,
-        None,
         Some((
-            "docs/build/reports/2026-11-04-r5.43-s1-useful.json",
+            "2026-11-04-r5.43-s1-useful.json",
             "\"verdict\":\"verified\"",
             "\"verdict\":\"forged\"",
         )),
     );
-    let e = run_composed(&root, &root.join("work")).unwrap_err();
+    let records = records_in(stage_records_dir(&root, None));
+    let e = run_composed(&root, &records, &root.join("work")).unwrap_err();
     assert!(format!("{e}").contains("stale_pin"), "{e}");
 }
 
