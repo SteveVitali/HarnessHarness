@@ -389,6 +389,7 @@ version = "0.1.0"
 dependencies = [
  "hharness-bench",
  "hharness-budget",
+ "hharness-bundle",
  "hharness-compiler",
  "hharness-containment",
  "hharness-context",
