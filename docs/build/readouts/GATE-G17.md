@@ -1,5 +1,5 @@
 # GATE-G17 — Fresh round-5 acceptance · readout
-Status: PENDING
+Status: PASSED — acceptance on the honest record
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is approval.
 
@@ -52,4 +52,4 @@ Confirm the agent-drafted block by its sha256 prefix.
 
 ## Signature
 
-(pending — operator words recorded verbatim here and in GATE DECISIONS when supplied)
+**PASSED** — operator words (verbatim, interactive, 2026-11-05T00:13:07Z): "passed, continue" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: the round-5 record is accepted as-landed — engineering `executed`, research `inconclusive`, portability/public/adoption `withheld`, `build_status: not_done`. The three OPEN deferrals (DF-R5.1-1, DF-H9-1, DF-CAP5.1-1) **carry forward OPEN** — the acceptance took the record as-landed; no waiver was named, so each stays open with its owner/trigger (never inferred completion). S3/S4 unmet obligations retained; Q-7 stays open until human ratification. No merge/publication permission granted beyond explicit words — `mergePolicy: OPERATOR` stands. Agent-drafted block sha256 `b6cebed58691` confirmed.
