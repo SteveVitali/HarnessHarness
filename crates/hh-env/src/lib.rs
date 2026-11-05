@@ -33,6 +33,7 @@ pub mod local;
 pub mod observe;
 pub mod ops;
 pub mod opslive;
+pub mod parity;
 pub mod pilot;
 pub mod preflight;
 pub mod protocol;
