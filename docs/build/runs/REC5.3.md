@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-05T00:53:48Z (`date -u` at SETUP)
-- Closed: (closed — set at §6.5) (`date -u` at §6.5 close)
+- Closed: 2026-11-05T01:04:25Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 24k + 10k reserve; loaded = contract 244 + invariants I-01–I-08/O-01–O-08 + supplement §9 (bounded, s9 + 9.2/9.4/9.5) + coverage register REC5.3-adjacent rows (no primary targets — contributing slice) + manifest rows 244–246 + operating/notes rows 1002–1003 + 3 OPEN DEFERRALS rows + LEDGER CURRENT STATE + BUILD_INDEX round-5 rows + reconcile-build mode=integration + REC.3/REC5.1/REC5.2 precedent artifacts ≈ at estimate; ≤450 changed source/test lines split trigger watched (docs-only scope).
 
 ## Deferrals read
@@ -182,7 +182,8 @@ predicate; historical same-named reports untouched.
 - `bash scripts/check-bm-tools.sh` → OK.
 - `check-build-memory.sh .` → 0 violations / 8 scoped warnings (baseline, unchanged).
 - fmt: no Rust touched — `cargo fmt` not applicable (docs-only).
-- POST-VERIFY entries appended at close.
+- 2026-11-05T01:04:25Z POST-VERIFY — `bash docs/build/tools/check-supplement-guard.sh` re-run post-artifacts → PASS DISPATCH REC5.3 (82 rows / 180 cand / 0 viol / 8 warnings); `check-build-memory.sh .` → 0 viol / 8 warnings; `--staged` → 0 viol / 0 warnings (713 changed protected lines judged, 1 record date); `check-living-docs.sh` → OK 456; `check-bm-tools.sh` → OK.
+- ci-boundary/1: `ci: pass #276@d76ca20 (build · test · fmt · drift (macos-latest) 41945409218; cargo-deny (licenses · advisories · bans · sources) 41945409218; gitleaks (full history + PR diff) 41945409218; build · test · fmt · drift (ubuntu-latest) 41945409218)` → `logs/ci-rec5.3.json` (force-added; read_at per record).
 
 ## Evidence report
 
