@@ -1,4 +1,4 @@
-# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10 · refreshed R3.10, 2026-10-16)
+# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10 · refreshed R3.10, 2026-10-16 · refreshed REC5.1, 2026-11-05)
 
 > The single deduplicated register of everything the build left owed at
 > GATE-ACCEPT (2026-10-02, accepted). One row in `BACKLOG.csv` is one
@@ -11,9 +11,11 @@
 
 - **Mode:** `reconcile-build mode=backlog` · 2026-10-06 · branch `svitali/harnessharness-rec.1` ·
   refreshed `reconcile-build mode=backlog` · 2026-10-10 (R2.26) · branch `svitali/harnessharness-r2.26` ·
-  refreshed `reconcile-build mode=backlog` · 2026-10-16 (R3.10) · branch `svitali/harnessharness-r3.10`
-- **Machine form:** `docs/build/BACKLOG.csv` (42 rows; `check-backlog.sh` exit 0 — complete,
-  non-duplicating, verdict-consistent; expected sources 156)
+  refreshed `reconcile-build mode=backlog` · 2026-10-16 (R3.10) · branch `svitali/harnessharness-r3.10` ·
+  refreshed `reconcile-build mode=backlog` · 2026-11-05 (REC5.1) · branch `codex/harnessharness-evidence-rec5.1`
+- **Machine form:** `docs/build/BACKLOG.csv` (49 rows after the REC5.1 appends; `check-backlog.sh` exit 0
+  — complete, non-duplicating, verdict-consistent; expected sources 204 over `docs/build/` + 73 over
+  `docs/build/reports/round5/` — 2026-11-05 re-check; at R3.10: 42 rows, expected 156)
 - **Sources consumed (R3.10 re-sweep):** `docs/tickets/DEFERRALS.md` (19 owed rows of 100 — 18 OPEN +
   1 PARTIAL) · `docs/build/COVERAGE_MATRIX.csv` (11 PARTIAL + 2 MET-ENGINEERED rows after the
   round-3 flips) · `docs/adr/` (145 `## Revisit trigger` sections, ADR-0217…ADR-0361) ·
@@ -24,6 +26,21 @@
   CF-492/CF-493; CF-489 resolved at R3.9) · `docs/build/LEDGER.md` OPEN FINDINGS (7 entries +
   LEDGER-OF-6) · `docs/build/readouts/GATE-ACCEPT.md` (10 signed deviations) · the R3.1–R3.9 run
   ledgers (the discharged round-3 rows: BL-10/BL-14/BL-15/BL-16/BL-19/BL-44/BL-45)
+
+- **Sources consumed (REC5.1 round-5 re-sweep, 2026-11-05):** `docs/tickets/DEFERRALS.md` (3 owed rows of
+  105 — DF-R5.1-1 + DF-H9-1 + DF-CAP5.1-1, all OPEN and all carried forward by GATE-G17's verbatim
+  2026-11-05T00:13:07Z disposition — no waiver named) · `docs/build/reports/round5/COVERAGE_MATRIX.csv`
+  (73 PARTIAL rows of 180 — homed BL-50…BL-53; 29 MET-ENGINEERED rows ride their OPEN D-row legs, never
+  gathered; 0 MISSING/AT-RISK/MET-DIFFERENTLY/WAIVED) · `docs/adr/` (204 `## Revisit trigger` sections,
+  ADR-0217…ADR-0420 — re-swept below; homes already complete at BL-01/BL-47/BL-48) ·
+  `research/registers/risks.md` (Round 5 review appended) · `research/registers/conflicts.md`,
+  `open-questions.md`, `spec-debt.md`, `scope.md` (register rows unchanged — CF-* packages stay BL-30)
+  · `docs/build/LEDGER.md` OPEN FINDINGS (9 entries, all homed per the BL-41/BL-30 mapping below;
+  the CC4 nit was adjudicated no-action-accepted at CAP5.3) · `docs/build/reports/2026-11-04-cap5.3-closure.json`
+  + `docs/build/reports/round5/CAPSTONE_CLOSURE.md` (the CAP5.3 closure fold: layer verdicts, unique owed
+  homes, two sums 107/78) · `docs/build/readouts/GATE-G17.md` (the fresh acceptance's verbatim
+  carry-forward set) · `docs/build/COVERAGE_MATRIX.csv` (the round-4 register — 66/66 closed; its old
+  owed rows' homes stand).
 
 ## How to read
 
@@ -130,6 +147,23 @@
 *(ADR-0377: `check-backlog`'s every-live-ADR-on-one-non-closed-home rule makes the
 two index rows the catalogue's backing store — they are classification state, not
 owed work; R4.16 re-verifies "no standing debt rows" at launch.)*
+
+### Round 5 — GATE-G17 carried set (4 rows, all open)
+
+| BL | Item | Sources |
+|---|---|---|
+| BL-50 | GATE-G17-carried scope dispositions — research-layer (R) unmet predicates + voided publication/value-stage (P) legs carried verbatim by the fresh acceptance | 40 round-5 matrix ids (REQ-B-101/103/105/106, REQ-C-004/005/105/106, REQ-D-001/002/003/004/007/009, REQ-D-101…110, REQ-D-301…310, REQ-E-011, REQ-G-201/202/206/207/209) |
+| BL-51 | HUMAN-H9 withheld participant/outreach predicate set — needs named participants/reviewer + consent/scope/access/resources | DF-H9-1 + 23 ids (REQ-B-005/006/007/107, REQ-C-007, REQ-F-201…206, REQ-G-101…107, REQ-G-203/204/205/208, REQ-H-009) |
+| BL-52 | Failed S1 useful-task residual — machinery repaired R5.44; a named bounded re-execution admission or a verbatim scope disposition | DF-CAP5.1-1 + 9 ids (REQ-A-003/104/201, REQ-B-002, REQ-G-001/003/005/008/009) |
+| BL-53 | R5.1 supplemental-guard contributor evidence — ten R5.1-owned targets' contributor cells need each boundary's guard-invocation record | DF-R5.1-1 + REQ-H-006 |
+
+*REC5.1 read (2026-11-05):* all four rows are `open` — GATE-G17's verbatim
+disposition accepted the record as-landed and carried every owed leg forward
+with its owner/trigger; nothing was waived and no deferred predicate became
+MET. Causes: **human** (BL-51 — operator supply), **window** (BL-50/BL-52 —
+scope disposition or a named admission), **evidence-record** (BL-53 —
+contributor cells cite the landed boundary records). The 29 MET-ENGINEERED
+matrix rows are homed through these rows' D-row legs, per BM-VERDICT-01.
 
 ## Themes
 
@@ -602,3 +636,268 @@ revalidation rows (BL-33/35/36/37/38/39).
 - Cells containing commas are quoted; `|` inside cells is written as `∣`/spelled
   out where needed; `D-1..D-6` expands to `D-1` `D-2` `D-3` `D-4` `D-5` `D-6`
   (the six ratified spec §11.4 deferrals).
+
+
+## Revisit-trigger sweep — dated 2026-11-05 (REC5.1, round 5)
+
+All 204 `## Revisit trigger` sections (ADR-0217…ADR-0420) re-evaluated against
+the landed record — the first sweep since 2026-10-10 (R2.26), so rounds 3–5
+are folded here. Homes are unchanged: every id already sits in exactly one
+`sources` cell (BL-01 ×3 env-pending · BL-47 ×152 quiet-conditional index ·
+BL-48 ×49 fired-answered index); no re-home was required — every id whose
+trigger partially fired keeps ≥1 live condition on the quiet-conditional
+index (the answered arms are named in the readings; no `fired-unanswered`
+arm was found outside BL-01's standing env-pending set). Verdicts:
+`quiet` (no live firing condition met) · `fired-answered` (condition met and
+discharged — the record stands) · `fired-unanswered` (condition met, residual
+owed → a live row) · `dormant` (subject inert) · `superseded` (none — no ADR
+was superseded).
+
+| ADR | Verdict | Reading | Home |
+|---|---|---|---|
+| ADR-0217 | quiet | condition unmet; stands | BL-47 |
+| ADR-0218 | quiet | arm (E3 generated-client bind) fired-answered at R4.2 — generated TS client bound + drift-checked (e3-smoke 17/17); E2-lab arm quiet | BL-47 |
+| ADR-0219 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0220 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0221 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0222 | quiet | condition unmet; stands | BL-47 |
+| ADR-0223 | fired-unanswered | foreign-toolchain/E2-lab arms environment-pending — gate-accepted (GATE-ACCEPT item 9); E2 replay legs hold foreign-run-verified, the live re-runs stay owed | BL-01 |
+| ADR-0224 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0225 | quiet | reviewer arm declined verbatim (ADR-0371 — waiver, not a refusal to accept a later signature); E2-lab arm's residual rides BL-01 | BL-47 |
+| ADR-0226 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0227 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0228 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0229 | quiet | condition unmet; stands | BL-47 |
+| ADR-0230 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0231 | quiet | condition unmet; stands | BL-47 |
+| ADR-0232 | quiet | condition unmet; stands | BL-47 |
+| ADR-0233 | quiet | condition unmet; stands | BL-47 |
+| ADR-0234 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0235 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0236 | quiet | condition unmet; stands | BL-47 |
+| ADR-0237 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0238 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0239 | fired-unanswered | Stage-3 polyglot CI / cross-impl divergence leg environment-pending (BL-01) | BL-01 |
+| ADR-0240 | quiet | condition unmet; stands | BL-47 |
+| ADR-0241 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0242 | quiet | condition unmet; stands | BL-47 |
+| ADR-0243 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0244 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0245 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0246 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0247 | quiet | arm (a) live exporter path fired-answered — otel-live leg 2026-10-22 (`hh-live-evidence/1` 2026-10-22-otel-live.json); append contract unchanged, check-drift green; Stage-3 sink-fixture arm quiet | BL-47 |
+| ADR-0248 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0249 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0250 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0251 | quiet | condition unmet; stands | BL-47 |
+| ADR-0252 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0253 | quiet | arm (a) live Transport/CredentialPort + emitters fired-answered across the R4 live-provider landings; C1 non-static arms + Stage-3 battery quiet | BL-47 |
+| ADR-0254 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0255 | quiet | condition unmet; stands | BL-47 |
+| ADR-0256 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0257 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0258 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0259 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0260 | quiet | condition unmet; stands | BL-47 |
+| ADR-0261 | quiet | condition unmet; stands | BL-47 |
+| ADR-0262 | quiet | condition unmet; stands | BL-47 |
+| ADR-0263 | quiet | condition unmet; stands | BL-47 |
+| ADR-0264 | quiet | condition unmet; stands | BL-47 |
+| ADR-0265 | quiet | condition unmet; stands | BL-47 |
+| ADR-0266 | quiet | arm (a) fired-answered 2026-10-21 (R4.5c; ADR-0365 LocalTlsTransport) per its own dated note; fork-op/widened-scope arms quiet | BL-47 |
+| ADR-0267 | quiet | condition unmet; stands | BL-47 |
+| ADR-0268 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0269 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0270 | quiet | condition unmet; stands | BL-47 |
+| ADR-0271 | quiet | condition unmet; stands | BL-47 |
+| ADR-0272 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0273 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0274 | quiet | condition unmet; stands | BL-47 |
+| ADR-0275 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0276 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0277 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0278 | quiet | condition unmet; stands | BL-47 |
+| ADR-0279 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0280 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0281 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0282 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0283 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0284 | quiet | condition unmet; stands | BL-47 |
+| ADR-0285 | quiet | condition unmet; stands | BL-47 |
+| ADR-0286 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0287 | quiet | condition unmet; stands | BL-47 |
+| ADR-0288 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0289 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0290 | quiet | condition unmet; stands | BL-47 |
+| ADR-0291 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0292 | quiet | condition unmet; stands | BL-47 |
+| ADR-0293 | quiet | condition unmet; stands | BL-47 |
+| ADR-0294 | quiet | condition unmet; stands | BL-47 |
+| ADR-0295 | dormant | OQ-334 ruling awaits the deferred comparisons; subject inert | BL-47 |
+| ADR-0296 | quiet | condition unmet; stands | BL-47 |
+| ADR-0297 | quiet | condition unmet; stands | BL-47 |
+| ADR-0298 | quiet | condition unmet; stands | BL-47 |
+| ADR-0299 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0300 | quiet | condition unmet; stands | BL-47 |
+| ADR-0301 | quiet | condition unmet; stands | BL-47 |
+| ADR-0302 | quiet | condition unmet; stands | BL-47 |
+| ADR-0303 | quiet | condition unmet; stands | BL-47 |
+| ADR-0304 | quiet | condition unmet; stands | BL-47 |
+| ADR-0305 | quiet | condition unmet; stands | BL-47 |
+| ADR-0306 | quiet | condition unmet; stands | BL-47 |
+| ADR-0307 | quiet | condition unmet; stands | BL-47 |
+| ADR-0308 | quiet | condition unmet; stands | BL-47 |
+| ADR-0309 | quiet | condition unmet; stands | BL-47 |
+| ADR-0310 | quiet | condition unmet; stands | BL-47 |
+| ADR-0311 | quiet | condition unmet; stands | BL-47 |
+| ADR-0312 | quiet | condition unmet; stands | BL-47 |
+| ADR-0313 | quiet | condition unmet; stands | BL-47 |
+| ADR-0314 | quiet | condition unmet; stands | BL-47 |
+| ADR-0315 | dormant | trainer landed; regression suites over real pairs not run — inert | BL-47 |
+| ADR-0316 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0317 | quiet | arm (a) fired-answered at R4.7 (github-live + signed webhook; DF-S5.6-1 DONE; BL-04 closed); arm (c) key_ref-mediator conditional quiet | BL-47 |
+| ADR-0318 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0319 | quiet | E3-bind arm fired-answered at R4.2 (generated client is the bind, no longer proxy; BL-03 closed); SSE-push arm quiet | BL-47 |
+| ADR-0320 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0321 | quiet | condition unmet; stands | BL-47 |
+| ADR-0322 | quiet | condition unmet; stands | BL-47 |
+| ADR-0323 | quiet | condition unmet; stands | BL-47 |
+| ADR-0324 | quiet | condition unmet; stands | BL-47 |
+| ADR-0325 | quiet | condition unmet; stands | BL-47 |
+| ADR-0326 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0327 | quiet | condition unmet; stands | BL-47 |
+| ADR-0328 | quiet | condition unmet; stands | BL-47 |
+| ADR-0329 | quiet | condition unmet; stands | BL-47 |
+| ADR-0330 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0331 | quiet | condition unmet; stands | BL-47 |
+| ADR-0332 | quiet | condition unmet; stands | BL-47 |
+| ADR-0333 | quiet | condition unmet; stands | BL-47 |
+| ADR-0334 | quiet | condition unmet; stands | BL-47 |
+| ADR-0335 | quiet | condition unmet; stands | BL-47 |
+| ADR-0336 | quiet | condition unmet; stands | BL-47 |
+| ADR-0337 | quiet | condition unmet; stands | BL-47 |
+| ADR-0338 | quiet | arm (a) fired-answered — BL-31 closed at R4.16 (live transports landed); residual arms quiet | BL-47 |
+| ADR-0339 | quiet | condition unmet; stands | BL-47 |
+| ADR-0340 | quiet | DF-S2.4-2 arm fired-answered 2026-10-21 (R4.5c; ADR-0365) per its own dated note; residual arms quiet | BL-47 |
+| ADR-0341 | quiet | DF-S2.4-2/BL-31 arm fired-answered 2026-10-21 (R4.5c; ADR-0365) per its own dated note; residual arms quiet | BL-47 |
+| ADR-0342 | quiet | condition unmet; stands | BL-47 |
+| ADR-0343 | quiet | condition unmet; stands | BL-47 |
+| ADR-0344 | quiet | condition unmet; stands | BL-47 |
+| ADR-0345 | quiet | arm (a) fired-answered 2026-10-16 (R3.8; ADR-0361 ring AEAD) per its own dated note; custody/AuditPolicy arms quiet | BL-47 |
+| ADR-0346 | quiet | condition unmet; stands | BL-47 |
+| ADR-0347 | quiet | D2/D3 live-judge admissibility arm fired-answered (calibrated LiveJudge pair + capstone-judge records; RecordedJudge composed per the rule); D4 telemetry-emission arm quiet | BL-47 |
+| ADR-0348 | quiet | D3 live-judge-binding arm fired-answered (same R4 records); D1 third-granularity arm quiet | BL-47 |
+| ADR-0349 | quiet | arm (a) live foreign-manifest import fired-answered (`hh-live-evidence/1` 2026-10-21-bench-manifest-live.json); DebtPolicy-binding arm quiet | BL-47 |
+| ADR-0350 | fired-answered | condition met and discharged; answering record stands | BL-48 |
+| ADR-0351 | quiet | arm (a) TLS transport + OAuth provider leg fired-answered (2026-10-21-https-reachability + 2026-10-22-oauth-device; BL-31 closed); registry-kind/SSE-cap/mediator-surface arms quiet | BL-47 |
+| ADR-0352 | quiet | condition unmet; stands | BL-47 |
+| ADR-0353 | fired-unanswered | HUMAN-H3 environment partially provided (E2 replay arms landed foreign-run-verified); remaining E3/live re-run legs environment-pending (BL-01) | BL-01 |
+| ADR-0354 | quiet | condition unmet; stands | BL-47 |
+| ADR-0355 | quiet | condition unmet; stands | BL-47 |
+| ADR-0356 | quiet | condition unmet; stands | BL-47 |
+| ADR-0357 | quiet | condition unmet; stands | BL-47 |
+| ADR-0358 | quiet | condition unmet; stands | BL-47 |
+| ADR-0359 | quiet | condition unmet; stands | BL-47 |
+| ADR-0360 | quiet | egress-broker proof leg landed with the R4 oauth-device leg; second-codec/wire-verb/custody arms quiet | BL-47 |
+| ADR-0361 | quiet | condition unmet; stands | BL-47 |
+| ADR-0362 | quiet | condition unmet; stands | BL-47 |
+| ADR-0363 | quiet | condition unmet; stands | BL-47 |
+| ADR-0364 | quiet | condition unmet; stands | BL-47 |
+| ADR-0365 | quiet | condition unmet; stands | BL-47 |
+| ADR-0366 | quiet | provider-dialect/credential-kind/`probe_profile` conditions unmet | BL-47 |
+| ADR-0367 | quiet | condition unmet; stands | BL-47 |
+| ADR-0368 | quiet | condition unmet; stands | BL-47 |
+| ADR-0369 | quiet | condition unmet; stands | BL-47 |
+| ADR-0370 | quiet | condition unmet; stands | BL-47 |
+| ADR-0371 | quiet | operator decline recorded (verbatim waiver); trigger re-fires only if the decline is reversed or a reviewer is named | BL-47 |
+| ADR-0372 | quiet | condition unmet; stands | BL-47 |
+| ADR-0373 | quiet | condition unmet; stands | BL-47 |
+| ADR-0374 | quiet | condition unmet; stands | BL-47 |
+| ADR-0375 | quiet | condition unmet; stands | BL-47 |
+| ADR-0376 | quiet | condition unmet; stands | BL-47 |
+| ADR-0377 | quiet | checker source-home contract unchanged — this ticket re-ran it; BL-47/48 index rows stand | BL-47 |
+| ADR-0378 | quiet | condition unmet; stands | BL-47 |
+| ADR-0379 | quiet | condition unmet; stands | BL-47 |
+| ADR-0380 | quiet | condition unmet; stands | BL-47 |
+| ADR-0381 | quiet | condition unmet; stands | BL-47 |
+| ADR-0382 | quiet | manifest/checker/state shapes unchanged this round (REC5.1 appends only) | BL-47 |
+| ADR-0383 | quiet | CURRENT STATE keyset/dispatchTarget unchanged | BL-47 |
+| ADR-0384 | quiet | GATE-G9 homing unchanged; §9.3 register intact | BL-47 |
+| ADR-0385 | quiet | condition unmet; stands | BL-47 |
+| ADR-0386 | quiet | condition unmet; stands | BL-47 |
+| ADR-0387 | quiet | condition unmet; stands | BL-47 |
+| ADR-0388 | quiet | condition unmet; stands | BL-47 |
+| ADR-0389 | quiet | condition unmet; stands | BL-47 |
+| ADR-0390 | quiet | condition unmet; stands | BL-47 |
+| ADR-0391 | quiet | condition unmet; stands | BL-47 |
+| ADR-0392 | quiet | condition unmet; stands | BL-47 |
+| ADR-0393 | quiet | condition unmet; stands | BL-47 |
+| ADR-0394 | quiet | condition unmet; stands | BL-47 |
+| ADR-0395 | quiet | condition unmet; stands | BL-47 |
+| ADR-0396 | quiet | condition unmet; stands | BL-47 |
+| ADR-0397 | quiet | condition unmet; stands | BL-47 |
+| ADR-0398 | quiet | condition unmet; stands | BL-47 |
+| ADR-0399 | quiet | condition unmet; stands | BL-47 |
+| ADR-0400 | quiet | condition unmet; stands | BL-47 |
+| ADR-0401 | quiet | condition unmet; stands | BL-47 |
+| ADR-0402 | quiet | condition unmet; stands | BL-47 |
+| ADR-0403 | quiet | condition unmet; stands | BL-47 |
+| ADR-0404 | quiet | condition unmet; stands | BL-47 |
+| ADR-0405 | quiet | condition unmet; stands | BL-47 |
+| ADR-0406 | quiet | condition unmet; stands | BL-47 |
+| ADR-0407 | quiet | condition unmet; stands | BL-47 |
+| ADR-0408 | quiet | condition unmet; stands | BL-47 |
+| ADR-0409 | quiet | condition unmet; stands | BL-47 |
+| ADR-0410 | quiet | condition unmet; stands | BL-47 |
+| ADR-0411 | quiet | condition unmet; stands | BL-47 |
+| ADR-0412 | quiet | condition unmet; stands | BL-47 |
+| ADR-0413 | quiet | condition unmet; stands | BL-47 |
+| ADR-0414 | quiet | condition unmet; stands | BL-47 |
+| ADR-0415 | quiet | condition unmet; stands | BL-47 |
+| ADR-0416 | quiet | condition unmet; stands | BL-47 |
+| ADR-0417 | quiet | condition unmet; stands | BL-47 |
+| ADR-0418 | quiet | condition unmet; stands | BL-47 |
+| ADR-0419 | quiet | condition unmet; stands | BL-47 |
+| ADR-0420 | quiet | condition unmet; stands | BL-47 |
+
+Sweep tally: **150 quiet · 49 fired-answered · 3 fired-unanswered · 2
+dormant · 0 superseded** (204 total). Round-5 ADRs ADR-0378…ADR-0420 are all
+`quiet` — every one is a conditional re-read ("if a later owner/admission
+needs X"); none of their named conditions obtained in-round.
+
+## Coverage sums — recomputed 2026-11-05 vs the CAP5.3 headline
+
+Recomputed from `docs/build/reports/round5/COVERAGE_MATRIX.csv` (180 round-5
+requirement rows: 167 adopted + 12 merged-with + 1 superseded-by):
+
+- **engineering closed = MET + MET-DIFFERENTLY + MET-ENGINEERED = 78 + 0 + 29 = 107/180**
+- **requirement satisfied = MET + MET-DIFFERENTLY = 78 + 0 = 78/180**
+
+CAP5.3's headline (`reports/round5/CAPSTONE_CLOSURE.md` §Recomputed totals):
+engineering closed **107** · requirement satisfied **78**. **Match** — the
+`check-backlog.sh` recomputation printed the same pair (107/180 · 78/180).
+The round-4 register (`docs/build/COVERAGE_MATRIX.csv`, 66 rows) stays
+closed at 66/66; the two matrices are different scopes and are never summed.
+
+## Register review — dated 2026-11-05 (REC5.1)
+
+`research/registers/risks.md` gained its **Round 5 review** (appended this
+ticket — rounds 3/4 were reconciled inside BACKLOG/OPERATIONAL_READINESS
+dated sections rather than register reviews; noted honestly). The other
+registers are unchanged this round: `conflicts.md` (7 open CF-rows stay
+BL-30's), `open-questions.md` (ADR-0210…0216 deferred packages stay
+BL-33…BL-39's), `spec-debt.md` (216 graded records; the cadence rides
+OQ-445), `scope.md` (R-2.12.4 stays deferred per ADR-0210).
+
+## Findings mapping — REC5.1 update (2026-11-05)
+
+The LEDGER OPEN FINDINGS set stands at 9 entries; the BL-41/BL-30 mapping
+below covers every one and no new finding was opened this round. Since the
+last reconcile: the **CC4 hygiene nit** (finding 1) was adjudicated
+`no-action-accepted` by CAP5.3's closure fold (recorded in
+`reports/round5/CAPSTONE_CLOSURE.md` §Findings reconciliation + the
+GATE-G17 signature list) — the prose mention in a dated report is outside
+CC4's contract/data-model/criterion/stage scope and the report is never
+rewritten; the **GATE-ACCEPT re-surface** (finding 2) was discharged by
+GATE-G17's fresh signature (its scoped items named the carried deviations
+verbatim). Both stay recorded here — entries are history, never deleted.
