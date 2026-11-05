@@ -42,9 +42,9 @@ them.
 - **Job:** a new useful-task drive with a sealed submission and the
   unchanged deterministic oracle, the bounded cap-field edit, plus the
   EX-01 receipt join.
-- **Version/pins:** `scripts/examples/ex-03.json` — the executed
+- **Version/pins:** `scripts/examples/ex-03.json` — the retained
   [hh-s1-useful/1 packet](build/reports/2026-11-04-r5.43-s1-useful.json)
-  and the pinned definition.
+  (`disposition: failed`, kept verbatim) and the pinned definition.
 - **Cost/network:** seconds; `network:false`, `$0`.
 - **Input → commands:** `cargo test -p hharness --test r5_45 ex03`.
 - **Semantic checks:** packet, sealed_submission, oracle_chain

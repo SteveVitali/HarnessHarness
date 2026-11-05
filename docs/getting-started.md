@@ -100,12 +100,15 @@ covers additional commands and configuration.
 
 ## Learn offline: the checked example cards
 
-Two committed `example-card/1` records under
+Four committed `example-card/1` records under
 [scripts/examples](../scripts/examples/) teach the lifecycle above plus a
-two-task offline Lab lesson — checked runners with semantic verdicts,
+two-task offline Lab lesson, a scripted-lane useful-task drive with a
+sealed submission and bounded cap-field edit, and the confined
+effect/refusal matrix — checked runners with semantic verdicts,
 pinned inputs, and stated costs and limitations on the record itself.
 They are fixture-verified teaching evidence only: no live provider, task
-efficacy, or study claim.
+efficacy, or study claim. The executed packets two of them pin retain
+their own honest dispositions (including a recorded failure).
 
 <!-- examples:begin -->
 ```sh
