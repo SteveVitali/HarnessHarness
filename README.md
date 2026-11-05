@@ -29,16 +29,19 @@ Readiness first — each route names its current state before you invest:
 - **Run a useful task** — *not yet available*: there is no verified
   useful-task recipe yet. The scripted run below exercises the runtime
   with a fixture model; it does not produce a useful artifact or a
-  study result. The useful-task objective stays open until a real,
-  independently checked task receipt lands.
+  study result. A bounded round-5 execution attempt was run and
+  honestly recorded as failed; the useful-task objective stays open
+  until a real, independently checked task receipt lands.
 - **Inspect a recorded result** — *available with scoped evidence*:
   the offline example below produces a durable, inspectable run
   (fixture-verified); [evidence and readiness](docs/evidence.md)
   explains what its receipt does and does not prove.
-- **Learn offline** — *available with scoped evidence*: two versioned
+- **Learn offline** — *available with scoped evidence*: four versioned
   [example cards](scripts/examples/README.md) run without a provider —
-  setup/inspect/replay/verify (EX-01) and a two-arm Lab lesson (EX-02);
-  both are labelled fixtures.
+  setup/inspect/replay/verify (EX-01), a two-arm Lab lesson (EX-02),
+  a useful-task drive with sealed submission and bounded cap edit
+  (EX-03), and the confined-effect matrix (EX-04); all are labelled
+  fixtures.
 
 Experienced integrators can enter the [reference](docs/reference.md)
 directly. A failure, refusal, or wrong output routes to

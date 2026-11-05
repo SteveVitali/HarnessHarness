@@ -90,10 +90,11 @@ on the candidate revision:
 ### Two routes that are not open yet
 
 - **The optional packaged component** — the bounded
-  `hharness-compact-evict-oldest` extension exercise — stays gated until its
-  checked recipe lands in this repository. When it opens it will require
-  observed build, seal, load, bind, and invoke phases, not a green exit
-  code alone.
+  `hharness-compact-evict-oldest` extension exercise — stays gated: the
+  round-5 exercise was recorded unselected (stage voided, no claim
+  awarded), and it reopens only under a fresh named selection. When it
+  opens it will require observed build, seal, load, bind, and invoke
+  phases, not a green exit code alone.
 - **Scientific replication** is a separately admitted and separately
   resourced protocol — fresh attempts under frozen methods, pins, and
   margins — not an ordinary contribution route.

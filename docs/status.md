@@ -91,6 +91,25 @@ For reduced Rust builds, also read the
 [feature-tier qualification](reference.md#rust-libraries-and-feature-tiers):
 disabling facade defaults alone does not remove all transitive tiers.
 
+## Round-5 evidence program
+
+*Update 2026-11-05:* the round-5 evidence-and-adoption build completed
+its fresh acceptance — [GATE-G17](build/readouts/GATE-G17.md) PASSED
+(2026-11-05T00:13:07Z), taking the record as-landed: engineering
+`executed` (composed 8/8 stages; activation and the bounded ops-live
+matrix executed), research `inconclusive` (the admitted
+[study report](build/reports/2026-11-04-r5.49-study-report.json)
+records `unmet{efficacy_unavailable;parity_withheld}` with S1/S3/S4
+unmet verbatim), and portability/public/adoption `withheld` —
+`build_status: not_done`. The useful-task execution was attempted and
+honestly recorded `failed`; the participant, publication and
+value-observation stages stayed withheld or unselected by operator
+decision. The full fold lives in the
+[round-5 closure report](build/reports/round5/CAPSTONE_CLOSURE.md);
+the per-surface reader account is [evidence and readiness](evidence.md).
+Three deferrals (DF-R5.1-1, DF-H9-1, DF-CAP5.1-1) remain open and the
+chain's PRs merge under `mergePolicy: OPERATOR` only.
+
 ## How to read the evidence
 
 Per-surface gate states — what is available with scoped evidence, not

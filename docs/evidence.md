@@ -30,9 +30,9 @@ Readiness is listed first so you can pick a route that matches what you
 have and what each route can actually show.
 
 - **Run a useful task** — `Not yet available`. No verified useful-task
-  recipe exists yet: a real task with an independently checked
-  submission has not been executed through this repository's supported
-  paths (see the [useful-task card](#card--run-a-useful-task-useful-task)
+  recipe exists yet: the bounded round-5 execution was run and
+  recorded `failed`, and no independently checked task receipt has
+  landed (see the [useful-task card](#card--run-a-useful-task-useful-task)
   below). The scripted offline run exercises the runtime with a fixture
   model; it cannot stand in for a useful artifact or a study result.
 - **Inspect a recorded result** — `Available`. The offline quickstart
@@ -168,80 +168,104 @@ behind it, its limits, and the access or exit route.
 
 ### Card — Run a useful task [useful-task]
 
-- **State:** Not yet available — no verified useful-task recipe exists
+- **State:** Not yet available — the bounded execution ran and failed;
+  no verified useful-task recipe exists
 - **Scope:** the S1 scenario — one unchanged upstream task, two fixed
   fresh subjects, an independently checked submission, and an actual
-  annotated native receipt. None of that has been executed: the task,
-  oracle, runner, and image pins and the gated execution itself are
-  still owed work (the R5.43 skeleton waits on the GATE-G11 execution
-  authorization; see the
-  [round-5 partition](build/planning/2026-10-30_evidence-decomposition.md)).
-- **Evidence:** none yet — deliberately. The scripted-lane fixture and
-  the recorded live `format_failure` run are not useful-task evidence.
-- **Limits:** this unmet objective is retained, not relabeled; a
-  fixture or setup success never substitutes for it
+  annotated native receipt.
+- **Evidence:** the executed
+  [hh-s1-useful/1 packet](build/reports/2026-11-04-r5.43-s1-useful.json)
+  records `disposition: failed` — the bounded drive ran under the
+  round-5 admission and produced no independently correct artifact
+  (`acceptance withheld{no_independent_correct_artifact}`). The two
+  machinery defects it carried were repaired and discharged at the
+  later ops-live packet, but no S1 re-execution was admitted or run;
+  the residual is carried by [DF-CAP5.1-1](tickets/DEFERRALS.md) and
+  the round-5 acceptance retained S1 unmet. The scripted-lane fixture
+  and the recorded live `format_failure` run are not useful-task
+  evidence.
+- **Limits:** a recorded attempt is not a passing receipt; this unmet
+  objective is retained, not relabeled; a fixture or setup success
+  never substitutes for it
   (see [the partial-release note](#dispositions-and-the-partial-release)).
 - **Access:** watch [status](status.md) and this page; the report route
   below does not require a successful setup.
 
 ### Card — The real compaction study [study]
 
-- **State:** Not yet available — planned; collection not ready
+- **State:** Not yet available — the admitted study reported
+  inconclusive; the efficacy objective stays unmet
 - **Scope:** the S3 scenario — the central conditional HH-native
   two-arm finite-manifest study with an oracle, policy-specific parity
   admission, four matched caps, detectors, and a frozen analysis.
-- **Evidence:** method and protocol admissions landed as engineered
-  artifacts only (the finite-manifest estimator, parity admission,
-  protocol materialization work in the
-  [round-5 partition](build/planning/2026-10-30_evidence-decomposition.md));
-  numerical/study validation remains owed.
-- **Limits:** fixtures cannot fulfill this objective; a sound
-  null/negative/inconclusive admitted result would be valid, but no
-  execution has occurred — there is no study claim of any sign.
+- **Evidence:** the
+  [hh-study-report/1 record](build/reports/2026-11-04-r5.49-study-report.json)
+  (`disposition: reported` — a recompute over nine committed packets)
+  carries the honest verdict verbatim: `unmet{efficacy_unavailable;
+  parity_withheld}` with `s1_unmet`, `s3_unmet` and `s4_unmet` all
+  `true`. Its bounded legs really executed — activation and the pilot
+  ran (10/10 pilot first-subjects, $0 recorded exposure) — while
+  parity stayed [`withheld{n_declared:0}`](build/reports/2026-11-04-r5.47-parity-n0.json)
+  and the confirmation tranche
+  [`withheld{tranche_absent}`](build/reports/2026-11-04-r5.48-confirm-withheld.json).
+- **Limits:** an admitted inconclusive report is not a positive
+  research claim — no efficacy, parity, sharp-null or adoption result
+  exists; fixtures cannot fulfill this objective, and a sound
+  null/negative admitted result would still be valid when collected.
 - **Access:** status updates land on this page and
   [status.md](status.md) when gated evidence exists.
 
 ### Card — Bounded operations [operations]
 
-- **State:** Not yet available — engineered apparatus only; the live
-  matrix is gated
+- **State:** Not yet available — the bounded matrix executed; the
+  S4 predicate stays unmet
 - **Scope:** the S4 scenario — eight cells × three trials over the
   shared task/effect apparatus with an independent sink, stage
   denominators, and negative controls.
-- **Evidence:** fixture-level machinery landed in `hharness-env`
-  (confined observer, permission wait/answer/resume, account
-  refusal/exhaustion, the seeded 8×3 report folds — R5.32–R5.34);
-  the real 24-trial execution is owed to R5.44 under GATE-G11.
-- **Limits:** engineered fixtures demonstrate the apparatus, not a
-  bounded-operations result; named host/fault/threat assumptions only —
-  no reliability or security rating.
+- **Evidence:** the second
+  [hh-ops-live/1 packet](build/reports/2026-11-04-r5.44-ops-live-second.json)
+  records `disposition: executed` under the bounded podman admission —
+  all 24 planned attempts invoked and boundary-observed, 0 violations,
+  honest `undeterminable` probes retained. The confirmation tranche
+  that would complete S4 stayed
+  [`withheld{tranche_absent}`](build/reports/2026-11-04-r5.48-confirm-withheld.json),
+  so `s4_unmet` remains `true`.
+- **Limits:** a bounded execution is real evidence of the apparatus,
+  not a `live-executed` record and not the S4 conclusion; named
+  host/fault/threat assumptions only — no reliability or security
+  rating.
 - **Access:** [the operational test batteries](../crates/hh-env/tests/)
   for the fixture layer.
 
 ### Card — Optional packaged component [component]
 
-- **State:** Restricted — a conditional, unselected exercise
+- **State:** Restricted — a conditional exercise, recorded unselected
 - **Scope:** at most one `hharness-compact-evict-oldest` package
   exercise: build → seal → load → bind → invoke → verify eviction and
   provenance, with tamper and missing-helper negatives.
 - **Evidence:** the package and host exist
-  ([plugins/](../plugins/), `hharness-varhost`), but the recipe has not
-  been executed end-to-end for readers.
+  ([plugins/](../plugins/), `hharness-varhost`); the round-5 exercise
+  was not selected — the
+  [hh-plugin-unselected/1 record](build/reports/2026-11-04-r5.50-plugin-unselected.json)
+  carries `unselected{stage_voided}` after the stage was voided for
+  this round.
 - **Limits:** no invocation has been observed; ABI conformance would
-  support no provider-treatment or efficacy claim; selection waits for
-  the named owner and does not compete with receipt readiness.
+  support no provider-treatment or efficacy claim; an unselected
+  exercise awards no claim and does not silently disappear.
 - **Access:** unselected — see the
   [contribution routes](../CONTRIBUTING.md) for the gated lane.
 
 ### Card — External interchange [interchange]
 
-- **State:** Restricted — optional and unselected
+- **State:** Restricted — optional and recorded unselected
 - **Scope:** at most one external consumer/direction (the inspected
   candidate is the Inspect JSON direction), exercised with one real
   artifact, a preserved-field/loss map, and unsupported
   direction/version controls.
-- **Evidence:** none executed; existing conversion fixtures are not a
-  real external-reader result.
+- **Evidence:** none executed — the
+  [hh-interchange-unselected/1 record](build/reports/2026-11-04-r5.51-interchange-unselected.json)
+  carries `unselected{stage_voided}`; existing conversion fixtures are
+  not a real external-reader result.
 - **Limits:** no return import is promised or claimed; an unselected
   direction awards no compatibility claim; imported foreign data does
   not gain native authority.
@@ -250,12 +274,17 @@ behind it, its limits, and the access or exit route.
 
 ### Card — Downloadable evidence and outside reports [evidence-access]
 
-- **State:** Restricted — access and rights conditions apply
+- **State:** Restricted — access and rights conditions apply; the
+  outside stage was withheld
 - **Scope:** redistributable receipt bundles, sanitized report
   excerpts, and outside verification procedures.
 - **Evidence:** the recipient-closure machinery (R5.27 handoff,
-  profile/completeness checks) is engineered; no outside
-  verify/recompute has run, and no report has been published.
+  profile/completeness checks) is engineered; the outside
+  clean-recipient verify/recompute stayed withheld — the
+  [hh-outside-withheld/1 record](build/reports/2026-11-04-r5.52-outside-withheld.json)
+  carries `withheld{stage_voided}` and the participant/outreach
+  predicate set stays open under [DF-H9-1](tickets/DEFERRALS.md); no
+  report has been published.
 - **Limits:** secrets/signed URLs/private paths/model I/O/solutions/
   oracles are inspected before anything is attached; nothing here is a
   public evidence badge.
@@ -361,30 +390,41 @@ recorded, not dropped.
 
 | Scenario | Job | Current state |
 |---|---|---|
-| S1 — useful task, inspect, replay, share | One unchanged upstream task, two fixed subjects, independently checked submission, annotated native receipt | **Not yet available** — unmet objective retained; gated execution owed |
+| S1 — useful task, inspect, replay, share | One unchanged upstream task, two fixed subjects, independently checked submission, annotated native receipt | **Not yet available** — attempted and recorded `failed`; machinery repaired, no re-execution admitted; unmet retained (DF-CAP5.1-1) |
 | S2 — offline Lab | Two synthetic tasks × two arms × five repetitions through the real chain | Available — fixture-verified (EX-02 card) |
-| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — planned; admission/detectors/protocol engineered, execution owed |
-| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — engineered apparatus only; live matrix gated |
-| S5 — participation | Fixed no-run bug, verifyfixed, verify/recompute paths | Restricted — lanes documented (contribute card); component exercise unselected |
-| S6 — interchange | At most one external consumer/direction | Restricted — unselected; optional after native readiness |
+| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — study reported `unmet{efficacy_unavailable;parity_withheld}`; parity withheld at N=0 |
+| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — bounded matrix executed (24/24, 0 violations); confirmation tranche withheld; unmet retained |
+| S5 — participation | Fixed no-run bug, verifyfixed, verify/recompute paths | Restricted — lanes documented (contribute card); stage voided for the round; component exercise recorded unselected |
+| S6 — interchange | At most one external consumer/direction | Restricted — recorded `unselected{stage_voided}`; optional after native readiness |
 <!-- portfolio:scenarios:end -->
 
 ### Dispositions and the partial release
 
 <!-- unmet:begin -->
 This page describes a **partial release**. The S1 useful-task and S3
-compaction-study objectives are **unmet**: no checked-task minimum has
+compaction-study objectives are **unmet** — recorded, not inferred:
+the bounded S1 execution ran and failed (the machinery was repaired,
+no re-execution was admitted; DF-CAP5.1-1 stays open), and the
+admitted study reported `unmet{efficacy_unavailable;parity_withheld}`
+with S4's confirmation tranche withheld. No checked-task minimum has
 been retained by substitution — the fixture cards are labelled teaching
 and explicitly cannot satisfy either objective. Publishing this reader
 surface while those objectives remain open is a scope disposition
 recorded by the operator through the round-5 admissions (the GATE-G8
-bootstrap scope, the GATE-G9 seven-row admission, and the GATE-G10
-narrow offline-evidence admission — all in the
+bootstrap scope, the GATE-G9 seven-row admission, the GATE-G10
+narrow offline-evidence admission, and the GATE-G13–G16 withheld/voided
+stage dispositions — all in the
 [GATE DECISIONS](build/LEDGER.md) of the build ledger) and the
 [round-5 partition](build/planning/2026-10-30_evidence-decomposition.md).
-A fixture or setup success is never first useful value, study proof, or
-outside comprehension; absent provider and wire capabilities stay
-explicit. No readiness claim on this page precedes gated evidence.
+The fresh round-5 acceptance,
+[GATE-G17](build/readouts/GATE-G17.md) PASSED 2026-11-05T00:13:07Z,
+took the record as-landed: engineering `executed`, research
+`inconclusive`, portability/public/adoption `withheld`, build
+`not_done` — with DF-R5.1-1, DF-H9-1 and DF-CAP5.1-1 carried open and
+no merge or publication permission granted. A fixture or setup success
+is never first useful value, study proof, or outside comprehension;
+absent provider and wire capabilities stay explicit. No readiness
+claim on this page precedes gated evidence.
 <!-- unmet:end -->
 
 Every disposition change is recorded: this table and the
