@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      DOC5.2
-lastCompleted:   DOC5.1
+nextTicket:      DONE
+lastCompleted:   DOC5.2
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-doc5.1
+chainTip:         codex/harnessharness-evidence-doc5.2
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-05T01:57:00Z
+updatedAt:        2026-11-05T02:27:00Z
 ```
 
 ## OPEN FINDINGS
@@ -110,6 +110,8 @@ updatedAt:        2026-11-05T01:57:00Z
   (the format-side ruling is CF-493, homed on BL-30). Standing rule — every round-closure
   reconcile re-sweeps lead tokens and machine-readable pending sets against the dated markers
   before reporting counts. Homed on **BL-41** (`accepted`, standing).
+
+- 2026-11-05 · **Retained guard terminal-state diagnostic (tooling gap, not a state defect).** With the 246-row manifest chain landed, `nextTicket: DONE` stands (precedent: R3.11/R4.18 round closes; the stock validator computes `want=DONE` cleanly — its 8-warning baseline unchanged). `check-supplement-guard.sh` on this terminal state reports route `HOLD — active round fully landed` but verdict FAIL on `[nextticket] nextTicket 'DONE' is not a chain row` — the tool's `check_routing` admits no DONE/terminal token and no fixture covers the completed-round state (recorded verbatim 2026-11-05, exit 1). Posture: the FAIL is a dispatch *refusal* — correct that nothing may dispatch on a DONE ledger; a future round's decompose-spec writes the new `nextTicket` before any dispatch. A guard semantic change belongs to the guard's owning admission, not a docs ticket — recorded, not patched.
 
 ## GATE DECISIONS
 
@@ -1215,3 +1217,4 @@ updatedAt:        2026-11-05T01:57:00Z
 - 2026-11-05 — REC5.2 done — branch `codex/harnessharness-evidence-rec5.2` · PR #275 · base `codex/harnessharness-evidence-rec5.1` (@169e3c25). Reconcile landed code, ADRs and supplemental coverage (records-in, offline, USD 0): `reconcile-build mode=spec` — `reports/round5/TICKET_VS_SPEC.md` tags all 63 landed rows (in-spec = stamped REQ set; spec-implied = PADR/gate machinery + honest disposition records; ticket-added = build tooling, all `ID`); V-1-V-15 audit: no external dep added (hh-env dev-deps x7 test-only), no reverse edge, zero generated/schema diff + drift byte-identical, no tier diff, all seven section-9.3 rows admitted GATE-G9 -> 39 landing ADRs, 6 new classes one-home in classes.rs, 20 packets carry honest executed/failed/inconclusive/withheld/unselected/reported, 47 manifest notes cover all deviations; `SPEC_RECONCILIATION_PLAN.md` — 1 proposed unticked amendment (R5A-1 canonical appendix range 0330->0420, frozen mismatch dispositioned legacy) + 6 dispositions; REQ-E-210 resolved E210-1-7 at D/E engineered (contributor evidence R5.3/R5.4/R5.5 landed; R/P n/a; no actual-execution E) — target not claimed fully satisfied. **Verify:** living-docs 456 OK · bm-tools OK · bm `.`+`--staged` 0 viol/8 scoped warnings · check-drift ok · adr-index --check identical · gen-revisit-triggers in sync · guard PASS DISPATCH REC5.2 pre+post · fmt n/a (no Rust). **Deferrals:** none opened/closed — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** none · chainTip -> codex/harnessharness-evidence-rec5.2 · next -> REC5.3 · ci: pass #275@6d43cf1 all 4 checks (run 41942931551; logs/ci-rec5.2.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-05 — REC5.3 done — branch `codex/harnessharness-evidence-rec5.3` · PR #276 · base `codex/harnessharness-evidence-rec5.2` (@a9a9db0b). Prepare integration recommendation from actual branch + CI state (records-in, offline, USD 0, read-only — zero merges/releases): `reconcile-build mode=integration` — actual 2026-11-05T00:50:56Z read: 16 open chain PRs #260–#275 all MERGEABLE + CI pass at heads; `merge-dryrun --ci` 16/16 clean onto origin/main `1cacf699`; stale "#256–#275" brief corrected (#256–#259 merged); operator bottom-up retarget→merge-commit procedure + reverse-tail rollback + post-merge check; withheld: DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 + BL-50…53 stay owed; artifacts `reports/round5/{INTEGRATION_PLAN.md,RELEASE_NOTES.md,merge-dryrun-2026-11-05.json}` + `planning/2026-11-05_decision-memo.md` · **Verify:** guard PASS DISPATCH REC5.3 pre+post (82 rows/180 cand/0 viol) · living-docs 456 OK · bm-tools OK · bm `.`+`--staged` 0 viol · fmt n/a no Rust · **Deferrals:** opened none, closed none · **Deviations:** none · chainTip → codex/harnessharness-evidence-rec5.3 · next → DOC5.1 · ci: pass #276@d76ca20 (all 4 checks — run 41945409218) · logs/ci-rec5.3.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-05 — DOC5.1 done — branch `codex/harnessharness-evidence-doc5.1` · PR #277 · base `codex/harnessharness-evidence-rec5.3` (@42e169d1). Refresh reader docs from the accepted round-5 record (docs-only, offline, USD 0): README/gettings-started spine four example cards; evidence.md useful-task card records `hh-s1-useful/1` `failed` (DF-CAP5.1-1 open), study card `hh-study-report/1` `reported` `unmet{efficacy_unavailable;parity_withheld}` + s1/s3/s4 unmet, operations card `hh-ops-live/1` `executed` 24/24 + confirmation `withheld`, component/interchange `unselected{stage_voided}`, evidence-access `withheld{stage_voided}` + DF-H9-1; status.md dated G17 section; no card state promoted (Not yet available/Restricted kept); artifact `reports/round5/READER_DOCS_CHECK.md`. **Verify:** living-docs 456 OK · check-position 13 + `--head` @88e07858 · check-examples/check-trace/check-contributing OK + `--head` · quickstart verbatim green @e9148ce2 · documented cmds ex01 1/1 ex02 5/5 ex03 3/3 ex04 2/2 · bm-tools OK · guard PASS DISPATCH DOC5.1 pre+post · fmt clean (docs-only) · self-test fixes 7cd9bf07/88e07858 (contributing/position mutation points preserved). **Deferrals:** opened none, closed none · **Deviations:** none · chainTip → codex/harnessharness-evidence-doc5.1 · next → DOC5.2 · ci: pass #277@88e0785 (all 4 checks — run 41947989761; macos helper_live flake resolved on rerun) · logs/ci-doc5.1.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-05 — DOC5.2 done — branch `codex/harnessharness-evidence-doc5.2` · PR #278 · base `codex/harnessharness-evidence-doc5.1` (@ef62b135). Refresh agent ownership and verification guidance from the accepted round-5 record (docs-only, offline, USD 0): AGENTS tree semantic claim audit — named the round-5 doc-surface checkers (position/examples/trace/contributing + `--head`) and `run-examples.sh`, recorded the retained routing guard's dispatch precondition (PASS + `DISPATCH — <id>` route before/after boundaries; `HOLD` = RETURN PASS), publish-readiness checks + `docs/build/tools/`/`merge-dryrun.sh` pointers in MAINTAINING, two line-count fixes; clients/foreign audited zero-drift; artifact `reports/round5/AGENT_DOCS_CHECK.md`. **Verify:** living-docs 456 OK · check-position 13 legs · check-examples 4 cards/6 pins/29 ids · check-trace · check-contributing 12 ids (no_ritual) · bm-tools OK · ci-gating OK · fmt clean (no Rust) · freshness 5 docs/0 issues · bm `.` 0 viol (8 baseline warn) · guard PASS DISPATCH DOC5.2 pre+post. **Deferrals:** opened none, closed none — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** none · chainTip → codex/harnessharness-evidence-doc5.2 · next → DONE (manifest chain complete — seq 246 the last row; DF/BL parked set + GATE-G17 OPENs stay owed; projectStatus stays IN_PROGRESS — DONE flip is the operator's) · ci: pass #278@09d0558 (all 4 checks — run 41953094082) · logs/ci-doc5.2.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent

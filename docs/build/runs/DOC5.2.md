@@ -7,6 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-05T02:03:15Z (`date -u` at SETUP)
+- Closed: 2026-11-05T02:27:00Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 18k + 10k reserve; loaded = contract 246 + invariants I-01–I-08/O-01–O-08 + supplement s9 + manifest row 246 + 3 OPEN DEFERRALS rows + LEDGER CURRENT STATE + BUILD_INDEX tail + GATE-G17 record (via PHASE LOG/CAPSTONE_CLOSURE) + all five AGENTS.md files + docs/README.md + MAINTAINING.md + CONTRIBUTING.md + the docs/build/tools README + ci.yml + every script the agent docs name (wc -l + header reads) ≈ at estimate; ≤550 changed source/test lines + 24k/10k split trigger watched (docs-only scope).
 
 ## Deferrals read
@@ -222,4 +223,32 @@ New artifact `docs/build/reports/round5/AGENT_DOCS_CHECK.md`.
 
 ## Evidence report
 
-(to fill at close)
+Agent-docs refresh landed claim-by-claim against the accepted round-5
+record. Structural detector: 5 docs / 0 issues (pre + post) — the drift
+was semantic; the audit verified every claim against source/manifests/
+scripts/CI before editing or certifying it. Changes: doc-surface
+checkers + `--head` modes + `run-examples.sh` named in docs/AGENTS and
+root Build & Test; retained routing guard's dispatch precondition
+recorded in root build-memory (PASS + `DISPATCH — <id>` before/after
+boundaries; `HOLD` = RETURN PASS) and MAINTAINING's tools section;
+publish-readiness checks (ADR-0380) named in Releasing;
+`merge-dryrun.sh` named; gotcha on checker self-test mutation points;
+two line-count corrections (ci.yml ~350, lib.rs 72). clients/ and
+foreign/ AGENTS.md audited with zero drift — left unchanged.
+Verification: living-docs 456 OK · check-position 13 legs ·
+check-examples (4/6/29) · check-trace · check-contributing 12 ids
+(no_ritual holds — no contributor ritual added) · check-bm-tools OK ·
+check-ci-gating OK · fmt clean (docs-only) · bm `.` 0 violations
+(8 baseline warnings) · guard PASS DISPATCH DOC5.2 pre + post
+artifacts · freshness detector 5/0. ci: pass #278@09d0558 (4/4
+checks — run 41953094082; logs/ci-doc5.2.json).
+Terminal-state guard read (post-close, verbatim): route `HOLD — active
+round fully landed`, verdict FAIL on `[nextticket] nextTicket 'DONE' is
+not a chain row` — the precedented DONE token (R3.11/R4.18) is outside
+the tool's chain-row vocabulary and no fixture covers a completed
+round; recorded as a dated OPEN FINDINGS line (dispatch refusal —
+nothing may dispatch on a DONE ledger), not patched in a docs ticket. Close state:
+BUILD_INDEX seq-246 row, LEDGER lastCompleted DOC5.2, nextTicket DONE
+(manifest chain complete — precedent R3.11/R4.18), projectStatus
+IN_PROGRESS — the GATE-G17 `not_done` record stands: three OPEN
+deferrals + the BL-50…53 parked set remain owed to their owners.
