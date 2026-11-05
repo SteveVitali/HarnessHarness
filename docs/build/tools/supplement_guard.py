@@ -472,24 +472,37 @@ class Guard:
         elif not self.landed(lc, index_ids, index_seqs, decisions):
             self.err("last-completed",
                      f"lastCompleted {last_completed} has no landed/decision evidence")
-        # nextTicket: active-round row, first unlanded
-        nt = id_row.get(next_ticket)
-        if nt is None:
-            self.err("nextticket", f"nextTicket {next_ticket!r} is not a chain row")
-        elif nt["id"] not in active_ids:
-            self.err("old-gate-routing",
-                     f"nextTicket {next_ticket} is outside the active round — "
-                     "a completed/legacy row never dispatches")
         unlanded = [r for r in active
                     if not self.landed(r, index_ids, index_seqs, decisions)]
         first = unlanded[0] if unlanded else None
+        nt = id_row.get(next_ticket)
         if first is None:
+            # Round complete — nextTicket holds a terminal token (DONE). A
+            # chain-row value is still invalid: a completed/legacy row never
+            # dispatches.
+            if nt is not None:
+                if nt["id"] not in active_ids:
+                    self.err("old-gate-routing",
+                             f"nextTicket {next_ticket} is outside the active round — "
+                             "a completed/legacy row never dispatches")
+                else:
+                    self.err("nextticket",
+                             f"nextTicket {next_ticket!r} names a landed row — "
+                             "a completed round's terminal token is DONE")
             self.route = ("HOLD", "active round fully landed")
             self.note("route", "no unlanded active-round row")
-        elif next_ticket != first["id"]:
-            self.err("nextticket",
-                     f"nextTicket {next_ticket!r} is not the active round's first "
-                     f"unlanded row ({first['id']})")
+        else:
+            # nextTicket: active-round row, must equal the first unlanded row
+            if nt is None:
+                self.err("nextticket", f"nextTicket {next_ticket!r} is not a chain row")
+            elif nt["id"] not in active_ids:
+                self.err("old-gate-routing",
+                         f"nextTicket {next_ticket} is outside the active round — "
+                         "a completed/legacy row never dispatches")
+            elif next_ticket != first["id"]:
+                self.err("nextticket",
+                         f"nextTicket {next_ticket!r} is not the active round's first "
+                         f"unlanded row ({first['id']})")
         # verdict on the first unlanded row
         if first is not None:
             if first["kind"] == "skeleton":
