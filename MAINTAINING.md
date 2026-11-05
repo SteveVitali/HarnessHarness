@@ -40,7 +40,10 @@ available artifacts from recorded readiness.
    `cargo publish --workspace --dry-run`.
    crates.io ownership of the `hharness` + `hharness-<x>` names is checked
    at publish time — a name collision is a stop-and-ask, never a rename or
-   a quiet drop from the set.
+   a quiet drop from the set. Publish readiness is pre-checked by
+   `scripts/check-publish-metadata.sh` (manifest metadata and publish edges)
+   and `scripts/check-docsrs.sh` (docs.rs render settings) under ADR-0380;
+   both run on CI's full path.
 
 The name-availability check currently treats any existing crate as taken,
 including one already owned by this project. It is an initial-publication
@@ -155,8 +158,16 @@ bash "$AGENT_SKILLS_ROOT/skills/reconcile-build/scripts/check-backlog.sh"
 
 Adjust `AGENT_SKILLS_ROOT` to your checkout. Record the tooling revision with
 verification results. The same checkout supplies
-`skills/build-memory/scripts/adr-index.sh` for the generated ADR index;
+`skills/build-memory/scripts/adr-index.sh` for the generated ADR index and
+`skills/reconcile-build/scripts/merge-dryrun.sh` for dry-running a stacked
+PR set against a target with its CI reads;
 `bash scripts/gen-revisit-triggers.sh` regenerates the separate revisit catalogue.
+
+The retained supplemental coverage/routing guard and the guarded dispatch
+driver live in this repository under `docs/build/tools/` — see its
+`README.md`. Product dispatch requires the guard's `PASS` + `DISPATCH` route
+recorded before/after the boundary; the stock validator and row tools run
+unchanged alongside it.
 
 ## Round-closure sweeps
 

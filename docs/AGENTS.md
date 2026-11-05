@@ -20,10 +20,16 @@
 
 ```sh
 bash scripts/check-living-docs.sh
+bash scripts/check-position.sh
+bash scripts/check-examples.sh
+bash scripts/check-trace.sh
+bash scripts/check-contributing.sh
 bash scripts/check-bm-tools.sh
 bash scripts/check-live-evidence.sh
 bash scripts/gen-revisit-triggers.sh --check
 ```
+
+- The four doc-surface checkers pin the reader spine (`check-position.sh`: evidence-card states, unmet and honesty legs), the example cards (`check-examples.sh`: card contract, recomputed pins, displayed-block equivalence), the annotated trace and four families (`check-trace.sh`), and the contribution lanes (`check-contributing.sh`: routes, gated lanes, `no_ritual`). Each also takes `--head` to validate committed HEAD in a clean clone — run that mode after committing a docs change that touches its surface. `scripts/check-quickstart.sh` exercises README's marked quickstart block on committed HEAD; `scripts/run-examples.sh` executes the committed offline cards on scratch stores.
 
 - For build-ticket records, run the external build-memory and backlog checks described in [MAINTAINING.md](../MAINTAINING.md#build-memory-tools). Repo-local row-tool checks are not substitutes.
 - Check relative links and anchors in every changed living document. Execute documented offline examples before claiming they work; record prerequisites and actual results. Live examples follow ADR-0363's evidence workflow.
@@ -49,6 +55,7 @@ bash scripts/gen-revisit-triggers.sh --check
 3. A closed row may contain older OPEN text. Use the dated disposition and preserve its history.
 4. `docs/build/logs/` is ignored. Force-add only the specific evidence record intentionally being committed.
 5. For README examples, `scripts/check-quickstart.sh` extracts the marked block from committed HEAD in a fresh clone. Running it before committing an edited README checks the old version.
+6. Closed card states, marked example blocks, `unmet` clauses and gated-lane phrases are pinned by the checkers above, and their self-tests under `scripts/ci/test-check-*.sh` mutate those exact phrases. Preserve the mutation points: never weaken an `unmet` clause, promote a closed card state, or drop a marked `<!-- -->` block to make an edit fit.
 
 ## Terminology
 

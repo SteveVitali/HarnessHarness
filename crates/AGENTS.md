@@ -69,7 +69,7 @@
 
 | File | Lines (approx) | Purpose |
 |---|---|---|
-| `crates/hh-embed/src/lib.rs` | 71 | Boundary bindings and module entry points |
+| `crates/hh-embed/src/lib.rs` | 72 | Boundary bindings and module entry points |
 | `crates/hh-embed-schema/src/lib.rs` | ~1.7k | Contract vocabulary, schema export, and identity helpers |
 | `crates/hh-codegen/src/main.rs` | ~150 | Generator outputs and orchestration |
 | `crates/hh-kernel/src/main.rs` | ~250 | Kernel command dispatch and identity diagnostics |
