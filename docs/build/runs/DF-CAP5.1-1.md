@@ -10,7 +10,7 @@
 - **Base:** dec5b96e (codex/harnessharness-guard-done tip — the current chain tip; LEDGER `chainTip` field reads codex/harnessharness-evidence-doc5.2, one commit behind; guard-done is doc5.2 + the terminal-DONE guard repair, PR #279 open)
 - **Branch:** codex/harnessharness-evidence-df-cap5-1 → PR targets codex/harnessharness-guard-done
 - **Config:** committed build-memory mode (root docs/build); operator-authorized re-execution inside the unchanged frozen two-subject scope; USD $0.00; scratch stores under `target/` only
-- **ci:** (pending)
+- **ci:** in-progress at close — `ci` workflow runs 42050646922 (in_progress) + 42050797645 (pending) on PR #280 @f27c37b4, read 2026-11-05T15:05Z (recorded, never counted green)
 
 ## Gate status
 
