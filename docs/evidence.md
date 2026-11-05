@@ -402,11 +402,12 @@ recorded, not dropped.
 
 <!-- unmet:begin -->
 This page describes a **partial release**. The S1 useful-task and S3
-compaction-study objectives are **unmet** — recorded, not inferred:
+compaction-study objectives are **unmet**: recorded, not inferred —
 the bounded S1 execution ran and failed (the machinery was repaired,
 no re-execution was admitted; DF-CAP5.1-1 stays open), and the
-admitted study reported `unmet{efficacy_unavailable;parity_withheld}`
-with S4's confirmation tranche withheld. No checked-task minimum has
+admitted study reported its efficacy and parity predicates
+unavailable/withheld with S4's confirmation tranche withheld. No
+checked-task minimum has
 been retained by substitution — the fixture cards are labelled teaching
 and explicitly cannot satisfy either objective. Publishing this reader
 surface while those objectives remain open is a scope disposition
