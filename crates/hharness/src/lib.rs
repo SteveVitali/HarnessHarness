@@ -77,6 +77,11 @@ pub use hharness_acp as acp;
 /// receipt, composed through the boundary ops and owner interfaces —
 /// never a second runner or store.
 pub mod examples;
+/// `hh-formative-withheld/1` — the withheld formative cohort
+/// disposition record (R5.53): records-in evaluators over
+/// supplied facts only, never manufacturing a participant,
+/// session, observation or claim.
+pub mod formative;
 pub mod recipe;
 pub use hharness_cli as cli;
 pub use hharness_mcp as mcp;

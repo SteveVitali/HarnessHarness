@@ -69,9 +69,10 @@ impl LegVerdict {
         matches!(self, LegVerdict::Verified)
     }
     /// The verdict's canonical JSON (`{verdict[, detail]}`) — shared
-    /// with `useful`'s `hh-s1-useful/1` record (one verdict codec,
-    /// never duplicated).
-    pub(crate) fn to_json(&self) -> Json {
+    /// with `useful`'s `hh-s1-useful/1` record and the facade's
+    /// `hh-formative-withheld/1` legs (one verdict codec, never
+    /// duplicated — widened `pub` for the R5.53 facade packet).
+    pub fn to_json(&self) -> Json {
         let mut pairs = vec![("verdict", Json::str(self.name()))];
         if let Some(d) = self.detail() {
             pairs.push(("detail", Json::str(d)));
