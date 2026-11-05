@@ -29,7 +29,7 @@
 |---|---|---|
 | `Cargo.toml` | ~550 | Workspace members, package metadata, dependency admissions |
 | `rust-toolchain.toml` | 6 | Rust 1.94 and `rustfmt` pin |
-| `.github/workflows/ci.yml` | ~300 | Linux/macOS build, test, provenance, and supply-chain checks |
+| `.github/workflows/ci.yml` | ~350 | Linux/macOS build, test, provenance, and supply-chain checks |
 | `scripts/check-drift.sh` | ~25 | Regenerate schema/client artifacts and compare the listed outputs |
 | `crates/hh-codegen/src/main.rs` | ~150 | Authoritative list of schema/client outputs |
 | `docs/README.md` | ~100 | Documentation navigation and edit modes |
@@ -57,7 +57,7 @@ cargo clippy -p hharness-embed -- -D warnings
 
 - Run `cargo fmt --all --check` and the scoped package tests (or the workspace suite) before claiming code verification. Report executed commands and passed/failed/skipped counts; an unavailable prerequisite is not a pass.
 - New behavior needs a regression test that fails without it. Acceptance batteries live under each crate's `tests/`, commonly named for their ticket. Ignored tests cite a `DF-*` row or the live-evidence ADR, for example `#[ignore = "live — ADR-0363: scripts/live-verify.sh <leg>"]`.
-- Documentation checks: `bash scripts/check-living-docs.sh`. The clean-clone quickstart check, `bash scripts/check-quickstart.sh`, reads **committed HEAD**, not uncommitted README edits.
+- Documentation checks: `bash scripts/check-living-docs.sh`; the doc-surface checkers `check-position.sh`, `check-examples.sh`, `check-trace.sh`, and `check-contributing.sh` each run a working-tree pass and a `--head` pass over committed HEAD; `bash scripts/run-examples.sh` executes the committed offline example cards on scratch stores. The clean-clone quickstart check, `bash scripts/check-quickstart.sh`, reads **committed HEAD**, not uncommitted README edits. `docs/AGENTS.md` scopes which of these a docs edit must run.
 - A full CI dispatch is a maintainer/gate action under ADR-0362, not a per-ticket requirement. Follow [MAINTAINING.md](MAINTAINING.md) for CI evidence and release operations.
 
 - Local connectivity smoke:
@@ -127,6 +127,7 @@ bash "$AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh" .
 ```
 
 - `scripts/check-bm-tools.sh` checks the in-repo row readers; it does not replace the external build-memory validator.
+- Product dispatch on a manifest ticket is guarded: `bash docs/build/tools/check-supplement-guard.sh` must return `PASS` with a `DISPATCH — <id>` route for the ticket, before and after its dispatch boundaries ([docs/build/tools/README.md](docs/build/tools/README.md)). A `HOLD` route is RETURN PASS — a pending gate, not a missing implementation.
 
 ## Do
 
