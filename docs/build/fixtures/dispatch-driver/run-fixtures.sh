@@ -71,11 +71,53 @@ for case_dir in "$FIXDIR"/cases/*; do
   git -C "$root" branch -f codex/harnessharness-evidence-r5.1
   python3 - "$root" "$pin" <<'PY'
 import re, sys
-p = f"{sys.argv[1]}/docs/build/LEDGER.md"
+root = sys.argv[1]
+p = f"{root}/docs/build/LEDGER.md"
 t = open(p).read()
 t2 = re.sub(r"pinnedBaseSha:\s+[0-9a-f]{40}", f"pinnedBaseSha:   {sys.argv[2]}", t)
 assert t2 != t, "pinnedBaseSha cell not rewritten"
-open(p, "w").write(t2)
+t = t2
+# Era synthesis (DF-R5.1-1): the plan-mode cases replay the recorded R5.2
+# dispatch boundary — they pin the R5.2 contract, GATE-G9 and the r5.1 tip
+# branch by name. Rewind the copied live ledger to that boundary so the
+# scenario is deterministic at any later chain position: nextTicket R5.2,
+# lastCompleted R5.1, chainTip the r5.1 branch created above, and the GATE
+# DECISIONS table holding only decisions recorded at that era (through
+# GATE-G8 — the post-G8 round-5 gate/human rows are stripped). BUILD_INDEX
+# data rows are trimmed to seq <= 169 (R5.1 last landed) so R5.2 is the
+# first unlanded row, exactly as at the recorded 22/22 run.
+for key, val in (("nextTicket", "R5.2"), ("lastCompleted", "R5.1"),
+                 ("chainTip", "codex/harnessharness-evidence-r5.1"),
+                 ("buildBranchBase", "codex/harnessharness-evidence")):
+    t2, n = re.subn(rf"^{key}:\s+\S+.*$", f"{key}: {val}", t, count=1, flags=re.M)
+    assert n == 1, f"{key} cell absent"
+    t = t2
+m = re.search(r"^(## GATE DECISIONS\s*)(.*?)(\n## )", t, re.S | re.M)
+assert m, "GATE DECISIONS region absent"
+post_g8 = re.compile(r"^(GATE-G(?:9|1[0-8])|HUMAN-H(?:8|9|1[01]))$")
+kept = []
+for line in m.group(2).splitlines():
+    if line.startswith("|"):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 2 and post_g8.match(cells[1] or ""):
+            continue
+    kept.append(line)
+t = t[:m.start(2)] + "\n".join(kept) + t[m.end(2):]
+open(p, "w").write(t)
+ip = f"{root}/docs/build/BUILD_INDEX.md"
+kept = []
+for line in open(ip):
+    if line.startswith("|"):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if (cells and cells[0] not in ("seq", "---")
+                and not cells[0].startswith("-")):
+            try:
+                if int(re.sub(r"[a-z]", "", cells[0])) > 169:
+                    continue
+            except ValueError:
+                pass
+    kept.append(line)
+open(ip, "w").writelines(kept)
 PY
   [ -f "$case_dir/patch.sh" ] && bash "$case_dir/patch.sh" "$root"
   ci="$DEFCI"; [ -f "$case_dir/ci.txt" ] && ci=$(head -1 "$case_dir/ci.txt" | tr -d '[:space:]')
