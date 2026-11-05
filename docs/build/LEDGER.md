@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      REC5.2
-lastCompleted:   REC5.1
+nextTicket:      REC5.3
+lastCompleted:   REC5.2
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-rec5.1
+chainTip:         codex/harnessharness-evidence-rec5.2
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-05T00:31:00Z
+updatedAt:        2026-11-05T00:42:24Z
 ```
 
 ## OPEN FINDINGS
@@ -1212,3 +1212,4 @@ updatedAt:        2026-11-05T00:31:00Z
 - 2026-11-05T00:13:07Z · **GATE-G17 PASSED — acceptance on the honest record** — operator words verbatim "passed, continue" (interactive, 2026-11-05T00:13:07Z); the round-5 record accepted as-landed (engineering executed; research inconclusive; portability/public/adoption withheld; not_done). DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 **carry forward OPEN** — no waiver named. S3/S4 unmet retained; Q-7 open; mergePolicy OPERATOR stands. `nextTicket → seq 242` (REC5.1). · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-05 — REC5.1 done — branch `codex/harnessharness-evidence-rec5.1` · PR #274 · base `codex/harnessharness-evidence-cap5.3` (@72f080bf). Reconcile backlog + current readiness (records-in, offline, USD 0): `reconcile-build mode=backlog` — BL-50…BL-53 appended (open) homing the 73 PARTIAL round-5 matrix ids + DF-R5.1-1/DF-H9-1/DF-CAP5.1-1, each source exactly once; 204 ADR triggers re-swept (150 quiet/49 fired-answered/3 fired-unanswered/2 dormant, no re-homes); sums 107/78 match CAP5.3; registers append-only refresh (BACKLOG.csv+md, OPERATIONAL_READINESS §Round-5 engineered ceiling + ticket:/proof: critical path, risks.md Round 5 review); artifacts `reports/round5/{BACKLOG_READINESS.md,READINESS_REPORT.md}`; ≤24 h probes podman 6.1.0 + release v0.1.0 not-draft + crates.io 200 (403 bare recorded); cap5.3-closure regen reverted (`9d756c68…` stands). **Verify:** check-backlog exit 0 (204+73 expected) · living-docs 456 OK · bm-tools OK · bm `.`+`--staged` 0 viol · guard PASS DISPATCH REC5.1 pre+post · fails-without by construction. **Deferrals:** none opened/closed — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** none · chainTip → codex/harnessharness-evidence-rec5.1 · next → REC5.2 · ci: pass #274@4853e79 all 4 checks (run 41941216616; logs/ci-rec5.1.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-05 — REC5.2 done — branch `codex/harnessharness-evidence-rec5.2` · PR #275 · base `codex/harnessharness-evidence-rec5.1` (@169e3c25). Reconcile landed code, ADRs and supplemental coverage (records-in, offline, USD 0): `reconcile-build mode=spec` — `reports/round5/TICKET_VS_SPEC.md` tags all 63 landed rows (in-spec = stamped REQ set; spec-implied = PADR/gate machinery + honest disposition records; ticket-added = build tooling, all `ID`); V-1-V-15 audit: no external dep added (hh-env dev-deps x7 test-only), no reverse edge, zero generated/schema diff + drift byte-identical, no tier diff, all seven section-9.3 rows admitted GATE-G9 -> 39 landing ADRs, 6 new classes one-home in classes.rs, 20 packets carry honest executed/failed/inconclusive/withheld/unselected/reported, 47 manifest notes cover all deviations; `SPEC_RECONCILIATION_PLAN.md` — 1 proposed unticked amendment (R5A-1 canonical appendix range 0330->0420, frozen mismatch dispositioned legacy) + 6 dispositions; REQ-E-210 resolved E210-1-7 at D/E engineered (contributor evidence R5.3/R5.4/R5.5 landed; R/P n/a; no actual-execution E) — target not claimed fully satisfied. **Verify:** living-docs 456 OK · bm-tools OK · bm `.`+`--staged` 0 viol/8 scoped warnings · check-drift ok · adr-index --check identical · gen-revisit-triggers in sync · guard PASS DISPATCH REC5.2 pre+post · fmt n/a (no Rust). **Deferrals:** none opened/closed — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** none · chainTip -> codex/harnessharness-evidence-rec5.2 · next -> REC5.3 · ci: pass #275@6d43cf1 all 4 checks (run 41942931551; logs/ci-rec5.2.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
