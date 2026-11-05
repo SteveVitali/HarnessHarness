@@ -266,3 +266,72 @@ limit, and the e2-tree extension-cell `environment-pending` set all
 stand exactly as recorded in the R4.16 sweep — `public` does not heal or
 erase them; it only asserts that the named artifacts are now reachable
 by strangers on the public internet.
+
+## Round-5 readiness — the REC5.1 sweep (2026-11-05)
+
+> This dated section reconciles current readiness against the landed round-5
+> record (append-only; nothing above is rewritten). The round-5 evidence/adoption
+> build is **records-in engineered** — CAP5.3's five-layer fold stands:
+> engineering `executed`, research `inconclusive` (admitted unmet verbatim),
+> portability/public/adoption `withheld`, `build_status: not_done`. Highest
+> achievable layer for every round-5 row is **`engineered`** — the podman cells
+> are bounded executions, not `live-executed` records; no withheld predicate is
+> promoted by this reconcile.
+
+### Live read of record (read_at stamps at write time)
+
+- **Stack CI — pending at this draft.** `ci-boundary/1` for this PR +
+  `--stack --no-wait` lands in `docs/build/logs/ci-rec5.1.json` at close;
+  its `read_at` is the citation. (Pre-push state: #273 green at `20bdd7d`
+  per `logs/ci-cap5.3.json`.)
+- **Backend access probe** — `podman --version` → `podman version 6.1.0`
+  · UTC `2026-11-05T00:23Z` · result ok (same version as CAP5.2's permitted
+  probe record `unix 1793825360`). Bounded-execution backend access stands;
+  no provisioning claim is made.
+- **Public release surface (read-only re-read)** — `gh release view v0.1.0`
+  → `draft:false`, 5 assets (4 target tarballs + `SHA256SUMS`) ·
+  `GET crates.io/api/v1/crates/hharness-cli` → `200` (UA-required; bare
+  request → 403 — the 200 is the probe's result) · UTC `2026-11-05T00:23Z`.
+  The 0.1.0 surface is still reachable; 48 sibling crates are not
+  re-enumerated (bounded spot read — the launch record's 49/49 dated
+  verification stands as the historical fact).
+
+### Capability × readiness (round-5 supplement)
+
+| Capability | Code state | Infra needed | Human (owner, date) | Highest layer | Proof |
+|---|---|---|---|---|---|
+| Round-5 engineering spine (guard `hh-supplement-guard/1`, packets `hh-*/1` records-in vocabulary, composed E2E, closure fold) | landed + verified in-round | none beyond toolchain | — | engineered | CAP5.2 composed packet 8/8 stages; CAP5.1 matrix 0 MISSING; supplement guard PASS DISPATCH REC5.1 |
+| Research layer (S1 useful / S3 parity / S4 confirmation / study efficacy) | machinery landed + repaired (R5.44); executions failed or withheld | a named bounded admission + compute envelope | operator disposition | engineered (machinery); **unmet** as research | `hh-s1-useful/1` disposition=failed; `hh-study-report/1` `unmet{efficacy_unavailable;parity_withheld}`; BL-50/BL-52 |
+| Participant layer (formative cohort, outside reviewer, interchange/plugin selection) | records-in vocabulary landed | HUMAN-H9 inputs: named participants/reviewer + consent/scope/access/resources | operator (Steven Vitali) — unscheduled | engineered (records only); claims **withheld** | six withheld/unselected packets `df_h9_1:open`; DF-H9-1 → BL-51 |
+| Publication / adoption-observation | records-in vocabulary landed | authorized public acts (none) | operator — unscheduled | engineered (records only); claims **withheld** | `hh-publication-withheld/1`, `hh-value-withheld/1` (`observed_not_achieved`); BL-50 |
+| Contributor evidence for the ten R5.1-owned targets | guard landed + rejection fixtures | each boundary's guard-invocation record | later acceptance records | engineered | DF-R5.1-1 → BL-53 (carried OPEN post-G17) |
+
+### Critical path to the unmet predicates (ordered, `ticket:` + `proof:` per step)
+
+1. `ticket:` BL-51 — operator supplies HUMAN-H9 inputs.
+   `proof:` named participants/reviewer + consent/scope/access/resources
+   record; withheld packets re-run as admitted procedures.
+2. `ticket:` BL-52 — named S1 re-execution admission or scope disposition.
+   `proof:` an executed `hh-s1-useful/1` packet on the repaired machinery
+   with an independent Decided artifact, or a verbatim operator disposition.
+3. `ticket:` BL-50 — next-round scope disposition for the 40 carried
+   R/P-layer predicates. `proof:` fresh acceptance record naming each leg's
+   disposition (as GATE-G17 did for round 5).
+4. `ticket:` BL-53 — contributor cells cite each boundary's guard record.
+   `proof:` closure/acceptance records carrying invocation counts/digests.
+5. `ticket:` BL-01 — foreign-toolchain environment (E3 + live re-runs).
+   `proof:` provisioned toolchain run records (HUMAN-H3 class).
+6. `ticket:` BL-49 — removability facade-edge repair when a manifest edit
+   is admissible. `proof:` `check-removability.sh` exit 0 on the edge.
+
+### Not claimed (round-5 honest floor)
+
+- No withheld or unmet predicate is promoted — research `inconclusive`,
+  participant/publication/adoption `withheld`; `build_status` stays
+  `not_done` (the build is not DONE; LEDGER `projectStatus` IN_PROGRESS).
+- No `live-executed`/`staging-verified`/`public` claim attaches to any
+  round-5 artifact; the 0.1.0 `public` rows above are the R4.18 dated
+  record plus this section's bounded re-reads — release-tag recency is
+  never evidence of a live service.
+- No current-state claim lacks a citation in this section's live-read
+  block; anything without a ≤24 h citation was omitted, not written.

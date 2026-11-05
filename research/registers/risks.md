@@ -72,3 +72,29 @@ window.*
 *Net: register unchanged at 11/11 medium. The round-2 watch set is
 RK-02/RK-05/RK-09 (all bound to the carried environment/assembly residuals
 at GATE-G4); RK-06 recorded its first-sweep disposition.*
+
+## Round 5 review
+
+*Sweep: REC5.1 · 2026-11-05 · eleven rows re-checked against the landed
+round-5 record (R5.1–R5.55 + CAP5.1–3 + GATE-G17, records-in). Rounds 3/4
+were reconciled inside `docs/build/BACKLOG.md`/`OPERATIONAL_READINESS.md`
+dated sections, not as register reviews — noted honestly. No row re-rated;
+the register's vocabulary is unchanged.*
+
+| # | Rating | Round-5 disposition |
+|---|---|---|
+| RK-01 | medium | Standing — the evidence/adoption round landed as 80 stacked rows behind stable contracts; no integration blowup (CAP5.2 composed 8/8). |
+| RK-02 | medium | Watch — the untestable-absence posture is now also the honest-withheld posture: CAP5.1's over-claim scan found no withheld claim asserted anywhere; watch stays. |
+| RK-03 | medium | Standing — no C0 decision rests on a provisional claim; the round-5 supplement's unmet predicates were dispositioned by verbatim operator words, never waived by engineering. |
+| RK-04 | medium | Standing — 49 recorded size rulings (46 AMEND, 3 SPLIT) each carry a scoped fresh-context review record; CAP5.3 verified all controls present. |
+| RK-05 | medium | Standing — adoption/value predicates stay `withheld`/`observed_not_achieved`; no differentiation claim was minted or inflated. |
+| RK-06 | medium | Standing — second spec-debt revalidation owed at the next cadence (OQ-445 → BL-33); none ran in-round. |
+| RK-07 | medium | Standing — the §9.3 amendment register landed through the dossier protocol (GATE-G9/G10 + ADRs 0384+); no silent amendments found in the CAP5.1 re-fold. |
+| RK-08 | medium | Standing — records-in checkers read committed bytes only; no fabrication surface (packets carry verbatim legs; CAP5.1 repaired the one phantom it found — DF-H9-1). |
+| RK-09 | medium | Watch — E3 replay landed foreign-run-verified (57/57); E2-extension/live re-run legs stay environment-pending on BL-01; the 403-vs-UA crates.io read this sweep recorded honestly. |
+| RK-10 | medium | Standing — ledgers/runs committed per-ticket all round; chain state machine-verified green (bm `.`+`--staged`). |
+| RK-11 | medium | Standing — every round-5 disposition recorded via signed readout/ADR/GATE DECISIONS row; GATE-G17's verbatim signature + agent-draft sha256 confirmation landed 2026-11-05T00:13:07Z. |
+
+*Net: register unchanged at 11/11 medium. Watch set: RK-02/RK-05/RK-09 —
+all bound to the carried withheld/environment residuals homed BL-50…BL-53
++ BL-01.*
