@@ -1,0 +1,101 @@
+{
+  "schema": "hh-guard-boundary-evidence/1",
+  "packet_version": "1.0.0",
+  "generated_at": "2026-11-05T15:12Z",
+  "generator": "devin-desktop/swe-2-high/subagent",
+  "deferral": "DF-R5.1-1",
+  "contributes_to": "GATE-G17 contributor evidence for the ten R5.1-owned targets",
+  "targets": ["REQ-C-104", "REQ-C-107", "REQ-C-108",
+              "REQ-H-001", "REQ-H-002", "REQ-H-003", "REQ-H-005",
+              "REQ-H-006", "REQ-H-007", "REQ-H-011"],
+  "scope_note": "records-in evidence collection over the landed round-5 record; never a forward dispatch dependency. Verifies (1) the retained hh-supplement-guard/1 ran before/after the round's actual dispatch boundaries, (2) old GATE-G1 dispatched zero times, (3) pending/failed states were refused on live routes, (4) no unguarded accumulating loop ran. Brief's example names reconcile to the exact recorded routes below.",
+  "subject_tools": {
+    "guard": {"schema": "hh-supplement-guard/1", "version": "1.0.0",
+              "path": "docs/build/tools/supplement_guard.py",
+              "entry": "docs/build/tools/check-supplement-guard.sh"},
+    "driver": {"schema": "hh-dispatch-driver/1", "version": "1.0.0",
+               "path": "docs/build/tools/dispatch_driver.py"}
+  },
+  "checks": [
+    {"id": "EV-1",
+     "predicate": "the retained guard ran before/after every actual dispatch boundary of the round",
+     "verdict": "verified",
+     "detail": "67 work-row run ledgers (R5.1–R5.55 incl. split legs R5.14b/R5.15b/R5.16b/R5.42a; CAP5.1–3; REC5.1–3; DOC5.1–2) each record the guard's pre-boundary and post-boundary invocations with verdict PASS and route DISPATCH — <that row>; every close entry in the LEDGER PHASE LOG repeats the guard verdict. Post-close routes name the next unlanded row (e.g. R5.8 post-boundary → DISPATCH — R5.9; R5.39 post → DISPATCH — R5.40) — expected routing semantics, not a stray dispatch. R5.1 is the GATE-G8-authorized bootstrap (its own guard run routed DISPATCH — R5.1); R5.2's two coordinator stub legs carry the transcript-contract guard.pre → spawn → report → guard.post ordering validated VALID on actual transcripts.",
+     "evidence": [
+       "docs/build/runs/R5.*.md, CAP5.*.md, REC5.*.md, DOC5.*.md — 'Guard pre-boundary'/'Guard post-boundary'/'check-supplement-guard.sh' records",
+       "docs/build/LEDGER.md PHASE LOG — 70 round-5 close entries each naming the guard verdict",
+       "docs/build/runs/R5.2.md AC-1 — invoked guard PASS+DISPATCH causal preflight; transcripts/actual-{happy,resume}.json VALID",
+       "docs/build/fixtures/dispatch-driver/transcripts/actual-{happy,resume}.json — ordered guard.pre→spawn→report→guard.post, identical pre/post input digests, one spawn per leg, clean tree, USD 0"
+     ]},
+    {"id": "EV-2",
+     "predicate": "counts / versions / digests recorded at the boundaries",
+     "verdict": "verified",
+     "detail": "Guard output carried schema hh-supplement-guard/1, guard_version 1.0.0 throughout the round. Recorded counts: candidates=180 (dispositions adopted 167 / merged-with 12 / superseded-by 1), coverage_md_rows=180, active_round_rows=79 (R5.3–R5.19 era) then 82 (R5.20 onward — mid-round manifest appends), chain_rows=287 at close, stock_violations=0, stock_warnings=8 (class-exact baseline-matched, never an arbitrary count). Input digests emitted per run; the frozen supplement sha256 8f540171… is invariant across every recorded boundary (frozen-source check).",
+     "evidence": [
+       "docs/build/runs/R5.11.md — recorded digests: coverage.md 1dd62a49…, supplement 8f540171…, LEDGER 9fad816b…, BUILD_INDEX c5421f74…",
+       "live re-run 2026-11-05T15:0xZ: PASS, route HOLD — active round fully landed; digests BUILD_INDEX 8823b9b7…, LEDGER 38b1557d…, coverage.json 769a17fd…, coverage.md eee5d89f…, legacy-baseline 835e00c2…, readouts/GATE-G1.md e286311b…, evidence-and-adoption-spec.md 8f540171…, 00_MANIFEST.md ff81f72d…; counts {active_round_rows:82, candidates:180, coverage_md_rows:180, chain_rows:287, stock_violations:0, stock_warnings:8, baseline_classes:8}"
+     ]},
+    {"id": "EV-3",
+     "predicate": "old GATE-G1 dispatched zero times as a nextTicket",
+     "verdict": "verified",
+     "detail": "Three independent legs. (a) legacy-completion: the guard byte-preserves readouts/GATE-G1.md — its sha256 e286311bbaa98966… is a recorded guard input at every boundary and the check requires the second 2026-09-15 PASSED/ADR-0226 evidence text. (b) old-gate-routing: a nextTicket outside the active round is a fatal error — proven live by the supplement-guard fixture old-gate-g1 (rejects with [old-gate-routing], 14/14 battery) and the dispatch-driver fixture old-gate-g1 (refuses spawn with [old-gate-routing], 22/22 battery). (c) the landed record: every recorded nextTicket/route during the round names a round-5 row — zero GATE-G1 dispatch routes exist anywhere in runs/, LEDGER, or BUILD_INDEX (grep-verified 2026-11-05).",
+     "evidence": [
+       "docs/build/tools/supplement_guard.py check_routing — legacy-completion (lines 448-459) + old-gate-routing (lines 483-501)",
+       "docs/build/fixtures/supplement-guard/cases/old-gate-g1 — rejects [old-gate-routing]",
+       "docs/build/fixtures/dispatch-driver/cases/old-gate-g1 — refuses [old-gate-routing] spawn-free",
+       "docs/build/readouts/GATE-G1.md sha256 e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
+     ]},
+    {"id": "EV-4",
+     "predicate": "pending/failed states were refused on live routes — HOLD/RETURN PASS and REFUSED records exist",
+     "verdict": "verified",
+     "detail": "Live recorded routes: HOLD human HUMAN-H8 pending (R5.42 post-boundary, RETURN PASS); HOLD gate GATE-G11 pending (R5.42a post, RETURN PASS); FAIL — route HOLD gate GATE-G13 pending + [nextticket] (R5.47 pre-fleshing — owed GATE DECISIONS row appended verbatim, then PASS DISPATCH); same shape for GATE-G14 (R5.48); PAUSE at HUMAN-H9 — the guard's post-boundary hold on the pending human row (LEDGER 2026-11-04T09:59:37Z); GATE-G15 BLOCKED on DF-H9-1 (LEDGER 2026-11-04T13:01:19Z — no dispatch admitted past a blocked gate); REFUSED — skeleton R5.44 and REFUSED — skeleton R5.46 + [nextticket] (pre-fleshing; skeletons never dispatch); terminal HOLD — active round fully landed (post-round: DOC5.2-era [nextticket] FAIL on DONE — recorded as a tooling gap, repaired on codex/harnessharness-guard-done to PASS + HOLD; DF-CAP5.1-1 verified PASS+HOLD pre+post). CAP5.2 pre-dispatch FAIL was a real catch — correction-kind rows indexing as gate decisions masked G15's PASSED row (findings F-1/F-2, repaired append-only; correction-mask fixture added, battery 13→14). The brief's paraphrased examples reconcile: 'GATE-G15 HOLD' ↔ the recorded H9 pause/G15-blocked hold chain; 'skeleton R5.50 REFUSED' ↔ the recorded skeleton refusals at R5.44/R5.46 (the class holds — R5.50's own boundary record begins post-fleshing at PASS DISPATCH — R5.50).",
+     "evidence": [
+       "docs/build/runs/R5.42.md L314; runs/R5.42a.md L158/L199; runs/R5.44.md L63; runs/R5.46.md L25/L55/L96; runs/R5.47.md L25/L60/L83/L129; runs/R5.48.md L24/L55/L80/L126",
+       "docs/build/LEDGER.md — PAUSE at HUMAN-H9 (2026-11-04T09:59:37Z); GATE-G15 BLOCKED on DF-H9-1 (2026-11-04T13:01:19Z); terminal-state diagnostic + repair (2026-11-05T02:31:58Z)",
+       "docs/build/runs/CAP5.2.md L119/L132/L202 — pre-dispatch FAIL F-1/F-2 real finding, repaired, correction-mask fixture",
+       "docs/build/runs/DF-CAP5.1-1.md L17/L52/L70 — PASS + HOLD — active round fully landed pre+post"
+     ]},
+    {"id": "EV-5",
+     "predicate": "fixture batteries prove the rejection classes (never a live claim)",
+     "verdict": "verified",
+     "detail": "supplement-guard battery: 14 rejected / 0 failures re-run 2026-11-05 (13 cases at R5.1 + correction-mask added at CAP5.2): omitted-id, duplicate-id, foreign-id, wrong-owner, wrong-ac, wrong-layer, deleted-alias-predicate, forward-dependency, skeleton-dispatch, pending-gate→[failed-gate], old-gate-g1→[old-gate-routing], unexplained-warning→[unexplained-diagnostic], old-signature→[signature-reuse], correction-mask. dispatch-driver battery: 22/22 recorded at R5.2 and re-run green 2026-11-05 after the era-synthesis repair (see findings): old-gate-g1, skeleton, pending-gate, failed-gate, stale-base, stale-signature, ci-fail/ci-pending/ci-missing, ordering-violation, guard-bypass, envelope-mismatch, product-mutation, provider-budget, no-progress, stale-state, state-mutation, spawn-count, validation-error; valid-happy/valid-resume VALID.",
+     "evidence": [
+       "docs/build/fixtures/supplement-guard/run-fixtures.sh — 14 rejected / 0 failures (re-run 2026-11-05)",
+       "docs/build/fixtures/dispatch-driver/run-fixtures.sh — 22 passed / 0 failures (re-run 2026-11-05 post-repair)"
+     ]},
+    {"id": "EV-6",
+     "predicate": "no unguarded accumulating loop ran",
+     "verdict": "verified",
+     "detail": "(a) Read-only guard: never a state owner — today's live run left `git status` byte-identical (re-verified 2026-11-05; same recorded at R5.1); inputs are opened read-only and fixture mutations live in mktemp sandboxes it owns. (b) Single advancing pointer: the guard's nextticket check requires nextTicket == the active round's first unlanded row — every recorded PASS proves the pointer matched exactly at that boundary; dispatch advanced one row per boundary, sequentially. (c) Fresh worker context per dispatch: each ticket ran as a fresh subagent worker (harness headers; run_subagent/subagent_general on this harness); the driver emits exactly one hh-dispatch-envelope/1 per leg and validate enforces exactly the contracted spawn count — no-progress is not a launch, resume requires a fresh ledger_reread before the stub acts. (d) State untouched between guard runs: transcript contract requires identical pre/post input digests and tree_status clean. (e) Post-round posture retained: DF-CAP5.1-1's deferral work ran under explicit operator authorization with guard PASS+HOLD recorded pre+post — no unguarded path exists even after manifest completion.",
+     "evidence": [
+       "docs/build/tools/README.md — read-only/versioned/supplemental properties; route verdicts DISPATCH/HOLD(RETURN PASS)/REFUSED",
+       "docs/build/runs/R5.1.md evidence — 'git status before/after guard runs: identical — no state writes'",
+       "docs/build/tools/dispatch_driver.py validate — guard.pre/guard.post ordering, spawn-count, prompt-sha, digest equality, stale-state, no-progress diagnostics",
+       "docs/build/runs/DF-CAP5.1-1.md — post-round HOLD discipline under operator authorization"
+     ]}
+  ],
+  "findings": [
+    {"id": "F-1",
+     "class": "fixture-staleness — found and repaired in-run (same disposition class as CAP5.2's F-1/F-2 and the guard-done terminal repair)",
+     "detail": "The dispatch-driver battery's three plan-mode cases (happy/pending-gate/skeleton) were era-bound: the runner copied the live LEDGER into the scratch tree, and once the live nextTicket/chainTip advanced past the R5.2-era scenario the cases pinned, they could no longer reach their named diagnostics (all three still REFUSED safely — never an emit). Repaired records-in in run-fixtures.sh: an era-synthesis step rewinds the scratch ledger to the recorded R5.2 boundary (nextTicket R5.2, lastCompleted R5.1, chainTip codex/harnessharness-evidence-r5.1, GATE DECISIONS stripped to through-G8, BUILD_INDEX trimmed to seq ≤169) so the scenario is deterministic at any chain position. Re-run: 22 passed / 0 failures.",
+     "evidence": ["docs/build/fixtures/dispatch-driver/run-fixtures.sh — era-synthesis heredoc (DF-R5.1-1 repair note)"]
+    },
+    {"id": "F-2",
+     "class": "self-caught record defect — guard load-bearing on this run's own writes",
+     "detail": "This run's first PHASE LOG append ran 2,153 bytes — over the ≤2 KiB entry budget. The stock checker emitted a new ledger-budget warning class, the guard failed closed on [unexplained-diagnostic] (9 vs 8 baseline warnings), and the verdict returned to PASS only after the entry was trimmed (1,545 B). The guard caught the evidence run's own record defect — direct confirmation the check is load-bearing on real state.",
+     "evidence": ["docs/build/LEDGER.md PHASE LOG tail — DF-R5.1-1 entry at 1,545 bytes", "guard run transcript: FAIL unexplained-diagnostic → PASS after trim"]
+    }
+  ],
+  "verification_commands": [
+    {"cmd": "AGENT_SKILLS_ROOT=$HOME/agent-skills bash docs/build/tools/check-supplement-guard.sh", "result": "PASS — hh-supplement-guard/1 v1.0.0, route HOLD — active round fully landed; 0 violations / 8 baseline warnings; digests above", "at": "2026-11-05"},
+    {"cmd": "bash docs/build/fixtures/supplement-guard/run-fixtures.sh", "result": "14 rejected / 0 failures", "at": "2026-11-05"},
+    {"cmd": "bash docs/build/fixtures/dispatch-driver/run-fixtures.sh", "result": "19/3 pre-repair (era-bound plan cases) → 22 passed / 0 failures post-repair", "at": "2026-11-05"},
+    {"cmd": "git status before/after guard run", "result": "identical — guard writes no state", "at": "2026-11-05"},
+    {"cmd": "grep -rn 'DISPATCH — GATE-G1|nextTicket → GATE-G1' docs/build/", "result": "zero matches — GATE-G1 never routed as nextTicket", "at": "2026-11-05"}
+  ],
+  "usd": 0.0,
+  "claims": {
+    "evidence_class": "records-in verification over committed records + offline fixture re-execution",
+    "not_claimed": ["live-service evidence", "forward dispatch authority", "GATE-G17 re-decision"]
+  }
+}
