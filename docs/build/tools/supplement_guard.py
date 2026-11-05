@@ -117,6 +117,11 @@ class Guard:
                 continue
             gid = cells[1]
             body = " | ".join(cells[2:])
+            # a `correction`-kind row annotates an earlier decision row; it is
+            # never the gate's decision record — indexing it (last-row-wins)
+            # would hide a PASSED decision or mask a real non-PASSED one.
+            if cells[-1].lower() == "correction":
+                continue
             passed = "PASSED" in body and "NOT PASSABLE" not in body and "FAILED" not in body
             quotes = re.findall(r'"([^"\n]+)"', line)
             dec[gid] = {"passed": passed, "quotes": quotes, "row": line}

@@ -72,6 +72,13 @@ pub use hharness_fleet_adapter as fleet_adapter;
 
 // The surfaces and the cross-implementation checker.
 pub use hharness_acp as acp;
+/// `hh-cap5-composed/1` — the CAP5.2 composed execution/methods/
+/// recipient verification driver: runs the four committed
+/// `example-card/1` records through the landed runner, folds the AC-1
+/// stage spine, carries the residual legs verbatim and validates the
+/// recorded backend-access claim — fixture-verified, never a withheld
+/// predicate closed.
+pub mod composed;
 /// `hh-recipe/1` — the one supported versioned in-process recipe
 /// (R5.28): launch → adopt → execute → grade → project → analyze →
 /// receipt, composed through the boundary ops and owner interfaces —

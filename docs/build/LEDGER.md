@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      CAP5.2
-lastCompleted:   CAP5.1
+nextTicket:      CAP5.3
+lastCompleted:   CAP5.2
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-cap5.1
+chainTip:         codex/harnessharness-evidence-cap5.2
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T20:37:00Z
+updatedAt:        2026-11-04T21:24:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1202,3 +1202,6 @@ updatedAt:        2026-11-04T20:37:00Z
 
 - 2026-11-04T20:40Z · **CAP5.1 fleshed — capstone contract bound to concrete checks** (no gate needed — records-in capstone; offline-only live stage): contract 238 appended dated note — twelve records-in checks NC-1…NC-12 (packet inventory + leg-fold re-computation vs declared dispositions; gate↔record verbatim vs GATE DECISIONS/readouts; deferral-reference integrity; 180-row coverage register ownership/anchor/contributor integrity; BUILD_INDEX + PHASE LOG consistency; withheld over-claim scan; coverage⇄contributor binding; owed-work homes; readout completeness); manifest row-238 note; REQ anchors unmoved (contributing slice only — no primary ids). Guard `PASS route DISPATCH — CAP5.1` (counts 82 rows / 180 candidates / 0 violations / 8 scoped warnings). · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T20:37Z · CAP5.1 done — branch `codex/harnessharness-evidence-cap5.1` · PR #271 · base `codex/harnessharness-evidence-r5.55` (@27699a4). Independent whole-scope gap hunt, records-in: `cap5_gap_hunt.py` twelve checks NC-1…NC-12 — 17 packets inventoried + leg-folds recomputed vs declared dispositions; gate↔record verbatim vs GATE DECISIONS/readouts; deferral-reference integrity (104 cited ids); 180-row register ownership/anchor/contributor checks; BUILD_INDEX/PHASE-LOG consistency; withheld over-claim scan; coverage⇄contributor binding; owed-work homes; readout completeness — **12/12 pass**. **Findings (4, all repaired append-only):** DF-H9-1 phantom row minted verbatim (H9 readout owner/trigger/control); G12 reading-2 GATE DECISIONS row appended; G15 decided_at correction row; DF-CAP5.1-1 minted (failed S1 residual → GATE-G17). Artifacts `reports/round5/COVERAGE_MATRIX.csv` (180 rows: MET 78 / MET-ENGINEERED 29 / PARTIAL 73) + `CAPSTONE_GAP_ANALYSIS.md` + `reports/2026-11-04-cap5.1-gap-hunt.json`. **Verify:** checker 12/12 · check-bm-tools OK · living-docs 438 OK · bm `.` 0 viol · guard PASS DISPATCH CAP5.1 · fmt n/a (no Rust) · 701 source lines ≤750 no trigger. **Deferrals:** opened DF-H9-1, DF-CAP5.1-1 — carried DF-R5.1-1 · **Deviations:** none · chainTip → codex/harnessharness-evidence-cap5.1 · next → CAP5.2 · ci: pending #271@b2b560e (4 checks started; logs/ci-cap5.1.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-04T20:54:36Z · **CAP5.2 size ruling** — worker stopped correctly at the ≤700 line trigger (measured 884 changed source/test lines: 841 numstat under `crates/` + ~43 docs/build tooling/fixtures, ~1.26×). Scoped fresh-context review verdict: **AMEND** — seq 239 one owner row; conjunctive `hh-cap5-composed/1` packet (`packet_id` minted last over the whole canonical record); impl-vs-battery the R5.32-rejected mid-predicate cut (battery compile-red standalone); in-run guard repair F-1/F-2 contract-bound and non-curative; L150 weak seams exhausted. Accepted as recorded Deviation; dated note on `239_CAP5.2__cap2.md`; review record `planning/2026-11-04_CAP5.2-split-review.md`; `runs/CAP5.2.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-04 — CAP5.2 done — branch `codex/harnessharness-evidence-cap5.2` · PR #272 · base `codex/harnessharness-evidence-cap5.1` (@a5bf3176). Composed execution/methods/recipient verification: `hh-cap5-composed/1` driver (`hharness/src/composed.rs`) runs the four committed example cards through `run_example` on fresh scratch stores → eight-stage AC-1 fold → sixteen residual legs records-in verbatim + homes resolved → permitted `podman --version` probe → `packet_id` minted last. Emitted `reports/2026-11-04-cap5.2-composed.json` disposition=executed — stages 8/8, counts {4 cards · 23 pass · 7 expected_refusal · 0 fail · 20 subjects · 2 receipts}, 16/16 residuals recorded + homes resolved, `live_authorization: pending{not_claimed}`, USD 0; `reports/round5/COMPOSED_E2E_REPORT.md`. In-run guard repair F-1/F-2 (`correction` rows never index as gate decisions — G15 PASSED unmasked; `correction-mask` fixture; 14/14). Post-PR readers-gate repair (first #272 read RED — 10 real docs/ reads, this ticket's): `RecordsIn` root + byte-identical fixtures `tests/fixtures/cap5_2/`; packet identical modulo probe timestamp. **Verify:** cap5_2 7/7 · hharness 0 failures · fmt clean · check-ci-gating OK · guard PASS DISPATCH CAP5.2 (82 rows/180 cand/0 viol) · bm `.`+`--staged` 0 viol · bm-tools OK · fails-without compile-red at a5bf3176 · **Deferrals:** none opened — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** 884 changed source/test lines vs ≤700 (~1.26×) at 75a39019 → ~1,000 (~1.43×) post-CI-repair — AMEND ruling `4e677760` (seq 239 one owner row; conjunctive packet; impl-vs-battery R5.32-rejected; recorded Deviation) · chainTip → codex/harnessharness-evidence-cap5.2 · next → CAP5.3 · ci: pass #272@f06fe1b (4 checks, run 41913118485; stack #271…#260 pass; logs/ci-cap5.2.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
