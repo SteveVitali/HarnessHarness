@@ -99,6 +99,13 @@ hharness-plugin = { path = "../hh-plugin" }
 # produced. Dev-deps do not ship and bundle never reaches env
 # (no cycle — bundle's deps stop below env's layer).
 hharness-bundle = { path = "../hh-bundle" }
+# R5.52 (tests/r5_52.rs): the withheld outside packet's
+# `procedure_vocabulary` leg asserts the landed `recompute`
+# owner's schema + frozen `within_tolerance` scalar rule
+# verbatim (records-in only — the recompute owner is read,
+# never run). Dev-deps do not ship and analysis never reaches
+# env (no cycle — analysis's deps stop below env's layer).
+hharness-analysis = { path = "../hh-analysis" }
 
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]
