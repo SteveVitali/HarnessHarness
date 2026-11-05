@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-05T00:19:03Z (`date -u` at SETUP)
-- Closed: (pending)
+- Closed: 2026-11-05T00:31Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 22k + 10k reserve; loaded = contract 242 + invariants I-01–I-08/O-01–O-08 + spec §9 (bounded) + coverage register/decomposition REC5.1 rows + invariants + landed closure records (cap5.3-closure.json layer verdicts, reports/round5/{COVERAGE_MATRIX.csv,CAPSTONE_GAP_ANALYSIS.md,CAPSTONE_CLOSURE.md,COMPOSED_E2E_REPORT.md}, cap5.1-gap-hunt packet) + DEFERRALS rows DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 + LEDGER CURRENT STATE/OPEN FINDINGS/GATE DECISIONS tail + BACKLOG.csv/md + OPERATIONAL_READINESS + risks register + manifest rows 238–246/operating rules + BUILD_INDEX tail + bm tools (check-backlog.sh mode contract) ≈ at estimate; ≤500 changed source/test lines split trigger watched.
 
 ## Deferrals read
@@ -175,6 +175,10 @@ never close an absent research/participant predicate.
 - `check-build-memory.sh .` → 0 violations (8 legacy warnings).
 - `bash docs/build/tools/check-supplement-guard.sh` → PASS route:
   DISPATCH — REC5.1 (82 rows / 180 cand / 0 viol) pre-artifacts.
+- ci-boundary/1: `ci: pass #274@4853e79 (cargo-deny 41941216616;
+  build·test·fmt·drift macos 41941216616; gitleaks 41941216616;
+  build·test·fmt·drift ubuntu 41941216616)` → `logs/ci-rec5.1.json`
+  (force-added; read_at per record).
 - Probes: `podman --version` → 6.1.0; `gh release view v0.1.0` →
   draft:false, 5 assets; `curl crates.io/api/v1/crates/hharness-cli` →
   200 w/ UA (403 bare — UA-required access limitation recorded).
