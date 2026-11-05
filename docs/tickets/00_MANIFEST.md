@@ -446,7 +446,7 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 219 | `219_R5.45__trace.md` | Round 5 | ticket | Actual task trace, bounded edit and example integration | — |
 | 219 note | | | | | size-deviation ruling 2026-11-04 — appended dated note on the contract (AMEND; one shared card-runner slice; ~1.17× smallest crossing) |
 | 220 | `220_GATE-G12__activation-gate.md` | Round 5 | gate | Authorize activation then fixed pilot | STOP |
-| 221 | `221_R5.46__pilot.md` | Round 5 | skeleton | Collect bounded activation and pilot evidence | pending GATE-G12 |
+| 221 | `221_R5.46__pilot.md` | Round 5 | ticket | Collect bounded activation evidence (pilot leg withheld pending GATE-G12 Reading 2) | GATE-G12 Reading 1 PASSED |
 | 222 | `222_GATE-G13__parity-gate.md` | Round 5 | gate | Freeze and fund authentic original-runner parity | STOP |
 | 223 | `223_R5.47__parity-live.md` | Round 5 | skeleton | Collect one authentic fixed-N parity tranche | pending GATE-G13 |
 | 224 | `224_GATE-G14__confirm-gate.md` | Round 5 | gate | Preregister and authorize held-out confirmation | STOP |
