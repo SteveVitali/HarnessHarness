@@ -161,6 +161,10 @@ an absent research/participant predicate.
 - `bash scripts/check-bm-tools.sh` → OK.
 - `check-build-memory.sh .` → 0 violations / 8 scoped warnings (baseline, unchanged).
 - fmt: no Rust touched — `cargo fmt` not applicable (docs-only).
+- 2026-11-05T00:42Z CLOSE — correction per BM-HIST-01: header `Closed:`
+  committed at `6d43cf1f` (line 10) carried the `00:5xZ` placeholder;
+  the actual close stamp is 2026-11-05T00:42:24Z (`date -u` at §6.5).
+- ci-boundary/1: `ci: pass #275@6d43cf1 (cargo-deny; gitleaks; build·test·fmt·drift ubuntu; build·test·fmt·drift macos — run 41942931551)` → `logs/ci-rec5.2.json` (force-added; read_at per record).
 
 ## Evidence report
 
