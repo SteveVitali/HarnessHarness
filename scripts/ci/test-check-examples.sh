@@ -23,7 +23,27 @@ seed() {  # $1 = dir — a minimal repo carrying the real checkout's example sur
   cp "$ROOT/docs/getting-started.md" "$d/docs/"
   cp "$ROOT/MAINTAINING.md" "$d/"
   cp "$ROOT/crates/hharness/src/examples.rs" "$d/crates/hharness/src/"
-  cp "$ROOT/clients/ts/fixture-definition.json" "$d/clients/ts/"
+  # every card-declared pin path — the seed must carry whatever the
+  # cards pin (packet evidence under docs/build/reports/, the shared
+  # definition, …), never a hardcoded list that drifts on admission.
+  python3 - "$ROOT" "$d" <<'PY'
+import json, os, shutil, sys
+root, d = sys.argv[1], sys.argv[2]
+exdir = os.path.join(root, "scripts", "examples")
+paths = set()
+for name in sorted(os.listdir(exdir)):
+    if not name.endswith(".json"):
+        continue
+    card = json.load(open(os.path.join(exdir, name)))
+    for pin in (card.get("pins") or {}).values():
+        rel = (pin or {}).get("path")
+        if rel:
+            paths.add(rel)
+for rel in sorted(paths):
+    src, dst = os.path.join(root, rel), os.path.join(d, rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copyfile(src, dst)
+PY
   git -C "$d" init -q >/dev/null
   git -C "$d" config user.email t@t; git -C "$d" config user.name t
   git -C "$d" add -A >/dev/null 2>&1
