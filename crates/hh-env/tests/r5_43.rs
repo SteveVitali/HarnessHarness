@@ -773,11 +773,16 @@ fn mint_seal(store: &mut Store, run: &str, lease: &Lease) -> EventRef {
 
 /// One real oracle attempt over a sealed submission — `OracleRunner` on
 /// the instrument run, `AdapterOracle` executing `hh-bench-adapter` for
-/// real. Returns the outcome fold for the packet leg.
+/// real. Returns the outcome fold for the packet leg. `subject_id` is
+/// the frozen bind id the outcome names (`subject_a`/`subject_b`; the
+/// instrument run id for controls — `useful_acceptance`'s subject fold
+/// reads the bind id, never the run coordinate; the run id stays bound
+/// in `spec.subject_run_id`).
 fn grade_attempt(
     store: &mut Store,
     instrument: &str,
     instrument_lease: &Lease,
+    subject_id: &str,
     subject_run: &str,
     seal_ref: EventRef,
     sub: &Submission,
@@ -785,7 +790,7 @@ fn grade_attempt(
     oracle: &AdapterOracle,
 ) -> (OracleOutcome, Option<hharness_bench::oracle::OracleAttempt>) {
     let mut out = OracleOutcome {
-        subject_id: subject_run.to_string(),
+        subject_id: subject_id.to_string(),
         attempted: true,
         invoked_before_verdict: None,
         outcome: None,
@@ -1041,10 +1046,28 @@ fn worksheet_facts() -> WorksheetFacts {
 
 // ── the full drive ───────────────────────────────────────────────────
 
+/// One subject's verbatim decided-artifact record — the collected
+/// artifact bytes plus its independent oracle outcome and the durable
+/// refs (the DF-CAP5.1-1-named evidence: the independent Decided
+/// artifact, recorded never manufactured).
+struct DecidedArtifact {
+    subject: String,
+    task: String,
+    artifact_sha256: String,
+    payload_hex: String,
+    submission_ref: String,
+    outcome: Option<String>,
+    reward_ppm: Option<i64>,
+    attempt_ref: Option<String>,
+    verdict_ref: Option<String>,
+    oracle_digest: String,
+}
+
 struct Drive {
     legs: Vec<Leg>,
     oracle_outcomes: Vec<OracleOutcome>,
     attempts: Vec<String>,
+    decided: Vec<DecidedArtifact>,
 }
 
 fn leg(name: &str, verdict: LegVerdict, facts: &[(&str, String)]) -> Leg {
@@ -1063,6 +1086,7 @@ fn leg(name: &str, verdict: LegVerdict, facts: &[(&str, String)]) -> Leg {
 /// the worksheet — honest outcomes folded into legs.
 fn run_s1() -> Drive {
     let mut all_attempts: Vec<String> = vec![];
+    let mut decided: Vec<DecidedArtifact> = vec![];
     // ── subject cells (≤1 setup retry bound, new identity each) ──────
     let (sa, art_a, seal_a) =
         drive_subject("subject_a", "a-hello", "{\"answer\":\"hello\"}", false);
@@ -1143,12 +1167,28 @@ fn run_s1() -> Drive {
                 &mut store,
                 &instrument,
                 &instrument_lease,
+                &s.subject_id,
                 &subject_run,
                 seal_ref,
                 &sub,
                 &t,
                 &oracle,
             );
+            // The verbatim decided-artifact record — the subject's
+            // collected bytes + its independent oracle outcome + the
+            // durable refs, recorded never manufactured.
+            decided.push(DecidedArtifact {
+                subject: s.subject_id.clone(),
+                task: tname.to_string(),
+                artifact_sha256: sha256_hex(&payload),
+                payload_hex: payload.iter().map(|b| format!("{b:02x}")).collect(),
+                submission_ref: sub.submission_id.clone(),
+                outcome: oo.outcome.clone(),
+                reward_ppm: oo.reward_ppm,
+                attempt_ref: oo.attempt_ref.clone(),
+                verdict_ref: oo.verdict_ref.clone(),
+                oracle_digest: oracle.digest.clone(),
+            });
             all_attempts.push(format!("oracle-{}", s.subject_id));
             oracle_outcomes.push(oo);
         }
@@ -1180,6 +1220,7 @@ fn run_s1() -> Drive {
             &instrument,
             &instrument_lease,
             &instrument,
+            &instrument,
             seal_c.clone(),
             &good,
             &t,
@@ -1190,6 +1231,7 @@ fn run_s1() -> Drive {
             &mut store,
             &instrument,
             &instrument_lease,
+            &instrument,
             &instrument,
             seal_c.clone(),
             &wrong,
@@ -1203,6 +1245,7 @@ fn run_s1() -> Drive {
             &mut store,
             &instrument,
             &instrument_lease,
+            &instrument,
             &instrument,
             seal_c,
             &good,
@@ -1240,6 +1283,22 @@ fn run_s1() -> Drive {
         }
         v
     };
+    // The oracle_chain leg records each attempt's verbatim outcome —
+    // the subject grades are the packet's own evidence of an
+    // independently Decided artifact.
+    let oracle_facts: Vec<(&str, String)> = oracle_outcomes
+        .iter()
+        .map(|o| {
+            (
+                o.subject_id.as_str(),
+                match (o.outcome.as_deref(), o.reward_ppm) {
+                    (Some("decided"), Some(p)) => format!("decided:{p}"),
+                    (Some(x), _) => x.to_string(),
+                    (None, _) => "unobserved".to_string(),
+                },
+            )
+        })
+        .collect();
     let legs = vec![
         leg(
             "subject_a",
@@ -1251,7 +1310,7 @@ fn run_s1() -> Drive {
             evaluate_subject(&sb),
             &subject_facts(&sb, &art_b),
         ),
-        leg("oracle_chain", oracle_verdict, &[]),
+        leg("oracle_chain", oracle_verdict, &oracle_facts),
         leg("controls", ctl_verdict, &[]),
         leg(
             "observer_probe",
@@ -1269,6 +1328,7 @@ fn run_s1() -> Drive {
         legs,
         oracle_outcomes,
         attempts: all_attempts,
+        decided,
     }
 }
 
@@ -1344,6 +1404,10 @@ fn ac2_ac3_controls_and_oracle_chain_real() {
         assert_eq!(o.outcome.as_deref(), Some("decided"), "{o:?}");
         assert_eq!(o.charged_to.as_deref(), Some("instrument"));
         assert_eq!(o.invoked_before_verdict, Some(true));
+        // The outcome names the frozen bind id — the acceptance fold's
+        // subject filter reads it (a run coordinate here is the
+        // DF-CAP5.1-1 instrument-fold mislabel; fails without the fix).
+        assert!(o.subject_id.starts_with("subject_"), "{o:?}");
     }
     let report = assemble(d.legs, &d.oracle_outcomes, d.attempts).unwrap();
     // The packet is honest whatever the cells produced: when both
@@ -1492,6 +1556,7 @@ fn ac3_wrong_is_valid_zero_broken_is_oracle_failure() {
         &instrument,
         &instrument_lease,
         &instrument,
+        &instrument,
         seal.clone(),
         &wrong,
         &t,
@@ -1507,6 +1572,7 @@ fn ac3_wrong_is_valid_zero_broken_is_oracle_failure() {
         &mut store,
         &instrument,
         &instrument_lease,
+        &instrument,
         &instrument,
         seal,
         &good,
@@ -1549,5 +1615,56 @@ fn ac2_ac3_executed_packet_is_honest() {
             repo_root().join(out)
         };
         std::fs::write(&out, format!("{j}\n")).unwrap();
+    }
+    if let Ok(out) = std::env::var("HH_S1_EMIT_DECIDED") {
+        // The independent Decided artifact the deferral names: the
+        // verbatim subject artifacts + their independent oracle
+        // outcomes + durable refs — records-in, never manufactured.
+        let rec = Json::obj([
+            ("version", Json::str("hh-s1-decided-artifacts/1")),
+            ("packet_id", Json::str(&report.packet_id)),
+            (
+                "artifacts",
+                Json::Arr(
+                    d.decided
+                        .iter()
+                        .map(|a| {
+                            Json::obj([
+                                ("subject", Json::str(&a.subject)),
+                                ("task", Json::str(&a.task)),
+                                ("artifact_sha256", Json::str(&a.artifact_sha256)),
+                                ("payload_hex", Json::str(&a.payload_hex)),
+                                ("submission_ref", Json::str(&a.submission_ref)),
+                                (
+                                    "outcome",
+                                    Json::str(a.outcome.as_deref().unwrap_or("unobserved")),
+                                ),
+                                (
+                                    "reward_ppm",
+                                    a.reward_ppm.map(Json::Int).unwrap_or(Json::Null),
+                                ),
+                                (
+                                    "attempt_ref",
+                                    Json::str(a.attempt_ref.as_deref().unwrap_or("none")),
+                                ),
+                                (
+                                    "verdict_ref",
+                                    Json::str(a.verdict_ref.as_deref().unwrap_or("none")),
+                                ),
+                                ("oracle_digest", Json::str(&a.oracle_digest)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ])
+        .to_canonical_string();
+        let out = PathBuf::from(&out);
+        let out = if out.is_absolute() {
+            out
+        } else {
+            repo_root().join(out)
+        };
+        std::fs::write(&out, format!("{rec}\n")).unwrap();
     }
 }
