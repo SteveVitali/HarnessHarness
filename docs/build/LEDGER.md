@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.54
-lastCompleted:   R5.53
+nextTicket:      R5.55
+lastCompleted:   R5.54
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.53
+chainTip:         codex/harnessharness-evidence-r5.54
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T18:50:00Z
+updatedAt:        2026-11-04T19:50:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1188,3 +1188,7 @@ updatedAt:        2026-11-04T18:50:00Z
 - 2026-11-04T18:53:32Z · **GATE-G16 PASSED — out-of-scope disposition** — operator words verbatim "confirm and proceed" (interactive, 2026-11-04T18:53:32Z); scoped decision = publication stage voided this round (consistent with GATE-G15): no public acts/contacts/content; spine stays internal; S3/S4 unmet obligations retained (omitted-S3 explicit scope disposition recorded). Dependent rows (H10, R5.54, H11, R5.55) land withheld records; nothing publishes. `nextTicket → seq 234`. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T18:53:42Z · **HUMAN-H10 + HUMAN-H11 WITHHELD** — both human rows sit inside the GATE-G16 voided publication stage: no acts were approved, none performed; no day-30/+90 dates exist (calendar derives from actual publication — none occurred). Readouts recorded `Status: WITHHELD` (`readouts/HUMAN-H10.md`, `readouts/HUMAN-H11.md`); every checklist claim stays withheld. `nextTicket → seq 235` (R5.54 publication-record skeleton — lands the honest withheld record). · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T18:58Z · **R5.54 fleshed — skeleton → ticket (withheld{stage_voided}/no_publication disposition)** under GATE-G16 PASSED — out-of-scope disposition (readouts/GATE-G16.md; operator verbatim "confirm and proceed" 2026-11-04T18:53:32Z; block sha256 `1b88c0ef16ba` confirmed; GATE DECISIONS row present verbatim): contract 235 rewritten — Run line, withheld scope (the publication stage is voided this round: NO public acts/contacts/content authorized; HUMAN-H10/H11 recorded WITHHELD; nothing published → nothing to verify; the honest record is a typed `withheld{stage_voided}`/`no_publication` packet `hh-publication-withheld/1` — ten pins (nine H8 + committed study-report spine; G16/H10/H11 readouts echoed verbatim as leg facts — never pinned, living records), §8.3 spine/claim/correction vocabulary verbatim, adverse + unmet study results carried verbatim — `unmet{efficacy_unavailable;parity_withheld}` no promotional inflation — typed refusals exercised, every public act zero-count, claims withheld, DF-H9-1 open), numbered AC-1…AC-6 (REQ-G-201/202/207/209 anchor unmoved, bound NC-1…NC-6 at AC-4); manifest row 235 skeleton→ticket + dated note.
+- 2026-11-04T19:12:02Z · **R5.54 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,596 numstat under `crates/`, ~2.13×). Scoped fresh-context review verdict: **AMEND** — seq 235 one owner row; conjunctive `hh-publication-withheld/1` packet (closed 7-member LEGS); impl-vs-battery rejected AND non-curative; all cuts non-curative. Accepted as recorded Deviation; dated note on `235_R5.54__publication-record.md`; manifest row-235 note; review record `planning/2026-11-04_R5.54-split-review.md`; `runs/R5.54.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-04T19:50Z · R5.54 done — branch codex/harnessharness-evidence-r5.54 · PR #269 · base codex/harnessharness-evidence-r5.53 · GATE-G16 PASSED — out-of-scope disposition ("confirm and proceed" 2026-11-04T18:53:32Z; block sha256 1b88c0ef16ba): `hh-publication-withheld/1` withheld{stage_voided}/no_publication record — records-in evaluators over supplied facts only; closed seven-member LEGS; withheld|failed|inconclusive fold; assemble() refuses partials, packet_id minted last. Emitted reports/2026-11-04-r5.54-publication-withheld.json disposition=withheld admission=withheld_stage_voided — gate verbatim + H10/H11 withheld acts_approved:none, ten pins byte-verified (nine H8 + committed byte-copy fixture of hh-study-report/1 6e83dcf8…), §8.3 spine/claim/correction vocabulary verbatim (study decls/codec/nine-family incl. adverse failed{s1_useful}, four rights schemas, closed AuthorityClass, six-stage order, release-note/report-spine/channel rules), ten exercised cases → verbatim outcomes via real machinery (stands, nothing admitted), study:unmet{efficacy_unavailable;parity_withheld} carried verbatim no inflation, sixteen publication members 0, df_h9_1:open claim_awarded:false — I-08, USD $0.00. **Verify:** r5_54 5/5 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at 676595f3 · guard PASS DISPATCH R5.54 post-fleshing+boundary · bm 0 viol (. + --staged) · bm-tools OK · pass-2: PinsFacts doc '13'->'10' + CI-caused pin/parse -> fixture; emit byte-identical. **Deferrals:** none — carried DF-R5.1-1; DF-H9-1 stays open. **ADRs:** (none) · **Deviations:** 1,596 vs ≤750 (~2.13×) → 1,603 net post repair (~2.14×) — AMEND ruling 25aa60a3 · chainTip → codex/harnessharness-evidence-r5.54 · next → R5.55 · ci: pass #269@141b6c3 all 4 checks (run 41896796310; first read red on readers scan — this ticket's, repaired); stack #268…#260 pass — logs/ci-r5.54.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
