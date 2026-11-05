@@ -7,7 +7,7 @@
 - Harness: devin-desktop/swe-2-high/subagent
 - Skills: agent-skills @ e981ec5
 - Started: 2026-11-05T01:10:42Z (`date -u` at SETUP)
-- Closed: (pending)
+- Closed: 2026-11-05T01:57:00Z (`date -u` at §6.5 close)
 - Context at SETUP: ticket estimate 20k + 10k reserve; loaded = contract 245 + invariants I-01–I-08/O-01–O-08 + supplement s1/s7/s8 + coverage register rows for the doc-surface ids (no primary targets — contributing slice) + manifest row 245/246 + 3 OPEN DEFERRALS rows + LEDGER CURRENT STATE + BUILD_INDEX tail + GATE-G17 readout + CAPSTONE_CLOSURE fold + the nine disposition packets + the ten living reader surfaces + check-position/examples/trace/contributing/quickstart scripts ≈ at estimate; ≤550 changed source/test lines + 24k/10k split trigger watched (docs-only scope).
 
 ## Deferrals read
@@ -135,11 +135,11 @@ this run ledger and its PR record.
 
 | item (spec §) | required | achieved | status | evidence |
 |---|---|---|---|---|
-| AC-1 refresh guides/navigation w/ actual commands + ready evidence/limits; offline semantic checks; links + source/code freshness; preserve failure/negative/unmet + contributor path | D/E | — | pending | (recorded at close) |
-| AC-2 no unexecuted quickstart/public-access/impl-detail claim; committed-HEAD check scoped | D/E | — | pending | |
+| AC-1 refresh guides/navigation w/ actual commands + ready evidence/limits; offline semantic checks; links + source/code freshness; preserve failure/negative/unmet + contributor path | D/E | engineered | met | six living files refreshed (README, evidence.md, status.md, getting-started, experiments.md, CONTRIBUTING) + `reports/round5/READER_DOCS_CHECK.md`; every claim cited to a committed packet/readout; static checks + documented commands all green; failed/withheld/unselected retained verbatim; `no_ritual` leg green |
+| AC-2 no unexecuted quickstart/public-access/impl-detail claim; committed-HEAD check scoped | D/E | engineered | met | `check-quickstart.sh` green on committed HEAD e9148ce2 (clone→build→doctor ok→run succeeded); four `--head` checks at e9148ce2/7cd9bf07/88e07858; no access claim added; withheld/Restricted states kept |
 | AC-3 primary targets → checks/evidence; achieved D/E vs owed R/P | D/E | engineered | met | none — contributing slice; the slice's own D/E recorded here; no full-target predicate claimed |
-| AC-4 fails-without; docs-only living-docs/row/link checks; commands + counts | E/D | — | pending | |
-| AC-5 universal phase gate | D/E | — | pending | |
+| AC-4 fails-without; docs-only living-docs/row/link checks; commands + counts | E/D | engineered | met | checker suite is the fails-without surface — and it fired twice for real (test-check-contributing ungated-lane mutation + test-check-position weakened-unmet mutation both caught my drift and were repaired, not relaxed); counts in evidence log |
+| AC-5 universal phase gate | D/E | engineered | met | run/PR/BUILD_INDEX/LEDGER agree at closeout; 1,512B phase log; three OPEN deferrals carried verbatim; ci: pass #277@88e0785 |
 
 ## Invariant / operating-clause gap rows
 
@@ -182,7 +182,23 @@ this run ledger and its PR record.
 - `cargo fmt --all --check` → clean (no Rust touched — docs-only; run per AC-4 anyway).
 - Documented commands on scratch stores (`HH_STORE_ROOT`/`HH_WORKSPACE_ROOT` under `mktemp -d`): `cargo test -p hharness --test r5_29 ex01` 1/1 · `ex02` 5/5 · `--test r5_45 ex03` 3/3 · `ex04` 2/2 — every displayed example command executes as documented.
 - `git diff` self-review: six living files; all claims trace to committed packets/readout; no frozen/historical file touched; no banned phrases (check-position honesty leg).
+- Committed-HEAD scope (explicit per AC-2 — clones test the committed tree, never the working tree): `check-position.sh --head` 13 legs @ 88e07858 · `check-examples.sh --head` @ e9148ce2 · `check-trace.sh --head` @ e9148ce2 · `check-contributing.sh --head` @ e9148ce2 + 7cd9bf07.
+- `bash scripts/check-quickstart.sh` → **green** — verbatim block on committed HEAD e9148ce2 (clone → build → doctor `connectivity:ok` → run `succeeded`/`completed`).
+- CI self-test repair (this ticket's own CI read caught two real regressions): (1) `test-check-contributing` mutates `stays gated until its` → kept that phrase while adding the recorded unselected disposition (fix `7cd9bf07`); (2) `test-check-position` mutates `are **unmet**:` and requires the clause's only `unmet` token to live there → moved the verbatim `unmet{…}` string out of the marked clause (fix `88e07858`). Both self-tests + real checks re-verified green; `test-check-trace` 9/9 and `test-check-examples` OK confirmed the other touched surfaces' mutation points hold.
 
 ## Evidence report
 
-(pending — written at Phase 6)
+Docs refresh landed claim-by-claim against the GATE-G17 accepted record:
+executed things documented executed (ops-live 24/24, activation, pilot),
+withheld/unmet verbatim (S1 failed, parity N=0, confirmation absent,
+study inconclusive, outside/formative/publication/value withheld,
+plugin/interchange unselected); no card state promoted. Verification:
+living-docs 456 OK; check-position 13 legs (+`--head` @88e07858);
+check-examples/check-trace/check-contributing green (+`--head`);
+quickstart verbatim green on committed HEAD; documented commands
+ex01 1/1 · ex02 5/5 · ex03 3/3 · ex04 2/2 on scratch stores; bm-tools
+OK; guard PASS DISPATCH DOC5.1; fmt clean; ci: pass #277@88e0785
+(4/4 checks, run 41947989761 — macos helper_live spawn-deadline flake
+resolved on rerun; ubuntu self-test failures earlier in the run were
+real regressions this ticket caused and were fixed at 7cd9bf07 +
+88e07858, not relaxed). Self-test learnings recorded above.
