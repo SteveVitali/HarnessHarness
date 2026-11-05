@@ -1,0 +1,796 @@
+{
+  "acceptance_prep": {
+    "artifact_digests": {
+      "composed_packet": "9761b1e766b8909bb9a5646d355425ccfb429c7667605461608bf384b6307559",
+      "coverage_matrix": "982c7bfe92235f8c802ae4771a249fd61a135cbe2c433602631ff189f4b7011c",
+      "gap_hunt_packet": "389e558974ef308d380beab8498575cfdce9c3395bb2b2c84d1f4966367f8668"
+    },
+    "criterion_verbatim": "Closure reports engineering, research, portability, public availability and adoption separately with executed commands/counts/evidence and true skipped/pending limits.",
+    "expiry_void": {
+      "expiry": "operator-stated at signature",
+      "voided_by": "operator cancellation or material contract/input change"
+    },
+    "fresh_fields_required": [
+      "operator words verbatim",
+      "UTC",
+      "channel",
+      "scoped items",
+      "expiry/void conditions",
+      "agent-draft sha256 confirmation"
+    ],
+    "old_signature_policy": "no old GATE-ACCEPT/G1 signature satisfies this gate",
+    "read_items": [
+      "docs/build/reports/round5/COVERAGE_MATRIX.csv",
+      "docs/build/reports/round5/CAPSTONE_GAP_ANALYSIS.md",
+      "docs/build/reports/2026-11-04-cap5.1-gap-hunt.json",
+      "docs/build/reports/2026-11-04-cap5.2-composed.json",
+      "docs/build/reports/round5/COMPOSED_E2E_REPORT.md",
+      "docs/build/reports/round5/CAPSTONE_CLOSURE.md",
+      "docs/build/reports/2026-11-04-cap5.3-closure.json",
+      "docs/tickets/DEFERRALS.md",
+      "docs/build/LEDGER.md#gate-decisions"
+    ],
+    "scoped_items": [
+      "CAP5.1 gap-hunt verdicts + 4 findings",
+      "CAP5.2 composed spine + residual routes",
+      "CAP5.3 layer verdicts + signature list",
+      "DF-R5.1-1 / DF-H9-1 / DF-CAP5.1-1 OPEN rows",
+      "S3/S4 unmet obligations",
+      "Q-7 open until human ratification"
+    ]
+  },
+  "base": "2909edce90f7991f0d1eb140e8c597a0d07ca38f",
+  "build_status": "not_done",
+  "checks": [
+    {
+      "check": "CL-1",
+      "detail": "rows=180 hist={'MET': 78, 'PARTIAL': 73, 'MET-ENGINEERED': 29} eng_closed=107 req_satisfied=78 ceiling=engineered",
+      "name": "matrix totals recompute",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-2",
+      "detail": "adoption=withheld; engineering=executed; portability=withheld; public=withheld; research=inconclusive",
+      "name": "five-layer fold from committed dispositions",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-3",
+      "detail": "REQ-C-005 contribs=R5.49,R5.49; REQ-H-009 contribs=R5.49,R5.49,R5.52,R5.52,R5.53,R5.53,R5.54,R5.54,R5.55,R5.55",
+      "name": "per-ID evidence + owned-target resolution",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-4",
+      "detail": "12 residual legs homes-resolved; 102 matrix owed cells routed; bad=0 dup=0 amb=0",
+      "name": "owed-work unique resolvable homes",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-5",
+      "detail": "CAP5.1 repairs verified=4/4; adjudications=2",
+      "name": "reconcile old/new findings",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-6",
+      "detail": "scanned 17 packets + composed residuals; promoted=[] claim_awarded=[]",
+      "name": "withheld never promoted",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-7",
+      "detail": "GATE-G17 readout absent=True; study unmet verbatim retained",
+      "name": "no old GATE-ACCEPT signature / unmet retained",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-8",
+      "detail": "accepted_deviations=52 scoped_owed_legs=7 waiver_requests=3",
+      "name": "three-part signature list emitted",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-9",
+      "detail": "projectStatus=IN_PROGRESS; manifest 241=GATE-G17:True",
+      "name": "build never marked DONE",
+      "verdict": "pass"
+    },
+    {
+      "check": "CL-10",
+      "detail": "criterion verbatim captured; read_items=9; digests=3; template present",
+      "name": "GATE-G17 acceptance prep",
+      "verdict": "pass"
+    }
+  ],
+  "counts": {
+    "checks": 10,
+    "findings_open": 0,
+    "passed": 10
+  },
+  "disposition": "reported",
+  "findings": [],
+  "generated_at": "2026-11-04T21:37:56Z",
+  "generated_by": "docs/build/tools/cap5_closure.py",
+  "layer_verdicts": {
+    "adoption": {
+      "evidence": [
+        "docs/build/reports/2026-11-04-r5.55-value-withheld.json",
+        "docs/build/reports/2026-11-04-r5.50-plugin-unselected.json",
+        "docs/build/reports/2026-11-04-r5.51-interchange-unselected.json",
+        "docs/build/reports/2026-11-04-r5.53-formative-withheld.json"
+      ],
+      "member_dispositions": [
+        "withheld",
+        "unselected",
+        "unselected",
+        "withheld"
+      ],
+      "owed": "GATE-G17",
+      "verdict": "withheld"
+    },
+    "engineering": {
+      "evidence": [
+        "docs/build/reports/2026-11-04-r5.46-activation-podman.json",
+        "docs/build/reports/2026-11-04-r5.44-ops-live-second.json",
+        "docs/build/reports/2026-11-04-cap5.2-composed.json",
+        "docs/build/reports/round5/COVERAGE_MATRIX.csv",
+        "docs/build/reports/round5/COMPOSED_E2E_REPORT.md"
+      ],
+      "member_dispositions": [
+        "executed",
+        "executed"
+      ],
+      "owed": "(none)",
+      "verdict": "executed"
+    },
+    "portability": {
+      "evidence": [
+        "docs/build/reports/2026-11-04-r5.52-outside-withheld.json"
+      ],
+      "member_dispositions": [
+        "withheld"
+      ],
+      "owed": "DF-H9-1 + GATE-G17",
+      "verdict": "withheld"
+    },
+    "public": {
+      "evidence": [
+        "docs/build/reports/2026-11-04-r5.54-publication-withheld.json"
+      ],
+      "member_dispositions": [
+        "withheld"
+      ],
+      "owed": "GATE-G17",
+      "verdict": "withheld"
+    },
+    "research": {
+      "evidence": [
+        "docs/build/reports/2026-11-04-r5.43-s1-useful.json",
+        "docs/build/reports/2026-11-04-r5.46-activation-podman.json",
+        "docs/build/reports/2026-11-04-r5.46-pilot-podman.json",
+        "docs/build/reports/2026-11-04-r5.47-parity-n0.json",
+        "docs/build/reports/2026-11-04-r5.48-confirm-withheld.json",
+        "docs/build/reports/2026-11-04-r5.49-study-report.json"
+      ],
+      "member_dispositions": [
+        "failed",
+        "executed",
+        "executed",
+        "withheld",
+        "withheld",
+        "reported"
+      ],
+      "owed": "GATE-G17",
+      "verdict": "inconclusive"
+    }
+  },
+  "live_authorization": "pending{not_claimed}",
+  "owed_cells_count": 102,
+  "owed_legs": [
+    {
+      "disposition": "inconclusive",
+      "home": "landed:discharged@r5.44",
+      "leg": "backend_preflight",
+      "state": "recorded"
+    },
+    {
+      "disposition": "inconclusive",
+      "home": "landed:discharged@r5.44",
+      "leg": "backend_preflight_reprobe",
+      "state": "recorded"
+    },
+    {
+      "disposition": "failed",
+      "home": "DF-CAP5.1-1",
+      "leg": "s1_useful",
+      "state": "recorded"
+    },
+    {
+      "disposition": "failed",
+      "home": "landed:honest-retention",
+      "leg": "ops_live_first",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "GATE-G17",
+      "leg": "s3_parity",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "GATE-G17",
+      "leg": "s4_confirm",
+      "state": "recorded"
+    },
+    {
+      "disposition": "unselected",
+      "home": "DF-H9-1",
+      "leg": "plugin_exercise",
+      "state": "recorded"
+    },
+    {
+      "disposition": "unselected",
+      "home": "DF-H9-1",
+      "leg": "interchange",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "DF-H9-1",
+      "leg": "outside_recipient",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "DF-H9-1",
+      "leg": "formative",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "GATE-G17",
+      "leg": "publication",
+      "state": "recorded"
+    },
+    {
+      "disposition": "withheld",
+      "home": "GATE-G17",
+      "leg": "value_followup",
+      "state": "recorded"
+    }
+  ],
+  "packet_id": "9d756c6830ca54caa3ec37a7d658105a6c78fc3d8c62db0390fca41c1dd7813f",
+  "reconciliation": {
+    "adjudications": [
+      {
+        "adjudication": "no-action-accepted \u2014 CC4 binds contracts, data models, criteria and stages; a prose mention inside a dated report is none of these; report is a historical record, never rewritten",
+        "control": "this CAPSTONE_CLOSURE.md findings section",
+        "finding": "CC4 hygiene nit (S0.3 measurement sheet names 'cargo' once in prose)"
+      },
+      {
+        "adjudication": "carried-forward \u2014 surfaced verbatim in the signature list part 1 for GATE-G17 re-signature",
+        "control": "readouts/GATE-G1.md + DEFERRALS.md DF-S0.3-3 + docs/adr/ADR-0226-*.md",
+        "finding": "GATE-G1 accepted residuals (DF-S0.3-3 R2 human signature; ADR-0226 trigger-5 satisfied-by-analysis)"
+      }
+    ],
+    "cap5_1_repairs": [
+      {
+        "finding": "F-1",
+        "repair_present": true,
+        "what": "DF-H9-1 minted row present w/ owner"
+      },
+      {
+        "finding": "F-2",
+        "repair_present": true,
+        "what": "GATE-G12 reading-2 row in GATE DECISIONS"
+      },
+      {
+        "finding": "F-3",
+        "repair_present": true,
+        "what": "G15 decided_at correction row"
+      },
+      {
+        "finding": "F-4",
+        "repair_present": true,
+        "what": "DF-CAP5.1-1 minted for failed-S1 residual"
+      }
+    ]
+  },
+  "schema": "hh-cap5-closure/1",
+  "scope": "round-5 closure recompute over committed CAP5.1/CAP5.2 artifacts + deferrals + gate records",
+  "signature_list": {
+    "accepted_deviations": [
+      {
+        "control": [
+          "docs/build/runs/R5.6.md"
+        ],
+        "id": "R5.6-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.7.md"
+        ],
+        "id": "R5.7-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.8.md"
+        ],
+        "id": "R5.8-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.9.md"
+        ],
+        "id": "R5.9-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.10.md"
+        ],
+        "id": "R5.10-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.11.md"
+        ],
+        "id": "R5.11-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.12.md"
+        ],
+        "id": "R5.12-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.13.md"
+        ],
+        "id": "R5.13-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.14.md"
+        ],
+        "id": "R5.14-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict SPLIT"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-02_R5.14b-split-review.md",
+          "docs/build/runs/R5.14b.md"
+        ],
+        "id": "R5.14b-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.15.md"
+        ],
+        "id": "R5.15-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict SPLIT"
+      },
+      {
+        "control": [
+          "docs/build/runs/R5.16.md"
+        ],
+        "id": "R5.16-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict SPLIT"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.18-split-review.md",
+          "docs/build/runs/R5.18.md"
+        ],
+        "id": "R5.18-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.19-split-review.md",
+          "docs/build/runs/R5.19.md"
+        ],
+        "id": "R5.19-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.20-split-review.md",
+          "docs/build/runs/R5.20.md"
+        ],
+        "id": "R5.20-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.21-split-review.md",
+          "docs/build/runs/R5.21.md"
+        ],
+        "id": "R5.21-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.22-split-review.md",
+          "docs/build/runs/R5.22.md"
+        ],
+        "id": "R5.22-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.23-split-review.md",
+          "docs/build/runs/R5.23.md"
+        ],
+        "id": "R5.23-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.25-split-review.md",
+          "docs/build/runs/R5.25.md"
+        ],
+        "id": "R5.25-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.26-split-review.md",
+          "docs/build/runs/R5.26.md"
+        ],
+        "id": "R5.26-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.27-split-review.md",
+          "docs/build/runs/R5.27.md"
+        ],
+        "id": "R5.27-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.28-split-review.md",
+          "docs/build/runs/R5.28.md"
+        ],
+        "id": "R5.28-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.29-split-review.md",
+          "docs/build/runs/R5.29.md"
+        ],
+        "id": "R5.29-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.31-split-review.md",
+          "docs/build/runs/R5.31.md"
+        ],
+        "id": "R5.31-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.32-split-review.md",
+          "docs/build/runs/R5.32.md"
+        ],
+        "id": "R5.32-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.33-split-review.md",
+          "docs/build/runs/R5.33.md"
+        ],
+        "id": "R5.33-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.34-split-review.md",
+          "docs/build/runs/R5.34.md"
+        ],
+        "id": "R5.34-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.36-split-review.md",
+          "docs/build/runs/R5.36.md"
+        ],
+        "id": "R5.36-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.37-split-review.md",
+          "docs/build/runs/R5.37.md"
+        ],
+        "id": "R5.37-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.38-split-review.md",
+          "docs/build/runs/R5.38.md"
+        ],
+        "id": "R5.38-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.39-split-review.md",
+          "docs/build/runs/R5.39.md"
+        ],
+        "id": "R5.39-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.40-split-review.md",
+          "docs/build/runs/R5.40.md"
+        ],
+        "id": "R5.40-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.41-split-review.md",
+          "docs/build/runs/R5.41.md"
+        ],
+        "id": "R5.41-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.42-split-review.md",
+          "docs/build/runs/R5.42.md"
+        ],
+        "id": "R5.42-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-03_R5.42a-split-review.md",
+          "docs/build/runs/R5.42a.md"
+        ],
+        "id": "R5.42a-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.43-split-review.md",
+          "docs/build/runs/R5.43.md"
+        ],
+        "id": "R5.43-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.44-split-review.md",
+          "docs/build/runs/R5.44.md"
+        ],
+        "id": "R5.44-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.45-split-review.md",
+          "docs/build/runs/R5.45.md"
+        ],
+        "id": "R5.45-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.46-split-review.md",
+          "docs/build/runs/R5.46.md"
+        ],
+        "id": "R5.46-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.47-split-review.md",
+          "docs/build/runs/R5.47.md"
+        ],
+        "id": "R5.47-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.48-split-review.md",
+          "docs/build/runs/R5.48.md"
+        ],
+        "id": "R5.48-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.49-split-review.md",
+          "docs/build/runs/R5.49.md"
+        ],
+        "id": "R5.49-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.50-split-review.md",
+          "docs/build/runs/R5.50.md"
+        ],
+        "id": "R5.50-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.51-split-review.md",
+          "docs/build/runs/R5.51.md"
+        ],
+        "id": "R5.51-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.52-split-review.md",
+          "docs/build/runs/R5.52.md"
+        ],
+        "id": "R5.52-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.53-split-review.md",
+          "docs/build/runs/R5.53.md"
+        ],
+        "id": "R5.53-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.54-split-review.md",
+          "docs/build/runs/R5.54.md"
+        ],
+        "id": "R5.54-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_R5.55-split-review.md",
+          "docs/build/runs/R5.55.md"
+        ],
+        "id": "R5.55-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/build/planning/2026-11-04_CAP5.2-split-review.md",
+          "docs/build/runs/CAP5.2.md"
+        ],
+        "id": "CAP5.2-size-trigger",
+        "what": "changed source/test lines exceeded the contract trigger; scoped review verdict AMEND"
+      },
+      {
+        "control": [
+          "docs/tickets/DEFERRALS.md DF-S0.3-3",
+          "docs/build/readouts/GATE-G1.md"
+        ],
+        "id": "DF-S0.3-3-residual",
+        "what": "R2 cross-camp human signature cell cannot be produced by the build (accepted at GATE-G1)"
+      },
+      {
+        "control": [
+          "docs/adr/ADR-0226-s0.3b-cross-candidate-revalidation-disposition.md",
+          "docs/build/readouts/GATE-G1.md"
+        ],
+        "id": "ADR-0226-trigger5",
+        "what": "armed revalidation trigger 5 dispositioned satisfied-by-analysis (accepted at GATE-G1)"
+      },
+      {
+        "control": [
+          "docs/build/runs/CAP5.3.md findings \u2014 no-action-accepted adjudication"
+        ],
+        "id": "CC4-hygiene-nit",
+        "what": "S0.3 measurement sheet names the E1 build tool once in report prose"
+      }
+    ],
+    "scoped_owed_legs": [
+      {
+        "home": "DF-R5.1-1",
+        "leg": "ten R5.1-owned targets' contributor evidence (REQ-C-104/107/108, REQ-H-001/002/003/005/006/007/011)",
+        "owner": "GATE-G17",
+        "trigger": "fresh round-5 acceptance readout records each dispatch boundary's guard invocation"
+      },
+      {
+        "home": "DF-H9-1",
+        "leg": "withheld participant/outreach predicate set (HUMAN-H9)",
+        "owner": "operator (Steven Vitali, @SteveVitali)",
+        "trigger": "actual named participants/reviewer + consent/scope/access/resources supplied"
+      },
+      {
+        "home": "DF-CAP5.1-1",
+        "leg": "failed S1 useful-task re-execution or scope disposition",
+        "owner": "GATE-G17",
+        "trigger": "executed hh-s1-useful/1 on the repaired machinery or verbatim scope disposition"
+      },
+      {
+        "home": "GATE-G17",
+        "leg": "S3 parity (N=0) + S4 confirmation (quote-only) unmet",
+        "owner": "GATE-G17",
+        "trigger": "explicit scope disposition (G13/G14/G16 records carried verbatim)"
+      },
+      {
+        "home": "GATE-G17",
+        "leg": "publication + value-observation stage predicates (voided at G16)",
+        "owner": "GATE-G17",
+        "trigger": "explicit scope disposition"
+      },
+      {
+        "home": "GATE-G17",
+        "leg": "all remaining R/P-layer legs (73 PARTIAL + 29 MET-ENGINEERED targets)",
+        "owner": "GATE-G17",
+        "trigger": "fresh acceptance + later contributor evidence"
+      },
+      {
+        "home": "GATE-G17",
+        "leg": "Q-7 human ratification",
+        "owner": "operator",
+        "trigger": "ratification after O2 disposition \u2014 stays open (AC-9-3)"
+      }
+    ],
+    "waiver_requests": [
+      {
+        "request": "S1 useful-task predicate \u2014 the bounded execution failed (machinery repaired, never re-admitted): waive round-5 re-execution or name a fresh bounded admission",
+        "requires": "operator verbatim words in GATE DECISIONS + GATE-G17 signature; a durable waiver needs an ADR quoting those words"
+      },
+      {
+        "request": "participant/outreach predicate set \u2014 stage voided at GATE-G15 (operator 'accept, continue' 14:32:29Z): ratify the round-5 scope or supply HUMAN-H9 inputs",
+        "requires": "operator verbatim words; voiding \u2260 discharge \u2014 DF-H9-1 stays open until then"
+      },
+      {
+        "request": "publication stage \u2014 voided at GATE-G16 (operator 'confirm and proceed' 18:53:32Z): ratify or name specific bounded public acts with expiry",
+        "requires": "operator verbatim words + ADR quoting them if the disposition becomes durable scope"
+      }
+    ]
+  },
+  "spend_usd": 0,
+  "totals": {
+    "engineering_closed": 107,
+    "highest_achieved_domain": "engineered",
+    "matrix_rows": 180,
+    "required_domain_histogram": {
+      "D": 9,
+      "D/E": 35,
+      "D/E/P": 12,
+      "D/E/R": 16,
+      "D/P": 11,
+      "D/R": 10,
+      "D/R/P": 1,
+      "E": 56,
+      "E/D": 9,
+      "E/P": 8,
+      "E/R": 10,
+      "P/D": 3
+    },
+    "requirement_satisfied": 78,
+    "verdict_histogram": {
+      "MET": 78,
+      "MET-ENGINEERED": 29,
+      "PARTIAL": 73
+    }
+  },
+  "version": "1.0.0"
+}

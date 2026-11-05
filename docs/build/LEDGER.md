@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      CAP5.3
-lastCompleted:   CAP5.2
+nextTicket:      REC5.1
+lastCompleted:   CAP5.3
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-cap5.2
+chainTip:         codex/harnessharness-evidence-cap5.3
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T21:24:00Z
+updatedAt:        2026-11-04T21:44:12Z
 ```
 
 ## OPEN FINDINGS
@@ -208,6 +208,7 @@ updatedAt:        2026-11-04T21:24:00Z
 
 | 2026-11-04T05:44:42Z | GATE-G12 | authorize activation then fixed pilot | disposition (reading 2 of 2) | "passed, I confirm/authorize. proceed autonomously without interruption" (operator verbatim, interactive, 2026-11-04T05:44:42Z — recorded in readouts/GATE-G12.md; agent-drafted block sha256 4d59d34fdc1f confirmed) | **Reading 2 PASSED** — fixed pilot authorized at the declared N=10 floor (2·T·R≥10T at T=1, R=5, inside the ≤60 ceiling), same frozen set (tasks/splits/policies/caps/oracle/detectors/analysis/stops); the activation result (`hh-activation/1`, disposition executed, 7/7 legs verified) was reviewed before this reading. Backfill note 2026-11-04 (CAP5.1 finding): the decision was recorded PHASE-LOG-only at decision time; appended verbatim now — the earlier row's 'Reading 2 PENDING' is history, not state. | decision |
 | 2026-11-04T20:36:18Z | GATE-G15 | timestamp correction | — | — | Correction (CAP5.1 finding): the G15 decision row's decided_at/interactive stamp reads 14:32:56Z; the verbatim record is 2026-11-04T14:32:29Z — readouts/GATE-G15.md operator-words line, six packets' `gate_readout.decided_at` (r5.50–r5.53), PHASE LOG and BUILD_INDEX all carry 14:32:29Z. This corrects the timestamp record, not the decision. | correction |
+| 2026-11-05T00:13:07Z | GATE-G17 | fresh round-5 acceptance (GATE-ACCEPT role) | disposition | "passed, continue" (operator verbatim, interactive, 2026-11-05T00:13:07Z — recorded in readouts/GATE-G17.md; agent-drafted block sha256 b6cebed58691 confirmed) | **PASSED** — acceptance on the honest record: engineering executed / research inconclusive / portability·public·adoption withheld / `build_status: not_done`. DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 **carry forward OPEN** (no waiver named; owner/trigger each intact — never inferred completion); S3/S4 unmet retained; Q-7 open; no merge/publication permission beyond explicit words (mergePolicy OPERATOR stands). next → seq 242 | decision |
 
 ## RETURN PASS
 
@@ -1205,3 +1206,8 @@ updatedAt:        2026-11-04T21:24:00Z
 - 2026-11-04T20:54:36Z · **CAP5.2 size ruling** — worker stopped correctly at the ≤700 line trigger (measured 884 changed source/test lines: 841 numstat under `crates/` + ~43 docs/build tooling/fixtures, ~1.26×). Scoped fresh-context review verdict: **AMEND** — seq 239 one owner row; conjunctive `hh-cap5-composed/1` packet (`packet_id` minted last over the whole canonical record); impl-vs-battery the R5.32-rejected mid-predicate cut (battery compile-red standalone); in-run guard repair F-1/F-2 contract-bound and non-curative; L150 weak seams exhausted. Accepted as recorded Deviation; dated note on `239_CAP5.2__cap2.md`; review record `planning/2026-11-04_CAP5.2-split-review.md`; `runs/CAP5.2.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
 
 - 2026-11-04 — CAP5.2 done — branch `codex/harnessharness-evidence-cap5.2` · PR #272 · base `codex/harnessharness-evidence-cap5.1` (@a5bf3176). Composed execution/methods/recipient verification: `hh-cap5-composed/1` driver (`hharness/src/composed.rs`) runs the four committed example cards through `run_example` on fresh scratch stores → eight-stage AC-1 fold → sixteen residual legs records-in verbatim + homes resolved → permitted `podman --version` probe → `packet_id` minted last. Emitted `reports/2026-11-04-cap5.2-composed.json` disposition=executed — stages 8/8, counts {4 cards · 23 pass · 7 expected_refusal · 0 fail · 20 subjects · 2 receipts}, 16/16 residuals recorded + homes resolved, `live_authorization: pending{not_claimed}`, USD 0; `reports/round5/COMPOSED_E2E_REPORT.md`. In-run guard repair F-1/F-2 (`correction` rows never index as gate decisions — G15 PASSED unmasked; `correction-mask` fixture; 14/14). Post-PR readers-gate repair (first #272 read RED — 10 real docs/ reads, this ticket's): `RecordsIn` root + byte-identical fixtures `tests/fixtures/cap5_2/`; packet identical modulo probe timestamp. **Verify:** cap5_2 7/7 · hharness 0 failures · fmt clean · check-ci-gating OK · guard PASS DISPATCH CAP5.2 (82 rows/180 cand/0 viol) · bm `.`+`--staged` 0 viol · bm-tools OK · fails-without compile-red at a5bf3176 · **Deferrals:** none opened — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** 884 changed source/test lines vs ≤700 (~1.26×) at 75a39019 → ~1,000 (~1.43×) post-CI-repair — AMEND ruling `4e677760` (seq 239 one owner row; conjunctive packet; impl-vs-battery R5.32-rejected; recorded Deviation) · chainTip → codex/harnessharness-evidence-cap5.2 · next → CAP5.3 · ci: pass #272@f06fe1b (4 checks, run 41913118485; stack #271…#260 pass; logs/ci-cap5.2.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-04T21:34Z · **CAP5.3 fleshed — capstone contract bound to concrete checks** (no gate needed — records-in capstone; offline-only live stage): contract 240 appended dated note — ten records-in checks CL-1…CL-10 (matrix recompute engineering-closed vs requirement-satisfied + highest domain ceiling; five-layer fold engineering/research/portability/public/adoption from committed packet dispositions; per-ID evidence citations; unique owed-work homes; CAP5.1 finding reconciliation + LEDGER OPEN FINDINGS adjudication; withheld-never-promoted + no-old-signature negative scans; three-part signature list; build-never-DONE guard; GATE-G17 acceptance prep); manifest row-240 note; REQ anchors unmoved (REQ-C-005/REQ-H-009 primary). Guard `PASS route DISPATCH — CAP5.3` (counts 82 rows / 180 candidates / 0 viol / 8 scoped warnings). · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-04 — CAP5.3 done — branch `codex/harnessharness-evidence-cap5.3` · PR #273 · base `codex/harnessharness-evidence-cap5.2` (@2909edce). Close layers and prepare fresh acceptance: `cap5_closure.py` records-in checker (`hh-cap5-closure/1`, CL-1…CL-10) — five-layer fold from committed dispositions: engineering executed (composed 8/8 stages; activation+ops-live executed; 0 MISSING/AT-RISK), research inconclusive (study reported; `unmet{efficacy_unavailable;parity_withheld}` + s1/s3/s4 unmet verbatim), portability/public/adoption withheld. Totals: eng-closed 107 / req-satisfied 78 / ceiling `engineered` (180 rows: MET 78 / MET-ENGINEERED 29 / PARTIAL 73). Owed legs each one resolved home (DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 + GATE-G17); 52 accepted deviations w/ controls (49 rulings + DF-S0.3-3 + ADR-0226 + CC4 nit adjudicated no-action-accepted) · 7 scoped owed legs · 3 waiver requests; CAP5.1 F-1…F-4 verified; `reports/round5/CAPSTONE_CLOSURE.md` + packet `2026-11-04-cap5.3-closure.json`; contract fleshed (dated note + manifest 240 note). **Verify:** checker 10/10 · guard PASS DISPATCH CAP5.3 pre+post (82 rows/180 cand/0 viol) · fmt clean · living-docs 456 OK · bm-tools OK · ci-gating OK · bm `.`+`--staged` 0 viol · 572 ≤600 · fails-without by construction. **Deferrals:** none opened/closed — carried DF-R5.1-1, DF-H9-1, DF-CAP5.1-1 · **Deviations:** none · chainTip → codex/harnessharness-evidence-cap5.3 · next → GATE-G17 · ci: pass #273@20bdd7d (4 checks, run 41918289769; logs/ci-cap5.3.json) · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-05T00:13:07Z · **GATE-G17 PASSED — acceptance on the honest record** — operator words verbatim "passed, continue" (interactive, 2026-11-05T00:13:07Z); the round-5 record accepted as-landed (engineering executed; research inconclusive; portability/public/adoption withheld; not_done). DF-R5.1-1/DF-H9-1/DF-CAP5.1-1 **carry forward OPEN** — no waiver named. S3/S4 unmet retained; Q-7 open; mergePolicy OPERATOR stands. `nextTicket → seq 242` (REC5.1). · harness: devin-desktop/swe-2-high/subagent.
+
