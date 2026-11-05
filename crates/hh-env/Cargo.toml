@@ -86,6 +86,12 @@ hharness-bench = { path = "../hh-bench" }
 # R5.43: the `TaskRecord` the `OracleRunner` attempt spec carries —
 # lab records only, dev-only, no cycle (lab never reaches env).
 hharness-lab = { path = "../hh-lab" }
+# R5.50 (tests/r5_50.rs): the unselected plugin packet's
+# `manifest_decl`/`refusal_vocabulary` legs drive the real
+# `admit_plugin` over the corpus store — `AdmissionContext.now` is
+# an `EvalPoint` owned here. Dev-deps do not ship and plugin never
+# reaches env (no cycle — hh-plugin is a leaf contract crate).
+hharness-plugin = { path = "../hh-plugin" }
 
 # L4.5 / ADR-0380 (d): docs.rs renders every tier-gated API.
 [package.metadata.docs.rs]

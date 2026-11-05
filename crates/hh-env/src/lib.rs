@@ -36,6 +36,7 @@ pub mod ops;
 pub mod opslive;
 pub mod parity;
 pub mod pilot;
+pub mod plugin;
 pub mod preflight;
 pub mod protocol;
 pub mod provider;

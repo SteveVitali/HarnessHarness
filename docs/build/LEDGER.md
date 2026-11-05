@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.50
-lastCompleted:   R5.49
+nextTicket:      R5.51
+lastCompleted:   R5.50
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-r5.49
+chainTip:         codex/harnessharness-evidence-r5.50
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-04T09:56:00Z
+updatedAt:        2026-11-04T15:20:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1165,3 +1165,7 @@ updatedAt:        2026-11-04T09:56:00Z
 - 2026-11-04T13:00:31Z · **HUMAN-H9 WITHHELD — DF-H9-1** — operator words verbatim "continue" (interactive, 2026-11-04T13:00:31Z); no formative participation materials supplied → the row stays OPEN with all participant/outreach claims withheld (DEFERRALS rule). **DF-H9-1**: owner = Steven Vitali (@SteveVitali); trigger = actual named reviewer/participants + consent/scope/access/resources supplied; compensating control = every checklist predicate withheld — no outreach, no participant/participant-adjacent claim; dependent gates (G15+) stay blocked on the row itself, never on the deferral. `projectStatus → IN_PROGRESS`, `blockedOn → none`, `nextTicket → seq 228`. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-04T13:01:19Z · **GATE-G15 BLOCKED on DF-H9-1** — the participation gate's every input (cleared recipient + participant procedures) sits inside the withheld HUMAN-H9 set; the DEFERRALS rule bars silently passing an OPEN scoped deferral. Readout seeded `docs/build/readouts/GATE-G15.md` as BLOCKED (not passed, not skipped). `nextTicket → GATE-G15`, `blockedOn → DF-H9-1`. Independent rows (capstones/REC/DOC — no gate dependency) may proceed under the recorded deferral; participant-gated rows (229–237) stay blocked. · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-04T14:42Z · **R5.50 fleshed — skeleton → ticket (unselected{stage_voided} disposition)** under GATE-G15 PASSED — out-of-scope disposition (readouts/GATE-G15.md; operator verbatim "accept, continue" 2026-11-04T14:32:29Z; block sha256 `0e5bd136858c` confirmed; GATE DECISIONS row present verbatim): contract 229 rewritten — Run line, unselected scope (the skeleton's "otherwise" arm binds: the participation stage is voided this round — the `hh-compact-evict-oldest` package is NOT selected and there is no walkthrough to execute; DF-H9-1 stays open, every participant/outreach predicate withheld), `hh-plugin-unselected/1` packet legs `gate_readout|pins_frozen|manifest_decl|refusal_vocabulary|walkthrough_absent|claims_withheld`, ten pins (nine H8 artifacts + committed manifest template `80eeabb8…`), numbered ACs bound to the unselected scope (AC-1 anchor unmoved); manifest row 229 skeleton → ticket. · harness: devin-desktop/swe-2-high/subagent.
+- 2026-11-04T14:52:24Z · **R5.50 size ruling** — worker stopped correctly at the ≤750 line trigger (measured 1,286 numstat under `crates/`, ~1.71×). Scoped fresh-context review verdict: **AMEND** — seq 229 one owner row; conjunctive `hh-plugin-unselected/1` packet; impl-vs-battery rejected; all cuts non-curative. Accepted as recorded Deviation; dated note on `229_R5.50__plugin.md`; manifest row-229 note; review record `planning/2026-11-04_R5.50-split-review.md`; `runs/R5.50.md` ruling. Worker resumes to close — deviation conspicuous in PHASE LOG/BUILD_INDEX/PR. · harness: devin-desktop/swe-2-high/subagent.
+
+- 2026-11-04T15:20Z · R5.50 done — branch codex/harnessharness-evidence-r5.50 · PR #265 · base codex/harnessharness-evidence-r5.49 · GATE-G15 PASSED — out-of-scope disposition ("accept, continue" 2026-11-04T14:32:29Z; block sha256 0e5bd136858c): `hh-plugin-unselected/1` unselected{stage_voided} record — records-in evaluators over supplied facts only; closed six-member LEGS; unselected|failed|inconclusive fold; assemble() refuses partials, packet_id minted last. Emitted reports/2026-11-04-r5.50-plugin-unselected.json disposition=unselected admission=unselected_stage_voided — gate verbatim, ten pins byte-verified, committed template decoded + admit_plugin honest ContractIncompatible (declared "1.0" vs supported ["1"]; dialect:hir/1 offered 1.0 vs supported [1] verbatim, never an admitted relabel), seven mutated decls → verbatim refusal spellings, seventeen walkthrough members 0, selection/reseal never attempted, df_h9_1:open claim_awarded:false — I-08, USD $0.00. **Verify:** r5_50 5/5 · hharness-env all suites 0 failures · fmt OK · fails-without compile-red at bc18d372 · guard PASS DISPATCH R5.50 post-boundary · bm 0 viol (. + --staged) · bm-tools OK · pass-2: admit_detail byte-asserted (packet byte-identical). **Deferrals:** none — carried DF-R5.1-1; DF-H9-1 stays open. **ADRs:** (none) · **Deviations:** 1,286 vs ≤750 (~1.71×) → 1,297 net post pass-2 repair (~1.73×) — AMEND ruling 85a973fc · chainTip → codex/harnessharness-evidence-r5.50 · next → R5.51 · ci: pass #265@8496579 all 4 checks (run 41853280970); stack #264/#263/#262/#261/#260 pass — logs/ci-r5.50.json · layer: engineered · harness: devin-desktop/swe-2-high/subagent.
