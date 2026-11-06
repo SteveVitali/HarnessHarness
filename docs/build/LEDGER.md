@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.56
-lastCompleted:   DOC5.2
+nextTicket:      R5.57
+lastCompleted:   R5.56
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-s4-completion-manifest
+chainTip:         codex/harnessharness-r5.56
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-06T16:50:00Z
+updatedAt:        2026-11-06T17:18:19Z
 ```
 
 ## OPEN FINDINGS
@@ -1255,3 +1255,4 @@ updatedAt:        2026-11-06T16:50:00Z
   parity/S4 records land via `codex/harnessharness-evidence-s3-s4` (PR #283 — merge before or
   alongside). Guard `tail-roles` repaired on this branch (OPEN FINDING). · harness:
   devin-desktop/swe-2-high/subagent.
+- 2026-11-06T17:18Z · R5.56 done — branch `codex/harnessharness-r5.56` · PR #285 · base `main` @`e703e2a0` (merged s4-completion tip — #284 landed; stacked-chain rule → base main; S4-egress records land via open #283). Admitted the scoped `bridge`-network cell profile as a first-class `PodmanBackend` variant (ADR-0421): `hh-helper --network <none|bridge>` + `S4_HELPER_NETWORK` (flag wins; unknown → usage 2) → `podman create --network bridge|none` (`create_args()` extracted); `start_helper` derives the flag from the attached policy (`egress_profile::podman_helper_args`: `net.mode=public` ⇒ bridge; `none`/`mediated` byte-identical, never widened); `admit_declared_deps` — transactional `declared_deps` admission (deps + owned/closed `host_bridge` residual + `local_container`, else typed `Unsupported`; validate() consulted — `PublicWithoutResidual`/`PublicBelowPrincipal` still fire — then verbatim `egress_profile`/`cell_network`/`policy_net_mode`/`declared_deps` ext stamps, the supplement's spellings); scratch `/tmp/s4-helper-egress` superseded. **Verify:** hh-helper r5_56 7/7 (binary + podman stub) + podman unit leg · hh-env r5_56 7/7 · all hh-env batteries 0 failures (helper_live 15/15, r5_44 4/4; one environmental flake — r5_42a stale `hh-env-pf-probe-*` name collision, `podman rm -f` → re-ran 10/10, recorded verbatim) · fmt clean · scoped clippy clean (`--all-targets` errors pre-existing at base — stash-verified) · tier-off helper build green + rebuilt · BL-47 += ADR-0421, adr-index/triggers regenerated (205) · guard **PASS DISPATCH — R5.56** pre+post · bm `.`/`--staged` 0 viol (8 warn) · bm-tools OK. **Deferrals:** none opened/closed — carried DF-H9-1 OPEN (disposition lands via #283). **Deviations:** none (~600 lines vs ≤900). **AC-1..5:** met (R-2.8.4 contributing-only; REQ-D-101/102/103 + REQ-E-011 owed to R5.58/R5.59). chainTip → codex/harnessharness-r5.56 · next → R5.57 · ci: pending #285 · layer: engineered · harness: devin-desktop/swe-2-high/subagent
