@@ -41,8 +41,12 @@ const DOMAIN: &str = "publication_withheld";
 /// The gate whose out-of-scope decision this packet records.
 pub const GATE: &str = "GATE-G16";
 
-/// The committed study report's honest status, carried verbatim —
+/// The pinned study report's honest status, carried verbatim —
 /// never inflated (REQ-G-209: adverse results/corrections retained).
+/// The pin is the frozen dated `2026-11-04-r5.49-study-report.json`
+/// record — the status the withheld packet carried at GATE-G16.
+/// The study's later recompute lands as a new dated record; this
+/// const names the pinned one, never the latest.
 pub const STUDY_STATUS: &str = "unmet{efficacy_unavailable;parity_withheld}";
 
 /// The seven legs (frozen vocabulary — the withheld scope).
@@ -147,7 +151,7 @@ pub const EXPECTED_STUDY_DISPOSITIONS: &str = "reported,failed,inconclusive";
 /// the adverse `task_truth:failed{s1_useful}` and the unavailable
 /// families retained as-is (REQ-D-009/AC-3-2; REQ-G-209 adverse
 /// retention).
-pub const EXPECTED_STUDY_FAMILIES: &str = "efficacy:unavailable{confirmation_tranche_absent},task_mixture:descriptive{pilot_recomputed},sharp_null:unavailable{confirmation_tranche_absent},parity:withheld{n_declared:0},mechanism:executed{activation,pilot},engineering:executed{ops_live;backend_verified},task_truth:failed{s1_useful},operations:executed{ops_live},adoption:unavailable{not_started}";
+pub const EXPECTED_STUDY_FAMILIES: &str = "efficacy:unavailable{partial},task_mixture:descriptive{pilot_recomputed},sharp_null:unavailable{partial},parity:executed{verified_30_30},mechanism:executed{activation,pilot},engineering:executed{ops_live;backend_verified},task_truth:failed{s1_useful},operations:executed{ops_live},adoption:unavailable{not_started}";
 /// The landed rights correction/supersession/freshness record
 /// schemas, verbatim (`hh-bundle::rights`) — REQ-G-202's
 /// version/loss/correction spine and REQ-G-209's

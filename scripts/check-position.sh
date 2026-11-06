@@ -290,9 +290,11 @@ if ev:
     if not un:
         fail("unmet", "no <!-- unmet:begin --> partial-release clause")
     else:
-        for tok in ("S1", "S3", "unmet"):
+        for tok in ("S1", "S3"):
             if tok not in un:
                 fail("unmet", f"partial-release clause missing {tok!r}")
+        if "are **unmet**" not in un:
+            fail("unmet", "partial-release clause lost the 'are **unmet**' claim")
         if "substitut" not in un and "never" not in un:
             fail("unmet", "partial-release clause does not forbid fixture substitution")
         ok("unmet", "S1/S3 unmet objectives preserved in the partial release")

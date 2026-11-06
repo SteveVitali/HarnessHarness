@@ -1,11 +1,17 @@
-//! R5.49 — `hh-study-report/1`: the admitted-study recompute report
-//! (GATE-G14 PASSED — **quote-only confirmation**). The report
-//! recomputes the admitted results from the nine committed packets —
-//! refolded dispositions, re-derived §4.2 denominators, nearest-rank
-//! tails, the §3.2 missingness bound, envelope maxima and freeze/
-//! `protocol_id` identities — asserting byte/consistency equality,
-//! never re-picking or fabricating. No confirmation evidence exists
-//! to report: the efficacy/sharp-null families stay `unavailable`.
+//! R5.49 — `hh-study-report/1`: the admitted-study recompute report,
+//! recomputed 2026-11-06 over the executed evidence (GATE-G13's
+//! `N=0 declared` and GATE-G14's **quote-only confirmation** records
+//! stand as committed history). The report recomputes the admitted
+//! results from the committed packets — refolded dispositions,
+//! re-derived §4.2 denominators, nearest-rank tails, the §3.2
+//! missingness bound, envelope maxima and freeze/`protocol_id`
+//! identities — asserting byte/consistency equality, never
+//! re-picking or fabricating. The parity tranche verified 30/30
+//! directional agreement (`hh-parity-tranche-report/1`); the
+//! confirmation cohort executed `partial` — 160/300 frozen-run
+//! receipts + 90/140 egress-supplement receipts = 250/300, the 50
+//! inconclusive slots verbatim. The efficacy/sharp-null families
+//! stay `unavailable` — a partial cohort is no contrast.
 //! Fails-without: the `study` module and this battery do not exist
 //! at base `b1a8644d` (compile-red evidence).
 //!
@@ -578,12 +584,23 @@ fn pilot_facts() -> PilotFacts {
     }
 }
 
+/// The executed cohort's frozen `protocol_id` — the real
+/// manifest's id, byte-equal across the parity tranche and both
+/// confirmation packets (verbatim supplied member).
+const COHORT_PROTOCOL_ID: &str = "9edc5327f89e2d66f8003bedc2530bc3e7d37326aad82cdfcab70465eda60a5f";
+
 fn parity_facts() -> ParityStageFacts {
     ParityStageFacts {
         echo: parity_echo(),
-        n_declared: 0,
-        s3_unmet: true,
-        confirmation_blocked: true,
+        tranche_version: "hh-parity-tranche-report/1".into(),
+        tranche_verdict: "verified".into(),
+        n_pairs: 30,
+        agree: 30,
+        discordant: 0,
+        protocol_id: COHORT_PROTOCOL_ID.into(),
+        n_declared: 30,
+        s3_unmet: false,
+        confirmation_blocked: false,
         gate: "GATE-G13".into(),
     }
 }
@@ -591,10 +608,27 @@ fn parity_facts() -> ParityStageFacts {
 fn confirm_facts() -> ConfirmStageFacts {
     ConfirmStageFacts {
         echo: confirm_echo(),
-        subjects_first: 0,
-        tranche_absent: true,
-        parity_absent: true,
-        confirmation_blocked: true,
+        confirm_version: "hh-s4-confirmation/1".into(),
+        confirm_verdict: "partial".into(),
+        planned: 300,
+        executed: 160,
+        inconclusive: 140,
+        failed: 0,
+        first_executed: 32,
+        first_total: 60,
+        supplement_version: "hh-s4-egress-supplement/1".into(),
+        supplement_verdict: "partial".into(),
+        sup_planned: 140,
+        sup_executed: 90,
+        sup_inconclusive: 50,
+        sup_first_executed: 18,
+        sup_first_total: 28,
+        parity_protocol_id: COHORT_PROTOCOL_ID.into(),
+        protocol_id: COHORT_PROTOCOL_ID.into(),
+        subjects_first: 50,
+        tranche_absent: false,
+        parity_absent: false,
+        confirmation_blocked: false,
         s4_unmet: true,
         gate: "GATE-G14".into(),
     }
@@ -602,10 +636,10 @@ fn confirm_facts() -> ConfirmStageFacts {
 
 fn family_facts() -> FamilyFacts {
     FamilyFacts {
-        efficacy: "unavailable{confirmation_tranche_absent}".into(),
+        efficacy: "unavailable{partial}".into(),
         task_mixture: "descriptive{pilot_recomputed}".into(),
-        sharp_null: "unavailable{confirmation_tranche_absent}".into(),
-        parity: "withheld{n_declared:0}".into(),
+        sharp_null: "unavailable{partial}".into(),
+        parity: "executed{verified_30_30}".into(),
         mechanism: "executed{activation,pilot}".into(),
         engineering: "executed{ops_live;backend_verified}".into(),
         task_truth: "failed{s1_useful}".into(),
@@ -627,12 +661,15 @@ fn cost_facts() -> CostFacts {
             "hh-pilot/1",
             "hh-parity-n0/1",
             "hh-confirm-withheld/1",
+            "hh-parity-tranche-report/1",
+            "hh-s4-confirmation/1",
+            "hh-s4-egress-supplement/1",
         ]
         .iter()
         .map(|p| (p.to_string(), 0))
         .collect(),
         subjects_first: 12,
-        gated_subjects: 0,
+        gated_subjects: 80,
     }
 }
 
@@ -750,23 +787,32 @@ fn run_packet() -> Vec<Leg> {
             "parity",
             evaluate_parity_stage(&pa),
             &[
-                ("disposition", s(&pa.echo.disposition)),
+                ("withheld_record", s(&pa.echo.disposition)),
+                ("disposition", s(&pa.tranche_verdict)),
                 ("n_declared", s(pa.n_declared)),
+                ("pairs", s(format!("{}/{}", pa.agree, pa.n_pairs))),
+                ("discordant", s(pa.discordant)),
                 ("s3_unmet", s(pa.s3_unmet)),
                 ("confirmation_blocked", s(pa.confirmation_blocked)),
-                ("status", s("withheld{n_declared:0}")),
+                ("status", s("verified{30_30}")),
             ],
         ),
         leg(
             "confirmation",
             evaluate_confirm_stage(&c),
             &[
-                ("disposition", s(&c.echo.disposition)),
+                ("withheld_record", s(&c.echo.disposition)),
+                ("disposition", s(&c.confirm_verdict)),
+                (
+                    "slots",
+                    s(format!("{}/{}", c.executed + c.sup_executed, c.planned)),
+                ),
+                ("inconclusive", s(c.sup_inconclusive)),
                 ("subjects_first", s(c.subjects_first)),
                 ("tranche_absent", s(c.tranche_absent)),
                 ("parity_absent", s(c.parity_absent)),
                 ("s4_unmet", s(c.s4_unmet)),
-                ("status", s("withheld{tranche_absent}")),
+                ("status", s("partial{250_300}")),
             ],
         ),
         leg(
@@ -979,15 +1025,38 @@ fn p49_activation_pilot_recompute() {
 }
 
 #[test]
-fn p49_parity_confirm_withheld() {
+fn p49_parity_confirm_executed() {
+    // The withheld records still refold `withheld` (committed
+    // history); the executed cohort's members re-verify — parity
+    // `verified` at 30/30, confirmation `partial` at 250/300.
     assert_eq!(evaluate_parity_stage(&parity_facts()), LegVerdict::Verified);
+    // A discordance, an inflated/deflated N, a non-verified verdict
+    // spelling or a retained upstream block refuses — never
+    // relabelled.
     for f in [
         ParityStageFacts {
-            n_declared: 30,
+            discordant: 1,
             ..parity_facts()
         },
         ParityStageFacts {
-            confirmation_blocked: false,
+            tranche_verdict: "infeasible{margin}".into(),
+            ..parity_facts()
+        },
+        ParityStageFacts {
+            n_declared: 0,
+            ..parity_facts()
+        },
+        ParityStageFacts {
+            n_pairs: 29,
+            agree: 29,
+            ..parity_facts()
+        },
+        ParityStageFacts {
+            s3_unmet: true,
+            ..parity_facts()
+        },
+        ParityStageFacts {
+            confirmation_blocked: true,
             ..parity_facts()
         },
         ParityStageFacts {
@@ -995,28 +1064,79 @@ fn p49_parity_confirm_withheld() {
             ..parity_facts()
         },
     ] {
-        assert!(matches!(evaluate_parity_stage(&f), LegVerdict::Refused(_)));
+        assert!(
+            matches!(evaluate_parity_stage(&f), LegVerdict::Refused(_)),
+            "{f:?}"
+        );
     }
+    let mut f = parity_facts();
+    f.protocol_id.clear();
+    assert!(matches!(
+        evaluate_parity_stage(&f),
+        LegVerdict::Inconclusive(_)
+    ));
     assert_eq!(
         evaluate_confirm_stage(&confirm_facts()),
         LegVerdict::Verified
     );
+    // Dispositions that fail to re-add, a supplement wider than the
+    // prior-inconclusive set, a full/zero cohort spelt `partial`, a
+    // first-subject count that doesn't re-add, a drifted protocol
+    // id, a dropped S4 bound or a retained upstream block refuses.
     for f in [
         ConfirmStageFacts {
-            subjects_first: 1,
+            executed: 159,
             ..confirm_facts()
         },
         ConfirmStageFacts {
-            tranche_absent: false,
+            sup_planned: 141,
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            sup_executed: 50,
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            executed: 300,
+            inconclusive: 0,
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            subjects_first: 51,
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            parity_protocol_id: "0".repeat(64),
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            sup_inconclusive: 0,
             ..confirm_facts()
         },
         ConfirmStageFacts {
             s4_unmet: false,
             ..confirm_facts()
         },
+        ConfirmStageFacts {
+            tranche_absent: true,
+            ..confirm_facts()
+        },
+        ConfirmStageFacts {
+            planned: 299,
+            ..confirm_facts()
+        },
     ] {
-        assert!(matches!(evaluate_confirm_stage(&f), LegVerdict::Refused(_)));
+        assert!(
+            matches!(evaluate_confirm_stage(&f), LegVerdict::Refused(_)),
+            "{f:?}"
+        );
     }
+    let mut f = confirm_facts();
+    f.protocol_id.clear();
+    assert!(matches!(
+        evaluate_confirm_stage(&f),
+        LegVerdict::Inconclusive(_)
+    ));
 }
 
 #[test]
@@ -1156,8 +1276,10 @@ fn p49_packet_reported_honest() {
     assert_eq!(report.version, VERSION);
     assert_eq!(report.subjects_first, 12);
     assert_eq!(report.exposure_micros, 0);
-    assert!(report.s1_unmet && report.s3_unmet && report.s4_unmet);
-    assert_eq!(report.study, "unmet{efficacy_unavailable;parity_withheld}");
+    // S3 met (parity verified 30/30); S1 and S4 stay unmet (the S1
+    // packet is `failed`, the confirmation cohort is `partial`).
+    assert!(report.s1_unmet && !report.s3_unmet && report.s4_unmet);
+    assert_eq!(report.study, "unmet{efficacy_unavailable;s4_partial}");
     assert_eq!(report.admission, "recompute_only");
     assert_eq!(report.disposition, Disposition::Reported);
     let j = report.to_json().to_canonical_string();
