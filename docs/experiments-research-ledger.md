@@ -19,7 +19,7 @@ whose state it never writes.
 ```text
 projectStatus:   IN_PROGRESS
 nextUnit:        B2
-lastCompleted:   D2
+lastCompleted:   C2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:22:29Z
+updatedAt:       2026-11-06T23:25:44Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -97,7 +97,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | C1 | **Ollama Cloud and `glm-5.3-flash` ground truth.** Endpoints (OpenAI chat, Anthropic messages), tool calling, seed/temperature/determinism, served-model identity/fingerprinting, prompt caching per endpoint, concurrency and rate limits, usage/balance endpoints and their latency, spend-cap controls, retirement risk, off-peak pricing; implications for receipts and budget enforcement. Free metadata endpoints (`GET /api/tags`, `/api/show`, `/api/balance`) allowed with the operator's key read from `~/MetaHarness-harnessharness/.env` — never printed, never recorded; no inference. Reqs `REQ-XC-001…`. | R | done | [26_ollama-glm.md](research/26_ollama-glm.md) |
-| C2 | **Model-call mediation proxy (adapter B made real).** An HH-gateway-backed OpenAI-chat + Anthropic-messages endpoint reachable only from cells; per-slot budget enforcement through `hh-budget` `Account`; verbatim model-call receipts; model identity records; spend reconciliation with Ollama `/api/usage`; a `model_proxy` egress profile; the `evaluate_costs` $0-rule amendment and the slot-record fields paid runs need. Depends C1. Reqs `REQ-XC-101…`. | A | in-progress | → `design/33_model-mediation.md` |
+| C2 | **Model-call mediation proxy (adapter B made real).** An HH-gateway-backed OpenAI-chat + Anthropic-messages endpoint reachable only from cells; per-slot budget enforcement through `hh-budget` `Account`; verbatim model-call receipts; model identity records; spend reconciliation with Ollama `/api/usage`; a `model_proxy` egress profile; the `evaluate_costs` $0-rule amendment and the slot-record fields paid runs need. Depends C1. Reqs `REQ-XC-101…`. | A | done | [33_model-mediation.md](design/33_model-mediation.md) |
 | C3 | **Harness survey and admission criteria.** Candidates from the HF harness leaderboard, Harbor's agent list and Ollama's integration list (and others found): license/ToS (incl. automated benchmarking of Claude Code), headless mode, pinned versions, Harbor adapter, base-URL support for Ollama's OpenAI/Anthropic endpoints, caching dependence, install reproducibility, trajectory export, known issues; a pilot shortlist with expected $/trial. Reqs `REQ-XC-201…`. | R | done | [27_harness-survey.md](research/27_harness-survey.md) |
 | C4 | **Harness hosting (adapter C made real).** Installing a pinned harness into the HH cell (reuse of Harbor's install templates vs own), offline-buildable images, configuration through the model proxy, trajectory capture, and the per-harness runner check (HH cell vs Harbor). Depends B2, C2, C3. Reqs `REQ-XC-301…`. | A | open | → `design/34_harness-hosting.md` |
 
@@ -183,6 +183,8 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X32 | ADR admitting each task's declared agent/verifier timeouts above HH's 900 s cap | "Yes, per-task declared (Recommended)" | B2, H1 |
 | Q-X33 | Card text after phase 1: whether the useful-task card changes once S1 is re-folded, and the operations card's reason text (A2 Q-A2-1, Q-A2-2) | | ratification (A2 recommendations stand until then) |
 | Q-X34 | Phase-3 L2 parity margin: is ε = ±.15 (≈300 pairs) or ±.20 (≈150 pairs) an acceptable parity claim, fixed at a gate after the pilot quote? (D2 F12, precision table at power ≥ .85) | | parity-margin gate (D2 recommends; presented with the pilot quote) |
+| Q-X35 | Raw model-call receipt archive (~10 MB/trial; too large for git under the build-memory size caps): where the bytes live (local operator disk with committed sha256 index, a GCS bucket, GitHub release assets, a Hugging Face dataset) and retention — interacts with publishing trajectories on the site (F1 open question on contamination) | | F2, H1; raise before the pilot gate |
+| Q-X36 | Settlement reserve: withhold 10% of each authorized phase cap from the proxy's hard cap until the first reconciliation with Ollama `/api/usage` (C2 recommendation) | | ratification |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -196,3 +198,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:20:00Z — Accepted A2 (`design/30`, 14 findings, REQ-XA-101…127). Coordinator spot-check of A2's new HH-cell × `tb` cross-check: discordances `swe-bench-langcodes` and `grid-pattern-transform` (tb resolved, HH cells unresolved on both first slots) CONFIRMED from the committed packets; denominator differs (coordinator: 17 tasks/15 agree using the confirmation packet's `first` slots with resolved/unresolved receipts; A2: 16/14) — the exact slot-inclusion rule is an implementation-ticket acceptance item and an O2 review item. A2 recommendations recorded against Q-X24 (records-in for phase 1; optional gated phase 1b) and Q-X25 (dated deviation record + retroactive ADR); new pending Q-X33.
 - 2026-11-06T23:20:37Z — Assignment: D1 → `design/35_comparative-method.md` (dependencies B1, C1, C3 accepted; inputs research/24–27, supplement §3/§4.1/§4.3/§4.5, analysis/eval code; local no-network simulations allowed).
 - 2026-11-06T23:22:29Z — Accepted D2 (`design/36`, 16 findings, REQ-XD-101…126; precision table defined as ε reachable at power ≥ .85 — consistent with the coordinator's expected-half-width check, e.g. N=150, q≈.12 → expected half-width ≈.143). D2 resolves a C1/E1 conflict in E1's favour (mini-swe-agent v2.4.6 uses native tool calls, so Ollama's tool parser is in its loop) — carried to H1 and O1 as a cross-note ruling. D2's original-harness-only pilot (~48 trials) is folded into D1's pilot gate, not a separate authorization. New pending Q-X34.
+- 2026-11-06T23:25:44Z — Accepted C2 (`design/33`, 17 findings, REQ-XC-101…125 refining C1's IDs without contradiction; proxy in `hharness-hosting` as a separately-spawned binary; cells reach it over a bind-mounted unix socket + std-only in-cell relay, no new dependency; five ADRs named). Coordinator sent B2 (running) C2's topology to reconcile with Q-X30's registry allowlist; B2 owns the profile composition. C2 recommendations recorded against Q-X22 (`high`) and Q-X21; new pending Q-X35, Q-X36.
