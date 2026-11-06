@@ -858,14 +858,18 @@ impl EnvDriver {
                     .map_err(|e| EnvError::Blob(format!("container workspace: {e}")))?;
                 (
                     "podman".to_string(),
-                    vec![
-                        "--container".to_string(),
-                        container.clone(),
-                        "--image".to_string(),
-                        image,
-                        "--workspace".to_string(),
-                        ws,
-                    ],
+                    // The helper's podman network derives from the
+                    // attached containment policy (R5.56; ADR-0421):
+                    // `net.mode = public` — the admitted `declared_deps`
+                    // egress profile — runs the cell on `--network
+                    // bridge`; `none`/`mediated` leave the flag absent,
+                    // byte-identical to the pre-variant argv.
+                    crate::egress_profile::podman_helper_args(
+                        &container,
+                        &image,
+                        &ws,
+                        h.containment.policy(),
+                    ),
                 )
             }
             _ => return Ok(()),

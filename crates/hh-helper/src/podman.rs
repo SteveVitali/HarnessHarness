@@ -94,13 +94,11 @@ impl PodmanBackend {
     /// The default image when the derivation doesn't pin one.
     pub const DEFAULT_IMAGE: &'static str = "docker.io/library/alpine:3.20";
 
-    /// `create` — the environment's container (stopped; `exec` requires a
-    /// running container, so the driver `start`s it at provision and leaves
-    /// it running for the handle's life). Network off by default;
-    /// `/work` mounts the environment workspace; a bounded pids limit;
-    /// no new privileges; seccomp is podman's default profile (ptrace,
-    /// process_vm_*, io_uring denied — the probe battery verifies).
-    pub fn create(&self) -> Result<(), BackendError> {
+    /// `create_args()` — the `podman create` argv [`Self::create`] runs.
+    /// `network` maps to `--network bridge|none` (`none` is the default
+    /// posture; `bridge` is the admitted `declared_deps` egress variant —
+    /// R5.56; ADR-0421).
+    pub fn create_args(&self) -> Vec<String> {
         let mut args = vec![
             "create".to_string(),
             "--name".to_string(),
@@ -124,7 +122,17 @@ impl PodmanBackend {
             "sleep".to_string(),
             "infinity".to_string(),
         ]);
-        run("create", &args)?;
+        args
+    }
+
+    /// `create` — the environment's container (stopped; `exec` requires a
+    /// running container, so the driver `start`s it at provision and leaves
+    /// it running for the handle's life). Network off by default;
+    /// `/work` mounts the environment workspace; a bounded pids limit;
+    /// no new privileges; seccomp is podman's default profile (ptrace,
+    /// process_vm_*, io_uring denied — the probe battery verifies).
+    pub fn create(&self) -> Result<(), BackendError> {
+        run("create", &self.create_args())?;
         Ok(())
     }
 
@@ -198,6 +206,30 @@ impl PodmanBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// AC-R5.56-1 leg (argv): `network` maps to the verbatim
+    /// `--network bridge|none` token in `create` argv; the `false`
+    /// posture is the unchanged default.
+    #[test]
+    fn create_args_map_network_verbatim() {
+        let base = PodmanBackend {
+            container: "hh-env-e1".into(),
+            image: PodmanBackend::DEFAULT_IMAGE.into(),
+            workspace: "/tmp/ws".into(),
+            network: false,
+            extra_args: vec![],
+        };
+        let args = base.create_args();
+        let pos = args.iter().position(|a| a == "--network").unwrap();
+        assert_eq!(args[pos + 1], "none");
+        let bridged = PodmanBackend {
+            network: true,
+            ..base
+        };
+        let args = bridged.create_args();
+        let pos = args.iter().position(|a| a == "--network").unwrap();
+        assert_eq!(args[pos + 1], "bridge");
+    }
 
     #[test]
     fn create_args_carry_the_boundary() {
