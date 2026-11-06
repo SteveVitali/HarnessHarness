@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_205 ADRs: 153 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_206 ADRs: 154 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -189,6 +189,7 @@ _205 ADRs: 153 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0419 | - The actual gated inputs arrive (tasks/seeds/quotas/margins/ tariffs — R5.42 quote or a later stage): re-materialize under the real decl and re-run the battery. - A `RecordKind`/event-class admission for protocol records lands: migrate `protocol_id` to the admitted kind. - `ReattemptPolicy`/`SchedulingPolicy` dialect gains members the frozen predicates must inspect (e.g. a lane/pool binding): re-validate the one-per-arm and retry-class checks. |
 | ADR-0420 | - The actual gated inputs arrive (HUMAN-H8 bindings, GATE-G18 backend, stage-gate quotes): rebuild under the real decl and re-run the battery. - A `RecordKind`/event-class admission for quote records lands: migrate `quote_id` to the admitted kind. - A §9.2 envelope amendment (new ceilings/stage vocabulary) or a second admitted precision method lands: re-scope the ceiling table or the diagnostic leg. |
 | ADR-0421 | - A second admitted network posture (a real `mediated`/proxy cell, a different podman network name, or a non-`host_bridge` residual kind) lands: re-scope the closed `--network` sum and the validator leg. - `HelperClient::spawn` gains per-cell argv plumbing: re-rule whether `S4_HELPER_NETWORK` stays admitted or the flag becomes the only channel. - The GCE backend's network spelling differs from local podman's `bridge` (R5.58's live leg): re-derive the mode↔spelling map rather than widening the sum silently. - `net.mode` gains a fourth member or `ResidualKind` a second bridge-class kind: the admission's closed mapping and the N4 leg get re-justified. |
+| ADR-0422 | - R5.58's re-run produces a verdict (or a different inconclusive shape) under the admitted bound: record it verbatim on the rows; this ADR's machinery claim stands independent of the outcome. - A second task needs a relaxed verifier bound: the admission pattern generalizes only through a new recorded admission with its own named-task scope, basis and envelope check. - The spec surface moves `max_test_timeout_sec` off `ext` or the §9.2 envelope changes: re-derive `enforced_decl_sec`'s member read and the cap const. - The run ledger's stated `60` gets a durable correction leg (e.g. a driver that enforced it): the packet's contrast section is the append-only venue — the enforced-before evidence here is not rewritten. |
 
 ## Fired-and-answered triggers (BL-48)
 
