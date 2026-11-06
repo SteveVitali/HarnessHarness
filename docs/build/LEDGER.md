@@ -16,7 +16,7 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      DONE
+nextTicket:      R5.56
 lastCompleted:   DOC5.2
 blockedOn: (none)
 pauseRequested:  false
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-evidence-df-r5-1
+chainTip:         codex/harnessharness-s4-completion-manifest
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-05T15:13:09Z
+updatedAt:        2026-11-06T16:50:00Z
 ```
 
 ## OPEN FINDINGS
@@ -112,6 +112,19 @@ updatedAt:        2026-11-05T15:13:09Z
   before reporting counts. Homed on **BL-41** (`accepted`, standing).
 
 - 2026-11-05 · **Retained guard terminal-state diagnostic (tooling gap, not a state defect).** With the 246-row manifest chain landed, `nextTicket: DONE` stands (precedent: R3.11/R4.18 round closes; the stock validator computes `want=DONE` cleanly — its 8-warning baseline unchanged). `check-supplement-guard.sh` on this terminal state reports route `HOLD — active round fully landed` but verdict FAIL on `[nextticket] nextTicket 'DONE' is not a chain row` — the tool's `check_routing` admits no DONE/terminal token and no fixture covers the completed-round state (recorded verbatim 2026-11-05, exit 1). Posture: the FAIL is a dispatch *refusal* — correct that nothing may dispatch on a DONE ledger; a future round's decompose-spec writes the new `nextTicket` before any dispatch. A guard semantic change belongs to the guard's owning admission, not a docs ticket — recorded, not patched.
+
+
+- 2026-11-06 · **Guard `tail-roles` repaired for authorized post-tail extension rows (S4-completion insert).**
+  The manifest extension appends rows 247–251 *after* the round's acceptance tail (rows 238–246), so the
+  retained guard's `active[-9:] == TAIL_KINDS` check would reject the extended manifest (the last nine
+  active rows are no longer the seed tail — `tail-roles`). Repaired on
+  `codex/harnessharness-s4-completion-manifest` (same class as the 2026-11-05 DONE-token repair):
+  `supplement_guard.py::check_chain` now requires the nine-role acceptance tail
+  (capstone×3, acceptance gate, reconcile×3, docs×2) to appear **contiguously** among the active-round
+  rows — presence, not strictly-last — preserving the §9.4 full-tail requirement while admitting
+  authorized post-tail extension rows; the acceptance-gate filename check evaluates the same window.
+  The 14-case negative fixture battery still rejects every case; the repair is machinery, not a
+  contract change. Without it the extension's own first row could never route DISPATCH.
 
 ## GATE DECISIONS
 
@@ -1224,3 +1237,21 @@ updatedAt:        2026-11-05T15:13:09Z
 - 2026-11-05T15:25:13Z · **Merge train complete — all round-5 PRs merged** — operator authorized merges ("I approve whatever is needed" + "proceed with the rest"); the open tail #278–#281 merged bottom-up to main (tip `bc42f0cd`); the earlier chain #256–#277 had already been merged by the operator. `gh pr list --state open` → 0. Entire Round-5 chain (246/246 rows + DF-CAP5.1-1 + DF-R5.1-1 discharges + the guard DONE-state repair) is on main. DF-H9-1 remains OPEN — operator confirmed no access to outside humans; the participant/outside-reviewer predicates stay honestly withheld. S3/S4 withheld (no real parity data). `mergePolicy: OPERATOR` honored — merges executed under the operator's explicit authorization. · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-05T16:04:15Z · **Residual dispositions recorded** — operator verbatim decisions (interactive): **DF-H9-1 → DONE, permanently unmet-by-decision** (no access to outside humans — the participant/outside-reviewer predicates honestly unmet, never waived or fabricated; append-only DEFERRALS row updated, `deferrals-open.sh` now shows zero OPEN rows). **S3 parity / S4 confirmation → kept withheld/open** (no real original-runner data; stay owed if data ever exists). **Q-7 → ratified** (operator verbatim "Ratify" — the carried predicates' dispositions stand). · harness: devin-desktop/swe-2-high/subagent.
 
+- 2026-11-06T16:50:00Z · **Round-5 extension manifest landed — S4-completion round** — operator verbatim
+  authorizations (operator chat, received 2026-11-06): "insert these into the build plan as new
+  ticket(s), then continue driving orchestrate-build over them to the end" + "you can provision
+  everything. just make sure we don't forget to deprovision at the end. proceed". Manifest rows
+  247–251 appended (## Plan extensions entry this date): `247_R5.56__egress-variant.md` (first-class
+  `bridge`/`declared_deps` `PodmanBackend` variant — sanctions the scratch `/tmp/s4-helper-egress`),
+  `248_R5.57__verifier-bound.md` (recorded machinery admission relaxing `swe-bench-astropy-2`'s
+  declared verifier bound), `249_R5.58__s4-completion.md` (re-execute the 50 inconclusive
+  frozen-cohort slots on the provisioned GCE backend `podman-s4-backend` /
+  `harnessharness-evidence-8d7a99`, `egress_profile: declared_deps` verbatim, fix-git stays
+  `inconclusive{upstream_deleted}`), `250_GATE-G19__efficacy-ruling.md` (STOP — efficacy-inference
+  admission ruling), `251_R5.59__efficacy-closure.md` (efficacy verdict + study recompute + mandatory
+  verbatim GCE deprovision + closure). `nextTicket → R5.56` — the DONE terminal state re-opens
+  honestly at 247 (all prior rows landed; first unlanded = R5.56). Branch
+  `codex/harnessharness-s4-completion-manifest` off `origin/main` `9f952d02` (PR to main); the cited
+  parity/S4 records land via `codex/harnessharness-evidence-s3-s4` (PR #283 — merge before or
+  alongside). Guard `tail-roles` repaired on this branch (OPEN FINDING). · harness:
+  devin-desktop/swe-2-high/subagent.

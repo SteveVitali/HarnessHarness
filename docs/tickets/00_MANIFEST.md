@@ -483,6 +483,11 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 244 | `244_REC5.3__rec3.md` | Round 5 | reconcile | Prepare integration recommendation from actual branch and CI state | — |
 | 245 | `245_DOC5.1__doc1.md` | Round 5 | docs | Refresh reader documentation from accepted evidence | — |
 | 246 | `246_DOC5.2__doc2.md` | Round 5 | docs | Refresh agent ownership and verification guidance | — |
+| 247 | `247_R5.56__egress-variant.md` | Round 5 | ticket | S4-completion extension (## Plan extensions): admit the scoped `bridge`-network cell profile as a first-class `PodmanBackend` variant — declared `declared_deps` egress admission (`cell_network: bridge`, `policy_net_mode: public` + `residual_channels[host_bridge]`); `none` stays default | — |
+| 248 | `248_R5.57__verifier-bound.md` | Round 5 | ticket | S4-completion extension (## Plan extensions): scoped machinery admission relaxing `swe-bench-astropy-2`'s declared verifier bound — recorded verbatim, never a silent bound change — so its real apt+venv+`pip install -e` bootstrap can run (10 `verifier_unavailable` slots) | — |
+| 249 | `249_R5.58__s4-completion.md` | Round 5 | ticket | S4-completion extension (## Plan extensions): re-execute the 50 inconclusive frozen-cohort slots (40 `image_unavailable:client_build_failed` + 10 `verifier_unavailable`) on the provisioned GCE podman backend, `egress_profile: declared_deps` verbatim per slot — fold the completed cohort into the S4 record; fix-git stays `inconclusive{upstream_deleted}` | — |
+| 250 | `250_GATE-G19__efficacy-ruling.md` | Round 5 | gate | S4-completion extension (## Plan extensions): rule the efficacy-inference admission — complete-cohort vs bounded-inference on the executed base (~290/300 ceiling given fix-git) | STOP |
+| 251 | `251_R5.59__efficacy-closure.md` | Round 5 | ticket | S4-completion extension (## Plan extensions): efficacy verdict + study recompute over the completed cohort + deprovision the GCE backend (mandatory tracked AC, teardown receipt) + round closure | — |
 
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
@@ -1140,3 +1145,28 @@ The original canonical source and legacy matcher/index above remain unchanged. S
 - 2026-10-30T03:05:43Z · **Round 5 extension (decompose-spec):** operator requested “Ok. Now run the decompose-spec step and continue” in the current Codex chat; append sequences 168–246, 79 rows including full tail. Baseline main/HEAD/origin main `001490c14a6568972d16a663bb04c07a4255d30d`, R4.18 complete, zero open PR/owed legacy rows. No old contract/row/signature renamed or closed. Current state becomes NOT_STARTED at GATE-G8 with RETURN PASS; lastCompleted remains R4.18. This records planning authorization only; no tooling/product implementation, live execution, publication or merge is authorized by it. [Planning ledger](../build/planning/2026-10-30_evidence-planning-ledger.md).
 
 - 2026-10-30T03:15:54Z · **Round-5 partition review closed:** [independent partition rereview](../build/planning/2026-10-30_evidence-partition-rereview.md) and [coverage/layer rereview](../build/planning/2026-10-30_evidence-coverage-rereview.md) are clean at planning scope. Repairs retain 79 rows/167 unique adopted owners; new GATE-G18/R5.42a supplies separately quoted backend proof before GATE-G11. No implementation, gate signature or new evidence class earned; pending-review banner above is historical draft status, superseded by this review closure.
+
+- 2026-11-06 · **Round-5 extension — S4-completion round (run-time insert, BM-MANIFEST-03):** operator
+  verbatim authorizations (operator chat, received 2026-11-06): "insert these into the build plan as
+  new ticket(s), then continue driving orchestrate-build over them to the end" + "you can provision
+  everything. just make sure we don't forget to deprovision at the end. proceed". Rows 247–251
+  appended in chain order after row 246 (DOC5.2 — the build's DONE tail): `247_R5.56__egress-variant.md`
+  (sanction the scoped `bridge`-network cell profile as a first-class `PodmanBackend` variant — the S4
+  egress run used the scratch `/tmp/s4-helper-egress` binary; `network: false` is hardcoded at
+  `crates/hh-helper/src/bin/hh_helper.rs:92`), `248_R5.57__verifier-bound.md` (`swe-bench-astropy-2`'s
+  declared verifier bound relaxed as a recorded machinery admission — the 10
+  `verifier_unavailable` slots), `249_R5.58__s4-completion.md` (re-execute the 50 inconclusive
+  frozen-cohort slots — 40 `image_unavailable:client_build_failed` + 10 `verifier_unavailable` — on the
+  provisioned GCE backend `podman-s4-backend`, project `harnessharness-evidence-8d7a99`, under
+  `egress_profile: declared_deps` verbatim; fix-git stays `inconclusive{upstream_deleted}`),
+  `250_GATE-G19__efficacy-ruling.md` (STOP — the operator rules the efficacy-inference admission:
+  complete-cohort vs bounded-inference on the executed base), `251_R5.59__efficacy-closure.md`
+  (efficacy verdict + study recompute + the mandatory verbatim GCE deprovision receipt + round
+  closure). Reason: the S4 confirmation cohort stands partial 250/300 — 50 honest inconclusive slots
+  the local backend could not lift (client-build OOM/ENOSPC/deb404/deleted upstream + astropy's
+  verifier bound). No file renamed; no row superseded; round 5 is now 87 rows (79 decomposed + 3
+  suffix inserts + these 5); the chain's end sequence is 251. LEDGER `nextTicket` → `R5.56` (the DONE
+  terminal state re-opens honestly at 247); chainTip → `codex/harnessharness-s4-completion-manifest`
+  (branch off `origin/main` `9f952d02`; the cited parity/S4 evidence records land via
+  `codex/harnessharness-evidence-s3-s4`, PR #283). Guard `tail-roles` repaired to tail-presence for
+  authorized post-tail extension rows (OPEN FINDING, this branch).
