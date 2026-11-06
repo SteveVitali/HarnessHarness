@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        A2
-lastCompleted:   B1
+nextUnit:        B2
+lastCompleted:   A2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:15:26Z
+updatedAt:       2026-11-06T23:20:37Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -82,7 +82,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | A1 | **Executed-record audit.** Exactly what the $0 program executed: per record (S3 tranches 1–3, S4 confirmation/egress/completion/30-slot repairs, R5.59 closure if landed), which surfaces and code paths ran (scratch vs committed; HH cells vs direct podman), R, participants, arms (intended vs served), estimators actually invoked, repairs, costs, and which claims each record does and does not support. Reconcile against the brief §2 and the public surfaces (`docs/evidence.md`, `docs/status.md`, README). Inventory the scratch drivers (archive `~/tb-work/scratch-archive-2026-11-06/` + sha256 manifest). Reqs `REQ-XA-001…`. | R | done | [24_executed-record-audit.md](research/24_executed-record-audit.md) |
-| A2 | **Methodology record and $0 hardening design.** Driver promotion (what is committed where, tests, reproducibility recipe), the records-in HH-cell×`tb` verdict cross-check, running the landed `parity_admission`/`kl_equivalence` over the records with honest outcome, record structure, README link, `docs/evidence.md` card transitions and the `check-position.sh` changes they need. Depends A1. Reqs `REQ-XA-101…`. | D | in-progress | → `design/30_methodology-record.md` |
+| A2 | **Methodology record and $0 hardening design.** Driver promotion (what is committed where, tests, reproducibility recipe), the records-in HH-cell×`tb` verdict cross-check, running the landed `parity_admission`/`kl_equivalence` over the records with honest outcome, record structure, README link, `docs/evidence.md` card transitions and the `check-position.sh` changes they need. Depends A1. Reqs `REQ-XA-101…`. | D | done | [30_methodology-record.md](design/30_methodology-record.md) |
 
 ## B. Benchmark and execution infrastructure
 
@@ -105,7 +105,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
-| D1 | **Comparative-evaluation method.** Estimands, reuse of the admitted §4.3 machinery (finite-manifest Beta-binomial, whole-task paired bootstrap, Holm), HF-style metrics (ties with leader, flip rates, all-k/any-k, $/solve) and which need method admission, the pilot→quote→gate design with a precision simulation, seeded TB 2.1 task selection, pre-registration packet, infra-failure missingness, reward-hacking/cheating scan policy, stop rules. Depends B1, C1, C3. Reqs `REQ-XD-001…`. | D | open | → `design/35_comparative-method.md` |
+| D1 | **Comparative-evaluation method.** Estimands, reuse of the admitted §4.3 machinery (finite-manifest Beta-binomial, whole-task paired bootstrap, Holm), HF-style metrics (ties with leader, flip rates, all-k/any-k, $/solve) and which need method admission, the pilot→quote→gate design with a precision simulation, seeded TB 2.1 task selection, pre-registration packet, infra-failure missingness, reward-hacking/cheating scan policy, stop rules. Depends B1, C1, C3. Reqs `REQ-XD-001…`. | D | in-progress | → `design/35_comparative-method.md` |
 | D2 | **HIR parity method.** L1 request-level conformance (recorded-response replay, canonicalization), L2 paired task-verdict KL parity with gate-set margin and pilot-quoted N, L3 descriptive trace shape; dimension map and §4.4 admission for an LLM participant ("same participant" with a served model lacking a digest). Depends C1, E1. Reqs `REQ-XD-101…`. | D | in-progress | → `design/36_hir-parity-method.md` |
 | D3 | **Sweep method.** OFAT explore on development tasks → pre-registered held-out confirmation; factor/level registry; multiplicity and winner's-curse controls; when a knob is exercised (e.g. compaction under a large context window); budgets. Depends D1, E2. Reqs `REQ-XD-201…`. | D | open | → `design/37_sweep-method.md` |
 
@@ -181,6 +181,7 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X30 | Agent-phase network policy for paid runs (TB 2.1 allows internet; answer-fetching risk) | "Allowlist + scan (Recommended)" — agents reach only the HH model proxy plus declared package registries, enforced and logged per slot; trajectory scan still flags leaked-answer behaviour; not leaderboard-comparable | B2, C2, C4, D1 |
 | Q-X31 | Long tasks in the paid subset | "Let's keep all nominally, but when it comes time to start running experiments, since there are so many tasks and model/harness/etc. combos and so on. perhaps we stratify and just start out with the lowest time / cheapest ones" | D1 (staged estimand by cost stratum), H1 |
 | Q-X32 | ADR admitting each task's declared agent/verifier timeouts above HH's 900 s cap | "Yes, per-task declared (Recommended)" | B2, H1 |
+| Q-X33 | Card text after phase 1: whether the useful-task card changes once S1 is re-folded, and the operations card's reason text (A2 Q-A2-1, Q-A2-2) | | ratification (A2 recommendations stand until then) |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -191,3 +192,5 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:06:27Z — Wave-2 assignments: A2 → `design/30_methodology-record.md` (inputs: `research/24`, check-position battery, layout rules; no network/execution), C2 → `design/33_model-mediation.md` (inputs: `research/26`, hosting/gateway/budget/env/helper code; owns the proxy replay/record mode shared with D2/C4). Accepted C3 (`research/27`, 14 findings; shortlist mini-swe-agent, Terminus-2, Claude Code, Pi, Hermes Agent, OpenHands, Kimi Code, OpenCode; spot-checked the Cursor CLI exclusion against Harbor adapter capabilities as quoted). New pending §Q rows Q-X26…Q-X28. Codex/Responses pass-through is a C2 design input (C3 open question 2).
 - 2026-11-06T23:06:49Z — Accepted E1 (`research/28`, pins mini-swe-agent v2.4.6 `a83fcae8`, Harbor `ff2a1ef4`/v0.25.0; both originals drivable against a replay endpoint unmodified; 17 HIR gaps). E1's proposed $0 "L1 capture spike" needs installs and execution, which research rows may not do: carried to H1 as a candidate first phase-3 build ticket, not a ledger row. Wave-2 assignment: D2 → `design/36_hir-parity-method.md` (inputs `research/26`, `research/28`, spec §4.4, parity_admission/directional_kl code; consumes C2's replay mode as an interface). New pending Q-X29.
 - 2026-11-06T23:15:26Z — Accepted B1 (`research/25`, 20 findings; TB 2.1 = 89 tasks pinned git `12b75656` + Hub ref + per-task digests; spot-checked the 39-task verifier-timeout census). Stream A–C checkpoint presented to the operator; answers recorded verbatim: Q-X26 (Claude Code admitted under stated terms), Q-X30 (allowlist + scan), Q-X31 (keep all 89 nominally; start with the cheapest/shortest stratum), Q-X32 (per-task declared timeouts via ADR). Wave-2 assignments: B2 → `design/31_experiment-runner.md`, B3 → `design/32_compute-backend.md`. Ownership: B2 owns cell egress-profile composition (registry allowlist + proxy reachability); C2 owns the proxy endpoint itself.
+- 2026-11-06T23:20:00Z — Accepted A2 (`design/30`, 14 findings, REQ-XA-101…127). Coordinator spot-check of A2's new HH-cell × `tb` cross-check: discordances `swe-bench-langcodes` and `grid-pattern-transform` (tb resolved, HH cells unresolved on both first slots) CONFIRMED from the committed packets; denominator differs (coordinator: 17 tasks/15 agree using the confirmation packet's `first` slots with resolved/unresolved receipts; A2: 16/14) — the exact slot-inclusion rule is an implementation-ticket acceptance item and an O2 review item. A2 recommendations recorded against Q-X24 (records-in for phase 1; optional gated phase 1b) and Q-X25 (dated deviation record + retroactive ADR); new pending Q-X33.
+- 2026-11-06T23:20:37Z — Assignment: D1 → `design/35_comparative-method.md` (dependencies B1, C1, C3 accepted; inputs research/24–27, supplement §3/§4.1/§4.3/§4.5, analysis/eval code; local no-network simulations allowed).
