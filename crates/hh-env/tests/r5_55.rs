@@ -37,7 +37,7 @@ use hharness_env::publication::{
 };
 use hharness_env::study::{
     check_echo, evaluate_costs, evaluate_families, CostFacts, FamilyFacts, PacketEcho,
-    LEGS as STUDY_LEGS, REQUIRED_FAMILIES,
+    LEGS_V1 as STUDY_V1_LEGS, REQUIRED_FAMILIES,
 };
 use hharness_env::value::{
     assemble as assemble_packet, evaluate_carried, evaluate_claims, evaluate_observation,
@@ -230,8 +230,9 @@ fn family_facts(efficacy: &str, adoption: &str, claim_present: bool) -> FamilyFa
     };
     FamilyFacts {
         efficacy: efficacy.to_string(),
+        required_efficacy: "computed{strata:easy,hard,medium}".to_string(),
         task_mixture: get("task_mixture"),
-        sharp_null: get("sharp_null"),
+        sharp_null: "unavailable{not_computed}".to_string(),
         parity: get("parity"),
         mechanism: get("mechanism"),
         engineering: get("engineering"),
@@ -244,7 +245,12 @@ fn family_facts(efficacy: &str, adoption: &str, claim_present: bool) -> FamilyFa
 
 fn exercise_refusals() -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
-    let required = |n: &str| REQUIRED_FAMILIES.iter().find(|(k, _)| *k == n).unwrap().1;
+    let required = |n: &str| {
+        if n == "efficacy" {
+            return "computed{strata:easy,hard,medium}";
+        }
+        REQUIRED_FAMILIES.iter().find(|(k, _)| *k == n).unwrap().1
+    };
     // The no-hidden-success gate: an adoption promoted past
     // `unavailable{not_started}` refuses — the recorded outcome
     // stays observed-not-achieved.
@@ -264,7 +270,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
     inflated.disposition = "satisfied".into();
     out.insert(
         "echo_disposition_inflated".into(),
-        outcome(&check_echo(&inflated, &STUDY_LEGS, "reported", "failed")),
+        outcome(&check_echo(&inflated, &STUDY_V1_LEGS, "reported", "failed")),
     );
     let mut tampered = study_echo();
     for (n, _) in tampered.legs.iter_mut() {
@@ -274,7 +280,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
     }
     out.insert(
         "echo_leg_tampered".into(),
-        outcome(&check_echo(&tampered, &STUDY_LEGS, "reported", "failed")),
+        outcome(&check_echo(&tampered, &STUDY_V1_LEGS, "reported", "failed")),
     );
     // A review spend refuses — USD $0.00 authority.
     out.insert(
@@ -414,7 +420,7 @@ fn carried_facts() -> CarriedFacts {
     let flag = |k: &str| matches!(member(&j, k), Json::Bool(true));
     let p = pub_json();
     CarriedFacts {
-        study_echo_verdict: check_echo(&echo, &STUDY_LEGS, "reported", "failed")
+        study_echo_verdict: check_echo(&echo, &STUDY_V1_LEGS, "reported", "failed")
             .name()
             .to_string(),
         study_status: member(&j, "study").as_str().unwrap().to_string(),

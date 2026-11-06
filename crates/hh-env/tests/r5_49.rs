@@ -8,16 +8,23 @@
 //! identities — asserting byte/consistency equality, never
 //! re-picking or fabricating. The parity tranche verified 30/30
 //! directional agreement (`hh-parity-tranche-report/1`); the
-//! confirmation cohort executed `partial` — 160/300 frozen-run
-//! receipts + 90/140 egress-supplement receipts = 250/300, the 50
-//! inconclusive slots verbatim. The efficacy/sharp-null families
-//! stay `unavailable` — a partial cohort is no contrast.
+//! confirmation cohort executed **300/300** — the frozen run +
+//! egress + s4-completion-gce + s4-30slot-repairs-gce epochs each
+//! covering exactly the prior residue (the four packets stand
+//! byte-untouched). Under GATE-G19's complete-cohort admission the
+//! efficacy leg carries the registered finite-manifest contrast
+//! (REQ-D-107/109) per declared stratum — computed here through the
+//! landed `hharness_eval::finite_manifest` machinery over the
+//! committed slots' receipt fold. The sharp-null family stays
+//! `unavailable{not_computed}` — the sign-flip test is not part of
+//! the admitted fold.
 //! Fails-without: the `study` module and this battery do not exist
 //! at base `b1a8644d` (compile-red evidence).
 //!
 //! The gated lane performs **no committed-record checkout read** —
-//! every committed packet's members are supplied verbatim here,
-//! exactly like `gate_facts`/`parity_facts` in the r5_48 battery.
+//! every committed packet's members are echoed verbatim from the
+//! committed report files, exactly like `gate_facts`/`parity_facts`
+//! in the r5_48 battery.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,17 +32,25 @@ use std::path::{Path, PathBuf};
 use hharness_env::preflight::{Leg, LegVerdict};
 use hharness_env::study::{
     assemble, check_echo, evaluate_activation, evaluate_confirm_stage, evaluate_costs,
-    evaluate_families, evaluate_freeze, evaluate_ops, evaluate_parity_stage, evaluate_pilot,
-    evaluate_preflight, evaluate_useful, recompute_arm_tail, recompute_maxima,
-    recompute_missingness, ActivationFacts, ArmTailEcho, ConfirmStageFacts, CostFacts, Disposition,
-    FamilyFacts, FeasibilityEcho, FidelityFold, FreezeFacts, MissingnessEcho, OpsFacts, PacketEcho,
-    ParityStageFacts, PilotFacts, PilotSubjectEcho, PreflightStageFacts, SubjectEcho, UsefulFacts,
-    LEGS, REQUIRED_FAMILIES, VERSION,
+    evaluate_efficacy, evaluate_families, evaluate_freeze, evaluate_ops, evaluate_parity_stage,
+    evaluate_pilot, evaluate_preflight, evaluate_useful, recompute_arm_tail, recompute_maxima,
+    recompute_missingness, ActivationFacts, ArmTailEcho, ConfirmEpochFacts, ConfirmStageFacts,
+    CostFacts, Disposition, EfficacyFacts, EfficacySlot, EfficacyStratum, FamilyFacts,
+    FeasibilityEcho, FidelityFold, FreezeFacts, MissingnessEcho, OpsFacts, PacketEcho,
+    ParityStageFacts, PilotFacts, PilotSubjectEcho, PreflightStageFacts, StudyFold, SubjectEcho,
+    UsefulFacts, LEGS, REQUIRED_FAMILIES, VERSION,
 };
 use hharness_eval::central_protocol as cp;
+use hharness_eval::finite_manifest::{finite_manifest_contrast, ContrastDecl, ContrastError};
+use hharness_eval::population::{
+    assemble as pop_assemble, Availability, BoundsDecl, PlannedPopulation, PlannedSlot,
+    PopulationInput, PopulationKind, SlotSubject,
+};
 use hharness_lab::experiment::{
     Backoff, CancelPolicy, OrderKind, Pool, ReattemptPolicy, SchedulingPolicy,
 };
+use hharness_ontology::control::OutcomeClass;
+use hharness_wire::json::{self, Json};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -616,29 +631,354 @@ fn confirm_facts() -> ConfirmStageFacts {
         failed: 0,
         first_executed: 32,
         first_total: 60,
-        supplement_version: "hh-s4-egress-supplement/1".into(),
-        supplement_verdict: "partial".into(),
-        sup_planned: 140,
-        sup_executed: 90,
-        sup_inconclusive: 50,
-        sup_first_executed: 18,
-        sup_first_total: 28,
+        // The named supplement epochs in commit order — each covers
+        // exactly the prior residue; the repairs epoch closed it.
+        epochs: vec![
+            ConfirmEpochFacts {
+                version: "hh-s4-egress-supplement/1".into(),
+                verdict: "partial".into(),
+                planned: 140,
+                executed: 90,
+                inconclusive: 50,
+                first_executed: 18,
+                first_total: 28,
+            },
+            ConfirmEpochFacts {
+                version: "hh-s4-completion/1".into(),
+                verdict: "partial".into(),
+                planned: 50,
+                executed: 20,
+                inconclusive: 30,
+                first_executed: 4,
+                first_total: 10,
+            },
+            ConfirmEpochFacts {
+                version: "hh-s4-30slot-repairs/1".into(),
+                verdict: "executed".into(),
+                planned: 30,
+                executed: 30,
+                inconclusive: 0,
+                first_executed: 6,
+                first_total: 6,
+            },
+        ],
         parity_protocol_id: COHORT_PROTOCOL_ID.into(),
         protocol_id: COHORT_PROTOCOL_ID.into(),
-        subjects_first: 50,
+        subjects_first: 60,
         tranche_absent: false,
         parity_absent: false,
         confirmation_blocked: false,
-        s4_unmet: true,
+        s4_unmet: false,
         gate: "GATE-G14".into(),
     }
 }
 
-fn family_facts() -> FamilyFacts {
+// ── the cohort's committed records — echoed verbatim from the
+// committed report files (records-in, never re-picked) ────────────
+
+/// The four cohort epoch packets, in commit order — later epochs
+/// re-execute exactly the prior residue's slots; a slot's last record
+/// carries its final receipt.
+const COHORT_PACKETS: [&str; 4] = [
+    "2026-11-05-s4-confirmation.json",
+    "2026-11-05-s4-egress-cohort.json",
+    "2026-11-06-s4-completion.json",
+    "2026-11-06-s4-30slot-repairs.json",
+];
+
+fn load_packet(name: &str) -> Json {
+    let text = std::fs::read_to_string(repo_root().join("docs/build/reports").join(name))
+        .expect("committed cohort packet readable");
+    // `parse_provider` — committed records carry float lexemes
+    // (`cost_usd: 0.0`); the inbound read preserves them verbatim as
+    // strings, never truncated or dropped (the canonical `parse`
+    // refuses them — outbound records never emit floats).
+    json::parse_provider(&text).expect("committed cohort packet parses")
+}
+
+fn jget<'a>(j: &'a Json, k: &str) -> &'a Json {
+    j.get(k).unwrap_or_else(|| panic!("member {k} absent"))
+}
+
+fn jstr(j: &Json, k: &str) -> String {
+    match jget(j, k) {
+        Json::Str(s) => s.clone(),
+        other => panic!("member {k} not a string: {other:?}"),
+    }
+}
+
+fn jint(j: &Json, k: &str) -> u64 {
+    match jget(j, k) {
+        Json::Int(n) => *n as u64,
+        other => panic!("member {k} not an int: {other:?}"),
+    }
+}
+
+fn jarr<'a>(j: &'a Json, k: &str) -> &'a [Json] {
+    match jget(j, k) {
+        Json::Arr(a) => a,
+        other => panic!("member {k} not an array: {other:?}"),
+    }
+}
+
+/// The cohort's 300 slots after folding all four epochs — a slot's
+/// last epoch record wins; each carries `receipt.verdict` verbatim.
+fn cohort_slots() -> Vec<Json> {
+    let mut by_ref: BTreeMap<String, Json> = BTreeMap::new();
+    for name in COHORT_PACKETS {
+        let p = load_packet(name);
+        for s in jarr(&p, "slots") {
+            by_ref.insert(jstr(s, "slot_ref"), s.clone());
+        }
+    }
+    let slots: Vec<Json> = by_ref.into_values().collect();
+    assert_eq!(slots.len(), 300, "the cohort covers every planned slot");
+    slots
+}
+
+/// task → declared stratum, verbatim from the frozen manifest's
+/// `manifest.selection` members.
+fn task_strata() -> BTreeMap<String, String> {
+    let p = load_packet(COHORT_PACKETS[0]);
+    jarr(jget(&p, "manifest"), "selection")
+        .iter()
+        .map(|s| (jstr(s, "task_id"), jstr(s, "stratum")))
+        .collect()
+}
+
+/// The committed `receipt.verdict` fold — `resolved`/`unresolved`
+/// verbatim, or `None` for a slot still without a receipt.
+fn receipt_verdicts() -> Vec<(Json, Option<String>)> {
+    cohort_slots()
+        .into_iter()
+        .map(|s| {
+            let v = s
+                .get("receipt")
+                .and_then(|r| r.get("verdict"))
+                .and_then(|v| match v {
+                    Json::Str(s) => Some(s.clone()),
+                    _ => None,
+                });
+            (s, v)
+        })
+        .collect()
+}
+
+/// The committed fold as `EfficacySlot`s — `None` when any slot
+/// lacks a receipt verdict (the incomplete-cohort fold).
+fn efficacy_slots() -> Option<Vec<EfficacySlot>> {
+    let strata = task_strata();
+    let mut out = Vec::new();
+    for (s, v) in receipt_verdicts() {
+        let task = jstr(&s, "task_id");
+        out.push(EfficacySlot {
+            stratum: strata.get(&task).cloned().unwrap_or_default(),
+            task_id: task,
+            arm_id: jstr(&s, "arm_id"),
+            receipt_verdict: v?,
+        });
+    }
+    Some(out)
+}
+
+/// The committed fold as the R5.15 population contract's planned
+/// slots — one bound subject per slot (the executed attempt), the
+/// receipt's binary verdict as `success`.
+fn planned_population() -> PlannedPopulation {
+    let strata = task_strata();
+    let mut slots = Vec::new();
+    let mut pins = BTreeMap::new();
+    let mut required = std::collections::BTreeSet::new();
+    for (s, v) in receipt_verdicts() {
+        let slot_ref = jstr(&s, "slot_ref");
+        let task = jstr(&s, "task_id");
+        let attempts = jarr(&s, "attempts");
+        let subject_run = attempts
+            .first()
+            .and_then(|a| match a {
+                Json::Str(s) => Some(s.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| format!("{slot_ref}-subject"));
+        pins.insert(subject_run.clone(), 1u64);
+        required.insert(slot_ref.clone());
+        slots.push(PlannedSlot {
+            plan_ref: slot_ref,
+            task_id: task.clone(),
+            split_label: "held_out".into(),
+            stratum: strata.get(&task).cloned().unwrap_or_default(),
+            arm_id: jstr(&s, "arm_id"),
+            replicate_index: jint(&s, "round"),
+            subjects: vec![SlotSubject {
+                subject_run,
+                attempt_no: 1,
+                outcome: Some(OutcomeClass::Scored),
+                success: v.map(|v| v == "resolved"),
+                veto_tripped: Vec::new(),
+                availability: Availability::Resolved,
+                seq: 1,
+                missing_required_checks: false,
+                admissible: true,
+            }],
+        });
+    }
+    pop_assemble(PopulationInput {
+        slots,
+        required,
+        pins,
+    })
+    .expect("the committed cohort assembles")
+}
+
+/// The registered finite-manifest declaration (REQ-D-107/109 §4.3,
+/// verbatim): the canonical population, B=arm:h-podman-oracle
+/// (clear_tool_results) minus A=arm:o-tb-oracle (evict_oldest), the
+/// registered beta{1,1} prior, the frozen 95% level and 8,000 base
+/// draws, declared seed 0.
+fn efficacy_decl(stratum: &str) -> ContrastDecl {
+    ContrastDecl {
+        population: PopulationKind::Canonical,
+        test_arm: "arm:h-podman-oracle".into(),
+        control_arm: "arm:o-tb-oracle".into(),
+        stratum: Some(stratum.into()),
+        prior: (1, 1),
+        prior_name: "beta{1,1}".into(),
+        dependence: None,
+        target: None,
+        use_as: None,
+        bounds: BoundsDecl::Unit,
+        level_ppm: 950_000,
+        seed: 0,
+    }
+}
+
+/// One stratum's result through the landed estimator — the computed
+/// members verbatim, or the typed refusal's display spelling.
+fn efficacy_stratum(
+    pop: &PlannedPopulation,
+    stratum: &str,
+) -> (
+    EfficacyStratum,
+    Option<hharness_eval::finite_manifest::FiniteManifestContrast>,
+) {
+    match finite_manifest_contrast(pop, &efficacy_decl(stratum)) {
+        Ok(out) => (
+            EfficacyStratum {
+                stratum: stratum.into(),
+                computed: true,
+                cells: out
+                    .cells
+                    .iter()
+                    .map(|c| hharness_env::study::EfficacyCell {
+                        task_id: c.task_id.clone(),
+                        test_c: c.test_c,
+                        test_n: c.test_n,
+                        control_c: c.control_c,
+                        control_n: c.control_n,
+                    })
+                    .collect(),
+                observed_contrast_ppm: out.observed_contrast_ppm,
+                posterior_mean_ppm: out.posterior_mean_ppm,
+                interval_lo_ppm: out.interval.lo,
+                interval_hi_ppm: out.interval.hi,
+                draws_used: out.draws_used,
+                refusal: String::new(),
+            },
+            Some(out),
+        ),
+        Err(e) => (
+            EfficacyStratum {
+                stratum: stratum.into(),
+                computed: false,
+                cells: Vec::new(),
+                observed_contrast_ppm: 0,
+                posterior_mean_ppm: 0,
+                interval_lo_ppm: 0,
+                interval_hi_ppm: 0,
+                draws_used: 0,
+                refusal: e.to_string(),
+            },
+            None,
+        ),
+    }
+}
+
+/// The efficacy stage's supplied facts — the committed fold's slots,
+/// the registered declaration and the per-declared-stratum results
+/// the landed estimator produced.
+fn efficacy_facts() -> (
+    EfficacyFacts,
+    PlannedPopulation,
+    BTreeMap<String, Result<hharness_eval::finite_manifest::FiniteManifestContrast, ContrastError>>,
+) {
+    let pop = planned_population();
+    let strata: Vec<String> = {
+        let mut v: Vec<String> = pop.slots.iter().map(|s| s.stratum.clone()).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    let mut results = BTreeMap::new();
+    let mut facts_strata = Vec::new();
+    for st in &strata {
+        let (es, out) = efficacy_stratum(&pop, st);
+        results.insert(
+            st.clone(),
+            out.ok_or_else(|| {
+                let d = efficacy_decl(st);
+                finite_manifest_contrast(&pop, &d).unwrap_err()
+            }),
+        );
+        facts_strata.push(es);
+    }
+    let mut computed_csv: Vec<&str> = Vec::new();
+    let mut refused_csv: Vec<String> = Vec::new();
+    for st in &facts_strata {
+        if st.computed {
+            computed_csv.push(st.stratum.as_str());
+        } else {
+            refused_csv.push(format!("{}:{}", st.stratum, st.refusal));
+        }
+    }
+    computed_csv.sort();
+    refused_csv.sort();
+    let status = if computed_csv.len() == facts_strata.len() {
+        format!("computed{{strata:{}}}", computed_csv.join(","))
+    } else if computed_csv.is_empty() {
+        format!("unavailable{{{}}}", refused_csv.join(";"))
+    } else {
+        format!(
+            "partial{{computed:{};refused:{}}}",
+            computed_csv.join(","),
+            refused_csv.join(";")
+        )
+    };
+    (
+        EfficacyFacts {
+            population: "canonical".into(),
+            test_arm: "arm:h-podman-oracle".into(),
+            control_arm: "arm:o-tb-oracle".into(),
+            prior: "beta{1,1}".into(),
+            direction: "test_minus_control".into(),
+            level_ppm: 950_000,
+            draws_requested: 8_000,
+            seed: 0,
+            protocol_id: COHORT_PROTOCOL_ID.into(),
+            slots: efficacy_slots().expect("the completed cohort's receipts all present"),
+            strata: facts_strata,
+            status,
+        },
+        pop,
+        results,
+    )
+}
+
+fn family_facts(efficacy_status: &str) -> FamilyFacts {
     FamilyFacts {
-        efficacy: "unavailable{partial}".into(),
+        efficacy: efficacy_status.into(),
+        required_efficacy: efficacy_status.into(),
         task_mixture: "descriptive{pilot_recomputed}".into(),
-        sharp_null: "unavailable{partial}".into(),
+        sharp_null: "unavailable{not_computed}".into(),
         parity: "executed{verified_30_30}".into(),
         mechanism: "executed{activation,pilot}".into(),
         engineering: "executed{ops_live;backend_verified}".into(),
@@ -664,12 +1004,14 @@ fn cost_facts() -> CostFacts {
             "hh-parity-tranche-report/1",
             "hh-s4-confirmation/1",
             "hh-s4-egress-supplement/1",
+            "hh-s4-completion/1",
+            "hh-s4-30slot-repairs/1",
         ]
         .iter()
         .map(|p| (p.to_string(), 0))
         .collect(),
         subjects_first: 12,
-        gated_subjects: 80,
+        gated_subjects: 90,
     }
 }
 
@@ -688,9 +1030,13 @@ fn s(v: impl ToString) -> String {
     v.to_string()
 }
 
-/// The ten legs driven on the supplied committed members — the
+/// The eleven legs driven on the supplied committed members — the
 /// report's honest recompute.
-fn run_packet() -> Vec<Leg> {
+fn run_packet() -> (
+    Vec<Leg>,
+    PlannedPopulation,
+    BTreeMap<String, Result<hharness_eval::finite_manifest::FiniteManifestContrast, ContrastError>>,
+) {
     let fr = freeze_facts();
     let pf = preflight_facts();
     let u = useful_facts();
@@ -699,9 +1045,10 @@ fn run_packet() -> Vec<Leg> {
     let p = pilot_facts();
     let pa = parity_facts();
     let c = confirm_facts();
-    let fam = family_facts();
+    let (ef, pop, contrast_results) = efficacy_facts();
+    let fam = family_facts(&ef.status);
     let co = cost_facts();
-    vec![
+    let legs = vec![
         leg(
             "freeze_identities",
             evaluate_freeze(&fr),
@@ -805,14 +1152,63 @@ fn run_packet() -> Vec<Leg> {
                 ("disposition", s(&c.confirm_verdict)),
                 (
                     "slots",
-                    s(format!("{}/{}", c.executed + c.sup_executed, c.planned)),
+                    s(format!(
+                        "{}/{}",
+                        c.executed + c.epochs.iter().map(|e| e.executed).sum::<u64>(),
+                        c.planned
+                    )),
                 ),
-                ("inconclusive", s(c.sup_inconclusive)),
+                (
+                    "epochs",
+                    s(c.epochs
+                        .iter()
+                        .map(|e| e.version.as_str())
+                        .collect::<Vec<_>>()
+                        .join(",")),
+                ),
+                (
+                    "inconclusive",
+                    s(c.epochs
+                        .last()
+                        .map(|e| e.inconclusive)
+                        .unwrap_or(c.inconclusive)),
+                ),
                 ("subjects_first", s(c.subjects_first)),
                 ("tranche_absent", s(c.tranche_absent)),
                 ("parity_absent", s(c.parity_absent)),
                 ("s4_unmet", s(c.s4_unmet)),
-                ("status", s("partial{250_300}")),
+                ("status", s("executed{300_300}")),
+            ],
+        ),
+        leg(
+            "efficacy",
+            evaluate_efficacy(&ef),
+            &[
+                ("population", s(&ef.population)),
+                ("direction", s(&ef.direction)),
+                ("test_arm", s(&ef.test_arm)),
+                ("control_arm", s(&ef.control_arm)),
+                ("prior", s(&ef.prior)),
+                ("level_ppm", s(ef.level_ppm)),
+                ("draws_requested", s(ef.draws_requested)),
+                ("seed", s(ef.seed)),
+                ("protocol_id", s(&ef.protocol_id)),
+                ("cohort_slots", s(ef.slots.len())),
+                (
+                    "strata",
+                    s(ef.strata
+                        .iter()
+                        .map(|st| {
+                            if st.computed {
+                                format!("{}:computed", st.stratum)
+                            } else {
+                                format!("{}:{}", st.stratum, st.refusal)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(",")),
+                ),
+                ("status", s(&ef.status)),
             ],
         ),
         leg(
@@ -840,7 +1236,21 @@ fn run_packet() -> Vec<Leg> {
                 ("gated_subjects", s(co.gated_subjects)),
             ],
         ),
-    ]
+    ];
+    (legs, pop, contrast_results)
+}
+
+/// The report's honest fold — the caller binds it; the fields are
+/// never hard-coded.
+fn study_fold() -> StudyFold {
+    StudyFold {
+        subjects_first: 12,
+        exposure_micros: 0,
+        s1_unmet: true,
+        s3_unmet: false,
+        s4_unmet: false,
+        study: "unmet{s1_failed}".into(),
+    }
 }
 
 // ── the battery ──────────────────────────────────────────────────
@@ -1079,30 +1489,35 @@ fn p49_parity_confirm_executed() {
         evaluate_confirm_stage(&confirm_facts()),
         LegVerdict::Verified
     );
-    // Dispositions that fail to re-add, a supplement wider than the
-    // prior-inconclusive set, a full/zero cohort spelt `partial`, a
+    // Dispositions that fail to re-add, an epoch wider/narrower than
+    // the prior residue, a foreign epoch schema, a full/zero cohort
+    // spelt `partial`, an epoch residue spelt `executed`, a
     // first-subject count that doesn't re-add, a drifted protocol
     // id, a dropped S4 bound or a retained upstream block refuses.
+    let mut bad_epoch = confirm_facts();
+    bad_epoch.epochs[0].planned = 141;
+    let mut bad_exec = confirm_facts();
+    bad_exec.epochs[1].executed = 19;
+    let mut bad_schema = confirm_facts();
+    bad_schema.epochs[1].version = "hh-other/1".into();
+    let mut bad_verdict = confirm_facts();
+    bad_verdict.epochs[2].verdict = "partial".into();
     for f in [
         ConfirmStageFacts {
             executed: 159,
             ..confirm_facts()
         },
-        ConfirmStageFacts {
-            sup_planned: 141,
-            ..confirm_facts()
-        },
-        ConfirmStageFacts {
-            sup_executed: 50,
-            ..confirm_facts()
-        },
+        bad_epoch,
+        bad_exec,
+        bad_schema,
+        bad_verdict,
         ConfirmStageFacts {
             executed: 300,
             inconclusive: 0,
             ..confirm_facts()
         },
         ConfirmStageFacts {
-            subjects_first: 51,
+            subjects_first: 59,
             ..confirm_facts()
         },
         ConfirmStageFacts {
@@ -1110,11 +1525,7 @@ fn p49_parity_confirm_executed() {
             ..confirm_facts()
         },
         ConfirmStageFacts {
-            sup_inconclusive: 0,
-            ..confirm_facts()
-        },
-        ConfirmStageFacts {
-            s4_unmet: false,
+            s4_unmet: true,
             ..confirm_facts()
         },
         ConfirmStageFacts {
@@ -1141,36 +1552,47 @@ fn p49_parity_confirm_executed() {
 
 #[test]
 fn p49_families_and_costs() {
-    assert_eq!(evaluate_families(&family_facts()), LegVerdict::Verified);
+    let fam = family_facts("computed{strata:easy,hard,medium}");
+    assert_eq!(evaluate_families(&fam), LegVerdict::Verified);
     // Every required status is the honest spelling — a met/passed
-    // unavailable family, a different executed spelling or a claim
-    // refuses, never relabelled.
+    // unavailable family, a different executed spelling, a family
+    // diverging from the efficacy leg's status or a claim refuses,
+    // never relabelled.
     for f in [
         FamilyFacts {
             efficacy: "met{confirmation_executed}".into(),
-            ..family_facts()
+            ..family_facts("computed{strata:easy,hard,medium}")
         },
         FamilyFacts {
             efficacy: "negative{no_effect}".into(),
-            ..family_facts()
+            ..family_facts("computed{strata:easy,hard,medium}")
+        },
+        FamilyFacts {
+            efficacy: "unavailable{partial}".into(),
+            ..family_facts("computed{strata:easy,hard,medium}")
         },
         FamilyFacts {
             parity: "equivalent".into(),
-            ..family_facts()
+            ..family_facts("computed{strata:easy,hard,medium}")
+        },
+        FamilyFacts {
+            sharp_null: "unavailable{partial}".into(),
+            ..family_facts("computed{strata:easy,hard,medium}")
         },
         FamilyFacts {
             adoption: "passed".into(),
-            ..family_facts()
+            ..family_facts("computed{strata:easy,hard,medium}")
         },
         FamilyFacts {
             claim_present: true,
-            ..family_facts()
+            ..family_facts("computed{strata:easy,hard,medium}")
         },
     ] {
         assert!(matches!(evaluate_families(&f), LegVerdict::Refused(_)));
     }
-    // The required vocabulary is exactly nine families.
-    assert_eq!(REQUIRED_FAMILIES.len(), 9);
+    // The required vocabulary is seven stable families plus the
+    // state-dependent efficacy/sharp-null members.
+    assert_eq!(REQUIRED_FAMILIES.len(), 7);
     assert_eq!(evaluate_costs(&cost_facts()), LegVerdict::Verified);
     let mut spend = cost_facts();
     spend.per_packet[0].1 = 1;
@@ -1268,18 +1690,18 @@ fn p49_check_echo_refold() {
 
 #[test]
 fn p49_packet_reported_honest() {
-    let legs = run_packet();
+    let (legs, _pop, results) = run_packet();
     for l in &legs {
         assert!(l.verdict.is_verified(), "{}: {:?}", l.name, l.verdict);
     }
-    let report = assemble(legs).unwrap();
+    let report = assemble(legs, &study_fold()).unwrap();
     assert_eq!(report.version, VERSION);
     assert_eq!(report.subjects_first, 12);
     assert_eq!(report.exposure_micros, 0);
-    // S3 met (parity verified 30/30); S1 and S4 stay unmet (the S1
-    // packet is `failed`, the confirmation cohort is `partial`).
-    assert!(report.s1_unmet && !report.s3_unmet && report.s4_unmet);
-    assert_eq!(report.study, "unmet{efficacy_unavailable;s4_partial}");
+    // S3 met (parity verified 30/30) and S4 met (the cohort executed
+    // 300/300); S1 stays unmet (the S1 packet is `failed`).
+    assert!(report.s1_unmet && !report.s3_unmet && !report.s4_unmet);
+    assert_eq!(report.study, "unmet{s1_failed}");
     assert_eq!(report.admission, "recompute_only");
     assert_eq!(report.disposition, Disposition::Reported);
     let j = report.to_json().to_canonical_string();
@@ -1297,17 +1719,123 @@ fn p49_packet_reported_honest() {
         std::fs::write(&out, format!("{j}\n")).unwrap();
         eprintln!("emitted {} disposition=reported", out.display());
     }
+    // The efficacy packet — the per-stratum contrast records the
+    // landed estimator produced, verbatim (never hand-written).
+    if let Ok(out) = std::env::var("HH_EFFICACY_EMIT") {
+        let out = PathBuf::from(&out);
+        let out = if out.is_absolute() {
+            out
+        } else {
+            repo_root().join(out)
+        };
+        let ej = efficacy_packet_json(&results);
+        std::fs::write(&out, format!("{}\n", ej.to_canonical_string())).unwrap();
+        eprintln!("emitted {}", out.display());
+    }
+}
+
+/// The `hh-s4-efficacy/1` record — the GATE-G19 complete-cohort fold:
+/// the registered declaration, the cohort counts and the per-stratum
+/// `finite_manifest_contrast` outputs (or typed refusals) verbatim.
+fn efficacy_packet_json(
+    results: &BTreeMap<
+        String,
+        Result<hharness_eval::finite_manifest::FiniteManifestContrast, ContrastError>,
+    >,
+) -> Json {
+    let mut members: Vec<(&'static str, Json)> = Vec::new();
+    members.push(("schema", Json::str("hh-s4-efficacy/1")));
+    members.push(("admission", Json::str("recompute_only")));
+    members.push((
+        "basis",
+        Json::str(
+            "complete-cohort — GATE-G19 PASSED 2026-11-06 (operator verbatim \"confirmed and proceed\"): all 300/300 cohort slots carry a real receipt across the four named epochs",
+        ),
+    ));
+    members.push(("protocol_id", Json::str(COHORT_PROTOCOL_ID)));
+    members.push((
+        "declared",
+        Json::obj([
+            ("population", Json::str("canonical")),
+            ("test_arm", Json::str("arm:h-podman-oracle")),
+            ("control_arm", Json::str("arm:o-tb-oracle")),
+            ("prior", Json::str("beta{1,1}")),
+            ("direction", Json::str("test_minus_control")),
+            ("level_ppm", Json::Int(950_000)),
+            ("draws_requested", Json::Int(8_000)),
+            ("seed", Json::Int(0)),
+        ]),
+    ));
+    let (mut resolved, mut unresolved) = (0u64, 0u64);
+    for (_, v) in receipt_verdicts() {
+        match v.as_deref() {
+            Some("resolved") => resolved += 1,
+            Some("unresolved") => unresolved += 1,
+            _ => {}
+        }
+    }
+    members.push((
+        "cohort",
+        Json::obj([
+            ("slots", Json::Int(300)),
+            ("receipts", Json::Int((resolved + unresolved) as i64)),
+            ("resolved", Json::Int(resolved as i64)),
+            ("unresolved", Json::Int(unresolved as i64)),
+            ("inconclusive", Json::Int(0)),
+            (
+                "epochs",
+                Json::Arr(COHORT_PACKETS.iter().map(|n| Json::str(*n)).collect()),
+            ),
+        ]),
+    ));
+    let mut strata_json = std::collections::BTreeMap::new();
+    let mut all_computed = true;
+    for (st, r) in results {
+        match r {
+            Ok(c) => strata_json.insert(st.clone(), c.to_json()),
+            Err(e) => {
+                all_computed = false;
+                strata_json.insert(
+                    st.clone(),
+                    Json::obj([
+                        ("computed", Json::Bool(false)),
+                        ("refusal", Json::str(e.to_string())),
+                    ]),
+                )
+            }
+        };
+    }
+    members.push(("strata", Json::Obj(strata_json)));
+    members.push((
+        "verdict",
+        Json::str(if all_computed {
+            format!(
+                "computed{{strata:{}}}",
+                results.keys().cloned().collect::<Vec<_>>().join(",")
+            )
+        } else {
+            "partial".to_string()
+        }),
+    ));
+    Json::Obj(
+        members
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect(),
+    )
 }
 
 #[test]
 fn p49_fold_honest_and_legs_closed() {
     let mk = |v: LegVerdict| -> Vec<Leg> { LEGS.iter().map(|n| leg(n, v.clone(), &[])).collect() };
     assert_eq!(
-        assemble(mk(LegVerdict::Verified)).unwrap().disposition,
+        assemble(mk(LegVerdict::Verified), &study_fold())
+            .unwrap()
+            .disposition,
         Disposition::Reported
     );
     assert_eq!(
-        assemble(mk(LegVerdict::Inconclusive("x".into())))
+        assemble(mk(LegVerdict::Inconclusive("x".into())), &study_fold())
             .unwrap()
             .disposition,
         Disposition::Inconclusive
@@ -1315,14 +1843,130 @@ fn p49_fold_honest_and_legs_closed() {
     // A definitive failure dominates an undetermined leg.
     let mut legs = mk(LegVerdict::Inconclusive("x".into()));
     legs[3].verdict = LegVerdict::Refused("z".into());
-    assert_eq!(assemble(legs).unwrap().disposition, Disposition::Failed);
+    assert_eq!(
+        assemble(legs, &study_fold()).unwrap().disposition,
+        Disposition::Failed
+    );
     // Malformed leg sets refuse — never a partial packet.
-    assert!(assemble(mk(LegVerdict::Verified)[..9].to_vec()).is_err());
+    assert!(assemble(mk(LegVerdict::Verified)[..10].to_vec(), &study_fold()).is_err());
     let mut bad = mk(LegVerdict::Verified);
     bad[0].name = "not_a_leg".into();
-    assert!(assemble(bad).is_err());
+    assert!(assemble(bad, &study_fold()).is_err());
     // A refused leg never folds to reported.
-    let mut legs = run_packet();
-    legs[9].verdict = LegVerdict::Refused("spend".into());
-    assert_eq!(assemble(legs).unwrap().disposition, Disposition::Failed);
+    let (mut legs, _, _) = run_packet();
+    legs[10].verdict = LegVerdict::Refused("spend".into());
+    assert_eq!(
+        assemble(legs, &study_fold()).unwrap().disposition,
+        Disposition::Failed
+    );
+}
+
+#[test]
+fn p49_efficacy_complete_cohort() {
+    let (ef, _pop, results) = efficacy_facts();
+    assert_eq!(evaluate_efficacy(&ef), LegVerdict::Verified);
+    // The three declared strata each compute through the landed
+    // estimator — the contrast members are real numbers, not echoes.
+    for st in &ef.strata {
+        assert!(st.computed, "{}: {}", st.stratum, st.refusal);
+        assert!(st.draws_used >= 64_000, "{}", st.stratum);
+        assert!(st.interval_lo_ppm <= st.interval_hi_ppm);
+        assert_eq!(
+            results
+                .get(&st.stratum)
+                .and_then(|r| r.as_ref().ok())
+                .map(|c| (
+                    c.observed_contrast_ppm,
+                    c.posterior_mean_ppm,
+                    c.interval.lo,
+                    c.interval.hi,
+                )),
+            Some((
+                st.observed_contrast_ppm,
+                st.posterior_mean_ppm,
+                st.interval_lo_ppm,
+                st.interval_hi_ppm
+            ))
+        );
+    }
+    assert_eq!(ef.status, "computed{strata:easy,hard,medium}");
+    // A missing receipt folds the honest incomplete-cohort refusal —
+    // never a dropped member.
+    let mut short = ef.clone();
+    short.slots[0].receipt_verdict = "absent".into();
+    assert!(matches!(
+        evaluate_efficacy(&short),
+        LegVerdict::Inconclusive(_)
+    ));
+    // A foreign arm, a drifted cell, a mis-spelt declaration or a
+    // status lying about the fold refuses — never relabelled.
+    for f in [
+        EfficacyFacts {
+            population: "raw".into(),
+            ..ef.clone()
+        },
+        EfficacyFacts {
+            test_arm: "arm:o-tb-oracle".into(),
+            control_arm: "arm:h-podman-oracle".into(),
+            ..ef.clone()
+        },
+        EfficacyFacts {
+            prior: "beta{2,2}".into(),
+            ..ef.clone()
+        },
+        EfficacyFacts {
+            level_ppm: 900_000,
+            ..ef.clone()
+        },
+        EfficacyFacts {
+            draws_requested: 2_000,
+            ..ef.clone()
+        },
+        EfficacyFacts {
+            status: "executed".into(),
+            ..ef.clone()
+        },
+    ] {
+        assert!(
+            matches!(evaluate_efficacy(&f), LegVerdict::Refused(_)),
+            "{f:?}"
+        );
+    }
+    let mut drift = ef.clone();
+    drift.slots[0].arm_id = "arm:foreign".into();
+    assert!(matches!(evaluate_efficacy(&drift), LegVerdict::Refused(_)));
+    let mut cell = ef.clone();
+    cell.strata[0].cells[0].test_c += 1;
+    assert!(matches!(evaluate_efficacy(&cell), LegVerdict::Refused(_)));
+    let mut dropped = ef.clone();
+    dropped.slots.pop();
+    assert!(matches!(
+        evaluate_efficacy(&dropped),
+        LegVerdict::Refused(_)
+    ));
+    // The cell table re-adds to the committed fold — task-for-task.
+    for st in &ef.strata {
+        let mut want: BTreeMap<String, [[u64; 2]; 2]> = BTreeMap::new();
+        for s in &ef.slots {
+            if s.stratum != st.stratum {
+                continue;
+            }
+            let arm = (s.arm_id == ef.test_arm) as usize;
+            let e = want.entry(s.task_id.clone()).or_insert([[0; 2]; 2]);
+            e[arm][1] += 1;
+            if s.receipt_verdict == "resolved" {
+                e[arm][0] += 1;
+            }
+        }
+        for c in &st.cells {
+            let w = &want[&c.task_id];
+            assert_eq!((c.test_c, c.test_n), (w[0][0], w[0][1]), "{}", c.task_id);
+            assert_eq!(
+                (c.control_c, c.control_n),
+                (w[1][0], w[1][1]),
+                "{}",
+                c.task_id
+            );
+        }
+    }
 }

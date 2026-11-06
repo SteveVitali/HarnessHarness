@@ -1,10 +1,10 @@
 //! `hh-study-report/1` — the admitted-study recompute report (R5.49;
-//! recomputed 2026-11-06 over the executed parity + partial
-//! confirmation evidence — GATE-G13's N=0 record and GATE-G14's
+//! recomputed 2026-11-06 over the executed parity + the completed
+//! confirmation cohort — GATE-G13's N=0 record and GATE-G14's
 //! **quote-only confirmation** record stand as committed history;
 //! evidence spec §3's denominators/missingness + AC-3-2's family
-//! separation, §4.2's mechanism denominators, §9.2's cost rows and
-//! AC-9-3's layer-separate closure).
+//! separation, §4.2's mechanism denominators, §4.3's finite-manifest
+//! contrast, §9.2's cost rows and AC-9-3's layer-separate closure).
 //!
 //! Records-in only: every leg evaluator folds *supplied* facts — the
 //! committed packets' members echoed verbatim, the re-derived
@@ -19,11 +19,15 @@
 //! `inconclusive` — never a fabricated stage. The parity tranche
 //! verified 30/30 directional agreement (`hh-parity-tranche-report/1`
 //! — the two earlier confounded tranches stand verbatim, never
-//! deleted); the confirmation cohort executed `partial` (250/300
-//! slots with real receipts across the frozen run + the egress
-//! supplement — the 50 inconclusive slots stay verbatim). The
-//! efficacy, sharp-null and adoption families stay `unavailable` —
-//! a partial cohort is not a finite-manifest contrast.
+//! deleted); the confirmation cohort executed **300/300** — four
+//! named epochs (the frozen run + the egress, s4-completion-gce and
+//! s4-30slot-repairs-gce supplements) each covering exactly the prior
+//! residue, all four packets standing byte-untouched. Under GATE-G19's
+//! complete-cohort admission the efficacy leg carries the registered
+//! finite-manifest contrast (REQ-D-107/109) per declared stratum —
+//! its supplied cell table re-adds to the committed receipt fold;
+//! the sharp-null sign-flip stays `unavailable{not_computed}` (not
+//! part of the admitted fold).
 
 use hharness_identity::idp::idp_digest;
 use hharness_wire::json::Json;
@@ -34,8 +38,27 @@ use crate::preflight::{Leg, LegVerdict};
 pub const VERSION: &str = "hh-study-report/1";
 const DOMAIN: &str = "study_report";
 
-/// The ten legs (frozen vocabulary — the recompute scope).
-pub const LEGS: [&str; 10] = [
+/// The eleven legs (frozen vocabulary — the recompute scope; the
+/// `efficacy` leg lands with the completed cohort — GATE-G19's
+/// complete-cohort admission, R5.59).
+pub const LEGS: [&str; 11] = [
+    "freeze_identities",
+    "pre_flight",
+    "useful_s1",
+    "ops_live",
+    "activation",
+    "pilot",
+    "parity",
+    "confirmation",
+    "efficacy",
+    "families",
+    "costs",
+];
+
+/// The vocabulary at the 2026-11-04 and 2026-11-06 committed packets
+/// (the `efficacy` leg landed later, R5.59) — a committed packet
+/// refolds its own era's legs, never the current spine's.
+pub const LEGS_V1: [&str; 10] = [
     "freeze_identities",
     "pre_flight",
     "useful_s1",
@@ -826,6 +849,24 @@ pub const CONFIRM_VERSION: &str = "hh-s4-confirmation/1";
 /// — the committed named supplement `2026-11-05-s4-egress-cohort.json`).
 pub const CONFIRM_SUPPLEMENT_VERSION: &str = "hh-s4-egress-supplement/1";
 
+/// The completion-epoch packet version (`hh-s4-completion/1` — the
+/// committed `2026-11-06-s4-completion.json`, epoch `s4-completion-gce`).
+pub const CONFIRM_COMPLETION_VERSION: &str = "hh-s4-completion/1";
+
+/// The repairs-epoch packet version (`hh-s4-30slot-repairs/1` — the
+/// committed `2026-11-06-s4-30slot-repairs.json`, epoch
+/// `s4-30slot-repairs-gce`).
+pub const CONFIRM_REPAIRS_VERSION: &str = "hh-s4-30slot-repairs/1";
+
+/// The admitted supplement-epoch schemas — each a named second-attempt
+/// epoch over exactly the prior residue (the original records stand;
+/// denominators re-add verbatim, never inflated).
+const EPOCH_VERSIONS: [&str; 3] = [
+    CONFIRM_SUPPLEMENT_VERSION,
+    CONFIRM_COMPLETION_VERSION,
+    CONFIRM_REPAIRS_VERSION,
+];
+
 /// The parity stage — the committed `hh-parity-n0/1` withheld record
 /// (history — refolds `withheld`, discharged by real evidence, never
 /// rewritten) plus the executed tranche packet's supplied members.
@@ -908,13 +949,33 @@ pub fn evaluate_parity_stage(f: &ParityStageFacts) -> LegVerdict {
     LegVerdict::Verified
 }
 
+/// One named supplement epoch's committed members, verbatim — a
+/// second-attempt epoch over exactly the prior residue (the original
+/// records stand; denominators re-add, never inflated).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfirmEpochFacts {
+    /// The epoch packet's `schema` (an `EPOCH_VERSIONS` member).
+    pub version: String,
+    /// Its recorded `verdict` — `partial` while a residue remains,
+    /// `executed` when the epoch's slots all carry receipts.
+    pub verdict: String,
+    /// `counts.planned` — exactly the prior epoch's inconclusive set.
+    pub planned: u64,
+    /// `counts.executed` — real receipts.
+    pub executed: u64,
+    /// `counts.inconclusive` — the residue the next epoch covers.
+    pub inconclusive: u64,
+    /// `first_subject_denominators.executed`.
+    pub first_executed: u64,
+    /// `first_subject_denominators.planned` — the first subjects the
+    /// epoch's slot set carries.
+    pub first_total: u64,
+}
+
 /// The confirmation stage — the committed `hh-confirm-withheld/1`
 /// withheld record (history — refolds `withheld`, discharged by the
-/// executed cohort, never rewritten) plus the frozen-run and
-/// egress-supplement packets' supplied members. The supplement is a
-/// named second-attempt epoch over exactly the prior-inconclusive
-/// slots — the original records stand; denominators re-add
-/// verbatim, never inflated.
+/// executed cohort, never rewritten) plus the frozen-run packet and
+/// the named supplement epochs' supplied members.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmStageFacts {
     /// The committed `hh-confirm-withheld/1` record (`withheld` —
@@ -936,27 +997,15 @@ pub struct ConfirmStageFacts {
     pub first_executed: u64,
     /// `first_subject_denominators.planned` (60).
     pub first_total: u64,
-    /// The supplement's `schema` (`hh-s4-egress-supplement/1`).
-    pub supplement_version: String,
-    /// Its recorded `verdict` (`partial`).
-    pub supplement_verdict: String,
-    /// `counts.planned` (140 — exactly the prior inconclusive set).
-    pub sup_planned: u64,
-    /// `counts.executed` (90).
-    pub sup_executed: u64,
-    /// `counts.inconclusive` (50 — the bounds the bounded egress
-    /// profile cannot lift, verbatim).
-    pub sup_inconclusive: u64,
-    /// `first_subject_denominators.executed` (18).
-    pub sup_first_executed: u64,
-    /// `first_subject_denominators.planned` (28).
-    pub sup_first_total: u64,
+    /// The named supplement epochs, in commit order (egress →
+    /// completion → repairs): each covers exactly the prior residue.
+    pub epochs: Vec<ConfirmEpochFacts>,
     /// The parity tranche's `protocol_id` — must byte-equal the
     /// cohort's (the same frozen manifest, never re-picked).
     pub parity_protocol_id: String,
-    /// The cohort's `protocol_id` (both packets share it).
+    /// The cohort's `protocol_id` (every epoch shares it).
     pub protocol_id: String,
-    /// Combined executed first subjects (32 + 18 = 50).
+    /// Combined executed first subjects (32 + 18 + 4 + 6 = 60).
     pub subjects_first: u64,
     /// `tranche_absent` — `false` (the cohort exists).
     pub tranche_absent: bool,
@@ -964,8 +1013,8 @@ pub struct ConfirmStageFacts {
     pub parity_absent: bool,
     /// `confirmation_blocked` — `false` (the cohort ran).
     pub confirmation_blocked: bool,
-    /// `s4_unmet` — `true`: the cohort is `partial` — 50 slots stay
-    /// inconclusive verbatim; partial is not met.
+    /// `s4_unmet` — `true` while any residue remains; `false` at the
+    /// completed cohort (every slot carries a real receipt).
     pub s4_unmet: bool,
     /// The recorded gate (`GATE-G14` — the withheld record's gate).
     pub gate: String,
@@ -973,13 +1022,14 @@ pub struct ConfirmStageFacts {
 
 /// `evaluate_confirm_stage` — the withheld record still refolds
 /// `withheld` (committed history); the cohort's members re-check:
-/// the frozen run's dispositions re-add to its planned slots, the
-/// supplement covers exactly the prior-inconclusive set and re-adds
-/// to its own plan, `partial` is the honest verdict for a
-/// non-zero/non-full executed cohort, the combined first-subject
-/// count re-adds, the protocol ids byte-equal the parity tranche's
-/// (one frozen manifest), and S4 stays unmet while any slot is
-/// inconclusive — never inflated, never a dropped denominator.
+/// the frozen run's dispositions re-add to its planned slots, every
+/// named supplement epoch covers exactly the prior residue and
+/// re-adds to its own plan, an epoch's verdict is `executed` only
+/// when its slots all carry receipts (`partial` otherwise), the
+/// combined first-subject count re-adds, the protocol ids byte-equal
+/// the parity tranche's (one frozen manifest), and S4 stays unmet
+/// while any residue remains — never inflated, never a dropped
+/// denominator.
 pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     if f.echo.version != crate::confirm::VERSION {
         return LegVerdict::Refused(format!("version:{}", f.echo.version));
@@ -993,9 +1043,6 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     }
     if f.confirm_version != CONFIRM_VERSION {
         return LegVerdict::Refused(format!("confirm_version:{}", f.confirm_version));
-    }
-    if f.supplement_version != CONFIRM_SUPPLEMENT_VERSION {
-        return LegVerdict::Refused(format!("supplement_version:{}", f.supplement_version));
     }
     for (member, id) in [
         ("protocol_id", &f.protocol_id),
@@ -1016,12 +1063,6 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     if f.executed + f.inconclusive + f.failed != f.planned {
         return LegVerdict::Refused("dispositions_ne_planned".to_string());
     }
-    if f.sup_planned != f.inconclusive {
-        return LegVerdict::Refused("supplement_scope".to_string());
-    }
-    if f.sup_executed + f.sup_inconclusive != f.sup_planned {
-        return LegVerdict::Refused("supplement_dispositions".to_string());
-    }
     // `partial` is the honest verdict for a non-zero/non-full
     // executed cohort — zero executed would be a different record,
     // full executed would be `executed`, never `partial`.
@@ -1031,21 +1072,48 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
             f.confirm_verdict, f.executed
         ));
     }
-    if f.sup_executed == 0 || f.sup_executed == f.sup_planned || f.supplement_verdict != "partial" {
-        return LegVerdict::Refused(format!(
-            "supplement_verdict:{}:executed:{}",
-            f.supplement_verdict, f.sup_executed
-        ));
-    }
-    if f.first_executed + f.sup_first_executed != f.subjects_first {
-        return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
-    }
-    if f.first_executed > f.first_total || f.sup_first_executed > f.sup_first_total {
+    if f.first_executed > f.first_total {
         return LegVerdict::Refused("first_denominators".to_string());
     }
-    // S4 stays unmet while any slot is inconclusive — the 50
-    // remaining inconclusive slots keep `s4_unmet` true verbatim.
-    if f.s4_unmet != (f.sup_inconclusive > 0) {
+    // The epoch chain — each named supplement covers exactly the
+    // prior residue, re-adds to its own plan and carries its own
+    // first-subject denominators; the residue folds forward.
+    let mut residual = f.inconclusive;
+    let mut subjects_first = f.first_executed;
+    for e in &f.epochs {
+        if !EPOCH_VERSIONS.contains(&e.version.as_str()) {
+            return LegVerdict::Refused(format!("epoch_version:{}", e.version));
+        }
+        if e.planned != residual {
+            return LegVerdict::Refused(format!("epoch_scope:{}:{}", e.version, e.planned));
+        }
+        if e.executed + e.inconclusive != e.planned {
+            return LegVerdict::Refused(format!("epoch_dispositions:{}", e.version));
+        }
+        if e.executed == 0 {
+            return LegVerdict::Refused(format!("epoch_empty:{}", e.version));
+        }
+        // `executed` only when every one of the epoch's slots carries
+        // a receipt — any residue keeps the honest `partial`.
+        if e.inconclusive == 0 {
+            if e.verdict != "executed" {
+                return LegVerdict::Refused(format!("epoch_verdict:{}", e.verdict));
+            }
+        } else if e.verdict != "partial" {
+            return LegVerdict::Refused(format!("epoch_verdict:{}", e.verdict));
+        }
+        if e.first_executed > e.first_total || e.first_total > e.planned {
+            return LegVerdict::Refused(format!("epoch_first_denominators:{}", e.version));
+        }
+        subjects_first += e.first_executed;
+        residual = e.inconclusive;
+    }
+    if subjects_first != f.subjects_first {
+        return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
+    }
+    // S4 stays unmet while any residue remains — at the completed
+    // cohort (300/300 receipts) `s4_unmet` folds `false` verbatim.
+    if f.s4_unmet != (residual > 0) {
         return LegVerdict::Refused(format!("s4_unmet:{}", f.s4_unmet));
     }
     if f.tranche_absent || f.parity_absent || f.confirmation_blocked {
@@ -1054,19 +1122,250 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     LegVerdict::Verified
 }
 
-// ── leg 9 — families (the REQ-D-009 separation) ─────────────────────
+// ── leg 9 — efficacy (the registered finite-manifest contrast) ──────
+
+/// One supplied cohort slot's outcome — the committed packet's
+/// `task_id`/`arm_id` and the manifest's declared `stratum` member,
+/// verbatim, plus `receipt.verdict`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EfficacySlot {
+    /// The committed slot's `task_id`.
+    pub task_id: String,
+    /// Its `arm_id` — the declared test/control arms only.
+    pub arm_id: String,
+    /// The task's declared stratum (the manifest selection member).
+    pub stratum: String,
+    /// The committed `receipt.verdict` (`resolved`/`unresolved`) —
+    /// anything else is a missing receipt, and the complete-cohort
+    /// admission fails `incomplete_cohort`, never a dropped member.
+    pub receipt_verdict: String,
+}
+
+/// One per-task cell the estimator consumed — `{s,n}` per arm.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EfficacyCell {
+    /// The task.
+    pub task_id: String,
+    /// Test-arm successes (`resolved` receipts).
+    pub test_c: u64,
+    /// Test-arm trials.
+    pub test_n: u64,
+    /// Control-arm successes.
+    pub control_c: u64,
+    /// Control-arm trials.
+    pub control_n: u64,
+}
+
+/// One declared stratum's supplied result — the estimator's reported
+/// members verbatim, or the typed refusal it produced.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EfficacyStratum {
+    /// The stratum.
+    pub stratum: String,
+    /// `true` — the estimator computed the contrast; `false` — a
+    /// typed refusal stands.
+    pub computed: bool,
+    /// The per-task cells the estimator consumed — re-adds to the
+    /// supplied slot fold (the estimator read the committed records,
+    /// never a re-pick).
+    pub cells: Vec<EfficacyCell>,
+    /// `observed_contrast_ppm` — the equal-task observed contrast.
+    pub observed_contrast_ppm: i64,
+    /// `posterior_mean_ppm` — the analytic posterior mean.
+    pub posterior_mean_ppm: i64,
+    /// The reported 95% equal-tail credible interval (ppm).
+    pub interval_lo_ppm: i64,
+    /// The reported interval's upper endpoint.
+    pub interval_hi_ppm: i64,
+    /// `draws_used` — the full doubling-ladder draw count.
+    pub draws_used: u64,
+    /// The typed refusal when not computed (empty when computed).
+    pub refusal: String,
+}
+
+/// The efficacy stage — GATE-G19's complete-cohort admission: the
+/// registered finite-manifest contrast (REQ-D-107/109, §4.3) over the
+/// completed cohort. Supplied members: the registered declaration
+/// verbatim, the 300 slots' receipt fold and the per-stratum results
+/// the estimator produced — the evaluator re-adds the cells from the
+/// supplied fold and folds the honest status; it never re-estimates.
+/// The complete-cohort admission holds only while every slot carries
+/// a real receipt — one missing verdict folds
+/// `unavailable{incomplete_cohort}` verbatim, never a dropped member.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EfficacyFacts {
+    /// `population` — the named set (`canonical`).
+    pub population: String,
+    /// `test_arm` — the B arm (`arm:h-podman-oracle`,
+    /// clear_tool_results).
+    pub test_arm: String,
+    /// `control_arm` — the A arm (`arm:o-tb-oracle`, evict_oldest).
+    pub control_arm: String,
+    /// `prior` — the registered `beta{1,1}`.
+    pub prior: String,
+    /// `direction` — `test_minus_control`.
+    pub direction: String,
+    /// `level_ppm` — the frozen 95% (950000).
+    pub level_ppm: i64,
+    /// `draws_requested` — the frozen 8000.
+    pub draws_requested: u64,
+    /// The declared seed (0 — the frozen declaration).
+    pub seed: u64,
+    /// The cohort's `protocol_id` — the frozen manifest's id.
+    pub protocol_id: String,
+    /// The cohort's receipt fold — every slot, verbatim.
+    pub slots: Vec<EfficacySlot>,
+    /// Per declared stratum — the estimator's output or refusal.
+    pub strata: Vec<EfficacyStratum>,
+    /// The honest status spelling.
+    pub status: String,
+}
+
+/// `evaluate_efficacy` — the declared inputs must equal the registered
+/// declaration verbatim; every supplied slot carries a receipt verdict
+/// on a declared arm (one missing/foreign member folds
+/// `incomplete_cohort`/`refused` — never a dropped member); the
+/// supplied strata cover exactly the strata the slots span; each
+/// computed stratum's cells re-add to the supplied fold task-for-task
+/// (the estimator consumed the committed records) with both arms paired
+/// and the R≥5 floor holding; a refused stratum carries its typed
+/// refusal verbatim; the status spelling folds the results — all
+/// computed → `computed{strata:…}`, all refused → `unavailable{…}`,
+/// mixed → `partial{computed:…;refused:…}`.
+pub fn evaluate_efficacy(f: &EfficacyFacts) -> LegVerdict {
+    // ── the registered declaration, verbatim ──────────────────────
+    if f.population != "canonical" {
+        return LegVerdict::Refused(format!("population:{}", f.population));
+    }
+    if f.direction != "test_minus_control" {
+        return LegVerdict::Refused(format!("direction:{}", f.direction));
+    }
+    if f.test_arm != "arm:h-podman-oracle" || f.control_arm != "arm:o-tb-oracle" {
+        return LegVerdict::Refused(format!("arms:{}/{}", f.test_arm, f.control_arm));
+    }
+    if f.prior != "beta{1,1}" {
+        return LegVerdict::Refused(format!("prior:{}", f.prior));
+    }
+    if f.level_ppm != 950_000 {
+        return LegVerdict::Refused(format!("level_ppm:{}", f.level_ppm));
+    }
+    if f.draws_requested != 8_000 {
+        return LegVerdict::Refused(format!("draws_requested:{}", f.draws_requested));
+    }
+    if f.protocol_id.len() != 64 || !f.protocol_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return LegVerdict::Inconclusive("protocol_id_absent".to_string());
+    }
+    // ── the cohort fold — the complete-cohort admission ───────────
+    if f.slots.is_empty() {
+        return LegVerdict::Inconclusive("cohort_absent".to_string());
+    }
+    if f.slots.len() as u64 != crate::confirm::FROZEN_SLOTS {
+        return LegVerdict::Refused(format!("cohort_slots:{}", f.slots.len()));
+    }
+    // Per-stratum per-(task,arm) counts re-added from the fold.
+    let mut fold: std::collections::BTreeMap<String, std::collections::BTreeMap<String, [u64; 2]>> =
+        std::collections::BTreeMap::new();
+    let mut cell_n: std::collections::BTreeMap<(String, String, String), [u64; 2]> =
+        std::collections::BTreeMap::new();
+    for s in &f.slots {
+        if s.receipt_verdict != "resolved" && s.receipt_verdict != "unresolved" {
+            return LegVerdict::Inconclusive("incomplete_cohort".to_string());
+        }
+        if s.task_id.is_empty() || s.stratum.is_empty() {
+            return LegVerdict::Refused("slot_member_absent".to_string());
+        }
+        if s.arm_id != f.test_arm && s.arm_id != f.control_arm {
+            return LegVerdict::Refused(format!("slot_arm:{}", s.arm_id));
+        }
+        let idx = (s.arm_id == f.test_arm) as usize;
+        let c = cell_n
+            .entry((s.stratum.clone(), s.task_id.clone(), s.arm_id.clone()))
+            .or_insert([0; 2]);
+        c[1] += 1;
+        if s.receipt_verdict == "resolved" {
+            c[0] += 1;
+        }
+        fold.entry(s.stratum.clone())
+            .or_default()
+            .entry(s.task_id.clone())
+            .or_insert([0; 2])[idx] = 1;
+    }
+    // ── per-stratum: coverage, the re-added cells, the fold's verdict ─
+    if f.strata.len() != fold.len() {
+        return LegVerdict::Refused(format!("strata:{}", f.strata.len()));
+    }
+    let mut computed_csv: Vec<String> = Vec::new();
+    let mut refused_csv: Vec<String> = Vec::new();
+    for st in &f.strata {
+        let tasks = match fold.get(&st.stratum) {
+            Some(t) => t,
+            None => return LegVerdict::Refused(format!("stratum_foreign:{}", st.stratum)),
+        };
+        if !st.computed {
+            if st.refusal.is_empty() {
+                return LegVerdict::Refused(format!("stratum_refusal_absent:{}", st.stratum));
+            }
+            refused_csv.push(format!("{}:{}", st.stratum, st.refusal));
+            continue;
+        }
+        // The cells the estimator consumed must re-add to the fold —
+        // task-for-task, both arms paired, the R≥5 first-slot floor.
+        if st.cells.len() != tasks.len() || tasks.len() < 2 {
+            return LegVerdict::Refused(format!("stratum_cells:{}", st.stratum));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for c in &st.cells {
+            if !tasks.contains_key(&c.task_id) || !seen.insert(c.task_id.clone()) {
+                return LegVerdict::Refused(format!("cell_task:{}", c.task_id));
+            }
+            for (arm, (sc, sn)) in [
+                (&f.test_arm, (c.test_c, c.test_n)),
+                (&f.control_arm, (c.control_c, c.control_n)),
+            ] {
+                let want = cell_n
+                    .get(&(st.stratum.clone(), c.task_id.clone(), arm.clone()))
+                    .copied()
+                    .unwrap_or([0; 2]);
+                if (sc, sn) != (want[0], want[1]) {
+                    return LegVerdict::Refused(format!("cell_counts:{}", c.task_id));
+                }
+                if sn < 5 {
+                    return LegVerdict::Refused(format!("cell_floor:{}", c.task_id));
+                }
+            }
+        }
+        if st.interval_lo_ppm > st.interval_hi_ppm || st.draws_used < f.draws_requested {
+            return LegVerdict::Refused(format!("stratum_members:{}", st.stratum));
+        }
+        computed_csv.push(st.stratum.clone());
+    }
+    computed_csv.sort();
+    refused_csv.sort();
+    let expected = if computed_csv.len() == f.strata.len() && !f.strata.is_empty() {
+        format!("computed{{strata:{}}}", computed_csv.join(","))
+    } else if computed_csv.is_empty() {
+        format!("unavailable{{{}}}", refused_csv.join(";"))
+    } else {
+        format!(
+            "partial{{computed:{};refused:{}}}",
+            computed_csv.join(","),
+            refused_csv.join(";")
+        )
+    };
+    if f.status != expected {
+        return LegVerdict::Refused(format!("status:{}!={}", f.status, expected));
+    }
+    LegVerdict::Verified
+}
 
 /// The required honest family statuses (the committed-evidence
 /// state): a missing margin, opportunity or admission is never a
 /// pass — the unavailable families stay unavailable. The parity
-/// family now records the verified tranche; efficacy and the
-/// sharp-null family stay unavailable over a `partial` cohort —
-/// 250/300 receipted slots is not a finite-manifest contrast, and
-/// the 50 inconclusive slots stay inconclusive verbatim.
-pub const REQUIRED_FAMILIES: [(&str, &str); 9] = [
-    ("efficacy", "unavailable{partial}"),
+/// family records the verified tranche; the efficacy and sharp-null
+/// families are the state-dependent members — `REQUIRED_EFFICACY`
+////`REQUIRED_SHARP_NULL` hold the completed-cohort spellings.
+pub const REQUIRED_FAMILIES: [(&str, &str); 7] = [
     ("task_mixture", "descriptive{pilot_recomputed}"),
-    ("sharp_null", "unavailable{partial}"),
     ("parity", "executed{verified_30_30}"),
     ("mechanism", "executed{activation,pilot}"),
     ("engineering", "executed{ops_live;backend_verified}"),
@@ -1075,17 +1374,26 @@ pub const REQUIRED_FAMILIES: [(&str, &str); 9] = [
     ("adoption", "unavailable{not_started}"),
 ];
 
+/// The sharp-null family's honest spelling at the completed cohort —
+/// the registered lane-randomization sign-flip test is not part of
+/// GATE-G19's admitted fold: unavailable, never computed here.
+pub const REQUIRED_SHARP_NULL: &str = "unavailable{not_computed}";
+
 /// The supplied family statuses — engineered capability, task
 /// truth, bounded operation, scientific effect and adoption
 /// distinguished (REQ-D-009 / AC-3-2), the unavailable families
 /// retained verbatim.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FamilyFacts {
-    /// Finite-manifest efficacy.
+    /// Finite-manifest efficacy — must equal `required_efficacy`,
+    /// the efficacy leg's computed status spelling.
     pub efficacy: String,
+    /// The efficacy leg's status the family must carry verbatim.
+    pub required_efficacy: String,
     /// Task-mixture sensitivity.
     pub task_mixture: String,
-    /// The sharp-null family.
+    /// The sharp-null family — `REQUIRED_SHARP_NULL` (the sign-flip
+    /// test is not part of the admitted fold).
     pub sharp_null: String,
     /// Parity/equivalence.
     pub parity: String,
@@ -1104,7 +1412,8 @@ pub struct FamilyFacts {
 }
 
 /// `evaluate_families` — every family's supplied status equals its
-/// required honest spelling; no pass/met/claim wording may appear in
+/// required honest spelling; efficacy carries the efficacy leg's
+/// computed status verbatim; no pass/met/claim wording may appear in
 /// an unavailable family's status; no claim of either sign is
 /// present.
 pub fn evaluate_families(f: &FamilyFacts) -> LegVerdict {
@@ -1119,15 +1428,19 @@ pub fn evaluate_families(f: &FamilyFacts) -> LegVerdict {
         ("operations", &f.operations),
         ("adoption", &f.adoption),
     ];
-    for (name, required) in REQUIRED_FAMILIES {
-        let have = supplied
-            .iter()
-            .find(|(n, _)| *n == name)
-            .map(|(_, s)| *s)
-            .unwrap_or("");
+    for (name, have) in supplied {
         if have.is_empty() {
             return LegVerdict::Inconclusive(format!("family_absent:{name}"));
         }
+        let required = match name {
+            "efficacy" => f.required_efficacy.as_str(),
+            "sharp_null" => REQUIRED_SHARP_NULL,
+            _ => REQUIRED_FAMILIES
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, s)| *s)
+                .unwrap_or(""),
+        };
         for claim in [
             "passed",
             "satisfied",
@@ -1161,15 +1474,16 @@ pub struct CostFacts {
     /// Executed first subjects in the admitted packets
     /// (2 activation + 10 pilot = 12).
     pub subjects_first: u64,
-    /// Gated-stage first subjects executed: 30 parity pairs + 50
-    /// confirmation first subjects (32 frozen run + 18 supplement)
-    /// = 80.
+    /// Gated-stage first subjects executed: 30 parity pairs + 60
+    /// confirmation first subjects (32 frozen run + 18 egress +
+    /// 4 completion + 6 repairs) = 90.
     pub gated_subjects: u64,
 }
 
 /// `evaluate_costs` — every committed packet's exposure is `0`, the
-/// recomputed total is USD $0.00, 12 admitted first subjects, 80
-/// gated-stage first subjects (30 parity + 50 confirmation).
+/// recomputed total is USD $0.00, 12 admitted first subjects, 90
+/// gated-stage first subjects (30 parity + 60 confirmation across
+/// the four epochs).
 pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
     let mut total: i64 = 0;
     for (packet, micros) in &f.per_packet {
@@ -1178,7 +1492,7 @@ pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
         }
         total += micros;
     }
-    if f.per_packet.len() != 12 {
+    if f.per_packet.len() != 14 {
         return LegVerdict::Inconclusive(format!("packets:{}", f.per_packet.len()));
     }
     if total != 0 {
@@ -1187,7 +1501,7 @@ pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
     if f.subjects_first != 12 {
         return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
     }
-    if f.gated_subjects != 80 {
+    if f.gated_subjects != 90 {
         return LegVerdict::Refused(format!("gated_subjects:{}", f.gated_subjects));
     }
     LegVerdict::Verified
@@ -1243,11 +1557,11 @@ pub struct StudyReport {
     pub s1_unmet: bool,
     /// S3 met — the parity tranche verified 30/30 (`false`).
     pub s3_unmet: bool,
-    /// S4 stays unmet — the confirmation cohort is `partial`
-    /// (`true`).
+    /// S4 met — the confirmation cohort executed 300/300 (`false`).
     pub s4_unmet: bool,
-    /// The study's honest status —
-    /// `unmet{efficacy_unavailable;s4_partial}`.
+    /// The study's honest status — `unmet{s1_failed}`: S1's subjects
+    /// failed (task truth unmet); parity, the cohort and the efficacy
+    /// contrast landed.
     pub study: String,
     /// The admission shape — `recompute_only`, never an execution.
     pub admission: String,
@@ -1294,12 +1608,31 @@ impl StudyReport {
     }
 }
 
-/// `assemble(legs)` — fold the ten leg verdicts into the
+/// The folded members the caller binds — the report's honest state
+/// is the fold's output, never hard-coded.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StudyFold {
+    /// Executed first subjects across admitted packets (12).
+    pub subjects_first: u64,
+    /// Total declared exposure in currency micros (0).
+    pub exposure_micros: i64,
+    /// S1 stays unmet (`true` — the useful stage's record is
+    /// `failed`).
+    pub s1_unmet: bool,
+    /// S3 met — parity verified 30/30 (`false`).
+    pub s3_unmet: bool,
+    /// The confirmation fold's `s4_unmet`.
+    pub s4_unmet: bool,
+    /// The study's honest status spelling.
+    pub study: String,
+}
+
+/// `assemble(legs, fold)` — fold the leg verdicts into the
 /// disposition and mint `packet_id` last over the canonical record.
 /// Every leg name must be a `LEGS` member, unique and complete — a
 /// malformed leg set is a `refused` assembly, never a partial
 /// packet.
-pub fn assemble(legs: Vec<Leg>) -> Result<StudyReport, String> {
+pub fn assemble(legs: Vec<Leg>, fold: &StudyFold) -> Result<StudyReport, String> {
     let mut seen = std::collections::BTreeSet::new();
     for l in &legs {
         if !LEGS.contains(&l.name.as_str()) {
@@ -1334,12 +1667,12 @@ pub fn assemble(legs: Vec<Leg>) -> Result<StudyReport, String> {
         packet_id: String::new(),
         version: VERSION.to_string(),
         legs,
-        subjects_first: 12,
-        exposure_micros: 0,
-        s1_unmet: true,
-        s3_unmet: false,
-        s4_unmet: true,
-        study: "unmet{efficacy_unavailable;s4_partial}".to_string(),
+        subjects_first: fold.subjects_first,
+        exposure_micros: fold.exposure_micros,
+        s1_unmet: fold.s1_unmet,
+        s3_unmet: fold.s3_unmet,
+        s4_unmet: fold.s4_unmet,
+        study: fold.study.clone(),
         disposition,
         admission: "recompute_only".to_string(),
     };

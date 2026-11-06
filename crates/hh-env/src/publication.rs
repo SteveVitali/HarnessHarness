@@ -143,7 +143,7 @@ pub fn evaluate_pins(f: &PinsFacts) -> LegVerdict {
 /// The committed study-report schema (`study::VERSION`).
 pub const EXPECTED_STUDY_VERSION: &str = "hh-study-report/1";
 /// The ten-leg study-report vocabulary, verbatim.
-pub const EXPECTED_STUDY_LEGS: &str = "freeze_identities,pre_flight,useful_s1,ops_live,activation,pilot,parity,confirmation,families,costs";
+pub const EXPECTED_STUDY_LEGS: &str = "freeze_identities,pre_flight,useful_s1,ops_live,activation,pilot,parity,confirmation,efficacy,families,costs";
 /// The `study::Disposition` closed codec, verbatim — `reported`
 /// only when the recompute matched (never `satisfied`/`complete`).
 pub const EXPECTED_STUDY_DISPOSITIONS: &str = "reported,failed,inconclusive";
@@ -151,7 +151,7 @@ pub const EXPECTED_STUDY_DISPOSITIONS: &str = "reported,failed,inconclusive";
 /// the adverse `task_truth:failed{s1_useful}` and the unavailable
 /// families retained as-is (REQ-D-009/AC-3-2; REQ-G-209 adverse
 /// retention).
-pub const EXPECTED_STUDY_FAMILIES: &str = "efficacy:unavailable{partial},task_mixture:descriptive{pilot_recomputed},sharp_null:unavailable{partial},parity:executed{verified_30_30},mechanism:executed{activation,pilot},engineering:executed{ops_live;backend_verified},task_truth:failed{s1_useful},operations:executed{ops_live},adoption:unavailable{not_started}";
+pub const EXPECTED_STUDY_FAMILIES: &str = "efficacy:computed{strata:easy,hard,medium},task_mixture:descriptive{pilot_recomputed},sharp_null:unavailable{not_computed},parity:executed{verified_30_30},mechanism:executed{activation,pilot},engineering:executed{ops_live;backend_verified},task_truth:failed{s1_useful},operations:executed{ops_live},adoption:unavailable{not_started}";
 /// The landed rights correction/supersession/freshness record
 /// schemas, verbatim (`hh-bundle::rights`) — REQ-G-202's
 /// version/loss/correction spine and REQ-G-209's
