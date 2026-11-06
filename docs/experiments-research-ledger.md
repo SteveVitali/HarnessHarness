@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        B2
-lastCompleted:   B3
+nextUnit:        C4
+lastCompleted:   B2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:30:17Z
+updatedAt:       2026-11-06T23:32:51Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -89,7 +89,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | B1 | **Terminal-Bench 2.1 + Harbor ground truth.** Dataset identity/pinning (Harbor Hub vs git), task format, per-task resources/GPU/internet needs, the oracle agent, podman backend and egress controls, custom model base URL, trajectories (ATIF), attempts conventions, leaderboard integrity rules, task feasibility on a single GCE VM, contamination canaries; the TB 1.0→2.1 differences that matter to HH. Reqs `REQ-XB-001…`. | R | done | [25_tb21-harbor.md](research/25_tb21-harbor.md) |
-| B2 | **Committed experiment runner and execution-surface port.** One in-repo runner shared by every phase (slot scheduling, cell lifecycle via `EnvDriver`/`hh-helper`, verdict channels — TB 1.0 parser and Harbor reward file — receipts, O-surface invocation of `tb`/`harbor`, records), its layering under K-2/CC1, and the $0 oracle re-proof design on TB 2.1. Depends A1, B1. Reqs `REQ-XB-101…`. | A | in-progress | → `design/31_experiment-runner.md` |
+| B2 | **Committed experiment runner and execution-surface port.** One in-repo runner shared by every phase (slot scheduling, cell lifecycle via `EnvDriver`/`hh-helper`, verdict channels — TB 1.0 parser and Harbor reward file — receipts, O-surface invocation of `tb`/`harbor`, records), its layering under K-2/CC1, and the $0 oracle re-proof design on TB 2.1. Depends A1, B1. Reqs `REQ-XB-101…`. | A | done | [31_experiment-runner.md](design/31_experiment-runner.md) |
 | B3 | **Compute backend and cost accounting.** GCE recipe as a committed re-runnable artifact, sizing against B1's resource census, quote method, unskippable teardown with receipt, a structured instance-hour cost field, and reconciliation with model spend. Depends B1. Reqs `REQ-XB-201…`. | A | done | [32_compute-backend.md](design/32_compute-backend.md) |
 
 ## C. Model mediation and harness hosting
@@ -99,7 +99,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | C1 | **Ollama Cloud and `glm-5.3-flash` ground truth.** Endpoints (OpenAI chat, Anthropic messages), tool calling, seed/temperature/determinism, served-model identity/fingerprinting, prompt caching per endpoint, concurrency and rate limits, usage/balance endpoints and their latency, spend-cap controls, retirement risk, off-peak pricing; implications for receipts and budget enforcement. Free metadata endpoints (`GET /api/tags`, `/api/show`, `/api/balance`) allowed with the operator's key read from `~/MetaHarness-harnessharness/.env` — never printed, never recorded; no inference. Reqs `REQ-XC-001…`. | R | done | [26_ollama-glm.md](research/26_ollama-glm.md) |
 | C2 | **Model-call mediation proxy (adapter B made real).** An HH-gateway-backed OpenAI-chat + Anthropic-messages endpoint reachable only from cells; per-slot budget enforcement through `hh-budget` `Account`; verbatim model-call receipts; model identity records; spend reconciliation with Ollama `/api/usage`; a `model_proxy` egress profile; the `evaluate_costs` $0-rule amendment and the slot-record fields paid runs need. Depends C1. Reqs `REQ-XC-101…`. | A | done | [33_model-mediation.md](design/33_model-mediation.md) |
 | C3 | **Harness survey and admission criteria.** Candidates from the HF harness leaderboard, Harbor's agent list and Ollama's integration list (and others found): license/ToS (incl. automated benchmarking of Claude Code), headless mode, pinned versions, Harbor adapter, base-URL support for Ollama's OpenAI/Anthropic endpoints, caching dependence, install reproducibility, trajectory export, known issues; a pilot shortlist with expected $/trial. Reqs `REQ-XC-201…`. | R | done | [27_harness-survey.md](research/27_harness-survey.md) |
-| C4 | **Harness hosting (adapter C made real).** Installing a pinned harness into the HH cell (reuse of Harbor's install templates vs own), offline-buildable images, configuration through the model proxy, trajectory capture, and the per-harness runner check (HH cell vs Harbor). Depends B2, C2, C3. Reqs `REQ-XC-301…`. | A | open | → `design/34_harness-hosting.md` |
+| C4 | **Harness hosting (adapter C made real).** Installing a pinned harness into the HH cell (reuse of Harbor's install templates vs own), offline-buildable images, configuration through the model proxy, trajectory capture, and the per-harness runner check (HH cell vs Harbor). Depends B2, C2, C3. Reqs `REQ-XC-301…`. | A | in-progress | → `design/34_harness-hosting.md` |
 
 ## D. Methods and admission
 
@@ -114,7 +114,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | E1 | **Reference-harness anatomy.** mini-swe-agent (version the HF board pins, 2.4.6) and Terminus-2: exact loop, templates/prompts, action parsing, observation formatting, limits, submit protocol, error/format-retry handling, summarization, configuration, and how Harbor runs each. Reqs `REQ-XE-001…`. | R | done | [28_reference-harness-anatomy.md](research/28_reference-harness-anatomy.md) |
-| E2 | **HIR and kernel gap closure.** Exec tool over `hh-embed/1` to podman cells, system-prompt/template slot, tool schemas on the wire, slot-configurable `StrategyParams`, `compaction_strategy` slot, observation-render policy, submit marker, Lab→cell→analysis glue for sweeps; mapping of each reference harness to an HIR document; which changes need ADRs or canonical-spec amendments. Depends E1, B2. Reqs `REQ-XE-101…`. | A | open | → `design/38_hir-native-gaps.md` |
+| E2 | **HIR and kernel gap closure.** Exec tool over `hh-embed/1` to podman cells, system-prompt/template slot, tool schemas on the wire, slot-configurable `StrategyParams`, `compaction_strategy` slot, observation-render policy, submit marker, Lab→cell→analysis glue for sweeps; mapping of each reference harness to an HIR document; which changes need ADRs or canonical-spec amendments. Depends E1, B2. Reqs `REQ-XE-101…`. | A | in-progress | → `design/38_hir-native-gaps.md` |
 
 ## F. Results publication and site
 
@@ -187,6 +187,7 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X36 | Settlement reserve: withhold 10% of each authorized phase cap from the proxy's hard cap until the first reconciliation with Ollama `/api/usage` (C2 recommendation) | | ratification |
 | Q-X37 | Where the model proxy and the Ollama key run during paid phases: on the phase VM (B3 recommends — runner, Harbor, store and proxy co-located; key placed on a cloud VM) or on the operator's laptop behind a tunnel (key never leaves the laptop; laptop must stay awake ~60 h) | | raise at stream checkpoint (security posture is the operator's call) |
 | Q-X38 | Compute safeguards: GCE max-run-duration action stop (B3 recommends) vs delete, and margin; tear the VM down across every intra-phase gate wait; billing-alert amount; reconcile billing by console reading (recommended) vs billing export | | ratification |
+| Q-X39 | Agent-phase allowlist provenance: may agents reach hosts that the $0 oracle run used but the task instruction does not name (default withheld), and should the oracle re-proof earn `live-executed` via a `scripts/live-verify.sh` leg? (B2 open questions 1–2) | | raise at stream checkpoint (Q-X39a hosts), ratification (Q-X39b label) |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -202,3 +203,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:22:29Z — Accepted D2 (`design/36`, 16 findings, REQ-XD-101…126; precision table defined as ε reachable at power ≥ .85 — consistent with the coordinator's expected-half-width check, e.g. N=150, q≈.12 → expected half-width ≈.143). D2 resolves a C1/E1 conflict in E1's favour (mini-swe-agent v2.4.6 uses native tool calls, so Ollama's tool parser is in its loop) — carried to H1 and O1 as a cross-note ruling. D2's original-harness-only pilot (~48 trials) is folded into D1's pilot gate, not a separate authorization. New pending Q-X34.
 - 2026-11-06T23:25:44Z — Accepted C2 (`design/33`, 17 findings, REQ-XC-101…125 refining C1's IDs without contradiction; proxy in `hharness-hosting` as a separately-spawned binary; cells reach it over a bind-mounted unix socket + std-only in-cell relay, no new dependency; five ADRs named). Coordinator sent B2 (running) C2's topology to reconcile with Q-X30's registry allowlist; B2 owns the profile composition. C2 recommendations recorded against Q-X22 (`high`) and Q-X21; new pending Q-X35, Q-X36.
 - 2026-11-06T23:30:17Z — Accepted B3 (`design/32`, 17 findings, REQ-XB-201…223). B3 found R5.59's post-teardown inventory check inconclusive; coordinator read-only check `gcloud projects describe harnessharness-evidence-8d7a99 --format='value(lifecycleState)'` at 2026-11-06T23:30:17Z returned `DELETE_REQUESTED` (project shut down; billing stopped; 30-day soft delete) — no billing leak. B3's corrected round-5 compute estimate (~$1.72 for 16:32Z–22:15:40Z vs the recorded ~$1.41) is an A2/phase-1 record input. New pending Q-X37, Q-X38.
+- 2026-11-06T23:32:51Z — Accepted B2 (`design/31`, 18 findings, REQ-XB-101…127; new `hharness-runner` crate + `hh-runner` binary over the existing experiment engine; one `allowlist_mediated` egress profile — cells on `--network none` reaching C2's model-proxy socket and a B2 registry-mediator socket; F18 records the C2 reconciliation: ADR-C2-C folds into B2's egress ADR, two sockets per cell, separate store roots — H1 confirms). Wave-3 assignments: C4 → `design/34_harness-hosting.md`; E2 → `design/38_hir-native-gaps.md`. New pending Q-X39.
