@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R5.57
-lastCompleted:   R5.56
+nextTicket:      R5.58
+lastCompleted:   R5.57
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r5.56
+chainTip:         codex/harnessharness-r5.57
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           5
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-06T17:18:19Z
+updatedAt:        2026-11-06T17:39:14Z
 ```
 
 ## OPEN FINDINGS
@@ -1257,3 +1257,4 @@ updatedAt:        2026-11-06T17:18:19Z
   alongside). Guard `tail-roles` repaired on this branch (OPEN FINDING). · harness:
   devin-desktop/swe-2-high/subagent.
 - 2026-11-06T17:18Z · R5.56 done — branch `codex/harnessharness-r5.56` · PR #285 · base `main` @`e703e2a0` (merged s4-completion tip — #284 landed; stacked-chain rule → base main; S4-egress records land via open #283). Admitted the scoped `bridge`-network cell profile as a first-class `PodmanBackend` variant (ADR-0421): `hh-helper --network <none|bridge>` + `S4_HELPER_NETWORK` (flag wins; unknown → usage 2) → `podman create --network bridge|none` (`create_args()` extracted); `start_helper` derives the flag from the attached policy (`egress_profile::podman_helper_args`: `net.mode=public` ⇒ bridge; `none`/`mediated` byte-identical, never widened); `admit_declared_deps` — transactional `declared_deps` admission (deps + owned/closed `host_bridge` residual + `local_container`, else typed `Unsupported`; validate() consulted — `PublicWithoutResidual`/`PublicBelowPrincipal` still fire — then verbatim `egress_profile`/`cell_network`/`policy_net_mode`/`declared_deps` ext stamps, the supplement's spellings); scratch `/tmp/s4-helper-egress` superseded. **Verify:** hh-helper r5_56 7/7 (binary + podman stub) + podman unit leg · hh-env r5_56 7/7 · all hh-env batteries 0 failures (helper_live 15/15, r5_44 4/4; one environmental flake — r5_42a stale `hh-env-pf-probe-*` name collision, `podman rm -f` → re-ran 10/10, recorded verbatim) · fmt clean · scoped clippy clean (`--all-targets` errors pre-existing at base — stash-verified) · tier-off helper build green + rebuilt · BL-47 += ADR-0421, adr-index/triggers regenerated (205) · guard **PASS DISPATCH — R5.56** pre+post · bm `.`/`--staged` 0 viol (8 warn) · bm-tools OK. **Deferrals:** none opened/closed — carried DF-H9-1 OPEN (disposition lands via #283). **Deviations:** none (~600 lines vs ≤900). **AC-1..5:** met (R-2.8.4 contributing-only; REQ-D-101/102/103 + REQ-E-011 owed to R5.58/R5.59). chainTip → codex/harnessharness-r5.56 · next → R5.57 · ci: pending #285 · layer: engineered · harness: devin-desktop/swe-2-high/subagent
+- 2026-11-06T17:39Z · R5.57 done — branch `codex/harnessharness-r5.57` · PR #287 · base `main` @`90fde635` (chain incident verbatim: PR #286 opened vs stacked base r5.56 at 17:39Z; operator merged #285 + deleted the base → #286 auto-closed; R5.57's two commits rebased `--onto main` — R5.56 + S4 evidence (#283) landed). Scoped verifier-bound admission for `swe-bench-astropy-2` (ADR-0422): `hh-env::verifier_bound` — `verifier_deadline_ms` = `min(declared, 900 s)` verbatim (tc-verdict+tc-vendored); `enforced_decl_sec` (ext member / `60` spec-gen default / malformed refuses); `admit_verifier_bound` — transactional named-task admission (task_id verbatim; enforced-before verified — the ledger's stated `60` cannot stamp on a spec that enforced `360`; `0 < enforced < admitted ≤ 900` = frozen §9.2 envelope; verbatim members required) → admitted decl + verbatim record; `slot_echo` for R5.58's rows. Enforced decl evidenced: durable `deadline: 360000` on both dispatches in frozen-run AND supplement stores (spec carried `task.yaml` `360.0`; `60.0` default never fired); walls 6.4–17.7 s — no bound fired; failure shape (`rc 127`/`no_pytest_summary`) verbatim, no verdict manufactured. Packet `hh-verifier-bound-admission/1` + 10 astropy specs `360→900` (other 90 byte-identical). **Verify:** `r5_57` 13/13 · hh-env 38 binaries 0 failures · fmt clean · BL-47 += ADR-0422 · adr regen (206) · guard **PASS** pre `DISPATCH — R5.57` / post `DISPATCH — R5.58` (route advanced on close state) · bm `.`/`--staged` 0 viol (8 warn) · bm-tools OK. **Deferrals:** none opened/closed — carried DF-H9-1 OPEN (disposition landed via #283's merge). **Deviations:** ~1290 lines vs ≤400 split trigger — recorded (atomic machinery+battery+record). **AC-1..4:** met (contributing-only; REQ-D-101/102/103 + REQ-E-011 owed to R5.58/R5.59). chainTip → codex/harnessharness-r5.57 · next → R5.58 · ci: pending #287 · layer: engineered · harness: devin-desktop/swe-2-high/subagent
