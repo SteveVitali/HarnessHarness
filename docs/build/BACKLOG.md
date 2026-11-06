@@ -1,4 +1,4 @@
-# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10 · refreshed R3.10, 2026-10-16 · refreshed REC5.1, 2026-11-05)
+# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10 · refreshed R3.10, 2026-10-16 · refreshed REC5.1, 2026-11-05 · reconciled 2026-11-06)
 
 > The single deduplicated register of everything the build left owed at
 > GATE-ACCEPT (2026-10-02, accepted). One row in `BACKLOG.csv` is one
@@ -12,10 +12,13 @@
 - **Mode:** `reconcile-build mode=backlog` · 2026-10-06 · branch `svitali/harnessharness-rec.1` ·
   refreshed `reconcile-build mode=backlog` · 2026-10-10 (R2.26) · branch `svitali/harnessharness-r2.26` ·
   refreshed `reconcile-build mode=backlog` · 2026-10-16 (R3.10) · branch `svitali/harnessharness-r3.10` ·
-  refreshed `reconcile-build mode=backlog` · 2026-11-05 (REC5.1) · branch `codex/harnessharness-evidence-rec5.1`
+  refreshed `reconcile-build mode=backlog` · 2026-11-05 (REC5.1) · branch `codex/harnessharness-evidence-rec5.1` ·
+  reconciled `reconcile-build mode=backlog` · 2026-11-06 · branch `codex/harnessharness-bl-reconcile`
 - **Machine form:** `docs/build/BACKLOG.csv` (49 rows after the REC5.1 appends; `check-backlog.sh` exit 0
   — complete, non-duplicating, verdict-consistent; expected sources 204 over `docs/build/` + 73 over
-  `docs/build/reports/round5/` — 2026-11-05 re-check; at R3.10: 42 rows, expected 156)
+  `docs/build/reports/round5/` — 2026-11-05 re-check; at R3.10: 42 rows, expected 156 · 2026-11-06
+  reconcile: BL-51/BL-52/BL-53 discharged (satisfied ×2, scope-dispositioned ×1 — BL-12/BL-21 re-home
+  convention); BL-50 stays open now homing all 73 round-5 PARTIAL ids; `check-backlog.sh` exit 0 both modes)
 - **Sources consumed (R3.10 re-sweep):** `docs/tickets/DEFERRALS.md` (19 owed rows of 100 — 18 OPEN +
   1 PARTIAL) · `docs/build/COVERAGE_MATRIX.csv` (11 PARTIAL + 2 MET-ENGINEERED rows after the
   round-3 flips) · `docs/adr/` (145 `## Revisit trigger` sections, ADR-0217…ADR-0361) ·
@@ -164,6 +167,31 @@ MET. Causes: **human** (BL-51 — operator supply), **window** (BL-50/BL-52 —
 scope disposition or a named admission), **evidence-record** (BL-53 —
 contributor cells cite the landed boundary records). The 29 MET-ENGINEERED
 matrix rows are homed through these rows' D-row legs, per BM-VERDICT-01.
+
+*reconcile read (2026-11-06):* three of the four carried rows discharged
+against landed evidence — **BL-52 satisfied** (its named exit met: the
+executed `hh-s1-useful/1` packet `reports/2026-11-05-df-cap5.1-s1-useful.json`
+with `useful_acceptance: marked` plus the independent Decided artifacts
+`…-s1-decided-artifacts.json`, both subjects `decided` `reward_ppm
+1000000`; DF-CAP5.1-1 DONE), **BL-53 satisfied** (the boundary-evidence
+record `reports/2026-11-05-df-r5.1-evidence.json`, EV-1…EV-6 verified over
+all 67 work-row dispatch boundaries; DF-R5.1-1 DONE), and **BL-51
+scope-dispositioned** (the fresh scope disposition its exit names landed
+verbatim on DF-H9-1 — permanently unmet-by-decision 2026-11-05T16:04:15Z;
+never satisfied, never waived). **BL-50 stays open:** its R-layer legs
+discharged by real evidence (parity verified 30/30 —
+`2026-11-05-parity-tranche-3.json`; S4 executed 300/300 over four epochs —
+`2026-11-06-s4-30slot-repairs.json`; efficacy computed, honest
+null-equivalent — `2026-11-06-r5.59-efficacy.json`; GATE-G19 PASSED) while
+its P-layer legs (REQ-G-201/202/207/209 publication, REQ-G-206
+value-observation) stay voided/carried — no publication or adoption
+evidence exists and none was authorized. The 33 still-carried matrix ids
+of the three closed rows re-home to BL-50's `sources` cell under the
+BL-12/BL-21 convention, so all 73 round-5 PARTIAL ids sit on the one open
+carrier; the CAP5.1-era matrix verdicts are not re-verdicted by this
+records-only reconcile — a matrix re-verdict pass is owed to the next
+capstone. `deferrals-open.sh --bl` now lists BL-50 only.
+
 
 ## Themes
 
