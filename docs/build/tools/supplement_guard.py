@@ -411,12 +411,21 @@ class Guard:
                 elif pos[d] >= pos[r["id"]]:
                     self.err("forward-dependency",
                              f"{r['id']}: 'Depends on' {d} points at a later/equal chain row")
-        # full-tail role presence: last nine active rows carry the retained roles
-        tail = [r["kind"] for r in active[-9:]]
-        if tail != TAIL_KINDS:
+        # full-tail role presence: the nine-role acceptance tail must appear
+        # contiguously among the active-round rows. Rows appended after the tail
+        # by an authorized run-time extension (## Plan extensions — e.g. the
+        # 2026-11-06 S4-completion rows 247-251) do not move the requirement;
+        # presence, not strictly-last. (Repaired 2026-11-06 — same class as the
+        # DONE-token routing repair; LEDGER OPEN FINDINGS.)
+        kinds = [r["kind"] for r in active]
+        n = len(TAIL_KINDS)
+        win = next((i for i in range(len(kinds) - n + 1)
+                    if kinds[i:i + n] == TAIL_KINDS), None)
+        if win is None:
             self.err("tail-roles",
-                     f"active-round tail kinds {tail} != required {TAIL_KINDS}")
-        elif not any("accept" in r["file"] for r in active[-9:] if r["kind"] == "gate"):
+                     f"active-round rows contain no contiguous tail {TAIL_KINDS}")
+        elif not any("accept" in r["file"]
+                     for r in active[win:win + n] if r["kind"] == "gate"):
             self.err("tail-roles", "tail gate row is not the operator-acceptance role")
         return active, kind_at
 
