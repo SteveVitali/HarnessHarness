@@ -19,7 +19,7 @@ whose state it never writes.
 ```text
 projectStatus:   IN_PROGRESS
 nextUnit:        B2
-lastCompleted:   A2
+lastCompleted:   D2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:20:37Z
+updatedAt:       2026-11-06T23:22:29Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -106,7 +106,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | D1 | **Comparative-evaluation method.** Estimands, reuse of the admitted §4.3 machinery (finite-manifest Beta-binomial, whole-task paired bootstrap, Holm), HF-style metrics (ties with leader, flip rates, all-k/any-k, $/solve) and which need method admission, the pilot→quote→gate design with a precision simulation, seeded TB 2.1 task selection, pre-registration packet, infra-failure missingness, reward-hacking/cheating scan policy, stop rules. Depends B1, C1, C3. Reqs `REQ-XD-001…`. | D | in-progress | → `design/35_comparative-method.md` |
-| D2 | **HIR parity method.** L1 request-level conformance (recorded-response replay, canonicalization), L2 paired task-verdict KL parity with gate-set margin and pilot-quoted N, L3 descriptive trace shape; dimension map and §4.4 admission for an LLM participant ("same participant" with a served model lacking a digest). Depends C1, E1. Reqs `REQ-XD-101…`. | D | in-progress | → `design/36_hir-parity-method.md` |
+| D2 | **HIR parity method.** L1 request-level conformance (recorded-response replay, canonicalization), L2 paired task-verdict KL parity with gate-set margin and pilot-quoted N, L3 descriptive trace shape; dimension map and §4.4 admission for an LLM participant ("same participant" with a served model lacking a digest). Depends C1, E1. Reqs `REQ-XD-101…`. | D | done | [36_hir-parity-method.md](design/36_hir-parity-method.md) |
 | D3 | **Sweep method.** OFAT explore on development tasks → pre-registered held-out confirmation; factor/level registry; multiplicity and winner's-curse controls; when a knob is exercised (e.g. compaction under a large context window); budgets. Depends D1, E2. Reqs `REQ-XD-201…`. | D | open | → `design/37_sweep-method.md` |
 
 ## E. HIR native representation
@@ -182,6 +182,7 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X31 | Long tasks in the paid subset | "Let's keep all nominally, but when it comes time to start running experiments, since there are so many tasks and model/harness/etc. combos and so on. perhaps we stratify and just start out with the lowest time / cheapest ones" | D1 (staged estimand by cost stratum), H1 |
 | Q-X32 | ADR admitting each task's declared agent/verifier timeouts above HH's 900 s cap | "Yes, per-task declared (Recommended)" | B2, H1 |
 | Q-X33 | Card text after phase 1: whether the useful-task card changes once S1 is re-folded, and the operations card's reason text (A2 Q-A2-1, Q-A2-2) | | ratification (A2 recommendations stand until then) |
+| Q-X34 | Phase-3 L2 parity margin: is ε = ±.15 (≈300 pairs) or ±.20 (≈150 pairs) an acceptable parity claim, fixed at a gate after the pilot quote? (D2 F12, precision table at power ≥ .85) | | parity-margin gate (D2 recommends; presented with the pilot quote) |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -194,3 +195,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:15:26Z — Accepted B1 (`research/25`, 20 findings; TB 2.1 = 89 tasks pinned git `12b75656` + Hub ref + per-task digests; spot-checked the 39-task verifier-timeout census). Stream A–C checkpoint presented to the operator; answers recorded verbatim: Q-X26 (Claude Code admitted under stated terms), Q-X30 (allowlist + scan), Q-X31 (keep all 89 nominally; start with the cheapest/shortest stratum), Q-X32 (per-task declared timeouts via ADR). Wave-2 assignments: B2 → `design/31_experiment-runner.md`, B3 → `design/32_compute-backend.md`. Ownership: B2 owns cell egress-profile composition (registry allowlist + proxy reachability); C2 owns the proxy endpoint itself.
 - 2026-11-06T23:20:00Z — Accepted A2 (`design/30`, 14 findings, REQ-XA-101…127). Coordinator spot-check of A2's new HH-cell × `tb` cross-check: discordances `swe-bench-langcodes` and `grid-pattern-transform` (tb resolved, HH cells unresolved on both first slots) CONFIRMED from the committed packets; denominator differs (coordinator: 17 tasks/15 agree using the confirmation packet's `first` slots with resolved/unresolved receipts; A2: 16/14) — the exact slot-inclusion rule is an implementation-ticket acceptance item and an O2 review item. A2 recommendations recorded against Q-X24 (records-in for phase 1; optional gated phase 1b) and Q-X25 (dated deviation record + retroactive ADR); new pending Q-X33.
 - 2026-11-06T23:20:37Z — Assignment: D1 → `design/35_comparative-method.md` (dependencies B1, C1, C3 accepted; inputs research/24–27, supplement §3/§4.1/§4.3/§4.5, analysis/eval code; local no-network simulations allowed).
+- 2026-11-06T23:22:29Z — Accepted D2 (`design/36`, 16 findings, REQ-XD-101…126; precision table defined as ε reachable at power ≥ .85 — consistent with the coordinator's expected-half-width check, e.g. N=150, q≈.12 → expected half-width ≈.143). D2 resolves a C1/E1 conflict in E1's favour (mini-swe-agent v2.4.6 uses native tool calls, so Ollama's tool parser is in its loop) — carried to H1 and O1 as a cross-note ruling. D2's original-harness-only pilot (~48 trials) is folded into D1's pilot gate, not a separate authorization. New pending Q-X34.
