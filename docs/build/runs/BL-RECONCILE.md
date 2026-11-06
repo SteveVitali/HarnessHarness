@@ -8,7 +8,7 @@
 - **Scope:** `docs/build/BACKLOG.csv` rows BL-50/51/52/53 — honest backlog maintenance, same class as `reconcile-build mode=backlog`. Reconcile the four stale backlog rows against the evidence that landed after they were opened at REC5.1 (2026-11-05).
 - **Authorization:** operator task dispatch (non-manifest records-in work; no code touched, USD $0.00)
 - **Base:** `origin/main` `@09fe8523` (merged R5.59 tip — the 251-row chain complete)
-- **Branch:** `codex/harnessharness-bl-reconcile`
+- **Branch:** `codex/harnessharness-bl-reconcile` → PR **#291** (base `main`, mergePolicy OPERATOR — never merged by this run)
 - **ci:** pending at close
 
 ## Gate status
