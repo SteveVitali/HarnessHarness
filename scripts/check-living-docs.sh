@@ -26,6 +26,7 @@ PLACEHOLDER_RE='^(user|example|demo|runner|<[^>]*>?)$'
 
 living=$(git ls-files \
   | grep -vE '^(docs/(build|tickets|adr)/|research/)' \
+  | grep -vE '^(crates/.*/tests/fixtures/)' \
   | grep -vE '\.(rs|ts|tsx|js|jsx|py|lock|jsonl)$' \
   | grep -vxE 'scripts/(check-living-docs\.sh|ci/test-check-living-docs\.sh)' || true)
 

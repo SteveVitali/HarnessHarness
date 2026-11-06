@@ -37,7 +37,8 @@ use hharness_env::publication::{
 use hharness_env::study::{
     check_echo, evaluate_costs, evaluate_families, evaluate_parity_stage, evaluate_useful,
     CostFacts, Disposition as StudyDisposition, FamilyFacts, PacketEcho, ParityStageFacts,
-    UsefulFacts, LEGS as STUDY_LEGS, REQUIRED_FAMILIES, VERSION as STUDY_VERSION,
+    UsefulFacts, LEGS as STUDY_LEGS, LEGS_V1 as STUDY_V1_LEGS, REQUIRED_FAMILIES,
+    VERSION as STUDY_VERSION,
 };
 use hharness_env::{parity, useful};
 use hharness_provenance::authority::AuthorityClass;
@@ -142,11 +143,16 @@ fn spine_facts() -> SpineFacts {
     .map(|d| d.name())
     .collect::<Vec<_>>()
     .join(",");
-    let study_families = REQUIRED_FAMILIES
-        .iter()
-        .map(|(n, s)| format!("{n}:{s}"))
-        .collect::<Vec<_>>()
-        .join(",");
+    let mut study_families: Vec<String> = vec!["efficacy:computed{strata:easy,hard,medium}".into()];
+    let mut inserted = false;
+    for (n, s) in REQUIRED_FAMILIES {
+        study_families.push(format!("{n}:{s}"));
+        if !inserted && n == "task_mixture" {
+            study_families.push("sharp_null:unavailable{not_computed}".into());
+            inserted = true;
+        }
+    }
+    let study_families = study_families.join(",");
     let correction_schemas = [
         RIGHTS_RECORD_SCHEMA,
         HANDOFF_REPORT_SCHEMA,
@@ -252,8 +258,9 @@ fn family_facts(efficacy: &str, claim_present: bool) -> FamilyFacts {
     };
     FamilyFacts {
         efficacy: efficacy.to_string(),
+        required_efficacy: "computed{strata:easy,hard,medium}".to_string(),
         task_mixture: get("task_mixture"),
-        sharp_null: get("sharp_null"),
+        sharp_null: "unavailable{not_computed}".to_string(),
         parity: get("parity"),
         mechanism: get("mechanism"),
         engineering: get("engineering"),
@@ -286,12 +293,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
         "family_efficacy_inflated".into(),
         outcome(&evaluate_families(&ff)),
     );
-    let required_efficacy = REQUIRED_FAMILIES
-        .iter()
-        .find(|(k, _)| *k == "efficacy")
-        .unwrap()
-        .1;
-    let ff = family_facts(required_efficacy, true);
+    let ff = family_facts("computed{strata:easy,hard,medium}", true);
     out.insert(
         "family_claim_present".into(),
         outcome(&evaluate_families(&ff)),
@@ -302,7 +304,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
     inflated.disposition = "satisfied".into();
     out.insert(
         "echo_disposition_inflated".into(),
-        outcome(&check_echo(&inflated, &STUDY_LEGS, "reported", "failed")),
+        outcome(&check_echo(&inflated, &STUDY_V1_LEGS, "reported", "failed")),
     );
     let mut tampered = study_echo();
     for (n, _) in tampered.legs.iter_mut() {
@@ -312,7 +314,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
     }
     out.insert(
         "echo_leg_tampered".into(),
-        outcome(&check_echo(&tampered, &STUDY_LEGS, "reported", "failed")),
+        outcome(&check_echo(&tampered, &STUDY_V1_LEGS, "reported", "failed")),
     );
     // A relabeled or re-signed stage record refuses — the adverse
     // records carry their committed spellings only.
@@ -402,7 +404,7 @@ fn carried_facts() -> CarriedFacts {
     };
     let flag = |k: &str| matches!(member(&j, k), Json::Bool(true));
     CarriedFacts {
-        echo_verdict: check_echo(&echo, &STUDY_LEGS, "reported", "failed")
+        echo_verdict: check_echo(&echo, &STUDY_V1_LEGS, "reported", "failed")
             .name()
             .to_string(),
         version: echo.version.clone(),
