@@ -1,0 +1,180 @@
+{
+ "schema": "hh-verifier-bound-admission/1",
+ "generated": "2026-11-06T17:45Z",
+ "ticket": "docs/tickets/248_R5.57__verifier-bound.md",
+ "kind": "scoped_machinery_admission",
+ "adr": "docs/adr/ADR-0422-r5.57-verifier-bound.md",
+ "protocol_id": "9edc5327f89e2d66f8003bedc2530bc3e7d37326aad82cdfcab70465eda60a5f",
+ "seed": "parity-tranche-2026-11-05:seed:v3",
+ "prior_records_untouched": [
+  "docs/build/runs/S4-EGRESS.md",
+  "docs/build/reports/2026-11-05-s4-egress-cohort.json (hh-s4-egress-supplement/1)",
+  "docs/build/runs/S4-CONFIRMATION.md",
+  "docs/build/reports/2026-11-05-s4-confirmation.json"
+ ],
+ "admission": {
+  "task_id": "swe-bench-astropy-2",
+  "field": "max_test_timeout_sec",
+  "enforced_before_sec": 360,
+  "admitted_sec": 900,
+  "deadline_derivation": "test_deadline = min(max_test_timeout_sec, 900 s) on the tc-verdict + tc-vendored dispatches (recorded driver machinery verbatim)",
+  "deadline_before_ms": 360000,
+  "deadline_after_ms": 900000,
+  "enforced_evidence": {
+   "durable": "action.effect.prepared payload deadline:360000 on tc-verdict AND tc-vendored \u2014 store ~/tb-work/s4-egress/stores/s6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e-r0-c0/runs/run-000001 (evt-000063 et al.); identical 360000 on the frozen-run store ~/tb-work/s4-confirm/stores/s6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e-r0-c0/runs/run-000001",
+   "spec": "cell spec ~/tb-work/s4-egress/specs/s6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e.json carried \"max_test_timeout_sec\": 360 at the recorded run",
+   "upstream_task_yaml": "max_test_timeout_sec: 360.0 (~/tb-work/dataset/swe-bench-astropy-2/task.yaml:59 \u2014 the decl the spec carried)",
+   "run_ledger_stated_verbatim": "the task's declared `max_test_timeout_sec: 60` cannot host its own run-tests.sh's apt+venv+`pip install -e .` bootstrap (docs/build/runs/S4-EGRESS.md, verbatim)",
+   "contrast": "the run ledger's prose states 60 s \u2014 recorded verbatim, never edited (append-only). The durable evidence shows the actually-enforced decl was 360 s: the spec carried the task.yaml decl (360.0), so the driver's spec-gen 60.0 default never fired, and both runs enforced deadline 360000 ms. The admission names the actually enforced decl verbatim; it does not presume which decl the ledger's prose meant."
+  },
+  "basis": {
+   "disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+   "count": 10,
+   "slots": [
+    {
+     "slot_ref": "slot:6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e",
+     "arm_id": "arm:o-tb-oracle",
+     "round": 0,
+     "wall_ms": 7330,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:8147eefb2a9b356e6aae1e17a59a33d96b8fad3611a38a025b02c3f703103797",
+     "arm_id": "arm:h-podman-oracle",
+     "round": 0,
+     "wall_ms": 6761,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:ad2ed084191afc398e76b615602d31bc74f8c9c4a8dc22f69b99f05633362c97",
+     "arm_id": "arm:o-tb-oracle",
+     "round": 1,
+     "wall_ms": 17704,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:64bb5eb083dcd369519c13348fa2cee95b309e24edd59b9fb4c1f5a8b43413bc",
+     "arm_id": "arm:h-podman-oracle",
+     "round": 1,
+     "wall_ms": 10774,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:4fb854c1f4febddf1170b9407996989d1281866163265ec684fbe25819c199fb",
+     "arm_id": "arm:o-tb-oracle",
+     "round": 2,
+     "wall_ms": 6920,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:837bbdf3b11bdbe322ce41780d9e7b67b40cf0d0c0f079384c709fff0ab83a99",
+     "arm_id": "arm:h-podman-oracle",
+     "round": 2,
+     "wall_ms": 6492,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:298b0c7e79bac7612e561585b32f72d626b055bb21f4684dbf5945ba5369b0b0",
+     "arm_id": "arm:o-tb-oracle",
+     "round": 3,
+     "wall_ms": 6392,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:b1c899154747f0f583006c9b290928e5456958641484c9d6b533982fc97a5471",
+     "arm_id": "arm:h-podman-oracle",
+     "round": 3,
+     "wall_ms": 6445,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:34719ba819b6f58267da750ced730f255222aad5bb8fe6647672403a107fffff",
+     "arm_id": "arm:o-tb-oracle",
+     "round": 4,
+     "wall_ms": 6489,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    },
+    {
+     "slot_ref": "slot:519479539adc0114b5059687fa19d7516c85ec5dc1de881424b952910f824cde",
+     "arm_id": "arm:h-podman-oracle",
+     "round": 4,
+     "wall_ms": 6461,
+     "verdict_verbatim.rc": "127",
+     "receipt": {
+      "channel": "vendored_offline",
+      "verdict": null,
+      "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+     }
+    }
+   ]
+  },
+  "scope": "this task's verifier leg only \u2014 the tc-verdict (verbatim run-tests.sh) + tc-vendored dispatches of swe-bench-astropy-2's ten slots. No other task's bound moves (the other 90 supplement specs carry their declared decls byte-identically); no other bound moves (max_agent_timeout_sec, staging/work bounds, the deadline ladder) \u2014 the admission touches machinery only, never the frozen manifest/protocol (protocol_id recomputes byte-identically).",
+  "envelope_check": "admitted 900 s <= 900 s driver cap = 15 min = the frozen SS9.2 verifier envelope \u2014 inside; no separate envelope admission needed. A bound beyond 900 s stops for its own recorded admission.",
+  "supplement_epoch": "verifier-bound-rerun",
+  "row_echo": "on re-run (R5.58) each of the ten slot rows carries verifier_bound_admitted: 900, prior_disposition: inconclusive{verifier_unavailable:no_parseable_verdict}, supplement_epoch: verifier-bound-rerun verbatim; the original inconclusive records stand untouched.",
+  "authorization_verbatim": "\"insert these into the build plan as new ticket(s), then continue driving orchestrate-build over them to the end\" + \"you can provision everything. just make sure we don't forget to deprovision at the end. proceed\" (operator chat, received 2026-11-06 \u2014 the S4-completion extension authorization, manifest ## Plan extensions row 248)",
+  "machinery": {
+   "sanctioned_home": "crates/hh-env/src/verifier_bound.rs",
+   "derivation": "verifier_bound::verifier_deadline_ms(declared) = min(declared, 900) * 1000; enforced_decl_sec reads the spec member or the recorded spec-gen default 60",
+   "admission_fn": "verifier_bound::admit_verifier_bound \u2014 transactional, named-task scope (ext task_id verbatim), enforced-before verified against the spec (a mislabeled before refuses), admitted in (enforced, 900], verbatim record stamped on ext[verifier_bound_admission]",
+   "refusals": "EnvError::Unsupported{verifier_bound.admission} \u2014 different/absent task_id, mislabeled before, admitted > 900, admitted <= enforced, empty verbatim members, malformed decl member",
+   "battery": "crates/hh-env/tests/r5_57.rs \u2014 13/13"
+  },
+  "cell_spec_changes": {
+   "work_root": "~/tb-work/s4-egress/specs/ (external scratch \u2014 recorded, not committed)",
+   "changed": 10,
+   "before_after_per_file": "max_test_timeout_sec: 360 -> 900 (single member; byte lengths preserved)",
+   "other_tasks": "the other 90 spec files carry their declared decls byte-identically (80 x 60, 10 x 600)"
+  },
+  "honesty_bounds": {
+   "observed_failure_shape": "the recorded slots' verifier leg ended at walls 6.4-17.7 s \u2014 long before either bound could fire: verdict_verbatim.rc 127 (`pytest: command not found` \u2014 run-tests.sh's bootstrap ran under the driver's `cd /app` while the project lives at /app/astropy: patch+sed+`pip install -e .` no-op'd, pytest never installed); the vendored channel ended `no_pytest_summary: No module named pytest` (the derived image's pip bake carries no pytest).",
+   "bound_was_not_the_recorded_proximate_cause": "relaxing the decl removes the declared bound as a blocker for the full apt+venv+`pip install -e .` bootstrap on re-run (the frozen-run and supplement records both diagnosed the bound as the bar; the admission is recorded verbatim either way). It does NOT assert the bound was the recorded proximate cause and manufactures no verdict \u2014 a bootstrap that still fails records unresolved/inconclusive{reason} verbatim on re-run (AC-3).",
+   "no_manifest_touch": "the frozen protocol_id/seed/30-task manifest are consumed verbatim \u2014 a machinery-bound admission is recorded on the rows, never a manifest re-pick (SS4.1)."
+  }
+ }
+}
