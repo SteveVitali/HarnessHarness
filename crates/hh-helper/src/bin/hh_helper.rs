@@ -3,7 +3,14 @@
 //! ```text
 //! hh-helper --socket <path> [--backend seatbelt|podman|direct]
 //!           [--container <name>] [--image <ref>] [--workspace <dir>]
+//!           [--network none|bridge]
 //! ```
+//!
+//! `--network` (default `none`, `S4_HELPER_NETWORK` env fallback — the
+//! flag wins when both are present) is the admitted `declared_deps`
+//! egress knob (R5.56; ADR-0421): `bridge` runs the podman cell on
+//! `--network bridge`; `none` is byte-identical to the pre-variant
+//! posture. An unknown value is a usage failure, never coerced.
 //!
 //! The kernel spawns this binary once per contained environment; it binds
 //! the session socket and serves `hh-helper/1` until `shutdown` or the
@@ -25,7 +32,8 @@ use hharness_helper::server::{serve, HelperServer};
 fn usage() -> ! {
     eprintln!(
         "usage: hh-helper --socket <path> [--backend seatbelt|podman|direct] \
-         [--container <name>] [--image <ref>] [--workspace <dir>]"
+         [--container <name>] [--image <ref>] [--workspace <dir>] \
+         [--network none|bridge]"
     );
     exit(2);
 }
@@ -37,6 +45,7 @@ fn main() {
     let mut container = None::<String>;
     let mut image = PodmanBackend::DEFAULT_IMAGE.to_string();
     let mut workspace = None::<String>;
+    let mut network = "none".to_string();
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -60,9 +69,27 @@ fn main() {
                 workspace = Some(args.get(i + 1).cloned().unwrap_or_else(|| usage()));
                 i += 2;
             }
+            "--network" => {
+                network = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                i += 2;
+            }
             _ => usage(),
         }
     }
+    // Env fallback — hh-env's HelperClient::spawn passes a fixed argv;
+    // the helper child inherits the driver process env, so the scoped
+    // `declared_deps` admission may also travel as `S4_HELPER_NETWORK`.
+    // An explicit flag wins (R5.56; ADR-0421).
+    let network = if args.iter().any(|a| a == "--network") {
+        network
+    } else {
+        std::env::var("S4_HELPER_NETWORK").unwrap_or(network)
+    };
+    let network_on = match network.as_str() {
+        "none" => false,
+        "bridge" => true,
+        _ => usage(),
+    };
     let socket = socket.unwrap_or_else(|| usage());
     let srv = Arc::new(HelperServer::new());
     match backend.as_str() {
@@ -89,7 +116,7 @@ fn main() {
                 container: name,
                 image,
                 workspace: ws,
-                network: false,
+                network: network_on,
                 extra_args: vec![],
             };
             if let Err(e) = b.create() {
