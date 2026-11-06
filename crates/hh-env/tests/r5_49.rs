@@ -687,8 +687,14 @@ const COHORT_PACKETS: [&str; 4] = [
 ];
 
 fn load_packet(name: &str) -> Json {
-    let text = std::fs::read_to_string(repo_root().join("docs/build/reports").join(name))
-        .expect("committed cohort packet readable");
+    // Byte-copy fixture under tests/fixtures/ — the CI readers scan
+    // forbids tests reading committed docs/ content at runtime.
+    let text = std::fs::read_to_string(
+        repo_root()
+            .join("crates/hh-env/tests/fixtures/r5_49")
+            .join(name),
+    )
+    .expect("cohort packet fixture readable");
     // `parse_provider` — committed records carry float lexemes
     // (`cost_usd: 0.0`); the inbound read preserves them verbatim as
     // strings, never truncated or dropped (the canonical `parse`
