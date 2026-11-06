@@ -45,7 +45,7 @@ const DOMAIN: &str = "value_withheld";
 /// The gate whose out-of-scope decision this packet records.
 pub const GATE: &str = "GATE-G16";
 
-/// The committed study report's honest status, carried verbatim —
+/// The pinned study report's honest status, carried verbatim —
 /// never inflated (REQ-G-209: adverse results/corrections retained).
 pub const STUDY_STATUS: &str = "unmet{efficacy_unavailable;parity_withheld}";
 

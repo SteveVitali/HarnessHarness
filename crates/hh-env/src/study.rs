@@ -1,11 +1,13 @@
 //! `hh-study-report/1` — the admitted-study recompute report (R5.49;
-//! GATE-G14 PASSED — **quote-only confirmation**; evidence spec §3's
-//! denominators/missingness + AC-3-2's family separation, §4.2's
-//! mechanism denominators, §9.2's cost rows and AC-9-3's
-//! layer-separate closure).
+//! recomputed 2026-11-06 over the executed parity + partial
+//! confirmation evidence — GATE-G13's N=0 record and GATE-G14's
+//! **quote-only confirmation** record stand as committed history;
+//! evidence spec §3's denominators/missingness + AC-3-2's family
+//! separation, §4.2's mechanism denominators, §9.2's cost rows and
+//! AC-9-3's layer-separate closure).
 //!
 //! Records-in only: every leg evaluator folds *supplied* facts — the
-//! nine committed packets' members echoed verbatim, the re-derived
+//! committed packets' members echoed verbatim, the re-derived
 //! denominators/tails/bounds/maxima and the freeze/`protocol_id`
 //! identities — and never manufactures a stage, an execution or a
 //! verdict. Recompute means: re-fold each committed packet's
@@ -14,9 +16,14 @@
 //! equality — never re-pick, never fabricate. `reported` is the honest
 //! terminal state (the recompute matched the committed records); a
 //! definitive mismatch folds `failed`, an undetermined fact
-//! `inconclusive` — never a fabricated stage. Unavailable families
-//! (finite-manifest efficacy, the sharp-null family, adoption) stay
-//! unavailable — there is no confirmation evidence to report.
+//! `inconclusive` — never a fabricated stage. The parity tranche
+//! verified 30/30 directional agreement (`hh-parity-tranche-report/1`
+//! — the two earlier confounded tranches stand verbatim, never
+//! deleted); the confirmation cohort executed `partial` (250/300
+//! slots with real receipts across the frozen run + the egress
+//! supplement — the 50 inconclusive slots stay verbatim). The
+//! efficacy, sharp-null and adoption families stay `unavailable` —
+//! a partial cohort is not a finite-manifest contrast.
 
 use hharness_identity::idp::idp_digest;
 use hharness_wire::json::Json;
@@ -805,27 +812,62 @@ pub fn evaluate_pilot(f: &PilotFacts) -> LegVerdict {
     LegVerdict::Verified
 }
 
-// ── legs 7–8 — parity / confirmation (the withheld records) ─────────
+// ── legs 7–8 — parity / confirmation (the executed records) ─────────
 
-/// The withheld parity stage — the committed `hh-parity-n0/1`
-/// record.
+/// The parity-tranche packet version (`hh-parity-tranche-report/1` —
+/// the committed tranche-3 artifact `2026-11-05-parity-tranche-3.json`).
+pub const PARITY_TRANCHE_VERSION: &str = "hh-parity-tranche-report/1";
+
+/// The confirmation packet version (`hh-s4-confirmation/1` — the
+/// committed frozen-run artifact `2026-11-05-s4-confirmation.json`).
+pub const CONFIRM_VERSION: &str = "hh-s4-confirmation/1";
+
+/// The egress-supplement packet version (`hh-s4-egress-supplement/1`
+/// — the committed named supplement `2026-11-05-s4-egress-cohort.json`).
+pub const CONFIRM_SUPPLEMENT_VERSION: &str = "hh-s4-egress-supplement/1";
+
+/// The parity stage — the committed `hh-parity-n0/1` withheld record
+/// (history — refolds `withheld`, discharged by real evidence, never
+/// rewritten) plus the executed tranche packet's supplied members.
+/// The two earlier confounded tranches
+/// (`infeasible{margin}` — disk confound / ANSI parse break) stand
+/// committed verbatim; the tranche-3 packet is the admitted one.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParityStageFacts {
-    /// The committed `hh-parity-n0/1` record (`withheld`).
+    /// The committed `hh-parity-n0/1` record (`withheld` — history).
     pub echo: PacketEcho,
-    /// `n_declared` (0).
+    /// The tranche packet's `schema` member
+    /// (`hh-parity-tranche-report/1`).
+    pub tranche_version: String,
+    /// Its recorded `verdict` (`verified`).
+    pub tranche_verdict: String,
+    /// `counts.n_pairs` (30 — the frozen N).
+    pub n_pairs: u64,
+    /// `counts.agree` (30 — directional agreement).
+    pub agree: u64,
+    /// `counts.discordant` (0 — none dropped).
+    pub discordant: u64,
+    /// The tranche's `protocol_id` — the frozen manifest's id,
+    /// byte-equal to the confirmation cohort's.
+    pub protocol_id: String,
+    /// `n_declared` — 30 pairs declared + executed (was 0 at the
+    /// withheld record).
     pub n_declared: u64,
-    /// `s3_unmet` (`true`).
+    /// `s3_unmet` — `false` (the tranche verified parity; S3 met).
     pub s3_unmet: bool,
-    /// `confirmation_blocked` (`true`).
+    /// `confirmation_blocked` — `false` (the dependent stage ran).
     pub confirmation_blocked: bool,
-    /// The recorded gate (`GATE-G13`).
+    /// The recorded gate (`GATE-G13` — the N=0 record's gate).
     pub gate: String,
 }
 
-/// `evaluate_parity_stage` — the record refolds `withheld`; N=0,
-/// S3 unmet and the dependent-confirmation block echoed; no claim
-/// of either sign.
+/// `evaluate_parity_stage` — the withheld record still refolds
+/// `withheld` (committed history); the tranche's members re-check:
+/// `verified` only under exact directional agreement (`agree ==
+/// n_pairs`, `discordant == 0`, N = the frozen 30), `n_declared`
+/// equals the executed N, the protocol id is a real digest, S3
+/// discharged and the dependent block lifted — no inflated claim,
+/// no dropped discordance.
 pub fn evaluate_parity_stage(f: &ParityStageFacts) -> LegVerdict {
     if f.echo.version != crate::parity::VERSION {
         return LegVerdict::Refused(format!("version:{}", f.echo.version));
@@ -837,38 +879,107 @@ pub fn evaluate_parity_stage(f: &ParityStageFacts) -> LegVerdict {
     if f.gate != crate::parity::GATE {
         return LegVerdict::Refused(format!("gate:{}", f.gate));
     }
-    if f.n_declared != 0 {
+    if f.tranche_version != PARITY_TRANCHE_VERSION {
+        return LegVerdict::Refused(format!("tranche_version:{}", f.tranche_version));
+    }
+    if f.protocol_id.len() != 64 || !f.protocol_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return LegVerdict::Inconclusive("tranche_protocol_id_absent".to_string());
+    }
+    if f.agree + f.discordant != f.n_pairs {
+        return LegVerdict::Refused("pair_count".to_string());
+    }
+    if f.n_pairs != crate::confirm::FROZEN_TASKS {
+        return LegVerdict::Refused(format!("n_pairs:{}", f.n_pairs));
+    }
+    // `verified` is admitted only under exact directional agreement
+    // — never a margin, never a dropped discordance.
+    if f.tranche_verdict != "verified" || f.discordant != 0 || f.agree != f.n_pairs {
+        return LegVerdict::Refused(format!(
+            "tranche_verdict:{}:agree:{}:discordant:{}",
+            f.tranche_verdict, f.agree, f.discordant
+        ));
+    }
+    if f.n_declared != f.n_pairs {
         return LegVerdict::Refused(format!("n_declared:{}", f.n_declared));
     }
-    if !f.s3_unmet || !f.confirmation_blocked {
-        return LegVerdict::Refused("upstream_block_unrecorded".to_string());
+    if f.s3_unmet || f.confirmation_blocked {
+        return LegVerdict::Refused("upstream_block_still_recorded".to_string());
     }
     LegVerdict::Verified
 }
 
-/// The withheld confirmation stage — the committed
-/// `hh-confirm-withheld/1` record.
+/// The confirmation stage — the committed `hh-confirm-withheld/1`
+/// withheld record (history — refolds `withheld`, discharged by the
+/// executed cohort, never rewritten) plus the frozen-run and
+/// egress-supplement packets' supplied members. The supplement is a
+/// named second-attempt epoch over exactly the prior-inconclusive
+/// slots — the original records stand; denominators re-add
+/// verbatim, never inflated.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfirmStageFacts {
-    /// The committed `hh-confirm-withheld/1` record (`withheld`).
+    /// The committed `hh-confirm-withheld/1` record (`withheld` —
+    /// history).
     pub echo: PacketEcho,
-    /// `subjects_first` (0).
+    /// The frozen-run packet's `schema` (`hh-s4-confirmation/1`).
+    pub confirm_version: String,
+    /// Its recorded `verdict` (`partial`).
+    pub confirm_verdict: String,
+    /// `counts.planned` (300 — the frozen slots).
+    pub planned: u64,
+    /// `counts.executed` (160 — real receipts).
+    pub executed: u64,
+    /// `counts.inconclusive` (140 — honest bounds, verbatim).
+    pub inconclusive: u64,
+    /// `counts.failed` (0).
+    pub failed: u64,
+    /// `first_subject_denominators.executed` (32).
+    pub first_executed: u64,
+    /// `first_subject_denominators.planned` (60).
+    pub first_total: u64,
+    /// The supplement's `schema` (`hh-s4-egress-supplement/1`).
+    pub supplement_version: String,
+    /// Its recorded `verdict` (`partial`).
+    pub supplement_verdict: String,
+    /// `counts.planned` (140 — exactly the prior inconclusive set).
+    pub sup_planned: u64,
+    /// `counts.executed` (90).
+    pub sup_executed: u64,
+    /// `counts.inconclusive` (50 — the bounds the bounded egress
+    /// profile cannot lift, verbatim).
+    pub sup_inconclusive: u64,
+    /// `first_subject_denominators.executed` (18).
+    pub sup_first_executed: u64,
+    /// `first_subject_denominators.planned` (28).
+    pub sup_first_total: u64,
+    /// The parity tranche's `protocol_id` — must byte-equal the
+    /// cohort's (the same frozen manifest, never re-picked).
+    pub parity_protocol_id: String,
+    /// The cohort's `protocol_id` (both packets share it).
+    pub protocol_id: String,
+    /// Combined executed first subjects (32 + 18 = 50).
     pub subjects_first: u64,
-    /// `tranche_absent` (`true`).
+    /// `tranche_absent` — `false` (the cohort exists).
     pub tranche_absent: bool,
-    /// `parity_absent` (`true`).
+    /// `parity_absent` — `false` (parity verified).
     pub parity_absent: bool,
-    /// `confirmation_blocked` (`true`).
+    /// `confirmation_blocked` — `false` (the cohort ran).
     pub confirmation_blocked: bool,
-    /// `s4_unmet` (`true`).
+    /// `s4_unmet` — `true`: the cohort is `partial` — 50 slots stay
+    /// inconclusive verbatim; partial is not met.
     pub s4_unmet: bool,
-    /// The recorded gate (`GATE-G14`).
+    /// The recorded gate (`GATE-G14` — the withheld record's gate).
     pub gate: String,
 }
 
-/// `evaluate_confirm_stage` — the record refolds `withheld`; the
-/// absent tranche, the parity-absent dependent block and S4 unmet
-/// echoed.
+/// `evaluate_confirm_stage` — the withheld record still refolds
+/// `withheld` (committed history); the cohort's members re-check:
+/// the frozen run's dispositions re-add to its planned slots, the
+/// supplement covers exactly the prior-inconclusive set and re-adds
+/// to its own plan, `partial` is the honest verdict for a
+/// non-zero/non-full executed cohort, the combined first-subject
+/// count re-adds, the protocol ids byte-equal the parity tranche's
+/// (one frozen manifest), and S4 stays unmet while any slot is
+/// inconclusive — never inflated, never a dropped denominator.
 pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     if f.echo.version != crate::confirm::VERSION {
         return LegVerdict::Refused(format!("version:{}", f.echo.version));
@@ -880,11 +991,65 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
     if f.gate != crate::confirm::GATE {
         return LegVerdict::Refused(format!("gate:{}", f.gate));
     }
-    if f.subjects_first != 0 {
+    if f.confirm_version != CONFIRM_VERSION {
+        return LegVerdict::Refused(format!("confirm_version:{}", f.confirm_version));
+    }
+    if f.supplement_version != CONFIRM_SUPPLEMENT_VERSION {
+        return LegVerdict::Refused(format!("supplement_version:{}", f.supplement_version));
+    }
+    for (member, id) in [
+        ("protocol_id", &f.protocol_id),
+        ("parity_protocol_id", &f.parity_protocol_id),
+    ] {
+        if id.len() != 64 || !id.chars().all(|c| c.is_ascii_hexdigit()) {
+            return LegVerdict::Inconclusive(format!("{member}_absent"));
+        }
+    }
+    if f.protocol_id != f.parity_protocol_id {
+        return LegVerdict::Refused("protocol_id_drift".to_string());
+    }
+    if f.planned != crate::confirm::FROZEN_SLOTS
+        || f.first_total != crate::confirm::FROZEN_FIRST_SLOTS
+    {
+        return LegVerdict::Refused("manifest_denominators".to_string());
+    }
+    if f.executed + f.inconclusive + f.failed != f.planned {
+        return LegVerdict::Refused("dispositions_ne_planned".to_string());
+    }
+    if f.sup_planned != f.inconclusive {
+        return LegVerdict::Refused("supplement_scope".to_string());
+    }
+    if f.sup_executed + f.sup_inconclusive != f.sup_planned {
+        return LegVerdict::Refused("supplement_dispositions".to_string());
+    }
+    // `partial` is the honest verdict for a non-zero/non-full
+    // executed cohort — zero executed would be a different record,
+    // full executed would be `executed`, never `partial`.
+    if f.executed == 0 || f.executed == f.planned || f.confirm_verdict != "partial" {
+        return LegVerdict::Refused(format!(
+            "confirm_verdict:{}:executed:{}",
+            f.confirm_verdict, f.executed
+        ));
+    }
+    if f.sup_executed == 0 || f.sup_executed == f.sup_planned || f.supplement_verdict != "partial" {
+        return LegVerdict::Refused(format!(
+            "supplement_verdict:{}:executed:{}",
+            f.supplement_verdict, f.sup_executed
+        ));
+    }
+    if f.first_executed + f.sup_first_executed != f.subjects_first {
         return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
     }
-    if !f.tranche_absent || !f.parity_absent || !f.confirmation_blocked || !f.s4_unmet {
-        return LegVerdict::Refused("member_unrecorded".to_string());
+    if f.first_executed > f.first_total || f.sup_first_executed > f.sup_first_total {
+        return LegVerdict::Refused("first_denominators".to_string());
+    }
+    // S4 stays unmet while any slot is inconclusive — the 50
+    // remaining inconclusive slots keep `s4_unmet` true verbatim.
+    if f.s4_unmet != (f.sup_inconclusive > 0) {
+        return LegVerdict::Refused(format!("s4_unmet:{}", f.s4_unmet));
+    }
+    if f.tranche_absent || f.parity_absent || f.confirmation_blocked {
+        return LegVerdict::Refused("upstream_block_still_recorded".to_string());
     }
     LegVerdict::Verified
 }
@@ -893,12 +1058,16 @@ pub fn evaluate_confirm_stage(f: &ConfirmStageFacts) -> LegVerdict {
 
 /// The required honest family statuses (the committed-evidence
 /// state): a missing margin, opportunity or admission is never a
-/// pass — the unavailable families stay unavailable.
+/// pass — the unavailable families stay unavailable. The parity
+/// family now records the verified tranche; efficacy and the
+/// sharp-null family stay unavailable over a `partial` cohort —
+/// 250/300 receipted slots is not a finite-manifest contrast, and
+/// the 50 inconclusive slots stay inconclusive verbatim.
 pub const REQUIRED_FAMILIES: [(&str, &str); 9] = [
-    ("efficacy", "unavailable{confirmation_tranche_absent}"),
+    ("efficacy", "unavailable{partial}"),
     ("task_mixture", "descriptive{pilot_recomputed}"),
-    ("sharp_null", "unavailable{confirmation_tranche_absent}"),
-    ("parity", "withheld{n_declared:0}"),
+    ("sharp_null", "unavailable{partial}"),
+    ("parity", "executed{verified_30_30}"),
     ("mechanism", "executed{activation,pilot}"),
     ("engineering", "executed{ops_live;backend_verified}"),
     ("task_truth", "failed{s1_useful}"),
@@ -989,15 +1158,18 @@ pub fn evaluate_families(f: &FamilyFacts) -> LegVerdict {
 pub struct CostFacts {
     /// `packet → exposure_micros` across the committed packets.
     pub per_packet: Vec<(String, i64)>,
-    /// Executed first subjects (2 activation + 10 pilot = 12).
+    /// Executed first subjects in the admitted packets
+    /// (2 activation + 10 pilot = 12).
     pub subjects_first: u64,
-    /// Parity + confirmation first subjects (0).
+    /// Gated-stage first subjects executed: 30 parity pairs + 50
+    /// confirmation first subjects (32 frozen run + 18 supplement)
+    /// = 80.
     pub gated_subjects: u64,
 }
 
 /// `evaluate_costs` — every committed packet's exposure is `0`, the
-/// recomputed total is USD $0.00, 12 executed first subjects, zero
-/// gated subjects.
+/// recomputed total is USD $0.00, 12 admitted first subjects, 80
+/// gated-stage first subjects (30 parity + 50 confirmation).
 pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
     let mut total: i64 = 0;
     for (packet, micros) in &f.per_packet {
@@ -1006,7 +1178,7 @@ pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
         }
         total += micros;
     }
-    if f.per_packet.len() != 9 {
+    if f.per_packet.len() != 12 {
         return LegVerdict::Inconclusive(format!("packets:{}", f.per_packet.len()));
     }
     if total != 0 {
@@ -1015,7 +1187,7 @@ pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
     if f.subjects_first != 12 {
         return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
     }
-    if f.gated_subjects != 0 {
+    if f.gated_subjects != 80 {
         return LegVerdict::Refused(format!("gated_subjects:{}", f.gated_subjects));
     }
     LegVerdict::Verified
@@ -1069,12 +1241,13 @@ pub struct StudyReport {
     pub exposure_micros: i64,
     /// S1 stays unmet (`true`).
     pub s1_unmet: bool,
-    /// S3 stays unmet (`true`).
+    /// S3 met — the parity tranche verified 30/30 (`false`).
     pub s3_unmet: bool,
-    /// S4 stays unmet (`true`).
+    /// S4 stays unmet — the confirmation cohort is `partial`
+    /// (`true`).
     pub s4_unmet: bool,
     /// The study's honest status —
-    /// `unmet{efficacy_unavailable;parity_withheld}`.
+    /// `unmet{efficacy_unavailable;s4_partial}`.
     pub study: String,
     /// The admission shape — `recompute_only`, never an execution.
     pub admission: String,
@@ -1164,9 +1337,9 @@ pub fn assemble(legs: Vec<Leg>) -> Result<StudyReport, String> {
         subjects_first: 12,
         exposure_micros: 0,
         s1_unmet: true,
-        s3_unmet: true,
+        s3_unmet: false,
         s4_unmet: true,
-        study: "unmet{efficacy_unavailable;parity_withheld}".to_string(),
+        study: "unmet{efficacy_unavailable;s4_partial}".to_string(),
         disposition,
         admission: "recompute_only".to_string(),
     };

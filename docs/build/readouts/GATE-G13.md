@@ -51,3 +51,7 @@ Confirm the agent-drafted block by its sha256 prefix.
 ## Signature
 
 **PASSED — N=0 declared** — operator words (verbatim, interactive, 2026-11-04T07:12:23Z): "confirm, proceed" — recorded verbatim in GATE DECISIONS and this signature. Scoped decision: the parity freeze is recorded (R5.39's admitted method/routing machinery stands); the parity tranche stays **N=0 — quote-only per the HUMAN-H8-declared worksheet** (no parity endpoints/margins/N were supplied, so no funded tranche is authorized — consistent with the declared minimum-admission posture). S3 stays unmet honestly; no tranche executes; no guessed margin/transfer; no favorable top-up or CP fallback. Agent-drafted block sha256 `29be1faa6511` confirmed.
+
+---
+
+*Dated note — 2026-11-06:* **discharged by real evidence.** The N=0-declared posture above stands as committed history; a real parity tranche subsequently executed under operator authorization — `docs/build/reports/2026-11-05-parity-tranche-3.json` (`hh-parity-tranche-report/1`, protocol_id `9edc5327…`) recorded `verified` at EXACT directional agreement 30/30 pairs, zero discordance, so **S3 is met** (`s3_unmet: false` in the recomputed `docs/build/reports/2026-11-06-r5.49-study-report.json`). The two prior confounded tranches (`2026-11-05-parity-tranche{,-2}.json`, `infeasible{margin}`, spent protocol_ids) stand committed verbatim — confounded/superseded, never deleted. The `hh-parity-n0/1` withheld packet still refolds `withheld` as history.

@@ -199,15 +199,23 @@ behind it, its limits, and the access or exit route.
   two-arm finite-manifest study with an oracle, policy-specific parity
   admission, four matched caps, detectors, and a frozen analysis.
 - **Evidence:** the
-  [hh-study-report/1 record](build/reports/2026-11-04-r5.49-study-report.json)
-  (`disposition: reported` — a recompute over nine committed packets)
-  carries the honest verdict verbatim: `unmet{efficacy_unavailable;
-  parity_withheld}` with `s1_unmet`, `s3_unmet` and `s4_unmet` all
-  `true`. Its bounded legs really executed — activation and the pilot
-  ran (10/10 pilot first-subjects, $0 recorded exposure) — while
-  parity stayed [`withheld{n_declared:0}`](build/reports/2026-11-04-r5.47-parity-n0.json)
-  and the confirmation tranche
-  [`withheld{tranche_absent}`](build/reports/2026-11-04-r5.48-confirm-withheld.json).
+  [hh-study-report/1 record](build/reports/2026-11-06-r5.49-study-report.json)
+  (`disposition: reported` — a recompute over twelve committed
+  packets) carries the honest verdict verbatim: `unmet{
+  efficacy_unavailable;s4_partial}` with `s1_unmet` and `s4_unmet`
+  `true` and `s3_unmet` `false`. Its bounded legs really executed —
+  activation and the pilot ran (10/10 pilot first-subjects, $0
+  recorded exposure) — parity is now
+  [`verified{30_30}`](build/reports/2026-11-05-parity-tranche-3.json)
+  (exact directional agreement on the real two-runner tranche) and
+  the confirmation tranche is `partial{250_300}` — 160/300 frozen-run
+  receipts plus 90/140 named egress-supplement receipts
+  ([confirmation](build/reports/2026-11-05-s4-confirmation.json) ·
+  [supplement](build/reports/2026-11-05-s4-egress-cohort.json)), the
+  50 inconclusive slots verbatim. The earlier withheld records
+  ([`hh-parity-n0/1`](build/reports/2026-11-04-r5.47-parity-n0.json),
+  [`hh-confirm-withheld/1`](build/reports/2026-11-04-r5.48-confirm-withheld.json))
+  stand as committed history.
 - **Limits:** an admitted inconclusive report is not a positive
   research claim — no efficacy, parity, sharp-null or adoption result
   exists; fixtures cannot fulfill this objective, and a sound
@@ -392,8 +400,8 @@ recorded, not dropped.
 |---|---|---|
 | S1 — useful task, inspect, replay, share | One unchanged upstream task, two fixed subjects, independently checked submission, annotated native receipt | **Not yet available** — attempted and recorded `failed`; machinery repaired, no re-execution admitted; unmet retained (DF-CAP5.1-1) |
 | S2 — offline Lab | Two synthetic tasks × two arms × five repetitions through the real chain | Available — fixture-verified (EX-02 card) |
-| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — study reported `unmet{efficacy_unavailable;parity_withheld}`; parity withheld at N=0 |
-| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — bounded matrix executed (24/24, 0 violations); confirmation tranche withheld; unmet retained |
+| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — study reported `unmet{efficacy_unavailable;s4_partial}`; parity verified 30/30, efficacy still unavailable (partial cohort, no contrast) |
+| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — bounded matrix executed (24/24, 0 violations); confirmation cohort executed `partial` (250/300 receipts, 50 inconclusive verbatim); unmet retained |
 | S5 — participation | Fixed no-run bug, verifyfixed, verify/recompute paths | Restricted — lanes documented (contribute card); stage voided for the round; component exercise recorded unselected |
 | S6 — interchange | At most one external consumer/direction | Restricted — recorded `unselected{stage_voided}`; optional after native readiness |
 <!-- portfolio:scenarios:end -->
@@ -405,8 +413,10 @@ This page describes a **partial release**. The S1 useful-task and S3
 compaction-study objectives are **unmet**: recorded, not inferred —
 the bounded S1 execution ran and failed (the machinery was repaired,
 no re-execution was admitted; DF-CAP5.1-1 stays open), and the
-admitted study reported its efficacy and parity predicates
-unavailable/withheld with S4's confirmation tranche withheld. No
+admitted study reported its efficacy predicate unavailable and S4's
+confirmation cohort `partial` — parity itself is verified 30/30, but
+the S3 study objective (a finite-manifest efficacy result) stays
+unmet. No
 checked-task minimum has
 been retained by substitution — the fixture cards are labelled teaching
 and explicitly cannot satisfy either objective. Publishing this reader

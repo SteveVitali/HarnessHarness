@@ -98,9 +98,9 @@ its fresh acceptance — [GATE-G17](build/readouts/GATE-G17.md) PASSED
 (2026-11-05T00:13:07Z), taking the record as-landed: engineering
 `executed` (composed 8/8 stages; activation and the bounded ops-live
 matrix executed), research `inconclusive` (the admitted
-[study report](build/reports/2026-11-04-r5.49-study-report.json)
-records `unmet{efficacy_unavailable;parity_withheld}` with S1/S3/S4
-unmet verbatim), and portability/public/adoption `withheld` —
+[study report](build/reports/2026-11-06-r5.49-study-report.json)
+records `unmet{efficacy_unavailable;s4_partial}` with S1/S4 unmet
+and S3 met (parity verified 30/30) verbatim), and portability/public/adoption `withheld` —
 `build_status: not_done`. The useful-task execution was attempted and
 honestly recorded `failed`; the participant, publication and
 value-observation stages stayed withheld or unselected by operator

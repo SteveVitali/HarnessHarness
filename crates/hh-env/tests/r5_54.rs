@@ -347,9 +347,15 @@ fn exercise_refusals() -> BTreeMap<String, String> {
         "parity_gate_resign".into(),
         outcome(&evaluate_parity_stage(&ParityStageFacts {
             echo: all_verified_echo(parity::VERSION, "withheld", &parity::LEGS),
-            n_declared: 0,
-            s3_unmet: true,
-            confirmation_blocked: true,
+            tranche_version: "hh-parity-tranche-report/1".into(),
+            tranche_verdict: "verified".into(),
+            n_pairs: 30,
+            agree: 30,
+            discordant: 0,
+            protocol_id: "9edc5327f89e2d66f8003bedc2530bc3e7d37326aad82cdfcab70465eda60a5f".into(),
+            n_declared: 30,
+            s3_unmet: false,
+            confirmation_blocked: false,
             gate: "GATE-G16".into(),
         })),
     );
