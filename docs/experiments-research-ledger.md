@@ -19,7 +19,7 @@ whose state it never writes.
 ```text
 projectStatus:   IN_PROGRESS
 nextUnit:        B2
-lastCompleted:   C2
+lastCompleted:   B3
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:25:44Z
+updatedAt:       2026-11-06T23:30:17Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -90,7 +90,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 |---|---|---|---|---|
 | B1 | **Terminal-Bench 2.1 + Harbor ground truth.** Dataset identity/pinning (Harbor Hub vs git), task format, per-task resources/GPU/internet needs, the oracle agent, podman backend and egress controls, custom model base URL, trajectories (ATIF), attempts conventions, leaderboard integrity rules, task feasibility on a single GCE VM, contamination canaries; the TB 1.0→2.1 differences that matter to HH. Reqs `REQ-XB-001…`. | R | done | [25_tb21-harbor.md](research/25_tb21-harbor.md) |
 | B2 | **Committed experiment runner and execution-surface port.** One in-repo runner shared by every phase (slot scheduling, cell lifecycle via `EnvDriver`/`hh-helper`, verdict channels — TB 1.0 parser and Harbor reward file — receipts, O-surface invocation of `tb`/`harbor`, records), its layering under K-2/CC1, and the $0 oracle re-proof design on TB 2.1. Depends A1, B1. Reqs `REQ-XB-101…`. | A | in-progress | → `design/31_experiment-runner.md` |
-| B3 | **Compute backend and cost accounting.** GCE recipe as a committed re-runnable artifact, sizing against B1's resource census, quote method, unskippable teardown with receipt, a structured instance-hour cost field, and reconciliation with model spend. Depends B1. Reqs `REQ-XB-201…`. | A | in-progress | → `design/32_compute-backend.md` |
+| B3 | **Compute backend and cost accounting.** GCE recipe as a committed re-runnable artifact, sizing against B1's resource census, quote method, unskippable teardown with receipt, a structured instance-hour cost field, and reconciliation with model spend. Depends B1. Reqs `REQ-XB-201…`. | A | done | [32_compute-backend.md](design/32_compute-backend.md) |
 
 ## C. Model mediation and harness hosting
 
@@ -185,6 +185,8 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X34 | Phase-3 L2 parity margin: is ε = ±.15 (≈300 pairs) or ±.20 (≈150 pairs) an acceptable parity claim, fixed at a gate after the pilot quote? (D2 F12, precision table at power ≥ .85) | | parity-margin gate (D2 recommends; presented with the pilot quote) |
 | Q-X35 | Raw model-call receipt archive (~10 MB/trial; too large for git under the build-memory size caps): where the bytes live (local operator disk with committed sha256 index, a GCS bucket, GitHub release assets, a Hugging Face dataset) and retention — interacts with publishing trajectories on the site (F1 open question on contamination) | | F2, H1; raise before the pilot gate |
 | Q-X36 | Settlement reserve: withhold 10% of each authorized phase cap from the proxy's hard cap until the first reconciliation with Ollama `/api/usage` (C2 recommendation) | | ratification |
+| Q-X37 | Where the model proxy and the Ollama key run during paid phases: on the phase VM (B3 recommends — runner, Harbor, store and proxy co-located; key placed on a cloud VM) or on the operator's laptop behind a tunnel (key never leaves the laptop; laptop must stay awake ~60 h) | | raise at stream checkpoint (security posture is the operator's call) |
+| Q-X38 | Compute safeguards: GCE max-run-duration action stop (B3 recommends) vs delete, and margin; tear the VM down across every intra-phase gate wait; billing-alert amount; reconcile billing by console reading (recommended) vs billing export | | ratification |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -199,3 +201,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:20:37Z — Assignment: D1 → `design/35_comparative-method.md` (dependencies B1, C1, C3 accepted; inputs research/24–27, supplement §3/§4.1/§4.3/§4.5, analysis/eval code; local no-network simulations allowed).
 - 2026-11-06T23:22:29Z — Accepted D2 (`design/36`, 16 findings, REQ-XD-101…126; precision table defined as ε reachable at power ≥ .85 — consistent with the coordinator's expected-half-width check, e.g. N=150, q≈.12 → expected half-width ≈.143). D2 resolves a C1/E1 conflict in E1's favour (mini-swe-agent v2.4.6 uses native tool calls, so Ollama's tool parser is in its loop) — carried to H1 and O1 as a cross-note ruling. D2's original-harness-only pilot (~48 trials) is folded into D1's pilot gate, not a separate authorization. New pending Q-X34.
 - 2026-11-06T23:25:44Z — Accepted C2 (`design/33`, 17 findings, REQ-XC-101…125 refining C1's IDs without contradiction; proxy in `hharness-hosting` as a separately-spawned binary; cells reach it over a bind-mounted unix socket + std-only in-cell relay, no new dependency; five ADRs named). Coordinator sent B2 (running) C2's topology to reconcile with Q-X30's registry allowlist; B2 owns the profile composition. C2 recommendations recorded against Q-X22 (`high`) and Q-X21; new pending Q-X35, Q-X36.
+- 2026-11-06T23:30:17Z — Accepted B3 (`design/32`, 17 findings, REQ-XB-201…223). B3 found R5.59's post-teardown inventory check inconclusive; coordinator read-only check `gcloud projects describe harnessharness-evidence-8d7a99 --format='value(lifecycleState)'` at 2026-11-06T23:30:17Z returned `DELETE_REQUESTED` (project shut down; billing stopped; 30-day soft delete) — no billing leak. B3's corrected round-5 compute estimate (~$1.72 for 16:32Z–22:15:40Z vs the recorded ~$1.41) is an A2/phase-1 record input. New pending Q-X37, Q-X38.
