@@ -277,7 +277,7 @@ D=$(seed mut-u)
 python3 - "$D/docs/results/site-data/method.json" <<'PY'
 import json, sys
 p = sys.argv[1]; d = json.loads(open(p).read())
-d["body"]["note"] = "/Users/alice/scratch"
+d["body"]["note"] = "/Users/example/scratch"
 open(p, "w").write(json.dumps(d) + "\n")
 PY
 expect_leg "hygiene" "(u) local path in site-data" "$D"
