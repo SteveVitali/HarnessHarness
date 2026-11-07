@@ -15,6 +15,7 @@ use hharness_wire::json::Json;
 
 use crate::disposition::{Disposition, SlotFlag};
 use crate::facts::map_slot_facts;
+use crate::json_ext::JsonExt;
 use crate::packet::{SlotPacket, SlotRecipe};
 use crate::slot_record::{
     ExperimentSlot, GradeAttemptRef, SlotCosts, SlotIntegrity, SlotPhase, SlotVerdict,
@@ -169,7 +170,54 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
     }
 
     // ST0 ADMIT — a refusal produces a withheld record, never a cell.
-    let facts = recipe.facts().expect("hold recipes return before this");
+    let mut facts = recipe.facts().expect("hold recipes return before this");
+    // AR-07 deadline admission (REQ-XB-118): a packet declaring
+    // `task.deadlines` enforces task-declared agent/verifier deadlines ×
+    // declared multipliers under the declared protocol ceiling through
+    // the separate admitted path; malformed or above-ceiling
+    // declarations refuse `admission:deadline_admission`. A packet
+    // without the member keeps the fixture defaults byte-identically.
+    struct DeclaredDeadlines {
+        agent: (u64, u64, u64),
+        verifier: (u64, u64, u64),
+    }
+    let deadlines: Option<DeclaredDeadlines> = packet.task.get("deadlines").and_then(|d| {
+        let m = d.as_obj().cloned().unwrap_or_default();
+        let u = |k: &str| -> u64 {
+            m.get(k)
+                .and_then(Json::as_int)
+                .map(|v| v as u64)
+                .unwrap_or(0)
+        };
+        let ppm = |k: &str| -> u64 {
+            m.get(k)
+                .and_then(Json::as_int)
+                .map(|v| v as u64)
+                .unwrap_or(hharness_env::task_deadline::CANONICAL_MULTIPLIER_PPM)
+        };
+        let ceiling = u("ceiling_sec");
+        let (agent_sec, agent_ppm) = (u("agent_sec"), ppm("agent_multiplier_ppm"));
+        let (verifier_sec, verifier_ppm) = (u("verifier_sec"), ppm("verifier_multiplier_ppm"));
+        let e = hharness_env::task_deadline::task_declared_deadline_ms;
+        match (
+            e(agent_sec, agent_ppm, ceiling),
+            e(verifier_sec, verifier_ppm, ceiling),
+        ) {
+            (Ok(a), Ok(v)) => Some(DeclaredDeadlines {
+                agent: (agent_sec, agent_ppm, a),
+                verifier: (verifier_sec, verifier_ppm, v),
+            }),
+            _ => None,
+        }
+    });
+    if packet.task.get("deadlines").is_some() && deadlines.is_none() {
+        // An ST0 refusal precedes any run — nothing the recipe would
+        // have produced exists (no reward, no infra ending); only the
+        // refusal fact stands.
+        let mut refused = crate::facts::SlotFacts::default();
+        refused.admission_refusal = Some(crate::disposition::AdmissionReason::DeadlineAdmission);
+        facts = refused;
+    }
     let outcome = map_slot_facts(&facts);
 
     let mut phases: Vec<SlotPhase> = Vec::new();
@@ -231,12 +279,20 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
                         .as_str(),
                 ),
             ] {
+                let (dsec, dppm, dms) = if phase == "agent" {
+                    deadlines
+                        .as_ref()
+                        .map(|d| d.agent)
+                        .unwrap_or((60, 1_000_000, 60_000))
+                } else {
+                    (60, 1_000_000, 60_000)
+                };
                 let ph = SlotPhase {
                     phase: phase.to_string(),
                     wall_ms: 1,
-                    deadline_declared_sec: Some(60),
-                    deadline_multiplier_ppm: Some(1_000_000),
-                    deadline_enforced_ms: Some(60_000),
+                    deadline_declared_sec: Some(dsec),
+                    deadline_multiplier_ppm: Some(dppm),
+                    deadline_enforced_ms: Some(dms),
                     end_cause: end_cause.to_string(),
                     exit_code: Some(0),
                     dispatch_outcome: "observed:applied".to_string(),
@@ -358,12 +414,16 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
                     break;
                 }
             }
+            let (vsec, vppm, vms) = deadlines
+                .as_ref()
+                .map(|d| d.verifier)
+                .unwrap_or((30, 1_000_000, 30_000));
             phases.push(SlotPhase {
                 phase: "verify".to_string(),
                 wall_ms: 1,
-                deadline_declared_sec: Some(30),
-                deadline_multiplier_ppm: Some(1_000_000),
-                deadline_enforced_ms: Some(30_000),
+                deadline_declared_sec: Some(vsec),
+                deadline_multiplier_ppm: Some(vppm),
+                deadline_enforced_ms: Some(vms),
                 end_cause: if facts.verifier_unavailable.is_some() {
                     "unavailable".to_string()
                 } else {
@@ -463,6 +523,23 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
     // ST6 RECORD — the hh-experiment-slot/1 blob + the bound finished row.
     let head_hash = store.head_event_id(&run_id).map_err(WorkerError::Ledger)?;
     let runner = crate::slot_record::RunnerIdentity::detect();
+    // AR-06 cell echo (REQ-XB-107): a packet declaring `cell.cell_spec`
+    // records the applied limits + the helper argv tail verbatim.
+    let cell_members = {
+        let mut c = packet.cell.clone();
+        if let Some(spec_j) = packet.cell.get("cell_spec") {
+            if let Ok(spec) = hharness_env::cell_spec::CellSpec::from_json(spec_j) {
+                if !spec.is_empty() {
+                    c.insert("applied_limits".to_string(), spec.to_json());
+                    c.insert(
+                        "helper_args".to_string(),
+                        Json::Arr(spec.helper_args().into_iter().map(Json::str).collect()),
+                    );
+                }
+            }
+        }
+        c
+    };
     let identity = Json::obj([
         ("experiment_id", Json::str(&packet.experiment_id)),
         ("protocol_id", Json::str(&packet.protocol_id)),
@@ -499,7 +576,7 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
         identity,
         task: Json::Obj(packet.task.clone()),
         participant: Json::Obj(packet.participant.clone()),
-        cell: Json::Obj(packet.cell.clone()),
+        cell: Json::Obj(cell_members),
         phases,
         verdict,
         disposition: outcome.disposition.clone(),

@@ -29,6 +29,28 @@ pub fn is_available() -> bool {
         .unwrap_or(false)
 }
 
+/// `CellSpec` — the admitted cell-spec members (R6.9; AR-06): the
+/// image-declared WORKDIR the cell runs under and the task's declared
+/// `cpus`/`memory_mb` applied as container limits. A record that declares
+/// none of them produces the pre-admission argv byte-identically.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CellSpec {
+    /// The cell's working directory — `None` keeps the `/work` default;
+    /// `Some(w)` replaces it verbatim (the resolved image WORKDIR).
+    pub workdir: Option<String>,
+    /// `--cpus` — the task's declared cpu count (a positive number token).
+    pub cpus: Option<String>,
+    /// `--memory` — the task's declared memory limit in MiB.
+    pub memory_mb: Option<u64>,
+}
+
+impl CellSpec {
+    /// `true` when nothing is declared — the argv stays byte-identical.
+    pub fn is_empty(&self) -> bool {
+        self == &CellSpec::default()
+    }
+}
+
 /// `PodmanBackend` — the container lifecycle for one environment.
 #[derive(Debug, Clone)]
 pub struct PodmanBackend {
@@ -43,6 +65,9 @@ pub struct PodmanBackend {
     /// Extra `podman create` args the policy requires (resource limits,
     /// mounts) — recorded verbatim, never interpreted.
     pub extra_args: Vec<String>,
+    /// The admitted cell spec (AR-06) — absent members keep the
+    /// pre-admission argv byte-identical.
+    pub cell: CellSpec,
 }
 
 /// A backend failure — verbatim stderr + exit status.
@@ -68,8 +93,14 @@ impl std::fmt::Display for BackendError {
 
 impl std::error::Error for BackendError {}
 
+/// The podman binary — `HH_PODMAN_BIN` overrides for diagnostics and
+/// the stub-driven acceptance legs (default `podman` on PATH).
+fn podman_bin() -> String {
+    std::env::var("HH_PODMAN_BIN").unwrap_or_else(|_| "podman".to_string())
+}
+
 fn run(op: &'static str, args: &[String]) -> Result<Output, BackendError> {
-    let out = Command::new("podman")
+    let out = Command::new(podman_bin())
         .args(args)
         .output()
         .map_err(|e| BackendError {
@@ -97,7 +128,9 @@ impl PodmanBackend {
     /// `create_args()` — the `podman create` argv [`Self::create`] runs.
     /// `network` maps to `--network bridge|none` (`none` is the default
     /// posture; `bridge` is the admitted `declared_deps` egress variant —
-    /// R5.56; ADR-0421).
+    /// R5.56; ADR-0421). The AR-06 cell spec lands verbatim: a declared
+    /// WORKDIR replaces `/work`, `--cpus`/`--memory` append after
+    /// `--init`; an undeclared spec leaves every byte as it was.
     pub fn create_args(&self) -> Vec<String> {
         let mut args = vec![
             "create".to_string(),
@@ -112,9 +145,20 @@ impl PodmanBackend {
             "-v".to_string(),
             format!("{}:/work:rw", self.workspace),
             "--workdir".to_string(),
-            "/work".to_string(),
+            self.cell
+                .workdir
+                .clone()
+                .unwrap_or_else(|| "/work".to_string()),
             "--init".to_string(),
         ];
+        if let Some(c) = &self.cell.cpus {
+            args.push("--cpus".to_string());
+            args.push(c.clone());
+        }
+        if let Some(m) = self.cell.memory_mb {
+            args.push("--memory".to_string());
+            args.push(format!("{m}m"));
+        }
         args.extend(self.extra_args.iter().cloned());
         args.extend([
             self.image.clone(),
@@ -146,7 +190,7 @@ impl PodmanBackend {
     /// `exec` — run `argv` inside the container, streaming to the caller's
     /// pipes (the caller sets stdio; this only builds the command).
     pub fn exec_command(&self, argv: &[String], cwd: &str, env: &[(String, String)]) -> Command {
-        let mut c = Command::new("podman");
+        let mut c = Command::new(podman_bin());
         c.arg("exec");
         for (k, v) in env {
             c.arg("-e").arg(format!("{k}={v}"));
@@ -176,7 +220,7 @@ impl PodmanBackend {
 
     /// `inspect_running` — is the container live?
     pub fn running(&self) -> bool {
-        Command::new("podman")
+        Command::new(podman_bin())
             .args(["inspect", "--format", "{{.State.Running}}", &self.container])
             .output()
             .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "true")
@@ -201,6 +245,173 @@ impl PodmanBackend {
         )?;
         Ok(())
     }
+
+    // ── AR-06 cell verbs — the kernel-mediated copy-in/out and the
+    //    phase filesystem reads the slot lifecycle drives. Every verb is
+    //    a verbatim `podman` argv; the caller supplies host paths, never
+    //    a channel through `/work` (REQ-XB-106). ───────────────────────
+
+    /// `image_workdir()` — the image's declared `.Config.WorkingDir` read
+    /// through `podman image inspect` (the `--workdir-from-image`
+    /// admission). An absent/empty declaration is a typed backend error —
+    /// the image WORKDIR is never silently substituted with `/work`.
+    pub fn image_workdir(&self) -> Result<String, BackendError> {
+        let out = run(
+            "image",
+            &[
+                "image".to_string(),
+                "inspect".to_string(),
+                "--format".to_string(),
+                "{{.Config.WorkingDir}}".to_string(),
+                self.image.clone(),
+            ],
+        )?;
+        let w = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if w.is_empty() {
+            return Err(BackendError {
+                op: "image",
+                stderr: format!("image {} declares no Config.WorkingDir", self.image),
+                status: None,
+            });
+        }
+        Ok(w)
+    }
+
+    /// `cp_in(host_src, container_dst)` — `podman cp` host → cell. The
+    /// kernel-side copy-in for `/tests`/`/solution`: bytes transit the
+    /// host↔container edge, never the `/work` mount the agent writes.
+    /// A `container_dst` under `/work` refuses before argv — aliasing the
+    /// agent-writable mount would launder the phase boundary.
+    pub fn cp_in(&self, host_src: &str, container_dst: &str) -> Result<(), BackendError> {
+        refuse_work_alias(container_dst)?;
+        run(
+            "cp",
+            &[
+                "cp".to_string(),
+                host_src.to_string(),
+                format!("{}:{container_dst}", self.container),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// `cp_out(container_src, host_dst)` — `podman cp` cell → host (the
+    /// reward/log collection leg). A `container_src` under `/work`
+    /// refuses for the same aliasing reason.
+    pub fn cp_out(&self, container_src: &str, host_dst: &str) -> Result<(), BackendError> {
+        refuse_work_alias(container_src)?;
+        run(
+            "cp",
+            &[
+                "cp".to_string(),
+                format!("{}:{container_src}", self.container),
+                host_dst.to_string(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// `exists(path)` — `test -e` inside the cell (the phase-boundary
+    /// listing leg: `/tests` and `/solution` are absent until theirs).
+    pub fn exists(&self, path: &str) -> Result<bool, BackendError> {
+        let out = Command::new(podman_bin())
+            .args([
+                "exec".to_string(),
+                self.container.clone(),
+                "test".to_string(),
+                "-e".to_string(),
+                path.to_string(),
+            ])
+            .output()
+            .map_err(|e| BackendError {
+                op: "exec",
+                stderr: e.to_string(),
+                status: None,
+            })?;
+        Ok(out.status.success())
+    }
+
+    /// `ls_dir(path)` — `ls -1A` inside the cell; the per-phase
+    /// filesystem listing the slot records cite.
+    pub fn ls_dir(&self, path: &str) -> Result<Vec<String>, BackendError> {
+        let out = run(
+            "exec",
+            &[
+                "exec".to_string(),
+                self.container.clone(),
+                "ls".to_string(),
+                "-1A".to_string(),
+                path.to_string(),
+            ],
+        )?;
+        let mut v: Vec<String> = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect();
+        v.sort();
+        Ok(v)
+    }
+
+    /// `rm_glob(path)` — `rm -f` inside the cell (the stale
+    /// `reward.*` removal before ST5 — REQ-XB-106).
+    pub fn rm_glob(&self, glob: &str) -> Result<(), BackendError> {
+        run(
+            "exec",
+            &[
+                "exec".to_string(),
+                self.container.clone(),
+                "sh".to_string(),
+                "-c".to_string(),
+                format!("rm -f {glob}"),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// `terminate_group(pattern)` — the agent-deadline-lapse leg
+    /// (REQ-XB-119): TERM the agent's process group inside the cell,
+    /// then KILL what survives. `pkill -f` addresses the group by the
+    /// participant's command line — the helper records the argv it
+    /// actually ran, never a claimed signal.
+    pub fn terminate_group(&self, pattern: &str) -> Result<(), BackendError> {
+        let _ = run(
+            "exec",
+            &[
+                "exec".to_string(),
+                self.container.clone(),
+                "pkill".to_string(),
+                "-TERM".to_string(),
+                "-f".to_string(),
+                pattern.to_string(),
+            ],
+        );
+        run(
+            "exec",
+            &[
+                "exec".to_string(),
+                self.container.clone(),
+                "pkill".to_string(),
+                "-KILL".to_string(),
+                "-f".to_string(),
+                pattern.to_string(),
+            ],
+        )?;
+        Ok(())
+    }
+}
+
+/// `/work` aliasing — a copy whose cell-side path lands under the
+/// agent-writable mount refuses (`/work` itself or `/work/…`); the phase
+/// boundary is never laundered through the mount.
+fn refuse_work_alias(path: &str) -> Result<(), BackendError> {
+    if path == "/work" || path.starts_with("/work/") {
+        return Err(BackendError {
+            op: "cp",
+            stderr: format!("cell path {path} aliases the agent-writable /work mount"),
+            status: None,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -218,6 +429,7 @@ mod tests {
             workspace: "/tmp/ws".into(),
             network: false,
             extra_args: vec![],
+            cell: CellSpec::default(),
         };
         let args = base.create_args();
         let pos = args.iter().position(|a| a == "--network").unwrap();
@@ -239,6 +451,7 @@ mod tests {
             workspace: "/tmp/ws".into(),
             network: false,
             extra_args: vec![],
+            cell: CellSpec::default(),
         };
         let mut c = Command::new("true");
         let _ = &mut c;

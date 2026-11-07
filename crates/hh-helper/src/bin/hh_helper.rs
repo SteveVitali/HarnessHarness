@@ -4,6 +4,8 @@
 //! hh-helper --socket <path> [--backend seatbelt|podman|direct]
 //!           [--container <name>] [--image <ref>] [--workspace <dir>]
 //!           [--network none|bridge]
+//!           [--workdir <path> | --workdir-from-image]
+//!           [--cpus <n>] [--memory <MiB>]
 //! ```
 //!
 //! `--network` (default `none`, `S4_HELPER_NETWORK` env fallback — the
@@ -11,6 +13,15 @@
 //! egress knob (R5.56; ADR-0421): `bridge` runs the podman cell on
 //! `--network bridge`; `none` is byte-identical to the pre-variant
 //! posture. An unknown value is a usage failure, never coerced.
+//!
+//! The cell-spec flags (R6.9; AR-06; REQ-XB-107) carry the task's
+//! declared cell bounds into the `podman create` argv: `--workdir
+//! <path>` or `--workdir-from-image` (resolved through `podman image
+//! inspect`, an absent `Config.WorkingDir` refuses exit 3) replaces the
+//! `/work` default; `--cpus <n>` and `--memory <MiB>` append the
+//! container limits after `--init`. Every flag absent produces the
+//! pre-admission argv byte-identically; a malformed value is a usage
+//! failure (exit 2), never coerced.
 //!
 //! The kernel spawns this binary once per contained environment; it binds
 //! the session socket and serves `hh-helper/1` until `shutdown` or the
@@ -26,14 +37,15 @@ use std::os::unix::net::UnixListener;
 use std::process::exit;
 use std::sync::Arc;
 
-use hharness_helper::podman::PodmanBackend;
+use hharness_helper::podman::{CellSpec, PodmanBackend};
 use hharness_helper::server::{serve, HelperServer};
 
 fn usage() -> ! {
     eprintln!(
         "usage: hh-helper --socket <path> [--backend seatbelt|podman|direct] \
          [--container <name>] [--image <ref>] [--workspace <dir>] \
-         [--network none|bridge]"
+         [--network none|bridge] [--workdir <path> | --workdir-from-image] \
+         [--cpus <n>] [--memory <MiB>]"
     );
     exit(2);
 }
@@ -46,6 +58,10 @@ fn main() {
     let mut image = PodmanBackend::DEFAULT_IMAGE.to_string();
     let mut workspace = None::<String>;
     let mut network = "none".to_string();
+    let mut workdir = None::<String>;
+    let mut workdir_from_image = false;
+    let mut cpus = None::<String>;
+    let mut memory_mb = None::<u64>;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -71,6 +87,31 @@ fn main() {
             }
             "--network" => {
                 network = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                i += 2;
+            }
+            "--workdir" => {
+                workdir = Some(args.get(i + 1).cloned().unwrap_or_else(|| usage()));
+                i += 2;
+            }
+            "--workdir-from-image" => {
+                workdir_from_image = true;
+                i += 1;
+            }
+            "--cpus" => {
+                let v = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                // A positive finite number token — never coerced.
+                match v.parse::<f64>() {
+                    Ok(n) if n.is_finite() && n > 0.0 => cpus = Some(v),
+                    _ => usage(),
+                }
+                i += 2;
+            }
+            "--memory" => {
+                let v = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                match v.parse::<u64>() {
+                    Ok(m) if m > 0 => memory_mb = Some(m),
+                    _ => usage(),
+                }
                 i += 2;
             }
             _ => usage(),
@@ -112,12 +153,31 @@ fn main() {
                 eprintln!("hh-helper: backend podman unavailable (no reachable podman)");
                 exit(3);
             }
-            let b = PodmanBackend {
+            let mut b = PodmanBackend {
                 container: name,
                 image,
                 workspace: ws,
                 network: network_on,
                 extra_args: vec![],
+                cell: CellSpec::default(),
+            };
+            if workdir_from_image {
+                if workdir.is_some() {
+                    eprintln!("hh-helper: --workdir and --workdir-from-image are exclusive");
+                    exit(2);
+                }
+                match b.image_workdir() {
+                    Ok(w) => workdir = Some(w),
+                    Err(e) => {
+                        eprintln!("hh-helper: --workdir-from-image refused: {e}");
+                        exit(3);
+                    }
+                }
+            }
+            b.cell = CellSpec {
+                workdir,
+                cpus,
+                memory_mb,
             };
             if let Err(e) = b.create() {
                 eprintln!("hh-helper: podman create failed: {e}");

@@ -19,6 +19,7 @@
 
 pub mod activation;
 pub mod capture;
+pub mod cell_spec;
 pub mod confirm;
 pub mod deadline;
 pub mod dispatch;
@@ -49,6 +50,7 @@ pub mod recovery;
 pub mod seal;
 pub mod snapshot;
 pub mod study;
+pub mod task_deadline;
 pub mod tokens;
 pub mod useful;
 pub mod value;

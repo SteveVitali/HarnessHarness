@@ -533,6 +533,7 @@ impl EnvDriver {
             image,
             applied_event_ref: None,
             phase: None,
+            cell_spec: crate::cell_spec::CellSpec::from_record(record)?,
             provider: provider_handle,
             hosted: None,
             created_ms: now,
@@ -648,6 +649,7 @@ impl EnvDriver {
             image,
             applied_event_ref: None,
             phase: None,
+            cell_spec: crate::cell_spec::CellSpec::from_record(record)?,
             provider: None,
             hosted: Some(binding.clone()),
             created_ms: now,
@@ -856,21 +858,26 @@ impl EnvDriver {
                 let ws = h.roots.cwd.clone();
                 std::fs::create_dir_all(&ws)
                     .map_err(|e| EnvError::Blob(format!("container workspace: {e}")))?;
-                (
-                    "podman".to_string(),
+                {
                     // The helper's podman network derives from the
                     // attached containment policy (R5.56; ADR-0421):
                     // `net.mode = public` — the admitted `declared_deps`
                     // egress profile — runs the cell on `--network
                     // bridge`; `none`/`mediated` leave the flag absent,
-                    // byte-identical to the pre-variant argv.
-                    crate::egress_profile::podman_helper_args(
+                    // byte-identical to the pre-variant argv. The AR-06
+                    // cell spec appends its own closed flags; a handle
+                    // without one appends nothing.
+                    let mut args = crate::egress_profile::podman_helper_args(
                         &container,
                         &image,
                         &ws,
                         h.containment.policy(),
-                    ),
-                )
+                    );
+                    if let Some(spec) = &h.cell_spec {
+                        args.extend(spec.helper_args());
+                    }
+                    ("podman".to_string(), args)
+                }
             }
             _ => return Ok(()),
         };
@@ -2299,6 +2306,7 @@ impl EnvDriver {
             image: parent.image.clone(),
             applied_event_ref: None,
             phase: None,
+            cell_spec: parent.cell_spec.clone(),
             provider: parent.provider.clone(),
             hosted: parent.hosted.clone(),
             created_ms: now,

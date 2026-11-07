@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_211 ADRs: 159 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_213 ADRs: 161 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -195,6 +195,8 @@ _211 ADRs: 159 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0425 | When a durable `PricingTable` JSON codec lands (bundle snapshot), `rate_unit` must be a required member of it; when a provider rate below $0.001/M appears, add `micro_per_1m_tokens` by amendment; if a paid study ever needs the router's `DeclaredPricing` path for real spend, re-derive it from `PricingTable` rather than maintaining the second table. |
 | ADR-0426 | A third Ollama surface (Responses — C-32) admitted for Round 6 or later revisits the lane set; a provider auth form outside `{bearer, api_key_header}` revisits `auth_form_header`'s coverage; a `forward_raw` caller wanting pipelined or keep-alive exchanges revisits the `Connection: close` posture. |
 | ADR-0427 | Reopen when the live cell lane lands (R6.9+) and the Harbor/O-surface adapter (R6.17) replaces the fixture executor — the `hh-runner-fixture-*` channel spellings, the `costs` reference shape (if `hh-slot-costs/1` changes), or the slot-record section list in §3.3 are amended; or if the engine gains a first-class "release fulfilled claim" verb that makes the wait-the-fence-out rule unnecessary. |
+| ADR-0428 | The live helper-protocol cell lane lands (egress/relay tickets): the `CellOps` podman lowering is re-bound to the protocol verbs then; the closed flags stay. |
+| ADR-0429 | A second protocol needs a different ceiling or a setup multiplier other than the declared 1.0: the ceiling and multipliers stay declared members; the derivation is reopened by a new ADR. |
 
 ## Fired-and-answered triggers (BL-48)
 
