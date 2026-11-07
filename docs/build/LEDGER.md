@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.3
-lastCompleted:   R6.2
+nextTicket:      R6.4
+lastCompleted:   R6.3
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         main
+chainTip:         codex/harnessharness-r6.3
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-07T02:10:00Z
+updatedAt:        2026-11-07T07:51:02Z
 ```
 
 ## OPEN FINDINGS
@@ -1269,6 +1269,8 @@ updatedAt:        2026-11-07T02:10:00Z
 - 2026-11-06T23:06Z · **BL-50…BL-53 reconcile** — branch `codex/harnessharness-bl-reconcile` · PR #291 · base `origin/main` `@09fe8523` (non-manifest records-in reconcile; manifest chain DONE — guard PASS route HOLD, no DISPATCH exists). **BL-52 discharged satisfied** — its named exit met: executed `hh-s1-useful/1` `2026-11-05-df-cap5.1-s1-useful.json` (`disposition: executed`, 7/7 legs verified, `useful_acceptance: marked`) + independent Decided artifacts `…-s1-decided-artifacts.json` (both subjects `decided` reward_ppm 1000000); DF-CAP5.1-1 DONE. **BL-53 discharged satisfied** — `hh-guard-boundary-evidence/1` `2026-11-05-df-r5.1-evidence.json` (EV-1..6 verified; 67/67 dispatch boundaries guard pre+post `PASS DISPATCH`); DF-R5.1-1 DONE. **BL-51 discharged scope-dispositioned — never satisfied** — DF-H9-1's verbatim 2026-11-05T16:04:15Z operator disposition (permanently unmet-by-decision) is the fresh scope disposition its exit names. **BL-50 stays open** — R-layer legs discharged by evidence (parity verified 30/30 tranche-3; S4 300/300 four epochs; efficacy computed null-equivalent; GATE-G19 PASSED; study reported `unmet{s1_failed}` verbatim); P-layer legs (REQ-G-201/202/206/207/209) still voided/carried — no publication/adoption evidence or authorization; += 33 re-homed matrix ids (all 73 round-5 PARTIAL ids on the one open carrier; CAP5.1 verdicts not re-verdicted — matrix re-verdict owed to next capstone). **Verify:** deferrals-open DF empty · --bl → BL-50 only · check-bm-tools OK · check-backlog exit 0 both modes (206 + 73 expected) · bm `.`/`--staged` 0 viol (8 warn) · guard PASS HOLD. **Deferrals:** none opened/closed. **Deviations:** none. chainTip → codex/harnessharness-bl-reconcile · next → (unchanged — nextTicket DONE) · layer: engineered (records-in, USD $0.00) · harness: devin-desktop/swe-2-high/subagent
 
 ## PHASE LOG — Round 6
+
+- 2026-11-07T07:51:02Z · **R6.3 done — phase-1 corrections record** — branch `codex/harnessharness-r6.3` · base `origin/main` @`39fb3f23`. Append-only dated corrections on every REQ-XA-114 target + main re-read hits: `null-equivalent` → 0-by-construction (oracle); `≈$1.41` → rate-card ≈$1.72 (16:32Z–22:15:40Z, B3 F3/F5, billing unread — REQ-XB-222); post-state `Listed 0 items` = failed request (B3 F4); `DELETE_REQUESTED` read 23:30:17Z cited (REQ-XH-028); GATE-G19 `live-executed` → recorded execution — internal; DF-CAP5.1-1 trailing disposition → DF-H9-1. **AR-02** `hh-protocol-deviations/1` `d8350902` + md — verbatim epoch authorizations; counts equal RC-4 (90/20/30; 28/60; 250/50; 160/140; 100 served; 200/100); never an amendment; REQ-XA-008 register (7/4 classes). **AR-01** ADR-0423 — retro TB 2.0 → `terminal-bench-core==0.1.1` (89→80); FNV `catalogue_identity` mislabel; `retro:` evidence. **P1-D** `r6_3` emits `hh-study-report/1` `485dbc55` — `reported`, `unmet{s1_objective}`, `s1_unmet:true`, folds `7bbd15a2`; r5_49/R5.59 byte-identical. **P1-E** `docs/results/phase1-execution-surface-replay.md` (internal; not outside-verified; 13 bounds verbatim; glossary) + `[replay-record]` card + spine/status links + `check-position.sh` `record` leg + `RECORD_BANNED` + mutations (a)–(i). **Verify:** cargo test -p hharness-env green (r6_3 2/2 · r5_49 9/9) · fmt clean · check-position work+head OK · test-check-position OK (29) · living-docs OK · ci-gating clean · deferrals-open empty · guard **PASS DISPATCH — R6.3** pre; post advanced · bm: inherited BM-DEFER-01 `D-` quirk on the DF row append (precedent `fd23ea47`). **Deferrals:** none. **Deviations:** ~1500 lines vs ≤400 — recorded (atomic record+corrections+checker). **AC-1..13** met in scope; rowed items stay unlanded/gated. chainTip → codex/harnessharness-r6.3 · next → R6.4 · layer engineered (records-in, $0.00) · harness devin-desktop/swe-2-high/subagent
 
 - 2026-11-07T02:10Z · R6.2 done — branch `codex/harnessharness-r6.2` · base local `main` @`dc6b0e2e`. **P1-A + P1-B landed:** the 71 scratch drivers + verbatim manifest (sha256 `f80859977e5a…`) committed as unmaintained provenance under `docs/build/reports/provenance/2026-11-06-scratch-drivers/` with `index.json` + README (historical re-run recipe — fresh execution, never replay); `raw/` 587-file record set + `raw/SHA256SUMS`; `sha256tree/1` dataset digests beside the FNV `catalogue_identity`; `p1_records.py` (`hh-p1-records-check/1`, RC-1…6, exit 0; battery 6/6). Cross-check: basis A 16/14/2, basis B 26/30, basis C 260/300 records; `hf-model-inference` `inconclusive_with_receipt` confound; estimators verbatim: `MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}` / `UnequalDesign{pairs 16 ≠ T·R 30}` / `MissingMargin` (margins empty, floors stated, no `verdict` member); REQ-XA-006 arm counts (A 150→150 evict; B 150→90 clear+60 evict). Emitted `2026-11-07-p1-surface-xcheck.json` + `-p1-estimators.json`; re-emission byte-equal. cargo test -p hharness-env green; fmt/ci-gating/living-docs OK; secret scan clean; no CI reference to the archive. Guard with stock checker → `PASS DISPATCH — R6.2` pre + post. chainTip → codex/harnessharness-r6.2 · next → R6.3.
 

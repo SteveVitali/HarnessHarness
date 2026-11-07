@@ -177,13 +177,16 @@ behind it, its limits, and the access or exit route.
   [hh-s1-useful/1 packet](build/reports/2026-11-04-r5.43-s1-useful.json)
   records `disposition: failed` — the bounded drive ran under the
   round-5 admission and produced no independently correct artifact
-  (`acceptance withheld{no_independent_correct_artifact}`). The two
-  machinery defects it carried were repaired and discharged at the
-  later ops-live packet, but no S1 re-execution was admitted or run;
-  the residual is carried by [DF-CAP5.1-1](tickets/DEFERRALS.md) and
-  the round-5 acceptance retained S1 unmet. The scripted-lane fixture
-  and the recorded live `format_failure` run are not useful-task
-  evidence.
+  (`acceptance withheld{no_independent_correct_artifact}`). The
+  operator-authorized 2026-11-05 re-execution on the repaired machinery
+  recorded `disposition: executed` with `useful_acceptance: marked`
+  ([packet](build/reports/2026-11-05-df-cap5.1-s1-useful.json)) —
+  a bounded slice, not the full objective. S1 remains unmet in the
+  latest fold; the re-execution awaits re-folding into this card's
+  state — a promotion is its own gated ticket (the
+  [phase-1 record](results/phase1-execution-surface-replay.md) carries
+  the account). The scripted-lane fixture and the recorded live
+  `format_failure` run are not useful-task evidence.
 - **Limits:** a recorded attempt is not a passing receipt; this unmet
   objective is retained, not relabeled; a fixture or setup success
   never substitutes for it
@@ -199,23 +202,27 @@ behind it, its limits, and the access or exit route.
   two-arm finite-manifest study with an oracle, policy-specific parity
   admission, four matched caps, detectors, and a frozen analysis.
 - **Evidence:** the
-  [hh-study-report/1 record](build/reports/2026-11-06-r5.49-study-report.json)
-  (`disposition: reported` — a recompute over twelve committed
-  packets) carries the honest verdict verbatim: `unmet{
-  efficacy_unavailable;s4_partial}` with `s1_unmet` and `s4_unmet`
-  `true` and `s3_unmet` `false`. Its bounded legs really executed —
-  activation and the pilot ran (10/10 pilot first-subjects, $0
-  recorded exposure) — parity is now
-  [`verified{30_30}`](build/reports/2026-11-05-parity-tranche-3.json)
-  (exact directional agreement on the real two-runner tranche) and
-  the confirmation tranche is `partial{250_300}` — 160/300 frozen-run
-  receipts plus 90/140 named egress-supplement receipts
-  ([confirmation](build/reports/2026-11-05-s4-confirmation.json) ·
-  [supplement](build/reports/2026-11-05-s4-egress-cohort.json)), the
-  50 inconclusive slots verbatim. The earlier withheld records
+  [hh-study-report/1 record](build/reports/2026-11-07-r6.3-study-report.json)
+  (`disposition: reported`) carries the honest verdict verbatim:
+  `unmet{s1_objective}` with the fold's `s1_unmet` flag — the
+  useful-task objective — `true`, `s3_unmet` (the parity predicate)
+  `false`, and `s4_unmet` (the confirmation-cohort predicate)
+  `false`. Its bounded legs really executed — activation and the
+  pilot ran (10/10 pilot first-subjects, $0 recorded exposure) — the
+  tranche's own `verified` verdict stands at
+  [30/30](build/reports/2026-11-05-parity-tranche-3.json)
+  (`tb` ↔ a reference runner, R=1) and the confirmation cohort is
+  `executed{300_300}` as a four-epoch composite outside the frozen
+  reattempt bound ([deviation record](build/reports/2026-11-07-s4-protocol-deviations.md)).
+  The efficacy leg's `computed{strata:easy,hard,medium}` is 0 by
+  construction — no efficacy result exists. The earlier withheld and
+  failed records
   ([`hh-parity-n0/1`](build/reports/2026-11-04-r5.47-parity-n0.json),
-  [`hh-confirm-withheld/1`](build/reports/2026-11-04-r5.48-confirm-withheld.json))
-  stand as committed history.
+  [`hh-confirm-withheld/1`](build/reports/2026-11-04-r5.48-confirm-withheld.json),
+  [R5.59 fold](build/reports/2026-11-06-r5.59-study-report.json))
+  stand as committed history; the
+  [phase-1 record](results/phase1-execution-surface-replay.md) carries
+  the account.
 - **Limits:** an admitted inconclusive report is not a positive
   research claim — no efficacy, parity, sharp-null or adoption result
   exists; fixtures cannot fulfill this objective, and a sound
@@ -234,16 +241,37 @@ behind it, its limits, and the access or exit route.
   [hh-ops-live/1 packet](build/reports/2026-11-04-r5.44-ops-live-second.json)
   records `disposition: executed` under the bounded podman admission —
   all 24 planned attempts invoked and boundary-observed, 0 violations,
-  honest `undeterminable` probes retained. The confirmation tranche
-  that would complete S4 stayed
-  [`withheld{tranche_absent}`](build/reports/2026-11-04-r5.48-confirm-withheld.json),
-  so `s4_unmet` remains `true`.
+  honest `undeterminable` probes retained. The confirmation cohort
+  executed as a four-epoch composite outside the frozen reattempt
+  bound — the fold's `s4_unmet` flag (the confirmation-cohort
+  predicate) is `false`, while the operations predicate stays unmet;
+  the dated [deviation record](build/reports/2026-11-07-s4-protocol-deviations.md)
+  is committed and the card's promotion stays its own gated ticket.
 - **Limits:** a bounded execution is real evidence of the apparatus,
   not a `live-executed` record and not the S4 conclusion; named
   host/fault/threat assumptions only — no reliability or security
   rating.
 - **Access:** [the operational test batteries](../crates/hh-env/tests/)
   for the fixture layer.
+
+### Card — Execution-surface replay record [replay-record]
+
+- **State:** Available — internal record; not outside-verified
+- **Scope:** the phase-1 methodology record — what executed (parity
+  tranches, the four-epoch S4 cohort, the study folds), the honest
+  bounds, the dated corrections, the deviation record and the edition
+  ADR.
+- **Evidence:** the
+  [phase-1 record](results/phase1-execution-surface-replay.md)
+  (recorded execution — internal record) over the committed packets,
+  the [records-in verifier](build/tools/p1_records.py) (RC-1…RC-6) and
+  the emitted [cross-check](build/reports/2026-11-07-p1-surface-xcheck.json)
+  and [estimator](build/reports/2026-11-07-p1-estimators.json) packets.
+- **Limits:** internal record only — not outside-verified, not
+  `live-executed`, not an admission or efficacy result; the tranche's
+  own `verified` verdict is exact agreement over `tb` ↔ a reference
+  runner, and the efficacy contrast is 0 by construction.
+- **Access:** read the record; corrections land as dated addenda.
 
 ### Card — Optional packaged component [component]
 
@@ -398,10 +426,10 @@ recorded, not dropped.
 
 | Scenario | Job | Current state |
 |---|---|---|
-| S1 — useful task, inspect, replay, share | One unchanged upstream task, two fixed subjects, independently checked submission, annotated native receipt | **Not yet available** — attempted and recorded `failed`; machinery repaired, no re-execution admitted; unmet retained (DF-CAP5.1-1) |
+| S1 — useful task, inspect, replay, share | One unchanged upstream task, two fixed subjects, independently checked submission, annotated native receipt | **Not yet available** — bounded execution `failed`, machinery repaired; the 2026-11-05 re-execution executed with `useful_acceptance: marked` (bounded slice; DF-CAP5.1-1 done); S1 remains unmet in the latest fold — promotion is a gated ticket |
 | S2 — offline Lab | Two synthetic tasks × two arms × five repetitions through the real chain | Available — fixture-verified (EX-02 card) |
-| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — study reported `unmet{efficacy_unavailable;s4_partial}`; parity verified 30/30, efficacy still unavailable (partial cohort, no contrast) |
-| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — bounded matrix executed (24/24, 0 violations); confirmation cohort executed `partial` (250/300 receipts, 50 inconclusive verbatim); unmet retained |
+| S3 — compaction | The central conditional two-arm finite-manifest study | **Not yet available** — the tranche's own `verified` verdict stands at 30/30 (`tb` ↔ reference runner, R=1 — `parity_admission` refuses the design); the efficacy contrast computed `computed{strata:easy,hard,medium}` but is 0 by construction; the S3 study objective stays unmet |
+| S4 — operations | Eight cells × three over the shared apparatus with an independent sink | **Not yet available** — bounded matrix executed (24/24, 0 violations); the confirmation cohort executed 300/300 as a four-epoch composite outside the frozen bound (dated deviation record); unmet retained |
 | S5 — participation | Fixed no-run bug, verifyfixed, verify/recompute paths | Restricted — lanes documented (contribute card); stage voided for the round; component exercise recorded unselected |
 | S6 — interchange | At most one external consumer/direction | Restricted — recorded `unselected{stage_voided}`; optional after native readiness |
 <!-- portfolio:scenarios:end -->
@@ -412,11 +440,13 @@ recorded, not dropped.
 This page describes a **partial release**. The S1 useful-task and S3
 compaction-study objectives are **unmet**: recorded, not inferred —
 the bounded S1 execution ran and failed (the machinery was repaired,
-no re-execution was admitted; DF-CAP5.1-1 stays open), and the
-admitted study reported its efficacy predicate unavailable and S4's
-confirmation cohort `partial` — parity itself is verified 30/30, but
-the S3 study objective (a finite-manifest efficacy result) stays
-unmet. No
+and the 2026-11-05 re-execution executed with `useful_acceptance:
+marked` — a bounded slice; S1 remains unmet in the latest fold and the
+re-execution awaits re-folding into the card state), and the S3 study
+objective (a finite-manifest efficacy result) stays unmet — the
+tranche's own `verified` verdict stands at 30/30 (`tb` ↔ a reference
+runner) and the computed contrast is 0 by construction, not an
+efficacy result. No
 checked-task minimum has
 been retained by substitution — the fixture cards are labelled teaching
 and explicitly cannot satisfy either objective. Publishing this reader

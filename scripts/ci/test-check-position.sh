@@ -27,6 +27,8 @@ seed() {  # $1 = dir — a minimal repo carrying the real checkout's positioning
   cp "$ROOT/docs/README.md" "$d/docs/"
   cp "$ROOT/docs/evidence-and-adoption-spec.md" "$d/docs/"
   cp "$ROOT/scripts/check-position.sh" "$d/scripts/"
+  mkdir -p "$d/docs/results"
+  cp "$ROOT/docs/results/phase1-execution-surface-replay.md" "$d/docs/results/"
   # placeholder files for every repo-relative link in docs/evidence.md
   # and the README spine block — the checker's link legs resolve
   # targets, not contents
@@ -38,7 +40,7 @@ def marked(doc, name):
         rf"<!--\s*{re.escape(name)}(?::begin)?\s*-->(.*?)<!--\s*{re.escape(name)}:end\s*-->",
         doc, re.S)
     return m.group(1) if m else ""
-for rel, base in (("docs/evidence.md", "docs"), ("README.md", "")):
+for rel, base in (("docs/evidence.md", "docs"), ("README.md", ""), ("docs/results/phase1-execution-surface-replay.md", "docs/results")):
     doc = open(os.path.join(root, rel)).read()
     if rel == "README.md":
         doc = marked(doc, "spine")
@@ -202,6 +204,70 @@ if grep -q "Reader spine" "$TMP/noannot.yml"; then
 else
   say "skip annotation-mutation leg (Reader spine step not yet in ci.yml)"
 fi
+
+# --- record mutations (a)–(i), each expected to fail --------------------------------
+D=$(seed mut-a)
+rm "$D/docs/results/phase1-execution-surface-replay.md"
+expect fail "(a) record deleted" "$D"
+
+D=$(seed mut-b)
+python3 - "$D/docs/results/phase1-execution-surface-replay.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+open(p, "w").write(t.replace("(R=1)", "(R=5)", 1))
+PY2
+expect fail "(b) a BOUNDS phrase altered" "$D"
+
+D=$(seed mut-c)
+echo '
+null-equivalent' >> "$D/docs/results/phase1-execution-surface-replay.md"
+expect fail "(c) null-equivalent appended to the record" "$D"
+
+D=$(seed mut-d)
+echo '
+parity verified' >> "$D/docs/evidence.md"
+expect fail "(d) parity verified in evidence.md" "$D"
+
+D=$(seed mut-e)
+python3 - "$D/docs/results/phase1-execution-surface-replay.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+open(p, "w").write(t.replace("internal record; not outside-verified", "live-executed", 1))
+PY2
+expect fail "(e) header changed to live-executed" "$D"
+
+D=$(seed mut-f)
+python3 - "$D/docs/evidence.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+t = t.replace("- **State:** Available — internal record; not outside-verified",
+              "- **State:** Available — verified", 1)
+open(p, "w").write(t)
+PY2
+expect fail "(f) replay-record State exceeds the cap" "$D"
+
+D=$(seed mut-g)
+python3 - "$D/README.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+t = t.replace("[phase-1 execution-surface replay record](docs/results/phase1-execution-surface-replay.md)",
+              "phase-1 record", 1)
+open(p, "w").write(t)
+PY2
+expect fail "(g) spine loses the record link" "$D"
+
+D=$(seed mut-h)
+python3 - "$D/docs/results/phase1-execution-surface-replay.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+open(p, "w").write(t + "\n[broken](no-such-file.md)\n")
+PY2
+expect fail "(h) a broken link in the record" "$D"
+
+D=$(seed mut-i)
+echo '
+proven' >> "$D/docs/results/phase1-execution-surface-replay.md"
+expect fail "(i) a BANNED entry appended to the record" "$D"
 
 # --- the real checkout is green ------------------------------------------------------------------------
 expect ok "real checkout (working tree)" "$ROOT"

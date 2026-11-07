@@ -19,6 +19,7 @@ history behind it.
 | Assess readiness | [Status and limitations](status.md) — available distribution, evidence, and known limits |
 | Check evidence and the portfolio | [Evidence and readiness](evidence.md) — per-surface cards, gate states, the selected job, and the capability catalogue |
 | Inspect a recorded run | [Inspect a run](inspect-a-run.md) — the annotated trace: six excerpts with event/cause coordinates, prerequisites and recovery |
+| Read a phase record | [Results](results/README.md) — dated phase records, starting with the phase-1 execution-surface replay record |
 | Run the example families | [Offline examples](experiments.md) — EX-01–04 cards: jobs, pins, costs, commands, semantic checks and failure routes |
 | Contribute | [Contributing](../CONTRIBUTING.md) — development workflow and verification |
 | Work with a coding agent | [Agent instructions](../AGENTS.md) — repository rules and scoped guidance |
@@ -60,6 +61,8 @@ entries under the applicable record protocol.
 | [status.md](status.md) | living | A current account of availability, evidence, and limitations |
 | [evidence.md](evidence.md) | living | Per-surface evidence cards, readiness states, the selected job, and the capability portfolio |
 | [inspect-a-run.md](inspect-a-run.md) | living | The annotated run trace: six excerpts, event/cause coordinates, prerequisites/recovery, the bounded cap-edit recipe |
+| [results/README.md](results/README.md) | living | Index of dated phase records |
+| [results/phase1-execution-surface-replay.md](results/phase1-execution-surface-replay.md) | historical | The phase-1 execution-surface replay record — internal record; dated addenda only |
 | [experiments.md](experiments.md) | living | The four offline example families — jobs, versions/pins, costs, commands, checks, failure routes |
 | [brief.md](brief.md) | frozen | Evidence and adoption founding intent; later changes are dated addenda. Charter approved; see its dated addendum. |
 | [protocol-resource-review.md](protocol-resource-review.md) | living checkpoint summary | Accepted research/design recommendations and Q-3–Q-6 review; decisions are recorded in the research ledger |
