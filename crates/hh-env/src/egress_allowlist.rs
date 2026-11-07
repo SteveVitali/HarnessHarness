@@ -71,14 +71,14 @@ fn unsupported(detail: impl Into<String>) -> EnvError {
     }
 }
 
-fn jobj<'a>(j: &'a Json) -> Option<&'a BTreeMap<String, Json>> {
+fn jobj(j: &Json) -> Option<&BTreeMap<String, Json>> {
     match j {
         Json::Obj(m) => Some(m),
         _ => None,
     }
 }
 
-fn jarr<'a>(j: &'a Json) -> Option<&'a Vec<Json>> {
+fn jarr(j: &Json) -> Option<&Vec<Json>> {
     match j {
         Json::Arr(v) => Some(v),
         _ => None,

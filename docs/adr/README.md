@@ -222,4 +222,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0430](ADR-0430-r6.12-replay-archive-index.md) | Proxy record/replay, `hh-l1-canon` reuse, and `hh-receipt-index/1` (AR-20) | R6.12 (manifest 265) | Accepted |
 | [ADR-0431](ADR-0431-r6.13-compute-recipe.md) | The AR-15 compute recipe — admitted `gcloud`, declaration/receipt schemas, nine-step teardown (R6.13) | R6.13 (manifest 266) | Accepted |
 | [ADR-0432](ADR-0432-r6.14-compute-pricing-spend-ledger.md) | `hh-live-pricing/2` compute rows, the priced §3.10 quote, and the phase spend ledger (AR-14) | R6.14 (COST-RECORD + RECONCILE) | accepted (lands with manifest 267/R6.14) |
-| [ADR-0433](ADR-0433-r6.15-egress-allowlist-mediated.md) | — | — | — |
+| [ADR-0433](ADR-0433-r6.15-egress-allowlist-mediated.md) | `allowlist_mediated` — the paid-cell egress profile (AR-05) | R6.15 (EGRESS a+b — absorbs C2 EGRESS) | accepted (lands with manifest 268/R6.15) |

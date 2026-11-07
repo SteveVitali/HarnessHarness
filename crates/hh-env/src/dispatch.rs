@@ -1761,9 +1761,11 @@ impl<'a> Dispatcher<'a> {
                             .append(&self.run_id, lease, vec![refused, rejected])?;
                         return Ok(DispatchOutcome::Refused { reason });
                     }
-                    // `gate` never produces `Forwarded` — the wire leg is
-                    // deferred to `forward`; unreachable, fail closed.
-                    crate::egress::MediatedOutcome::Forwarded { .. } => {
+                    // `gate` never produces `Forwarded`/`Tunneled` —
+                    // the wire leg is deferred to `forward`; unreachable,
+                    // fail closed.
+                    crate::egress::MediatedOutcome::Forwarded { .. }
+                    | crate::egress::MediatedOutcome::Tunneled { .. } => {
                         self.minter.expire(&effect_id, 1);
                         let reason = "egress_gate_protocol_error".to_string();
                         let refused = self.minter_ev().mint_effect(
@@ -2349,6 +2351,11 @@ impl<'a> Dispatcher<'a> {
                         }
                         Ok(crate::egress::MediatedOutcome::Forwarded { .. }) => {
                             unreachable!("forwarded arm matched above")
+                        }
+                        Ok(crate::egress::MediatedOutcome::Tunneled { .. }) => {
+                            // The dispatch path never opens a tunnel — a
+                            // tunneled outcome here is a protocol error.
+                            "tunnel_on_forward_path".to_string()
                         }
                         Err(e) => format!("{e:?}"),
                     };
