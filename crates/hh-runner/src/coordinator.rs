@@ -487,6 +487,7 @@ pub fn slot_packet(
             );
             m
         },
+        harbor: packet.harbor.clone(),
         recipe,
     }
 }

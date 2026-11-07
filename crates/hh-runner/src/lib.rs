@@ -29,6 +29,7 @@ pub mod coordinator;
 pub mod diskwatch;
 pub mod disposition;
 pub mod facts;
+pub mod harbor;
 pub mod packet;
 pub mod probe;
 pub mod receipt_index;

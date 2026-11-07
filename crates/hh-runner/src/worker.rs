@@ -572,6 +572,18 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
         ),
         ("runner", runner.to_json()),
     ]);
+    // REQ-XH-014 — the O-surface slots carry the program-wide Harbor
+    // pin in `identity.harbor` (the packet's declared member).
+    let identity = match (identity, &packet.harbor) {
+        (Json::Obj(mut m), Some(pin)) => {
+            m.insert(
+                "harbor".to_string(),
+                Json::obj([("pin", Json::str(pin.clone()))]),
+            );
+            Json::Obj(m)
+        }
+        (id, _) => id,
+    };
     let record = ExperimentSlot {
         identity,
         task: Json::Obj(packet.task.clone()),
