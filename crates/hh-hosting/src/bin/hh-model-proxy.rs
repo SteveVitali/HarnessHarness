@@ -9,15 +9,22 @@
 //! control ops with the accept loop — one writer, one speaker.
 //!
 //! Ops: `configure{store_root, run_id, listen, lane, credential_env?,
-//! root_cap_micros}` (exactly once, first op — the reply carries the
-//! bound `listen`), `register_slot{slot_id, effort?, slice_micros}`,
-//! `revoke_slot{slot_id}`, `status`, `stop`.
+//! authorization, mode?, replay?}` (exactly once, first op — the reply
+//! carries the bound `listen`), `register_slot{slot_id, effort?,
+//! slice_micros}`, `revoke_slot{slot_id}`, `seal_recording{slot_id}`
+//! (`record` mode), `status`, `stop`.
+//!
+//! `mode` ∈ `live|record|replay` (default `live`; §4.9). `replay`
+//! declares `{recordings:[hh.model_proxy.recording/1…], canonicalizer,
+//! strict, keying, latency, cell_facts?}` — replay has no upstream
+//! port and no budget charge (REQ-XC-122).
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use hharness_hosting::proxy::budget::ProxyAuthorization;
 use hharness_hosting::proxy::lane::{ProxyLane, Reservation, ReservationFormula};
+use hharness_hosting::proxy::replay::{Keying, LatencyMode, ProxyMode, Recording, ReplayConfig};
 use hharness_hosting::proxy::{Proxy, ProxyConfig};
 use hharness_wire::json::{parse, Json};
 
@@ -125,6 +132,66 @@ fn auth_from_json(j: &Json) -> Result<ProxyAuthorization, String> {
     })
 }
 
+/// `mode` + `replay` — the §4.9 mode declaration. `record` needs no
+/// extra members; `replay` requires `replay{recordings[],
+/// canonicalizer, strict?}` with optional `keying`, `latency`,
+/// `cell_facts`. Unknown spellings refuse typed.
+fn mode_from_json(doc: &Json) -> Result<ProxyMode, String> {
+    let mode = doc.get("mode").and_then(Json::as_str).unwrap_or("live");
+    match mode {
+        "live" => Ok(ProxyMode::Live),
+        "record" => Ok(ProxyMode::Record),
+        "replay" => {
+            let r = doc
+                .get("replay")
+                .ok_or("replay mode requires a replay member")?;
+            let mut recordings = std::collections::BTreeMap::new();
+            if let Some(Json::Arr(docs)) = r.get("recordings") {
+                for d in docs {
+                    let rec = Recording::parse(d).map_err(|e| format!("{e}"))?;
+                    recordings.insert(rec.slot_id.clone(), rec);
+                }
+            }
+            let canonicalizer_id = r
+                .get("canonicalizer")
+                .and_then(Json::as_str)
+                .unwrap_or("identity")
+                .to_string();
+            let keying = match r.get("keying").and_then(Json::as_str).unwrap_or("sequence") {
+                "sequence" => Keying::Sequence,
+                "sequence_then_hash" => Keying::SequenceThenHash,
+                other => return Err(format!("keying {other}")),
+            };
+            let latency = match r
+                .get("latency")
+                .and_then(Json::as_str)
+                .unwrap_or("immediate")
+            {
+                "immediate" => LatencyMode::Immediate,
+                "recorded" => LatencyMode::Recorded,
+                other => return Err(format!("latency {other}")),
+            };
+            let mut cell_facts = Vec::new();
+            if let Some(Json::Obj(facts)) = r.get("cell_facts") {
+                for (k, v) in facts {
+                    if let Some(s) = v.as_str() {
+                        cell_facts.push((k.clone(), s.to_string()));
+                    }
+                }
+            }
+            Ok(ProxyMode::Replay(ReplayConfig {
+                recordings,
+                canonicalizer_id,
+                cell_facts,
+                strict: matches!(r.get("strict"), Some(Json::Bool(true))),
+                keying,
+                latency,
+            }))
+        }
+        other => Err(format!("unknown mode {other}")),
+    }
+}
+
 fn main() {
     // Forward stdin lines into a channel — `run` drains it on the
     // owning thread while the accept loop ticks between ops.
@@ -196,6 +263,13 @@ fn main() {
             }
             None => {
                 reply(&mut out, &err("configure.authorization missing"));
+                return;
+            }
+        },
+        mode: match mode_from_json(&doc) {
+            Ok(m) => m,
+            Err(e) => {
+                reply(&mut out, &err(&e));
                 return;
             }
         },

@@ -857,58 +857,74 @@ impl HttpModelTransport {
     /// frames path for the same wire bytes (AC-4.1-2's decode leg;
     /// AR-11).
     pub fn raw_frames(&self, exchange: &RawExchange) -> Result<Vec<(u64, WireFrame)>, ModelError> {
-        let is_sse = exchange
-            .headers
-            .get("content-type")
-            .is_some_and(|v| v.contains("text/event-stream"));
-        let mut frames: Vec<(u64, WireFrame)> = Vec::new();
-        if !is_sse {
-            let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&exchange.body))
-                .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
-            let stamp = exchange.chunk_stamps.last().map(|(s, _)| *s).unwrap_or(0);
-            for f in match self.family {
-                Family::Messages => anthropic::completion_frames(&doc)?,
-                Family::ChatCompletions => openai::completion_frames(&doc)?,
-            } {
-                frames.push((stamp, f));
-            }
-            return Ok(frames);
-        }
-        let mut sse = SseDecoder::new(self.max_body);
-        let mut tr = Translator::for_family(self.family);
-        let mut off = 0usize;
-        let mut done = false;
-        let mut last_stamp = 0u64;
-        for (stamp, len) in &exchange.chunk_stamps {
-            if done || sse.terminated() {
-                break;
-            }
-            last_stamp = *stamp;
-            let end = (off + len).min(exchange.body.len());
-            let bytes = &exchange.body[off..end];
-            off = end;
-            feed_sse(&mut sse, &mut tr, bytes, *stamp, &mut frames, &mut done)?;
-        }
-        if !done && !sse.terminated() && off < exchange.body.len() {
-            // Defensive tail — bytes no recorded chunk covers.
-            feed_sse(
-                &mut sse,
-                &mut tr,
-                &exchange.body[off..],
-                last_stamp,
-                &mut frames,
-                &mut done,
-            )?;
-        }
-        if !done {
-            // The stream closed without its own sentinel — the family's
-            // terminal `finish`, stamped at the last chunk's arrival.
-            for f in tr.finish() {
-                frames.push((last_stamp, f));
-            }
-        }
-        Ok(frames)
+        decode_exchange_frames(self.family, self.max_body, exchange)
     }
+}
+
+/// `decode_exchange_frames(family, max_body, exchange)` — the
+/// [`HttpModelTransport::raw_frames`] decode lifted to a free function:
+/// the R6.12 `RecordedTransport` (experiments spec §4.9; REQ-XC-122)
+/// decodes recorded exchange bytes through the same family translators
+/// without binding a live transport. An SSE body rides `SseDecoder` +
+/// the family's `Translator` chunk-by-chunk (frames stamped at their
+/// chunk's recorded arrival); a JSON body rides the family's
+/// `completion_frames`.
+pub fn decode_exchange_frames(
+    family: Family,
+    max_body: usize,
+    exchange: &RawExchange,
+) -> Result<Vec<(u64, WireFrame)>, ModelError> {
+    let is_sse = exchange
+        .headers
+        .get("content-type")
+        .is_some_and(|v| v.contains("text/event-stream"));
+    let mut frames: Vec<(u64, WireFrame)> = Vec::new();
+    if !is_sse {
+        let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&exchange.body))
+            .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
+        let stamp = exchange.chunk_stamps.last().map(|(s, _)| *s).unwrap_or(0);
+        for f in match family {
+            Family::Messages => anthropic::completion_frames(&doc)?,
+            Family::ChatCompletions => openai::completion_frames(&doc)?,
+        } {
+            frames.push((stamp, f));
+        }
+        return Ok(frames);
+    }
+    let mut sse = SseDecoder::new(max_body);
+    let mut tr = Translator::for_family(family);
+    let mut off = 0usize;
+    let mut done = false;
+    let mut last_stamp = 0u64;
+    for (stamp, len) in &exchange.chunk_stamps {
+        if done || sse.terminated() {
+            break;
+        }
+        last_stamp = *stamp;
+        let end = (off + len).min(exchange.body.len());
+        let bytes = &exchange.body[off..end];
+        off = end;
+        feed_sse(&mut sse, &mut tr, bytes, *stamp, &mut frames, &mut done)?;
+    }
+    if !done && !sse.terminated() && off < exchange.body.len() {
+        // Defensive tail — bytes no recorded chunk covers.
+        feed_sse(
+            &mut sse,
+            &mut tr,
+            &exchange.body[off..],
+            last_stamp,
+            &mut frames,
+            &mut done,
+        )?;
+    }
+    if !done {
+        // The stream closed without its own sentinel — the family's
+        // terminal `finish`, stamped at the last chunk's arrival.
+        for f in tr.finish() {
+            frames.push((last_stamp, f));
+        }
+    }
+    Ok(frames)
 }
 
 /// `feed_sse` — push one captured chunk through `SseDecoder` + the

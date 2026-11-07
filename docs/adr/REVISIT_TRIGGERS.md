@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_213 ADRs: 161 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_214 ADRs: 162 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -197,6 +197,7 @@ _213 ADRs: 161 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0427 | Reopen when the live cell lane lands (R6.9+) and the Harbor/O-surface adapter (R6.17) replaces the fixture executor — the `hh-runner-fixture-*` channel spellings, the `costs` reference shape (if `hh-slot-costs/1` changes), or the slot-record section list in §3.3 are amended; or if the engine gains a first-class "release fulfilled claim" verb that makes the wait-the-fence-out rule unnecessary. |
 | ADR-0428 | The live helper-protocol cell lane lands (egress/relay tickets): the `CellOps` podman lowering is re-bound to the protocol verbs then; the closed flags stay. |
 | ADR-0429 | A second protocol needs a different ceiling or a setup multiplier other than the declared 1.0: the ceiling and multipliers stay declared members; the derivation is reopened by a new ADR. |
+| ADR-0430 | The L1 gate (R6.21+) needing cross-connection hash keying beyond `sequence_then_hash`, multi-slot trajectory bundling, or canonicalizer rulesets past `hh-l1-canon/1` — each is a new declaration, not an edit to this record. |
 
 ## Fired-and-answered triggers (BL-48)
 

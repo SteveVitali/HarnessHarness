@@ -31,4 +31,5 @@ hharness-eval = { path = "../hh-eval", version = "0.1.0" }
 hharness-bench = { path = "../hh-bench", version = "0.1.0" }
 hharness-env = { path = "../hh-env", version = "0.1.0" }
 hharness-helper = { path = "../hh-helper", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
 hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }

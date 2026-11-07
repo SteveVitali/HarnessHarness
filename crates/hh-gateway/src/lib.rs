@@ -57,6 +57,7 @@ pub mod openai;
 pub mod plan;
 pub mod prepared;
 pub mod probes;
+pub mod replay;
 pub mod router;
 pub mod snapshot;
 pub mod vocab;
@@ -97,7 +98,9 @@ pub use grammar::{
     decode_frame, DecodeState, Delta, GrammarViolation, ModelEvent, ModelEventKind, Timing,
     UsageArrivalKind,
 };
-pub use http_transport::{family_of, Family, HttpModelTransport, RawExchange};
+pub use http_transport::{
+    decode_exchange_frames, family_of, Family, HttpModelTransport, RawExchange,
+};
 pub use layout::{
     check_layout, check_marker_carriers, check_prefix_affecting, check_purpose_isolation,
     check_static_stability, check_tool_order_prefix, check_transcript_append, is_volatile_kind,
@@ -116,6 +119,11 @@ pub use probes::{
     canonical_probe_request, describe, discovery_claims, discovery_conformance,
     fingerprint_probe_verdict, run_fingerprint_probe, run_transport_probes,
     FingerprintProbeOutcome, FingerprintProbeSpec, TransportCapabilityDeclaration, ADAPTER_VERSION,
+};
+pub use replay::{
+    canonicalizer_for, match_requests, recorded_call, CanonRefusal, Canonical,
+    IdentityCanonicalizer, JsonCanonicalizer, L1Canonicalizer, MatchVerdict, RecordedCall,
+    RecordedTransport, RequestCanonicalizer,
 };
 pub use router::{
     check_reroute_order, error_action, explain, lift, lower, on_attempt_failed, project_health,

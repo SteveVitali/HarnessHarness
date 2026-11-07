@@ -123,6 +123,7 @@ fn setup(tag: &str, reservation: Reservation) -> (Proxy, String, Arc<Mutex<Vec<S
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth(100_000_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     };
     let (mut proxy, _bound) = Proxy::configure(cfg).unwrap();
     let token = proxy.register_slot("slot-A", "high", 50_000_000).unwrap();
@@ -537,6 +538,7 @@ fn ollama_key_in_receipt_refuses_and_stops_phase() {
         listen: "127.0.0.1:0".into(),
         credential_env: Some("HH_R610_KEY".into()),
         authorization: auth(100_000_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     };
     let (mut p, _bound) = Proxy::configure(cfg).unwrap();
     let token = p.register_slot("slot-A", "high", 50_000_000).unwrap();

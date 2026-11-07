@@ -143,6 +143,7 @@ fn setup(
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth,
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     };
     let (mut proxy, _bound) = Proxy::configure(cfg).unwrap();
     let token = proxy.register_slot("slot-A", "high", 2_000_000).unwrap();
@@ -631,6 +632,7 @@ fn crash_recovery_settles_orphans_bounded() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth(10_000_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     };
     let (_proxy, _bound) = Proxy::configure(cfg).unwrap();
     let t = terminals(&store_root);
@@ -825,6 +827,7 @@ fn missing_authorization_refuses() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: a,
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     };
     let e = Proxy::configure(cfg).err().unwrap();
     assert!(format!("{e}").contains("missing_authorization"), "{e}");
@@ -877,6 +880,7 @@ fn carry_over_pool_and_unharvested_refusal() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: a,
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     })
     .err()
     .unwrap();
@@ -948,6 +952,7 @@ fn slot_slice_refusal_is_budget_refused_not_phase_stop() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth(10_000_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     })
     .unwrap();
     // 60_000 < the ≈95_844 formula reservation → every call on this
@@ -1015,6 +1020,7 @@ fn root_exhaustion_emits_stop_rows_and_stops_phase() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth(60_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     })
     .unwrap();
     let token_b = proxy.register_slot("slot-B", "high", 60_000).unwrap();
@@ -1091,6 +1097,7 @@ fn fifo_queue_records_queue_wait_and_bounded_inflight() {
         listen: "127.0.0.1:0".into(),
         credential_env: None,
         authorization: auth(10_000_000),
+        mode: hharness_hosting::proxy::ProxyMode::Live,
     })
     .unwrap();
     let mut streams = vec![];
