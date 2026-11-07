@@ -1,4 +1,5 @@
-# Independent machine check of the Round-6 partition and coverage register (v2, Phase-4 revision).
+# Independent machine check of the Round-6 partition and coverage register (v3: Phase-4 revision +
+# operator re-partition of 2026-11-07 — ~45-row sizing, ≤ 95k focused + 10k reserve, 3-run minimal tail).
 # Reads only the four committed-to-be artifacts plus the literal sources they cite:
 #   docs/experiments-spec.md (Appendix A, normative rows, <a id> anchors),
 #   docs/build/planning/2026-11-07_round6-coverage.json, …-coverage.md (literal owner table, owner index),
@@ -94,10 +95,11 @@ def deps_ok():
     return not bad, short(bad)
 ck('depends-on: "nothing" or chain rows only (never "—"), backward only', deps_ok)
 ck('only the bootstrap gate depends on nothing', lambda: [c for c, r in rows.items() if r['deps'] == ['nothing']] == [order[0]])
-ck('tail=full contiguous at end; its gate filename contains "accept"', lambda: (
-    [rows[x]['kind'] for x in order[-9:]] == ['capstone'] * 3 + ['gate'] + ['reconcile'] * 3 + ['docs'] * 2 and 'accept' in rows[order[-6]]['file']))
-ck('row 1 bootstrap gate; rows 2–3 are the guard rows (R6.1, R6.1a), before any product row', lambda: (
-    rows[order[0]]['kind'] == 'gate' and order[1:3] == ['R6.1', 'R6.1a'] and all(rows[x]['seq'] > rows['R6.1a']['seq'] for x in order[3:])))
+ck('tail (operator Qs 2026-11-07: minimal tail, then "Split into 4-run tail") contiguous at end: capstone, capstone, capstone, gate, docs; its gate filename contains "accept"; no reconcile row', lambda: (
+    [rows[x]['kind'] for x in order[-5:]] == ['capstone', 'capstone', 'capstone', 'gate', 'docs'] and 'accept' in rows[order[-2]]['file']
+    and not any(r['kind'] == 'reconcile' for r in rows.values()) and all(rows[x]['kind'] not in ('capstone', 'docs') for x in order[:-5])))
+ck('row 1 bootstrap gate; row 2 is the single guard row R6.1, before any product row', lambda: (
+    rows[order[0]]['kind'] == 'gate' and order[1] == 'R6.1' and rows['R6.1']['kind'] == 'ticket' and all(rows[x]['seq'] > rows['R6.1']['seq'] for x in order[2:])))
 def skel():
     bad = []
     for c, r in rows.items():
@@ -120,9 +122,30 @@ def sizes():
     bad = []
     for c, r in rows.items():
         mm = re.match(r'(\d+)k \+ 10k', r['size'])
-        if mm and int(mm.group(1)) + 10 > 85: bad.append(c)
+        if r['kind'] in ('ticket', 'capstone', 'reconcile', 'docs') and not mm: bad.append((c, 'no size')); continue
+        if mm and int(mm.group(1)) + 10 > 105 and 'operator-ruled' not in r['size']: bad.append(c)
     return not bad, short(bad)
-ck('every sized row ≤ 85k including the 10k reserve', sizes)
+ck('every implement-spec row sized; ≤ 95k focused + 10k reserve (105k) unless marked operator-ruled', sizes)
+ck('operator-ruled oversize rows are tail capstones only (the closure capstone)', lambda: (lambda x: (all(rows[c]['kind'] == 'capstone' and c in order[-4:] for c in x), short(x)))(
+    [c for c, r in rows.items() if 'operator-ruled' in r['size']]))
+def impl_total():
+    mm = re.search(r'\*\*implement-spec rows\*\* \| \*\*(\d+)\*\*', PLAN)
+    n = sum(1 for r in rows.values() if r['kind'] in ('ticket', 'capstone', 'reconcile', 'docs'))
+    return mm is not None and int(mm.group(1)) == n and 40 <= n <= 50, f'{mm.group(1) if mm else None} vs {n} (band 40–50)'
+ck('Totals implement-spec count equals the row table and sits in the operator band 40–50', impl_total)
+
+ck('record-only window rows folded: ARCHIVE-UPLOAD / SETTLE acts live only in window skeletons', lambda: (lambda b: (not b, short(b)))(
+    [c for c, r in rows.items() if re.search(r'ARCHIVE-UPLOAD|SETTLE-W', r['alias']) and r['kind'] != 'skeleton']))
+def lin_b():
+    mm = re.search(r'<!-- linearization-B-prime: ([^>]*?) -->', PLAN)
+    if not mm: return False, 'marker missing'
+    mv = mm.group(1).split()
+    if any(x not in rows for x in mv) or 'GATE-G29' not in rows: return False, 'unknown id'
+    ob = [x for x in order if x not in mv]; i = ob.index('GATE-G29') + 1; ob = ob[:i] + mv + ob[i:]
+    pos = {x: j for j, x in enumerate(ob)}
+    bad = [(c, d) for c, r in rows.items() if r['deps'] != ['nothing'] for d in r['deps'] if d in pos and pos[d] >= pos[c]]
+    return not bad, short(bad)
+ck("linearization B′ (marked rows moved to just after GATE-G29) stays backward-only", lin_b)
 
 # ---------- 3. register json ----------
 ck('json candidate ids unique and == Appendix A', lambda: (len(J.get('candidates', [])) == len(C) and set(C) == set(A), short(set(A) ^ set(C))))
@@ -200,12 +223,15 @@ def owner_kind():
     for c in C.values():
         if c.get('disposition') != 'adopted' or c.get('primary') not in rows: continue
         k = rows[c['primary']]['kind']
-        if k in ('gate', 'human') and c['primary'] not in ('GATE-G26', 'HUMAN-H23'): bad.append(c['id'])
+        if k in ('gate', 'human') and c['primary'] not in ('GATE-G26', 'HUMAN-H16'): bad.append(c['id'])
         if k == 'skeleton' and c.get('layer') not in ('R', 'P'): bad.append(c['id'])
     return not bad, short(bad)
 ck('owner-kind rule: gate/human only literal gate/HUMAN obligations; skeleton only R/P window evidence', owner_kind)
-ck('routed ids: owned by CAP6.1 only (before GATE-ACCEPT); first-pass ids never by CAP6.1', lambda: all(
-    (c.get('primary') == 'CAP6.1') == (c.get('round_scope', '').startswith('routed')) for c in C.values() if c.get('disposition') == 'adopted'))
+CLOSURE = {'REQ-XH-015', 'REQ-XH-021', 'REQ-XH-029', 'REQ-XH-106', 'REQ-XH-110'}
+ck('routed ids: owned by CAP6.2 (closure capstone, before GATE-ACCEPT) only; CAP6.2 first-pass ids = the five closure ids; CAP6.1 owns none', lambda: all(
+    (c.get('round_scope', '').startswith('routed') and c.get('primary') == 'CAP6.2') or
+    (c.get('round_scope') == 'first-pass' and (c.get('primary') != 'CAP6.2' or c['id'] in CLOSURE) and c.get('primary') != 'CAP6.1')
+    for c in C.values() if c.get('disposition') == 'adopted'))
 ck('contributors are table rows, never the primary', lambda: (not (b := [(i, x) for i, c in C.items() for x in c.get('contributors', []) if x not in rows or x == c.get('primary')]), short(b)))
 
 # ---------- 4. coverage md agrees with json ----------

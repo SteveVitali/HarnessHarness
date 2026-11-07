@@ -41,7 +41,7 @@ a missing prerequisite is never a pass.
 | `owner`, `ac-anchor`, `layer` | Exactly one primary owner per adopted target; ticket file + numbered AC anchor resolve; D/E/R/P layer vocabulary; §/AC supplemental hooks resolve; contributors are chain rows |
 | `alias-predicate`, `disposition` | Aliases retain literal predicate bytes (source_sha256) and resolve to adopted targets sharing the primary owner |
 | `chain-*`, `dependency`, `forward-dependency` | Grammar-valid unique chain ids/files; skeleton contracts carry no Run line; every `Depends on:` resolves backward |
-| `tail-roles` | Active-round tail keeps capstone ×3, operator-acceptance gate, reconcile ×3, docs ×2 in order |
+| `tail-roles` | Active-round tail keeps capstone ×3, operator-acceptance gate, reconcile ×3, docs ×2 in order — or, when the round banner declares `tail=minimal` (added 2026-11-07 for Round 6 by operator decision), capstone ×2, operator-acceptance gate, docs ×1 |
 | `nextticket`, `old-gate-routing`, `skeleton-dispatch`, `pending-prerequisite`, `failed-gate`, `last-completed`, `legacy-completion` | `nextTicket` is the active round's first row without landed evidence (BUILD_INDEX row for work kinds; PASSED GATE DECISIONS for gates; recorded decision/non-pending readout for human rows); legacy GATE-G1 completion evidence byte-preserved; skeletons and pre-round rows never dispatch |
 | `signature-reuse` | Active-round gate verbatims never replay a pre-round signature from GATE DECISIONS or readouts |
 | `chain-tip`, `git-ancestry` | `chainTip`/`buildBranchBase` agree; `pinnedBaseSha` is a git ancestor of the chain tip (noted skipped outside a checkout) |

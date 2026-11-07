@@ -55,7 +55,7 @@ needs. A Round-6 contract cites this file by clause ID instead of restating it.
   row (REQ-XH-002) lands, the retained round-5 guard routes Round 6 by chain order only; the
   extension adds the REQ-X coverage register and Round-6 routing.
   Exception: R6.1 dispatches under GATE-G20's scoped bootstrap authorization (`--no-checker`
-  ROUTE plus the stock validator at 0 violations, GATE-G8 precedent); from R6.1a on, `PASS` with
+  ROUTE plus the stock validator at 0 violations, GATE-G8 precedent); from R6.2 on, `PASS` with
   the stock checker is required.
 - **XO-03 Worker sizing.** The implementation worker is Cognition SWE-2 (High, 256k context; Q-X51).
   A contract's `Size budget` is its estimate; a measured working set above ~100–120k tokens
