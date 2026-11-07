@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      GATE-G20
-lastCompleted:   R5.59
+nextTicket:      R6.1
+lastCompleted:   GATE-G20
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -129,6 +129,7 @@ updatedAt:        2026-11-07T05:25:31Z
 - 2026-11-07 · **Round-6 insertion — guard environment note (owned by R6.1).** With the stock validator at `~/agent-skills` `e981ec5`, `check-build-memory.sh .` reports 0 violations / 54 warnings on `main` `185c16c7`, 46 of them legacy `reqcov` warnings (round-1 tickets citing footnoted `R-2.x¹` ids) that the guard's reviewed baseline (`2026-10-30_evidence-legacy-baseline.json`, 8 classes) does not list, so `check-supplement-guard.sh` WITH that checker reports `unexplained-diagnostic` (the BL-RECONCILE run recorded 8 warnings — the warning count depends on the validator version in use). GATE-G20 authorizes R6.1 under the guard's `--no-checker` ROUTE + the stock validator at 0 violations; R6.1 classifies the legacy classes into the reviewed baseline with dated provenance (never silently) so the guard with the stock checker returns PASS. Also: `chainTip` set to `main` at insertion because `codex/harnessharness-bl-reconcile` / `-r5.59` no longer resolve as local refs.
 
 ## GATE DECISIONS
+| 2026-11-07T06:10Z | GATE-G20 | review the Round-6 plan and authorize the GUARD-X bootstrap | disposition | "accept all and proceed" (operator verbatim, interactive, 2026-11-07T06:10Z — readout docs/build/readouts/GATE-G20.md Status: PASSED) | **PASSED** — artifact identity confirmed (spec sha256 `4329b2740fe6be0f…` post-§10.6-amendment; 0 reqcov observed at presentation vs disclosed 46 — OPEN FINDING to R6.1 AC-3); partition+register accepted (74 rows, 456 candidates/370 adopted); **Q-X46 = A** (plan order — "accept all" accepts the plan as presented; B′ not selected); D-1…D-6 all accepted; twelve ambiguity resolutions + "second row"=R6.2 confirmed. Scope: R6.1 only; expiry at R6.1 landing; stock-checker PASS required from R6.2. No spend/provisioning/publication/merges. lastCompleted → GATE-G20 · next → R6.1. | decision |
 
 | date | ticket | gate | item | answer | consequence |
 |---|---|---|---|---|---|
