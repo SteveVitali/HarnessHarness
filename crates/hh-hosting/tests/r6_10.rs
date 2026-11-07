@@ -15,13 +15,27 @@ use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use hharness_hosting::proxy::budget::ProxyAuthorization;
 use hharness_hosting::proxy::lane::{ProxyLane, Reservation};
 use hharness_hosting::proxy::{Proxy, ProxyConfig};
 use hharness_ledger::store::Store;
-use hharness_wire::http::{read_response, write_request};
+use hharness_wire::http::read_response;
 use hharness_wire::json::{parse, parse_provider, Json};
 
 const MODEL: &str = "glm-5.3-flash";
+
+/// A fixture authorization granting `cap` µ$ (m = 0 keeps the R6.10
+/// numbers; REQ-XC-004 — the verbatim citation rides the manifest).
+fn auth(cap: i64) -> ProxyAuthorization {
+    ProxyAuthorization {
+        verbatim: "fixture authorization — R6.10 battery".into(),
+        gate_record_ref: "gate.fixture".into(),
+        authorized_micros: cap,
+        available_credit_micros: cap,
+        m_ppm: 0,
+        prior_windows: vec![],
+    }
+}
 
 /// A scratch store root (per-test, unique).
 fn root(tag: &str) -> PathBuf {
@@ -42,7 +56,6 @@ fn root(tag: &str) -> PathBuf {
 struct Seen {
     method: String,
     target: String,
-    headers: BTreeMap<String, String>,
     body: String,
 }
 
@@ -63,7 +76,6 @@ fn fixture_upstream() -> (String, Arc<Mutex<Vec<Seen>>>) {
             seen_w.lock().unwrap().push(Seen {
                 method: head.method.clone(),
                 target: head.target.clone(),
-                headers: head.headers.clone(),
                 body: String::from_utf8_lossy(&body).to_string(),
             });
             let (status, payload): (u16, &str) = match head.target.as_str() {
@@ -93,20 +105,24 @@ fn fixture_upstream() -> (String, Arc<Mutex<Vec<Seen>>>) {
 fn setup(tag: &str, reservation: Reservation) -> (Proxy, String, Arc<Mutex<Vec<Seen>>>, PathBuf) {
     let (endpoint, seen) = fixture_upstream();
     let store_root = root(tag);
-    let lane = ProxyLane::program(
+    let mut lane = ProxyLane::program(
         "lane.fixture",
         &endpoint,
         "fixture.local",
         MODEL,
         reservation,
     );
+    // The R6.11 catalog probe is its own battery — this fixture lane
+    // opts out with a dead base (the probe records `probe_error`,
+    // never an upstream exchange).
+    lane.catalog_base = Some("http://127.0.0.1:1".to_string());
     let cfg = ProxyConfig {
         store_root: store_root.clone(),
         run_id: RUN.to_string(),
         lane,
         listen: "127.0.0.1:0".into(),
         credential_env: None,
-        root_cap_micros: 100_000_000,
+        authorization: auth(100_000_000),
     };
     let (mut proxy, _bound) = Proxy::configure(cfg).unwrap();
     let token = proxy.register_slot("slot-A", "high", 50_000_000).unwrap();
@@ -380,7 +396,9 @@ fn field_policy_strips_and_refuses() {
     let up = seen.lock().unwrap()[1].body.clone();
     assert!(!up.contains("cache_control"));
     assert!(!up.contains("metadata"));
-    // streaming → typed unsupported{release_mode:buffered_heartbeat}
+    // streaming — R6.11's `buffered_heartbeat` serves it (the R6.10
+    // `unsupported{release_mode}` refusal is gone); this fixture's
+    // non-SSE body receipts `stream_broken` as the in-stream error.
     let (s, b, _) = call(
         &mut p,
         "POST",
@@ -389,8 +407,8 @@ fn field_policy_strips_and_refuses() {
         &chat_body(",\"stream\":true"),
         &[],
     );
-    assert_eq!(s, 400);
-    assert!(b.contains("buffered_heartbeat"));
+    assert_eq!(s, 200); // the committed SSE head
+    assert!(b.contains("stream_broken"), "{b}");
 }
 
 // ─── AC-5/AC-8: non-fixture lane + budget refusal ───
@@ -473,9 +491,8 @@ fn no_released_byte_without_durable_terminal() {
     // upstream-shaped success byte is released, and the ledger has no
     // model.call.completed.
     let outcome = read_response(&mut r, 1 << 20);
-    match outcome {
-        Ok((head, _)) => assert_eq!(head.status, 500),
-        Err(_) => {}
+    if let Ok((head, _)) = outcome {
+        assert_eq!(head.status, 500);
     }
     let cs = classes(&root, RUN);
     assert!(!cs.contains(&"model.call.completed".to_string()));
@@ -492,8 +509,7 @@ fn ollama_key_in_receipt_refuses_and_stops_phase() {
     let addr = listener.local_addr().unwrap();
     let key = "sk-ollama-fixture-leak-12345";
     std::thread::spawn(move || {
-        for conn in listener.incoming() {
-            let Ok(mut stream) = conn else { return };
+        if let Ok(mut stream) = listener.accept().map(|(s, _)| s) {
             let mut r = BufReader::new(stream.try_clone().unwrap());
             let _ = hharness_wire::http::read_request(&mut r, 4 << 20);
             let payload = format!("{{\"leak\":\"{key}\"}}");
@@ -502,25 +518,25 @@ fn ollama_key_in_receipt_refuses_and_stops_phase() {
                 payload.len()
             );
             let _ = stream.write_all(resp.as_bytes());
-            return;
         }
     });
     std::env::set_var("HH_R610_KEY", key);
     let store_root = root("leak");
-    let lane = ProxyLane::program(
+    let mut lane = ProxyLane::program(
         "lane.leak",
         &format!("http://{addr}/v1"),
         "fixture.local",
         MODEL,
         Reservation::FixtureBound { micros: 1_000_000 },
     );
+    lane.catalog_base = Some("http://127.0.0.1:1".to_string());
     let cfg = ProxyConfig {
         store_root,
         run_id: "phase-proxy-leak".into(),
         lane,
         listen: "127.0.0.1:0".into(),
         credential_env: Some("HH_R610_KEY".into()),
-        root_cap_micros: 100_000_000,
+        authorization: auth(100_000_000),
     };
     let (mut p, _bound) = Proxy::configure(cfg).unwrap();
     let token = p.register_slot("slot-A", "high", 50_000_000).unwrap();
@@ -685,7 +701,19 @@ fn control_channel_over_the_binary() {
             ("store_root", Json::str(store_root.to_str().unwrap())),
             ("run_id", Json::str("phase-proxy-chan")),
             ("listen", Json::str("127.0.0.1:0")),
-            ("root_cap_micros", Json::Int(100_000_000)),
+            (
+                "authorization",
+                Json::obj([
+                    (
+                        "verbatim",
+                        Json::str("fixture authorization — R6.10 battery"),
+                    ),
+                    ("gate_record_ref", Json::str("gate.fixture")),
+                    ("authorized_micros", Json::Int(100_000_000)),
+                    ("available_credit_micros", Json::Int(100_000_000)),
+                    ("m_ppm", Json::Int(0)),
+                ]),
+            ),
             (
                 "lane",
                 Json::obj([
@@ -700,6 +728,7 @@ fn control_channel_over_the_binary() {
                             ("micros", Json::Int(1_000_000)),
                         ]),
                     ),
+                    ("catalog_base", Json::str("http://127.0.0.1:1")),
                 ]),
             ),
         ]),

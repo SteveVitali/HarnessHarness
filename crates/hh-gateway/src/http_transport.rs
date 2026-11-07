@@ -700,6 +700,11 @@ impl HttpModelTransport {
     /// A `GET`/`HEAD` carries an empty body by construction — a
     /// non-empty body on a body-less method is a typed
     /// `invalid_request` refusal, never silently dropped.
+    ///
+    /// The error half drops the partial capture — callers that must
+    /// keep the head status / partial body (the §4.8 proxy taxonomy's
+    /// `stream_broken` leg, whose partial bytes are deposited as a
+    /// blob) ride [`HttpModelTransport::forward_raw_capture`].
     #[allow(clippy::too_many_arguments)]
     pub fn forward_raw_method(
         &mut self,
@@ -711,8 +716,50 @@ impl HttpModelTransport {
         body: &[u8],
         auth: Option<AuthKind>,
     ) -> Result<RawExchange, ModelError> {
+        match self.forward_raw_capture(
+            method,
+            credential,
+            endpoint_ref,
+            op,
+            kept_headers,
+            body,
+            auth,
+        ) {
+            Ok(ex) => Ok(ex),
+            Err(f) => Err(f.error),
+        }
+    }
+
+    /// `forward_raw_capture(method, …)` — [`HttpModelTransport::forward_raw_method`]
+    /// with the partial capture preserved on failure: the `Err` arm is
+    /// a [`RawFailure`] whose `partial` carries everything read before
+    /// the failure (`status = 0` when the response head never arrived —
+    /// the §4.8 split between `upstream_error`/`upstream_timeout` and
+    /// `stream_broken`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn forward_raw_capture(
+        &mut self,
+        method: &str,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        op: &str,
+        kept_headers: &[(&str, &str)],
+        body: &[u8],
+        auth: Option<AuthKind>,
+    ) -> Result<RawExchange, Box<RawFailure>> {
+        let fail = |e: ModelError| {
+            Err(Box::new(RawFailure {
+                error: e,
+                partial: RawExchange {
+                    status: 0,
+                    headers: Default::default(),
+                    body: Vec::new(),
+                    chunk_stamps: Vec::new(),
+                },
+            }))
+        };
         if matches!(method, "GET" | "HEAD") && !body.is_empty() {
-            return Err(ModelError::new(
+            return fail(ModelError::new(
                 ModelErrorClass::InvalidRequest,
                 format!("forward_raw_method: {method} carries no body"),
             ));
@@ -726,7 +773,7 @@ impl HttpModelTransport {
                 n.as_str(),
                 "authorization" | "x-api-key" | "proxy-authorization"
             ) {
-                return Err(ModelError::new(
+                return fail(ModelError::new(
                     ModelErrorClass::InvalidRequest,
                     format!(
                         "forward_raw: caller-supplied auth header `{name}` refused — the lane derives auth from `auth_kinds`"
@@ -734,10 +781,18 @@ impl HttpModelTransport {
                 ));
             }
         }
-        let auth = self.lane_auth_header(credential, auth)?;
-        let url =
-            http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
-        let mut sock = self.dial(&url)?;
+        let auth = match self.lane_auth_header(credential, auth) {
+            Ok(a) => a,
+            Err(e) => return fail(e),
+        };
+        let url = match http::parse_http_url(endpoint_ref) {
+            Ok(u) => u,
+            Err(e) => return fail(map_io(e, TimeoutKind::Connect)),
+        };
+        let mut sock = match self.dial(&url) {
+            Ok(s) => s,
+            Err(e) => return fail(e),
+        };
         let target = join(&url.target, op);
         let host_header = url.host_header();
         let mut headers: Vec<(&str, &str)> =
@@ -748,12 +803,16 @@ impl HttpModelTransport {
             headers.push(auth_pair);
         }
         headers.extend_from_slice(kept_headers);
-        http::write_request(&mut sock, method, &target, &headers, body)
-            .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        if let Err(e) = http::write_request(&mut sock, method, &target, &headers, body) {
+            return fail(map_io(e, TimeoutKind::Attempt));
+        }
         let t0 = std::time::Instant::now();
         let at = || t0.elapsed().as_millis() as u64;
         let mut r = BufReader::new(sock);
-        let head = http::read_response_head(&mut r).map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let head = match http::read_response_head(&mut r) {
+            Ok(h) => h,
+            Err(e) => return fail(map_io(e, TimeoutKind::Attempt)),
+        };
         let mut ex = RawExchange {
             status: head.status,
             headers: head.headers.clone(),
@@ -768,10 +827,26 @@ impl HttpModelTransport {
                     ex.body.extend_from_slice(&bytes);
                 }
                 Ok(None) => break,
-                Err(e) => return Err(map_io(e, TimeoutKind::StreamIdle)),
+                Err(e) => {
+                    return Err(Box::new(RawFailure {
+                        error: map_io(e, TimeoutKind::StreamIdle),
+                        partial: ex,
+                    }))
+                }
             }
         }
         Ok(ex)
+    }
+
+    /// `set_rw_ms(ms)` — the per-call read-deadline override the
+    /// proxy's lane-declared `nonstream_read_deadline_ms` rides
+    /// (REQ-XC-111): independent of the dialect's
+    /// `stream_idle_timeout_ms` and its 30 s floor — the declared
+    /// deadline is the lane's own contract (a non-streaming call may
+    /// legitimately refuse to wait out a stalled upstream), bounded
+    /// only against the 10 min socket ceiling.
+    pub fn set_rw_ms(&mut self, ms: u64) {
+        self.rw_ms = ms.clamp(1, 600_000);
     }
 
     /// `raw_frames(exchange)` — replay a captured [`RawExchange`]
@@ -884,6 +959,18 @@ pub struct RawExchange {
     /// `(arrival_ms, byte_len)` per body chunk in `body`'s order —
     /// `raw_frames` stamps frames with their chunk's recorded arrival.
     pub chunk_stamps: Vec<(u64, usize)>,
+}
+
+/// `RawFailure { error, partial }` — a failed `forward_raw_capture`:
+/// the typed boundary error plus everything read before it (the proxy
+/// deposits `partial` and classifies on `partial.status == 0` —
+/// §4.8's upstream- vs stream-failure split).
+#[derive(Debug)]
+pub struct RawFailure {
+    /// The typed boundary error.
+    pub error: ModelError,
+    /// The partial capture (`status = 0` when the head never arrived).
+    pub partial: RawExchange,
 }
 
 impl Transport for HttpModelTransport {

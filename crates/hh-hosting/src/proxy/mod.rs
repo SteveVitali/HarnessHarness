@@ -18,20 +18,29 @@
 //! the write and stops the phase; a slot-token hit is recorded and
 //! permitted (REQ-XC-109).
 //!
-//! Until R6.11 lands there is exactly one release mode — `buffered` —
-//! and one reservation form — the fixture lane's declared bound; a
-//! streaming request gets the typed, surface-shaped, receipted
-//! `Unsupported{release_mode: buffered_heartbeat}` refusal, and a lane
-//! without the declared bound refuses at ledger step 2
-//! (`Unsupported{reservation_formula}`).
+//! R6.11 (PROXY-CORE-b + BUDGET): `buffered` + `buffered_heartbeat`
+//! release modes (REQ-XC-110), the lane-declared
+//! `nonstream_read_deadline_ms` (REQ-XC-111), the §4.8 taxonomy with
+//! `max_attempts = 1` (REQ-XC-123), `bounded{0,reserved}` orphan
+//! settlement on restart (REQ-XC-124), `client_gone` charged receipts
+//! (REQ-XC-322), the catalog-identity tuple with `drift_observed`
+//! (REQ-XC-119), and the mechanical §4.4 spend layer — root cap
+//! `A_eff × (1 − m)`, per-slot slices, the worst-case reservation
+//! formula and the ≤ 3 FIFO upstream gate (REQ-XC-004/112/113/114/
+//! 115/126/210, REQ-XH-005/120).
 
 pub mod apply;
+pub mod budget;
 pub mod core_;
 pub mod lane;
 
 pub use apply::{apply_policy, error_body, filter_headers, FilteredHeaders, Mutations, Refusal};
+pub use budget::{
+    feasibility_remaining_micros, harvest_window_spend, refusal_is_premature, reservation_micros,
+    slice_floor_micros, validate_slices, ProxyAuthorization, SliceViolation, WindowSpend,
+};
 pub use core_::{ControlOutcome, Proxy, ProxyConfig, ProxyError};
-pub use lane::{FieldOp, FieldRule, ProxyLane, Reservation, Route, Surface};
+pub use lane::{FieldOp, FieldRule, ProxyLane, Reservation, ReservationFormula, Route, Surface};
 
 /// The proxy implementation identity — lands in every receipt's
 /// `proxy_version` member and the participant identity hash
