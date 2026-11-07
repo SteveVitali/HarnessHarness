@@ -212,3 +212,11 @@ zero retried beyond the frozen bound, zero fabricated. Packet:
 - **Verdict: `executed`** — all 30 prior-inconclusive slots executed
   with real receipts under the three verbatim-recorded repairs; the
   full 300-slot frozen cohort now holds real evidence end to end.
+
+## Correction — 2026-11-07 (R6.3 · REQ-XB-222 / AR-03)
+
+The "≈ **$1.41** cumulative" figure above is a rate-card estimate
+(≈4.7 h × ≈$0.30/h), not a billing read; over the VM's full life
+2026-11-06T16:32Z–22:15:40Z (≈ 5.73 h) the rate-card estimate is ≈ $1.72
+(design/32 B3 F3/F5). Billing was never read; the "$1.41" text is
+retained verbatim per REQ-XB-222.

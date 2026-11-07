@@ -132,3 +132,12 @@ None.
 
 Unchanged — `nextTicket: DONE` (the 251-row manifest chain is complete).
 chainTip → `codex/harnessharness-bl-reconcile`.
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+"parity verified 30/30" / "S3 met" above are the tranche's own
+exact-agreement endpoint (`tb` ↔ scratch reference runner, R=1;
+`parity_admission` refuses the design — `MissingKey{pins.rights_ref}`,
+`AdapterFloor{repeats:1}`). "efficacy computed null-equivalent" is 0 by
+construction (oracle participant — arms cannot change outcomes), not
+efficacy evidence. The BL-50/51/52/53 dispositions stand.

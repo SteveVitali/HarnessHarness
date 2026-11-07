@@ -328,3 +328,13 @@ drivers `/tmp/parity-driver` + `/tmp/parity-h-side.py`.
   remain (all removed per-task).
 - `~/tb-work/parity-runs/` holds all raw records (not committed —
   external working dir).
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+The "parity admitted → S3 met" endpoint wording above is the declared
+tranche rule (this tranche itself recorded `infeasible{margin}`); under
+the landed `parity_admission` machinery the R=1 two-runner design is
+refused (`MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}`),
+and the H side is a scratch reference runner, not HH cells. See the
+dated correction on `PARITY-TRANCHE-3.md` and
+`docs/build/reports/2026-11-07-p1-estimators.json`.

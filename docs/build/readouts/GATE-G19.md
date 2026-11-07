@@ -65,3 +65,14 @@ dispatch (R5.59 withholds until G19 passes).
 ## Signature
 
 **PASSED** — operator words (verbatim, interactive, 2026-11-06T22:04Z): "confirmed and proceed" — recorded verbatim in GATE DECISIONS and this signature; the admitted basis is **complete-cohort** — compute the efficacy verdict on the full 300/300 executed cohort (the pre-registered `fix-git` residue was lifted by the recorded repairs, so no missingness declaration remains). Agent-drafted block sha256 `13471dbdc0e4` confirmed by the approval.
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+The `layer: live-executed` labels in the Evidence list misapply the
+evidence class: under ADR-0363 `live-executed` requires a cited
+`hh-live-evidence/1` record, and none exists for these packets
+(`docs/build/reports/live/` carries no S3/S4 entries — research/24
+F14). The correct class is *recorded execution — internal*: the gate
+read the committed executed-record packets verbatim. The reads, the
+presented state and the PASSED disposition stand; only the layer label
+is corrected.

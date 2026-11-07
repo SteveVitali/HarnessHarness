@@ -204,3 +204,19 @@ beyond the frozen bound, zero fabricated. Packet:
   build). No retrospective smaller manifest; S4 recorded with all
   denominators — the executed cohort's receipts and the inconclusive
   bounds are both the record.
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+"the verifier genuinely decided fail" (for `swe-bench-langcodes`,
+`grid-pattern-transform`, `solana-data`) overstates the evidence: every
+verdict on this page was parsed by tb's `PytestParser` in scratch Python
+outside the HH machinery. The records-in cross-check
+(`docs/build/reports/2026-11-07-p1-surface-xcheck.json`, basis A)
+agrees with tranche-3's `tb` verdicts on 14 of 16 tasks carrying a
+first-attempt HH verdict and disagrees on 2 — `swe-bench-langcodes`
+(HH unresolved here; the probable cause is the declared-workdir defect,
+repaired only in the repairs epoch — research/24 F2) and
+`grid-pattern-transform` (cause unestablished). `solana-data`'s
+unresolved verdict agrees with the O side. The two discordant tasks
+are therefore not "genuinely decided" — they are scratch-parser
+verdicts over a defect-era driver, recorded verbatim as such.

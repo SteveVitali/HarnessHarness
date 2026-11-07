@@ -61,3 +61,9 @@ Confirm the agent-drafted block by its sha256 prefix.
 ---
 
 *Dated note — 2026-11-06:* **partially discharged by real evidence.** The quote-only/withheld posture above stands as committed history; the frozen confirmation manifest subsequently executed under operator authorization after parity verified — `docs/build/reports/2026-11-05-s4-confirmation.json` (`hh-s4-confirmation/1`) executed 160/300 slots with real receipts, plus the named egress supplement `docs/build/reports/2026-11-05-s4-egress-cohort.json` (`hh-s4-egress-supplement/1`, `egress-profile-rerun` over exactly the 140 prior-inconclusive slots) executed a further 90/140 — **combined 250/300 slots receipted, 50/60 first subjects; verdict `partial`**. The 50 still-inconclusive slots stay inconclusive verbatim (build-time OOM/ENOSPC, deleted upstreams, a verifier bootstrap exceeding the task's own declared bound), so **S4 stays unmet** (`s4_unmet: true` in `docs/build/reports/2026-11-06-r5.49-study-report.json`). The `hh-confirm-withheld/1` packet still refolds `withheld` as history; the participant/publication stage stays withheld (DF-H9-1, permanently unmet-by-decision).
+
+*Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03):* "after parity
+verified" in the dated note above is the tranche's own exact-agreement
+verdict (`tb` ↔ a scratch reference runner, R=1), not an admission
+under the landed `parity_admission` machinery (refused:
+`MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}`).

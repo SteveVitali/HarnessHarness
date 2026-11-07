@@ -84,3 +84,8 @@ packets stand byte-untouched.
   tracked AC, not this work's
 
 mergePolicy: OPERATOR — not merged by the agent.
+
+*Correction — 2026-11-07 (R6.3 · REQ-XB-222 / AR-03):* "≈ **$1.41**" is
+a rate-card estimate, not a billing read — ≈ $1.72 over the VM's full
+16:32Z–22:15:40Z life at B3 F5 rates (the "$1.41" text retained verbatim
+per REQ-XB-222).

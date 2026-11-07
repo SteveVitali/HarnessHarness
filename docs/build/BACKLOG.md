@@ -929,3 +929,13 @@ CC4's contract/data-model/criterion/stage scope and the report is never
 rewritten; the **GATE-ACCEPT re-surface** (finding 2) was discharged by
 GATE-G17's fresh signature (its scoped items named the carried deviations
 verbatim). Both stay recorded here — entries are history, never deleted.
+
+*correction read (2026-11-07, R6.3 · REQ-XA-114 / AR-03):* the reconcile
+note above repeats two phrasings corrected by the phase-1 corrections
+pass: "parity verified 30/30" is the tranche's own exact-agreement
+verdict over `tb` ↔ the scratch reference runner — not HH cells, and
+the landed `parity_admission` refuses the design
+(`MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}`); "efficacy
+computed, honest null-equivalent" is a contrast that is 0 by
+construction (oracle participant — the arms cannot change an outcome),
+not efficacy evidence. BL-50's open state is unchanged.

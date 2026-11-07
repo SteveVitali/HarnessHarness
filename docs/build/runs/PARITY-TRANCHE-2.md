@@ -346,3 +346,13 @@ H-side `~/tb-work/parity-runs/h-side/t2/`; drivers
   per-task and by the final prune).
 - `~/tb-work/parity-runs/` holds all raw records (external working
   dir, not committed).
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+The "parity admitted → S3 met" endpoint wording above is the declared
+tranche rule (this tranche itself recorded `infeasible{margin}`); under
+the landed `parity_admission` machinery the R=1 two-runner design is
+refused (`MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}`),
+and the H side is a scratch reference runner, not HH cells. See the
+dated correction on `PARITY-TRANCHE-3.md` and
+`docs/build/reports/2026-11-07-p1-estimators.json`.
