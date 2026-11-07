@@ -203,6 +203,7 @@ fn drive_packet(
         );
     }
     DrivePacket {
+        harbor: None,
         spec,
         budgets: BTreeMap::from([
             ("eval:a".to_string(), caps(100)),
@@ -460,6 +461,7 @@ fn admission_refusal_emits_withheld_record() {
     let docs = LabDocs::open(&cfg.experiment_root).unwrap();
     let (eid, _rid, _lease) = coordinator::open_or_attach(&mut store, &docs, &packet).unwrap();
     let sp = SlotPacket {
+        harbor: None,
         run_plan_id: "plan:withheld".to_string(),
         subject_run_id: "subj:withheld".to_string(),
         attempt_no: 1,
@@ -653,6 +655,7 @@ fn kill_point_worker_death_before_seal() {
     );
     let slot_root = cfg.slots_dir.join("kp1");
     let sp = SlotPacket {
+        harbor: None,
         slot_root: slot_root.to_string_lossy().into_owned(),
         ..sp
     };
@@ -776,6 +779,7 @@ fn kill_point_worker_death_after_seal_before_bind() {
         },
     );
     let sp = SlotPacket {
+        harbor: None,
         slot_root: slot_root.to_string_lossy().into_owned(),
         ..sp
     };

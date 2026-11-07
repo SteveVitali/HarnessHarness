@@ -508,6 +508,20 @@ impl ExperimentSlot {
                 str_member(vm, "binary_sha256")?;
             }
         }
+        // `identity.harbor` (REQ-XH-014; AR-04/R6.17) — the program-wide
+        // Harbor pin when the slot serves the O surface; strictly
+        // member-checked when present.
+        if let Some(hb) = id.get("harbor") {
+            let hm = hb
+                .as_obj()
+                .ok_or_else(|| err("identity.harbor must be an object"))?;
+            no_unknown(
+                hm,
+                &["pin", "kind", "contains_skip_install"],
+                "identity.harbor",
+            )?;
+            str_member(hm, "pin")?;
+        }
         let ss = obj(j.get("identity").unwrap(), "slot_store")?;
         no_unknown(
             ss,

@@ -262,6 +262,7 @@ fn drive_packet(
         );
     }
     DrivePacket {
+        harbor: None,
         spec,
         budgets: BTreeMap::from([
             ("eval:a".to_string(), caps(100)),

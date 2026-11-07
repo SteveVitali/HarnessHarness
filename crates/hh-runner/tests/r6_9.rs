@@ -400,6 +400,7 @@ fn slot_packet(
     recipe: SlotRecipe,
 ) -> SlotPacket {
     SlotPacket {
+        harbor: None,
         run_plan_id: "plan:r69".to_string(),
         subject_run_id: "subj:r69".to_string(),
         attempt_no: 1,

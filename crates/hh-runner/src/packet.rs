@@ -342,6 +342,9 @@ pub struct SlotPacket {
     pub participant: BTreeMap<String, Json>,
     /// Declared cell facts stamped into `cell`.
     pub cell: BTreeMap<String, Json>,
+    /// The program-wide Harbor pin when the slot serves the O surface
+    /// (R6.17/REQ-XH-014 — `identity.harbor.pin`; absent = no Harbor leg).
+    pub harbor: Option<String>,
     /// The declared slot recipe.
     pub recipe: SlotRecipe,
 }
@@ -367,6 +370,13 @@ impl SlotPacket {
             ("task", Json::Obj(self.task.clone())),
             ("participant", Json::Obj(self.participant.clone())),
             ("cell", Json::Obj(self.cell.clone())),
+            (
+                "harbor",
+                self.harbor
+                    .as_ref()
+                    .map(|h| Json::str(h.clone()))
+                    .unwrap_or(Json::Null),
+            ),
             ("recipe", self.recipe.to_json()),
         ])
     }
@@ -403,6 +413,14 @@ impl SlotPacket {
                 .cloned()
                 .unwrap_or_default(),
             cell: need(m, "cell")?.as_obj().cloned().unwrap_or_default(),
+            harbor: match m.get("harbor") {
+                None | Some(Json::Null) => None,
+                Some(v) => Some(
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| err("harbor must be a string"))?,
+                ),
+            },
             recipe: SlotRecipe::from_json(need(m, "recipe")?)?,
         })
     }
@@ -450,6 +468,9 @@ pub struct DrivePacket {
     /// `supervision{…}` — the declared proxy/mediator process members
     /// (R6.16 Stage 2; RUNNER-SUPERVISION). Absent = unsupervised.
     pub supervision: Option<crate::supervision::SupervisionDecl>,
+    /// The program-wide Harbor pin — stamped into every slot packet the
+    /// drive mints (`identity.harbor.pin`; R6.17/REQ-XH-014).
+    pub harbor: Option<String>,
 }
 
 impl DrivePacket {
@@ -550,6 +571,14 @@ impl DrivePacket {
                         .map_err(|e| PacketError { detail: e.detail })
                 })
                 .transpose()?,
+            harbor: match m.get("harbor") {
+                None | Some(Json::Null) => None,
+                Some(v) => Some(
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| err("harbor must be a string"))?,
+                ),
+            },
         })
     }
 }

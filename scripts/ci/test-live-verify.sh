@@ -129,6 +129,23 @@ fi
 if command -v python3 >/dev/null 2>&1; then
   check "check-live-evidence over produced records" 0 \
     env HH_LIVE_DIR="$T/live" bash "$CK"
+
+  # ── 9. `reproof` registered (R6.17 / REQ-XH-027) — not run here ──────
+  out=$(run bash "$LV" --check-names reproof 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] || bad "--check-names reproof: exit $rc (leg not registered)"
+  # A packet claiming live-executed with no hh-live-evidence/1 record
+  # refuses; recorded_execution passes (REQ-XB-126).
+  cat > "$T/live/2026-11-07-reproof-packet.json" <<'EOF'
+{"schema":"hh-reproof-packet/1","label":"Oracle execution-surface re-proof (internal, recorded execution, `parity: none`)","parity":"none","evidence_label":"recorded_execution"}
+EOF
+  check "reproof packet recorded_execution validates" 0 \
+    env HH_LIVE_DIR="$T/live" bash "$CK"
+  cat > "$T/live/2026-11-07-reproof-packet.json" <<'EOF'
+{"schema":"hh-reproof-packet/1","label":"Oracle execution-surface re-proof (internal, recorded execution, `parity: none`)","parity":"none","evidence_label":"live-executed"}
+EOF
+  check "reproof packet live-executed without record refuses" 1 \
+    env HH_LIVE_DIR="$T/live" bash "$CK"
 else
   skip "python3-absent"
 fi
