@@ -1,0 +1,34 @@
+[package]
+name = "hharness-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "The committed experiment runner (experiments supplement §3.2/§3.3; manifest 261/R6.8; ADR-0427/AR-04): a coordinator process that drives hh-experiment's ExperimentEngine (next/claim/launch/settle, ReattemptPolicy), one slot-worker process per in-flight attempt writing one hh-experiment-slot/1 record per slot, the closed withheld{…} member set, the §3.3 slot-fact → outcome-class/disposition map, and the process-level single-writer topology. No scheduler, retry counter or authoritative store of its own; resume derives only from durable records."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-runner"
+path = "src/main.rs"
+
+[dependencies]
+hharness-wire = { path = "../hh-wire", version = "0.1.0" }
+hharness-identity = { path = "../hh-identity", version = "0.1.0" }
+hharness-provenance = { path = "../hh-provenance", version = "0.1.0" }
+hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
+hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
+hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-lab = { path = "../hh-lab", version = "0.1.0" }
+hharness-eval = { path = "../hh-eval", version = "0.1.0" }
+hharness-bench = { path = "../hh-bench", version = "0.1.0" }
+hharness-env = { path = "../hh-env", version = "0.1.0" }
+hharness-helper = { path = "../hh-helper", version = "0.1.0" }
+hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }

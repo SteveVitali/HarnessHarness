@@ -379,6 +379,20 @@ members = [
     # exactly-once). Reads hharness-lab records + hharness-ledger/hharness-budget primitives;
     # registry facts arrive through the context (plane separation — CC10).
     "crates/hh-experiment",
+    # The committed experiment runner (experiments supplement §3.2/§3.3;
+    # manifest 261/R6.8; ADR-0427/AR-04). A PERSISTENT workspace member:
+    # the `hh-runner` binary (lib + bin) — a coordinator process that is the
+    # sole writer of the experiment store root and drives `ExperimentEngine`
+    # (next/claim/launch/settle under the spec's ReattemptPolicy — no
+    # scheduler, retry counter or store of its own), one slot-worker process
+    # per in-flight attempt each sole-writing its own slot store and emitting
+    # one `hh-experiment-slot/1` record per slot with the closed
+    # `withheld{…}` member set, the §3.3 slot-fact → outcome/disposition map,
+    # and the process-level single-writer topology + durable-only recovery.
+    # Depends only downward (hh-experiment/hh-lab/hh-eval/hh-bench/hh-env/
+    # hh-helper/hh-ledger/hh-budget); no edge into hh-embed/hh-cli/hosting
+    # (K-2, REQ-XB-103 — scripts/check-runner-edges.sh enforces it).
+    "crates/hh-runner",
     # The C3/Stage-4 sub-agent orchestrator class (spec §5e.3, R-2.6.3;
     # ticket S4.6; ADR-0186) — the `orchestrator` component class binding the
     # closed `TopologyPreset` catalogue (T0 `single`; T1 `orchestrator_worker`;

@@ -745,6 +745,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "hharness-runner"
+version = "0.1.0"
+dependencies = [
+ "hharness-bench",
+ "hharness-budget",
+ "hharness-env",
+ "hharness-eval",
+ "hharness-experiment",
+ "hharness-helper",
+ "hharness-identity",
+ "hharness-lab",
+ "hharness-ledger",
+ "hharness-ontology",
+ "hharness-provenance",
+ "hharness-wire",
+]
+
+[[package]]
 name = "hharness-secrets"
 version = "0.1.0"
 dependencies = [

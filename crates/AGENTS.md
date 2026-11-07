@@ -39,6 +39,7 @@
 | `hharness-cli` | hh terminal client and renderer over the kernel boundary |
 | `hharness-lab` | Experiment, benchmark and analysis records plus canonical exemplars |
 | `hharness-experiment` | Experiment engine and durable experiment-document lifecycle |
+| `hharness-runner` | The committed runner: `hh-runner` coordinator + slot-worker processes driving the experiment engine; `hh-experiment-slot/1` records |
 | `hharness-results` | Results projections, watermark reads, exports and leaderboard views |
 | `hharness-analysis` | Estimators and statistical analysis over results rows |
 | `hharness-eval` | Metric/oracle catalogue, evaluation, comparison and typed n/a outcomes |

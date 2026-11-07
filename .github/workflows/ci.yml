@@ -266,6 +266,12 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-drift.sh
 
+      # R6.8 / ADR-0427 (AR-04): the runner stays below hh-embed — no edge
+      # into hh-embed/hh-cli/hosting/kernel/orchestrator/fleet (K-2).
+      - name: Runner K-2 edge check (AR-04)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-runner-edges.sh
+
       # L4.3 / MINOR-2: rustdoc warnings are build noise the public repo
       # cannot carry; one matrix leg suffices.
       - name: Rustdoc warnings gate
