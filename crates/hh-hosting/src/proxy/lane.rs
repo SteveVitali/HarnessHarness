@@ -94,9 +94,10 @@ pub struct FieldRule {
     pub op: FieldOp,
 }
 
-/// The step-2 reservation form. Until R6.11's §4.4 formula lands, the
-/// only admitted form is the fixture lane's declared bound — any other
-/// lane refuses typed at ledger step 2 (`unsupported{reservation_formula}`).
+/// The step-2 reservation form. `FixtureBound` exists only on fixture
+/// lanes; `Formula` is the §4.4 worst-case bound (REQ-XC-113); a lane
+/// with neither refuses typed at ledger step 2
+/// (`unsupported{reservation_formula}`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reservation {
     /// A declared per-call bound in µ$ — exists only on fixture lanes.
@@ -104,8 +105,47 @@ pub enum Reservation {
         /// The bound reserved per call on the slot's slice.
         micros: i64,
     },
+    /// The §4.4 worst-case formula (R6.11): `ceil(rate_in·(body_bytes +
+    /// template_overhead) + rate_out·max_output_bound)` at the uncached
+    /// input rate. `max_tokens` insertion is optional and recorded —
+    /// the first pass inserts none (S-14; the bound is the model cap).
+    Formula(ReservationFormula),
     /// No formula declared — step-2 typed refusal.
     Unsupported,
+}
+
+/// The declared constants of [`Reservation::Formula`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReservationFormula {
+    /// `O` — the template/serialization overhead in tokens (default
+    /// 2048, recalibrated from first-smoke usage — F10).
+    pub template_overhead_tokens: i64,
+    /// `M` — the output bound: the 131 072-token model cap while the
+    /// first pass inserts no `max_tokens` (REQ-XC-113, S-14).
+    pub max_output_bound: i64,
+    /// The declared body-bytes bound the REQ-XC-126 worst-case call `w`
+    /// is priced at (200 KB).
+    pub declared_body_bytes: i64,
+    /// The measured cached-input share in ppm of 1.0 — `None` until a
+    /// measured spend stage records it per endpoint, so planning is
+    /// no-cache (REQ-XC-210).
+    pub cached_share_ppm: Option<i64>,
+    /// `max_tokens_policy` — `reserve_model_cap` (first pass) or
+    /// `insert_max_tokens{n}` when a later pass declares insertion; the
+    /// policy is *recorded*, never implicit.
+    pub max_tokens_policy: String,
+}
+
+impl Default for ReservationFormula {
+    fn default() -> Self {
+        ReservationFormula {
+            template_overhead_tokens: 2_048,
+            max_output_bound: 131_072,
+            declared_body_bytes: 200_000,
+            cached_share_ppm: None,
+            max_tokens_policy: "reserve_model_cap".to_string(),
+        }
+    }
 }
 
 /// `hh.proxy.lane/1` — the declared lane: upstream coordinate, release
@@ -122,8 +162,26 @@ pub struct ProxyLane {
     pub endpoint_ref: String,
     /// The upstream host fact recorded on receipts.
     pub upstream_host: String,
-    /// The release mode — `buffered` until R6.11.
+    /// The release mode — `buffered` for non-streaming; a streaming
+    /// request releases as `buffered_heartbeat` (REQ-XC-110).
     pub release: String,
+    /// The `buffered_heartbeat` SSE-comment cadence in ms
+    /// (`: hh-proxy` every interval while the upstream body buffers —
+    /// F9; the surface's error event rides the same stream on a late
+    /// failure).
+    pub heartbeat_ms: u64,
+    /// The lane-declared non-streaming read deadline (REQ-XC-111) —
+    /// independent of `stream_idle_timeout_ms` (120 s). `None` rides
+    /// the dialect's stream-idle clamp.
+    pub nonstream_read_deadline_ms: Option<u64>,
+    /// The lane-declared served-model expected set, fixed from recorded
+    /// first-smoke evidence (REQ-XC-119; empty = unobserved — recorded,
+    /// never checked).
+    pub served_model_expected: Vec<String>,
+    /// The Ollama catalog base for `/api/tags` + `/api/show` probes
+    /// (§4.6). `None` derives `endpoint_ref` minus its `/v1` suffix —
+    /// no derivation, no catalog probe.
+    pub catalog_base: Option<String>,
     /// `surface|"*" → rules`, applied `*` first then surface.
     pub field_policy: BTreeMap<String, Vec<FieldRule>>,
     /// The generation-parameter policy (AR-10: `pin` path-qualified,
@@ -218,6 +276,10 @@ impl ProxyLane {
             endpoint_ref: endpoint_ref.to_string(),
             upstream_host: upstream_host.to_string(),
             release: "buffered".to_string(),
+            heartbeat_ms: 10_000,
+            nonstream_read_deadline_ms: None,
+            served_model_expected: Vec::new(),
+            catalog_base: None,
             field_policy,
             gen_param_policy: GenParamPolicy {
                 forward: chat_scope
@@ -235,6 +297,17 @@ impl ProxyLane {
         }
     }
 
+    /// The Ollama catalog base (`{…}/api/tags`, `{…}/api/show`): the
+    /// declared `catalog_base`, else `endpoint_ref` minus a trailing
+    /// `/v1` suffix — no derivation, no probe.
+    pub fn catalog_base(&self) -> Option<String> {
+        if let Some(b) = &self.catalog_base {
+            return Some(b.clone());
+        }
+        let trimmed = self.endpoint_ref.trim_end_matches('/');
+        trimmed.strip_suffix("/v1").map(|b| b.to_string())
+    }
+
     /// The declared form (recorded on the manifest's `extra` and the
     /// conformance fixtures' input).
     pub fn to_json(&self) -> Json {
@@ -245,6 +318,17 @@ impl ProxyLane {
             ("endpoint_ref", Json::str(&self.endpoint_ref)),
             ("upstream_host", Json::str(&self.upstream_host)),
             ("release", Json::str(&self.release)),
+            ("heartbeat_ms", Json::Int(self.heartbeat_ms as i64)),
+            (
+                "nonstream_read_deadline_ms",
+                self.nonstream_read_deadline_ms
+                    .map(|v| Json::Int(v as i64))
+                    .unwrap_or(Json::Null),
+            ),
+            (
+                "served_model_expected",
+                Json::Arr(self.served_model_expected.iter().map(Json::str).collect()),
+            ),
             (
                 "field_policy",
                 Json::Obj(
@@ -276,6 +360,20 @@ impl ProxyLane {
                     Reservation::FixtureBound { micros } => Json::obj([
                         ("kind", Json::str("fixture_bound")),
                         ("micros", Json::Int(*micros)),
+                    ]),
+                    Reservation::Formula(f) => Json::obj([
+                        ("kind", Json::str("worst_case_formula")),
+                        (
+                            "template_overhead_tokens",
+                            Json::Int(f.template_overhead_tokens),
+                        ),
+                        ("max_output_bound", Json::Int(f.max_output_bound)),
+                        ("declared_body_bytes", Json::Int(f.declared_body_bytes)),
+                        (
+                            "cached_share_ppm",
+                            f.cached_share_ppm.map(Json::Int).unwrap_or(Json::Null),
+                        ),
+                        ("max_tokens_policy", Json::str(&f.max_tokens_policy)),
                     ]),
                     Reservation::Unsupported => Json::obj([("kind", Json::str("unsupported"))]),
                 },
