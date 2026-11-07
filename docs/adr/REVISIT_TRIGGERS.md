@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_209 ADRs: 157 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_210 ADRs: 158 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -193,6 +193,7 @@ _209 ADRs: 157 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0423 | A phase-1b tranche or any later pass that executes a different TB edition (e.g. TB 2.1 under the §3.8 re-proof) must bind its edition, content digest and R in a pre-registration before data, and cite this ADR as the precedent for edition corrections. |
 | ADR-0424 | Any change to the Pages surface — a new action version, an added deploy step, a widened permission, a changed trigger, or a second publication record — re-arms this ADR: update `check-pages-workflow.sh`, the `hhsite/publication.py` validator and this record's pinned SHAs in the same commit. |
 | ADR-0425 | When a durable `PricingTable` JSON codec lands (bundle snapshot), `rate_unit` must be a required member of it; when a provider rate below $0.001/M appears, add `micro_per_1m_tokens` by amendment; if a paid study ever needs the router's `DeclaredPricing` path for real spend, re-derive it from `PricingTable` rather than maintaining the second table. |
+| ADR-0426 | A third Ollama surface (Responses — C-32) admitted for Round 6 or later revisits the lane set; a provider auth form outside `{bearer, api_key_header}` revisits `auth_form_header`'s coverage; a `forward_raw` caller wanting pipelined or keep-alive exchanges revisits the `Connection: close` posture. |
 
 ## Fired-and-answered triggers (BL-48)
 

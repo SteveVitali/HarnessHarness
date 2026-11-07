@@ -28,7 +28,7 @@ use hharness_wire::json::Json;
 use crate::anthropic::{self, MessagesTranslator};
 use crate::codec::{self, WireFrame};
 use crate::credentials::header_secret;
-use crate::dialect::WireDialect;
+use crate::dialect::{AuthKind, WireDialect};
 use crate::gateway::{CredentialHandle, Transport};
 use crate::openai::{self, ChunkTranslator, SseDecoder, SseEvent};
 use crate::vocab::{ModelError, ModelErrorClass, TimeoutKind};
@@ -58,7 +58,7 @@ pub enum Family {
 /// through its `dialect_id`.
 pub fn family_of(dialect: &WireDialect) -> Family {
     match dialect.dialect_id.as_str() {
-        "anthropic-messages" => Family::Messages,
+        "anthropic-messages" | "ollama-messages" => Family::Messages,
         _ => Family::ChatCompletions,
     }
 }
@@ -277,7 +277,85 @@ impl HttpModelTransport {
         }
     }
 
-    /// The auth header the family's `send` attaches for a `provided`
+    /// The `(name, value)` one `AuthKind` spells on the wire — the lane's
+    /// declared `auth_kinds` pick the form, never the wire family (AR-11;
+    /// REQ-XC-104). `bearer` → `Authorization: Bearer`, `api_key_header`
+    /// → `x-api-key`; a declared kind with no header form is a typed
+    /// `unsupported_feature` refusal, never a silent guess.
+    fn auth_form_header(kind: AuthKind, secret: &str) -> Result<(String, String), ModelError> {
+        match kind {
+            AuthKind::Bearer => Ok(("Authorization".to_string(), format!("Bearer {secret}"))),
+            AuthKind::ApiKeyHeader => Ok(("x-api-key".to_string(), secret.to_string())),
+            AuthKind::None => Err(ModelError::new(
+                ModelErrorClass::UnsupportedFeature,
+                "auth kind `none` binds no header",
+            )),
+            other => Err(ModelError::new(
+                ModelErrorClass::UnsupportedFeature,
+                format!("auth kind {} has no header form", other.as_str()),
+            )),
+        }
+    }
+
+    /// The lane's auth header — derived from the dialect's declared
+    /// `auth_kinds`, not the wire family (AR-11; REQ-XC-104).
+    /// `requested: Some(k)` asks a declared form explicitly — an
+    /// undeclared form is a typed `unsupported_feature` refusal;
+    /// `requested: None` picks the lane's declared credential form (the
+    /// first non-`none` kind `auth_kinds` spells). The `send`-path
+    /// contract is preserved: an unprovided credential binds no header
+    /// (the upstream decides), while an *explicitly* requested
+    /// credential form without a provided credential is `auth`.
+    fn lane_auth_header(
+        &self,
+        credential: &CredentialHandle,
+        requested: Option<AuthKind>,
+    ) -> Result<Option<(String, String)>, ModelError> {
+        let kind = match requested {
+            Some(k) => {
+                if !self.dialect.auth_kinds.contains(&k) {
+                    return Err(ModelError::new(
+                        ModelErrorClass::UnsupportedFeature,
+                        format!(
+                            "lane `auth_kinds` do not admit {} (declared: {})",
+                            k.as_str(),
+                            self.dialect
+                                .auth_kinds
+                                .iter()
+                                .map(|k| k.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    ));
+                }
+                Some(k)
+            }
+            None => self
+                .dialect
+                .auth_kinds
+                .iter()
+                .copied()
+                .find(|k| *k != AuthKind::None),
+        };
+        match kind {
+            None | Some(AuthKind::None) => Ok(None),
+            Some(k) => {
+                if !credential.provided {
+                    if requested.is_some() {
+                        return Err(ModelError::new(
+                            ModelErrorClass::Auth,
+                            format!("{} auth asked but credential not provided", k.as_str()),
+                        ));
+                    }
+                    return Ok(None);
+                }
+                let secret = header_secret(&*self.credentials, credential)?;
+                Ok(Some(Self::auth_form_header(k, &secret)?))
+            }
+        }
+    }
+
+    /// The auth header the lane's `send` attaches for a `provided`
     /// credential — the value resolved inside this call and dropped on
     /// return (`(header-name, header-value)`; the value never lands in a
     /// frame, a log, or a record).
@@ -285,14 +363,7 @@ impl HttpModelTransport {
         &self,
         credential: &CredentialHandle,
     ) -> Result<Option<(String, String)>, ModelError> {
-        if !credential.provided {
-            return Ok(None);
-        }
-        let secret = header_secret(&*self.credentials, credential)?;
-        Ok(Some(match self.family {
-            Family::Messages => ("x-api-key".to_string(), secret),
-            Family::ChatCompletions => ("Authorization".to_string(), format!("Bearer {secret}")),
-        }))
+        self.lane_auth_header(credential, None)
     }
 
     /// `dial(url)` — the transport beneath the codec: TCP on `http`,
@@ -578,6 +649,206 @@ impl HttpModelTransport {
         }
         Ok(o)
     }
+
+    /// `forward_raw(credential, endpoint_ref, op, kept_headers, body, auth)`
+    /// — the raw-forward primitive the Ollama upstream lanes ride
+    /// (design/33 F3; AR-11; REQ-XC-104): the same `dial`, TLS and
+    /// `hh-wire` codec `send` uses, but the request body bytes go out
+    /// *verbatim* (no plan re-serialization) and the response is
+    /// captured raw — JSON and SSE alike — with per-chunk arrival
+    /// stamps so [`HttpModelTransport::raw_frames`] replays the
+    /// captured bytes through the family's own decoders.
+    ///
+    /// The auth header derives from the lane's declared `auth_kinds`
+    /// ([`HttpModelTransport::lane_auth_header`]): `auth: Some(k)` asks a
+    /// declared form explicitly (an undeclared form is a typed
+    /// `unsupported_feature` refusal); `auth: None` picks the lane's
+    /// declared credential form — `Authorization: Bearer` on every
+    /// Ollama surface, Messages included. A caller-supplied auth header
+    /// in `kept_headers` is refused `invalid_request` — the wire form is
+    /// the lane's own, never the caller's. The credential's value is
+    /// resolved inside this call and dropped on return; no member of
+    /// [`RawExchange`] carries it.
+    ///
+    /// Any completed HTTP response is an exchange — a non-2xx status is
+    /// captured verbatim for the caller (the proxy relays it, never
+    /// fabricates a body); only transport/codec failures are `Err`.
+    pub fn forward_raw(
+        &mut self,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        op: &str,
+        kept_headers: &[(&str, &str)],
+        body: &[u8],
+        auth: Option<AuthKind>,
+    ) -> Result<RawExchange, ModelError> {
+        // `kept_headers` never carry an auth header — the lane derives
+        // the wire form from its declared `auth_kinds` (a second auth
+        // header would be either a duplicate or a downgrade).
+        for (name, _) in kept_headers {
+            let n = name.to_ascii_lowercase();
+            if matches!(
+                n.as_str(),
+                "authorization" | "x-api-key" | "proxy-authorization"
+            ) {
+                return Err(ModelError::new(
+                    ModelErrorClass::InvalidRequest,
+                    format!(
+                        "forward_raw: caller-supplied auth header `{name}` refused — the lane derives auth from `auth_kinds`"
+                    ),
+                ));
+            }
+        }
+        let auth = self.lane_auth_header(credential, auth)?;
+        let url =
+            http::parse_http_url(endpoint_ref).map_err(|e| map_io(e, TimeoutKind::Connect))?;
+        let mut sock = self.dial(&url)?;
+        let target = join(&url.target, op);
+        let host_header = url.host_header();
+        let mut headers: Vec<(&str, &str)> =
+            vec![("Host", host_header.as_str()), ("Connection", "close")];
+        let auth_pair;
+        if let Some((name, value)) = &auth {
+            auth_pair = (name.as_str(), value.as_str());
+            headers.push(auth_pair);
+        }
+        headers.extend_from_slice(kept_headers);
+        http::write_request(&mut sock, "POST", &target, &headers, body)
+            .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let t0 = std::time::Instant::now();
+        let at = || t0.elapsed().as_millis() as u64;
+        let mut r = BufReader::new(sock);
+        let head = http::read_response_head(&mut r).map_err(|e| map_io(e, TimeoutKind::Attempt))?;
+        let mut ex = RawExchange {
+            status: head.status,
+            headers: head.headers.clone(),
+            body: Vec::new(),
+            chunk_stamps: Vec::new(),
+        };
+        let mut rd = BodyReader::new(&mut r, &head, self.max_body);
+        loop {
+            match rd.next_chunk() {
+                Ok(Some(bytes)) => {
+                    ex.chunk_stamps.push((at(), bytes.len()));
+                    ex.body.extend_from_slice(&bytes);
+                }
+                Ok(None) => break,
+                Err(e) => return Err(map_io(e, TimeoutKind::StreamIdle)),
+            }
+        }
+        Ok(ex)
+    }
+
+    /// `raw_frames(exchange)` — replay a captured [`RawExchange`]
+    /// through the family's own decoders: an SSE body rides
+    /// `SseDecoder` + the family's `Translator` chunk-by-chunk (frames
+    /// stamped at their chunk's recorded arrival), a JSON body rides
+    /// the family's `completion_frames`. The output equals the `send`
+    /// frames path for the same wire bytes (AC-4.1-2's decode leg;
+    /// AR-11).
+    pub fn raw_frames(&self, exchange: &RawExchange) -> Result<Vec<(u64, WireFrame)>, ModelError> {
+        let is_sse = exchange
+            .headers
+            .get("content-type")
+            .is_some_and(|v| v.contains("text/event-stream"));
+        let mut frames: Vec<(u64, WireFrame)> = Vec::new();
+        if !is_sse {
+            let doc = hharness_wire::json::parse_provider(&String::from_utf8_lossy(&exchange.body))
+                .map_err(|e| ModelError::new(ModelErrorClass::StreamDecode, format!("{e}")))?;
+            let stamp = exchange.chunk_stamps.last().map(|(s, _)| *s).unwrap_or(0);
+            for f in match self.family {
+                Family::Messages => anthropic::completion_frames(&doc)?,
+                Family::ChatCompletions => openai::completion_frames(&doc)?,
+            } {
+                frames.push((stamp, f));
+            }
+            return Ok(frames);
+        }
+        let mut sse = SseDecoder::new(self.max_body);
+        let mut tr = Translator::for_family(self.family);
+        let mut off = 0usize;
+        let mut done = false;
+        let mut last_stamp = 0u64;
+        for (stamp, len) in &exchange.chunk_stamps {
+            if done || sse.terminated() {
+                break;
+            }
+            last_stamp = *stamp;
+            let end = (off + len).min(exchange.body.len());
+            let bytes = &exchange.body[off..end];
+            off = end;
+            feed_sse(&mut sse, &mut tr, bytes, *stamp, &mut frames, &mut done)?;
+        }
+        if !done && !sse.terminated() && off < exchange.body.len() {
+            // Defensive tail — bytes no recorded chunk covers.
+            feed_sse(
+                &mut sse,
+                &mut tr,
+                &exchange.body[off..],
+                last_stamp,
+                &mut frames,
+                &mut done,
+            )?;
+        }
+        if !done {
+            // The stream closed without its own sentinel — the family's
+            // terminal `finish`, stamped at the last chunk's arrival.
+            for f in tr.finish() {
+                frames.push((last_stamp, f));
+            }
+        }
+        Ok(frames)
+    }
+}
+
+/// `feed_sse` — push one captured chunk through `SseDecoder` + the
+/// family's `Translator`, appending `(stamp, frame)` pairs; `done` is set
+/// on the stream's own `[DONE]` sentinel (the family's terminal `finish`
+/// then already ran — matching `send`'s SSE loop).
+fn feed_sse(
+    sse: &mut SseDecoder,
+    tr: &mut Translator,
+    bytes: &[u8],
+    stamp: u64,
+    frames: &mut Vec<(u64, WireFrame)>,
+    done: &mut bool,
+) -> Result<(), ModelError> {
+    for ev in sse.push(bytes)? {
+        match ev {
+            SseEvent::Data(data) => {
+                let chunk = hharness_wire::json::parse_provider(&data).map_err(|e| {
+                    ModelError::new(ModelErrorClass::StreamDecode, format!("sse chunk: {e}"))
+                })?;
+                for f in tr.push(&chunk)? {
+                    frames.push((stamp, f));
+                }
+            }
+            SseEvent::Done => {
+                for f in tr.finish() {
+                    frames.push((stamp, f));
+                }
+                *done = true;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `RawExchange` — one verbatim upstream exchange the Ollama lanes
+/// capture (AR-11; REQ-XC-104): the response head and body exactly as
+/// they arrived. No member ever carries the credential — it lived only
+/// inside `forward_raw`'s call frame.
+#[derive(Debug, Clone)]
+pub struct RawExchange {
+    /// The upstream status.
+    pub status: u16,
+    /// The upstream response headers (lowercased names).
+    pub headers: std::collections::BTreeMap<String, String>,
+    /// The raw body bytes verbatim (JSON document or SSE stream).
+    pub body: Vec<u8>,
+    /// `(arrival_ms, byte_len)` per body chunk in `body`'s order —
+    /// `raw_frames` stamps frames with their chunk's recorded arrival.
+    pub chunk_stamps: Vec<(u64, usize)>,
 }
 
 impl Transport for HttpModelTransport {

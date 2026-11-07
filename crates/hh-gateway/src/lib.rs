@@ -84,8 +84,9 @@ pub use dialect::{
     UsageMapping, UsageMappingDefault, WireDialect,
 };
 pub use dialects::{
-    anthropic_messages, anthropic_messages_doc, openai, openai_compatible, openai_compatible_doc,
-    openai_doc, ANTHROPIC_MESSAGES_ID, OPENAI_COMPATIBLE_ID, OPENAI_ID,
+    anthropic_messages, anthropic_messages_doc, ollama_chat, ollama_chat_doc, ollama_messages,
+    ollama_messages_doc, openai, openai_compatible, openai_compatible_doc, openai_doc,
+    ANTHROPIC_MESSAGES_ID, OLLAMA_CHAT_ID, OLLAMA_MESSAGES_ID, OPENAI_COMPATIBLE_ID, OPENAI_ID,
 };
 pub use errors::{CodecError, GatewayError};
 pub use gateway::{
@@ -96,7 +97,7 @@ pub use grammar::{
     decode_frame, DecodeState, Delta, GrammarViolation, ModelEvent, ModelEventKind, Timing,
     UsageArrivalKind,
 };
-pub use http_transport::{family_of, Family, HttpModelTransport};
+pub use http_transport::{family_of, Family, HttpModelTransport, RawExchange};
 pub use layout::{
     check_layout, check_marker_carriers, check_prefix_affecting, check_purpose_isolation,
     check_static_stability, check_tool_order_prefix, check_transcript_append, is_volatile_kind,

@@ -49,6 +49,14 @@ pub const OPENAI_ID: &str = "openai@1";
 /// (`anthropic-messages@1`).
 pub const ANTHROPIC_MESSAGES_ID: &str = "anthropic-messages@1";
 
+/// `OLLAMA_CHAT_DIALECT_ID` — the Ollama Cloud OpenAI-chat upstream lane
+/// (`ollama-chat@1`; AR-11; REQ-XC-104).
+pub const OLLAMA_CHAT_ID: &str = "ollama-chat@1";
+
+/// `OLLAMA_MESSAGES_DIALECT_ID` — the Ollama Cloud Anthropic-Messages
+/// upstream lane (`ollama-messages@1`; AR-11; REQ-XC-104).
+pub const OLLAMA_MESSAGES_ID: &str = "ollama-messages@1";
+
 /// The debt record a family's class-mapping rules carry (ADR-0119 d.5 —
 /// every `error_*_to_class`/`retry_class_override`/`metadata_frame` rule
 /// ships its complete debt row: assumption, counter-case, pinned evidence,
@@ -669,4 +677,124 @@ pub fn anthropic_messages() -> WireDialect {
 /// `anthropic_messages_doc()` — the `anthropic-messages@1` document body.
 pub fn anthropic_messages_doc() -> hharness_wire::json::Json {
     anthropic_messages().to_json()
+}
+
+/// `ollama_chat()` — the `ollama-chat@1` dialect document: Ollama Cloud's
+/// OpenAI chat-completions upstream lane (`ollama.com/v1/chat/completions`;
+/// AR-11; REQ-XC-104). It IS the `openai-compatible@1` wire grammar — one
+/// family, one spelling (CC1) — with the lane's own hosting facts:
+///
+/// - `auth_kinds: [bearer]` — every Ollama surface is Bearer-only
+///   (experiments-spec §4.1); `none` is not admissible — a credential-less
+///   bind is `CredentialUnavailable`, and the raw-forward leg derives the
+///   `Authorization: Bearer` header from this member, never the family.
+/// - `plan_schema` drops `tool_choice` (§4.1: unsupported upstream —
+///   admitting it would be a lie the lane must refuse) and adds
+///   `reasoning_effort` (the §4.2 effort pin).
+/// - `cache_semantics: uncached` — Ollama caching is automatic and
+///   uncontrollable; no explicit cache contract, and this surface does
+///   not document a per-call cached count (§4.1: only the native API
+///   does), so `cache_state_visible` stays `false`.
+/// - `count_tokens: none` — no counting primitive upstream.
+pub fn ollama_chat() -> WireDialect {
+    let mut d = openai_compatible();
+    d.dialect_id = "ollama-chat".to_string();
+    d.plan_schema = PlanSchema {
+        allowed_keys: [
+            "temperature",
+            "top_p",
+            "max_tokens",
+            "seed",
+            "stream_options",
+            "reasoning_effort",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect(),
+        required_keys: vec![],
+    };
+    d.auth_kinds = vec![AuthKind::Bearer];
+    d.prefix_affecting_params = [
+        "model",
+        "messages",
+        "tools",
+        "stream",
+        "temperature",
+        "seed",
+        "reasoning_effort",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    d
+}
+
+/// `ollama_chat_doc()` — the `ollama-chat@1` document body.
+pub fn ollama_chat_doc() -> hharness_wire::json::Json {
+    ollama_chat().to_json()
+}
+
+/// `ollama_messages()` — the `ollama-messages@1` dialect document: Ollama
+/// Cloud's Anthropic-Messages upstream lane (`ollama.com/v1/messages`;
+/// AR-11; REQ-XC-104). It IS the `anthropic-messages@1` wire grammar —
+/// one family, one spelling (CC1) — with the lane's own hosting facts:
+///
+/// - `auth_kinds: [bearer]` — the Anthropic-compatible endpoint rejects
+///   `x-api-key` alone (§4.1): the auth header is `Authorization: Bearer`
+///   on the Messages surface too, derived from this member. The
+///   downstream-facing `anthropic-version` header is a *request* header
+///   the caller keeps under the §4.2 allowlist, not a dialect member.
+/// - `plan_schema` drops `tool_choice`, `metadata` and the
+///   `cache_control`-family keys (§4.1: unsupported upstream) and admits
+///   `output_config` (the §4.2 effort pin) and `budget_tokens` (accepted
+///   but not enforced — admitted, never claimed enforced).
+/// - `cache_semantics: uncached` + `cache_state_visible: false` — no
+///   explicit breakpoints on this surface, and the provider-reported
+///   cached count is documented on the native API only.
+/// - `count_tokens: none` — the proxy answers `count_tokens` itself with
+///   a typed refusal (§4.2); the lane has no counting primitive.
+pub fn ollama_messages() -> WireDialect {
+    let mut d = anthropic_messages();
+    d.dialect_id = "ollama-messages".to_string();
+    d.plan_schema = PlanSchema {
+        allowed_keys: [
+            "max_tokens",
+            "temperature",
+            "top_p",
+            "top_k",
+            "stop_sequences",
+            "thinking",
+            "output_config",
+            "budget_tokens",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect(),
+        required_keys: vec!["max_tokens".to_string()],
+    };
+    d.auth_kinds = vec![AuthKind::Bearer];
+    d.cache_semantics = CacheSemantics::Uncached;
+    d.cache_state_visible = false;
+    d.count_tokens = None;
+    d.prefix_affecting_params = [
+        "model",
+        "messages",
+        "max_tokens",
+        "temperature",
+        "top_p",
+        "top_k",
+        "stop_sequences",
+        "thinking",
+        "output_config",
+        "stream",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    d
+}
+
+/// `ollama_messages_doc()` — the `ollama-messages@1` document body.
+pub fn ollama_messages_doc() -> hharness_wire::json::Json {
+    ollama_messages().to_json()
 }
