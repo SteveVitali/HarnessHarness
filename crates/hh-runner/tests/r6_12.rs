@@ -273,22 +273,32 @@ fn fold_recompute_equals_committed_packet_and_no_archive_bytes_in_git() {
         Some(20)
     );
     assert_eq!(packet.get("calls").and_then(Json::as_int), Some(2));
-    // `git ls-files` holds no archive bytes: no WAL segment, no blob
-    // pool file, no condensed transcript is committed.
+    // `git ls-files` (repo root) holds no experiment archive bytes:
+    // no condensed transcript, no archive-store WAL or blob-pool file.
+    // The committed `hh-xcheck` ledger corpus is a declared fixture
+    // (cross-implementation corpus), not an experiment archive —
+    // excluded explicitly so the check stays honest.
     let out = Command::new("git")
-        .args(["ls-files"])
+        .args(["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--show-toplevel"])
+        .output()
+        .expect("git rev-parse");
+    let root = String::from_utf8(out.stdout).unwrap().trim().to_string();
+    let out = Command::new("git")
+        .args(["-C", &root, "ls-files"])
         .output()
         .expect("git ls-files");
     let files = String::from_utf8(out.stdout).unwrap();
     for line in files.lines() {
-        assert!(!line.ends_with("events.wal"), "archive byte in git: {line}");
-        assert!(!line.contains("/blobs/"), "archive byte in git: {line}");
         assert!(
             !line.ends_with("transcript.jsonl"),
             "archive byte in git: {line}"
         );
-        let seg = format!("store/{}", line);
-        let _ = seg;
+        if line.ends_with("events.wal") || line.contains("/blobs/") {
+            assert!(
+                line.starts_with("crates/hh-xcheck/fixtures/"),
+                "archive byte in git: {line}"
+            );
+        }
     }
     // A segment file entry's sha256 is over the archived bytes.
     let e = file_entry("store_segment", "w2/store/seg.wal", b"wal-bytes").unwrap();
