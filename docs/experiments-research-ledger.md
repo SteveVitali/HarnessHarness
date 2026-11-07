@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        H1
-lastCompleted:   D3
+nextUnit:        O1
+lastCompleted:   H1
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-07T00:17:16Z
+updatedAt:       2026-11-07T00:40:39Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -127,13 +127,13 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
-| H1 | **Program plan and synthesis readiness.** Phase ordering and dependency DAG, every gate (provisioning, spend, parity margin, publication) and HUMAN row, budget envelopes, the amendment/ADR register (incl. the TB 2.0→1.0 substitution never recorded, `evaluate_costs`, claims graduation), sizing for decomposition, cross-note conflict resolution. Depends on all other rows. Reqs `REQ-XH-001…`. | A | in-progress | → `design/40_program-plan.md` |
+| H1 | **Program plan and synthesis readiness.** Phase ordering and dependency DAG, every gate (provisioning, spend, parity margin, publication) and HUMAN row, budget envelopes, the amendment/ADR register (incl. the TB 2.0→1.0 substitution never recorded, `evaluate_costs`, claims graduation), sizing for decomposition, cross-note conflict resolution. Depends on all other rows. Reqs `REQ-XH-001…`. | A | done | [40_program-plan.md](design/40_program-plan.md) |
 
 ## O. Spec synthesis & review process
 
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
-| O1 | Synthesize `docs/experiments-spec.md` from the accepted notes (front matter, §0 conventions with `req_id_pattern: REQ-X[A-H]-[0-9]+`, decision register, body by phase, appendices A–F incl. outline-superset proof). | S | open | — |
+| O1 | Synthesize `docs/experiments-spec.md` from the accepted notes (front matter, §0 conventions with `req_id_pattern: REQ-X[A-H]-[0-9]+`, decision register, body by phase, appendices A–F incl. outline-superset proof). | S | in-progress | — |
 | O2 | Fresh-context adversarial review; dispositions in Appendix E (`accept/adapt/rebut/defer`). | S | open | — |
 | O3 | Operator ratification; freeze this ledger; write `docs/experiments-decomposition-prompt.md`. | S | open | — |
 | O4 | (Downstream, not a synthesis unit) `decompose-spec mode=extend` appending Round 6 after row 251, on top of `main` once R5.59 has landed (Q-X3/Q-X18). | S | open | — |
@@ -193,6 +193,8 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X42 | Terminus-2 HIR stage as a later gated block after mini-swe-agent's L1 gate passes, not the first Round-6 build (E2 recommends; ~3 more ADRs, ~6 tickets) | | H1, ratification |
 | Q-X43 | Results-site choices (F2 Q-F2-1…6): approve the "Instrument — calibrated readout" identity at a rendered mock-review gate after the first site ticket; system fonts only in v1 vs vendored OFL fonts via ADR; trajectories fetched in-site from the public HF dataset (F2 recommends; conflicts with F1's no-third-party-request pattern) vs dataset links only vs unpublished; Pages via SHA-pinned Actions + ADR vs `gh-pages` branch; default project URL vs custom domain; a `[results-site]` card in `docs/evidence.md` | | mock-review gate (identity); ratification (rest) |
 | Q-X44 | Phase-4 design choices (D3): compaction tested as "strategy under a declared window cap W" (W fixed by a token-count-only rule; never padding) or dropped from phase 4; reasoning effort as a factor (`low`/`max` around a `high` pin); explore on 11 cheapest-band dev tasks vs all 20; confirm 1 vs 2 configurations (+ combination?) on 37 vs 54 held-out tasks; fund an `edit_file` capability for the tool-surface level; start exploration after the phase-3 L2 verdict (D3 recommends) vs right after L1; a later cost-reduction claim track (needs a new admitted method) | | ratification (D3 recommendations stand until then) |
+| Q-X45 | Round structure (H1 Q-H1-1): Round 6 ≈ 92–102 rows (all funded or $0 work — bootstrap/guard extension, phase 1, site shell, infrastructure, TB 2.1 oracle re-proof, ≤$60 pilot, mini-swe-agent HIR gap closure, L1 gate, quotes for every paid continuation); Round 7 ≈ 45–55 rows (tranche 1, L2 parity, phase-4 sweeps — decomposed only after their gates); Round 8 ≈ 35–40 rows (Terminus-2); tail=full per round | | ratification |
+| Q-X46 | Schedule vs the Ollama credit reset 2026-11-22T16:30:34Z (H1 Q-H1-2): plan to reach the pilot before the reset, or accept the post-reset allowance — a planning choice only; authorizes no spend | | ratification |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -213,3 +215,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:58:49Z — Wave-4 assignments: D3 → `design/37_sweep-method.md` (inputs design/35, 36, 38; research/25–28); F2 → `design/39_results-site.md` (inputs research/29, design/35, 30, 33; coordinator visual-pass notes passed in the assignment).
 - 2026-11-07T00:15:06Z — Accepted F2 (`design/39`, identity "Instrument — the calibrated readout"; stdlib-Python generator under `scripts/site/` → drift-checked `docs/results/site-data/`; shared `scripts/claims-lexicon.json`; claims checker 14 legs / 21 mutations; separate gated `pages.yml`; contrast script passes WCAG 4.5:1 both themes; scatter identifies harnesses by monogram + direct label because the 8-colour palette fails ΔE in scatters). Beauty explicitly unestablished until a rendered mock — carried as a mock-review gate. New pending Q-X43.
 - 2026-11-07T00:17:16Z — Accepted D3 (`design/37`, 16 findings, REQ-XD-201…225; 9 levels over 7 factors; exploration 550 trials ≈ $28–187; confirmation 555 trials ≈ $28–189; simulated false-confirmation ≤ 2.6%, power for a true +5 pt gain 0.13–0.26 — "not confirmed" is the likely honest outcome). All A–F rows done. New pending Q-X44. Wave-5 assignment: H1 → `design/40_program-plan.md` (inputs: every accepted note's closing sections + targeted bodies via a coordinator digest; resolves cross-note conflicts; ADR/amendment register; gates; sizing).
+- 2026-11-07T00:40:39Z — Accepted H1 (`design/40`, 12 findings, 34 cross-note rulings, ADR/amendment register, gates/HUMAN rows, budget envelope, ~180–195-row three-round plan). **Correction to the coordinator's earlier spot-check (entry of the A2 acceptance):** the coordinator's 17/15 count wrongly included `hf-model-inference`, whose two first slots are dispositioned `inconclusive{environment:cell_network_isolated:…}` while still carrying an `unresolved` receipt verdict; counting that receipt relabels an inconclusive slot. A2's 16/14 stands (verified by the coordinator from the packet at 2026-11-07T00:40:39Z). New pending Q-X45, Q-X46. All research/design rows done; O1 synthesis dispatched to a fresh-context synthesizer (inputs: brief, ledger, outline trace, H1 note in full, the coordinator digest of all notes, targeted note reads; output `docs/experiments-spec.md` + outline-trace mapping).
