@@ -217,3 +217,5 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0425](ADR-0425-r6.7-pricing-rate-unit.md) | The integer-µ$ pricing unit — `rate_unit` on the pricing-table carrier, one rounding rule, `NoPrice{unrepresentable_rate}` (AR-09) | R6.7 (manifest row 260; experiments supplement §10.5 AR-09) | Accepted |
 | [ADR-0426](ADR-0426-r6.7-ollama-lane-raw-forward.md) | The Ollama upstream lane — same-dialect dialect documents, auth from `auth_kinds`, the raw-forward leg (AR-11) | R6.7 (manifest row 260; experiments supplement §10.5 AR-11) | Accepted |
 | [ADR-0427](ADR-0427-r6.8-runner-placement.md) | The committed runner is a workspace crate below hh-embed (AR-04) | R6.8 (manifest 261) | Accepted |
+| [ADR-0428](ADR-0428-r6.9-cell-spec.md) | The TB 2.1 cell spec — image WORKDIR, cpu/memory limits, kernel-mediated copy-in (AR-06) | R6.9 (manifest 262) | Accepted |
+| [ADR-0429](ADR-0429-r6.9-task-deadlines.md) | Task-declared deadlines above 900 s on a separate admitted path (AR-07) | R6.9 (manifest 262) | Accepted |

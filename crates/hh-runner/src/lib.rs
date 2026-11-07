@@ -23,9 +23,12 @@
 
 pub(crate) mod json_ext;
 
+pub mod cell;
 pub mod coordinator;
 pub mod disposition;
 pub mod facts;
 pub mod packet;
+pub mod probe;
 pub mod slot_record;
+pub mod verdict;
 pub mod worker;

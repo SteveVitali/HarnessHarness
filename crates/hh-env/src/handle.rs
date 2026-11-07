@@ -690,6 +690,9 @@ pub struct EnvHandle {
     /// The applied phase (`setup | agent | verify`) — `set_phase`
     /// records it; absent ⇒ the provision-time phase (`agent`).
     pub phase: Option<String>,
+    /// The admitted cell spec (AR-06) carried into the helper spawn
+    /// argv; `None` keeps the pre-admission argv byte-identical.
+    pub cell_spec: Option<crate::cell_spec::CellSpec>,
     /// The provider-side handle a `remote_*`/`provider_hosted` adapter
     /// returned at provision (S4.13) — `None` for local classes. The
     /// adapter's suspend/resume/teardown/meters hooks key off it.
