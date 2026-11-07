@@ -63,6 +63,7 @@ entries under the applicable record protocol.
 | [inspect-a-run.md](inspect-a-run.md) | living | The annotated run trace: six excerpts, event/cause coordinates, prerequisites/recovery, the bounded cap-edit recipe |
 | [results/README.md](results/README.md) | living | Index of dated phase records |
 | [results/phase1-execution-surface-replay.md](results/phase1-execution-surface-replay.md) | historical | The phase-1 execution-surface replay record — internal record; dated addenda only |
+| [results/site-data/](results/site-data/) | generated | `hh-site-data/1` — the results site's generated data layer; regenerate with `python3 scripts/site/build.py --emit`, drift-check with `--check`; never hand-edit |
 | [experiments.md](experiments.md) | living | The four offline example families — jobs, versions/pins, costs, commands, checks, failure routes |
 | [brief.md](brief.md) | frozen | Evidence and adoption founding intent; later changes are dated addenda. Charter approved; see its dated addendum. |
 | [protocol-resource-review.md](protocol-resource-review.md) | living checkpoint summary | Accepted research/design recommendations and Q-3–Q-6 review; decisions are recorded in the research ledger |

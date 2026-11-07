@@ -1,9 +1,14 @@
-# scripts/site — results-site layer (R6.4 / F2-a)
+# scripts/site — results-site layer (R6.4 / F2-a; R6.5 / F2-b+F2-e)
 
 The "Instrument — the calibrated readout" design system and static shell
-(spec §9.1/§9.2; design note `39_results-site` §Design overview, F5, F13).
-Python 3 standard library only; no network; nothing under `crates/` reads
-this tree.
+(spec §9.1/§9.2; design note `39_results-site` §Design overview, F5, F13),
+plus the R6.5 generator: it reads only the packets named in
+`config/inputs.json`, projects them into the generated, committed
+`hh-site-data/1` layer at `docs/results/site-data/` (integer units,
+per-value provenance, derivations D-1…D-8 only), and renders the phase-1
+and always-present pages through the same shell/components (one
+renderer — CC1). Python 3 standard library only (declared floor 3.9);
+no network; nothing under `crates/` reads this tree.
 
 ## Layout
 
@@ -28,12 +33,17 @@ this tree.
 ## Commands
 
 ```sh
+python3 scripts/site/build.py --emit          # write docs/results/site-data/ (hh-site-data/1)
+python3 scripts/site/build.py --check         # drift leg: rebuild byte-equals committed
+python3 scripts/site/build.py --out <dir>     # render the phase-1 + always-present pages
 python3 scripts/site/build_mock.py --out <dir>                  # internal mock
 python3 scripts/site/build_mock.py --out <dir> --profile all-absent \
     --manifest scripts/site/golden/all-absent.manifest          # regen golden
 python3 scripts/site/tests/test_tokens.py                       # ratio test
 python3 scripts/site/tests/test_tokens.py --selftest            # mutation (m)
 python3 scripts/site/tests/test_site.py                         # component battery
+python3 scripts/site/tests/test_sitedata.py                     # generator + contract battery
+python3 scripts/site/tests/test_sitepages.py                    # page-level battery
 ```
 
 Two builds of one profile produce an identical tree sha256. The output is
