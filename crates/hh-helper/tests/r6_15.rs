@@ -146,7 +146,10 @@ fn cell_relay_is_statically_linked() {
     }
     let f = Command::new("file").arg(&artifact).output().unwrap();
     let out = String::from_utf8_lossy(&f.stdout);
-    assert!(out.contains("statically linked"), "not static: {out}");
+    assert!(
+        out.contains("statically linked") || out.contains("static-pie linked"),
+        "not static: {out}"
+    );
     let r = Command::new("readelf")
         .args(["-d", artifact.to_str().unwrap()])
         .output()
