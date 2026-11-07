@@ -204,17 +204,20 @@ def validate_skeleton(fragment):
     return True
 
 
-def absent_block(reason, schema, gate, bars=None):
+def absent_block(reason, schema, gate, bars=None, sprite=GLYPH_SPRITE):
     """The designed absent state: typed reason, awaited schema, gate id,
-    numberless skeleton (design/39 F5)."""
+    numberless skeleton (design/39 F5). sprite is the depth-aware glyph
+    sprite path (nested pages pass their ../ prefix — the links leg
+    verifies the use href resolves)."""
     body = ('<div class="absent">%s'
             '<div class="absent-meta">'
             '<span class="kv">reason<b>%s</b></span>'
             '<span class="kv">awaits schema<b>%s</b></span>'
             '<span class="kv">gate<b>%s</b></span>'
             '</div>%s</div>'
-            % (stamp("absent", "Not yet available") if reason == "not_yet_available"
-               else stamp("withheld", reason),
+            % (stamp("absent", "Not yet available", sprite)
+               if reason == "not_yet_available"
+               else stamp("withheld", reason, sprite),
                ESC(reason), ESC(schema), ESC(gate), skeleton(bars or ())))
     return body
 

@@ -114,6 +114,7 @@ jobs:
           bash scripts/ci/test-check-contributing.sh
           bash scripts/ci/test-check-position.sh
           bash scripts/ci/test-check-trace.sh
+          bash scripts/ci/test-check-site.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -185,6 +186,15 @@ jobs:
         run: |
           bash scripts/check-trace.sh
           bash scripts/check-trace.sh --head
+
+      # ci-mode: both — reads committed packets under docs/build/reports and
+      # the generated docs/results/site-data layer; a docs-only head that
+      # drifts a packet, a site-data file or a claim must not take the fast
+      # path green.
+      - name: Results site build + claims/provenance/a11y check
+        run: |
+          bash scripts/check-site.sh
+          bash scripts/check-site.sh --head
 
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain

@@ -64,6 +64,7 @@ fi
 export CHECK_POSITION_LABEL="$LABEL"
 
 python3 - "$ROOT" <<'PY'
+import json
 import os
 import re
 import sys
@@ -135,13 +136,21 @@ BOUNDS = [
     "The ANSI-strip and declared-workdir repairs were made in scratch drivers;",
     "The drivers that produced these packets are preserved verbatim as unmaintained provenance; the packets are recomputable records-in from the committed raw set, not re-executable from the repository.",
 ]
+# REQ-XF-134 / C-25 — the one banned-phrase source (CC1): BANNED and
+# RECORD_BANNED live in scripts/claims-lexicon.json verbatim, shared
+# with check-site.sh. A missing or malformed lexicon fails closed.
+LEXICON_REL = "scripts/claims-lexicon.json"
+try:
+    _lex = json.loads(read_rel(LEXICON_REL))
+    BANNED = list(_lex["banned"])
+    RECORD_BANNED = list(_lex["record_banned"])
+except (OSError, KeyError, TypeError, ValueError) as e:
+    print(f"check-position: FAIL [lexicon] cannot read {LEXICON_REL}: {e}",
+          file=sys.stderr)
+    sys.exit(1)
+
 # REQ-XA-120 — record-surface bans, scanned case-insensitive and
 # word-bounded over the record, evidence.md and the spine.
-RECORD_BANNED = [
-    "null-equivalent", "parity verified", "verified for hh",
-    "proof of correctness", "proof-of-correctness",
-    "equivalence verified", "efficacy result shows",
-]
 
 # ── canon from the frozen supplement (never mirrored by hand) ─────────
 spec_rel = "docs/evidence-and-adoption-spec.md"
@@ -387,13 +396,6 @@ if ev:
             fail("record", f"record-banned phrase {b!r} on the record surfaces")
 
 # ── honesty: no favorable-treatment or scientific-claim language ──────
-BANNED = [
-    "proven", "guarantee", "guaranteed", "production-ready",
-    "production ready", "state-of-the-art", "outperform",
-    "significant improvement", "statistically significant",
-    "users demand", "users love", "widely adopted", "market-leading",
-    "best-in-class", "superior",
-]
 if ev:
     hay = ev + "\n" + spine + "\n" + record
     low = hay.lower()

@@ -91,11 +91,14 @@ def _script_hash():
         hashlib.sha256(THEME_INIT.encode()).digest()).decode()
 
 
-def shell(title, path, body, labels, section="", calib=None):
+def shell(title, path, body, labels, section="", calib=None,
+          noindex=False):
     """Base template: head (theme init + hashed CSP + stylesheet), header
     (glyph + wordmark + nav + theme toggle), label banner, main, footer
     with the calibration block. calib=None renders the mock's fields —
-    R6.5's generator passes the REQ-XF-139 packet values."""
+    R6.5's generator passes the REQ-XF-139 packet values. noindex adds
+    the robots meta trial pages carry (REQ-XF-133); default False keeps
+    mock output byte-identical."""
     p = _prefix(path)
     nav = "".join(
         '<a href="%s%s"%s>%s</a>'
@@ -118,6 +121,7 @@ def shell(title, path, body, labels, section="", calib=None):
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<title>%s · HarnessHarness results</title>"
             "<meta name=\"description\" content=\"%s\">"
+            "%s"
             "<meta http-equiv=\"Content-Security-Policy\" content=\"%s\">"
             "<meta property=\"og:title\" content=\"%s\">"
             "<meta property=\"og:image\" content=\"%sassets/og.png\">"
@@ -144,7 +148,9 @@ def shell(title, path, body, labels, section="", calib=None):
             "<a href=\"%sdata/\">data &amp; recompute</a>"
             "<a href=\"%sabout/\">about</a>"
             "</div></footer></body></html>"
-            % (ESC(title), ESC(title), CSP % _script_hash(), ESC(title),
+            % (ESC(title), ESC(title),
+               '<meta name="robots" content="noindex">' if noindex else "",
+               CSP % _script_hash(), ESC(title),
                p, THEME_INIT, p, p, p, p, p,
                p or "./", p, nav, banner, body, calib, p, p, p))
 
