@@ -1140,7 +1140,7 @@ fn stub_oop_live_transport_binds_and_sends() {
 fn usage_to_cost_pinned_pricing() {
     use hharness_budget::{price, ModelRef, PricingRow, PricingTable, TokenDecomposition};
     // The pinned table — USD micro-units per token (micro = 1e-6 USD;
-    // e.g. 1000 micro/token ⇒ $1/1M).
+    // e.g. 1000 micro/token ⇒ $1/1k tokens, i.e. $1000/1M).
     let table = PricingTable {
         table_id: "test/live-pricing".into(),
         version: "2026-10-21".into(),

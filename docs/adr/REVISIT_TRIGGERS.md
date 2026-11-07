@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_208 ADRs: 156 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_209 ADRs: 157 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -192,6 +192,7 @@ _208 ADRs: 156 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0422 | - R5.58's re-run produces a verdict (or a different inconclusive shape) under the admitted bound: record it verbatim on the rows; this ADR's machinery claim stands independent of the outcome. - A second task needs a relaxed verifier bound: the admission pattern generalizes only through a new recorded admission with its own named-task scope, basis and envelope check. - The spec surface moves `max_test_timeout_sec` off `ext` or the §9.2 envelope changes: re-derive `enforced_decl_sec`'s member read and the cap const. - The run ledger's stated `60` gets a durable correction leg (e.g. a driver that enforced it): the packet's contrast section is the append-only venue — the enforced-before evidence here is not rewritten. |
 | ADR-0423 | A phase-1b tranche or any later pass that executes a different TB edition (e.g. TB 2.1 under the §3.8 re-proof) must bind its edition, content digest and R in a pre-registration before data, and cite this ADR as the precedent for edition corrections. |
 | ADR-0424 | Any change to the Pages surface — a new action version, an added deploy step, a widened permission, a changed trigger, or a second publication record — re-arms this ADR: update `check-pages-workflow.sh`, the `hhsite/publication.py` validator and this record's pinned SHAs in the same commit. |
+| ADR-0425 | When a durable `PricingTable` JSON codec lands (bundle snapshot), `rate_unit` must be a required member of it; when a provider rate below $0.001/M appears, add `micro_per_1m_tokens` by amendment; if a paid study ever needs the router's `DeclaredPricing` path for real spend, re-derive it from `PricingTable` rather than maintaining the second table. |
 
 ## Fired-and-answered triggers (BL-48)
 

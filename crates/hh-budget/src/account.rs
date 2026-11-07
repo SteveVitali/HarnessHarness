@@ -37,7 +37,7 @@ use std::collections::BTreeMap;
 use crate::attribution::Attribution;
 use crate::errors::BudgetError;
 use crate::events::{self, ThresholdFire};
-use crate::pricing::{CostTotals, PricingTable, SpendSource};
+use crate::pricing::{CostTotals, PricingUnit, SpendSource};
 use crate::quantity::{ResourceQuantity, ResourceVector};
 use crate::spec::{BudgetMode, BudgetNode, BudgetScope, BudgetSpec};
 use crate::tree::{BudgetTree, Exceeded};
@@ -937,13 +937,13 @@ impl<'a> Account<'a> {
     /// and `coverage = 1`. Idempotent on `(source_event, spend)` — a replayed
     /// derivation is a no-op.
     #[allow(clippy::too_many_arguments)]
-    pub fn attribute_spend(
+    pub fn attribute_spend<T: PricingUnit + ?Sized>(
         &mut self,
         lease: &Lease,
         source: EventRef,
         decomp: &TokenDecomposition,
         model_ref: &crate::attribution::ModelRef,
-        table: &PricingTable,
+        table: &T,
         pin: Option<String>,
         source_kind: &SpendSource,
         coverage_ppm: i64,
