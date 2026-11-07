@@ -250,7 +250,7 @@ fn ac3_job_config_golden_and_upload_refusal() {
 }
 
 fn fixture_job(pin: &HarborPin) -> (HarborIngest, PathBuf) {
-    let root = tmp("job");
+    let root = tmp("job-fixture");
     let job = root.join("w1-e0");
     let trial = job.join("hello-world__abc1234");
     std::fs::create_dir_all(trial.join("verifier")).unwrap();
@@ -298,7 +298,7 @@ fn fixture_job(pin: &HarborPin) -> (HarborIngest, PathBuf) {
 #[test]
 fn ac3_readonly_ingest_trial_members() {
     let p = pin();
-    let root = tmp("job");
+    let root = tmp("job-ac3");
     let job = root.join("w1-e0");
     let trial = job.join("hello-world__abc1234");
     std::fs::create_dir_all(trial.join("verifier")).unwrap();
