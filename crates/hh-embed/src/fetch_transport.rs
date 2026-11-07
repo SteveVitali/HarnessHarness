@@ -295,6 +295,11 @@ impl FetchLeg<'_> {
                 // a pending wire.
                 Err("egress_asked:fetch_never_asks".to_string())
             }
+            MediatedOutcome::Tunneled { .. } => {
+                // Fetch issues plain GETs — a tunnel outcome is
+                // unreachable here; surface it as a typed refusal.
+                Err("egress_tunneled:fetch_never_tunnels".to_string())
+            }
         }
     }
 }

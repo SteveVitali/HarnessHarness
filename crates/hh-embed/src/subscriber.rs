@@ -300,6 +300,14 @@ impl ExportSubscriber {
                     detail: format!("credential refused: {code:?}"),
                 });
             }
+            MediatedOutcome::Tunneled { decided_ref, .. } => {
+                // The subscriber issues plain POSTs — a tunnel outcome
+                // is unreachable here; refuse rather than claim.
+                return Ok(PollOutcome::Refused {
+                    decided_ref,
+                    detail: "egress tunneled: subscriber never tunnels".to_string(),
+                });
+            }
             MediatedOutcome::Asked {
                 decided_ref,
                 permission_id,
