@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- the double frame: two concentric rounded squares (24/16 units,
+       2-unit strokes) crossed by one needle stroke — a harness inside a
+       harness (design/39 §Wordmark). Frames are ink, the needle is the
+       needle colour, in both themes. -->
+  <style>
+    rect.frame { fill: none; stroke: #111A22; stroke-width: 2; }
+    rect.needle { fill: #C2410C; }
+    @media (prefers-color-scheme: dark) {
+      rect.frame { stroke: #E8ECEA; }
+      rect.needle { fill: #FF7A45; }
+    }
+  </style>
+  <rect class="frame" x="4" y="4" width="24" height="24" rx="4"/>
+  <rect class="frame" x="8" y="8" width="16" height="16" rx="3"/>
+  <rect class="needle" x="15" y="2" width="2" height="20"/>
+</svg>

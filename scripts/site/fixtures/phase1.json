@@ -1,0 +1,42 @@
+{
+  "schema": "hh-site-fixture/1",
+  "label": "fixture",
+  "note": "Phase-1 fixture for the R6.4 mock. Values are real packet fields copied by hand from committed packets (design/39 F15); the fixture label is mandatory and the public profile refuses these values (REQ-XF-142). Not a site-data input.",
+  "tiles": [
+    {
+      "title": "Task pairs agree — parity tranche 3",
+      "value": "30 / 30",
+      "detail": "tb oracle vs a reference podman runner — not HH cells · R=1 · descriptive, no margin registered",
+      "stamp": {"kind": "verified", "text": "verified"},
+      "receipt": {"packet": "2026-11-05-parity-tranche-3.json", "schema": "hh-parity-tranche-report/1", "sha256": "19789c79…6a0c45", "date": "2026-11-05", "href": "data/"}
+    },
+    {
+      "title": "HH cells × tb — records-in cross-check",
+      "absent": true,
+      "reason": "not_yet_available",
+      "schema": "hh-surface-xcheck/1",
+      "gate": "F2-b"
+    },
+    {
+      "title": "Study report — round 5",
+      "value": "reported",
+      "detail": "disposition `reported` · efficacy 0 by construction (oracle arms) · s3/s4 met, s1 unmet",
+      "stamp": {"kind": "failed", "text": "unmet{s1_failed}"},
+      "receipt": {"packet": "2026-11-07-r6.3-study-report.json", "schema": "hh-study-report/1", "sha256": "485dbc55…", "date": "2026-11-07", "href": "data/"}
+    },
+    {
+      "title": "Spend — phase 1",
+      "value": "$0.00",
+      "detail": "inference $0.00 (structured) · compute unrecorded{pre_schema}",
+      "stamp": {"kind": "absent", "text": "unrecorded{pre_schema}"},
+      "receipt": {"packet": "(record)", "schema": "hh-compute-cost/1", "sha256": "n/a{pre_schema}", "date": "—", "href": "spend/"}
+    }
+  ],
+  "specimen_receipt": {"packet": "fixture", "schema": "hh-site-fixture/1", "sha256": "fixture", "date": "—", "href": "data/"},
+  "specimen_harnesses": ["mini-swe-agent", "pi", "claude-code"],
+  "specimen_rows": [
+    ["descriptive fixture value", ["verified", "executed{resolved}"]],
+    ["descriptive fixture value", ["withheld", "withheld{dataset_private}"]],
+    ["descriptive fixture value", ["failed", "refused{UnresolvedCell}"]]
+  ]
+}

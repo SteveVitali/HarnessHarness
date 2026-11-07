@@ -1,0 +1,24 @@
+{
+  "schema": "hh-site-harnesses/1",
+  "note": "Hand-authored presentation config (design/39 §Wordmark): two-character monograms plus display names, unique per admitted harness — typographic marks, never vendor logos. Holds no measurement values. Slot order is admission-record order, never rank.",
+  "admission_order": [
+    "mini-swe-agent",
+    "terminus-2",
+    "claude-code",
+    "openhands",
+    "opencode",
+    "pi",
+    "hermes-agent",
+    "kimi-code"
+  ],
+  "harnesses": {
+    "mini-swe-agent": {"monogram": "MS", "name": "mini-swe-agent"},
+    "terminus-2": {"monogram": "T2", "name": "Terminus-2"},
+    "claude-code": {"monogram": "CC", "name": "Claude Code"},
+    "openhands": {"monogram": "OH", "name": "OpenHands"},
+    "opencode": {"monogram": "OC", "name": "OpenCode"},
+    "pi": {"monogram": "PI", "name": "Pi"},
+    "hermes-agent": {"monogram": "HA", "name": "Hermes Agent"},
+    "kimi-code": {"monogram": "KC", "name": "Kimi Code"}
+  }
+}
