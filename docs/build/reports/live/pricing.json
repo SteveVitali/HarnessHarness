@@ -45,7 +45,48 @@
       "prompt_per_1k_usd": 2e-05
     }
   },
+  "compute": {
+    "currency": "USD",
+    "note": "first-pass compute rows (AR-14 / R6.14) — integer micro-units per the row's unit; on-demand rates, no free tier, no sustained-use discount; every row carries its source URL and retrieved UTC; egress is an estimate line (GCE enforces no egress cap)",
+    "rows": [
+      {
+        "price_micros": 268040,
+        "retrieved": "2026-11-07",
+        "sku": "e2-standard-8",
+        "source": "https://cloud.google.com/compute/vm-instance-pricing#e2_standard_machine_types",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 137,
+        "retrieved": "2026-11-07",
+        "sku": "pd-balanced",
+        "source": "https://cloud.google.com/compute/disks-image-pricing#persistent-disk-pricing",
+        "unit": "gib_hour"
+      },
+      {
+        "price_micros": 5000,
+        "retrieved": "2026-11-07",
+        "sku": "ipv4",
+        "source": "https://cloud.google.com/vpc/network-pricing#ipaddress",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 120000,
+        "retrieved": "2026-11-07",
+        "sku": "egress",
+        "source": "https://cloud.google.com/vpc/network-pricing#egress",
+        "unit": "gib"
+      },
+      {
+        "price_micros": 44000,
+        "retrieved": "2026-11-07",
+        "sku": "nat_gateway",
+        "source": "https://cloud.google.com/nat/pricing",
+        "unit": "hour"
+      }
+    ]
+  },
   "retrieved": "2026-10-21",
-  "schema": "hh-live-pricing/1",
+  "schema": "hh-live-pricing/2",
   "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared"
 }

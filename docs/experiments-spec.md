@@ -863,6 +863,24 @@ Invariant (the acceptance property): at every durable ledger prefix, for every n
 | **REQ-XC-117** | Paid-phase study reports SHALL evaluate costs with one new evaluator, `evaluate_admitted_costs`, having a model leg (exposure 0, or admitted and within cap, with settlement status) and a compute leg (§3.10 predicates; round-5 packets fold as `compute: unrecorded{pre_schema}`, never $0), refusing unadmitted or over-cap spend (C-14). The four round-5 `$0` evaluators and their recomputes SHALL remain byte-unchanged. *Absorbs:* REQ-XB-218 (merged). | Leg truth-table tests; round-5 tests byte-unchanged; the R5.59 study refold is byte-stable. · `AC-4.5-2` · E |
 | **REQ-XC-118** | Every slot record SHALL carry `costs` in the `hh-slot-costs/1` shape of §4.5: the `model` member a recomputable fold over the phase proxy run filtered by `slot_id` (never a separate counter), the `compute` member a reference owned by §3.10, and `total` only when currencies match, with provenance never averaged. | Fold recompute test from the run ledger. · `AC-4.5-3` · E |
 
+**Supplement AR-16 (admitted 2026-11-07, R6.14):** the `hh-slot-costs/1`
+fold and the paid-study evaluator land in `hh-runner::slot_costs` and
+`hh-env::admitted_costs` respectively. The fold reads the phase proxy
+run's durable events filtered by `slot_id` (`mc:` holders resolved
+through the slot's slice `budget_id`); the `compute` member cites the
+window's `hh-compute-cost/1` (`ADR-0432`); `total` is emitted only when
+the model and compute currencies match, and provenance folds verbatim
+(`mixed` when the spend rows disagree — never averaged). Settlement
+status rides the phase spend ledger's `measurement.cost.reconciled`
+row, supplied records-in. `evaluate_admitted_costs` implements the F12
+truth table (`unadmitted_spend`/`over_cap` refuse; `settlement_pending`
+inconclusive; `settled_discrepant` refuses without an operator
+acceptance ref; `unreconcilable{reason}` inconclusive) and the §3.10
+compute predicates (missing record / non-empty post-state / estimate
+over authorization refuse; billing `pending|unavailable` inconclusive
+for publication); round-5 packets fold `compute: unrecorded{pre_schema}`,
+never $0, and the four round-5 `$0` evaluators stay byte-unchanged.
+
 ### 4.6 Participant identity and declared supports
 
 "Same participant" is declared at the catalog coordinate. `ModelSnapshotRecord{provider, model_id, snapshot_id = "tags:0c238824336d@2026-08-26T14:00:00Z", pinned = false, observed_fingerprint = None, provenance = reported}` carries it honestly.

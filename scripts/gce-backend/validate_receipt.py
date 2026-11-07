@@ -206,8 +206,20 @@ def check(path):
         if h["exceeded"] and not h["requires_dated_df_row"]:
             refuse(path, "h_r.exceeded-without-df-flag")
         cr = need(r, "cost_record", "receipt", path)
-        if not (isinstance(cr, str) and cr.startswith("n/a{") and cr.endswith("}")):
-            refuse(path, "cost_record")  # R6.14 owns hh-compute-cost/1
+        # R6.14 wired the §3.9 step-9 hook: the member carries the written
+        # hh-compute-cost/1 reference {path, sha256}; the n/a marker still
+        # validates for receipts cut before the hook was armed.
+        if isinstance(cr, str):
+            if not (cr.startswith("n/a{") and cr.endswith("}")):
+                refuse(path, "cost_record")
+        elif isinstance(cr, dict):
+            closed(cr, {"path", "sha256"}, "cost_record", path)
+            if not strv(need(cr, "path", "cost_record", path)):
+                refuse(path, "cost_record.path")
+            if not sha(need(cr, "sha256", "cost_record", path)):
+                refuse(path, "cost_record.sha256")
+        else:
+            refuse(path, "cost_record")
     elif "post_state" in r:
         refuse(path, "post_state:teardown-only")
 
