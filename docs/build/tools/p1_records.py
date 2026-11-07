@@ -64,7 +64,9 @@ EPOCH_ORDER = ["s4-confirm", "s4-egress", "s4-completion", "s4-repairs"]
 NON_RECORD = {"slot_ref", "task_id", "arm_id", "round", "first", "lane_id",
               "prior_disposition", "supplement_epoch", "disposition"}
 VERDICTS = {"resolved", "unresolved"}
-EMITTED_PACKETS = ["p1-surface-xcheck", "p1-estimators"]
+# (file stem, declared schema)
+EMITTED_PACKETS = [("p1-surface-xcheck", "hh-surface-xcheck/1"),
+                   ("p1-estimators", "hh-p1-estimators/1")]
 
 CHECKS = ["RC-1", "RC-2", "RC-3", "RC-4", "RC-5", "RC-6"]
 
@@ -461,7 +463,7 @@ def rc5(root):
 # ── RC-6: emission equality ────────────────────────────────────────────────
 def rc6(root, emit_dir):
     detail = {}
-    for stem in EMITTED_PACKETS:
+    for stem, schema in EMITTED_PACKETS:
         p = _emitted_path(root, stem)
         if p is None:
             raise Missing(f"emitted {stem} packet")
@@ -470,7 +472,7 @@ def rc6(root, emit_dir):
             obj = json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError as e:
             return "fail", f"{stem}: not parseable JSON ({e})"
-        if obj.get("schema") != f"hh-{stem}/1":
+        if obj.get("schema") != schema:
             return "fail", f"{stem}: schema member mismatch"
         if raw != (canon(obj) + "\n").encode("utf-8"):
             return "fail", f"{stem}: committed bytes are not canonical emission bytes"
@@ -481,7 +483,7 @@ def rc6(root, emit_dir):
             return "fail", f"{stem}: packet_id {pid} != recomputed {want}"
         detail[stem] = "canonical + self-consistent packet_id"
     if emit_dir:
-        for stem in EMITTED_PACKETS:
+        for stem, _schema in EMITTED_PACKETS:
             committed = read_bytes(root, _emitted_path(root, stem))
             fresh = None
             for fn in os.listdir(emit_dir):
