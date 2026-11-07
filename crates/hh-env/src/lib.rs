@@ -26,6 +26,7 @@ pub mod deadline;
 pub mod dispatch;
 pub mod driver;
 pub mod egress;
+pub mod egress_allowlist;
 pub mod egress_profile;
 pub mod errors;
 pub mod events;

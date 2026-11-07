@@ -51,6 +51,41 @@ impl CellSpec {
     }
 }
 
+/// `SocketMount{name, host_path}` — one declared unix-socket bind mount
+/// (AR-05): the host path mounts at the closed cell path
+/// `/run/hh/<name>.sock` (`name ∈ {model, egress}` — the closed relay
+/// pair set).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SocketMount {
+    /// `model | egress` (closed set — the pair's cell path derives).
+    pub name: String,
+    /// The host-side socket path.
+    pub host_path: String,
+}
+
+impl SocketMount {
+    /// The closed name → cell socket path map (one spelling home —
+    /// `hh-env::egress_allowlist` records the same map on the profile).
+    pub fn cell_path(&self) -> &'static str {
+        match self.name.as_str() {
+            "model" => "/run/hh/model.sock",
+            _ => "/run/hh/egress.sock",
+        }
+    }
+}
+
+/// `RelaySpec{host_bin, pairs}` — the `hh-cell-relay` declaration (AR-05;
+/// REQ-XB-129): the statically linked host binary bind-mounted read-only
+/// at `/hh/bin/hh-cell-relay` and run as the cell's main process with
+/// `--pair <name>=<port>=<cell_sock>` per declared pair.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RelaySpec {
+    /// The host path of the statically linked relay binary.
+    pub host_bin: String,
+    /// `(name, port)` pairs — `name` derives the cell socket path.
+    pub pairs: Vec<(String, u16)>,
+}
+
 /// `PodmanBackend` — the container lifecycle for one environment.
 #[derive(Debug, Clone)]
 pub struct PodmanBackend {
@@ -68,6 +103,12 @@ pub struct PodmanBackend {
     /// The admitted cell spec (AR-06) — absent members keep the
     /// pre-admission argv byte-identical.
     pub cell: CellSpec,
+    /// The declared unix-socket bind mounts (AR-05) — absent keeps the
+    /// pre-admission argv byte-identical.
+    pub mounts: Vec<SocketMount>,
+    /// The `hh-cell-relay` main process (AR-05) — `None` keeps the
+    /// `sleep infinity` tail byte-identical.
+    pub relay: Option<RelaySpec>,
 }
 
 /// A backend failure — verbatim stderr + exit status.
@@ -159,13 +200,37 @@ impl PodmanBackend {
             args.push("--memory".to_string());
             args.push(format!("{m}m"));
         }
+        // AR-05 — the declared unix-socket bind mounts and the
+        // statically linked `hh-cell-relay` main process (`--init` stays:
+        // catatonit reaps and forwards a PID-1 signal to the relay, so
+        // the REQ-XB-129 signal fact reads the same).
+        for m in &self.mounts {
+            args.push("-v".to_string());
+            args.push(format!("{}:{}", m.host_path, m.cell_path()));
+        }
+        if let Some(r) = &self.relay {
+            args.push("-v".to_string());
+            args.push(format!("{}:/hh/bin/hh-cell-relay:ro", r.host_bin));
+        }
         args.extend(self.extra_args.iter().cloned());
-        args.extend([
-            self.image.clone(),
-            // A running-but-idle container: exec workloads attach to it.
-            "sleep".to_string(),
-            "infinity".to_string(),
-        ]);
+        args.push(self.image.clone());
+        match &self.relay {
+            Some(r) => {
+                args.push("/hh/bin/hh-cell-relay".to_string());
+                for (name, port) in &r.pairs {
+                    args.push("--pair".to_string());
+                    let sock = SocketMount {
+                        name: name.clone(),
+                        host_path: String::new(),
+                    };
+                    args.push(format!("{name}={port}={}", sock.cell_path()));
+                }
+            }
+            None => {
+                // A running-but-idle container: exec workloads attach to it.
+                args.extend(["sleep".to_string(), "infinity".to_string()]);
+            }
+        }
         args
     }
 
@@ -430,6 +495,8 @@ mod tests {
             network: false,
             extra_args: vec![],
             cell: CellSpec::default(),
+            mounts: vec![],
+            relay: None,
         };
         let args = base.create_args();
         let pos = args.iter().position(|a| a == "--network").unwrap();
@@ -452,6 +519,8 @@ mod tests {
             network: false,
             extra_args: vec![],
             cell: CellSpec::default(),
+            mounts: vec![],
+            relay: None,
         };
         let mut c = Command::new("true");
         let _ = &mut c;

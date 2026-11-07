@@ -664,6 +664,24 @@ const EGRESS_DECIDED_FIELDS: &[AuditField] = &[
     af("tls_terminated"),
 ];
 
+/// `security.egress.tunnel.closed` — the CONNECT tunnel closing summary
+/// (R6.15; AR-05; experiments-spec §3.5/F11): the decided CONNECT leg's
+/// byte accounting, appended after the pipe drains. Audit-grade like the
+/// rest of the family; coordinates + counters only — tunnelled bytes are
+/// `tls_opaque`, never recorded.
+const TUNNEL_CLOSED_FIELDS: &[AuditField] = &[
+    af("request_ref"),
+    af("decided_ref"),
+    af("effect_id"),
+    af("env_handle"),
+    af("host_norm"),
+    af("port"),
+    af("bytes_up"),
+    af("bytes_down"),
+    af("duration_ms"),
+    af("close_cause"),
+];
+
 /// `security.containment.amended` — the §5g.4 `amend` audit row (ADR-0062
 /// (e); ADR-0266 D6): `{policy_version_id, from_version_id, to_version_id,
 /// diff, basis, endorser, scope, effect_id?}` — the diff is a canonical
@@ -1490,6 +1508,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── security:egress ──
     ("security.egress.decided", "passthrough"),
     ("security.egress.requested", "passthrough"),
+    ("security.egress.tunnel.closed", "passthrough"),
     // ── security:extension ──
     ("security.extension.drift", "hint"),
     ("security.extension.install_completed", "hint"),
@@ -1921,6 +1940,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // a kernel component.
     row_audit("security.egress.requested",    O::Events, false, EGRESS_REQUESTED_FIELDS, &[], None, None),
     row_audit("security.egress.decided",      O::Events, false, EGRESS_DECIDED_FIELDS, &[], None, None),
+    // R6.15 (AR-05; experiments-spec §3.5/F11): the CONNECT tunnel closing
+    // summary — decided{allow} precedes the first byte; this row lands at
+    // close with the byte fold. Passthrough like the rest of the family.
+    row_audit("security.egress.tunnel.closed", O::Events, false, TUNNEL_CLOSED_FIELDS, &[], None, None),
     // The `security.extension.*` family (§5g.5 §6; ADR-0064 D7; S1.23) —
     // audit-grade, provenance-mandatory. `loaded` is the pin attestation the
     // Rule-O producer obligation resolves against; `resolved`/`sealed` are the

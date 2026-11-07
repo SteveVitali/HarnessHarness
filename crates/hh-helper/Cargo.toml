@@ -32,6 +32,13 @@ path = "src/lib.rs"
 name = "hh-helper"
 path = "src/bin/hh_helper.rs"
 
+# AR-05 (R6.15; REQ-XB-129) — the in-cell byte relay, std-only so the
+# `x86_64-unknown-linux-musl` build is statically linked (PID 1 in any
+# task image; its digest lands in the slot identity).
+[[bin]]
+name = "hh-cell-relay"
+path = "src/bin/hh_cell_relay.rs"
+
 [features]
 default = ["tier-c1"]
 # The C1 halves of R-2.5.5¹ — the durable executor-side dedup store

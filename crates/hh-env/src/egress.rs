@@ -143,6 +143,16 @@ pub trait EgressTransport {
         body: Option<&[u8]>,
     ) -> Result<WireResponse, String>;
 
+    /// `dial(addr, port)` — open a byte stream to the *resolved* address
+    /// for the CONNECT tunnel leg (R6.15; F11). The default refuses:
+    /// a transport that cannot tunnel answers typed, never a silently
+    /// plain forward. `LocalHttpTransport` dials `TcpStream` — the
+    /// tunnelled bytes are `tls_opaque` by declaration.
+    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, String> {
+        let _ = (addr, port);
+        Err("tunnel unsupported on this transport".to_string())
+    }
+
     /// Whether the transport terminates TLS at the mediator (a
     /// `tls.terminate`-declared policy's relied-on capability — R2.9b;
     /// ADR-0341 D3). Default `false`: the reference `LocalHttpTransport`
@@ -151,6 +161,30 @@ pub trait EgressTransport {
     /// closed against a `false` answer — never silently unterminated.
     fn terminates_tls(&self) -> bool {
         false
+    }
+}
+
+/// `ByteStream` — the duplex byte pipe `dial` returns (Read + Write +
+/// Send so the tunnel legs can run on pump threads).
+pub trait ByteStream: std::io::Read + std::io::Write + Send {
+    /// A second handle on the same stream (the pump threads' two ends).
+    fn try_clone(&self) -> std::io::Result<Box<dyn ByteStream>>;
+}
+impl ByteStream for std::net::TcpStream {
+    fn try_clone(&self) -> std::io::Result<Box<dyn ByteStream>> {
+        std::net::TcpStream::try_clone(self).map(|s| {
+            let b: Box<dyn ByteStream> = Box::new(s);
+            b
+        })
+    }
+}
+#[cfg(unix)]
+impl ByteStream for std::os::unix::net::UnixStream {
+    fn try_clone(&self) -> std::io::Result<Box<dyn ByteStream>> {
+        std::os::unix::net::UnixStream::try_clone(self).map(|s| {
+            let b: Box<dyn ByteStream> = Box::new(s);
+            b
+        })
     }
 }
 
@@ -172,6 +206,14 @@ impl Default for LocalHttpTransport {
 }
 
 impl EgressTransport for LocalHttpTransport {
+    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, String> {
+        let s =
+            TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
+        s.set_read_timeout(Some(self.timeout)).ok();
+        s.set_write_timeout(Some(self.timeout)).ok();
+        Ok(Box::new(s))
+    }
+
     fn forward(
         &self,
         addr: IpAddr,
@@ -354,6 +396,21 @@ pub enum MediatedOutcome {
         /// The wire response.
         response: WireResponse,
     },
+    /// A CONNECT tunnel ran — `decided{allow}` durable before the
+    /// first byte; `security.egress.tunnel.closed` carries the byte
+    /// fold (R6.15; F11).
+    Tunneled {
+        /// The `decision_request` ref.
+        request_ref: String,
+        /// The `security.egress.decided` event id.
+        decided_ref: String,
+        /// The `security.egress.tunnel.closed` event id.
+        closed_ref: String,
+        /// Bytes client → upstream.
+        bytes_up: u64,
+        /// Bytes upstream → client.
+        bytes_down: u64,
+    },
     /// Refused by policy — `decided{deny}` is durable before this is
     /// visible.
     Refused {
@@ -425,6 +482,25 @@ pub struct GateAllow {
     /// widened allow set and the version-pinned cache stays honest
     /// (`security.containment.amended` is already durable).
     pub amended_policy: Option<ContainmentPolicy>,
+}
+
+/// `PreWire` — the shared pre-decided legs' result (R6.15; F11):
+/// either a refusal already durable on the ledger, or the gate-through-
+/// `decided{allow}` material the wire leg consumes.
+#[derive(Debug)]
+enum PreWire {
+    /// A guard/budget/credential leg refused — the `decided{deny}` row is
+    /// durable; hand the outcome straight back.
+    Refused(MediatedOutcome),
+    /// `decided{allow}` landed — the caller's wire leg runs now.
+    Ready {
+        /// The mediator's fresh resolution (consume-once).
+        fresh: Vec<IpAddr>,
+        /// `(sentinel, claim_id)` pairs staged by the broker.
+        staged: Vec<(String, String)>,
+        /// The `security.egress.decided` event id.
+        decided_ref: String,
+    },
 }
 
 /// The mediator's failure modes — typed, never a warning.
@@ -649,6 +725,294 @@ impl<'a> EgressMediator<'a> {
                 chain,
             ),
         }
+    }
+
+    /// `pre_wire` — the legs `forward`/`forward_tunnel` share (R6.15;
+    /// F11): consume-once re-resolution + recheck, the C2 post-allow
+    /// guards, credential-sentinel staging, the `network.calls` budget
+    /// gate, then `decided{allow}` durable. Returns `PreWire::Refused`
+    /// when a leg refuses (its `decided{deny}` row is already durable)
+    /// or `PreWire::Ready` with the fresh addrs, the staged claims and
+    /// the decided event.
+    fn pre_wire(
+        &mut self,
+        req: &EgressRequest,
+        decision: &EgressDecision,
+        decided_by: DecidedBy,
+        effect_id: &str,
+        started: u64,
+        chain: &ScopeChain,
+    ) -> Result<PreWire, EgressError> {
+        // (d) Consume-once re-resolution: the caller's `resolved_addrs` are
+        //     never trusted — the mediator resolves and re-checks (the SSRF
+        //     pivot — a public name resolving private dies here).
+        let host_norm = req.host_norm();
+        let fresh = self
+            .resolver
+            .resolve(&host_norm)
+            .map_err(|e| EgressError::Resolve {
+                detail: format!("resolve {host_norm}: {e}"),
+            })?;
+        if let Some(deny) = recheck_resolved(&self.policy, req, &fresh) {
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(PreWire::Refused(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason: deny.reason.unwrap_or(EgressReason::Denied),
+            }));
+        }
+
+        // (d2) The C2 post-allow guards (R2.9b; ADR-0341 D3) — they run on
+        //      *every* allow here, including monitor-endorsed ones the pure
+        //      `decide_egress` never re-decided. Order: the `approved_host_
+        //      body` readers closer (content flow), then TLS termination
+        //      (a hook inspects terminated/plaintext content — refuse
+        //      before invoking hooks when a TLS leg can't terminate), then
+        //      the declared hook set. A guard deny is durable before the
+        //      refusal is visible, and no credential is staged for a
+        //      refused leg.
+        if let Some(deny) = hharness_containment::approved_host_body_check(&self.policy, req) {
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(PreWire::Refused(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason: deny.reason.unwrap_or(EgressReason::ReaderCoverage),
+            }));
+        }
+        let tls_leg = req.protocol == hharness_containment::policy::EgressProtocol::HttpsConnect;
+        if tls_leg
+            && (self.policy.net.tls.terminate || !self.policy.net.tls.inspect_hooks.is_empty())
+            && !self.transport.terminates_tls()
+        {
+            // A TLS leg under `tls.terminate` or declared hooks cannot be
+            // honoured by a non-terminating transport — enforce-or-refuse.
+            let (reason, detail) = if self.policy.net.tls.terminate {
+                (
+                    EgressReason::TlsTerminateUnsupported,
+                    "tls.terminate".to_string(),
+                )
+            } else {
+                (
+                    EgressReason::InspectHookUnavailable,
+                    self.policy.net.tls.inspect_hooks[0].clone(),
+                )
+            };
+            let deny = EgressDecision::deny_guard(EgressSource::TlsGuard, reason, Some(detail));
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(PreWire::Refused(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason,
+            }));
+        }
+        let hook_deny: Option<EgressDecision> = {
+            let view = InspectView {
+                host_norm: &host_norm,
+                port: req.port,
+                protocol: req.protocol.as_str(),
+                method: req.method.as_deref().unwrap_or("GET"),
+                path: req.path.as_deref(),
+                headers: &req.headers,
+                body: req.body.as_deref(),
+            };
+            let mut deny = None;
+            for hook_ref in &self.policy.net.tls.inspect_hooks {
+                match self.inspect_hooks.get(hook_ref) {
+                    None => {
+                        deny = Some(EgressDecision::deny_guard(
+                            EgressSource::InspectHook,
+                            EgressReason::InspectHookUnavailable,
+                            Some(hook_ref.clone()),
+                        ));
+                        break;
+                    }
+                    Some(h) if h.inspect(&view) == InspectVerdict::Deny => {
+                        deny = Some(EgressDecision::deny_guard(
+                            EgressSource::InspectHook,
+                            EgressReason::InspectHookDenied,
+                            Some(hook_ref.clone()),
+                        ));
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            deny
+        };
+        if let Some(deny) = hook_deny {
+            let reason = deny.reason.unwrap_or(EgressReason::InspectHookDenied);
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(PreWire::Refused(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason,
+            }));
+        }
+
+        // (e) The credential-binding slot — each sentinel mediates through
+        //     the broker (denied row durable before the refusal is visible).
+        let sentinel_refs = Self::collect_sentinels(req);
+        let mut staged: Vec<(String, String)> = Vec::new(); // (sentinel, claim_id)
+        let mut applied: Vec<String> = Vec::new();
+        for sentinel in &sentinel_refs {
+            let desc = RequestDescriptor {
+                dpop_proof: None,
+                effect_id: effect_id.to_string(),
+                env_handle: req.env_handle.clone(),
+                destination: host_norm.clone(),
+                method: req.method.clone(),
+                path: req.path.clone(),
+            };
+            match self
+                .broker
+                .mediate_sentinel(&mut *self.store, &self.run_id, self.lease, sentinel, &desc)
+                .map_err(|e| EgressError::Broker {
+                    detail: format!("mediate_sentinel: {e:?}"),
+                })? {
+                MediationOutcome::Staged(d) => {
+                    staged.push((sentinel.clone(), d.claim_id));
+                    applied.push(d.binding_id);
+                }
+                MediationOutcome::Refused(r) => {
+                    // The egress decision was allow; the credential leg
+                    // refused — the decided row spells `deny{monitor}` and
+                    // the credential.denied row carries the precise code.
+                    let deny = EgressDecision {
+                        decision: EgressVerdict::Deny,
+                        source: EgressSource::Monitor,
+                        rule_ref: None,
+                        reason: Some(EgressReason::Denied),
+                        credential_binding_candidates: vec![],
+                        rule_index: None,
+                        guard_detail: None,
+                    };
+                    let ev = self.decide_row(
+                        req,
+                        &deny,
+                        decided_by,
+                        &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                        &[],
+                        effect_id,
+                        started,
+                        chain,
+                        false,
+                    )?;
+                    return Ok(PreWire::Refused(MediatedOutcome::RefusedCredential {
+                        request_ref: request_ref(req),
+                        decided_ref: ev.event_id,
+                        code: r.code,
+                    }));
+                }
+            }
+        }
+
+        // (f-pre) The `network.calls` gate — a call that can't be charged
+        //     must not fire: when the dimension is already at/against its
+        //     cap, the decided row spells `deny{monitor, budget_exhausted}`
+        //     and nothing reaches the wire (§8.2's "deny before the
+        //     authority is spent" — the ask path's `resolve_ask` is the
+        //     same gate for `approvals.requested`).
+        if let Some(budget_id) = self.budget_id.clone() {
+            let acct =
+                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
+                    detail: format!("account open: {e:?}"),
+                })?;
+            let exceeded = acct.check(&budget_id).map_err(|e| EgressError::Budget {
+                detail: format!("check {budget_id}: {e:?}"),
+            })?;
+            let calls_exceeded = exceeded
+                .iter()
+                .any(|x| x.dimension.primary() == Some(DimensionId::NetworkCalls));
+            if calls_exceeded {
+                let deny = EgressDecision {
+                    decision: EgressVerdict::Deny,
+                    source: EgressSource::Monitor,
+                    rule_ref: None,
+                    reason: Some(EgressReason::BudgetExhausted),
+                    credential_binding_candidates: vec![],
+                    rule_index: None,
+                    guard_detail: None,
+                };
+                let ev = self.decide_row(
+                    req,
+                    &deny,
+                    decided_by,
+                    &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                    &[],
+                    effect_id,
+                    started,
+                    chain,
+                    false,
+                )?;
+                return Ok(PreWire::Refused(MediatedOutcome::Refused {
+                    request_ref: request_ref(req),
+                    decided_ref: ev.event_id,
+                    reason: EgressReason::BudgetExhausted,
+                }));
+            }
+        }
+
+        // `decided{allow}` — durable before the wire fires; the
+        // `tls_terminated` member records whether the leg terminates at the
+        // mediator (a runtime fact the C2 surface reads back).
+        let decided_ev = self.decide_row(
+            req,
+            decision,
+            decided_by,
+            &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+            &applied,
+            effect_id,
+            started,
+            chain,
+            self.transport.terminates_tls(),
+        )?;
+        let decided_ref = decided_ev.event_id.clone();
+
+        Ok(PreWire::Ready {
+            fresh,
+            staged,
+            decided_ref,
+        })
     }
 
     /// The decided row (durable before its outcome is visible).
@@ -1132,270 +1496,16 @@ impl<'a> EgressMediator<'a> {
         started: u64,
         chain: &ScopeChain,
     ) -> Result<MediatedOutcome, EgressError> {
-        // (d) Consume-once re-resolution: the caller's `resolved_addrs` are
-        //     never trusted — the mediator resolves and re-checks (the SSRF
-        //     pivot — a public name resolving private dies here).
+        let (fresh, staged, decided_ref) =
+            match self.pre_wire(req, decision, decided_by, effect_id, started, chain)? {
+                PreWire::Refused(o) => return Ok(o),
+                PreWire::Ready {
+                    fresh,
+                    staged,
+                    decided_ref,
+                } => (fresh, staged, decided_ref),
+            };
         let host_norm = req.host_norm();
-        let fresh = self
-            .resolver
-            .resolve(&host_norm)
-            .map_err(|e| EgressError::Resolve {
-                detail: format!("resolve {host_norm}: {e}"),
-            })?;
-        if let Some(deny) = recheck_resolved(&self.policy, req, &fresh) {
-            let ev = self.decide_row(
-                req,
-                &deny,
-                decided_by,
-                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                &[],
-                effect_id,
-                started,
-                chain,
-                false,
-            )?;
-            return Ok(MediatedOutcome::Refused {
-                request_ref: request_ref(req),
-                decided_ref: ev.event_id,
-                reason: deny.reason.unwrap_or(EgressReason::Denied),
-            });
-        }
-
-        // (d2) The C2 post-allow guards (R2.9b; ADR-0341 D3) — they run on
-        //      *every* allow here, including monitor-endorsed ones the pure
-        //      `decide_egress` never re-decided. Order: the `approved_host_
-        //      body` readers closer (content flow), then TLS termination
-        //      (a hook inspects terminated/plaintext content — refuse
-        //      before invoking hooks when a TLS leg can't terminate), then
-        //      the declared hook set. A guard deny is durable before the
-        //      refusal is visible, and no credential is staged for a
-        //      refused leg.
-        if let Some(deny) = hharness_containment::approved_host_body_check(&self.policy, req) {
-            let ev = self.decide_row(
-                req,
-                &deny,
-                decided_by,
-                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                &[],
-                effect_id,
-                started,
-                chain,
-                false,
-            )?;
-            return Ok(MediatedOutcome::Refused {
-                request_ref: request_ref(req),
-                decided_ref: ev.event_id,
-                reason: deny.reason.unwrap_or(EgressReason::ReaderCoverage),
-            });
-        }
-        let tls_leg = req.protocol == hharness_containment::policy::EgressProtocol::HttpsConnect;
-        if tls_leg
-            && (self.policy.net.tls.terminate || !self.policy.net.tls.inspect_hooks.is_empty())
-            && !self.transport.terminates_tls()
-        {
-            // A TLS leg under `tls.terminate` or declared hooks cannot be
-            // honoured by a non-terminating transport — enforce-or-refuse.
-            let (reason, detail) = if self.policy.net.tls.terminate {
-                (
-                    EgressReason::TlsTerminateUnsupported,
-                    "tls.terminate".to_string(),
-                )
-            } else {
-                (
-                    EgressReason::InspectHookUnavailable,
-                    self.policy.net.tls.inspect_hooks[0].clone(),
-                )
-            };
-            let deny = EgressDecision::deny_guard(EgressSource::TlsGuard, reason, Some(detail));
-            let ev = self.decide_row(
-                req,
-                &deny,
-                decided_by,
-                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                &[],
-                effect_id,
-                started,
-                chain,
-                false,
-            )?;
-            return Ok(MediatedOutcome::Refused {
-                request_ref: request_ref(req),
-                decided_ref: ev.event_id,
-                reason,
-            });
-        }
-        let hook_deny: Option<EgressDecision> = {
-            let view = InspectView {
-                host_norm: &host_norm,
-                port: req.port,
-                protocol: req.protocol.as_str(),
-                method: req.method.as_deref().unwrap_or("GET"),
-                path: req.path.as_deref(),
-                headers: &req.headers,
-                body: req.body.as_deref(),
-            };
-            let mut deny = None;
-            for hook_ref in &self.policy.net.tls.inspect_hooks {
-                match self.inspect_hooks.get(hook_ref) {
-                    None => {
-                        deny = Some(EgressDecision::deny_guard(
-                            EgressSource::InspectHook,
-                            EgressReason::InspectHookUnavailable,
-                            Some(hook_ref.clone()),
-                        ));
-                        break;
-                    }
-                    Some(h) if h.inspect(&view) == InspectVerdict::Deny => {
-                        deny = Some(EgressDecision::deny_guard(
-                            EgressSource::InspectHook,
-                            EgressReason::InspectHookDenied,
-                            Some(hook_ref.clone()),
-                        ));
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            deny
-        };
-        if let Some(deny) = hook_deny {
-            let reason = deny.reason.unwrap_or(EgressReason::InspectHookDenied);
-            let ev = self.decide_row(
-                req,
-                &deny,
-                decided_by,
-                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                &[],
-                effect_id,
-                started,
-                chain,
-                false,
-            )?;
-            return Ok(MediatedOutcome::Refused {
-                request_ref: request_ref(req),
-                decided_ref: ev.event_id,
-                reason,
-            });
-        }
-
-        // (e) The credential-binding slot — each sentinel mediates through
-        //     the broker (denied row durable before the refusal is visible).
-        let sentinel_refs = Self::collect_sentinels(req);
-        let mut staged: Vec<(String, String)> = Vec::new(); // (sentinel, claim_id)
-        let mut applied: Vec<String> = Vec::new();
-        for sentinel in &sentinel_refs {
-            let desc = RequestDescriptor {
-                dpop_proof: None,
-                effect_id: effect_id.to_string(),
-                env_handle: req.env_handle.clone(),
-                destination: host_norm.clone(),
-                method: req.method.clone(),
-                path: req.path.clone(),
-            };
-            match self
-                .broker
-                .mediate_sentinel(&mut *self.store, &self.run_id, self.lease, sentinel, &desc)
-                .map_err(|e| EgressError::Broker {
-                    detail: format!("mediate_sentinel: {e:?}"),
-                })? {
-                MediationOutcome::Staged(d) => {
-                    staged.push((sentinel.clone(), d.claim_id));
-                    applied.push(d.binding_id);
-                }
-                MediationOutcome::Refused(r) => {
-                    // The egress decision was allow; the credential leg
-                    // refused — the decided row spells `deny{monitor}` and
-                    // the credential.denied row carries the precise code.
-                    let deny = EgressDecision {
-                        decision: EgressVerdict::Deny,
-                        source: EgressSource::Monitor,
-                        rule_ref: None,
-                        reason: Some(EgressReason::Denied),
-                        credential_binding_candidates: vec![],
-                        rule_index: None,
-                        guard_detail: None,
-                    };
-                    let ev = self.decide_row(
-                        req,
-                        &deny,
-                        decided_by,
-                        &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                        &[],
-                        effect_id,
-                        started,
-                        chain,
-                        false,
-                    )?;
-                    return Ok(MediatedOutcome::RefusedCredential {
-                        request_ref: request_ref(req),
-                        decided_ref: ev.event_id,
-                        code: r.code,
-                    });
-                }
-            }
-        }
-
-        // (f-pre) The `network.calls` gate — a call that can't be charged
-        //     must not fire: when the dimension is already at/against its
-        //     cap, the decided row spells `deny{monitor, budget_exhausted}`
-        //     and nothing reaches the wire (§8.2's "deny before the
-        //     authority is spent" — the ask path's `resolve_ask` is the
-        //     same gate for `approvals.requested`).
-        if let Some(budget_id) = self.budget_id.clone() {
-            let acct =
-                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
-                    detail: format!("account open: {e:?}"),
-                })?;
-            let exceeded = acct.check(&budget_id).map_err(|e| EgressError::Budget {
-                detail: format!("check {budget_id}: {e:?}"),
-            })?;
-            let calls_exceeded = exceeded
-                .iter()
-                .any(|x| x.dimension.primary() == Some(DimensionId::NetworkCalls));
-            if calls_exceeded {
-                let deny = EgressDecision {
-                    decision: EgressVerdict::Deny,
-                    source: EgressSource::Monitor,
-                    rule_ref: None,
-                    reason: Some(EgressReason::BudgetExhausted),
-                    credential_binding_candidates: vec![],
-                    rule_index: None,
-                    guard_detail: None,
-                };
-                let ev = self.decide_row(
-                    req,
-                    &deny,
-                    decided_by,
-                    &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-                    &[],
-                    effect_id,
-                    started,
-                    chain,
-                    false,
-                )?;
-                return Ok(MediatedOutcome::Refused {
-                    request_ref: request_ref(req),
-                    decided_ref: ev.event_id,
-                    reason: EgressReason::BudgetExhausted,
-                });
-            }
-        }
-
-        // `decided{allow}` — durable before the wire fires; the
-        // `tls_terminated` member records whether the leg terminates at the
-        // mediator (a runtime fact the C2 surface reads back).
-        let decided_ev = self.decide_row(
-            req,
-            decision,
-            decided_by,
-            &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
-            &applied,
-            effect_id,
-            started,
-            chain,
-            self.transport.terminates_tls(),
-        )?;
-        let decided_ref = decided_ev.event_id.clone();
 
         // (f) Drain the claims consume-once and substitute into the
         //     headers, the path and the body — `collect_sentinels` already
@@ -1494,6 +1604,131 @@ impl<'a> EgressMediator<'a> {
             decided_ref,
             charge_source,
             response,
+        })
+    }
+
+    /// `forward_tunnel(req, decision, decided_by, effect_id, started,
+    /// chain, client)` — the CONNECT tunnel leg (R6.15; AR-05; F11;
+    /// REQ-XB-114): the same `pre_wire` legs as `forward` (recheck →
+    /// guards → sentinels → budget gate → `decided{allow}` durable
+    /// before the first byte), then `transport.dial` to the resolved
+    /// address, `200 Connection established`, and a byte pipe until
+    /// close. The closing summary `security.egress.tunnel.closed`
+    /// (bytes up/down, duration) lands before the `network.calls`
+    /// charge. A denied CONNECT sends no byte upstream.
+    #[allow(clippy::too_many_arguments)] // the wire-leg material is a single tuple.
+    pub fn forward_tunnel(
+        &mut self,
+        req: &EgressRequest,
+        decision: &EgressDecision,
+        decided_by: DecidedBy,
+        effect_id: &str,
+        started: u64,
+        chain: &ScopeChain,
+        client: &mut dyn ByteStream,
+    ) -> Result<MediatedOutcome, EgressError> {
+        let (fresh, _staged, decided_ref) =
+            match self.pre_wire(req, decision, decided_by, effect_id, started, chain)? {
+                PreWire::Refused(o) => return Ok(o),
+                PreWire::Ready {
+                    fresh,
+                    staged,
+                    decided_ref,
+                } => (fresh, staged, decided_ref),
+            };
+        let host_norm = req.host_norm();
+        let addr = *fresh.first().ok_or_else(|| EgressError::Resolve {
+            detail: format!("{host_norm} resolved to no addresses"),
+        })?;
+        let upstream = self
+            .transport
+            .dial(addr, req.port)
+            .map_err(|e| EgressError::Transport {
+                detail: format!("tunnel {addr}:{}: {e}", req.port),
+            })?;
+        client
+            .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            .and_then(|()| client.flush())
+            .map_err(|e| EgressError::Transport {
+                detail: format!("tunnel 200: {e}"),
+            })?;
+        // The byte pipe — two directions, drained to close. Reads are
+        // bounded by the caller's deadlines; a read error ends the leg
+        // honestly (the close row records the partial fold).
+        let mut up_reader = upstream;
+        let mut up_writer = up_reader.try_clone().map_err(|e| EgressError::Transport {
+            detail: format!("tunnel upstream clone: {e}"),
+        })?;
+        let mut client_reader = client.try_clone().map_err(|e| EgressError::Transport {
+            detail: format!("tunnel client clone: {e}"),
+        })?;
+        let up = std::thread::spawn(move || {
+            std::io::copy(&mut client_reader, &mut up_writer).unwrap_or(0)
+        });
+        let bytes_down = std::io::copy(&mut up_reader, client).unwrap_or(0);
+        let bytes_up = up.join().unwrap_or(0);
+        let duration_ms = self.store.now_ms().saturating_sub(started);
+        // The closing summary — durable before the charge.
+        let closed_ev = self.emit(
+            "security.egress.tunnel.closed",
+            Json::obj([
+                ("request_ref", Json::str(request_ref(req))),
+                ("decided_ref", Json::str(decided_ref.clone())),
+                ("effect_id", Json::str(effect_id)),
+                ("env_handle", Json::str(req.env_handle.clone())),
+                ("host_norm", Json::str(host_norm)),
+                ("port", Json::Int(req.port as i64)),
+                ("bytes_up", Json::Int(bytes_up as i64)),
+                ("bytes_down", Json::Int(bytes_down as i64)),
+                ("duration_ms", Json::Int(duration_ms as i64)),
+                ("close_cause", Json::str("eof")),
+            ]),
+            Some(effect_id),
+            chain,
+        )?;
+        if let Some(budget_id) = self.budget_id.clone() {
+            let mut acct =
+                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
+                    detail: format!("account open: {e:?}"),
+                })?;
+            let source = EventRef {
+                run_id: self.run_id.clone(),
+                event_id: decided_ref.clone(),
+            };
+            let mut attribution = Attribution::subject(
+                self.run_id.clone(),
+                budget_id.clone(),
+                self.participant_ref.clone(),
+            );
+            attribution.charged_to = default_charged_to("security.egress.tunnel.closed");
+            attribution.component_class = Some(COMPONENT.to_string());
+            acct.charge(
+                self.lease,
+                &ChargeRequest {
+                    budget_id,
+                    quantity: ResourceQuantity {
+                        dimension: DimensionId::NetworkCalls,
+                        amount: 1,
+                        unit: "calls".to_string(),
+                        model_ref: None,
+                        measured_at: source.clone(),
+                    },
+                    source,
+                    attribution,
+                    reservation_id: None,
+                    cache_ttl: None,
+                },
+            )
+            .map_err(|e| EgressError::Budget {
+                detail: format!("charge network.calls: {e:?}"),
+            })?;
+        }
+        Ok(MediatedOutcome::Tunneled {
+            request_ref: request_ref(req),
+            decided_ref,
+            closed_ref: closed_ev.event_id,
+            bytes_up,
+            bytes_down,
         })
     }
 

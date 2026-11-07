@@ -37,7 +37,7 @@ use std::os::unix::net::UnixListener;
 use std::process::exit;
 use std::sync::Arc;
 
-use hharness_helper::podman::{CellSpec, PodmanBackend};
+use hharness_helper::podman::{CellSpec, PodmanBackend, RelaySpec, SocketMount};
 use hharness_helper::server::{serve, HelperServer};
 
 fn usage() -> ! {
@@ -45,7 +45,9 @@ fn usage() -> ! {
         "usage: hh-helper --socket <path> [--backend seatbelt|podman|direct] \
          [--container <name>] [--image <ref>] [--workspace <dir>] \
          [--network none|bridge] [--workdir <path> | --workdir-from-image] \
-         [--cpus <n>] [--memory <MiB>]"
+         [--cpus <n>] [--memory <MiB>] \
+         [--mount-socket <model|egress>=<host_path>] \
+         [--relay-bin <host_path>] [--relay-pair <model|egress>=<port>]"
     );
     exit(2);
 }
@@ -62,6 +64,13 @@ fn main() {
     let mut workdir_from_image = false;
     let mut cpus = None::<String>;
     let mut memory_mb = None::<u64>;
+    let mut mounts: Vec<SocketMount> = Vec::new();
+    let mut relay_bin = None::<String>;
+    let mut relay_pairs: Vec<(String, u16)> = Vec::new();
+    // AR-05 (R6.15) — the closed pair names; anything else refuses.
+    fn closed(name: &str) -> bool {
+        matches!(name, "model" | "egress")
+    }
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -114,6 +123,31 @@ fn main() {
                 }
                 i += 2;
             }
+            "--mount-socket" => {
+                let v = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                let (name, host) = v.split_once('=').unwrap_or_else(|| usage());
+                if !closed(name) || host.is_empty() {
+                    usage();
+                }
+                mounts.push(SocketMount {
+                    name: name.to_string(),
+                    host_path: host.to_string(),
+                });
+                i += 2;
+            }
+            "--relay-bin" => {
+                relay_bin = Some(args.get(i + 1).cloned().unwrap_or_else(|| usage()));
+                i += 2;
+            }
+            "--relay-pair" => {
+                let v = args.get(i + 1).cloned().unwrap_or_else(|| usage());
+                let (name, port) = v.split_once('=').unwrap_or_else(|| usage());
+                match (closed(name), port.parse::<u16>()) {
+                    (true, Ok(p)) if p > 0 => relay_pairs.push((name.to_string(), p)),
+                    _ => usage(),
+                }
+                i += 2;
+            }
             _ => usage(),
         }
     }
@@ -153,6 +187,17 @@ fn main() {
                 eprintln!("hh-helper: backend podman unavailable (no reachable podman)");
                 exit(3);
             }
+            // A relay declaration is all-or-nothing — a bin without a
+            // pair (or pairs without the bin) is a usage failure, never
+            // a half-declared main process.
+            let relay = match (relay_bin, relay_pairs.is_empty()) {
+                (Some(bin), false) => Some(RelaySpec {
+                    host_bin: bin,
+                    pairs: relay_pairs,
+                }),
+                (None, true) => None,
+                _ => usage(),
+            };
             let mut b = PodmanBackend {
                 container: name,
                 image,
@@ -160,6 +205,8 @@ fn main() {
                 network: network_on,
                 extra_args: vec![],
                 cell: CellSpec::default(),
+                mounts,
+                relay,
             };
             if workdir_from_image {
                 if workdir.is_some() {
