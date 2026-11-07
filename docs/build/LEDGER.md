@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      GATE-G21
-lastCompleted:   R6.4
+nextTicket:      R6.5
+lastCompleted:   GATE-G21
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -130,6 +130,7 @@ updatedAt:        2026-11-07T09:08:15Z
   - *Closed 2026-11-07 (R6.1, GUARD-X AC-3):* the 46 legacy `reqcov` warnings are classified into the reviewed baseline by an append-only, dated `amendments` entry in `docs/build/planning/2026-10-30_evidence-legacy-baseline.json` — a bounded family (check `reqcov`; files `docs/tickets` rows 083–164f; message `ticket <b> cites <rid> which is not in the spec`; `max_emitted: 46`) with recorded provenance citing GATE-G20's `n/a{empty_at_presentation}` list sha256, never a rewrite of the standing 8 classes and never a silent re-baseline. Emission is validator-version dependent and never required (a vanished family is not `missing-historical-diagnostic`; a 47th or out-of-family warning still fails `unexplained-diagnostic` — fixture `x-47th-warning`). R6.1 verbatim re-observation on this environment (main `35dbe0f1`, `~/agent-skills` `e981ec5`): `check-build-memory.sh .` → **0 violations / 8 warnings, zero `reqcov` lines** — matching GATE-G20's presentation record; a literal reproduction of the validator's reqcov leg yields 0 candidate warnings on this tree and on the experiments worktree. Post-landing: `check-supplement-guard.sh` with the stock checker returns verdict PASS with `DISPATCH — R6.2`.
 
 ## GATE DECISIONS
+| 2026-11-07T09:20Z | GATE-G21 | site identity mock review: approve "Instrument" or redirect | disposition | "approve and proceed" (operator verbatim, interactive, 2026-11-07T09:20Z — readout docs/build/readouts/GATE-G21.md Status PASSED; agent-draft block sha256 5aa64df94daf confirmed) | **PASSED — "Instrument — the calibrated readout" is the site identity** (Q-X43 resolved approve). Shown: internal mock (20pp, tree ca66c699…) + all-absent (19pp, 472ae59f…), both themes, all four viewports; test_tokens 40/40 above floor; R6.4 run record agrees. R6.5 released. lastCompleted → GATE-G21 · next → R6.5. | decision |
 | 2026-11-07T06:10Z | GATE-G20 | review the Round-6 plan and authorize the GUARD-X bootstrap | disposition | "accept all and proceed" (operator verbatim, interactive, 2026-11-07T06:10Z — readout docs/build/readouts/GATE-G20.md Status: PASSED) | **PASSED** — artifact identity confirmed (spec sha256 `4329b2740fe6be0f…` post-§10.6-amendment; 0 reqcov observed at presentation vs disclosed 46 — OPEN FINDING to R6.1 AC-3); partition+register accepted (74 rows, 456 candidates/370 adopted); **Q-X46 = A** (plan order — "accept all" accepts the plan as presented; B′ not selected); D-1…D-6 all accepted; twelve ambiguity resolutions + "second row"=R6.2 confirmed. Scope: R6.1 only; expiry at R6.1 landing; stock-checker PASS required from R6.2. No spend/provisioning/publication/merges. lastCompleted → GATE-G20 · next → R6.1. | decision |
 
 | date | ticket | gate | item | answer | consequence |
