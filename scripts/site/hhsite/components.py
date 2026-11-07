@@ -229,3 +229,92 @@ def calibration_block(fields):
     return ('<footer class="calib"><div class="shell">'
             '<span class="calib-title">Calibration block</span>'
             '<dl>%s</dl></div></footer>' % rows)
+
+
+# ── provenance attributes (REQ-XF-121) ─────────────────────────────────
+def prov_attrs(src):
+    """Every rendered value carries data-src (path#pointer) + data-sha."""
+    if not src:
+        return ""
+    return (' data-src="%s#%s" data-sha="%s"'
+            % (ESC(src["path"]), ESC(src["ptr"]), ESC(src["sha256"])))
+
+
+def data_value(obj, fmt=None):
+    """Render a value object's display text with provenance attrs:
+    <span class="num" data-src=… data-sha=…>text</span>. fmt formats the
+    v member (a D-2 call); absent it renders the integer verbatim."""
+    if "text" in obj:
+        return ('<span%s>%s</span>' % (prov_attrs(obj.get("src")),
+                                       ESC(obj["text"])))
+    v = obj.get("v")
+    disp = fmt(v) if (fmt and v is not None) else (str(v) if v is not None
+                                                 else "—")
+    return ('<span class="num"%s>%s</span>'
+            % (prov_attrs(obj.get("src")), ESC(disp)))
+
+
+# ── figure anatomy (REQ-XF-109) ────────────────────────────────────────
+def figure(fid, title, subtitle, chart, receipt, howto, table):
+    """The REQ-XF-109 envelope: title, definition/direction subtitle,
+    chart, receipt rail, 'How to read this' (estimand, N × k, interval
+    method + level, population, exclusions, source) and an always-present
+    data table — pre-rendered, readable without JavaScript."""
+    rows = "".join('<div><dt>%s</dt><dd>%s</dd></div>'
+                   % (ESC(k), ESC(v)) for k, v in howto)
+    return ('<figure class="fig" id="%s"><h3>%s</h3>'
+            '<p class="subtitle">%s</p>'
+            '<div class="figure-row"><div class="figure-body">%s'
+            '<details class="howto"><summary>How to read this</summary>'
+            '<dl>%s</dl></details>'
+            '<div class="table-wrap">%s</div>'
+            '</div>%s</div></figure>'
+            % (ESC(fid), ESC(title), ESC(subtitle), chart, rows, table,
+               receipt_rail(receipt)))
+
+
+# ── labelled log-scale cost axis (REQ-XF-108) ──────────────────────────
+def cost_axis_svg(marks, lo_usd=0.01, hi_usd=100.0, label="cost — log scale",
+                  width=420, height=44):
+    """Cost values on a labelled log10 axis: tick labels at powers of ten,
+    marks as needle ticks. $0.00 cannot plot on a log axis — a caller
+    renders it as a below-floor note, never a fake position. marks is a
+    list of (usd_float, text_label); no bars from zero."""
+    import math
+    if lo_usd <= 0 or hi_usd <= lo_usd:
+        raise GuardError("log cost axis needs 0 < lo < hi")
+    lo_l, hi_l = math.log10(lo_usd), math.log10(hi_usd)
+    span = hi_l - lo_l
+    x = lambda v: 8 + (math.log10(v) - lo_l) / span * (width - 16)
+    y = height - 18
+    parts = ['<svg class="needle-fig cost-axis" width="%d" height="%d" '
+             'role="img" aria-label="%s" viewBox="0 0 %d %d">'
+             % (width, height, ESC(label), width, height)]
+    parts.append('<line x1="8" y1="%.1f" x2="%d" y2="%.1f" '
+                 'stroke="var(--ink-2)" stroke-width="1"/>' % (y, width - 8, y))
+    e0, e1 = int(math.floor(lo_l)), int(math.ceil(hi_l))
+    for e in range(e0, e1 + 1):
+        usd = 10.0 ** e
+        if usd < lo_usd or usd > hi_usd:
+            continue
+        parts.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
+                     'stroke="var(--ink-2)" stroke-width="1"/>'
+                     % (x(usd), y - 3, x(usd), y + 3))
+        parts.append('<text x="%.1f" y="%d" text-anchor="middle" '
+                     'class="axis-label">$%s</text>'
+                     % (x(usd), height - 4, ("%.2f" % usd).rstrip("0").rstrip(".")
+                        if usd < 1 else "%d" % int(usd)))
+    for usd, _t in marks:
+        if usd is None or usd <= 0:
+            continue
+        usd = min(max(usd, lo_usd), hi_usd)
+        parts.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" '
+                     'stroke="var(--needle)" stroke-width="2" '
+                     'class="glyph-needle"/>'
+                     % (x(usd), y - 7, x(usd), y + 7))
+    parts.append('<title>%s</title></svg>' % ESC(label))
+    return "".join(parts)
+
+
+PARETO_CAPTION = ("Pareto frontier among complete entries only · "
+                  "descriptive")

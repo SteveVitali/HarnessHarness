@@ -91,10 +91,11 @@ def _script_hash():
         hashlib.sha256(THEME_INIT.encode()).digest()).decode()
 
 
-def shell(title, path, body, labels, section=""):
+def shell(title, path, body, labels, section="", calib=None):
     """Base template: head (theme init + hashed CSP + stylesheet), header
     (glyph + wordmark + nav + theme toggle), label banner, main, footer
-    with the calibration block."""
+    with the calibration block. calib=None renders the mock's fields —
+    R6.5's generator passes the REQ-XF-139 packet values."""
     p = _prefix(path)
     nav = "".join(
         '<a href="%s%s"%s>%s</a>'
@@ -104,7 +105,7 @@ def shell(title, path, body, labels, section=""):
         for name, href in NAV)
     banner = '<div class="banner"><div class="shell">%s</div></div>' % "".join(
         labels)
-    calib = calibration_block([
+    calib = calibration_block(calib if calib is not None else [
         ("experiment id", "phase-1 replay record (fixture scope)"),
         ("site version", SITE_VERSION),
         ("source commit", "mock — pinned at build"),

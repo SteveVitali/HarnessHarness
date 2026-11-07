@@ -1,0 +1,14 @@
+{
+  "schema": "hh-site-inputs/1",
+  "note": "R6.5 (F2-b) — every input the generator reads, named by path, schema and phase; never globbed (REQ-XF-119). The record participates with format markdown-bounds: its declared schema hh-p1-bounds-record/1 is the <!-- bounds --> block contract of REQ-XA-119, not JSON.",
+  "inputs": [
+    {"id": "parity-t3", "path": "docs/build/reports/2026-11-05-parity-tranche-3.json", "schema": "hh-parity-tranche-report/1", "phase": "phase-1"},
+    {"id": "s4-repairs", "path": "docs/build/reports/2026-11-06-s4-30slot-repairs.json", "schema": "hh-s4-30slot-repairs/1", "phase": "phase-1"},
+    {"id": "study-r559", "path": "docs/build/reports/2026-11-06-r5.59-study-report.json", "schema": "hh-study-report/1", "phase": "phase-1"},
+    {"id": "study-r63", "path": "docs/build/reports/2026-11-07-r6.3-study-report.json", "schema": "hh-study-report/1", "phase": "phase-1"},
+    {"id": "xcheck", "path": "docs/build/reports/2026-11-07-p1-surface-xcheck.json", "schema": "hh-surface-xcheck/1", "phase": "phase-1"},
+    {"id": "estimators", "path": "docs/build/reports/2026-11-07-p1-estimators.json", "schema": "hh-p1-estimators/1", "phase": "phase-1"},
+    {"id": "deviations", "path": "docs/build/reports/2026-11-07-s4-protocol-deviations.json", "schema": "hh-protocol-deviations/1", "phase": "phase-1"},
+    {"id": "record", "path": "docs/results/phase1-execution-surface-replay.md", "schema": "hh-p1-bounds-record/1", "phase": "phase-1", "format": "markdown-bounds"}
+  ]
+}
