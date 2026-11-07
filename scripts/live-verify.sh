@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "reproof" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -229,6 +229,10 @@ leg_field() { # $1 leg, $2 field
     plugin-tracker-fixture:names)    printf '';;
     plugin-tracker-fixture:test)     printf 'hharness-varhost:l4_6a:l46a_plugin_tracker_fixture';;
     plugin-tracker-fixture:host)     printf '127.0.0.1';;
+    reproof:ticket)   printf 'R6.32';;
+    reproof:provider) printf 'pinned-harbor';;
+    reproof:kind)     printf 'script';;
+    reproof:names)    printf '';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -1488,6 +1492,16 @@ run_leg_plugin_oop() { # $1 leg
 run_leg_plugin_memory_store() { run_leg_plugin_oop "plugin-memory-store"; }
 run_leg_plugin_compact_evict_oldest() { run_leg_plugin_oop "plugin-compact-evict-oldest"; }
 run_leg_plugin_tracker_fixture() { run_leg_plugin_oop "plugin-tracker-fixture"; }
+
+# `reproof` — the §3.8/§1.6 $0 oracle re-proof (surfaces O, H-pub and
+# H-allow at R each over the pinned Harbor + the W1 VM): registered by
+# R6.17 (REQ-XH-027) so its `hh-live-evidence/1` record may earn
+# `live-executed`; the leg itself executes in W1 under R6.32 — it is
+# honestly `skipped(...)` until that ticket wires the driver here.
+run_leg_reproof() {
+  ASSERTIONS="the \$0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor \`harbor run -r 0 --no-force-build\` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W1-under-R6.32)"
+}
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
 emit_record() { # $1 leg $2 ticket $3 out.json — python writer, all inputs via env

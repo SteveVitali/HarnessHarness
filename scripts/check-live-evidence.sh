@@ -111,13 +111,19 @@ if os.path.exists(spend_path):
 records = sorted(glob.glob(os.path.join(live, "*.json")))
 records = [p for p in records if os.path.basename(p) != "pricing.json"]
 seen = set()
+packets = []
 for path in records:
     base = os.path.basename(path)
-    seen.add(base)
     try:
         rec = json.load(open(path))
     except Exception:
         bad(f"{base}: not JSON"); continue
+    # hh-reproof-packet/1 (R6.17/REQ-XB-126): an adjunct, not a spend
+    # record — validated below, exempt from the evidence shape/spend
+    # correspondence legs.
+    if rec.get("schema") == "hh-reproof-packet/1":
+        packets.append((base, rec)); continue
+    seen.add(base)
     if rec.get("schema") != "hh-live-evidence/1":
         bad(f"{base}: schema != hh-live-evidence/1"); continue
     if not ISOTS.match(rec.get("recorded_at", "")):
@@ -176,6 +182,30 @@ for base in seen - spend_records:
     bad(f"record {base} has no SPEND.jsonl row")
 for base in spend_records - seen:
     bad(f"SPEND.jsonl row names uncommitted record {base}")
+
+# ── hh-reproof-packet/1 adjuncts (REQ-XB-126/REQ-XH-027) ───────────────
+REPROOF_LABEL = ("Oracle execution-surface re-proof (internal, "
+                 "recorded execution, `parity: none`)")
+for base, rec in packets:
+    if rec.get("label") != REPROOF_LABEL:
+        bad(f"{base}: label drifted from the pinned phrase")
+    if rec.get("parity") != "none":
+        bad(f"{base}: parity != none")
+    el = rec.get("evidence_label")
+    if el == "live-executed":
+        ref = rec.get("live_evidence_ref")
+        ok = False
+        if isinstance(ref, str):
+            cand = ref if os.path.exists(ref) else os.path.join(live, os.path.basename(ref))
+            if os.path.exists(cand):
+                try:
+                    ok = json.load(open(cand)).get("schema") == "hh-live-evidence/1"
+                except Exception:
+                    ok = False
+        if not ok:
+            bad(f"{base}: live-executed without an hh-live-evidence/1 record")
+    elif el != "recorded_execution":
+        bad(f"{base}: evidence_label {el!r} unknown")
 
 if fails:
     for f in fails:

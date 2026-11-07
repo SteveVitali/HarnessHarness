@@ -33,6 +33,7 @@ pub mod harbor;
 pub mod packet;
 pub mod probe;
 pub mod receipt_index;
+pub mod reproof;
 pub mod schedule;
 pub mod slot_costs;
 pub mod slot_record;

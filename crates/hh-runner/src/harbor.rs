@@ -178,7 +178,7 @@ pub struct HarborPin {
     /// The dispatch live-read evidence.
     pub live_read: LiveRead,
     /// The E1 F13 agent-relevant diff record ref — attached when the
-    /// rule requires one ([`diff_required`]), absent otherwise.
+    /// rule requires one ([`Self::diff_required`]), absent otherwise.
     pub diff_record_ref: Option<String>,
     /// The AR-04 record this pin amends (`ADR-0427`).
     pub adr: String,
@@ -445,6 +445,7 @@ pub const FORBIDDEN_ARGV: [&str; 2] = ["--upload", "--public"];
 impl JobConfig {
     /// `new(…)` — the constructor-level refusals: nonzero retries,
     /// force-build, `skip_install` at a pin lacking the knob.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         pin: &HarborPin,
         job_name: &str,
