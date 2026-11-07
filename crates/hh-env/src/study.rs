@@ -372,6 +372,71 @@ pub fn evaluate_useful(f: &UsefulFacts) -> LegVerdict {
     LegVerdict::Verified
 }
 
+/// The S1 useful stage after the executed re-execution — R6.3 (P1-D,
+/// REQ-XA-117): the committed `failed` record (R5.43) stands as
+/// history beside the executed DF-CAP5.1-1 `hh-s1-useful/1` packet
+/// (`disposition: executed`, `useful_acceptance: marked`, packet_id
+/// `7bbd15a2…`). `s1_unmet` records the S1 *objective* — the bounded
+/// `bounded_s1_execution` admission discharges only its bounded slice
+/// (full-target predicates stay owed per the coverage register; the
+/// useful-task card promotion is a gated operator decision), so the
+/// objective stays unmet and the flag stays `true`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UsefulReexecFacts {
+    /// The committed failed record (history — refolds `failed`).
+    pub failed: PacketEcho,
+    /// The committed executed record (refolds `executed`; every leg
+    /// verified).
+    pub executed: PacketEcho,
+    /// The executed packet's `useful_acceptance` member (`marked`).
+    pub acceptance: String,
+    /// The two carried machinery predicates, verbatim.
+    pub carried: Vec<String>,
+    /// The S1 objective stays unmet (`true` — bounded slice only; the
+    /// promotion is a gated decision).
+    pub s1_unmet: bool,
+}
+
+/// `evaluate_useful_reexec` — the failed record still refolds `failed`
+/// (committed history); the executed record refolds `executed` with
+/// every leg verified, its acceptance is `marked`, both carried
+/// predicates are named verbatim, and the objective flag stays `true`.
+pub fn evaluate_useful_reexec(f: &UsefulReexecFacts) -> LegVerdict {
+    for (which, echo) in [("failed", &f.failed), ("executed", &f.executed)] {
+        if echo.version != crate::useful::VERSION {
+            return LegVerdict::Refused(format!("{which}_version:{}", echo.version));
+        }
+        let v = check_echo(echo, &crate::useful::LEGS, "executed", "failed");
+        if !v.is_verified() {
+            return v;
+        }
+    }
+    if f.failed.disposition != "failed" {
+        return LegVerdict::Refused(format!("failed_disposition:{}", f.failed.disposition));
+    }
+    if f.executed.disposition != "executed" {
+        return LegVerdict::Refused(format!("executed_disposition:{}", f.executed.disposition));
+    }
+    if !f.executed.legs.iter().all(|(_, v)| v == "verified") {
+        return LegVerdict::Refused("executed_legs_unverified".to_string());
+    }
+    if f.acceptance != "marked" {
+        return LegVerdict::Refused(format!("acceptance:{}", f.acceptance));
+    }
+    for p in [
+        crate::useful::PROBE_CARRIED,
+        crate::useful::EXEC_BACKEND_CLOBBER,
+    ] {
+        if !f.carried.iter().any(|c| c == p) {
+            return LegVerdict::Refused(format!("carried_absent:{p}"));
+        }
+    }
+    if !f.s1_unmet {
+        return LegVerdict::Refused("s1_met".to_string());
+    }
+    LegVerdict::Verified
+}
+
 // ── leg 4 — ops_live ─────────────────────────────────────────────────
 
 /// The bounded operational stage — the first committed record
@@ -1411,12 +1476,34 @@ pub struct FamilyFacts {
     pub claim_present: bool,
 }
 
+/// The required family spellings once the executed S1 re-execution is
+/// folded (R6.3, P1-D): identical to `REQUIRED_FAMILIES` except
+/// `task_truth` — the bounded S1 execution executed and marked, so the
+/// family's honest status is `executed{s1_useful}` (the objective stays
+/// unmet — `s1_unmet` records it separately).
+pub const REQUIRED_FAMILIES_P1D: [(&str, &str); 7] = [
+    ("task_mixture", "descriptive{pilot_recomputed}"),
+    ("parity", "executed{verified_30_30}"),
+    ("mechanism", "executed{activation,pilot}"),
+    ("engineering", "executed{ops_live;backend_verified}"),
+    ("task_truth", "executed{s1_useful}"),
+    ("operations", "executed{ops_live}"),
+    ("adoption", "unavailable{not_started}"),
+];
+
 /// `evaluate_families` — every family's supplied status equals its
 /// required honest spelling; efficacy carries the efficacy leg's
 /// computed status verbatim; no pass/met/claim wording may appear in
 /// an unavailable family's status; no claim of either sign is
 /// present.
 pub fn evaluate_families(f: &FamilyFacts) -> LegVerdict {
+    evaluate_families_table(f, &REQUIRED_FAMILIES)
+}
+
+/// `evaluate_families_table` — the same honest-spelling fold over a
+/// caller-supplied required table (the P1-D re-execution fold's
+/// `REQUIRED_FAMILIES_P1D`).
+pub fn evaluate_families_table(f: &FamilyFacts, table: &[(&str, &str)]) -> LegVerdict {
     let supplied: [(&str, &str); 9] = [
         ("efficacy", &f.efficacy),
         ("task_mixture", &f.task_mixture),
@@ -1435,7 +1522,7 @@ pub fn evaluate_families(f: &FamilyFacts) -> LegVerdict {
         let required = match name {
             "efficacy" => f.required_efficacy.as_str(),
             "sharp_null" => REQUIRED_SHARP_NULL,
-            _ => REQUIRED_FAMILIES
+            _ => table
                 .iter()
                 .find(|(n, _)| *n == name)
                 .map(|(_, s)| *s)
@@ -1485,6 +1572,18 @@ pub struct CostFacts {
 /// gated-stage first subjects (30 parity + 60 confirmation across
 /// the four epochs).
 pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
+    evaluate_costs_table(f, 14, 12, 90)
+}
+
+/// `evaluate_costs_table` — the same exposure fold with the packet,
+/// admitted-first-subject and gated-subject counts supplied (the P1-D
+/// fold's DF packet joins the rollup: 15 packets, 14 first subjects).
+pub fn evaluate_costs_table(
+    f: &CostFacts,
+    packets: usize,
+    subjects_first: u64,
+    gated_subjects: u64,
+) -> LegVerdict {
     let mut total: i64 = 0;
     for (packet, micros) in &f.per_packet {
         if *micros != 0 {
@@ -1492,16 +1591,16 @@ pub fn evaluate_costs(f: &CostFacts) -> LegVerdict {
         }
         total += micros;
     }
-    if f.per_packet.len() != 14 {
+    if f.per_packet.len() != packets {
         return LegVerdict::Inconclusive(format!("packets:{}", f.per_packet.len()));
     }
     if total != 0 {
         return LegVerdict::Refused(format!("total_micros:{total}"));
     }
-    if f.subjects_first != 12 {
+    if f.subjects_first != subjects_first {
         return LegVerdict::Refused(format!("subjects_first:{}", f.subjects_first));
     }
-    if f.gated_subjects != 90 {
+    if f.gated_subjects != gated_subjects {
         return LegVerdict::Refused(format!("gated_subjects:{}", f.gated_subjects));
     }
     LegVerdict::Verified
@@ -1565,11 +1664,25 @@ pub struct StudyReport {
     pub study: String,
     /// The admission shape — `recompute_only`, never an execution.
     pub admission: String,
+    /// The structured repair register (REQ-XA-008) the record carries —
+    /// empty on reports whose fold names no repairs (emitted only when
+    /// non-empty, so prior emission bytes are unchanged).
+    pub repairs: Vec<Json>,
 }
 
 impl StudyReport {
     /// `to_json` — the canonical record.
     pub fn to_json(&self) -> Json {
+        let mut j = self.to_json_body();
+        if !self.repairs.is_empty() {
+            if let Json::Obj(ref mut m) = j {
+                m.insert("repairs".into(), Json::Arr(self.repairs.clone()));
+            }
+        }
+        j
+    }
+
+    fn to_json_body(&self) -> Json {
         Json::obj([
             ("version", Json::str(&self.version)),
             ("packet_id", Json::str(&self.packet_id)),
@@ -1675,7 +1788,26 @@ pub fn assemble(legs: Vec<Leg>, fold: &StudyFold) -> Result<StudyReport, String>
         study: fold.study.clone(),
         disposition,
         admission: "recompute_only".to_string(),
+        repairs: Vec::new(),
     };
+    let mut j = out.to_json();
+    if let Json::Obj(ref mut m) = j {
+        m.remove("packet_id");
+    }
+    out.packet_id = idp_digest(DOMAIN, j.to_canonical_string().as_bytes());
+    Ok(out)
+}
+
+/// `assemble_with_repairs` — `assemble` plus the REQ-XA-008 repair
+/// register carried on the record (the P1-D recompute names the
+/// repairs its fold covers); `packet_id` minted over the register.
+pub fn assemble_with_repairs(
+    legs: Vec<Leg>,
+    fold: &StudyFold,
+    repairs: Vec<Json>,
+) -> Result<StudyReport, String> {
+    let mut out = assemble(legs, fold)?;
+    out.repairs = repairs;
     let mut j = out.to_json();
     if let Json::Obj(ref mut m) = j {
         m.remove("packet_id");
