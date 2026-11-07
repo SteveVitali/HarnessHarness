@@ -1,0 +1,114 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "se6b927cbf3037dc0f9fe31b9f0476dd3bc4da57e46927e53da64298eb1a9633a-r1-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 912,
+      "name": "verdict.log",
+      "sha256": "305bb6ab74e8b69b9ccc5f8b2cfac10be6d060be61b3647d8d95ba658c071afa"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 172,
+      "name": "solution.log",
+      "sha256": "f25ed4f011f8742ccf4fac1de946988a6801c5cdd7a266d9559b395b8b276f47"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 7027,
+      "name": "verdict_verbatim.log",
+      "sha256": "a1b7ba9473a23fae8f8a9604cbc6787e69004ce08d1fd0da95e07e89df706448"
+    },
+    {
+      "bytes": 2044,
+      "name": "solution.sh",
+      "sha256": "b96d3eea0e7e864aa71c0c634db507d43850cb9f277725767ae668087c29a1d4"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 0,
+  "image": "localhost/s4-tb__decommissioning-service-with-sensitive-data:latest",
+  "input_tokens": 123,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 8111,
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 1,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:e6b927cbf3037dc0f9fe31b9f0476dd3bc4da57e46927e53da64298eb1a9633a",
+  "solution_kind": "sh",
+  "solution_log_bytes": 172,
+  "solution_log_sha256": "f25ed4f011f8742ccf4fac1de946988a6801c5cdd7a266d9559b395b8b276f47",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "decommissioning-service-with-sensitive-data",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict.log.bytes": 912,
+  "verdict.log.sha256": "305bb6ab74e8b69b9ccc5f8b2cfac10be6d060be61b3647d8d95ba658c071afa",
+  "verdict.rc": "0",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 7027,
+  "verdict_verbatim.log.sha256": "a1b7ba9473a23fae8f8a9604cbc6787e69004ce08d1fd0da95e07e89df706448",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 17530,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 17.53,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_original_sensitive_data_is_gone": "passed",
+      "test_config_file_is_gone": "passed",
+      "test_pid_file_is_gone": "passed",
+      "test_encrypted_archive_exists": "passed",
+      "test_intermediate_unencrypted_archive_is_gone": "passed",
+      "test_archive_is_correctly_encrypted_and_contains_data": "passed"
+    },
+    "raw_bytes": 912,
+    "stripped_bytes": 912,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

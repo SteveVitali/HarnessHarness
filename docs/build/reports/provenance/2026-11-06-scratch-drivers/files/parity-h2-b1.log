@@ -1,0 +1,20 @@
+[ 1/6] count-dataset-tokens
+      -> unresolved (some_tests_failed)
+[ 2/6] write-compressor
+      -> resolved (all_tests_passed)
+[ 3/6] build-initramfs-qemu
+      -> unresolved (some_tests_failed)
+[ 4/6] incompatible-python-fasttext.base_with_hint
+      -> resolved (all_tests_passed)
+[ 5/6] raman-fitting
+      -> resolved (all_tests_passed)
+[ 6/6] openssl-selfsigned-cert
+      -> resolved (all_tests_passed)
+{
+  "count-dataset-tokens": "unresolved",
+  "write-compressor": "resolved",
+  "build-initramfs-qemu": "unresolved",
+  "incompatible-python-fasttext.base_with_hint": "resolved",
+  "raman-fitting": "resolved",
+  "openssl-selfsigned-cert": "resolved"
+}

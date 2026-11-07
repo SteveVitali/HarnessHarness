@@ -1,0 +1,18 @@
+Starting harness run
+Run ID: 2026-11-06__00-55-35
+  Running tasks (6/6, Accuracy: 83.33%) - Last: hf-model-inference ✗ ━━ 100% 0:…
+
+Results Summary:
++-------------------+---------+
+| Metric            | Value   |
++===================+=========+
+| Resolved Trials   | 5       |
++-------------------+---------+
+| Unresolved Trials | 1       |
++-------------------+---------+
+| Accuracy          | 83.33%  |
++-------------------+---------+
+
+Results written to 
+/Users/stevenvitali/tb-work/parity-runs/o-side-3/2026-11-06__00-55-35/results.js
+on

@@ -1,0 +1,20 @@
+[ 1/6] pytorch-model-cli.easy
+      -> resolved (all_tests_passed)
+[ 2/6] solana-data
+      -> unresolved (some_tests_failed)
+[ 3/6] reshard-c4-data
+      -> resolved (all_tests_passed)
+[ 4/6] fibonacci-server
+      -> resolved (all_tests_passed)
+[ 5/6] grid-pattern-transform
+      -> resolved (all_tests_passed)
+[ 6/6] swe-bench-astropy-2
+      -> unresolved (some_tests_failed)
+{
+  "pytorch-model-cli.easy": "resolved",
+  "solana-data": "unresolved",
+  "reshard-c4-data": "resolved",
+  "fibonacci-server": "resolved",
+  "grid-pattern-transform": "resolved",
+  "swe-bench-astropy-2": "unresolved"
+}

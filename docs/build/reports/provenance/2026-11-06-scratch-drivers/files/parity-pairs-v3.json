@@ -1,0 +1,770 @@
+[
+ {
+  "position": 0,
+  "task_id": "super-benchmark-upet",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "test_right_output": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_right_output": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__super-benchmark-upet__client:latest",
+  "h_image_id_digest": "7599185c66316003fa4971373d8b0e4b59abd5550594086974ce30eeecc593fe sha256:29a63a8f780d8933bcd63469f825aafc392cf9fb925d04023ce86576e3e6a293",
+  "agree": true
+ },
+ {
+  "position": 1,
+  "task_id": "raman-fitting",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "test_result_file_exists": "passed",
+   "test_G_Peak": "passed",
+   "test_2D_Peak": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_result_file_exists": "passed",
+   "test_G_Peak": "passed",
+   "test_2D_Peak": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__raman-fitting__client:latest",
+  "h_image_id_digest": "3ac382322cdcbfd7dd640f277fe2bc2b3b9f0d19318223af80cd9b6b98f3d824 sha256:cee643c855fe2dbcd1913423b46c8819f054e9bc5ed78376dc05009aaa49e87d",
+  "agree": true
+ },
+ {
+  "position": 2,
+  "task_id": "hello-world",
+  "stratum": "easy",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "test_hello_file_exists": "passed",
+   "test_hello_file_content": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_hello_file_exists": "passed",
+   "test_hello_file_content": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__hello-world__client:latest",
+  "h_image_id_digest": "5be1101cfee9df5c6394e93d36d895a22da620c8e1298053f296df7a1ec0c40f sha256:7fcb4fa0529385cbad9fee55cc1ab2057130ebf8c3930aa01a5470a03635110a",
+  "agree": true
+ },
+ {
+  "position": 3,
+  "task_id": "git-workflow-hack",
+  "stratum": "easy",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "test_token_leak": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_token_leak": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__git-workflow-hack__client:latest",
+  "h_image_id_digest": "511c85b108d5cd0e705bbdc8236e60295db12fe619b0c96a248cdc7bace7e462 sha256:9350dc9e7bfb62a1c4f9a6025f1c02a90492f0037b2248fbc58a5fc5b6cc2295",
+  "agree": true
+ },
+ {
+  "position": 4,
+  "task_id": "build-linux-kernel-qemu",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": false,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "../tests/test_outputs.py - TypeError: bad operand type for unary +: 'str'": "failed"
+  },
+  "h_verdict": "unresolved",
+  "h_reason": "some_tests_failed",
+  "h_parsed": {
+   "../tests/test_outputs.py - TypeError: bad operand type for unary +: 'str'": "failed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__build-linux-kernel-qemu__client:latest",
+  "h_image_id_digest": "d134f15b55952e57df75d927ac0770806f47da664010533ed946296db1b0579c sha256:c94d7bb7bb18baa84a5da27ba4a4478ee381e734cd93458dd142b0e003ae2284",
+  "agree": true
+ },
+ {
+  "position": 5,
+  "task_id": "incompatible-python-fasttext.base_with_hint",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-05__23-16-40",
+  "o_parser_results": {
+   "test_predict_raises_no_error": "passed",
+   "test_correct_output": "passed",
+   "test_site_packages_not_overly_changed": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_predict_raises_no_error": "passed",
+   "test_correct_output": "passed",
+   "test_site_packages_not_overly_changed": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__incompatible-python-fasttext-base_with_hint__client:latest",
+  "h_image_id_digest": "777db9803ba820e0bea2922b3e1ec68a2824f12fcb8476b49a7e2df412c15bbf sha256:01fd4a0540967ea91b22fbf1460e676aa0d505ec48061f79914c2ded00454778",
+  "agree": true
+ },
+ {
+  "position": 6,
+  "task_id": "polyglot-c-py",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": {
+   "test_fibonacci_polyglot": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_fibonacci_polyglot": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__polyglot-c-py__client:latest",
+  "h_image_id_digest": "858f0e5beca461a61865648d6567a77576379f75250affb552aff809fb4cd0f5 sha256:13b171980587aeba9c96c0e1d96aefe97feea043310fc6e962c9e51d27854dc1",
+  "agree": true
+ },
+ {
+  "position": 7,
+  "task_id": "get-bitcoin-nodes",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": {
+   "test_service_process_running": "passed",
+   "test_service_responding": "passed",
+   "test_block_endpoint": "passed",
+   "test_transaction_endpoint": "passed",
+   "test_error_handling": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_service_process_running": "passed",
+   "test_service_responding": "passed",
+   "test_block_endpoint": "passed",
+   "test_transaction_endpoint": "passed",
+   "test_error_handling": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__get-bitcoin-nodes__client:latest",
+  "h_image_id_digest": "96861cd0fbd1f255f9102333dee3fd1daadbc7d2183597d166a3e28d49d04b23 sha256:41eab58fd3cdd69385f0f894842a77e34345ba7b88d058df758bda4c0f00b798",
+  "agree": true
+ },
+ {
+  "position": 8,
+  "task_id": "configure-git-webserver",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": {
+   "test_hello_file_exists_example": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_hello_file_exists_example": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__configure-git-webserver__client:latest",
+  "h_image_id_digest": "b6493fc781fa2b84ebdda1b1ba7855be49e7c62361268eac0e472e65f28be781 sha256:aeb424aacea08a6e05f473932e81af226768bd22a935457d607287ab286ba1e9",
+  "agree": true
+ },
+ {
+  "position": 9,
+  "task_id": "blind-maze-explorer-algorithm.hard",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": {
+   "test_maze_map_files_exist": "passed",
+   "test_maze_map_contents[1]": "passed",
+   "test_maze_map_contents[2]": "passed",
+   "test_maze_map_contents[3]": "passed",
+   "test_maze_map_contents[4]": "passed",
+   "test_maze_map_contents[5]": "passed",
+   "test_maze_map_contents[6]": "passed",
+   "test_maze_map_contents[7]": "passed",
+   "test_maze_map_contents[8]": "passed",
+   "test_maze_map_contents[9]": "passed",
+   "test_maze_map_contents[10]": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_maze_map_files_exist": "passed",
+   "test_maze_map_contents[1]": "passed",
+   "test_maze_map_contents[2]": "passed",
+   "test_maze_map_contents[3]": "passed",
+   "test_maze_map_contents[4]": "passed",
+   "test_maze_map_contents[5]": "passed",
+   "test_maze_map_contents[6]": "passed",
+   "test_maze_map_contents[7]": "passed",
+   "test_maze_map_contents[8]": "passed",
+   "test_maze_map_contents[9]": "passed",
+   "test_maze_map_contents[10]": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__blind-maze-explorer-algorithm-hard__client:latest",
+  "h_image_id_digest": "fc158aea67c9cd581d83479ea8da47af4b191555b2c54f3a5015ff66e0abc136 sha256:6cdb62ede0b039ce9f482dfe181e4d466a34147480e04696df4e7cf207561885",
+  "agree": true
+ },
+ {
+  "position": 10,
+  "task_id": "new-encrypt-command",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": {
+   "test_success": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_success": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__new-encrypt-command__client:latest",
+  "h_image_id_digest": "51fe22fd4293d62d84ca5196a3bebab70fa2e9486d19f9535f2b7888f3f56aaa sha256:fb4cd9d677ea8969a5a3ccb6d930a48d70ce60a2b89c34d9fc68e38c4b3ebd36",
+  "agree": true
+ },
+ {
+  "position": 11,
+  "task_id": "eval-mteb.hard",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": null,
+  "o_failure_mode": "unknown_agent_error",
+  "o_run_dir": "2026-11-06__00-26-04",
+  "o_parser_results": null,
+  "h_verdict": "unresolved",
+  "h_reason": "build_failure",
+  "h_parsed": null,
+  "h_image_preexisting": false,
+  "h_ansi_stripped": null,
+  "h_image": "localhost/tb__eval-mteb-hard__client:latest",
+  "h_image_id_digest": null,
+  "agree": true
+ },
+ {
+  "position": 12,
+  "task_id": "swe-bench-langcodes",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": {
+   "test__hash__": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test__hash__": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__swe-bench-langcodes__client:latest",
+  "h_image_id_digest": "7576c36c4c364edf3100671553ca44c8c74a12eacb8a0c0bcaad35152e48ec85 sha256:5fb72b9f25abf89dbc8145fae67c931c7b182f393a03cacfb94f0fbe693f87c0",
+  "agree": true
+ },
+ {
+  "position": 13,
+  "task_id": "fix-git",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": null,
+  "o_failure_mode": "unknown_agent_error",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": null,
+  "h_verdict": "unresolved",
+  "h_reason": "build_failure",
+  "h_parsed": null,
+  "h_image_preexisting": false,
+  "h_ansi_stripped": null,
+  "h_image": "localhost/tb__fix-git__client:latest",
+  "h_image_id_digest": null,
+  "agree": true
+ },
+ {
+  "position": 14,
+  "task_id": "grid-pattern-transform",
+  "stratum": "easy",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": {
+   "test_transformation_case1": "passed",
+   "test_transformation_case2": "passed",
+   "test_transformation_case3": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_transformation_case1": "passed",
+   "test_transformation_case2": "passed",
+   "test_transformation_case3": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__grid-pattern-transform__client:latest",
+  "h_image_id_digest": "9e2e831f574ac5415ea84eb0f21d1fedfcfe70f9d329a1bfb1c1a88ccd8c1e3a sha256:ca17556c808260ca5d412de77728185e5e5ad4cd737a6f550f417b3e481f71e2",
+  "agree": true
+ },
+ {
+  "position": 15,
+  "task_id": "security-vulhub-minio",
+  "stratum": "easy",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": {
+   "test_command_output_content": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_command_output_content": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__security-vulhub-minio__client:latest",
+  "h_image_id_digest": "facec4d79ab78423d5a0818c60bbfd6562eb0be0cc4d2ded364f84cfdcde8642 sha256:dba09fff3e3c282b30fa3d246a805ce59bc9a6e2316421d2e13508a4b844abea",
+  "agree": true
+ },
+ {
+  "position": 16,
+  "task_id": "oom",
+  "stratum": "hard",
+  "o_verdict": "unresolved",
+  "o_is_resolved": null,
+  "o_failure_mode": "unknown_agent_error",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": null,
+  "h_verdict": "unresolved",
+  "h_reason": "build_failure",
+  "h_parsed": null,
+  "h_image_preexisting": false,
+  "h_ansi_stripped": null,
+  "h_image": "localhost/tb__oom__client:latest",
+  "h_image_id_digest": null,
+  "agree": true
+ },
+ {
+  "position": 17,
+  "task_id": "git-multibranch",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-38-15",
+  "o_parser_results": {
+   "test_multi_branch_https_deploy": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_multi_branch_https_deploy": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__git-multibranch__client:latest",
+  "h_image_id_digest": "92063e73429064d9cec5a2bb2488f0d23d7460d7d696dc440f03af87c6f1f5d6 sha256:548eaa368d9984a3d2967100b12c7fb74d092d450015d9f95ae8417ea7b531fc",
+  "agree": true
+ },
+ {
+  "position": 18,
+  "task_id": "password-recovery",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": {
+   "test_recovery_file_exists": "passed",
+   "test_password_match": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_recovery_file_exists": "passed",
+   "test_password_match": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__password-recovery__client:latest",
+  "h_image_id_digest": "e498e2a70391e91554b4e6f0e1a8cf1bd5ceded6798dd60ecddb6ce21f2998cf sha256:26bcdce656f0fc98b75cc22d382351a9e18b889011a93f6d1ed479b575a13ddb",
+  "agree": true
+ },
+ {
+  "position": 19,
+  "task_id": "solana-data",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": false,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": {
+   "test_status_endpoint - Failed: Solana service is not responding": "failed",
+   "test_block_endpoint - Failed: Solana service is not responding": "failed",
+   "test_account_endpoint - Failed: Solana service is not responding": "failed",
+   "test_program_accounts_endpoint - Failed: Solana service is not responding": "failed",
+   "test_transaction_endpoint_exists - Failed: Solana service is not responding": "failed"
+  },
+  "h_verdict": "unresolved",
+  "h_reason": "some_tests_failed",
+  "h_parsed": {
+   "test_status_endpoint - Failed: Solana service...": "failed",
+   "test_block_endpoint - Failed: Solana service ...": "failed",
+   "test_account_endpoint - Failed: Solana servic...": "failed",
+   "test_program_accounts_endpoint - Failed: Sola...": "failed",
+   "test_transaction_endpoint_exists - Failed: So...": "failed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__solana-data__client:latest",
+  "h_image_id_digest": "aeab67b7f792581973e3ab656d5b17a712d79065b9b65cf2a86f7c587feb6e51 sha256:11850d3bce61fd3c9348565fd5cc9b6cf262c510c00903f1fab07e0cbc72d2a1",
+  "agree": true
+ },
+ {
+  "position": 20,
+  "task_id": "qemu-alpine-ssh",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": null,
+  "o_failure_mode": "unknown_agent_error",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": null,
+  "h_verdict": "unresolved",
+  "h_reason": "build_failure",
+  "h_parsed": null,
+  "h_image_preexisting": false,
+  "h_ansi_stripped": null,
+  "h_image": "localhost/tb__qemu-alpine-ssh__client:latest",
+  "h_image_id_digest": null,
+  "agree": true
+ },
+ {
+  "position": 21,
+  "task_id": "polyglot-rust-c",
+  "stratum": "hard",
+  "o_verdict": "unresolved",
+  "o_is_resolved": false,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": {
+   "test_fibonacci_polyglot": "failed"
+  },
+  "h_verdict": "unresolved",
+  "h_reason": "some_tests_failed",
+  "h_parsed": {
+   "test_fibonacci_polyglot": "failed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__polyglot-rust-c__client:latest",
+  "h_image_id_digest": "d73d4a707ecefe63071e483767726703d3c592b308e23715b429956b983dcc65 sha256:90090bd4aa324d7edec473b79134a06a205cb7c4e064863a929d8a230584247d",
+  "agree": true
+ },
+ {
+  "position": 22,
+  "task_id": "path-tracing-reverse",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": {
+   "test_image_c_exists": "passed",
+   "test_image_compiles": "passed",
+   "test_image_similarity": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_image_c_exists": "passed",
+   "test_image_compiles": "passed",
+   "test_image_similarity": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__path-tracing-reverse__client:latest",
+  "h_image_id_digest": "f6adbac7570fc91e29d639e903b947a92f8727ea5cb6a10d28faef17078c4562 sha256:88ac25c5273fa1b89e5115080f87b5b64b9427ad24b71396525e7c46c8a229ee",
+  "agree": true
+ },
+ {
+  "position": 23,
+  "task_id": "organization-json-generator",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-49-37",
+  "o_parser_results": {
+   "test_json_file_exists": "passed",
+   "test_organization_structure": "passed",
+   "test_relationships_integrity": "passed",
+   "test_statistics_calculations": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_json_file_exists": "passed",
+   "test_organization_structure": "passed",
+   "test_relationships_integrity": "passed",
+   "test_statistics_calculations": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__organization-json-generator__client:latest",
+  "h_image_id_digest": "26686681c01214829a4c9b8ee16319a28f60078a3e2652a811e8909e3e0b1f78 sha256:76d9aacfe8e2059269bfc40b478492c4c86655bbf83fb48e5d6cffbebe06ae22",
+  "agree": true
+ },
+ {
+  "position": 24,
+  "task_id": "jupyter-notebook-server",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_jupyter_server_running": "passed",
+   "test_jupyter_config_exists": "passed",
+   "test_sample_notebook_exists": "passed",
+   "test_password_authentication": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_jupyter_server_running": "passed",
+   "test_jupyter_config_exists": "passed",
+   "test_sample_notebook_exists": "passed",
+   "test_password_authentication": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__jupyter-notebook-server__client:latest",
+  "h_image_id_digest": "667d5f3c6bab2eedd27b709414320bb9c463fff04dba19fac22d535a9025bb4b sha256:d99310da8f5a3ae4a2ea58d61fabefd888c8da9bf5d1de20da33311d380ea5fd",
+  "agree": true
+ },
+ {
+  "position": 25,
+  "task_id": "swe-bench-astropy-2",
+  "stratum": "hard",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_get_tables_from_qdp_file": "passed",
+   "test_roundtrip[False]": "passed",
+   "test_roundtrip[True]": "passed",
+   "test_read_example": "passed",
+   "test_roundtrip_example": "passed",
+   "test_roundtrip_example_comma": "passed",
+   "test_read_write_simple": "passed",
+   "test_read_write_simple_specify_name": "passed",
+   "test_get_lines_from_qdp": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_get_tables_from_qdp_file": "passed",
+   "test_roundtrip[False]": "passed",
+   "test_roundtrip[True]": "passed",
+   "test_read_example": "passed",
+   "test_roundtrip_example": "passed",
+   "test_roundtrip_example_comma": "passed",
+   "test_read_write_simple": "passed",
+   "test_read_write_simple_specify_name": "passed",
+   "test_get_lines_from_qdp": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__swe-bench-astropy-2__client:latest",
+  "h_image_id_digest": "16584dbdf1d6da94bfc52ebda66151fed3e2ab7d5794b283503ee4ca276dda81 sha256:c521c0f1fc7f217d917c96e6a4d21a56eff94a6725330b54c2a95c0ed0ed0978",
+  "agree": true
+ },
+ {
+  "position": 26,
+  "task_id": "modernize-fortran-build",
+  "stratum": "easy",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_output_file_exists_and_content_is_correct": "passed",
+   "test_target_executable_was_created_and_is_executable": "passed",
+   "test_makefile_compilation_process": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_output_file_exists_and_content_is_correct": "passed",
+   "test_target_executable_was_created_and_is_executable": "passed",
+   "test_makefile_compilation_process": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__modernize-fortran-build__client:latest",
+  "h_image_id_digest": "860ac5e0c049c38e422576c1f1fabc7f7381ab61025ac4b1ad378bcb7eb5a36a sha256:bc41c8e22ad6231986a0a98c69c14aef8bd246a3d309991c8745bac4bd95d6a0",
+  "agree": true
+ },
+ {
+  "position": 27,
+  "task_id": "blind-maze-explorer-algorithm.easy",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_maze_map_files_exist": "passed",
+   "test_maze_map_contents[1]": "passed",
+   "test_maze_map_contents[2]": "passed",
+   "test_maze_map_contents[3]": "passed",
+   "test_maze_map_contents[4]": "passed",
+   "test_maze_map_contents[5]": "passed",
+   "test_maze_map_contents[6]": "passed",
+   "test_maze_map_contents[7]": "passed",
+   "test_maze_map_contents[8]": "passed",
+   "test_maze_map_contents[9]": "passed",
+   "test_maze_map_contents[10]": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_maze_map_files_exist": "passed",
+   "test_maze_map_contents[1]": "passed",
+   "test_maze_map_contents[2]": "passed",
+   "test_maze_map_contents[3]": "passed",
+   "test_maze_map_contents[4]": "passed",
+   "test_maze_map_contents[5]": "passed",
+   "test_maze_map_contents[6]": "passed",
+   "test_maze_map_contents[7]": "passed",
+   "test_maze_map_contents[8]": "passed",
+   "test_maze_map_contents[9]": "passed",
+   "test_maze_map_contents[10]": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__blind-maze-explorer-algorithm-easy__client:latest",
+  "h_image_id_digest": "75446d6153c7767a8427fd08ce331088c83de9d852097aa03abd0ded3e80fc15 sha256:1cf158a9a3b291c43c4d0e62887837174ad6fdc75833432620a1aaecb52efcaf",
+  "agree": true
+ },
+ {
+  "position": 28,
+  "task_id": "decommissioning-service-with-sensitive-data",
+  "stratum": "medium",
+  "o_verdict": "resolved",
+  "o_is_resolved": true,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_original_sensitive_data_is_gone": "passed",
+   "test_config_file_is_gone": "passed",
+   "test_pid_file_is_gone": "passed",
+   "test_encrypted_archive_exists": "passed",
+   "test_intermediate_unencrypted_archive_is_gone": "passed",
+   "test_archive_is_correctly_encrypted_and_contains_data": "passed"
+  },
+  "h_verdict": "resolved",
+  "h_reason": "all_tests_passed",
+  "h_parsed": {
+   "test_original_sensitive_data_is_gone": "passed",
+   "test_config_file_is_gone": "passed",
+   "test_pid_file_is_gone": "passed",
+   "test_encrypted_archive_exists": "passed",
+   "test_intermediate_unencrypted_archive_is_gone": "passed",
+   "test_archive_is_correctly_encrypted_and_contains_data": "passed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": true,
+  "h_image": "docker.io/library/tb__decommissioning-service-with-sensitive-data__client:latest",
+  "h_image_id_digest": "92ffe09618416359e85974fc2fc1c1204b1285f1e8bc163d0b819416bee4a92e sha256:f59257b068601d9f8dfb49a57f5bc8ad98bedbec417fca03034c0eff0a9cf259",
+  "agree": true
+ },
+ {
+  "position": 29,
+  "task_id": "hf-model-inference",
+  "stratum": "medium",
+  "o_verdict": "unresolved",
+  "o_is_resolved": false,
+  "o_failure_mode": "unset",
+  "o_run_dir": "2026-11-06__00-55-35",
+  "o_parser_results": {
+   "test_flask_api_running": "passed",
+   "test_sentiment_endpoint": "passed",
+   "test_api_error_handling": "passed",
+   "test_model_downloaded": "failed"
+  },
+  "h_verdict": "unresolved",
+  "h_reason": "some_tests_failed",
+  "h_parsed": {
+   "test_flask_api_running": "passed",
+   "test_sentiment_endpoint": "passed",
+   "test_api_error_handling": "passed",
+   "test_model_downloaded": "failed"
+  },
+  "h_image_preexisting": true,
+  "h_ansi_stripped": false,
+  "h_image": "docker.io/library/tb__hf-model-inference__client:latest",
+  "h_image_id_digest": "e9b9b7897d9eddda8e7acea0dd3093a414fdee52e2ab61f0cf25ec032bf1d84c sha256:804e725e835f1454a1503759c295d3e8a21d249c3bd7c7abb15723e958806088",
+  "agree": true
+ }
+]

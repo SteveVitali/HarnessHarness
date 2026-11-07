@@ -1,0 +1,19 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:d4ed91c6ce48b0529439e037903a28ab7e994d5ffdeae0d398bba38e4c3e9334",
+  "task_id": "oom",
+  "arm_id": "arm:o-tb-oracle",
+  "strategy": "evict_oldest",
+  "round": 4,
+  "first": false,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "prior_disposition": "inconclusive{image_unavailable:client_build_failed}",
+  "supplement_epoch": "egress-profile-rerun",
+  "egress_profile": "declared_deps",
+  "cell_network": "bridge",
+  "policy_net_mode": "public",
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

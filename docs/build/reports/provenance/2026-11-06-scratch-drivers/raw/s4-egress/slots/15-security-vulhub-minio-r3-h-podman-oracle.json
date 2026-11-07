@@ -1,0 +1,101 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "sddb848ac051700004bd1097dc273428ffd9bb53fe34d30c810de248637f7cfe6-r3-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 768,
+      "name": "solution.log",
+      "sha256": "b67a800530c8f996e1cfc30dbab2c57215fa3a214547888a1b2da8a49212cef9"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1777,
+      "name": "verdict_verbatim.log",
+      "sha256": "7dad6ba52d42a988488e24f68d6d00c38e2df8c8f8031131072ae7c1616bcc63"
+    },
+    {
+      "bytes": 744,
+      "name": "solution.sh",
+      "sha256": "f7d8104e6048b447e1022651744b8e774e563a4778da73482dba7d19d29b7c18"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__security-vulhub-minio:latest",
+  "input_tokens": 272,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 2545,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 3,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:ddb848ac051700004bd1097dc273428ffd9bb53fe34d30c810de248637f7cfe6",
+  "solution_kind": "sh",
+  "solution_log_bytes": 768,
+  "solution_log_sha256": "b67a800530c8f996e1cfc30dbab2c57215fa3a214547888a1b2da8a49212cef9",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "security-vulhub-minio",
+  "tokens_freed": 264,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 1777,
+  "verdict_verbatim.log.sha256": "7dad6ba52d42a988488e24f68d6d00c38e2df8c8f8031131072ae7c1616bcc63",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 11440,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 11.45,
+  "prior_disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_command_output_content": "passed"
+    },
+    "raw_bytes": 1777,
+    "stripped_bytes": 1777,
+    "ansi_stripped": false
+  },
+  "egress_evidence": "Could not resolve",
+  "disposition": "executed"
+}

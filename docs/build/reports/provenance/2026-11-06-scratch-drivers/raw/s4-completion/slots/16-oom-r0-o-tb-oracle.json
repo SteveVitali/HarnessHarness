@@ -1,0 +1,109 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s268b383b1fcc5c7ebaa4f75390aa13aeac46c4ea61619e6698bcc188b04606d2-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1111,
+      "name": "solution.log",
+      "sha256": "18ab312916c74efc853a4f30d48c69d988b647c4e7104c3a091e1bfecc7a9bfa"
+    },
+    {
+      "bytes": 69,
+      "name": "run-tests.sh",
+      "sha256": "f6e7f89d274e299e384acbf8d5b549268f62531b8b5f42cde62ea6a848164761"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 3172,
+      "name": "verdict_verbatim.log",
+      "sha256": "3655f5360cbf7a5822fd4ac5c7b1daffd51b41a8396dba0b23a760fd66722165"
+    },
+    {
+      "bytes": 239,
+      "name": "stream.sh",
+      "sha256": "5ec49971c7f8a16c36fd9ed4929cd47d3ceb0ff3a090e3cf547e845f1c7e2814"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "declared_deps": [
+    "hf_hub",
+    "pip"
+  ],
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 3,
+  "helper_bin": "/Users/stevenvitali/MetaHarness-harnessharness/target/debug/hh-helper",
+  "helper_variant": "hh-helper --network (R5.56 first-class; stock binary)",
+  "image": "localhost/s4-tb__oom:latest",
+  "input_tokens": 357,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 4283,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "remote_host": "podman-s4-backend",
+  "remote_ws_push": "attempt0:pushed:10240B",
+  "remote_ws_syncs": 4,
+  "request_changed": true,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:268b383b1fcc5c7ebaa4f75390aa13aeac46c4ea61619e6698bcc188b04606d2",
+  "solution_kind": "yaml",
+  "solution_log_bytes": 1111,
+  "solution_log_sha256": "18ab312916c74efc853a4f30d48c69d988b647c4e7104c3a091e1bfecc7a9bfa",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "oom",
+  "tokens_freed": 349,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 3172,
+  "verdict_verbatim.log.sha256": "3655f5360cbf7a5822fd4ac5c7b1daffd51b41a8396dba0b23a760fd66722165",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 28780,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 28.8,
+  "prior_disposition": "inconclusive{image_unavailable:client_build_failed}",
+  "supplement_epoch": "s4-completion-gce",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_offline_model_load": "passed"
+    },
+    "raw_bytes": 3152,
+    "stripped_bytes": 3079,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

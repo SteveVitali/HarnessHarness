@@ -1,0 +1,111 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s13a9f6a2e2f8a449b7db4c0f68ee0cb95e19585c75185dc76ea8f68aa2cc33ff-r3-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 648,
+      "name": "verdict.log",
+      "sha256": "28edef42baab777f7fa6586d5a0109ae3c833c06d463207ba954f27097dcf3bd"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 89688,
+      "name": "solution.log",
+      "sha256": "a1c9904c9005b680817504e813819238559fe94968446352fc86986daf5c3fe6"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 10586,
+      "name": "verdict_verbatim.log",
+      "sha256": "7ce64ac7c3894936b5f796401fb672577a0be2ddef9e01bcdd1582af20ecdde6"
+    },
+    {
+      "bytes": 2655,
+      "name": "solution.sh",
+      "sha256": "8dcc962b97d0b098003ae9c84ac7a087dc46a61a6e037c70ba5a0fe6ccff7872"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__raman-fitting:latest",
+  "input_tokens": 22502,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 100922,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 3,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:13a9f6a2e2f8a449b7db4c0f68ee0cb95e19585c75185dc76ea8f68aa2cc33ff",
+  "solution_kind": "sh",
+  "solution_log_bytes": 89688,
+  "solution_log_sha256": "a1c9904c9005b680817504e813819238559fe94968446352fc86986daf5c3fe6",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "raman-fitting",
+  "tokens_freed": 22494,
+  "triggered": true,
+  "verdict.log.bytes": 648,
+  "verdict.log.sha256": "28edef42baab777f7fa6586d5a0109ae3c833c06d463207ba954f27097dcf3bd",
+  "verdict.rc": "0",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 10586,
+  "verdict_verbatim.log.sha256": "7ce64ac7c3894936b5f796401fb672577a0be2ddef9e01bcdd1582af20ecdde6",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 17801,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 17.81,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_result_file_exists": "passed",
+      "test_G_Peak": "passed",
+      "test_2D_Peak": "passed"
+    },
+    "raw_bytes": 648,
+    "stripped_bytes": 648,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

@@ -1,0 +1,18 @@
+Starting harness run
+Run ID: 2026-11-05__22-23-36
+  Running tasks (6/6, Accuracy: 83.33%) - Last: reshard-c4-data ✓ ━━━━ 100% 0:0…
+
+Results Summary:
++-------------------+---------+
+| Metric            | Value   |
++===================+=========+
+| Resolved Trials   | 5       |
++-------------------+---------+
+| Unresolved Trials | 1       |
++-------------------+---------+
+| Accuracy          | 83.33%  |
++-------------------+---------+
+
+Results written to 
+/Users/stevenvitali/tb-work/parity-runs/o-side-2/2026-11-05__22-23-36/results.js
+on

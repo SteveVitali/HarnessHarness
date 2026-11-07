@@ -1,0 +1,105 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "sc22d6c7d5615f312e9fb89ec8162e3904d3325a0e3aee7844e31e8105cf96f86-r1-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 14644,
+      "name": "solution.log",
+      "sha256": "29ec43ac616c15dcb76625d491f2518e2bd1e5737ec57765ed65fccfc855ca8a"
+    },
+    {
+      "bytes": 132,
+      "name": "run-tests.sh",
+      "sha256": "00a027492204f1b321fab096f77f57c75655e2b76af5287908d62c688da48b4c"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 91511,
+      "name": "verdict_verbatim.log",
+      "sha256": "adc9a0970dae65bc0cc18a0c2a13aafd89628483c7f97bf7ec91ce08401a2e2a"
+    },
+    {
+      "bytes": 3265,
+      "name": "solution.sh",
+      "sha256": "a74255f5fdb07c1dbb0df15062b90a1db5d481aa47d6c05c9dfcb8ae21de0afb"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__hf-model-inference:latest",
+  "input_tokens": 3741,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 106155,
+  "policy_net_mode": "public",
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 1,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:c22d6c7d5615f312e9fb89ec8162e3904d3325a0e3aee7844e31e8105cf96f86",
+  "solution_kind": "sh",
+  "solution_log_bytes": 14644,
+  "solution_log_sha256": "29ec43ac616c15dcb76625d491f2518e2bd1e5737ec57765ed65fccfc855ca8a",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "hf-model-inference",
+  "tokens_freed": 3733,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 91511,
+  "verdict_verbatim.log.sha256": "adc9a0970dae65bc0cc18a0c2a13aafd89628483c7f97bf7ec91ce08401a2e2a",
+  "verdict_verbatim.rc": "1",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 20683,
+  "work_dispatch": "observed:applied",
+  "work_exit": "1",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 20.69,
+  "prior_disposition": "inconclusive{environment:cell_network_isolated:Connection refused}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "unresolved",
+    "verdict_reason": "some_tests_failed",
+    "parsed": {
+      "test_model_downloaded": "failed",
+      "test_flask_api_running": "failed",
+      "test_sentiment_endpoint": "failed",
+      "test_api_error_handling": "failed"
+    },
+    "raw_bytes": 91511,
+    "stripped_bytes": 91511,
+    "ansi_stripped": false
+  },
+  "egress_evidence": "Connection refused",
+  "disposition": "executed",
+  "disposition_recomputed": "inconclusive{environment:cell_network_isolated:Connection refused} -> executed \u2014 the signature scan predates the egress profile: under declared_deps the cell is --network bridge and the 'Connection refused' was to localhost:5000 (the oracle's own flask service raced/not up inside the 360s work cap) \u2014 a genuine participant outcome, not cell isolation. receipt (verbatim channel, unresolved) retained verbatim."
+}

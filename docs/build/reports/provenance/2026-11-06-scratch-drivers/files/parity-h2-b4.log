@@ -1,0 +1,20 @@
+[ 1/6] tmux-advanced-workflow
+      -> resolved (all_tests_passed)
+[ 2/6] play-zork
+      -> resolved (all_tests_passed)
+[ 3/6] oom
+      -> unresolved (build_failure)
+[ 4/6] qemu-alpine-ssh
+      -> unresolved (build_failure)
+[ 5/6] train-fasttext
+      -> resolved (all_tests_passed)
+[ 6/6] sqlite-db-truncate
+      -> resolved (all_tests_passed)
+{
+  "tmux-advanced-workflow": "resolved",
+  "play-zork": "resolved",
+  "oom": "unresolved",
+  "qemu-alpine-ssh": "unresolved",
+  "train-fasttext": "resolved",
+  "sqlite-db-truncate": "resolved"
+}

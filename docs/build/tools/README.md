@@ -117,3 +117,12 @@ PR #209 (pass at closeout head; inherited-red record at commit `7b5ac8df`);
 (`capture_kind`). The stub-leg transcripts returned by the coordinator are
 validated against the committed `envelope-*.json`; `transcripts/valid-*.json`
 are stand-in contracts, not execution records.
+
+## p1_records.py — `hh-p1-records-check/1` (R6.2, REQ-XA-106)
+
+Stdlib, read-only records-in verifier for the phase-1 provenance tree. It
+verifies archive + raw hashes (RC-1), dataset content digests when a tree is
+supplied (RC-2, else `skipped(dataset_absent)`), raw ↔ packet slots (RC-3),
+fold histograms + the REQ-XA-006 arm fold (RC-4), fixture ↔ docs byte
+equality (RC-5) and committed-emission equality (RC-6). Exit 0/1/2; a
+missing input exits 2. Battery: `bash docs/build/fixtures/p1-records/run-fixtures.sh`.

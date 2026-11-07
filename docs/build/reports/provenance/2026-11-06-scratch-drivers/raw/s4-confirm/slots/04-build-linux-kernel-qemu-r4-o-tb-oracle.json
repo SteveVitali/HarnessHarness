@@ -1,0 +1,103 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "sefd349e85afcd7a63d6fada1062b4c2b91e49512b6b3aa5d9e3925d61126af1b-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 41,
+      "name": "verdict.log",
+      "sha256": "b72695fcb3e2889d64484497e2ea8079822f1532c2505f226cde970957bedf7d"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 3709,
+      "name": "solution.log",
+      "sha256": "439510681d548bae8bd8b4f71f7a253bf8accfc72318c2aea79ef871e44a1ef1"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"
+    },
+    {
+      "bytes": 4103,
+      "name": "verdict_verbatim.log",
+      "sha256": "a045a499745af757c0a1b24db14775b9aff31c577e48fb585c5104414fe9152a"
+    },
+    {
+      "bytes": 854,
+      "name": "solution.sh",
+      "sha256": "eca1f6f93280f567c491beb2efd97359aa853213cc6babcb1c0037f95b31c633"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__build-linux-kernel-qemu:latest",
+  "input_tokens": 1007,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 7853,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:efd349e85afcd7a63d6fada1062b4c2b91e49512b6b3aa5d9e3925d61126af1b",
+  "solution_kind": "sh",
+  "solution_log_bytes": 3709,
+  "solution_log_sha256": "439510681d548bae8bd8b4f71f7a253bf8accfc72318c2aea79ef871e44a1ef1",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "build-linux-kernel-qemu",
+  "tokens_freed": 999,
+  "triggered": true,
+  "verdict.log.bytes": 41,
+  "verdict.log.sha256": "b72695fcb3e2889d64484497e2ea8079822f1532c2505f226cde970957bedf7d",
+  "verdict.rc": "1",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 4103,
+  "verdict_verbatim.log.sha256": "a045a499745af757c0a1b24db14775b9aff31c577e48fb585c5104414fe9152a",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 25675,
+  "work_dispatch": "observed:applied",
+  "work_exit": "2",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 25.68,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": null,
+    "verdict_reason": "no_pytest_summary:/usr/bin/python3: No module named pytest"
+  },
+  "egress_evidence": "Temporary failure resolving",
+  "disposition": "inconclusive{environment:cell_network_isolated:Temporary failure resolving}"
+}

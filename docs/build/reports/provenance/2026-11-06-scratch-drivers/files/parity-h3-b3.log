@@ -1,0 +1,20 @@
+[ 1/6] swe-bench-langcodes
+      -> resolved (all_tests_passed)
+[ 2/6] fix-git
+      -> unresolved (build_failure)
+[ 3/6] grid-pattern-transform
+      -> resolved (all_tests_passed)
+[ 4/6] security-vulhub-minio
+      -> resolved (all_tests_passed)
+[ 5/6] oom
+      -> unresolved (build_failure)
+[ 6/6] git-multibranch
+      -> resolved (all_tests_passed)
+{
+  "swe-bench-langcodes": "resolved",
+  "fix-git": "unresolved",
+  "grid-pattern-transform": "resolved",
+  "security-vulhub-minio": "resolved",
+  "oom": "unresolved",
+  "git-multibranch": "resolved"
+}

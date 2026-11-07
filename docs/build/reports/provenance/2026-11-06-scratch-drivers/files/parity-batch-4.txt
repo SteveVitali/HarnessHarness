@@ -1,0 +1,6 @@
+tmux-advanced-workflow
+play-zork
+oom
+qemu-alpine-ssh
+train-fasttext
+sqlite-db-truncate

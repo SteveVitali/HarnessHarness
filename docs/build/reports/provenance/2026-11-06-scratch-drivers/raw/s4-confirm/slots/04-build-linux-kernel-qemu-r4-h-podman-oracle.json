@@ -1,0 +1,103 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "sbb6f84d65e08d00340071eda4e7d2dc3513c8d4b3cca5094630c554ab4489a3f-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 41,
+      "name": "verdict.log",
+      "sha256": "b72695fcb3e2889d64484497e2ea8079822f1532c2505f226cde970957bedf7d"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 3709,
+      "name": "solution.log",
+      "sha256": "4f2b195d9bd869a9c80fccbb84ac5c3215d9a849df4e4639dc9eec3b0dfd2cf2"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"
+    },
+    {
+      "bytes": 4103,
+      "name": "verdict_verbatim.log",
+      "sha256": "a045a499745af757c0a1b24db14775b9aff31c577e48fb585c5104414fe9152a"
+    },
+    {
+      "bytes": 854,
+      "name": "solution.sh",
+      "sha256": "eca1f6f93280f567c491beb2efd97359aa853213cc6babcb1c0037f95b31c633"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__build-linux-kernel-qemu:latest",
+  "input_tokens": 1007,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 7853,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:bb6f84d65e08d00340071eda4e7d2dc3513c8d4b3cca5094630c554ab4489a3f",
+  "solution_kind": "sh",
+  "solution_log_bytes": 3709,
+  "solution_log_sha256": "4f2b195d9bd869a9c80fccbb84ac5c3215d9a849df4e4639dc9eec3b0dfd2cf2",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "build-linux-kernel-qemu",
+  "tokens_freed": 999,
+  "triggered": true,
+  "verdict.log.bytes": 41,
+  "verdict.log.sha256": "b72695fcb3e2889d64484497e2ea8079822f1532c2505f226cde970957bedf7d",
+  "verdict.rc": "1",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 4103,
+  "verdict_verbatim.log.sha256": "a045a499745af757c0a1b24db14775b9aff31c577e48fb585c5104414fe9152a",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 25872,
+  "work_dispatch": "observed:applied",
+  "work_exit": "2",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 25.88,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": null,
+    "verdict_reason": "no_pytest_summary:/usr/bin/python3: No module named pytest"
+  },
+  "egress_evidence": "Temporary failure resolving",
+  "disposition": "inconclusive{environment:cell_network_isolated:Temporary failure resolving}"
+}

@@ -1,0 +1,145 @@
+{
+ "schema": "hh-p1-raw-records/1",
+ "generated": "2026-11-07",
+ "evidence_class": "recorded execution \u2014 committed raw-record set; every committed packet recomputable records-in",
+ "purpose": "the per-slot/per-pair records the committed packets were folded from (REQ-XA-103, absorbs REQ-XA-011)",
+ "sha256sums": "SHA256SUMS",
+ "committed": {
+  "s4-confirm/slots": {
+   "files": 300,
+   "folded_into": "docs/build/reports/2026-11-05-s4-confirmation.json"
+  },
+  "s4-egress/slots": {
+   "files": 140,
+   "folded_into": "docs/build/reports/2026-11-05-s4-egress-cohort.json"
+  },
+  "s4-completion/slots": {
+   "files": 50,
+   "folded_into": "docs/build/reports/2026-11-06-s4-completion.json"
+  },
+  "s4-repairs/slots": {
+   "files": 30,
+   "folded_into": "docs/build/reports/2026-11-06-s4-30slot-repairs.json"
+  },
+  "parity-tranche-3/o-side": {
+   "files": 36,
+   "kind": "tb run-level + per-trial results.json / run_metadata.json across the 5 t3 run dirs",
+   "folded_into": "docs/build/reports/2026-11-05-parity-tranche-3.json pairs[] o_* members"
+  },
+  "parity-tranche-3/h-side": {
+   "files": 31,
+   "kind": "reference-runner per-task records + h-side-all.json fold",
+   "folded_into": "docs/build/reports/2026-11-05-parity-tranche-3.json pairs[] h_* members"
+  }
+ },
+ "total_files": 587,
+ "algorithm": "sha256tree/1 \u2014 sha256 over the sorted lines '<file sha256><two spaces><tree-relative path>' for every regular file in the set",
+ "not_committed": [
+  {
+   "class": "s4-confirm non-slot bulk (dockerfiles/logs/specs/stage/stores/ws/orch.log)",
+   "sha256tree": "d5e87340f8ba277a6b1f6930b89b4ebc5c4251cd9dd892300f0e1f61b5f237df",
+   "files": 5413,
+   "bytes": 27031927,
+   "committed": false,
+   "label": "not committed \u2014 bulk artifacts; content address only"
+  },
+  {
+   "class": "s4-egress non-slot bulk",
+   "sha256tree": "7a0607dbcbd94e31d1b2d9f61cd00eeefb01b970dc4a26992f4475aab2282b4c",
+   "files": 1953,
+   "bytes": 15714611,
+   "committed": false,
+   "label": "not committed \u2014 bulk artifacts; content address only"
+  },
+  {
+   "class": "s4-completion non-slot bulk",
+   "sha256tree": "c8665ea83058eee29b101e3cc1b557a23cc9691bf04cbd9bc293d4ba67f54cad",
+   "files": 610,
+   "bytes": 2431101,
+   "committed": false,
+   "label": "not committed \u2014 bulk artifacts; content address only"
+  },
+  {
+   "class": "s4-repairs non-slot bulk",
+   "sha256tree": "315eded92024ef995ceac660a930cf45028351a98eaae47a9e14fca679616d95",
+   "files": 600,
+   "bytes": 36446124,
+   "committed": false,
+   "label": "not committed \u2014 bulk artifacts; content address only"
+  },
+  {
+   "class": "tranche-3 O-side non-results bulk (agent/tests casts, session logs, panes, run.log, commands.txt)",
+   "sha256tree": "e76d359d918500fb9e0326131ddb1deaf65173905e9069b8421c162aafff9341",
+   "files": 216,
+   "bytes": 7361372,
+   "committed": false,
+   "label": "not committed \u2014 bulk artifacts; content address only"
+  },
+  {
+   "class": "tranche-1 O-side run tree (out of scope \u2014 no phase-1 computation folds it)",
+   "sha256tree": "467c6c7ea734e24d76bedc6409ad7fb909c900924bf196d5030f7f34f11797eb",
+   "files": 121,
+   "bytes": 7312128,
+   "committed": false,
+   "label": "not committed \u2014 out of scope per design F4"
+  },
+  {
+   "class": "tranche-2 O-side run tree (out of scope)",
+   "sha256tree": "98bbf951fa3c0170f47a572b7414fa51229ca96ab828294f883a0cd8f0991af2",
+   "files": 245,
+   "bytes": 8031857,
+   "committed": false,
+   "label": "not committed \u2014 out of scope per design F4"
+  },
+  {
+   "class": "tranche-1/2 H-side record trees h1/h2/t2 (out of scope)",
+   "sha256tree:h1": "26ea8501d01bb0700bdfd0ebb6e6df231caa6eefdbbbff8f0f757a763e5d58ba",
+   "sha256tree:h2": "fabbb60cb1c3a4bd3eabd97419ac8eb06f53edcf69f6ae125d07f558bc46a8f3",
+   "sha256tree:t2": "0b21d46482bda8452d1a74dcfc58fc5784911fa0584807d007632f5145b95ca5",
+   "files": 63,
+   "bytes": 12205070,
+   "committed": false,
+   "label": "not committed \u2014 out of scope per design F4"
+  },
+  {
+   "class": "vendored Software Heritage git mirror (repairs epoch)",
+   "sha256tree": "7847df877cffcadf84a79122382298fed619b21855e88c2275e7bd2d91b6347e",
+   "files": 14,
+   "bytes": 64766781,
+   "committed": false,
+   "label": "not committed \u2014 bulk mirror; content address only"
+  },
+  {
+   "class": "the 80-task dataset",
+   "committed": false,
+   "label": "not committed \u2014 carries a training-corpus canary; content digests live in ../dataset-digests.json"
+  },
+  {
+   "class": "derived/mirror container images and podman stores",
+   "committed": false,
+   "digest": "n/a{not a filesystem tree \u2014 podman storage}",
+   "label": "not committed \u2014 image identities are recorded on the slot/pair records"
+  }
+ ],
+ "fold_expectations": {
+  "note": "the recorded fold invariants a recompute must reproduce (A1 F8); RC-4 asserts recompute == these",
+  "slot_multiplicity": {
+   "1": 160,
+   "2": 90,
+   "3": 20,
+   "4": 30
+  },
+  "round0_later_attempt": {
+   "of": 60,
+   "count": 28
+  },
+  "backend_final_fold": {
+   "arm64_applehv": 250,
+   "amd64_gce": 50
+  },
+  "network_final_fold": {
+   "none": 160,
+   "bridge": 140
+  }
+ }
+}

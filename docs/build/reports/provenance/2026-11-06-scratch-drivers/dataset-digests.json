@@ -1,0 +1,27 @@
+{
+ "schema": "hh-dataset-digests/1",
+ "generated": "2026-11-07",
+ "algorithm": "sha256tree/1 \u2014 sha256 over the sorted lines '<file sha256><two spaces><dataset-relative path>' for every regular file under the listed task directories; one digest per set",
+ "suite_ref": "terminal-bench-core==0.1.1",
+ "catalogue_identity_fnv": {
+  "value": "sha256:bd18094423eaca3c",
+  "verbatim_from": "the frozen manifest's manifest.suite.catalogue_identity \u2014 a 64-bit FNV-1a over sorted task ids mislabelled 'sha256:'; retained as the identity of record, never replaced by these digests"
+ },
+ "sets": {
+  "tranche30": {
+   "tasks": 30,
+   "files": 294,
+   "sha256tree": "60d47248f6fae87f6c48674ea301620aeb88c3cf7125f20913e3cb2b1aa1cce4",
+   "task_list": "the 30 tranche-3 pair task_ids"
+  },
+  "catalogue80": {
+   "tasks": 80,
+   "files": 795,
+   "sha256tree": "f419eda19783261d21247ca6a14b7ea78373b79d46ba5394c0a0fda27aacf38f",
+   "task_list": "every directory of the local dataset copy"
+  }
+ },
+ "task_content": "never committed \u2014 the dataset carries a training-corpus canary (e.g. swe-bench-langcodes/run-tests.sh)",
+ "recompute": "python3 -I docs/build/tools/p1_records.py --check --dataset <dir> \u2014 RC-2 recomputes both digests when a dataset tree is supplied; with none it reports skipped(dataset_absent), never a pass",
+ "note": "tb's run_metadata.json records dataset_name: null and commit_hash: unknown \u2014 these content digests are the only dataset identity"
+}

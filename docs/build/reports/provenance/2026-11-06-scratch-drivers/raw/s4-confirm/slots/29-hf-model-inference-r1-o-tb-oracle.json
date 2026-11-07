@@ -1,0 +1,98 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "sc22d6c7d5615f312e9fb89ec8162e3904d3325a0e3aee7844e31e8105cf96f86-r1-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 19194,
+      "name": "solution.log",
+      "sha256": "aa28e845e4fc933308ecd3a76be3ac121f8c1be1e5c3caf4e0810dac146c5c59"
+    },
+    {
+      "bytes": 132,
+      "name": "run-tests.sh",
+      "sha256": "00a027492204f1b321fab096f77f57c75655e2b76af5287908d62c688da48b4c"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 61781,
+      "name": "verdict_verbatim.log",
+      "sha256": "4500205f5df3fbb7fa6eeac8e3235473f9f8006532cab0d65a400bbe870ecf84"
+    },
+    {
+      "bytes": 3265,
+      "name": "solution.sh",
+      "sha256": "a74255f5fdb07c1dbb0df15062b90a1db5d481aa47d6c05c9dfcb8ae21de0afb"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__hf-model-inference:latest",
+  "input_tokens": 4878,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 80975,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 1,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:c22d6c7d5615f312e9fb89ec8162e3904d3325a0e3aee7844e31e8105cf96f86",
+  "solution_kind": "sh",
+  "solution_log_bytes": 19194,
+  "solution_log_sha256": "aa28e845e4fc933308ecd3a76be3ac121f8c1be1e5c3caf4e0810dac146c5c59",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "hf-model-inference",
+  "tokens_freed": 4870,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 61781,
+  "verdict_verbatim.log.sha256": "4500205f5df3fbb7fa6eeac8e3235473f9f8006532cab0d65a400bbe870ecf84",
+  "verdict_verbatim.rc": "1",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 32210,
+  "work_dispatch": "observed:applied",
+  "work_exit": "1",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 32.21,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "unresolved",
+    "verdict_reason": "some_tests_failed",
+    "parsed": {
+      "test_model_downloaded": "failed",
+      "test_flask_api_running": "failed",
+      "test_sentiment_endpoint": "failed",
+      "test_api_error_handling": "failed"
+    },
+    "raw_bytes": 61781,
+    "stripped_bytes": 61781,
+    "ansi_stripped": false
+  },
+  "egress_evidence": "Connection refused",
+  "disposition": "inconclusive{environment:cell_network_isolated:Connection refused}"
+}

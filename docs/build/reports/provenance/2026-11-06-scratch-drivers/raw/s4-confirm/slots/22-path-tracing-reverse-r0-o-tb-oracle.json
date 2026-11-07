@@ -1,0 +1,97 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s2653a3a3974a1963242f792348bd394669a37897f6b8196aca340656228b6914-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 0,
+      "name": "solution.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 12970,
+      "name": "verdict_verbatim.log",
+      "sha256": "dee2f5cc370106d259577d9cf22fd4c5ecaaa9f64c13b01c00d5b21c6b3b038f"
+    },
+    {
+      "bytes": 9913,
+      "name": "solution.sh",
+      "sha256": "b11271aedc4e6882290cb908aea3f2208ced0101002742e10b136c9ecae79735"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 0,
+  "image": "localhost/s4-tb__path-tracing-reverse:latest",
+  "input_tokens": 81,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 12970,
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:2653a3a3974a1963242f792348bd394669a37897f6b8196aca340656228b6914",
+  "solution_kind": "sh",
+  "solution_log_bytes": 0,
+  "solution_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "path-tracing-reverse",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 12970,
+  "verdict_verbatim.log.sha256": "dee2f5cc370106d259577d9cf22fd4c5ecaaa9f64c13b01c00d5b21c6b3b038f",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 11593,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 11.6,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_image_c_exists": "passed",
+      "test_image_compiles": "passed",
+      "test_image_similarity": "passed"
+    },
+    "raw_bytes": 12970,
+    "stripped_bytes": 3445,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

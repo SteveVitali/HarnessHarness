@@ -1,0 +1,18 @@
+Starting harness run
+Run ID: 2026-11-05__23-16-40
+  Running tasks (6/6, Accuracy: 83.33%) - Last: git-workflow-hack ✓ ━━ 100% 0:4…
+
+Results Summary:
++-------------------+---------+
+| Metric            | Value   |
++===================+=========+
+| Resolved Trials   | 5       |
++-------------------+---------+
+| Unresolved Trials | 1       |
++-------------------+---------+
+| Accuracy          | 83.33%  |
++-------------------+---------+
+
+Results written to 
+/Users/stevenvitali/tb-work/parity-runs/o-side-3/2026-11-05__23-16-40/results.js
+on

@@ -1,0 +1,168 @@
+[ 3/30] git-workflow-hack supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 03-git-workflow-hack-r0-o-tb-oracle -> executed resolved wall=8619ms
+    slot 03-git-workflow-hack-r0-h-podman-oracle -> executed resolved wall=4893ms
+    slot 03-git-workflow-hack-r1-o-tb-oracle -> executed resolved wall=4874ms
+    slot 03-git-workflow-hack-r1-h-podman-oracle -> executed resolved wall=4982ms
+    slot 03-git-workflow-hack-r2-o-tb-oracle -> executed resolved wall=4856ms
+    slot 03-git-workflow-hack-r2-h-podman-oracle -> executed resolved wall=4693ms
+    slot 03-git-workflow-hack-r3-o-tb-oracle -> executed resolved wall=4671ms
+    slot 03-git-workflow-hack-r3-h-podman-oracle -> executed resolved wall=4796ms
+    slot 03-git-workflow-hack-r4-o-tb-oracle -> executed resolved wall=4879ms
+    slot 03-git-workflow-hack-r4-h-podman-oracle -> executed resolved wall=4842ms
+[ 4/30] build-linux-kernel-qemu supplement_slots=10
+    declared_deps={'apt': True, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': True, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 04-build-linux-kernel-qemu-r0-o-tb-oracle -> executed unresolved wall=1215525ms
+    slot 04-build-linux-kernel-qemu-r0-h-podman-oracle -> executed unresolved wall=1361772ms
+    slot 04-build-linux-kernel-qemu-r1-o-tb-oracle -> executed unresolved wall=1206285ms
+    slot 04-build-linux-kernel-qemu-r1-h-podman-oracle -> executed unresolved wall=1212612ms
+    slot 04-build-linux-kernel-qemu-r2-o-tb-oracle -> executed unresolved wall=1500062ms
+    slot 04-build-linux-kernel-qemu-r2-h-podman-oracle -> executed unresolved wall=1390127ms
+    slot 04-build-linux-kernel-qemu-r3-o-tb-oracle -> executed unresolved wall=1414129ms
+    slot 04-build-linux-kernel-qemu-r3-h-podman-oracle -> executed unresolved wall=1674309ms
+    slot 04-build-linux-kernel-qemu-r4-o-tb-oracle -> executed unresolved wall=1815747ms
+    slot 04-build-linux-kernel-qemu-r4-h-podman-oracle -> executed unresolved wall=1817732ms
+[ 6/30] polyglot-c-py supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 06-polyglot-c-py-r0-o-tb-oracle -> executed resolved wall=8466ms
+    slot 06-polyglot-c-py-r0-h-podman-oracle -> executed resolved wall=9109ms
+    slot 06-polyglot-c-py-r1-o-tb-oracle -> executed resolved wall=9820ms
+    slot 06-polyglot-c-py-r1-h-podman-oracle -> executed resolved wall=10268ms
+    slot 06-polyglot-c-py-r2-o-tb-oracle -> executed resolved wall=9284ms
+    slot 06-polyglot-c-py-r2-h-podman-oracle -> executed resolved wall=9854ms
+    slot 06-polyglot-c-py-r3-o-tb-oracle -> executed resolved wall=10063ms
+    slot 06-polyglot-c-py-r3-h-podman-oracle -> executed resolved wall=8647ms
+    slot 06-polyglot-c-py-r4-o-tb-oracle -> executed resolved wall=8717ms
+    slot 06-polyglot-c-py-r4-h-podman-oracle -> executed resolved wall=9916ms
+[ 8/30] configure-git-webserver supplement_slots=10
+    declared_deps={'apt': True, 'pip': False, 'uv_bootstrap': True, 'git_clone': True, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 08-configure-git-webserver-r0-o-tb-oracle -> executed resolved wall=19719ms
+    slot 08-configure-git-webserver-r0-h-podman-oracle -> executed resolved wall=19991ms
+    slot 08-configure-git-webserver-r1-o-tb-oracle -> executed resolved wall=18944ms
+    slot 08-configure-git-webserver-r1-h-podman-oracle -> executed resolved wall=19689ms
+    slot 08-configure-git-webserver-r2-o-tb-oracle -> executed resolved wall=20382ms
+    slot 08-configure-git-webserver-r2-h-podman-oracle -> executed resolved wall=24092ms
+    slot 08-configure-git-webserver-r3-o-tb-oracle -> executed resolved wall=20382ms
+    slot 08-configure-git-webserver-r3-h-podman-oracle -> executed resolved wall=21046ms
+    slot 08-configure-git-webserver-r4-o-tb-oracle -> executed resolved wall=19686ms
+    slot 08-configure-git-webserver-r4-h-podman-oracle -> executed resolved wall=20241ms
+[11/30] eval-mteb.hard supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 11-eval-mteb.hard-r0-o-tb-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r0-h-podman-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r1-o-tb-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r1-h-podman-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r2-o-tb-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r2-h-podman-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r3-o-tb-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r3-h-podman-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r4-o-tb-oracle -> inconclusive image
+    slot 11-eval-mteb.hard-r4-h-podman-oracle -> inconclusive image
+[13/30] fix-git supplement_slots=10
+    declared_deps={'apt': False, 'pip': True, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 13-fix-git-r0-o-tb-oracle -> inconclusive image
+    slot 13-fix-git-r0-h-podman-oracle -> inconclusive image
+    slot 13-fix-git-r1-o-tb-oracle -> inconclusive image
+    slot 13-fix-git-r1-h-podman-oracle -> inconclusive image
+    slot 13-fix-git-r2-o-tb-oracle -> inconclusive image
+    slot 13-fix-git-r2-h-podman-oracle -> inconclusive image
+    slot 13-fix-git-r3-o-tb-oracle -> inconclusive image
+    slot 13-fix-git-r3-h-podman-oracle -> inconclusive image
+    slot 13-fix-git-r4-o-tb-oracle -> inconclusive image
+    slot 13-fix-git-r4-h-podman-oracle -> inconclusive image
+[15/30] security-vulhub-minio supplement_slots=10
+    declared_deps={'apt': True, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': True, 'hf_hub': False, 'remote_rpc': True} -> egress:bridge
+    slot 15-security-vulhub-minio-r0-o-tb-oracle -> executed resolved wall=10130ms
+    slot 15-security-vulhub-minio-r0-h-podman-oracle -> executed resolved wall=11583ms
+    slot 15-security-vulhub-minio-r1-o-tb-oracle -> executed resolved wall=11769ms
+    slot 15-security-vulhub-minio-r1-h-podman-oracle -> executed resolved wall=11195ms
+    slot 15-security-vulhub-minio-r2-o-tb-oracle -> executed resolved wall=11536ms
+    slot 15-security-vulhub-minio-r2-h-podman-oracle -> executed resolved wall=11895ms
+    slot 15-security-vulhub-minio-r3-o-tb-oracle -> executed resolved wall=11628ms
+    slot 15-security-vulhub-minio-r3-h-podman-oracle -> executed resolved wall=11440ms
+    slot 15-security-vulhub-minio-r4-o-tb-oracle -> executed resolved wall=10729ms
+    slot 15-security-vulhub-minio-r4-h-podman-oracle -> executed resolved wall=11482ms
+[16/30] oom supplement_slots=10
+    declared_deps={'apt': False, 'pip': True, 'uv_bootstrap': False, 'git_clone': False, 'fetch': False, 'hf_hub': True, 'remote_rpc': False} -> egress:bridge
+    slot 16-oom-r0-o-tb-oracle -> inconclusive image
+    slot 16-oom-r0-h-podman-oracle -> inconclusive image
+    slot 16-oom-r1-o-tb-oracle -> inconclusive image
+    slot 16-oom-r1-h-podman-oracle -> inconclusive image
+    slot 16-oom-r2-o-tb-oracle -> inconclusive image
+    slot 16-oom-r2-h-podman-oracle -> inconclusive image
+    slot 16-oom-r3-o-tb-oracle -> inconclusive image
+    slot 16-oom-r3-h-podman-oracle -> inconclusive image
+    slot 16-oom-r4-o-tb-oracle -> inconclusive image
+    slot 16-oom-r4-h-podman-oracle -> inconclusive image
+[18/30] password-recovery supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 18-password-recovery-r0-o-tb-oracle -> executed resolved wall=7385ms
+    slot 18-password-recovery-r0-h-podman-oracle -> executed resolved wall=8051ms
+    slot 18-password-recovery-r1-o-tb-oracle -> executed resolved wall=7788ms
+    slot 18-password-recovery-r1-h-podman-oracle -> executed resolved wall=7210ms
+    slot 18-password-recovery-r2-o-tb-oracle -> executed resolved wall=7982ms
+    slot 18-password-recovery-r2-h-podman-oracle -> executed resolved wall=7369ms
+    slot 18-password-recovery-r3-o-tb-oracle -> executed resolved wall=7603ms
+    slot 18-password-recovery-r3-h-podman-oracle -> executed resolved wall=7122ms
+    slot 18-password-recovery-r4-o-tb-oracle -> executed resolved wall=7566ms
+    slot 18-password-recovery-r4-h-podman-oracle -> executed resolved wall=8323ms
+[20/30] qemu-alpine-ssh supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 20-qemu-alpine-ssh-r0-o-tb-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r0-h-podman-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r1-o-tb-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r1-h-podman-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r2-o-tb-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r2-h-podman-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r3-o-tb-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r3-h-podman-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r4-o-tb-oracle -> inconclusive image
+    slot 20-qemu-alpine-ssh-r4-h-podman-oracle -> inconclusive image
+[21/30] polyglot-rust-c supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 21-polyglot-rust-c-r0-o-tb-oracle -> executed unresolved wall=10393ms
+    slot 21-polyglot-rust-c-r0-h-podman-oracle -> executed unresolved wall=9965ms
+    slot 21-polyglot-rust-c-r1-o-tb-oracle -> executed unresolved wall=10024ms
+    slot 21-polyglot-rust-c-r1-h-podman-oracle -> executed unresolved wall=10403ms
+    slot 21-polyglot-rust-c-r2-o-tb-oracle -> executed unresolved wall=10484ms
+    slot 21-polyglot-rust-c-r2-h-podman-oracle -> executed unresolved wall=9494ms
+    slot 21-polyglot-rust-c-r3-o-tb-oracle -> executed unresolved wall=8771ms
+    slot 21-polyglot-rust-c-r3-h-podman-oracle -> executed unresolved wall=9246ms
+    slot 21-polyglot-rust-c-r4-o-tb-oracle -> executed unresolved wall=9497ms
+    slot 21-polyglot-rust-c-r4-h-podman-oracle -> executed unresolved wall=8861ms
+[25/30] swe-bench-astropy-2 supplement_slots=10
+    declared_deps={'apt': True, 'pip': True, 'uv_bootstrap': False, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 25-swe-bench-astropy-2-r0-o-tb-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=7330ms
+    slot 25-swe-bench-astropy-2-r0-h-podman-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6761ms
+    slot 25-swe-bench-astropy-2-r1-o-tb-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=17704ms
+    slot 25-swe-bench-astropy-2-r1-h-podman-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=10774ms
+    slot 25-swe-bench-astropy-2-r2-o-tb-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6920ms
+    slot 25-swe-bench-astropy-2-r2-h-podman-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6492ms
+    slot 25-swe-bench-astropy-2-r3-o-tb-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6392ms
+    slot 25-swe-bench-astropy-2-r3-h-podman-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6445ms
+    slot 25-swe-bench-astropy-2-r4-o-tb-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6489ms
+    slot 25-swe-bench-astropy-2-r4-h-podman-oracle -> inconclusive{verifier_unavailable:no_parseable_verdict} None wall=6461ms
+[26/30] modernize-fortran-build supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 26-modernize-fortran-build-r0-o-tb-oracle -> executed resolved wall=4888ms
+    slot 26-modernize-fortran-build-r0-h-podman-oracle -> executed resolved wall=5861ms
+    slot 26-modernize-fortran-build-r1-o-tb-oracle -> executed resolved wall=5343ms
+    slot 26-modernize-fortran-build-r1-h-podman-oracle -> executed resolved wall=4958ms
+    slot 26-modernize-fortran-build-r2-o-tb-oracle -> executed resolved wall=4896ms
+    slot 26-modernize-fortran-build-r2-h-podman-oracle -> executed resolved wall=5938ms
+    slot 26-modernize-fortran-build-r3-o-tb-oracle -> executed resolved wall=5027ms
+    slot 26-modernize-fortran-build-r3-h-podman-oracle -> executed resolved wall=5018ms
+    slot 26-modernize-fortran-build-r4-o-tb-oracle -> executed resolved wall=5261ms
+    slot 26-modernize-fortran-build-r4-h-podman-oracle -> executed resolved wall=5041ms
+[29/30] hf-model-inference supplement_slots=10
+    declared_deps={'apt': False, 'pip': True, 'uv_bootstrap': False, 'git_clone': False, 'fetch': False, 'hf_hub': True, 'remote_rpc': True} -> egress:bridge
+    slot 29-hf-model-inference-r0-o-tb-oracle -> executed unresolved wall=16850ms
+    slot 29-hf-model-inference-r0-h-podman-oracle -> executed unresolved wall=31779ms
+    slot 29-hf-model-inference-r1-o-tb-oracle -> inconclusive{environment:cell_network_isolated:Connection refused} unresolved wall=20683ms
+    slot 29-hf-model-inference-r1-h-podman-oracle -> executed unresolved wall=21419ms
+    slot 29-hf-model-inference-r2-o-tb-oracle -> executed unresolved wall=14939ms
+    slot 29-hf-model-inference-r2-h-podman-oracle -> executed unresolved wall=15519ms
+    slot 29-hf-model-inference-r3-o-tb-oracle -> executed unresolved wall=15260ms
+    slot 29-hf-model-inference-r3-h-podman-oracle -> executed unresolved wall=15246ms
+    slot 29-hf-model-inference-r4-o-tb-oracle -> executed unresolved wall=15341ms
+    slot 29-hf-model-inference-r4-h-podman-oracle -> executed unresolved wall=15441ms

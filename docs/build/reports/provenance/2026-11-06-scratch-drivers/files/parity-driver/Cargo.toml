@@ -1,0 +1,11 @@
+[package]
+name = "parity-driver"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+hharness-eval = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-eval" }
+hharness-lab = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-lab" }
+hharness-wire = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-wire" }
+
+[workspace]

@@ -1,0 +1,20 @@
+[ 1/6] fix-permissions
+      -> resolved (all_tests_passed)
+[ 2/6] get-bitcoin-nodes
+      -> resolved (all_tests_passed)
+[ 3/6] processing-pipeline
+      -> resolved (all_tests_passed)
+[ 4/6] build-linux-kernel-qemu
+      -> unresolved (some_tests_failed)
+[ 5/6] qemu-startup
+      -> unresolved (build_failure)
+[ 6/6] hf-model-inference
+      -> unresolved (some_tests_failed)
+{
+  "fix-permissions": "resolved",
+  "get-bitcoin-nodes": "resolved",
+  "processing-pipeline": "resolved",
+  "build-linux-kernel-qemu": "unresolved",
+  "qemu-startup": "unresolved",
+  "hf-model-inference": "unresolved"
+}

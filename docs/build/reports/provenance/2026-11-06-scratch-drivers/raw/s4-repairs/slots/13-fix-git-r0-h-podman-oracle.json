@@ -1,0 +1,114 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "s93a8267de9ffd91e2bb9f58e8d7cafe3828799269fc0241eb92edbf98771e9a4-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 807,
+      "name": "solution.log",
+      "sha256": "e670bbb1a0de5655b381752e73c42e61ac4c6a0fbf0392aeac334a8d653dc476"
+    },
+    {
+      "bytes": 104,
+      "name": "run-tests.sh",
+      "sha256": "e1b4099b6be3204bd5478d6358bdbaf88ee5c9217d269eb598db18062efd4763"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 3879,
+      "name": "verdict_verbatim.log",
+      "sha256": "29ddb02a77b3875aa1d5d4375aa2af8f34c13250d4bfbfdd29eb073ca1a8ce78"
+    },
+    {
+      "bytes": 211,
+      "name": "stream.sh",
+      "sha256": "95a9412dcc8770dfd1ab660d2f99ebd3044f3fbca32195889903ccb51dcff416"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "declared_deps": [
+    "pip",
+    "uv_bootstrap"
+  ],
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 3,
+  "helper_bin": "/Users/stevenvitali/MetaHarness-harnessharness/target/debug/hh-helper",
+  "helper_variant": "hh-helper --network (R5.56 first-class; stock binary)",
+  "image": "localhost/s4-tb__fix-git:latest",
+  "input_tokens": 285,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 4686,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "remote_host": "podman-s4-backend",
+  "remote_ws_push": "attempt0:pushed:10240B",
+  "remote_ws_syncs": 4,
+  "request_changed": true,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:93a8267de9ffd91e2bb9f58e8d7cafe3828799269fc0241eb92edbf98771e9a4",
+  "solution_kind": "yaml",
+  "solution_log_bytes": 807,
+  "solution_log_sha256": "e670bbb1a0de5655b381752e73c42e61ac4c6a0fbf0392aeac334a8d653dc476",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "fix-git",
+  "task_workdir": "/app/personal-site",
+  "tokens_freed": 277,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 3879,
+  "verdict_verbatim.log.sha256": "29ddb02a77b3875aa1d5d4375aa2af8f34c13250d4bfbfdd29eb073ca1a8ce78",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 18453,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 18.46,
+  "prior_disposition": "inconclusive{upstream_deleted}",
+  "supplement_epoch": "s4-30slot-repairs-gce",
+  "repair_class": "env_repair",
+  "env_repair": "vendored_mirror",
+  "repair_note": "upstream deleted (rc 128; terminal-bench head still clones TheMikeMerrill/personal-site \u2014 no task-version admission). Mirror: Software Heritage git-bare snapshot swh:1:snp:b2cbd5476b5a00d133f224e990498de4e06bad01 (visit 8, 2026-04-04T11:00:17Z, full), vendored at ~/tb-work/vendored/fix-git/personal-site.git; pinned commit d7d3e4ba9350f634d92d39ace2b471433ee57d50 verified in refs/heads/master history. Client Dockerfile rewritten ONLY by added COPY vendor/ + git url.insteadOf lines for the setup.sh leg (config unset after) \u2014 all task files byte-identical.",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_about_file": "passed",
+      "test_layout_file": "passed"
+    },
+    "raw_bytes": 3879,
+    "stripped_bytes": 2798,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

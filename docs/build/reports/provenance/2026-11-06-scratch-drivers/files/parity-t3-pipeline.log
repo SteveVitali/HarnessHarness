@@ -1,0 +1,352 @@
+[23:31:48] pipeline start; waiting for in-flight O-side batch 1
+[23:59:30] in-flight O-side batch 1 finished
+[23:59:30] H-side batch 1 starting
+[00:25:56] H-side batch 1 done rc=0
+[00:25:56] prune starting
+Deleted Images
+7599185c66316003fa4971373d8b0e4b59abd5550594086974ce30eeecc593fe
+d134f15b55952e57df75d927ac0770806f47da664010533ed946296db1b0579c
+777db9803ba820e0bea2922b3e1ec68a2824f12fcb8476b49a7e2df412c15bbf
+5be1101cfee9df5c6394e93d36d895a22da620c8e1298053f296df7a1ec0c40f
+3ac382322cdcbfd7dd640f277fe2bc2b3b9f0d19318223af80cd9b6b98f3d824
+511c85b108d5cd0e705bbdc8236e60295db12fe619b0c96a248cdc7bace7e462
+Total reclaimed space: 6.343GB
+ID						RECLAIMABLE	SIZE		LAST ACCESSED
+1p8q9tixosldcnpmscr7j9qx9*              	true 		0B        	27 minutes ago
+zv9miwmtjj6abw0obhgcxe3lb               	true 	32B       	27 minutes ago
+ronxzojsmg5ja8u4i9xajz239*              	true 	4.096kB   	52 minutes ago
+osu5nzk2z0vudmsjt65mvs0wo               	true 	136.5MB   	28 minutes ago
+torun2fg91mi44iswf435fdi6*              	true 	0B        	About an hour ago
+s0tdkbpg1j3u4w3rhjtfks5w8*              	true 	0B        	28 minutes ago
+i92xkj6fq1gn0atw22iay6w97*              	true 	4.096kB   	27 minutes ago
+xql1sew7eqtjtxk8sk1ynl52z*              	true 	4.096kB   	About an hour ago
+putj0b12o7twh7zrlox1zl75a*              	true 	0B        	27 minutes ago
+q8hcjj1e5ls540d5e6wse7ot8               	true 	2.638GB   	About an hour ago
+a2yzjj1jvp6er1bxep4m61ful               	true 	4.725kB   	27 minutes ago
+osa7ys4j1ziqbujs2qagpuf7h               	true 	118B      	28 minutes ago
+yi3gflw7slgy8ypc2earslp95               	true 	4.709kB   	About an hour ago
+tysnxaxebion2aqb03ibj2iaf*              	true 	4.096kB   	28 minutes ago
+yyed7gvngvu8z4la2uy6w3r1m*              	true 	4.096kB   	28 minutes ago
+4ggro6g7wxp1k1kvf7dowqwev*              	true 	90.11kB   	27 minutes ago
+zg3gjsacivbz834anm98vwneu*              	true 	0B        	52 minutes ago
+p62xj2k62v0rwydcsus1ebfqn*              	true 	4.096kB   	About an hour ago
+p43a9eghn680rudqzne8fo6yo               	true 	131kB     	27 minutes ago
+rbfp5g3jqtrpl7oicv7lmil2h*              	true 	0B        	28 minutes ago
+zzcjxxv88ean0z1gkaeg9zmh7               	true 	32B       	27 minutes ago
+qiejin4t3o5h74tbmnkyr0umf*              	true 	4.096kB   	27 minutes ago
+j7ketskz3xn0r27241aejquat*              	true 	12.29kB   	27 minutes ago
+bdjfb6vg8tl9cbseonx1vyepm               	true 	4.689kB   	27 minutes ago
+w45dqvqic0oz8fr77a8mxtu97               	true 	185MB     	28 minutes ago
+bs9qpp9zr5hvzees60g0i58z6               	true 	93B       	About an hour ago
+stw8djan44z27ogzu2eiefyex               	true 	180.6MB   	28 minutes ago
+fx62fgu97kac29ng1kqw67c32               	true 	3.681GB   	About an hour ago
+vznuscbio2csmmy962pq80g1o               	true 	10.56kB   	27 minutes ago
+llimpehf906vhe29hszzf8eg0               	true 	34.8MB    	About an hour ago
+rd504ych5ajwr6iidq1euztgf               	true 	120B      	27 minutes ago
+3bf5ldbjpyfa0ogqudhyy7sn6               	true 	522.4MB   	28 minutes ago
+t5qd1vof6i94fhcc6t1s06xtm               	true 	131.3MB   	27 minutes ago
+2uh52kx6loxf5mg8zcr3rpm9y               	true 	93B       	27 minutes ago
+c5a2h0cfmi0hd72sb4i3jh6og               	true 	250B      	About an hour ago
+1zmhiw0jjp9zrgcxjlngx8ffg               	true 	91B       	27 minutes ago
+kwqze2lkr9hianlvlpphbfzvi               	true 	57.78MB   	30 minutes ago
+z9uhmmvfz69l756iwda5yj8wc               	true 	78.7MB    	About an hour ago
+s48zffkr139bwmwef2pb4rino               	true 	12.26MB   	About an hour ago
+y7gahmocpwsit0tgd08ij13ic               	true 	250B      	30 minutes ago
+x1gtug822m8ia8yn36m42z6vl               	true 	65.68MB   	52 minutes ago
+utev0yl3vgcnjuxak5ej9zzpk               	true 	136.6MB   	52 minutes ago
+ya2qb0oymbbudr5vu2mttwobh               	true 	56.13MB   	30 minutes ago
+niv1dh73xdovpbq3dl1j6n3h2               	true 	134.4MB   	About an hour ago
+lh99bhndcbh77neriyxwvbtlb               	true 	13.04MB   	30 minutes ago
+gt4o0exo3bvd8m0j0zmxnpd5q               	true 	134.1MB   	30 minutes ago
+Total:	8.198GB
+/dev/vda4        30G  3.1G   27G  11% /var
+[00:26:01] prune done
+[00:26:01] O-side batch 2 starting
+[00:35:12] O-side batch 2 done rc=0
+[00:35:12] H-side batch 2 starting
+[00:38:11] H-side batch 2 done rc=0
+[00:38:11] prune starting
+Deleted Images
+fc158aea67c9cd581d83479ea8da47af4b191555b2c54f3a5015ff66e0abc136
+51fe22fd4293d62d84ca5196a3bebab70fa2e9486d19f9535f2b7888f3f56aaa
+b6493fc781fa2b84ebdda1b1ba7855be49e7c62361268eac0e472e65f28be781
+96861cd0fbd1f255f9102333dee3fd1daadbc7d2183597d166a3e28d49d04b23
+858f0e5beca461a61865648d6567a77576379f75250affb552aff809fb4cd0f5
+23b459407c3482801a9ca6adb18ca6123559a0b518efd34f67fc946064e99f91
+7485c7fcf9972aeb4e1cb481d1f06e1f40d465cc234dfa748b5b05fc447212da
+5b13379601f310223c85f4df988342a1ef1c302396fbd91ef421b21fd53c1ef3
+1aa1dedef9a6cac93ac36638db22b9191ad51fcbabc036db05156c55f19927d7
+Total reclaimed space: 2.761GB
+ID						RECLAIMABLE	SIZE		LAST ACCESSED
+rhyqgody68py47f78u87teamd               	true 		414.2MB   	3 minutes ago
+cr8p1zuspdi32hp9c0dtuv3qy               	true 	32.04MB   	6 minutes ago
+z76x6p3qwr9m841otuudm6n1x*              	true 	0B        	4 minutes ago
+pd4bfscus48cc4ejdr7wmp0uf               	true 	93B       	4 minutes ago
+ol243va2ghbmg613axo378myq               	true 	16.63GB   	6 minutes ago
+uhclz98if31ublrwxuf79vrvj*              	true 	0B        	6 minutes ago
+ur1kndlvvzr0a4g9c69kstif4*              	true 	81.92kB   	6 minutes ago
+7pa1lwq77fpwgi4f9gzu2pfkw*              	true 	0B        	5 minutes ago
+i81q7p43je9wwk5387kn7oz34*              	true 	0B        	3 minutes ago
+ohnng2kk3vze8q8fpzeulrscj*              	true 	0B        	6 minutes ago
+w29u8oa5btgm7xs3i7acp6w4s*              	true 	16.38kB   	5 minutes ago
+orcoavaix1s9cavguiludtfjk*              	true 	0B        	5 minutes ago
+xbi03hv8qm9xs9cbj0ou00mam*              	true 	4.096kB   	5 minutes ago
+ltdwgeejpwnquqlz3xyeze17x               	true 	18.67kB   	6 minutes ago
+4n6rifb2bggfhkowrzgj4bceg*              	true 	4.096kB   	4 minutes ago
+lh7aygvovsfpjmfhav3rxstkp*              	true 	4.096kB   	6 minutes ago
+m6c3r39y5gx3akinx7uk2hec1*              	true 	4.096kB   	3 minutes ago
+ca6bpxfs8rl9stx4augn4jdr0               	true 	38.06MB   	6 minutes ago
+0vyrde86f0m5tl0erb8yeauzv*              	true 	4.096kB   	5 minutes ago
+zn9u9tyny5n2g0jnyvkesy9z7               	true 	13.35MB   	4 minutes ago
+meqxtwyzkhacc6c0i3kut0oz0               	true 	93B       	6 minutes ago
+t55nfop6pr50bqvsjdc8ts1ue*              	true 	4.096kB   	6 minutes ago
+jjenx50a9b4hk6ts9v83t3hv3               	true 	25.2kB    	5 minutes ago
+hbigufuudnbtapj4w1j1kxmui               	true 	249B      	4 minutes ago
+myxcewers174fr09hqis88efb               	true 	91B       	3 minutes ago
+qem1tpgnqgqvje46zgrtx7oco               	true 	4.128kB   	6 minutes ago
+xhxhvd6p3tclatog8pz9q277q               	true 	65.68MB   	5 minutes ago
+xcs511n3zhfiyfg7927qygj2e               	true 	5.086kB   	5 minutes ago
+m49q6ad1qcho0usln76be2u4s               	true 	12.58MB   	4 minutes ago
+9kiw6op4k9s11pq3xu1rb488m               	true 	408.1MB   	6 minutes ago
+9eym0rrxdgap7la2leqy7qdi9               	true 	4.43kB    	6 minutes ago
+m0fhmlq69ur2stfz76acfnr3h               	true 	5.088kB   	5 minutes ago
+byny8e8bg2mhmwuwmlayesu9q               	true 	250B      	6 minutes ago
+ggh93m7mdsbb0r6xatm9lxlnk               	true 	136.6MB   	5 minutes ago
+r87k1twad9yrhu0dxrckjl05w               	true 	4.254kB   	6 minutes ago
+5d4ydbn3ogwu3oin03rht165h               	true 	3.511MB   	4 minutes ago
+l3n0v9azsocoezsupzy0dbpzb               	true 	8.434kB   	5 minutes ago
+c1bfb75ascavk6643hjwh9q8e               	true 	28.21MB   	4 minutes ago
+frr6d8c490ppq618z1uba34ki               	true 	14.88kB   	6 minutes ago
+b2886h1cdv220alxby2xzztol               	true 	78.7MB    	12 minutes ago
+exu8srhf58y9ujl548yvxcei9               	true 	18.06kB   	5 minutes ago
+133nlpt6ya8pboocgnu7kojcv               	true 	4.298kB   	6 minutes ago
+5kprfrs0371efox03m785ef7c               	true 	12.26MB   	12 minutes ago
+f7cd16hasubkfzf2s76zep95n               	true 	134.4MB   	12 minutes ago
+75xr6s48bmkmm28iymrs1sbul               	true 	41.61kB   	6 minutes ago
+gdy00yebn5713d4cm0cebvi05               	true 	45.99MB   	5 minutes ago
+ww9f6em3wf31qbl18tped7ydm               	true 	5.042kB   	6 minutes ago
+lbdt4gcqpdqtgau9pkzq3cmxu               	true 	10.79kB   	6 minutes ago
+q5ijaeynw7q4rlks8xr84dsz3               	true 	32B       	6 minutes ago
+zhm1mmpc1gp1154q4jzo5yvem               	true 	97B       	6 minutes ago
+j7rpfrj2fm3teur8gz9l13lse               	true 	93B       	5 minutes ago
+wql98wmduhxt9iosa156sr1ib               	true 	57.78MB   	6 minutes ago
+5z3de8t0kzs97culufrosbqnc               	true 	250B      	6 minutes ago
+sgfjpr35nj2rlebo439b4xiz7               	true 	56.13MB   	6 minutes ago
+11dvk21zns42z3eztb41sh1mu               	true 	13.04MB   	6 minutes ago
+x51xega9ft8ze8nnjyoo64qon               	true 	134.1MB   	6 minutes ago
+Total:	18.32GB
+/dev/vda4        30G  3.1G   27G  11% /var
+[00:38:13] prune done
+[00:38:13] O-side batch 3 starting
+[00:46:43] O-side batch 3 done rc=0
+[00:46:43] H-side batch 3 starting
+[00:49:27] H-side batch 3 done rc=0
+[00:49:27] prune starting
+Deleted Volumes
+c1e1c0ffa03ff08e4f7de8aa1c12e6da93bdf2ca05ee29a18047b6d50d3478b9
+cd7c74c9ac7aa635ee5bedfa61320877ef50bb27109fe1dd718091286e732b10
+5553b37a773f937a26b5d4551ea6cbffacd2eb3f772f8a6f9fc328d315a66a71
+64d968cbb41ae66575fbfa49443319b7e632e9cf1f0e7905434bdf0ba1892bda
+2d9f4bd17ed9aa2ef7917749515140290e858d6a6431c1cdacc9b1b97959a6e6
+76b9f4d30d647a6971eaa96883097c9e5037eb500674ea67e4e81ea26e4b8d79
+Deleted Images
+9e2e831f574ac5415ea84eb0f21d1fedfcfe70f9d329a1bfb1c1a88ccd8c1e3a
+92063e73429064d9cec5a2bb2488f0d23d7460d7d696dc440f03af87c6f1f5d6
+facec4d79ab78423d5a0818c60bbfd6562eb0be0cc4d2ded364f84cfdcde8642
+837a2ec82f4288b3a091c05919980878d08a137809f64b303cd89a562a96dcbb
+7576c36c4c364edf3100671553ca44c8c74a12eacb8a0c0bcaad35152e48ec85
+d98d20e1b448620c67ff63616901335efa2138b9b093fee1e242c643a65a3509
+04801bf034763a5fc1d3d6cb8e27f59df3febcb9e003536abcda60c1abf0020d
+e370a58269075ee2812f151c17371067613731b6812aaf853cf1b717357da9d2
+890b56d2e4338ce1be28c80c174b7115ab0552779a9be55f5daf58078a9ae62e
+Total reclaimed space: 3.289GB
+ID						RECLAIMABLE	SIZE		LAST ACCESSED
+5z8tcttzhjwu9penm0k0xlyj6               	true 		4.411kB   	2 minutes ago
+7t639ocsscsktyjp6cmbtms72*              	true 	0B        	2 minutes ago
+iz5yw5sa6ua6fa50vtjgvifv0*              	true 	4.096kB   	9 minutes ago
+u3c23eyn28h597zs73de2ua6p*              	true 	4.096kB   	2 minutes ago
+qh44gvkitr4dvdl24tdpuddvp*              	true 	0B        	8 minutes ago
+lx5uibsrx45sq6hordojdpu4j               	true 	4.128kB   	10 minutes ago
+s1v0r5kpzda4cy1oh0lj9iear*              	true 	0B        	10 minutes ago
+gqsfbt08gmfz3xhrqpry2bxfl*              	true 	4.096kB   	11 minutes ago
+24mwfzlyxacgvdq98nvaf6che*              	true 	0B        	8 minutes ago
+4xuhr3ix0t2vhkoeygbet06hm               	true 	32B       	11 minutes ago
+hy8fywwmwlqlhd7pbos38hlwn*              	true 	0B        	9 minutes ago
+zrsq4y3oj3t0lnfer77j53s79*              	true 	12.29kB   	10 minutes ago
+9ku4zgkg8m2nz8w240dkpmutv               	true 	91B       	9 minutes ago
+qrp33txdxfxnr2i6ickm7lg1t*              	true 	4.096kB   	2 minutes ago
+sc7bc1tospzcmdo0t21h0cp53*              	true 	4.096kB   	8 minutes ago
+jvdnb5e5xd8jajdg3w9isvdty               	true 	12.29kB   	8 minutes ago
+vxu6mfl2fmeh5wdidg077q485               	true 	32B       	8 minutes ago
+nvxsmohgeredlm3su3n0vgqy3*              	true 	4.096kB   	8 minutes ago
+cjs214in228yspj0866j3y512*              	true 	4.096kB   	10 minutes ago
+ac8ysv5g436x98lbd1o4hbajs*              	true 	16.38kB   	8 minutes ago
+jrjb5p1d3c537a0vl1gk4p56j*              	true 	0B        	11 minutes ago
+jwertqaf1wsiqnzogvude805m               	true 	4.428kB   	10 minutes ago
+y3v7pcbk2boxthnmwikq69km0               	true 	14.85MB   	9 minutes ago
+q1w3k95ahcdinb8jn67pp7izx               	true 	4.41kB    	2 minutes ago
+oo4k9z8hy3nh3zxguyjttx0fp               	true 	359.8MB   	8 minutes ago
+zetsnfhcsoo91m4w7seaq9q1b               	true 	4.096kB   	8 minutes ago
+gs1y1rqeuyiy0jwaval7q1it5               	true 	361.1MB   	8 minutes ago
+o1dxlc4orloe0krvlkhos00s5               	true 	5.197kB   	10 minutes ago
+np2fz38536ocxfulj9hpmmcsr               	true 	15.79GB   	2 minutes ago
+2xvxr2wnbx4dw1qzamv9ii8u0               	true 	28.85MB   	9 minutes ago
+sobgk28a0jspxois7lw4wvs0h               	true 	140.5MB   	8 minutes ago
+wys7k2xoc1a3bknr0ofg7pcg8               	true 	4.886kB   	10 minutes ago
+i97nm4gnpjlqpwjhl49zzhht6               	true 	93B       	2 minutes ago
+gu2ny7lvyvmwtmrqbt68rsdd9               	true 	247.9MB   	8 minutes ago
+9gb1fyezp2oe3nfin5vmfadzl               	true 	252B      	8 minutes ago
+5rd1cu3zna995icxdjctr1ol2               	true 	57.78MB   	11 minutes ago
+eyhdjmmv82biujlp94ylx4fmj               	true 	93B       	10 minutes ago
+h6t4xf0h2mwnid98d0xmgbfu1               	true 	66.79MB   	8 minutes ago
+o7jnycfdgq8wm0co95z7zkzm9               	true 	130B      	10 minutes ago
+nx6mbqk5p2wpwmuvwdgtxvrla               	true 	250B      	11 minutes ago
+ma8x5eaa53b10ie822b32ral5               	true 	10.51kB   	10 minutes ago
+7jaxepf714it72hep5u6gofle               	true 	56.13MB   	11 minutes ago
+wy6v1c1p31ru07m1bn6yqgnvn               	true 	13.14MB   	8 minutes ago
+ycivb45zi8zeyzl8xsmngsmzb               	true 	746MB     	10 minutes ago
+233jxoopsrwopod45u522p8l4               	true 	13.04MB   	11 minutes ago
+8895gb57u76hm5t7oof2gfbe5               	true 	134.3MB   	8 minutes ago
+kob2fbu66bzd0j5rqptp19y4j               	true 	4.484kB   	10 minutes ago
+fia903zcfcwcxfushfnb2e448               	true 	134.1MB   	11 minutes ago
+tq2cwtncu22ql4ko71xxdhkz1               	true 	174.9MB   	10 minutes ago
+Total:	18.33GB
+/dev/vda4        30G  3.1G   27G  11% /var
+[00:49:35] prune done
+[00:49:35] O-side batch 4 starting
+[00:53:44] O-side batch 4 done rc=0
+[00:53:44] H-side batch 4 starting
+[00:55:32] H-side batch 4 done rc=0
+[00:55:32] prune starting
+Deleted Images
+d73d4a707ecefe63071e483767726703d3c592b308e23715b429956b983dcc65
+f6adbac7570fc91e29d639e903b947a92f8727ea5cb6a10d28faef17078c4562
+e498e2a70391e91554b4e6f0e1a8cf1bd5ceded6798dd60ecddb6ce21f2998cf
+aeab67b7f792581973e3ab656d5b17a712d79065b9b65cf2a86f7c587feb6e51
+26686681c01214829a4c9b8ee16319a28f60078a3e2652a811e8909e3e0b1f78
+8b75590e0380c62845853d72b8564575aac352f07a9060add6309276c993dddc
+Total reclaimed space: 2.264GB
+ID						RECLAIMABLE	SIZE		LAST ACCESSED
+skgkuatcjktewclhv2w66j8ru*              	true 		16.38kB   	3 minutes ago
+blsplk4blp3wsgwt92yirrtwu*              	true 	4.096kB   	3 minutes ago
+pmx3fll0p1r0admk98k5a2vwm*              	true 	0B        	3 minutes ago
+zcllsjm6m9nzkbu4wk51zb06t*              	true 	4.096kB   	2 minutes ago
+yia9t6xadnpzihr02fz4vs7xi*              	true 	4.096kB   	3 minutes ago
+qbpkebfugu10p0jtna8lbzp4v*              	true 	4.096kB   	2 minutes ago
+m4bejl7r0fhgo5hsmt6uqjipl               	true 	980.5MB   	4 minutes ago
+kupm8k5p25wh85o6ihqmbj7l2*              	true 	4.096kB   	3 minutes ago
+rq6nsrgmeb8ji5d3c1uv3z7tj*              	true 	4.096kB   	5 minutes ago
+nupu9jodz3ouiz7m8pt5tix95*              	true 	0B        	5 minutes ago
+gcjjejqr86wvagi06e7vo7egc               	true 	113.7MB   	5 minutes ago
+kf4ke910fatx3twyorfq9yu14               	true 	32B       	3 minutes ago
+7ofuyeh0egsglegklmqb18zla*              	true 	0B        	3 minutes ago
+z5srwxnds0hdi5v94ki4l3gcd*              	true 	16.38kB   	2 minutes ago
+ly6jz35dt17pagqrgdhhp4yqh               	true 	19.74MB   	2 minutes ago
+ta5e0qveq93gpha9tg2oxhnjk*              	true 	4.096kB   	4 minutes ago
+alhj3vytyu2jc2a06d6rio7fe*              	true 	0B        	2 minutes ago
+swjs0tmrk1cz9sh7l1sbnj926*              	true 	0B        	2 minutes ago
+w83f9ojpeiwdq7mvb8zdq91zg*              	true 	0B        	4 minutes ago
+y47ylnz4wvn2iqa2fs3f5wko5               	true 	275.2MB   	3 minutes ago
+gj68wfwex3dds1wsez8x9rvbw               	true 	4.913kB   	2 minutes ago
+eq3wrrumnqq47rtwkm6ffvpd2               	true 	4.499kB   	3 minutes ago
+sa8g9mu4dezpd5733lms45cag               	true 	8.478MB   	3 minutes ago
+zpkmwyo6zbdy0leqkrwkjs9p0               	true 	4.457kB   	2 minutes ago
+ylz3bn9x3qtqjfnqhta6opc5k               	true 	129B      	3 minutes ago
+iglteoykexoy116yvounbmz00               	true 	4.981kB   	3 minutes ago
+lj9dywitr6ngdomwh50qcyqs6               	true 	27.75kB   	3 minutes ago
+qyvhbxub1lpcmrlslct8rsbls               	true 	4.731kB   	2 minutes ago
+u5luvcknq5jevo9w14i675mkv               	true 	162.4MB   	3 minutes ago
+xunvjqnvqcpazhq9mcru7vwif               	true 	15.13kB   	3 minutes ago
+hiz3fsesxtxudm8alm1wvglcs               	true 	4.359kB   	2 minutes ago
+5t97ys49lknaa5vebxgp2x1x2               	true 	93B       	2 minutes ago
+ubit2a2fgb0twf43orlivonys               	true 	323.6MB   	3 minutes ago
+g9gvzl0sd38lj3ffyssz1n7pa               	true 	99.45MB   	3 minutes ago
+ph35w3sy6iym2b92fkmtfu7m6               	true 	57.78MB   	2 minutes ago
+zx5y6ng315m3gaug9o7qpknqy               	true 	250B      	2 minutes ago
+dmmdrchc5sx3z0r287fax0lr3               	true 	91B       	3 minutes ago
+k53ql1nxq6y0hm1wtfrkw35jj               	true 	56.13MB   	2 minutes ago
+550fzkk10845binsttqfzaip3               	true 	65.68MB   	5 minutes ago
+tis41llj3ey9atuksey2nkq2u               	true 	136.6MB   	5 minutes ago
+o58yvu6etn8ngi3hnva6e7r17               	true 	13.04MB   	2 minutes ago
+sm6s0ue0wcrca58ns7dwxiec4               	true 	134.1MB   	2 minutes ago
+Total:	2.447GB
+/dev/vda4        30G  3.1G   27G  11% /var
+[00:55:33] prune done
+[00:55:33] O-side batch 5 starting
+[01:02:15] O-side batch 5 done rc=0
+[01:02:15] H-side batch 5 starting
+[01:07:13] H-side batch 5 done rc=0
+[01:07:13] prune starting
+Deleted Images
+16584dbdf1d6da94bfc52ebda66151fed3e2ab7d5794b283503ee4ca276dda81
+75446d6153c7767a8427fd08ce331088c83de9d852097aa03abd0ded3e80fc15
+667d5f3c6bab2eedd27b709414320bb9c463fff04dba19fac22d535a9025bb4b
+860ac5e0c049c38e422576c1f1fabc7f7381ab61025ac4b1ad378bcb7eb5a36a
+92ffe09618416359e85974fc2fc1c1204b1285f1e8bc163d0b819416bee4a92e
+e9b9b7897d9eddda8e7acea0dd3093a414fdee52e2ab61f0cf25ec032bf1d84c
+Total reclaimed space: 2.042GB
+ID						RECLAIMABLE	SIZE		LAST ACCESSED
+l9qqa33megpd65rgybo50m9zg*              	true 		0B        	11 minutes ago
+xkze2vx1h6we6fo03nfvmemkz*              	true 	0B        	7 minutes ago
+1ms0k42ifokrqm6xz3lovdkwj               	true 	32B       	11 minutes ago
+9nfik20bpu1fv1iiakn973hfa*              	true 	4.096kB   	8 minutes ago
+racvq4hpc40mflm74y2x45mig               	true 	32B       	8 minutes ago
+ydrvmnjcdewwru74qwnysatpl*              	true 	81.92kB   	9 minutes ago
+nsa1b1y3zf1ctqceo92wq2glu*              	true 	0B        	7 minutes ago
+irzik3ggu53snguqz2qc0wnr0*              	true 	0B        	9 minutes ago
+76u9bhvyh846lkg1weok1ptpc*              	true 	0B        	8 minutes ago
+8m5jckznhqwn2mivh2rxq8svu               	true 	93B       	9 minutes ago
+gnga51zxr6cm1nh780m2nk5d1               	true 	13.44kB   	8 minutes ago
+uvn5bdrs3w8rsx6x53898jwr1*              	true 	4.096kB   	7 minutes ago
+rox9b2jk9r7xp487a3w33v8ch*              	true 	4.096kB   	7 minutes ago
+r9w3pqzpug6o5u1bcftd6r7qj               	true 	20.01MB   	7 minutes ago
+iekk2hg8f361neyjds9zh8otk*              	true 	12.29kB   	8 minutes ago
+685c0qmxa87n1zp93jxc3kkji*              	true 	0B        	9 minutes ago
+nqyvns6r81282c8n4slvqry7r*              	true 	4.096kB   	11 minutes ago
+v62pivgdbm7ud42cy0xx62u41               	true 	32B       	7 minutes ago
+s63f8erb9ie8olb0dnqmhi225               	true 	32.04MB   	9 minutes ago
+q86zcdhx4nop6gtgatks5ghfa               	true 	65.53MB   	9 minutes ago
+f3ei9sprx0xgb44mqu0emrl6j*              	true 	4.096kB   	9 minutes ago
+08wxrfhut83i8p3ozso9p3scj               	true 	110B      	8 minutes ago
+i2o3cyny9u8nww2e2mxgww7ik               	true 	32B       	7 minutes ago
+u1pg3mgo8q8nzn69zexhhbk1i               	true 	445.1MB   	11 minutes ago
+s9ds172s4jwuvjygqbdwn7zzi               	true 	247B      	9 minutes ago
+4cvqiu85v6kvz0fedwrqs9nuv               	true 	18.67kB   	9 minutes ago
+oq1lesuzuzo8o3cy3begbzfhh*              	true 	4.096kB   	9 minutes ago
+9ee2ncsec1fm2jbu7n16z1q0t               	true 	4.237kB   	7 minutes ago
+ddwj2mpxjy2i56h21ov5cra2n               	true 	56.44MB   	9 minutes ago
+6chge325y65xfqisnvp6shqyp               	true 	364.5MB   	8 minutes ago
+ojqtmuojwybepxcm88zz8ix39               	true 	4.128kB   	9 minutes ago
+tfcbikiaq6l057qxwsovfnv0x               	true 	447.3MB   	11 minutes ago
+qjvnemv1w2x9u61kt2c9x0rok               	true 	4.291kB   	7 minutes ago
+882vwlqfa2emujh7r1hhpunuk               	true 	91B       	8 minutes ago
+mif7e350eyyh355umu5d084f3               	true 	247.9MB   	11 minutes ago
+asjrbanvqp8jygywcoe9uqwx2               	true 	4.43kB    	9 minutes ago
+ouo7n2lq79pga37d8zm96v8gm               	true 	12.25MB   	9 minutes ago
+ft0ibofrgdzuo4ycf28iwmjcl               	true 	252B      	11 minutes ago
+92wvy37njrojf9k37q2dx4711               	true 	65.68MB   	8 minutes ago
+nrypmv3yxnzonfrp5vcbi0jnz               	true 	134.4MB   	9 minutes ago
+zxnekjl431axi868vxjiojn4y               	true 	4.255kB   	9 minutes ago
+xmfocf2i0796afbbkkht5loey               	true 	8.439kB   	7 minutes ago
+srqf01t2yp2amocadl7mbk37z               	true 	66.79MB   	11 minutes ago
+vxijw91nlsrqau8i8iv5m2b7j               	true 	14.88kB   	9 minutes ago
+jc4qv99yr9q2m13a0oy71qgpd               	true 	14.69MB   	7 minutes ago
+mhh2n96afjoj8hfdg60rpypq1               	true 	136.6MB   	8 minutes ago
+y123fd6m8m3j1myhyw5wsv0gk               	true 	13.14MB   	11 minutes ago
+l20uviyhtmczxf6qzgvwt0akw               	true 	4.297kB   	9 minutes ago
+1g475rusgq9umtbxp5p3k2e7b               	true 	41.61kB   	9 minutes ago
+tzyad7o3zw4zipjxf4up2b1cb               	true 	134.3MB   	11 minutes ago
+vli483o6khajq9adyviwg4ha3               	true 	5.042kB   	9 minutes ago
+rq77btn8wma8vd65gr1f1ju1u               	true 	10.78kB   	9 minutes ago
+j7fplwgf5n2hhdl9ctnbjefrf               	true 	32B       	9 minutes ago
+guclm6zwbzb5ztpoguohv4su1               	true 	97B       	9 minutes ago
+qmb6js3dhrzoh8ne97q0hpyh9               	true 	93B       	7 minutes ago
+mmd3wj8elq0ii4rz776mblsku               	true 	57.78MB   	9 minutes ago
+rnd095i9ui59yzb0flbcu76ig               	true 	250B      	9 minutes ago
+2dzxaea7o4i1fs7a4z0zs7xh9               	true 	56.13MB   	9 minutes ago
+z7rmsgjxt4kfhoitr6c04lgkg               	true 	13.04MB   	9 minutes ago
+5nosi74zdmhmipkhxq45bnew9               	true 	134.1MB   	9 minutes ago
+Total:	2.518GB
+/dev/vda4        30G  3.1G   27G  11% /var
+[01:07:16] prune done
+[01:07:16] PIPELINE COMPLETE

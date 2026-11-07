@@ -1,0 +1,20 @@
+[package]
+name = "s4-cell"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+hharness-env = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-env" }
+hharness-helper = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-helper" }
+hharness-compiler = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-compiler" }
+hharness-containment = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-containment" }
+hharness-context = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-context" }
+hharness-hir = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-hir" }
+hharness-ledger = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-ledger" }
+hharness-monitor = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-monitor" }
+hharness-provenance = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-provenance" }
+hharness-secrets = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-secrets" }
+hharness-wire = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-wire" }
+hharness-identity = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-identity" }
+
+[workspace]

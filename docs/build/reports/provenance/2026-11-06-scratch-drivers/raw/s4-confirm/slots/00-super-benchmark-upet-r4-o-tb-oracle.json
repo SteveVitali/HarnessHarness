@@ -1,0 +1,109 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "sd9833220fe26b3a167011f2385fc9f5fa6677e776f3fa8938de3b594b4749926-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 551,
+      "name": "verdict.log",
+      "sha256": "b3e53da5f2330e6b906514879857560fbe4800a6618016e556e2d9b998b78527"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 7902,
+      "name": "solution.log",
+      "sha256": "02a06ca485049316bd074925adf424fa6c9db9f8fcb7b5c314165c8302a459c5"
+    },
+    {
+      "bytes": 96,
+      "name": "run-tests.sh",
+      "sha256": "3f4ff014a8b885da6a7c1114c6c6016a68445ae26fae2f50a9448dc92e466aec"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1943,
+      "name": "verdict_verbatim.log",
+      "sha256": "afb5bf963e70a71561b3826a92d2ab9a1566ee43c9c218acc36f4c3ee3cb2f60"
+    },
+    {
+      "bytes": 1260,
+      "name": "stream.sh",
+      "sha256": "8ba53972b3f71a369670aa46ed13f59b9b8e0a866be921ec89665d56cf5cec7e"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__super-benchmark-upet:latest",
+  "input_tokens": 2055,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 10396,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:d9833220fe26b3a167011f2385fc9f5fa6677e776f3fa8938de3b594b4749926",
+  "solution_kind": "yaml",
+  "solution_log_bytes": 7902,
+  "solution_log_sha256": "02a06ca485049316bd074925adf424fa6c9db9f8fcb7b5c314165c8302a459c5",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "super-benchmark-upet",
+  "tokens_freed": 2047,
+  "triggered": true,
+  "verdict.log.bytes": 551,
+  "verdict.log.sha256": "b3e53da5f2330e6b906514879857560fbe4800a6618016e556e2d9b998b78527",
+  "verdict.rc": "0",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 1943,
+  "verdict_verbatim.log.sha256": "afb5bf963e70a71561b3826a92d2ab9a1566ee43c9c218acc36f4c3ee3cb2f60",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 14989,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 15.0,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_right_output": "passed"
+    },
+    "raw_bytes": 551,
+    "stripped_bytes": 551,
+    "ansi_stripped": false
+  },
+  "egress_evidence": "Could not resolve",
+  "disposition": "executed"
+}

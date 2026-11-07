@@ -1,0 +1,20 @@
+[ 1/6] password-recovery
+      -> resolved (all_tests_passed)
+[ 2/6] solana-data
+      -> unresolved (some_tests_failed)
+[ 3/6] qemu-alpine-ssh
+      -> unresolved (build_failure)
+[ 4/6] polyglot-rust-c
+      -> unresolved (some_tests_failed)
+[ 5/6] path-tracing-reverse
+      -> resolved (all_tests_passed)
+[ 6/6] organization-json-generator
+      -> resolved (all_tests_passed)
+{
+  "password-recovery": "resolved",
+  "solana-data": "unresolved",
+  "qemu-alpine-ssh": "unresolved",
+  "polyglot-rust-c": "unresolved",
+  "path-tracing-reverse": "resolved",
+  "organization-json-generator": "resolved"
+}

@@ -1,0 +1,48 @@
+{
+  "task_id": "git-workflow-hack",
+  "runner": "h-podman-exec",
+  "started_at": "2026-11-06T00:00:45-0500",
+  "max_test_timeout_sec": 60.0,
+  "image": "docker.io/library/tb__git-workflow-hack__client:latest",
+  "container": "tb__git-workflow-hack-client-t3",
+  "compose_services": [
+    "client"
+  ],
+  "network": null,
+  "image_preexisting": true,
+  "image_id_digest": "511c85b108d5cd0e705bbdc8236e60295db12fe619b0c96a248cdc7bace7e462 sha256:9350dc9e7bfb62a1c4f9a6025f1c02a90492f0037b2248fbc58a5fc5b6cc2295",
+  "container_up": {
+    "rc": 0,
+    "stdout": "c53184fffcf78a32a7b3011c5bb3da8d9a722e7e1dfa7f2058a70a4a34fb9261\n",
+    "stderr": "",
+    "duration_sec": 0.66,
+    "timeout": false
+  },
+  "solution_kind": "sh",
+  "solution_copy_rc": 0,
+  "solution_exec": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": "",
+    "duration_sec": 0.1,
+    "timeout": false
+  },
+  "run_tests_copy_rc": 0,
+  "tests_copy_rc": 0,
+  "test_exec": {
+    "rc": 0,
+    "stdout": "Get:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease [256 kB]\nGet:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]\nGet:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]\nGet:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]\nGet:5 http://ports.ubuntu.com/ubuntu-ports noble/multiverse arm64 Packages [274 kB]\nGet:6 http://ports.ubuntu.com/ubuntu-ports noble/restricted arm64 Packages [113 kB]\nGet:7 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 Packages [19.0 MB]\nGet:8 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages [1776 kB]\nGet:9 http://ports.ubuntu.com/ubuntu-ports noble-updates/multiverse arm64 Packages [107 kB]\nGet:10 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [1823 kB]\nGet:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [3325 kB]\nGet:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [2229 kB]\nGet:13 http://ports.ubuntu.com/ubuntu-ports noble-backports/multiverse arm64 Packages [669 B]\nGet:14 http://ports.ubuntu.com/ubuntu-ports noble-backports/universe arm64 Packages [36.3 kB]\nGet:15 http://ports.ubuntu.com/ubuntu-ports noble-backports/main arm64 Packages [49.0 kB]\nGet:16 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted arm64 Packages [3148 kB]\nGet:17 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages [1489 kB]\nGet:18 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1652 kB]\nGet:19 http://ports.ubuntu.com/ubuntu-ports noble-security/multiverse arm64 Packages [102 kB]\nFetched 35.8 MB in 3s (11.9 MB/s)\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\ncurl is already the newest version (8.5.0-2ubuntu10.16).\n0 upgraded, 0 newly installed, 0 to remove and 61 not upgraded.\ninstalling to /root/.local/bin\n  uv\n  uvx\neverything's installed!\n\nTo add $HOME/.local/bin to your PATH, either restart your shell or run:\n\n    source $HOME/.local/bin/env (sh, bash, zsh)\n    source $HOME/.local/bin/env.fish (fish)\n============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /tests\ncollected 1 item\n\n../tests/test_outputs.py .                                               [100%]\n\n==================================== PASSES ====================================\n=========================== short test summary info ============================\nPASSED ../tests/test_outputs.py::test_token_leak\n============================== 1 passed in 0.00s ===============================\n",
+    "stderr": "downloading uv 0.13.7 aarch64-unknown-linux-gnu\nInitialized project `app`\nUsing CPython 3.12.3 interpreter at: /usr/bin/python3.12\nCreating virtual environment at: .venv\nResolved 7 packages in 322ms\n   Building app @ file:///app\n      Built app @ file:///app\nDownloading pygments (1.2MiB)\n Downloaded pygments\nPrepared 6 packages in 150ms\nInstalled 6 packages in 41ms\n + app==0.1.0 (from file:///app)\n + iniconfig==2.3.1\n + packaging==26.3\n + pluggy==1.7.0\n + pygments==2.21.0\n + pytest==9.2.0\n",
+    "duration_sec": 6.32,
+    "timeout": false
+  },
+  "verdict_input_raw_len": 3180,
+  "verdict_input_stripped_len": 3180,
+  "ansi_stripped": false,
+  "parsed": {
+    "test_token_leak": "passed"
+  },
+  "verdict": "resolved",
+  "verdict_reason": "all_tests_passed",
+  "ended_at": "2026-11-06T00:01:03-0500"
+}

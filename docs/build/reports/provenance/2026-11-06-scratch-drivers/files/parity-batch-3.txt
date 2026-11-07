@@ -1,0 +1,6 @@
+fix-permissions
+get-bitcoin-nodes
+processing-pipeline
+build-linux-kernel-qemu
+qemu-startup
+hf-model-inference

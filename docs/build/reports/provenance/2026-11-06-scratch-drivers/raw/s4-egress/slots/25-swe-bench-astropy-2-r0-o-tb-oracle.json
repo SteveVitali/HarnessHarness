@@ -1,0 +1,109 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 47,
+      "name": "verdict.log",
+      "sha256": "edb5bf264be014682d102a017e55065fdf464babb41166d65fb78a3d015c2902"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 382,
+      "name": "solution.log",
+      "sha256": "816156ffa15f17f5e636616f36fc439b6325839c0f8f3a9a1dabeece852eb290"
+    },
+    {
+      "bytes": 1587,
+      "name": "run-tests.sh",
+      "sha256": "644ccd631194ec05419a3f13d88ba2804bb6824c89054027dbe60c62955250d5"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 1739,
+      "name": "verdict_verbatim.log",
+      "sha256": "38a627d8629b80cced8c40426a288ef9baffa12df60b75038f834636770928db"
+    },
+    {
+      "bytes": 1521,
+      "name": "solution.sh",
+      "sha256": "b9211bc012813d977c3ee8a461953d27a8148da2666fa4607a839205fa87c1d5"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 0,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__swe-bench-astropy-2:latest",
+  "input_tokens": 175,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 2168,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:6cc2a5bb8b96b1320ae67b1d395acdfbda5bea4d4f53c731da9d76f53a0df39e",
+  "solution_kind": "sh",
+  "solution_log_bytes": 382,
+  "solution_log_sha256": "816156ffa15f17f5e636616f36fc439b6325839c0f8f3a9a1dabeece852eb290",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "swe-bench-astropy-2",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict.log.bytes": 47,
+  "verdict.log.sha256": "edb5bf264be014682d102a017e55065fdf464babb41166d65fb78a3d015c2902",
+  "verdict.rc": "1",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 1739,
+  "verdict_verbatim.log.sha256": "38a627d8629b80cced8c40426a288ef9baffa12df60b75038f834636770928db",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 7330,
+  "work_dispatch": "observed:applied",
+  "work_exit": "1",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 7.33,
+  "prior_disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": null,
+    "verdict_reason": "no_pytest_summary:/usr/local/bin/python3: No module named pytest"
+  },
+  "egress_evidence": null,
+  "disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}"
+}
