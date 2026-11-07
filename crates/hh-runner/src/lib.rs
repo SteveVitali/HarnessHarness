@@ -32,6 +32,7 @@ pub mod facts;
 pub mod packet;
 pub mod probe;
 pub mod receipt_index;
+pub mod schedule;
 pub mod slot_costs;
 pub mod slot_record;
 pub mod verdict;

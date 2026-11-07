@@ -238,6 +238,8 @@ fn drive_packet(
                 ]),
             ),
         ]),
+        window: None,
+        podman_bin: None,
     }
 }
 

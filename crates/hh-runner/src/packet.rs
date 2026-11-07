@@ -440,6 +440,13 @@ pub struct DrivePacket {
     /// Declared `costs.model`/`costs.compute` fold references + expected
     /// fold values for the fixture fold-recompute leg (`{ref, fold}`).
     pub costs: BTreeMap<String, Json>,
+    /// `window{…}` — the declared window scheduling inputs (R6.16;
+    /// `hh-runner-window/1`). Absent = the unscheduled R6.8 drive.
+    pub window: Option<crate::schedule::WindowDecl>,
+    /// The podman binary for the own-label sweep (`podman_bin` —
+    /// declared, never PATH-defaulted in a scheduled window; R6.16
+    /// REQ-XB-127). Absent = no container sweep.
+    pub podman_bin: Option<String>,
 }
 
 impl DrivePacket {
@@ -525,6 +532,14 @@ impl DrivePacket {
                 .and_then(Json::as_obj)
                 .cloned()
                 .unwrap_or_default(),
+            window: m
+                .get("window")
+                .map(crate::schedule::WindowDecl::from_json)
+                .transpose()?,
+            podman_bin: m
+                .get("podman_bin")
+                .and_then(Json::as_str)
+                .map(str::to_string),
         })
     }
 }
