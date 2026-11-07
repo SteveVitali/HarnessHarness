@@ -198,6 +198,12 @@ jobs:
           bash scripts/check-site.sh
           bash scripts/check-site.sh --head
 
+      # ci-mode: both — validates committed hh-compute-receipt/1 and
+      # hh-compute-decl/1 files; a docs-only head that drifts a receipt or
+      # declaration must not take the fast path green.
+      - name: Compute declaration + receipt schema check
+        run: bash scripts/check-compute-receipts.sh
+
       # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
       - name: Install pinned toolchain
         if: steps.path.outputs.mode != 'fast'
@@ -245,6 +251,13 @@ jobs:
       - name: Test
         if: steps.path.outputs.mode != 'fast'
         run: cargo test --workspace
+
+      # R6.13 (manifest 266): the offline fake-gcloud/ssh battery — every
+      # §3.9/§3.11 refusal, receipt shape, teardown ordering and the
+      # secret path, fully deterministic with no GCP call/credential.
+      - name: GCE backend fake-shim battery (offline)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-gce-backend.sh
 
       # L4.7: the README's hermetic quickstart block executed verbatim
       # from a clean clone of this head (clone → build → doctor → a
