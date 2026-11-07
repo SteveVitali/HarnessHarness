@@ -660,7 +660,7 @@ impl HttpModelTransport {
     /// captured bytes through the family's own decoders.
     ///
     /// The auth header derives from the lane's declared `auth_kinds`
-    /// ([`HttpModelTransport::lane_auth_header`]): `auth: Some(k)` asks a
+    /// (`HttpModelTransport::lane_auth_header`): `auth: Some(k)` asks a
     /// declared form explicitly (an undeclared form is a typed
     /// `unsupported_feature` refusal); `auth: None` picks the lane's
     /// declared credential form — `Authorization: Bearer` on every
