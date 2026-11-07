@@ -59,34 +59,11 @@ pub fn is_loopback(addr: &std::net::SocketAddr) -> bool {
     addr.ip().is_loopback()
 }
 
-/// The `Authorization: Bearer` acceptance check — constant-time over the
-/// padded bytes so the compare does not leak length or prefix (P2).
-pub fn token_matches(expected: &str, presented: &str) -> bool {
-    let e = expected.as_bytes();
-    let p = presented.as_bytes();
-    // Fold the length mismatch into the accumulator — comparing
-    // `max(len)` bytes with out-of-range reads mapped to a fixed
-    // nonmatching byte keeps the scan length-independent.
-    let n = e.len().max(p.len());
-    let mut acc = (e.len() ^ p.len()) as u8;
-    for i in 0..n {
-        let a = e.get(i).copied().unwrap_or(0xFF);
-        let b = p.get(i).copied().unwrap_or(0x00);
-        acc |= a ^ b;
-    }
-    acc == 0
-}
-
-/// Mint a 128-bit capability token (P2 — the kernel's id-source
-/// discipline doesn't cover a per-process secret; `/dev/urandom` is the
-/// std-only portable seam and the generation is one-shot per server
-/// start).
-pub fn mint_token() -> std::io::Result<String> {
-    use std::io::Read;
-    let mut buf = [0u8; 16];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
-    Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
-}
+// `token_matches`/`mint_token` relocated to `hh-secrets::tokens` (the one
+// lower-layer home — design/33 F4; AR-08; R6.10): the hosting-tier model
+// proxy shares this implementation and may never name `hh-embed`. The
+// re-export keeps this module's public surface byte-identical (CC1).
+pub use hharness_secrets::tokens::{mint_token, token_matches};
 
 /// The headers every response carries (P7 — even the RPC binding gets
 /// the no-cache/no-referrer posture so a misrouted browser can never

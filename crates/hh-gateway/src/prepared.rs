@@ -843,7 +843,7 @@ impl PreparedCall {
                 }
                 let payload = events::call_completed(
                     &mc,
-                    &**message,
+                    message,
                     usage.as_ref(),
                     state.raw_usage.as_ref(),
                     Some("final_frame"),

@@ -589,7 +589,7 @@ impl DispatchGate {
             env_handle_id: env_handle,
             declared: cap.declared.clone(),
             requested_grants: vec![],
-            ladder: cap.ladder.clone(),
+            ladder: cap.ladder,
             output_policy: cap.output_policy.clone(),
             reserve: None,
             compensation_plan_id: None,

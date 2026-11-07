@@ -31,34 +31,92 @@ pub const ADAPTER_B_ID: &str = "hh.adapter.b";
 /// is what the proxy pins when the participant did not set it. Anything
 /// else the participant asks for is stripped and logged, never silently
 /// applied.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// AR-10 (R6.10; design/33 F7; REQ-XC-107): the policy is amended **in
+/// place** with two additive members — `pin{path → value}` and
+/// `params_scope{surface → [paths]}`. `pin` keys are *path-qualified*
+/// (`model`, `reasoning_effort`, `output_config.effort`,
+/// `reasoning.effort`): the named request member is overwritten-or-
+/// inserted to the declared value, and the requested value is recorded
+/// — the program lane's `model` and effort-path pins live here.
+/// `params_scope[surface]` declares the request paths that surface's
+/// forward/strip policy applies to — request members outside the scope
+/// (`messages`, `tools`, …) are never parameters and never subject to
+/// it. Flat `forward`/`default` keys mean exactly what they meant
+/// before: top-level member names.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct GenParamPolicy {
     /// The parameters the proxy forwards (`temperature`, `max_tokens`,
     /// `top_p`, …).
     pub forward: Vec<String>,
     /// The pinned defaults (`param → value`).
     pub default: BTreeMap<String, Json>,
+    /// Path-qualified pins (`dotted.path → value`; AR-10). Absent in the
+    /// canonical form when empty — pre-amendment records are
+    /// byte-identical.
+    pub pin: BTreeMap<String, Json>,
+    /// Per-surface parameter scopes (`surface → [dotted.path]`; AR-10).
+    /// Absent in the canonical form when empty.
+    pub params_scope: BTreeMap<String, Vec<String>>,
 }
 
 impl GenParamPolicy {
     /// Canonical JSON (the adapter record's `ext.model_io_intercept`
-    /// policy member and the debt record's hypothesis input).
+    /// policy member and the debt record's hypothesis input). `pin` and
+    /// `params_scope` emit only when non-empty, so a policy declared
+    /// before AR-10 keeps its byte-identical canonical form.
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            (
-                "forward",
-                Json::Arr(self.forward.iter().map(Json::str).collect()),
+        let mut m = BTreeMap::new();
+        m.insert(
+            "forward".to_string(),
+            Json::Arr(self.forward.iter().map(Json::str).collect()),
+        );
+        m.insert(
+            "default".to_string(),
+            Json::Obj(
+                self.default
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
             ),
-            (
-                "default",
+        );
+        if !self.pin.is_empty() {
+            m.insert(
+                "pin".to_string(),
                 Json::Obj(
-                    self.default
+                    self.pin
                         .iter()
                         .map(|(k, v)| (k.clone(), v.clone()))
                         .collect(),
                 ),
-            ),
-        ])
+            );
+        }
+        if !self.params_scope.is_empty() {
+            m.insert(
+                "params_scope".to_string(),
+                Json::Obj(
+                    self.params_scope
+                        .iter()
+                        .map(|(s, ps)| (s.clone(), Json::Arr(ps.iter().map(Json::str).collect())))
+                        .collect(),
+                ),
+            );
+        }
+        Json::Obj(m)
+    }
+
+    /// The scoped path list for `surface` — the declared subset of
+    /// request paths the forward/strip policy governs (AR-10). `None`
+    /// when the policy declares no scope for the surface (top-level
+    /// `forward` semantics apply to every member then).
+    pub fn scope_of(&self, surface: &str) -> Option<&[String]> {
+        self.params_scope.get(surface).map(Vec::as_slice)
+    }
+
+    /// `pin(path)` — the declared overwrite/insert value for the
+    /// path-qualified member, when the policy pins it.
+    pub fn pin_at(&self, path: &str) -> Option<&Json> {
+        self.pin.get(path)
     }
 
     /// Filter a participant's requested generation parameters through
