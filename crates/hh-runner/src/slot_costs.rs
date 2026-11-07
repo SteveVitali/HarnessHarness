@@ -120,22 +120,16 @@ pub fn fold_slot_costs(events: &[(String, Json)], slot_id: &str, ctx: &SlotCostC
                     if let Some(v) = u.get("input_uncached").and_then(Json::as_int) {
                         in_uncached += v;
                     }
-                    match u.get("cache_read") {
-                        Some(Json::Int(v)) => {
-                            cache_read += v;
-                            cache_avail = true;
-                        }
-                        _ => {}
+                    if let Some(Json::Int(v)) = u.get("cache_read") {
+                        cache_read += v;
+                        cache_avail = true;
                     }
                     if let Some(v) = u.get("output_total").and_then(Json::as_int) {
                         out_total += v;
                     }
-                    match u.get("output_reasoning") {
-                        Some(Json::Int(v)) => {
-                            out_reasoning += v;
-                            out_reasoning_avail = true;
-                        }
-                        _ => {}
+                    if let Some(Json::Int(v)) = u.get("output_reasoning") {
+                        out_reasoning += v;
+                        out_reasoning_avail = true;
                     }
                 }
             }
