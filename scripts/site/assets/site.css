@@ -1,0 +1,190 @@
+/* site.css — components of the "Instrument — the calibrated readout"
+   identity (design/39 §§Design overview, Chart grammar; REQ-XF-101/103/104/
+   105/137/139). Tokens live in tokens.css. No font file, no font request
+   (REQ-XF-106): system stacks only. */
+
+:root {
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono",
+    "Roboto Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    "Helvetica Neue", Arial, sans-serif;
+  /* space scale — base unit 4px: 4·8·12·16·24·32·48·64·96 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-16: 64px; --sp-24: 96px;
+  --maxw: 1200px;
+  --rail: 128px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 1rem; line-height: 1.55;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+a { color: var(--link); text-decoration: underline; }
+a:visited { color: var(--link); }
+img, svg { vertical-align: middle; }
+.glyph-needle { fill: var(--needle); }
+:focus-visible { outline: 2px solid var(--needle); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  a, button, .chip { transition: color .12s, background .12s, opacity .12s; }
+}
+
+/* type scale (design/39 §Design tokens §Type) */
+.display-1 { font: 600 2.5rem/1.1 var(--mono); letter-spacing: -0.02em; }
+.display-2 { font: 600 1.875rem/1.15 var(--mono); letter-spacing: -0.015em; margin: 0 0 var(--sp-4); }
+h2 { font: 600 1.375rem/1.25 var(--mono); letter-spacing: -0.01em; margin: var(--sp-8) 0 var(--sp-4); }
+h3 { font: 600 1.0625rem/1.35 var(--sans); margin: 0 0 var(--sp-2); }
+.prose { font: 400 1rem/1.55 var(--sans); max-width: 68ch; }
+.reading { font: 500 2rem/1 var(--mono); letter-spacing: -0.02em; }
+.small { font: 400 0.875rem/1.5 var(--sans); color: var(--ink-2); }
+.micro { font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.06em; color: var(--ink-3); }
+.micro-caps { text-transform: uppercase; }
+@media (max-width: 600px) { .display-1 { font-size: 1.75rem; } }
+
+/* layout */
+.shell { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--sp-6); }
+main { padding: var(--sp-8) 0 var(--sp-16); }
+.cols { display: grid; gap: var(--sp-6); grid-template-columns: repeat(12, 1fr); }
+@media (min-width: 1080px) { .span-6 { grid-column: span 6; } .span-4 { grid-column: span 4; } .span-3 { grid-column: span 3; } .span-8 { grid-column: span 8; } }
+@media (max-width: 1079px) { .cols > * { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .shell { padding: 0 var(--sp-4); } }
+
+/* header — glyph + wordmark + nav + theme toggle */
+.site-head { border-bottom: 1px solid var(--rule); }
+.site-head .shell { display: flex; align-items: center; gap: var(--sp-4); padding-top: var(--sp-4); padding-bottom: var(--sp-4); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: var(--sp-2); text-decoration: none; color: var(--ink); }
+.brand .glyph { width: 28px; height: 28px; }
+.wordmark { font: 600 1.0625rem/1 var(--mono); letter-spacing: -0.01em; }
+.wordmark .w2 { color: var(--ink-2); }
+.wordmark-sub { font: 500 0.75rem/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); border-left: 1px solid var(--rule); padding-left: var(--sp-2); margin-left: var(--sp-1); }
+.site-nav { display: flex; gap: var(--sp-4); flex-wrap: wrap; margin-left: auto; }
+.site-nav a { font: 500 0.8125rem/1.6 var(--mono); color: var(--ink-2); text-decoration: none; }
+.site-nav a[aria-current] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--needle); }
+.theme-toggle { font: 500 0.75rem/1 var(--mono); letter-spacing: 0.06em; color: var(--ink-2); background: var(--panel); border: 1px solid var(--ink-3); border-radius: 14px; height: 28px; padding: 0 var(--sp-3); cursor: pointer; }
+.theme-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--needle); }
+
+/* mandatory-label banner (REQ-XF-116 class of label; mock carries it) */
+.banner { border-bottom: 1px solid var(--rule); background: var(--panel); }
+.banner .shell { padding-top: var(--sp-2); padding-bottom: var(--sp-2); display: flex; gap: var(--sp-4); flex-wrap: wrap; align-items: baseline; }
+.banner .stamp { flex: none; }
+
+/* hero on graph-paper ground (decorative; never behind data) */
+.hero { background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 8px 8px; padding: var(--sp-12) 0 var(--sp-8); }
+.hero .prose { color: var(--ink-2); }
+
+/* cards — panel fill, 1px rule border, 6px radius, no shadow */
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: var(--sp-4); }
+.card > h3 { margin-bottom: var(--sp-3); }
+.card .kicker { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.card .kicker .glyph { width: 8px; height: 8px; }
+
+/* chips — 28px mono micro, ink-3 outline, 14px radius */
+.chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; height: 28px; padding: 0 var(--sp-3); font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); background: transparent; border: 1px solid var(--ink-3); border-radius: 14px; cursor: pointer; text-decoration: none; }
+.chip[aria-pressed="true"], .chip.active { background: var(--ink); color: var(--panel); border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--needle); }
+.chip[disabled], .chip.disabled { color: var(--ink-3); text-decoration: line-through; cursor: not-allowed; border-style: dashed; }
+
+/* tables — micro header, axis rule, hairline rows, numbers right mono */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+table.data { border-collapse: collapse; width: 100%; font-size: 0.9375rem; line-height: 1.4; }
+table.data th { font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--axis); white-space: nowrap; }
+table.data td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.data tr:last-child td { border-bottom: 0; }
+table.data td.num, table.data th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums slashed-zero; }
+table.data td.name { font-family: var(--sans); text-align: left; }
+table.data th button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: inherit; text-transform: inherit; }
+
+/* monogram chip — 20×20 rounded, 2 chars, mono (REQ-XF-107) */
+.monogram { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--ink-2); border-radius: 5px; font: 600 0.6875rem/1 var(--mono); color: var(--ink); vertical-align: -5px; margin-right: var(--sp-1); }
+
+/* disposition stamps — verbatim text + shape glyph + colour; never
+   colour-only (REQ-XF-105). Glyph in --st-*; text always printed. */
+.stamp { display: inline-flex; align-items: center; gap: var(--sp-1); font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.02em; border: 1px solid currentColor; border-radius: 4px; padding: 2px 6px; background: var(--panel); white-space: nowrap; }
+.stamp .glyph { width: 12px; height: 12px; flex: none; }
+.stamp.verified { color: var(--st-verified); }
+.stamp.inconclusive { color: var(--st-inconclusive); }
+.stamp.withheld { color: var(--st-withheld); }
+.stamp.failed { color: var(--st-failed); }
+.stamp.infra { color: var(--st-infra); }
+.stamp.unresolved { color: var(--ink-2); }
+.stamp.absent { color: var(--ink-3); border-style: dotted; }
+.stamp.flagged { color: var(--st-failed); border-style: double; }
+.stamp-filter { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.stamp-filter .stamp { cursor: pointer; }
+.stamp-filter .stamp[aria-pressed="false"] { opacity: 0.45; }
+/* stamps stay visible under forced colours: shape + text carry meaning */
+
+/* needle readout — interval rule with caps + needle tick; never a bar
+   from zero. Unseparated intervals are outlines (two hairlines). */
+.needle-fig { display: inline-block; }
+.needle-fig svg { display: block; }
+
+/* noise-floor / observed-leader band */
+.floor-band { background: var(--floor); border-top: 1px solid var(--floor-edge); border-bottom: 1px solid var(--floor-edge); padding: var(--sp-2) var(--sp-3); }
+.floor-band .micro { color: var(--ink-2); }
+
+/* receipt rail — narrow left gutter; folds to one line under 900px */
+.figure-row { display: flex; gap: var(--sp-4); align-items: stretch; }
+.figure-row .receipt-rail { flex: 0 0 var(--rail); border-left: 1px solid var(--rule); padding: var(--sp-2) 0 var(--sp-2) var(--sp-3); font: 500 0.75rem/1.5 var(--mono); color: var(--ink-3); overflow-wrap: anywhere; }
+.figure-row .figure-body { flex: 1; min-width: 0; }
+@media (max-width: 899px) {
+  .figure-row { flex-direction: column; gap: var(--sp-2); }
+  .figure-row .receipt-rail { flex-basis: auto; border-left: 0; border-top: 1px solid var(--rule); padding: var(--sp-2) 0 0; }
+}
+
+/* figures — envelope order: h3, subtitle, chart, rail, details, table */
+figure.fig { margin: var(--sp-6) 0; }
+figure.fig .subtitle { font: 400 0.875rem/1.5 var(--sans); color: var(--ink-2); margin-bottom: var(--sp-3); }
+figure.fig details { margin: var(--sp-2) 0; }
+figure.fig summary { font: 500 0.8125rem/1.5 var(--mono); color: var(--ink-2); cursor: pointer; }
+
+/* calibration block — the page footer title block (REQ-XF-139 fields;
+   R6.5 fills packet-set values; mock pins fixture values) */
+.calib { border-top: 2px solid var(--ink); background: var(--panel); margin-top: var(--sp-12); }
+.calib .shell { padding-top: var(--sp-4); padding-bottom: var(--sp-6); display: grid; gap: var(--sp-2); }
+.calib .calib-title { font: 600 0.75rem/1.3 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.calib dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-1) var(--sp-6); margin: 0; }
+.calib dt { font: 500 0.75rem/1.3 var(--mono); color: var(--ink-3); display: inline; }
+.calib dd { font: 400 0.8125rem/1.4 var(--mono); color: var(--ink-2); display: inline; margin: 0; }
+.calib dd::after { content: "\A"; white-space: pre; }
+
+/* footer */
+.site-foot { border-top: 1px solid var(--rule); }
+.site-foot .shell { padding-top: var(--sp-4); padding-bottom: var(--sp-6); display: flex; gap: var(--sp-6); flex-wrap: wrap; }
+.site-foot a { color: var(--ink-2); font: 500 0.8125rem/1.6 var(--mono); }
+
+/* absent state — typed reason, awaited schema, gate id, skeleton (no
+   digits inside .absent-skeleton; design/39 F5) */
+.absent { border: 1px dashed var(--rule); border-radius: 6px; background: var(--panel); padding: var(--sp-4); }
+.absent-meta { display: flex; gap: var(--sp-6); flex-wrap: wrap; margin: var(--sp-3) 0; }
+.absent-meta .kv { font: 500 0.75rem/1.5 var(--mono); color: var(--ink-3); }
+.absent-meta .kv b { display: block; font-weight: 500; color: var(--ink-2); }
+.absent-skeleton { margin-top: var(--sp-3); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 8px 8px; border: 1px dashed var(--rule); border-radius: 4px; padding: var(--sp-4); display: grid; gap: var(--sp-2); }
+.absent-skeleton .bar { height: 12px; border: 1px dashed var(--axis); border-radius: 2px; opacity: 0.55; }
+/* skeleton class names carry no digits — a skeleton is numberless by
+   construction (mutation (r): one digit in a skeleton fails its test) */
+.absent-skeleton .bar.w-short { width: 40%; } .absent-skeleton .bar.w-mid { width: 60%; }
+.absent-skeleton .bar.w-wide { width: 80%; } .absent-skeleton .bar.w-full { width: 100%; }
+.absent-skeleton .bar.row { height: 40px; }
+
+/* tiles on the home page */
+.tile .reading { display: block; margin: var(--sp-2) 0; }
+.tile .micro { display: block; }
+.dont-claim li { margin: var(--sp-2) 0; }
+
+/* specimen page only: pinned-theme side-by-side */
+.theme-pair { display: grid; gap: var(--sp-4); grid-template-columns: 1fr; }
+@media (min-width: 900px) { .theme-pair { grid-template-columns: 1fr 1fr; } }
+.theme-pair .swatch { border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); padding: var(--sp-4); }
+.theme-pair .swatch > .micro { display: block; margin-bottom: var(--sp-3); }
+
+/* print — receipt mode: light theme, expanded details, packet links */
+@media print {
+  :root { --paper: #FFFFFF; --panel: #FFFFFF; --ink: #111A22; --ink-2: #45515B; --ink-3: #5E6A73; --link: #1E4FC2; --needle: #C2410C; --axis: #7D878E; --floor: #E3EBE8; --floor-edge: #6B8781; --rule: #D3D9D5; --grid: #E7EBE7; }
+  .theme-toggle, .site-nav { display: none; }
+  details { display: block; }
+  details > * { display: block; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font: 400 0.75rem/1 var(--mono); color: var(--ink-3); }
+}

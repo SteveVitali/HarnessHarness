@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <!-- disposition glyph sprite (design/39 §Iconography). Each glyph is a
+       shape + colour + verbatim text; meaning never rides on fill alone
+       (WCAG 1.4.1). Shapes use currentColor — the stamp's --st-* token
+       governs the colour. -->
+  <symbol id="hh-glyph" viewBox="0 0 32 32">
+    <rect x="4" y="4" width="24" height="24" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+    <rect x="8" y="8" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+    <rect x="15" y="2" width="2" height="20" class="glyph-needle"/>
+  </symbol>
+  <symbol id="g-verified" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="currentColor"/></symbol>
+  <symbol id="g-inconclusive" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="2" width="6" height="12" fill="currentColor"/></symbol>
+  <symbol id="g-withheld" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.5 2"/></symbol>
+  <symbol id="g-failed" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 3 L13 13" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="g-infra" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 14 L14 4 M2 10 L10 2 M6 16 L16 6" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="g-unresolved" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="g-absent" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="1.8 2.2"/></symbol>
+  <symbol id="g-flagged" viewBox="0 0 16 16"><rect x="2" y="6" width="10" height="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2 L10 9 L15 5.5 Z" fill="currentColor"/></symbol>
+</svg>

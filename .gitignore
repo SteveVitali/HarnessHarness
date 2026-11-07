@@ -13,4 +13,8 @@
 **/target/
 .idea/
 
+# Python bytecode caches (scripts/site and other python3 checkers)
+__pycache__/
+*.pyc
+
 .env

@@ -1,0 +1,97 @@
+/* tokens.css — "Instrument — the calibrated readout" design tokens.
+   Source: docs/design/39_results-site.md §Design tokens (recorded WCAG
+   computations at 2026-11-07T00:04Z). REQ-XF-101/102/103.
+   Themes: light on :root (default); dark via [data-theme="dark"], or via
+   prefers-color-scheme when no saved choice (no data-theme attr). A subtree
+   may pin a theme with data-theme="light"|"dark" on any wrapper. */
+
+:root, [data-theme="light"] {
+  --paper: #F3F5F2;          /* page ground */
+  --panel: #FFFFFF;          /* cards, chart surface */
+  --ink: #111A22;            /* primary text, frames, intervals */
+  --ink-2: #45515B;          /* secondary text, interval rules */
+  --ink-3: #5E6A73;          /* tertiary text, axis labels, dominated points */
+  --link: #1E4FC2;           /* links (always underlined) */
+  --needle: #C2410C;         /* point tick, focus ring, active chip edge */
+  --axis: #7D878E;           /* axis lines, ticks (meaningful non-text) */
+  --floor: #E3EBE8;          /* noise-floor / leader-group band fill */
+  --floor-edge: #6B8781;     /* band edges (carry the meaning) */
+  --rule: #D3D9D5;           /* hairlines, card borders */
+  --grid: #E7EBE7;           /* graph-paper ground (decorative) */
+  --st-verified: #0B6E5F;    /* verified{…}, executed{resolved} */
+  --st-inconclusive: #8A5A00;/* inconclusive{…}, partial{…} */
+  --st-withheld: #4F4A9A;    /* withheld{…}, unselected, Restricted */
+  --st-failed: #A1262A;      /* failed{…}, unmet{…}, integrity veto */
+  --st-infra: #5B5F66;       /* infra/oracle failure, unresolved cell */
+  /* 8-slot series palette — F2's fixed order; admission-record order only,
+     never rank; adjacent-pair forms only (lines, grouped bars). */
+  --series-1: #3F6DD7;  /* cobalt */
+  --series-2: #A36500;  /* amber */
+  --series-3: #008977;  /* verdigris */
+  --series-4: #835CBE;  /* violet */
+  --series-5: #B55422;  /* rust */
+  --series-6: #B2468A;  /* magenta */
+  --series-7: #638119;  /* olive */
+  --series-8: #0080AD;  /* sky */
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #0F1418;
+  --panel: #161C21;
+  --ink: #E8ECEA;
+  --ink-2: #B5BEC3;
+  --ink-3: #8F9AA1;
+  --link: #8FB0FF;
+  --needle: #FF7A45;
+  --axis: #6C777F;
+  --floor: #1F2B2D;
+  --floor-edge: #5E7A75;
+  --rule: #2A333A;
+  --grid: #1E262C;
+  --st-verified: #4FC7B2;
+  --st-inconclusive: #E0A93B;
+  --st-withheld: #A9A3F0;
+  --st-failed: #FF8A8A;
+  --st-infra: #A3A9B0;
+  --series-1: #5686F2;
+  --series-2: #BD7D00;
+  --series-3: #1EA28F;
+  --series-4: #9B74D9;
+  --series-5: #D06D3D;
+  --series-6: #CD5EA2;
+  --series-7: #7A9938;
+  --series-8: #1F99C7;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --paper: #0F1418;
+    --panel: #161C21;
+    --ink: #E8ECEA;
+    --ink-2: #B5BEC3;
+    --ink-3: #8F9AA1;
+    --link: #8FB0FF;
+    --needle: #FF7A45;
+    --axis: #6C777F;
+    --floor: #1F2B2D;
+    --floor-edge: #5E7A75;
+    --rule: #2A333A;
+    --grid: #1E262C;
+    --st-verified: #4FC7B2;
+    --st-inconclusive: #E0A93B;
+    --st-withheld: #A9A3F0;
+    --st-failed: #FF8A8A;
+    --st-infra: #A3A9B0;
+    --series-1: #5686F2;
+    --series-2: #BD7D00;
+    --series-3: #1EA28F;
+    --series-4: #9B74D9;
+    --series-5: #D06D3D;
+    --series-6: #CD5EA2;
+    --series-7: #7A9938;
+    --series-8: #1F99C7;
+    color-scheme: dark;
+  }
+}
