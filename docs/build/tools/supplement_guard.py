@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
-"""supplement_guard.py — hh-supplement-guard/1, the retained Round-5 supplemental
-coverage and routing guard (R5.1; REQ-H-001/002/003/005/006/007/011, REQ-C-104/107/108).
+"""supplement_guard.py — hh-supplement-guard/1, the retained supplemental
+coverage and routing guard (R5.1: REQ-H-001/002/003/005/006/007/011,
+REQ-C-104/107/108; R6.1 GUARD-X: REQ-XH-001/002/003/004/008/024/025/026, AR-31).
 
-READ-ONLY: it reads existing build-memory records and the ratified supplement, emits
-input digests, counts and diagnostics, and exits. It never writes build state and is
-never a second state owner. The stock external build-memory validator and the repo
-legacy checks are preserved unchanged; this guard consumes the stock checker's
-machine-readable output, it does not replace it.
+READ-ONLY: it reads existing build-memory records and the two ratified
+supplements, emits input digests, counts and diagnostics, and exits. It never
+writes build state and is never a second state owner. The stock external
+build-memory validator and the repo legacy checks are preserved unchanged;
+this guard consumes the stock checker's machine-readable output, it does not
+replace it.
+
+Round 6 (GUARD-X, REQ-XH-002): the guard carries a second frozen source —
+the experiments supplement and its REQ-X coverage register — beside the
+Round-5 source, whose checks and counts stay byte-for-byte in force (CC1:
+one guard, two sources). It routes Round 6 and enforces the round's gate,
+HUMAN, skeleton, window and paid-row rules, and it folds the committed
+planning checker (check_round6_coverage.py) into guard legs so one
+implementation remains (SR-23).
 
 Usage:
   supplement_guard.py [--root DIR] [--checker-json FILE | --no-checker] [--json]
@@ -23,7 +33,7 @@ import subprocess
 import sys
 
 GUARD_SCHEMA = "hh-supplement-guard/1"
-GUARD_VERSION = "1.0.0"
+GUARD_VERSION = "1.1.0"
 
 COVERAGE_MD = "docs/build/planning/2026-10-30_evidence-coverage.md"
 COVERAGE_JSON = "docs/build/planning/2026-10-30_evidence-coverage.json"
@@ -34,7 +44,21 @@ BUILD_INDEX = "docs/build/BUILD_INDEX.md"
 READOUTS_DIR = "docs/build/readouts"
 TICKETS_DIR = "docs/tickets"
 
+# Round-6 frozen source (GUARD-X, REQ-XH-002): the experiments supplement,
+# its REQ-X coverage register and the frozen partition plan it was generated
+# from. The register's `supplement_sha256` pins the spec bytes (the second
+# frozen-source digest); the plan table is checked as a committed planning
+# record, folded from check_round6_coverage.py (REQ-XH-003, SR-23/CC1).
+SPEC6 = "docs/experiments-spec.md"
+COVERAGE6_MD = "docs/build/planning/2026-11-07_round6-coverage.md"
+COVERAGE6_JSON = "docs/build/planning/2026-11-07_round6-coverage.json"
+PLAN6 = "docs/build/planning/2026-11-07_round6-decomposition.md"
+DEFERRALS = "docs/tickets/DEFERRALS.md"
+ROUND6 = 6
+
 REQ_ID = re.compile(r"^REQ-[A-H]-\d+$")
+REQX_ID = re.compile(r"^REQ-X[A-H]-\d+$")
+AC_HOOK = re.compile(r"^AC-\d+(\.\d+)*-\d+$")   # widened from AC-\d+-\d+ (R6.1)
 CHAIN_ID = re.compile(r"^(GATE|HUMAN)-[A-Z0-9]+$|^[A-Z]+\d*(\.\d+[a-z0-9]*)?$")
 LAYER = re.compile(r"^[DERP](/[DERP])*$")
 CHAIN_KINDS = {"ticket", "gate", "human", "skeleton", "capstone", "reconcile", "docs"}
@@ -47,6 +71,45 @@ TAIL_KINDS = ["capstone", "capstone", "capstone", "gate",
 # (Recommended)"); an undeclared round keeps the full nine-role tail.
 TAIL_KINDS_MINIMAL = ["capstone", "capstone", "gate", "docs"]
 EXPECTED_DISPOSITIONS = {"adopted": 167, "merged-with": 12, "superseded-by": 1}
+EXPECTED6_DISPOSITIONS = {"adopted": 370, "merged-with": 81, "superseded-by": 5}
+EXPECTED6_CANDIDATES = 456
+# The five closure ids CAP6.2 owns as first-pass ids (the rest of its adopted
+# ids are routed to later passes); CAP6.1 owns none (register rule O4).
+CLOSURE_IDS6 = {"REQ-XH-015", "REQ-XH-021", "REQ-XH-029", "REQ-XH-106", "REQ-XH-110"}
+# Marker owners: a gate or HUMAN row owns an id only when the id is literally
+# a gate-readout or HUMAN obligation (register rule O3).
+MARKER_OWNERS6 = {"GATE-G26", "HUMAN-H16"}
+# Disposition gates (plan §Disposition gates, SR-1): a recorded PASSED
+# decision for these gates must carry one of the pre-registered forms.
+# GATE-G26 is a plain PASSED (the Q-X62 waiver is named inside the readout,
+# never as a chain-routing token); a `disposition <token>` form is also
+# accepted and names the waiver. A basis containing FAILED or NOT PASSABLE
+# stays non-PASSED (the decision parser already reads it that way).
+DISPOSITION_FORMS6 = {
+    "GATE-G27": [r"disposition\s+run\b", r"disposition\s+not_run\{fallback\}",
+                 r"disposition\s+not_run\{pp0_hold\}"],
+    "GATE-G28": [r"disposition\s+triggered\{", r"not\s+triggered;\s*Wc\s+unused"],
+    "GATE-G29": [r"disposition\s+full\b", r"disposition\s+fallback\b"],
+    "GATE-G30": [r"disposition\s+run\{full\}", r"disposition\s+run\{hosted-only\}",
+                 r"disposition\s+end_after_w2\b"],
+}
+# Non-PENDING HUMAN readout tokens (REQ-XH-026; contracts defer the token
+# vocabulary to this row). DEFERRED must cite an existing DEFERRALS row that
+# cites the HUMAN row; DECLINED, NOT_NEEDED and N/A land the row outright.
+HUMAN_NONPENDING_TOKENS6 = {"DEFERRED", "DECLINED", "NOT_NEEDED", "N/A"}
+# Spend gates whose contracts must carry the REQ-XH-004 readout fields:
+# model authorization, compute authorization (separately), quote id and the
+# hard-cap formula.
+SPEND_GATES6 = {"GATE-G26", "GATE-G30"}
+SPEND_READOUT_FIELDS6 = (
+    re.compile(r"model authorization", re.I),
+    re.compile(r"compute authorization", re.I),
+    re.compile(r"quote id", re.I),
+    re.compile(r"hard-?cap formula", re.I),
+)
+# A Round-7/8 (later-pass) row may appear in Round 6 only as a skeleton
+# (REQ-XH-001/024); a fleshed or non-skeleton later-round row is refused.
+LATER_ROUND_ID6 = re.compile(r"^[A-Z]*[78]\.|^R[7-9]\.|^CAP[78]\.|^REC[78]\.|^DOC[78]\.")
 
 
 def sha256_file(path):
@@ -64,6 +127,10 @@ class Guard:
         self.digests = {}
         self.counts = {}
         self.route = ("HOLD", "not evaluated")
+        self.round_tail = {}
+        self._paid_bodies = {}        # window body id -> its PROV gate id
+        self._paid_window_names = {}  # window body id -> W1/W2/W3/Wc/W4
+        self._deferrals = None
 
     def err(self, code, msg):
         self.diags.append(("error", code, msg))
@@ -171,7 +238,7 @@ class Guard:
             rows.append({
                 "seq": cells[0], "file": fm.group(1), "id": fm.group(2),
                 "kind": cells[3], "phase": cells[2], "gate": cells[5],
-                "round": current_round,
+                "scope": cells[4], "round": current_round,
             })
         return rows
 
@@ -365,6 +432,652 @@ class Guard:
         self.counts["coverage_md_rows"] = seen
         if seen != len(by_id):
             self.err("coverage-md", f"md table has {seen} rows, json has {len(by_id)}")
+
+    # ---------------- Round-6 (GUARD-X) frozen source ----------------
+
+    @staticmethod
+    def _cells(line):
+        return [c.strip() for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+
+    def check_coverage6(self, spec_text, manifest_ids, kind_at):
+        """REQ-X register legs (REQ-XH-003): ids sourced from spec Appendix A
+        (the frozen spec carries no `id="req-…"` anchors), AC hooks resolved
+        through `ac_hook_resolution: appendix-a-row`, literal-predicate
+        recompute, one primary owner per adopted id."""
+        cov = self.read(COVERAGE6_JSON)
+        if cov is None:
+            return {}
+        try:
+            data = json.loads(cov)
+        except json.JSONDecodeError as e:
+            self.err("coverage-json", f"round-6 coverage json not parseable: {e}")
+            return {}
+        if data.get("schema") != "hh-supplement-plan/1":
+            self.err("coverage-json",
+                     f"round-6 coverage schema {data.get('schema')!r} "
+                     "!= 'hh-supplement-plan/1'")
+        if data.get("pattern") != "REQ-X[A-H]-[0-9]+":
+            self.err("coverage-json",
+                     f"round-6 coverage pattern {data.get('pattern')!r} unexpected")
+        sup_rel = data.get("supplement", "")
+        sup_path = self.path(sup_rel)
+        if not sup_rel or sup_rel != SPEC6 or not os.path.isfile(sup_path):
+            self.err("coverage-json", f"round-6 supplement {sup_rel!r} missing")
+        else:
+            actual = sha256_file(sup_path)
+            if actual != data.get("supplement_sha256"):
+                self.err("frozen-source",
+                         f"experiments-spec sha256 drifted: {actual[:12]} != "
+                         f"{str(data.get('supplement_sha256'))[:12]}")
+            self.digests[sup_rel] = actual
+        # ---- spec-side tables: Appendix A, normative rows, anchors ----
+        appendix, arow, srow = {}, {}, {}
+        m = re.search(r"## Appendix A — Requirement index(.*?)\n<a id=\"appendix-b\">",
+                      spec_text, re.S)
+        azone = m.group(1) if m else ""
+        if not m:
+            self.err("coverage-json", "experiments spec has no Appendix A zone")
+        for line in azone.split("\n"):
+            mm = re.match(r"^\| (REQ-X[A-H]-\d+) \| ([^|]+?) \| ([^|]+?) \| "
+                          r"([^|]+?) \| ([^|]+?) \|", line)
+            if mm:
+                appendix[mm.group(1)] = {
+                    "disp": mm.group(2).strip(), "sec": mm.group(3).strip(),
+                    "hook": mm.group(4).strip().replace(" (target)", "").strip("`"),
+                    "layer": mm.group(5).strip()}
+                arow[mm.group(1)] = line
+        for line in spec_text.split("\n"):
+            mm = re.match(r"^\| \*\*(REQ-X[A-H]-\d+)\*\* \|", line)
+            if mm:
+                srow[mm.group(1)] = line
+        anchors = set(re.findall(r'<a id="([^"]+)"', spec_text))
+        adopted_a = {i for i, v in appendix.items() if v["disp"].startswith("adopted")}
+        if len(appendix) != EXPECTED6_CANDIDATES or len(adopted_a) != \
+                EXPECTED6_DISPOSITIONS["adopted"]:
+            self.err("coverage-count",
+                     f"Appendix A has {len(appendix)} ids / {len(adopted_a)} "
+                     f"adopted != {EXPECTED6_CANDIDATES}/"
+                     f"{EXPECTED6_DISPOSITIONS['adopted']}")
+        for i in adopted_a - set(srow):
+            self.err("omitted-id", f"adopted {i} has no normative row in the spec")
+        # ---- register ----
+        cands = data.get("candidates", [])
+        self.counts["candidates6"] = len(cands)
+        ids = [c.get("id", "") for c in cands]
+        for i in set(ids):
+            if ids.count(i) > 1:
+                self.err("duplicate-id", f"round-6 candidate id {i} appears more than once")
+        by_id = {}
+        for c in cands:
+            if isinstance(c, dict) and "id" in c:
+                by_id.setdefault(c["id"], c)
+        if set(by_id) != set(appendix):
+            for i in sorted(set(by_id) - set(appendix)):
+                self.err("foreign-id", f"candidate {i} is not an Appendix A id")
+            for i in sorted(set(appendix) - set(by_id)):
+                self.err("omitted-id", f"Appendix A id {i} absent from the register")
+        disps = {"adopted": 0, "merged-with": 0, "superseded-by": 0}
+        for c in cands:
+            cid = c.get("id", "?")
+            for k, v in c.items():
+                if v is None or v == "":
+                    self.err("coverage-json", f"{cid}: field {k} is null or empty")
+                    break
+            dm = re.match(r"^(adopted|merged-with|superseded-by)", c.get("disposition", ""))
+            if not dm:
+                self.err("disposition", f"{cid}: unknown disposition "
+                                        f"{c.get('disposition')!r}")
+            else:
+                disps[dm.group(1)] += 1
+            a = appendix.get(cid, {})
+            if a:
+                if c.get("layer") != a["layer"]:
+                    self.err("layer", f"{cid}: register layer {c.get('layer')!r} "
+                                      f"!= Appendix A {a['layer']!r}")
+                if c.get("section") != a["sec"]:
+                    self.err("coverage-json", f"{cid}: register section "
+                                              f"{c.get('section')!r} != Appendix A {a['sec']!r}")
+                if not a["disp"].startswith(c.get("disposition", "\0")):
+                    self.err("disposition", f"{cid}: register disposition "
+                                            f"{c.get('disposition')!r} != Appendix A {a['disp']!r}")
+            self.check_candidate6(c, by_id, a, arow, srow, anchors,
+                                  manifest_ids, kind_at)
+        self.counts["dispositions6"] = dict(disps)
+        for k, want in EXPECTED6_DISPOSITIONS.items():
+            if disps[k] != want:
+                self.err("coverage-count", f"round-6 disposition {k}: {disps[k]} != {want}")
+        adopted_own = [c.get("target") for c in cands if c.get("disposition") == "adopted"]
+        for t in set(adopted_own):
+            if adopted_own.count(t) != 1:
+                self.err("owner", f"adopted target {t} owned {adopted_own.count(t)} times")
+        missing = adopted_a - set(adopted_own)
+        if missing:
+            self.err("owner", f"adopted ids not owned as their own target: "
+                              f"{sorted(missing)[:6]}")
+        return by_id
+
+    def check_candidate6(self, c, by_id, a, arow, srow, anchors,
+                         manifest_ids, kind_at):
+        cid = c.get("id", "?")
+        disp = c.get("disposition", "")
+        # literal predicate retained: verbatim row bytes + source file digest
+        lr = c.get("literal_row")
+        if not lr:
+            self.err("alias-predicate", f"{cid}: literal predicate row is empty/deleted")
+        elif c.get("source_sha256") != hashlib.sha256(lr.encode()).hexdigest():
+            self.err("alias-predicate",
+                     f"{cid}: literal_row sha256 does not match source_sha256")
+        src = c.get("literal_source", "")
+        sp = self.path(src)
+        if not src or not os.path.isfile(sp):
+            self.err("frozen-source", f"{cid}: literal_source {src!r} missing")
+        else:
+            with open(sp, "rb") as f:
+                raw = f.read()
+            if c.get("literal_source_sha256") != hashlib.sha256(raw).hexdigest():
+                self.err("frozen-source", f"{cid}: literal_source_sha256 drifted")
+            elif lr and lr.encode() not in raw:
+                self.err("alias-predicate",
+                         f"{cid}: literal_row is not verbatim in {src}")
+            elif lr and cid not in lr:
+                self.err("alias-predicate", f"{cid}: id absent from literal_row")
+        if c.get("synthesis_allocated"):
+            if src != SPEC6 or lr != srow.get(cid):
+                self.err("alias-predicate",
+                         f"{cid}: synthesis-allocated id must carry the spec's "
+                         "own normative row as literal_row")
+        if not c.get("requirement"):
+            self.err("alias-predicate", f"{cid}: requirement text is empty")
+        elif disp == "adopted":
+            sc = self._cells(srow.get(cid, "|||"))
+            if len(sc) < 3 or c.get("requirement") != sc[1] \
+                    or c.get("acceptance") != sc[2]:
+                self.err("coverage-json",
+                         f"{cid}: adopted requirement/acceptance != spec cells")
+        elif not c.get("literal_row") or \
+                c["requirement"].split()[0] not in c.get("literal_row", ""):
+            self.err("alias-predicate",
+                     f"{cid}: alias requirement not drawn from its literal row")
+        # anchors: appendix-a row, widened hook pattern, spec_anchor exists
+        if c.get("appendix_a_row") != arow.get(cid) or \
+                c.get("appendix_a_row_sha256") != \
+                hashlib.sha256((arow.get(cid) or "").encode()).hexdigest():
+            self.err("ac-anchor", f"{cid}: appendix_a_row/digest mismatch")
+        if not AC_HOOK.fullmatch(c.get("ac_hook", "")) or \
+                c.get("ac_hook") != a.get("hook"):
+            self.err("ac-anchor", f"{cid}: ac_hook {c.get('ac_hook')!r} is not the "
+                                  "Appendix A hook")
+        if c.get("ac_hook_resolution") != "appendix-a-row":
+            self.err("ac-anchor", f"{cid}: ac_hook_resolution "
+                                  f"{c.get('ac_hook_resolution')!r} != 'appendix-a-row'")
+        if c.get("spec_anchor") not in anchors:
+            self.err("ac-anchor", f"{cid}: spec_anchor {c.get('spec_anchor')!r} "
+                                  "is not a spec <a id>")
+        tgt = c.get("target", "")
+        if c.get("target_spec_row_sha256") != \
+                hashlib.sha256((srow.get(tgt) or "").encode()).hexdigest():
+            self.err("alias-predicate", f"{cid}: target_spec_row_sha256 mismatch")
+        if disp == "adopted" and c.get("ac_hook", "\0") not in srow.get(cid, ""):
+            self.err("ac-anchor", f"{cid}: ac_hook absent from its normative row")
+        # one primary owner, a real chain row, its contract file + anchor
+        primary = str(c.get("primary", "")).strip()
+        if not primary or "," in primary or not CHAIN_ID.match(primary):
+            self.err("owner", f"{cid}: primary owner {primary!r} is not exactly "
+                              "one chain id")
+        elif primary not in manifest_ids:
+            self.err("owner", f"{cid}: primary owner {primary} is not a manifest "
+                              "chain row")
+        if disp == "adopted":
+            if tgt != cid:
+                self.err("disposition", f"{cid}: adopted row target {tgt!r} != own id")
+        else:
+            tc = by_id.get(tgt)
+            if tc is None or tc.get("disposition") != "adopted":
+                self.err("disposition",
+                         f"{cid}: merge/supersede target {tgt} is not adopted")
+            elif str(tc.get("primary", "")).strip() != primary:
+                self.err("owner", f"{cid}: alias primary {primary} != target {tgt} "
+                                  f"primary {tc.get('primary')}")
+        pf = c.get("primary_file", "")
+        if pf:
+            pfp = self.path(pf)
+            if not os.path.isfile(pfp):
+                self.err("owner", f"{cid}: primary_file {pf} missing")
+            else:
+                with open(pfp, encoding="utf-8") as f:
+                    pftext = f.read()
+                if f"_{primary}__" not in pf:
+                    self.err("owner", f"{cid}: primary_file {pf} is not the "
+                                      f"{primary} contract")
+                anchor = c.get("acceptance_anchor", "")
+                if not anchor or f'id="{anchor}"' not in pftext:
+                    self.err("ac-anchor", f"{cid}: acceptance anchor {anchor!r} "
+                                          f"not present in {pf}")
+                pk = c.get("primary_kind")
+                if pk and pk != kind_at.get(primary):
+                    self.err("owner", f"{cid}: primary_kind {pk!r} != manifest "
+                                      f"kind {kind_at.get(primary)!r}")
+        else:
+            self.err("owner", f"{cid}: primary_file empty")
+        if not LAYER.match(c.get("layer", "")):
+            self.err("layer", f"{cid}: layer {c.get('layer')!r} outside D/E/R/P")
+        # owner-kind rule (O2/O3): gate/human only literal marker obligations;
+        # skeleton only R/P window evidence
+        if disp == "adopted" and primary in manifest_ids:
+            pk = kind_at.get(primary)
+            if pk in ("gate", "human") and primary not in MARKER_OWNERS6:
+                self.err("owner", f"{cid}: adopted id owned by marker row {primary} "
+                                  "that is not a literal gate/HUMAN obligation owner")
+            if pk == "skeleton" and c.get("layer") not in ("R", "P"):
+                self.err("owner", f"{cid}: skeleton-owned id must be R/P layer")
+        # routing (O4): routed ids are owned by CAP6.2 only
+        scope = c.get("round_scope", "")
+        if disp == "adopted":
+            if scope.startswith("routed"):
+                if primary != "CAP6.2":
+                    self.err("owner", f"{cid}: routed id owned by {primary}, "
+                                      "must be CAP6.2")
+            elif scope == "first-pass":
+                if primary == "CAP6.1" or (primary == "CAP6.2" and cid not in CLOSURE_IDS6):
+                    self.err("owner", f"{cid}: first-pass id owned by {primary} "
+                                      "outside the CAP6.2 closure set")
+        for con in c.get("contributors", []):
+            if con == primary:
+                self.err("owner", f"{cid}: contributor {con} duplicates the primary")
+            elif con not in manifest_ids:
+                self.err("owner", f"{cid}: contributor {con} is not a manifest "
+                                  "chain row")
+
+    def check_coverage6_md(self, by_id):
+        """The round-6 .md literal owner table and owner index agree with the
+        json register row-for-row."""
+        text = self.read(COVERAGE6_MD)
+        if text is None or not by_id:
+            return
+        m = re.search(r"## Literal owner table\s*(.*?)(\n## |\Z)", text, re.S)
+        if not m:
+            self.err("coverage-md", "round-6 coverage .md has no '## Literal owner table'")
+            return
+        seen = 0
+        for line in m.group(1).splitlines():
+            if not line.startswith("|"):
+                continue
+            cells = self._cells(line)
+            if len(cells) < 7 or not re.match(r"REQ-X[A-H]-\d+$", cells[0]):
+                continue
+            cid = cells[0]
+            seen += 1
+            c = by_id.get(cid)
+            if c is None:
+                self.err("coverage-md", f"md row {cid} has no json candidate")
+                continue
+            owners = re.findall(r"\(([^)]*tickets/[^)#]+?\.md)#([^)]+)\)", cells[2])
+            if len(owners) != 1:
+                self.err("owner", f"{cid}: md owner cell must link exactly one "
+                                  f"primary contract (found {len(owners)})")
+            else:
+                if os.path.basename(owners[0][0]) != \
+                        os.path.basename(c.get("primary_file", "")):
+                    self.err("owner", f"{cid}: md owner file {owners[0][0]!r} != "
+                                      f"json {c.get('primary_file')!r}")
+                if owners[0][1] != c.get("acceptance_anchor"):
+                    self.err("ac-anchor", f"{cid}: md owner anchor {owners[0][1]!r} "
+                                          f"!= json {c.get('acceptance_anchor')!r}")
+        self.counts["coverage6_md_rows"] = seen
+        if seen != EXPECTED6_CANDIDATES:
+            self.err("coverage-md", f"round-6 md owner table has {seen} rows, "
+                                    f"json has {EXPECTED6_CANDIDATES}")
+        mi = re.search(r"## Owner index[^\n]*\n(.*?)(\n## |\Z)", text, re.S)
+        if not mi:
+            self.err("coverage-md", "round-6 coverage .md has no '## Owner index'")
+            return
+        got = {}
+        cid_re = r"(GATE-G\d+|HUMAN-H\d+|R6\.\d+[a-z]?|CAP6\.\d+|REC6\.\d+|DOC6\.\d+)"
+        for line in mi.group(1).splitlines():
+            cells = self._cells(line) if line.startswith("|") else []
+            mm = re.match(r"\[" + cid_re + r"\]", cells[0]) if cells else None
+            if mm:
+                body = re.sub(r"^\d+: (routed: )?", "", cells[3])
+                got[mm.group(1)] = {"REQ-" + x.strip() for x in body.split(",")}
+        want = {}
+        for c in by_id.values():
+            if c.get("disposition") == "adopted":
+                want.setdefault(c.get("primary"), set()).add(c["id"])
+        for k in set(got) | set(want):
+            if got.get(k) != want.get(k):
+                self.err("coverage-md", f"md owner index for {k} disagrees with json")
+
+    # ---------------- Round-6 frozen partition plan (folded SR-23/CC1) ----------------
+
+    def check_plan6(self, by_id):
+        """The frozen Round-6 partition plan as a committed planning record —
+        the legs folded from docs/build/tools/check_round6_coverage.py so one
+        implementation remains. Diagnostics carry the `plan-` family."""
+        text = self.read(PLAN6)
+        if text is None:
+            return
+        rows, order, owned, parse_err = {}, [], {}, []
+        for line in text.split("\n"):
+            if not re.match(r"^\| \d{3} \| `", line):
+                continue
+            c = self._cells(line)
+            if len(c) != 13:
+                parse_err.append(line[:60])
+                continue
+            seq, f, cid, kind, deps, size = \
+                int(c[0]), c[1].strip("`"), c[2], c[3], c[8], c[9]
+            rows[cid] = {"seq": seq, "file": f, "kind": kind,
+                         "deps": [d.strip() for d in deps.split(",")],
+                         "size": size, "scope": c[5], "alias": c[12]}
+            order.append(cid)
+            oc = c[7]
+            mm = re.match(r"^(\d+)(?: \([^)]*\))?: (.*)$", oc)
+            owned[cid] = (int(mm.group(1)), ["REQ-" + x.strip()
+                                             for x in mm.group(2).split(",")]) \
+                if mm else (0, []) if oc == "—" else (-1, [oc])
+        order.sort(key=lambda x: rows[x]["seq"])
+        n = len(order)
+        if parse_err or n == 0:
+            self.err("plan-table", f"round-6 plan row table does not parse "
+                                   f"({n} rows; {parse_err[:2]})")
+            return rows
+        if [rows[x]["seq"] for x in order] != list(range(252, 252 + n)):
+            self.err("plan-table", "plan sequences are not contiguous from 252")
+        self.counts["plan6_rows"] = n
+        tot = re.search(r"\*\*total rows\*\* \| \*\*(\d+)\*\*", text)
+        if tot is None or int(tot.group(1)) != n:
+            self.err("plan-totals", "Totals table total != row-table count")
+        kinds = [rows[x]["kind"] for x in order]
+        for k in ("ticket", "skeleton", "gate", "human"):
+            mm = re.search(r"^\| " + k + r" \| (\d+)", text, re.M)
+            if not mm or int(mm.group(1)) != kinds.count(k):
+                self.err("plan-totals", f"Totals kind {k} != row table")
+        mm = re.search(r"^\| capstone / reconcile / docs \| (\d+) / (\d+) / (\d+)",
+                       text, re.M)
+        if not mm or (int(mm.group(1)), int(mm.group(2)), int(mm.group(3))) != \
+                (kinds.count("capstone"), kinds.count("reconcile"), kinds.count("docs")):
+            self.err("plan-totals", "Totals capstone/reconcile/docs != row table")
+        for cid, r in rows.items():
+            if not CHAIN_ID.match(cid):
+                self.err("plan-chain", f"plan id {cid} fails chain-id grammar")
+            if not r["file"].startswith(f"{r['seq']:03d}_{cid}__"):
+                self.err("plan-chain", f"{cid}: file {r['file']} does not open "
+                                       "with seq+id")
+            if r["kind"] not in CHAIN_KINDS:
+                self.err("plan-chain", f"{cid}: kind {r['kind']!r} unknown")
+        pos = {x: i for i, x in enumerate(order)}
+        for cid, r in rows.items():
+            if r["deps"] == ["nothing"]:
+                continue
+            for d in r["deps"]:
+                if d not in rows or rows[d]["seq"] >= r["seq"]:
+                    self.err("plan-deps", f"{cid}: dep {d} is not a backward "
+                                          "chain row")
+        nothing = [c for c, r in rows.items() if r["deps"] == ["nothing"]]
+        if nothing != order[:1]:
+            self.err("plan-deps", "only the bootstrap gate may depend on nothing")
+        if n >= 5:
+            if kinds[-5:] != ["capstone", "capstone", "capstone", "gate", "docs"] \
+                    or "accept" not in rows[order[-2]]["file"] \
+                    or "reconcile" in kinds \
+                    or any(k in ("capstone", "docs") for k in kinds[:-5]):
+                self.err("plan-tail", "plan tail is not the contiguous minimal "
+                                      "capstone×3, accept-gate, docs shape")
+        if not order or rows[order[0]]["kind"] != "gate" or order[1] != "R6.1" \
+                or rows.get("R6.1", {}).get("kind") != "ticket":
+            self.err("plan-rows", "plan row 1 is not the bootstrap gate followed "
+                                  "by the single guard row R6.1")
+        skels = [c for c, r in rows.items() if r["kind"] == "skeleton"]
+        for c in skels:
+            if not any(rows.get(d, {}).get("kind") == "gate" for d in rows[c]["deps"]) \
+                    or "fleshed after gate" not in rows[c]["size"]:
+                self.err("plan-skeleton", f"{c}: skeleton lacks a gate dep or "
+                                          "'fleshed after gate'")
+        if len(skels) != 5:
+            self.err("plan-skeleton", f"{len(skels)} window skeletons != 5")
+        for i, c in enumerate(order):
+            if rows[c]["kind"] != "human":
+                continue
+            j = i + 1
+            while j < n and rows[order[j]]["kind"] == "human":
+                j += 1
+            nx = order[j] if j < n else None
+            if nx is None or not (rows[nx]["kind"] in ("gate", "capstone")
+                                  or c in rows[nx]["deps"]):
+                self.err("plan-human", f"{c}: HUMAN row not before a gate, the "
+                                       "tail, or a row that depends on it")
+        for c, r in rows.items():
+            mm = re.match(r"(\d+)k \+ 10k", r["size"])
+            if r["kind"] in ("ticket", "capstone", "reconcile", "docs") and not mm:
+                self.err("plan-size", f"{c}: implement-spec row carries no size")
+                continue
+            if mm and int(mm.group(1)) + 10 > 105 \
+                    and "operator-ruled" not in r["size"]:
+                self.err("plan-size", f"{c}: row size over 95k + 10k without "
+                                      "operator-ruled")
+        opruled = [c for c, r in rows.items() if "operator-ruled" in r["size"]]
+        if any(rows[c]["kind"] != "capstone" or c not in order[-4:]
+               for c in opruled):
+            self.err("plan-size", "operator-ruled oversize on a non-tail-capstone")
+        mm = re.search(r"\*\*implement-spec rows\*\* \| \*\*(\d+)\*\*", text)
+        n_impl = sum(1 for r in rows.values()
+                     if r["kind"] in ("ticket", "capstone", "reconcile", "docs"))
+        if mm is None or int(mm.group(1)) != n_impl or not 40 <= n_impl <= 50:
+            self.err("plan-totals", "Totals implement-spec count wrong or "
+                                    "outside the operator band 40–50")
+        for c, r in rows.items():
+            if re.search(r"ARCHIVE-UPLOAD|SETTLE-W", r["alias"]) \
+                    and r["kind"] != "skeleton":
+                self.err("plan-fold", f"{c}: ARCHIVE-UPLOAD/SETTLE act lives "
+                                      "outside a window skeleton")
+        bpm = re.search(r"<!-- linearization-B-prime: ([^>]*?) -->", text)
+        if not bpm:
+            self.err("plan-linearization", "linearization-B-prime marker missing")
+        else:
+            mv = bpm.group(1).split()
+            if any(x not in rows for x in mv) or "GATE-G29" not in rows:
+                self.err("plan-linearization", "B′ marker names an unknown id")
+            else:
+                ob = [x for x in order if x not in mv]
+                i = ob.index("GATE-G29") + 1
+                ob = ob[:i] + mv + ob[i:]
+                bpos = {x: j for j, x in enumerate(ob)}
+                for c, r in rows.items():
+                    if r["deps"] == ["nothing"]:
+                        continue
+                    for d in r["deps"]:
+                        if d in bpos and bpos[d] >= bpos[c]:
+                            self.err("plan-linearization",
+                                     f"{c}: B′ permutation breaks backward-only "
+                                     f"on dep {d}")
+        # row-table owned ids == json primaries, row for row
+        js = {}
+        for c in by_id.values():
+            if c.get("disposition") == "adopted":
+                js.setdefault(c.get("primary"), set()).add(c["id"])
+        seen = {}
+        for cid, (cnt, ids) in owned.items():
+            if cnt == -1:
+                self.err("plan-owner", f"{cid}: unparseable owned cell")
+                continue
+            if cnt != len(ids) and ids:
+                self.err("plan-owner", f"{cid}: owned count {cnt} != {len(ids)}")
+            for x in ids:
+                seen[x] = seen.get(x, 0) + 1
+            if set(ids) != js.get(cid, set()):
+                self.err("plan-owner", f"{cid}: plan-table owned ids != register")
+        for x, v in seen.items():
+            if v > 1:
+                self.err("plan-owner", f"{x}: duplicated owner in plan table")
+        for x in sorted(set(js) - set(owned)):
+            self.err("plan-owner", f"{x}: register owner absent from plan table")
+        # shared-decision ownership: the owner row precedes every consumer
+        sm = re.search(r"### Shared-decision ownership[^\n]*\n(.*?)(\n### |\Z)",
+                       text, re.S)
+        if not sm:
+            self.err("plan-shared", "no '### Shared-decision ownership' table")
+        else:
+            cid_re = r"(?:GATE-G\d+|HUMAN-H\d+|R6\.\d+[a-z]?|CAP6\.\d+|REC6\.\d+|DOC6\.\d+)"
+            nsh = 0
+            for line in sm.group(1).splitlines():
+                c = self._cells(line) if line.startswith("|") else []
+                if len(c) != 3 or c[0] in ("shared decision / seam", "---") \
+                        or set(c[0]) <= {"-"}:
+                    continue
+                own = re.findall(cid_re, c[1])
+                if not own:
+                    continue
+                nsh += 1
+                o = own[0]
+                if o not in rows:
+                    self.err("plan-shared", f"shared decision owner {o} not a row")
+                    continue
+                for x in re.findall(cid_re, c[2]):
+                    if x in rows and x != o and rows[x]["seq"] <= rows[o]["seq"]:
+                        self.err("plan-shared", f"shared decision {o} after "
+                                                f"consumer {x}")
+            if nsh < 20:
+                self.err("plan-shared", f"only {nsh} shared decisions parsed")
+        return rows
+
+    # ---------------- Round-6 markers, windows and paid rows ----------------
+
+    def _contract_text(self, row):
+        tf = self.path(os.path.join(TICKETS_DIR, row["file"]))
+        if not os.path.isfile(tf):
+            self.err("chain-file", f"{row['id']}: contract file {row['file']} missing")
+            return ""
+        with open(tf, encoding="utf-8") as f:
+            return f.read()
+
+    def check_markers6(self, active, pos, kind_at, decisions, spec_text):
+        """Gate markers (REQ-XH-025), HUMAN rows (REQ-XH-026), paid bodies
+        (REQ-XH-001/024) and the spend-gate readout fields (REQ-XH-004)."""
+        specn = re.sub(r"\s+", " ", spec_text)
+        for r in active:
+            t = self._contract_text(r)
+            if not t:
+                continue
+            if r["kind"] == "gate":
+                cm = re.search(r"^## Criterion \(verbatim[^\n]*\n(.*?)(?=^## |\Z)",
+                               t, re.S | re.M)
+                if not cm:
+                    self.err("gate-criterion",
+                             f"{r['id']}: no '## Criterion (verbatim …)' section")
+                else:
+                    for ln in cm.group(1).splitlines():
+                        if ln.startswith("> |"):
+                            q = re.sub(r"\s+", " ", ln[2:]).strip()
+                            if q and q not in specn:
+                                self.err("gate-criterion",
+                                         f"{r['id']}: criterion quote absent from "
+                                         f"the frozen spec: {q[:80]}")
+                d = decisions.get(r["id"])
+                if r["id"] in DISPOSITION_FORMS6 and d and d["passed"]:
+                    body = d["row"]
+                    if not any(re.search(p, body)
+                               for p in DISPOSITION_FORMS6[r["id"]]):
+                        self.err("gate-disposition",
+                                 f"{r['id']}: PASSED decision carries no "
+                                 "pre-registered disposition form")
+                if r["id"] in SPEND_GATES6:
+                    for pat in SPEND_READOUT_FIELDS6:
+                        if not pat.search(t):
+                            self.err("readout-fields",
+                                     f"{r['id']}: spend-gate contract lacks the "
+                                     f"'{pat.pattern}' readout field")
+            elif r["kind"] == "human":
+                for label, pat in (("owner", r"\*\*Owner:\*\*"),
+                                   ("trigger", r"\*\*Scheduled:\*\*[^\n]*trigger"),
+                                   ("exit", r"^## Exit criterion"),
+                                   ("withheld", r"\*\*Withheld until done:\*\*")):
+                    if not re.search(pat, t, re.M):
+                        self.err("human-marker",
+                                 f"{r['id']}: contract lacks the {label} marker")
+                ro = self.path(os.path.join(READOUTS_DIR, f"{r['id']}.md"))
+                if os.path.isfile(ro):
+                    with open(ro, encoding="utf-8") as f:
+                        head = f.read(4096)
+                    st = re.search(r"^Status:\s*(\S+)", head, re.M)
+                    if st and st.group(1) == "DEFERRED":
+                        dfs = re.findall(r"DF-[A-Za-z0-9.-]+", head)
+                        deftext = self._deferrals or ""
+                        cited = [x for x in dfs
+                                 if x in deftext and r["id"] in deftext]
+                        if not cited:
+                            self.err("human-deferred",
+                                     f"{r['id']}: DEFERRED readout cites no "
+                                     "existing DEFERRALS row naming the HUMAN row")
+            if r["kind"] in ("ticket", "capstone", "reconcile", "docs"):
+                # a paid body in the active round is a window skeleton or a row
+                # decomposed after its gate (REQ-XH-001/024)
+                if r["id"] in self._paid_bodies:
+                    gate = self._paid_bodies[r["id"]]
+                    gd = decisions.get(gate)
+                    if r["kind"] == "ticket" and not (gd and gd["passed"]):
+                        self.err("paid-body",
+                                 f"{r['id']}: paid window body is fleshed but its "
+                                 f"gate {gate} is not recorded PASSED")
+                if LATER_ROUND_ID6.match(r["id"]):
+                    self.err("paid-body",
+                             f"{r['id']}: a later-round (7/8) row may appear in "
+                             "Round 6 only as a skeleton")
+
+    def check_window6(self, active, pos):
+        """REQ-XH-008 window pattern: per window, PROV gate → window body → its
+        HUMAN-reconcile entry, as an ordered subsequence (consolidated
+        HUMAN-H18; GATE-G20 D-1/D-2 accepted)."""
+        # reconcile coverage: a human row covers a window when its manifest
+        # scope cell names that window's token in a reconcile context (the
+        # consolidated HUMAN-H18 scope names all five; a per-window reconcile
+        # row names its own)
+        covers = {}
+        for h in (r for r in active if r["kind"] == "human"):
+            scope = h.get("scope", "")
+            if not re.search(r"reconcil", scope, re.I):
+                continue
+            for w in ("W1", "W2", "W3", "W4", "Wc"):
+                if re.search(r"\b" + w + r"\b", scope):
+                    covers.setdefault(w, []).append(h)
+        for body, gate in self._paid_bodies.items():
+            brow = next((r for r in active if r["id"] == body), None)
+            grow = next((r for r in active if r["id"] == gate), None)
+            if brow is None:
+                self.err("window-order", f"window body {body} is not an "
+                                         "active-round row")
+                continue
+            if grow is None or pos[grow["id"]] >= pos[body]:
+                self.err("window-order",
+                         f"{body}: its PROV gate {gate} does not precede the "
+                         "window body")
+            wname = self._paid_window_names.get(body)
+            if wname:
+                recs = covers.get(wname, [])
+                if not recs:
+                    self.err("window-order",
+                             f"{body}: no HUMAN-reconcile row covers window {wname}")
+                for h in recs:
+                    if pos[h["id"]] <= pos[body]:
+                        self.err("window-order",
+                                 f"{h['id']}: reconcile entry for {wname} sits "
+                                 f"before its window body {body}")
+
+    def _init_paid_windows(self, plan_rows):
+        """Window bodies and their PROV gates from the frozen plan table:
+        skeleton rows whose dep is a gate; window names from the plan alias
+        (W1/W2/W3/Wc/W4{…})."""
+        self._paid_bodies = {}
+        self._paid_window_names = {}
+        for cid, r in plan_rows.items():
+            if r.get("kind") != "skeleton":
+                continue
+            gate = next((d for d in r["deps"]
+                         if plan_rows.get(d, {}).get("kind") == "gate"), None)
+            if gate:
+                self._paid_bodies[cid] = gate
+            wm = re.match(r"(W[1-4]|Wc)\b", r.get("alias", ""))
+            if wm:
+                self._paid_window_names[cid] = wm.group(1)
 
     def check_chain(self, rows, active_round):
         ids = [r["id"] for r in rows]
@@ -690,6 +1403,27 @@ class Guard:
         for v in cdata.get("violations", []):
             self.err("stock-violation",
                      f"stock checker violation {v.get('check')}: {v.get('message')}")
+        # append-only dated amendments: bounded diagnostic families classified
+        # into the reviewed baseline with provenance (R6.1 AC-3 — the 46 legacy
+        # reqcov warnings). A family explains at most `max_emitted` matching
+        # warnings — a further warning is still unexplained — and is never
+        # required to be emitted (emission is validator-version dependent, so
+        # a vanished family is not a missing-historical-diagnostic; the
+        # standing `legacy` classes keep the required-emission rule).
+        families = []
+        for am in bdata.get("amendments", []):
+            fam = am.get("family", {})
+            try:
+                families.append({
+                    "id": am.get("id", "?"),
+                    "check": fam.get("check", ""),
+                    "file": re.compile(fam.get("file_pattern", r"\b\B")),
+                    "message": re.compile(fam.get("message_pattern", r"\b\B")),
+                    "left": int(fam.get("max_emitted", 0)),
+                    "used": 0,
+                })
+            except (re.error, TypeError, ValueError) as e:
+                self.err("baseline", f"amendment {am.get('id')!r} malformed: {e}")
         emitted = cdata.get("warnings", [])
         self.counts["stock_warnings"] = len(emitted)
         self.counts["stock_violations"] = len(cdata.get("violations", []))
@@ -699,10 +1433,23 @@ class Guard:
                                       w.get("message", ""))
             if sig in unmatched:
                 del unmatched[sig]
+                continue
+            fam = next((f for f in families
+                        if f["left"] > 0 and f["check"] == w.get("check")
+                        and f["file"].search(w.get("file", ""))
+                        and f["message"].search(w.get("message", ""))), None)
+            if fam is not None:
+                fam["left"] -= 1
+                fam["used"] += 1
             else:
                 self.err("unexplained-diagnostic",
                          f"stock warning not in the reviewed baseline classes: "
                          f"{w.get('check')}|{w.get('file')}|{w.get('message', '')[:80]}")
+        for fam in families:
+            if fam["used"]:
+                self.note("classified-diagnostic",
+                          f"{fam['used']} warning(s) explained by dated baseline "
+                          f"amendment {fam['id']}")
         for sig, cur in unmatched.items():
             self.err("missing-historical-diagnostic",
                      f"baseline class no longer emitted by the stock checker: "
@@ -712,13 +1459,17 @@ class Guard:
     # ---------------- driver ----------------
 
     def run(self, checker_json):
-        for rel in (COVERAGE_MD, COVERAGE_JSON, BASELINE_JSON, MANIFEST, LEDGER, BUILD_INDEX):
+        for rel in (COVERAGE_MD, COVERAGE_JSON, BASELINE_JSON, MANIFEST, LEDGER,
+                    BUILD_INDEX, COVERAGE6_MD, COVERAGE6_JSON, PLAN6, SPEC6,
+                    DEFERRALS):
             self.digest(rel)
         spec_rel = "docs/evidence-and-adoption-spec.md"
         spec_text = self.read(spec_rel)
+        spec6_text = self.read(SPEC6)
         ledger_text = self.read(LEDGER)
         manifest_text = self.read(MANIFEST)
         index_text = self.read(BUILD_INDEX)
+        self._deferrals = self.read(DEFERRALS) or ""
         if spec_text is None or ledger_text is None or manifest_text is None \
                 or index_text is None:
             return self.finish()
@@ -735,6 +1486,18 @@ class Guard:
         by_id = self.check_coverage(spec_text, manifest_ids)
         self.check_coverage_md(by_id)
         active, kind_at = self.check_chain(rows, active_round)
+        # Round-6 frozen source (GUARD-X): register legs over the committed
+        # REQ-X register and the folded partition-plan legs; one
+        # implementation remains for both (CC1).
+        if spec6_text is not None:
+            by_id6 = self.check_coverage6(spec6_text, manifest_ids, kind_at)
+            self.check_coverage6_md(by_id6)
+            plan_rows = self.check_plan6(by_id6)
+            self._init_paid_windows(plan_rows)
+            pos = {r["id"]: n for n, r in enumerate(rows)}
+            if active_round == ROUND6:
+                self.check_markers6(active, pos, kind_at, decisions, spec6_text)
+                self.check_window6(active, pos)
         self.check_routing(state, rows, active, kind_at,
                            index_ids, index_seqs, decisions)
         self.check_git_ancestry(state)
