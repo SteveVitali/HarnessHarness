@@ -199,7 +199,7 @@ _216 ADRs: 164 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0429 | A second protocol needs a different ceiling or a setup multiplier other than the declared 1.0: the ceiling and multipliers stay declared members; the derivation is reopened by a new ADR. |
 | ADR-0430 | The L1 gate (R6.21+) needing cross-connection hash keying beyond `sequence_then_hash`, multi-slot trajectory bundling, or canonicalizer rulesets past `hh-l1-canon/1` — each is a new declaration, not an edit to this record. |
 | ADR-0431 | Re-open if (a) a second provisioning surface is admitted (new tool, new cloud, or a second `gcloud` call site) — the single-home assertion and this ADR must be re-cut; (b) `hh-compute-decl/1` or `hh-compute-receipt/1` gains or drops members — the schemas are closed and this record documents the field set; (c) R6.14 lands pricing and the `cost_record`/`billed: pending` hook is wired; or (d) REQ-XB-212's live evidence (R6.47) surfaces a fixture/live divergence the battery cannot express. |
-| ADR-0432 | (no `## Revisit trigger` section — contract violation) |
+| ADR-0432 | Revisit when (a) GCP reprices any pinned compute row (the register `retrieved` dates are the staleness bound), (b) the first billed reconciliation appends `basis: billed` rows against these estimates — the `within\|outside` spread then measures the estimate methodology — or (c) a phase spend leg needs a third `kind` or `authority` value, which is a new AR item, not an in-place edit. |
 
 ## Fired-and-answered triggers (BL-48)
 
