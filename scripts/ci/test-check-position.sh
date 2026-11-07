@@ -27,6 +27,7 @@ seed() {  # $1 = dir — a minimal repo carrying the real checkout's positioning
   cp "$ROOT/docs/README.md" "$d/docs/"
   cp "$ROOT/docs/evidence-and-adoption-spec.md" "$d/docs/"
   cp "$ROOT/scripts/check-position.sh" "$d/scripts/"
+  cp "$ROOT/scripts/claims-lexicon.json" "$d/scripts/"
   mkdir -p "$d/docs/results"
   cp "$ROOT/docs/results/phase1-execution-surface-replay.md" "$d/docs/results/"
   # placeholder files for every repo-relative link in docs/evidence.md
@@ -268,6 +269,11 @@ D=$(seed mut-i)
 echo '
 proven' >> "$D/docs/results/phase1-execution-surface-replay.md"
 expect fail "(i) a BANNED entry appended to the record" "$D"
+
+# --- the shared lexicon (REQ-XF-134 / C-25) ---------------------------------
+D=$(seed no-lexicon)
+rm "$D/scripts/claims-lexicon.json"
+expect fail "missing claims-lexicon fails closed" "$D"
 
 # --- the real checkout is green ------------------------------------------------------------------------
 expect ok "real checkout (working tree)" "$ROOT"

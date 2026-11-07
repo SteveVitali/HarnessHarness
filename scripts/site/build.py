@@ -12,7 +12,12 @@ shell and components (one renderer — CC1).
     python3 scripts/site/build.py --emit       write site-data in place
     python3 scripts/site/build.py --check      rebuild & byte-compare (drift)
     python3 scripts/site/build.py --out DIR    render the site tree
-    python3 scripts/site/build.py --print-tree also print tree sha256
+    python3 scripts/site/build.py --out DIR --profile public
+        render the deployable profile: a phase's pages only where a
+        committed hh-site-publication/1 record pins its exact input set
+        (REQ-XF-128/129); the public profile refuses fixture-labelled
+        values, the internal-preview banner, private dataset paths and
+        an input-set mismatch (REQ-XF-142)
 
 Deterministic: no wall clock, no network. Exit 0 green; 1 a check or
 render failed; 2 usage or malformed input (unknown schema, missing
@@ -30,7 +35,7 @@ SITE = Path(__file__).resolve().parent
 ROOT = SITE.parent.parent
 sys.path.insert(0, str(SITE))
 
-from hhsite import packets, project, values  # noqa: E402
+from hhsite import packets, project, publication, values  # noqa: E402
 
 SITE_DATA_DIR = ROOT / "docs" / "results" / "site-data"
 MIN_PYTHON = (3, 9)
@@ -100,10 +105,28 @@ def run_check(dest=SITE_DATA_DIR):
     return drift
 
 
-def run_out(out_dir):
+def load_publications(inputs, repo_root=ROOT):
+    """Committed hh-site-publication/1 records, validated. A malformed
+    record refuses (fail closed); a record whose pinned input set
+    mismatches the current one refuses the public build (REQ-XF-129)."""
+    records, errors = publication.load_dir(repo_root)
+    for e in errors:
+        raise values.Refusal("publication record — %s" % e)
+    for rel, doc in records:
+        mism = publication.pin_errors(doc, inputs)
+        for e in mism:
+            raise values.Refusal(
+                "publication record %s does not pin the current input "
+                "set: %s" % (rel, e))
+    return records
+
+
+def run_out(out_dir, profile="internal"):
     from hhsite import sitepages  # stage-2 renderer (F2-e)
     inputs, digest, bodies = emit_bodies()
-    written = sitepages.build(out_dir, inputs, digest, bodies)
+    pubs = load_publications(inputs)
+    written = sitepages.build(out_dir, inputs, digest, bodies,
+                              profile=profile, publications=pubs)
     return written
 
 
@@ -117,6 +140,10 @@ def main(argv=None):
                     help="render the site tree into DIR")
     ap.add_argument("--site-data", metavar="DIR", default=str(SITE_DATA_DIR),
                     help="site-data directory (default committed layer)")
+    ap.add_argument("--profile", default="internal",
+                    choices=("internal", "public"),
+                    help="render profile: internal (all input content) or "
+                         "public (publication-record-gated)")
     args = ap.parse_args(argv)
     try:
         check_python()
@@ -136,9 +163,10 @@ def main(argv=None):
             did = True
         if args.out:
             from hhsite import sitepages
-            written = run_out(args.out)
-            print("build: %d page(s) into %s, tree sha256 %s"
-                  % (len(written), args.out,
+            written = run_out(args.out, args.profile)
+            print("build: %d page(s) into %s (%s profile), "
+                  "tree sha256 %s"
+                  % (len(written), args.out, args.profile,
                      sitepages.tree_sha256(args.out)))
             did = True
         if not did:

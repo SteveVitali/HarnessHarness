@@ -1,0 +1,67 @@
+# HarnessHarness Pages — the publication-gated deploy lane (REQ-XF-128,
+# ADR-0424). Separate from ci.yml by design: triggers on push to main and
+# manual dispatch only, minimally permissioned, and every `uses:` is
+# pinned by commit SHA (the `# v…` comment names the version dependabot
+# tracks). With no committed hh-site-publication/1 record the job exits
+# green with "nothing published" and never reaches a deploy step —
+# publication is an operator gate (GATE-G22/GATE-G31), never an agent act.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build public profile + conditional deploy
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the public profile
+        run: python3 scripts/site/build.py --out _site --profile public
+
+      # The public profile's own checker legs run before any deploy step.
+      - name: Check the public profile
+        run: bash scripts/check-site.sh --profile public _site
+
+      # Nothing is public until a committed hh-site-publication/1 record
+      # pins a phase's exact input set (REQ-XF-128/129). This gate runs
+      # BEFORE the deploy steps; with zero records it exits green.
+      - name: Publication record gate
+        id: pub
+        run: |
+          if compgen -G "docs/results/publication/*.json" >/dev/null; then
+            echo "published=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=no" >> "$GITHUB_OUTPUT"
+            echo "nothing published — no hh-site-publication/1 record; deploy skipped"
+          fi
+
+      - name: Configure Pages
+        if: steps.pub.outputs.published == 'yes'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Pages artifact
+        if: steps.pub.outputs.published == 'yes'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        if: steps.pub.outputs.published == 'yes'
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

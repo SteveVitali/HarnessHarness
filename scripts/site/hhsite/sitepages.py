@@ -7,16 +7,26 @@ a value object with data-src/data-sha provenance; absent states render
 their typed reason, awaited schema and gate id; negative, inconclusive,
 declined and withheld outcomes get the same component, size and position
 as positive ones.
+
+R6.6 adds the two profiles (design/39 F10): ``internal`` renders every
+phase its inputs carry and the designed absent state elsewhere;
+``public`` renders a phase's pages only when a committed
+``hh-site-publication/1`` record pins that phase's exact input set —
+everything else is ``not yet published — publication gate pending``
+with no numbers (REQ-XF-128/129/142).
 """
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
 from . import components, derive, pages, raster, tokparse
 from .components import (ESC, absent_block, cost_axis_svg, figure,
-                         interval_svg, prov_attrs, receipt_rail, stamp)
-from .values import GENERATOR, GENERATOR_VERSION
+                         interval_svg, prov_attrs, receipt_rail,
+                         stamp)
+from .values import (GENERATOR, GENERATOR_VERSION, Refusal,
+                     hygiene_scan)
 
 SITE_VERSION = "s1"
 EXPERIMENT_ID = "phase-1 replay record (execution surface)"
@@ -24,6 +34,9 @@ EVIDENCE_CLASS = "recorded execution — internal; not outside-verified"
 RECOMPUTE = "python3 scripts/site/build.py --emit && python3 " \
             "scripts/site/build.py --check"
 ASSETS = ("tokens.css", "site.css", "site.js", "glyphs.svg", "favicon.svg")
+PROFILES = ("internal", "public")
+PUB_ABSENT = "not yet published — publication gate pending"
+ROBOTS_TXT = "User-agent: *\nDisallow: /*/trial/\n"
 
 URLS = [("", "Overview"),
         ("phase-1/", "Phase 1 — execution-surface replay record"),
@@ -172,14 +185,42 @@ def _tile(title, value_html, detail, stamp_html, receipt, prefix=""):
                receipt_rail(receipt, prefix)))
 
 
+# ── absent/publication states ─────────────────────────────────────────
+def _absent_page(claims, title, path, reason, schema, gate, section,
+                 calib):
+    """A §9.2 path without its renderer or input: the designed absent
+    state under the real label banner (never the mock label)."""
+    sprite = pages._prefix(path) + "assets/glyphs.svg"
+    body = ('<h1 class="display-2">%s</h1>' % ESC(title)
+            + absent_block(reason, schema, gate,
+                           bars=("w-wide", "w-mid"), sprite=sprite))
+    return pages.shell(title, path, body, _labels(claims), section,
+                       calib=calib, noindex="/trial/" in path)
+
+
+def _pub_absent_page(claims, title, path, schema, gate, section, calib):
+    """The public profile's unpublished state (design/39 F10):
+    'not yet published — publication gate pending', with no numbers."""
+    sprite = pages._prefix(path) + "assets/glyphs.svg"
+    body = ('<h1 class="display-2">%s</h1>' % ESC(title)
+            + absent_block(PUB_ABSENT, schema, gate,
+                           bars=("w-wide", "w-mid"), sprite=sprite))
+    return pages.shell(title, path, body, _labels(claims), section,
+                       calib=calib, noindex="/trial/" in path)
+
+
 # ── page builders ──────────────────────────────────────────────────────
-def home_page(sd, pkts, commit):
+def home_page(sd, pkts, commit, published=None):
+    """published=None → internal profile (all input-carrying content);
+    a set → public profile (a phase's readings only when its record pins
+    the input set — every other channel is 'not yet published')."""
     claims = json.loads(sd["claims.json"])["body"]
     p1 = json.loads(sd["phase1.json"])["body"]
     sp = json.loads(sd["spend.json"])["body"]
     t3 = p1["tranche3"]
     study = p1["dispositions"]["study"]
     xconf = p1["confounds"]
+    p1_pub = published is None or "phase-1" in published
 
     body = ['<div class="hero"><h1 class="display-1">A harness lab that '
             'keeps its receipts.</h1>'
@@ -190,67 +231,79 @@ def home_page(sd, pkts, commit):
 
     body.append('<h2>Channels</h2><div class="cols">')
     chans = [
-        ("P1 · execution-surface replay",
+        ("P1 · execution-surface replay", "phase-1",
          stamp("verified", "recorded · internal"),
          "TB-core 0.1.1 · oracle · $0", "phase-1/"),
-        ("P2 · comparative", stamp("absent", "Not yet available"),
+        ("P2 · comparative", "phase-2",
+         stamp("absent", "Not yet available"),
          "awaits the FP-S gate", "phase-2/"),
-        ("P3 · HIR parity", stamp("absent", "Not yet available"),
+        ("P3 · HIR parity", "phase-3",
+         stamp("absent", "Not yet available"),
          "awaits the G-L1 gate", "phase-3/"),
-        ("P4 · sweeps", stamp("absent", "Not yet available"),
+        ("P4 · sweeps", "phase-4",
+         stamp("absent", "Not yet available"),
          "awaits FP-RESULTS", "phase-4/")]
-    for name, state, detail, href in chans:
+    for name, ph, state, detail, href in chans:
+        if published is not None and ph not in published:
+            state = stamp("withheld", "Not yet published")
+            detail = "publication gate pending"
         body.append('<section class="card span-3 tile"><h3>%s</h3>'
                     '<p>%s</p><p class="micro">%s</p>'
                     '<p class="small"><a href="%s">open →</a></p></section>'
                     % (ESC(name), state, ESC(detail), href))
     body.append('</div><h2>Readings</h2><div class="cols">')
+    if not p1_pub:
+        body.append('<section class="card span-12">'
+                    + absent_block(PUB_ABSENT, "hh-site-publication/1",
+                                   "GATE-G22", bars=("w-wide", "w-mid"))
+                    + '</section>')
 
     rec_t3 = _receipt(pkts["parity-t3"], commit)
-    body.append(_tile(
-        "Task pairs agree — parity tranche 3",
-        '<span%s>%s / %s</span>'
-        % (prov_attrs(t3["counts"]["agree"]["src"]),
-           _fmt_value(t3["counts"]["agree"]),
-           _fmt_value(t3["counts"]["n_pairs"])),
-        ESC("tb oracle vs a reference podman runner — not HH cells · "
-            "R=1 · %s" % t3["verdict"]["label"]),
-        stamp("verified", "verified"),
-        rec_t3))
-    rec_x = _receipt(pkts["xcheck"], commit)
-    body.append(_tile(
-        "HH cells × tb — records-in cross-check",
-        '<span%s>%s / %s</span>'
-        % (prov_attrs(p1["crosscheck"]["basis_A"]["agree"]["src"]),
-           _fmt_value(p1["crosscheck"]["basis_A"]["agree"]),
-           _fmt_value(p1["crosscheck"]["basis_A"]["tasks"])),
-        ESC("attempt-1 basis · %s / %s on the final fold · %d discordant "
-            "tasks named" % (
-                _fmt_value(p1["crosscheck"]["basis_B"]["agree"]),
-                _fmt_value(p1["crosscheck"]["basis_B"]["tasks"]),
-                len(p1["discordances"]))),
-        stamp("unresolved", "discordant: 2"), rec_x))
-    rec_s = _receipt(pkts["study-r559"], commit)
-    body.append(_tile(
-        "Study report — round 5",
-        '<span%s>%s</span>' % (prov_attrs(study["disposition"]["src"]),
-                               ESC(study["disposition"]["text"])),
-        ESC("disposition `reported` · efficacy 0 by construction "
-            "(oracle arms) · s3/s4 met, s1 unmet"),
-        stamp("failed", study["study"]["text"]), rec_s))
-    for c in xconf:
+    if p1_pub:
         body.append(_tile(
-            "Confound — %s" % c["task_id"]["text"],
-            '<span%s>%s</span>' % (prov_attrs(c["kind"]["src"]),
-                                   ESC(c["kind"]["text"])),
-            ESC("records-in cross-check confound — never a verdict"),
-            stamp("inconclusive", c["disposition"]["text"]), rec_x))
-    body.append(_tile(
-        "Spend — phase 1",
-        _span(sp["inference_usd"]),
-        ESC("inference $0.00 (structured) · compute "
-            "unrecorded{pre_schema}"),
-        stamp("absent", "unrecorded{pre_schema}"), rec_t3))
+            "Task pairs agree — parity tranche 3",
+            '<span%s>%s / %s</span>'
+            % (prov_attrs(t3["counts"]["agree"]["src"]),
+               _fmt_value(t3["counts"]["agree"]),
+               _fmt_value(t3["counts"]["n_pairs"])),
+            ESC("tb oracle vs a reference podman runner — not HH cells · "
+                "R=1 · %s" % t3["verdict"]["label"]),
+            stamp("verified", "verified"),
+            rec_t3))
+        rec_x = _receipt(pkts["xcheck"], commit)
+        body.append(_tile(
+            "HH cells × tb — records-in cross-check",
+            '<span%s>%s / %s</span>'
+            % (prov_attrs(p1["crosscheck"]["basis_A"]["agree"]["src"]),
+               _fmt_value(p1["crosscheck"]["basis_A"]["agree"]),
+               _fmt_value(p1["crosscheck"]["basis_A"]["tasks"])),
+            ESC("attempt-1 basis · %s / %s on the final fold · %d "
+                "discordant tasks named" % (
+                    _fmt_value(p1["crosscheck"]["basis_B"]["agree"]),
+                    _fmt_value(p1["crosscheck"]["basis_B"]["tasks"]),
+                    len(p1["discordances"]))),
+            stamp("unresolved", "discordant: 2"), rec_x))
+        rec_s = _receipt(pkts["study-r559"], commit)
+        body.append(_tile(
+            "Study report — round 5",
+            '<span%s>%s</span>' % (prov_attrs(study["disposition"]["src"]),
+                                   ESC(study["disposition"]["text"])),
+            ESC("disposition `reported` · efficacy 0 by construction "
+                "(oracle arms) · s3/s4 met, s1 unmet"),
+            stamp("failed", study["study"]["text"]), rec_s))
+        for c in xconf:
+            body.append(_tile(
+                "Confound — %s" % c["task_id"]["text"],
+                '<span%s>%s</span>' % (prov_attrs(c["kind"]["src"]),
+                                       ESC(c["kind"]["text"])),
+                ESC("records-in cross-check confound — never a verdict"),
+                stamp("inconclusive", c["disposition"]["text"]), rec_x))
+        body.append(_tile(
+            "Spend — phase 1",
+            _span(sp["inference_usd"]),
+            ESC("inference $0.00 (structured) · compute "
+                "unrecorded{pre_schema}"),
+            stamp("absent", "unrecorded{pre_schema}"), rec_t3))
     body.append('</div><h2>What we don\'t claim</h2>'
                 '<ul class="dont-claim">%s</ul>'
                 % "".join('<li class="prose">%s — <a href="limits/">'
@@ -517,7 +570,7 @@ def method_page(sd, pkts, commit):
             'carries or its designed absent state.</p><div class="cols">']
     for s in m["sections"]:
         if _is_absent(s.get("state")):
-            body.append('<section class="card span-6"><h3>%s</h3>%s'
+            body.append('<section class="card span-6"><h2>%s</h2>%s'
                         '</section>'
                         % (ESC(s["name"]),
                            absent_block(s["state"]["reason"],
@@ -542,7 +595,7 @@ def method_page(sd, pkts, commit):
                 ])
                 inner = '%s<p class="small">%s</p>' % (
                     rows, _span(s["values"]["admission_mechanism"]))
-            body.append('<section class="card span-6"><h3>%s</h3>%s'
+            body.append('<section class="card span-6"><h2>%s</h2>%s'
                         '</section>' % (ESC(s["name"]), inner))
     body.append('</div>')
     return pages.shell("Method", "method/", "".join(body),
@@ -580,7 +633,8 @@ def spend_page(sd, pkts, commit):
          ("exclusions", "billing was never read (bound 10)"),
          ("source", pkts["parity-t3"]["path"])],
         table)
-    body = ['<h1 class="display-2">Spend ledger</h1>', fig,
+    body = ['<h1 class="display-2">Spend ledger</h1>',
+            '<h2>Inference vs compute</h2>', fig,
             '<h2>Compute — round 5</h2>',
             absent_block(sp["compute"]["reason"], sp["compute"]["awaits"],
                          "a compute-cost schema landing",
@@ -628,18 +682,63 @@ def limits_page(sd, pkts, commit):
                                     commit))
 
 
-def changelog_page(sd, pkts, commit):
+def changelog_entries(publications):
+    """REQ-XF-140 — changelog entries derived from publication records
+    and the generator version: one entry per record, each marked
+    current or superseded-by-reference."""
+    superseded = {}
+    for rel, doc in publications:
+        if doc.get("supersedes"):
+            superseded[doc["supersedes"]] = rel
+    entries = []
+    for rel, doc in publications:
+        status = ("superseded by %s" % superseded[rel]
+                  if rel in superseded else "current")
+        entries.append(
+            "%s — %s published %s · record %s · generator %s %s · %s"
+            % (rel.rsplit("/", 1)[-1][:-5], doc["phase"],
+               doc["recorded_at"], rel, GENERATOR, GENERATOR_VERSION,
+               status))
+    return entries, superseded
+
+
+def archive_page(version, rel, doc, status, claims, calib):
+    """One /archive/<version>/ marker page: the version stays reachable
+    and carries its supersession state (REQ-XF-140). The pinned input
+    set is referenced, never copied into prose."""
+    inputs = "".join('<li class="small"><code>%s</code> '
+                     '<span class="micro">%s…</span></li>'
+                     % (ESC(i["path"]), ESC(i["sha256"][:12]))
+                     for i in doc["inputs"])
+    body = ('<h1 class="display-2">Site version %s</h1>'
+            '<div class="card"><h2>%s · %s</h2>'
+            '<p class="prose">%s — published %s · gate row %s · '
+            'record <code>%s</code></p>'
+            '<p class="small">This archive entry marks the pinned input '
+            'set of the publication record; the phase pages under this '
+            'version are the live site when current.</p>'
+            '<ul>%s</ul></div>'
+            % (ESC(version), ESC(doc["phase"]), ESC(status),
+               ESC(version), ESC(doc["recorded_at"]),
+               ESC(doc["gate_row"]), ESC(rel), inputs))
+    return pages.shell("Archive — %s" % version,
+                       "archive/%s/" % version, body, _labels(claims),
+                       "changelog", calib=calib)
+
+
+def changelog_page(sd, pkts, commit, publications=()):
     claims = json.loads(sd["claims.json"])["body"]
     c = json.loads(sd["changelog.json"])["body"]
-    entries = "".join('<li class="prose">%s</li>' % ESC(e)
-                      for e in c["entries"]) or (
+    entries, _sup = changelog_entries(publications)
+    items = "".join('<li class="prose">%s</li>' % ESC(e)
+                    for e in entries) or (
         '<li class="prose">(none — no hh-site-publication/1 records '
         'exist)</li>')
     body = ('<h1 class="display-2">Changelog</h1>'
-            '<div class="card"><h3>site %s · generator %s</h3>'
+            '<div class="card"><h2>site %s · generator %s</h2>'
             '<p class="small">%s</p><ul>%s</ul></div>'
             % (ESC(SITE_VERSION), ESC(c["generator_version"]),
-               ESC(c["note"]), entries))
+               ESC(c["note"]), items))
     return pages.shell("Changelog", "changelog/", body,
                        _labels(claims), "changelog",
                        calib=_calib(pkts["_digest"], len(pkts["inputs"]),
@@ -704,22 +803,55 @@ def about_page(sd, pkts, commit):
                                     commit))
 
 
-PAGE_FUNCS = {
-    "": home_page,
-    "phase-1/": phase1_page,
-    "method/": method_page,
-    "spend/": spend_page,
-    "limits/": limits_page,
-    "changelog/": changelog_page,
-    "data/": data_page,
-    "about/": about_page,
-}
+# Real-content paths by phase: a phase's pages render only when the
+# profile allows its content (internal: always; public: a pinning
+# publication record). Static pages are always present in both
+# profiles; every other §9.2 path renders its absent state.
+PHASE1_PATHS = ("phase-1/", "method/", "spend/", "limits/")
+ALWAYS_PATHS = ("", "changelog/", "data/", "about/")
+
+# The public-profile refusals (REQ-XF-142): fixture-labelled values, the
+# internal-preview banner, private dataset paths. Scanned over rendered
+# pages before any file is written — a hit refuses the build (exit 2).
+_PUBLIC_MARKERS = re.compile(
+    r"fixture ·|fixture-labelled|mock preview|internal preview|"
+    r"INTERNAL PREVIEW")
+_DATASET_HOST_RE = re.compile(r"huggingface\.co", re.I)
 
 
-def build(out_dir, inputs, digest, bodies):
-    """Render the eight R6.5 paths into out_dir: assets, rasterized
-    glyph/OG, site-data copies and the pages. Deterministic — no wall
-    clock, no network."""
+def _public_scan(html, where):
+    """Refuse a public-profile page that carries a fixture label, the
+    internal-preview banner, or a private dataset path (REQ-XF-142)."""
+    m = _PUBLIC_MARKERS.search(html)
+    if m:
+        raise Refusal("public profile: fixture-labelled value or "
+                      "internal-preview marker %r in %s"
+                      % (m.group(0), where))
+    m = _DATASET_HOST_RE.search(html)
+    if m:
+        raise Refusal("public profile: private dataset path %r in %s — "
+                      "no declared dataset origin" % (m.group(0), where))
+    hit = hygiene_scan(html)
+    if hit:
+        raise Refusal("public profile: local/host path %r in %s"
+                      % (hit, where))
+
+
+def build(out_dir, inputs, digest, bodies, profile="internal",
+          publications=()):
+    """Render the site into out_dir: assets, rasterized glyph/OG,
+    site-data copies, robots.txt and the pages. ``internal`` renders
+    phase-1 content plus the designed absent states; ``public`` renders
+    a phase only when a committed hh-site-publication/1 record pins its
+    input set — everything else is publication-pending absent, with no
+    numbers. Deterministic — no wall clock, no network."""
+    if profile not in PROFILES:
+        raise Refusal("unknown profile %r" % profile)
+    public = profile == "public"
+    published = {doc["phase"] for _rel, doc in publications} if public \
+        else None
+    p1_live = not public or (published and "phase-1" in published)
+
     out = Path(out_dir)
     if out.exists():
         shutil.rmtree(out)
@@ -735,18 +867,71 @@ def build(out_dir, inputs, digest, bodies):
     (out / "assets" / "og.png").write_bytes(raster.og_png(tokens))
     for name, text_ in bodies.items():
         (out / "site-data" / name).write_text(text_)
+    (out / "robots.txt").write_text(ROBOTS_TXT)
 
     commit = source_commit(site_root.parent)
     pkts = {i.id: {"path": i.path, "schema": i.schema,
                    "sha256": i.sha256} for i in inputs}
     pkts["inputs"] = inputs
     pkts["_digest"] = digest
+    calib = lambda: _calib(digest, len(inputs), commit)
+    claims = json.loads(bodies["claims.json"])["body"]
 
     written = []
-    for path, _title in URLS:
-        html = PAGE_FUNCS[path](bodies, pkts, commit)
+
+    def emit(path, html):
+        if public:
+            _public_scan(html, path or "index.html")
+        # stamp sprites are emitted relative to the page: give the bare
+        # default sprite path the depth prefix so every <use href>
+        # resolves (the links leg verifies this)
+        html = html.replace('href="assets/glyphs.svg#',
+                            'href="%sassets/glyphs.svg#'
+                            % pages._prefix(path))
         target = out / path / "index.html" if path else out / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(html)
         written.append(str(target.relative_to(out)))
+
+    real = {
+        "": lambda: home_page(bodies, pkts, commit, published=published),
+        "phase-1/": lambda: phase1_page(bodies, pkts, commit),
+        "method/": lambda: method_page(bodies, pkts, commit),
+        "spend/": lambda: spend_page(bodies, pkts, commit),
+        "limits/": lambda: limits_page(bodies, pkts, commit),
+        "changelog/": lambda: changelog_page(bodies, pkts, commit,
+                                             publications),
+        "data/": lambda: data_page(bodies, pkts, commit),
+        "about/": lambda: about_page(bodies, pkts, commit),
+    }
+    for path, title, absent, section in pages.URL_MAP:
+        if path == "specimen/":
+            continue  # internal mock-only page, never in either profile
+        if path in real:
+            if path in PHASE1_PATHS and not p1_live:
+                reason, schema, gate = absent or (
+                    "not_yet_available", "hh-site-data/1", "GATE-G22")
+                emit(path, _pub_absent_page(claims, title, path, schema,
+                                            gate, section, calib()))
+            else:
+                emit(path, real[path]())
+        elif absent:
+            reason, schema, gate = absent
+            phase = "phase-" + path.split("-", 1)[1].split("/", 1)[0] \
+                if path.startswith("phase-") else ""
+            if public and phase and phase not in published:
+                emit(path, _pub_absent_page(claims, title, path, schema,
+                                            gate, section, calib()))
+            else:
+                emit(path, _absent_page(claims, title, path, reason,
+                                        schema, gate, section, calib()))
+    # archive markers — one per publication record, each reachable under
+    # /archive/<version>/ and marked current or superseded (REQ-XF-140)
+    _entries, superseded = changelog_entries(publications)
+    for rel, doc in publications:
+        version = rel.rsplit("/", 1)[-1][:-5]
+        status = ("superseded by %s" % superseded[rel].rsplit("/", 1)[-1][:-5]
+                  if rel in superseded else "current")
+        emit("archive/%s/" % version,
+             archive_page(version, rel, doc, status, claims, calib()))
     return written

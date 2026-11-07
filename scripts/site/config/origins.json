@@ -1,0 +1,7 @@
+{
+  "schema": "hh-site-origins/1",
+  "note": "R6.6 (F2-f/F2-g) — the declared origin set the no-third-party leg enforces (REQ-XF-009, REQ-XF-132). Pages load assets only from the Pages origin itself; outbound anchors are allowed; dataset_origins is the REQ-XF-132 runtime exception — empty while the receipt dataset stays private (C-07, HUMAN-H17). A dataset-host URL anywhere in the site fails the leg until this list declares the indexed public origin.",
+  "asset_origins": [],
+  "dataset_origins": [],
+  "dataset_hosts": ["huggingface.co"]
+}

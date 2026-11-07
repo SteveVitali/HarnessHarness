@@ -64,6 +64,9 @@ entries under the applicable record protocol.
 | [results/README.md](results/README.md) | living | Index of dated phase records |
 | [results/phase1-execution-surface-replay.md](results/phase1-execution-surface-replay.md) | historical | The phase-1 execution-surface replay record — internal record; dated addenda only |
 | [results/site-data/](results/site-data/) | generated | `hh-site-data/1` — the results site's generated data layer; regenerate with `python3 scripts/site/build.py --emit`, drift-check with `--check`; never hand-edit |
+| [results/publication/README.md](results/publication/README.md) | living | `hh-site-publication/1` record schema and semantics; validate with `scripts/check-publication.sh` |
+| [results/publication/CHECKLIST.md](results/publication/CHECKLIST.md) | living | Operator publication-gate checklist (GATE-G22/GATE-G31, HUMAN-H12/H17) |
+| [results/publication/](results/publication/) | append-only | Committed `hh-site-publication/1` records — supersede only by a new record's `supersedes` field |
 | [experiments.md](experiments.md) | living | The four offline example families — jobs, versions/pins, costs, commands, checks, failure routes |
 | [brief.md](brief.md) | frozen | Evidence and adoption founding intent; later changes are dated addenda. Charter approved; see its dated addendum. |
 | [protocol-resource-review.md](protocol-resource-review.md) | living checkpoint summary | Accepted research/design recommendations and Q-3–Q-6 review; decisions are recorded in the research ledger |
