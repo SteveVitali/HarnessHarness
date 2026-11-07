@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        O2
-lastCompleted:   O1
+nextUnit:        O3
+lastCompleted:   O2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-07T01:36:59Z
+updatedAt:       2026-11-07T02:09:27Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -134,7 +134,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | O1 | Synthesize `docs/experiments-spec.md` from the accepted notes (front matter, §0 conventions with `req_id_pattern: REQ-X[A-H]-[0-9]+`, decision register, body by phase, appendices A–F incl. outline-superset proof). | S | done | [experiments-spec.md](experiments-spec.md) v0.1 draft |
-| O2 | Fresh-context adversarial review; dispositions in Appendix E (`accept/adapt/rebut/defer`). | S | in-progress | — |
+| O2 | Fresh-context adversarial review; dispositions in Appendix E (`accept/adapt/rebut/defer`). | S | done | [41_spec-review.md](design/41_spec-review.md); dispositions in spec Appendix E (v0.2) |
 | O3 | Operator ratification; freeze this ledger; write `docs/experiments-decomposition-prompt.md`. | S | open | — |
 | O4 | (Downstream, not a synthesis unit) `decompose-spec mode=extend` appending Round 6 after row 251, on top of `main` once R5.59 has landed (Q-X3/Q-X18). | S | open | — |
 
@@ -204,6 +204,14 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X53 | First-pass L2 margin (RB-3; Q-X34 for the first pass) | "±.20, expect inconclusive (Recommended)" | O2 revision; Q-X34 resolved for the first pass |
 | Q-X54 | First-pass $100 split at the `high` pin (RB-4/RB-5/RA-11) | "Model ≤$70, compute ≤$20, $10 reserve (Recommended)" — spend above the $60 included credit needs purchased Ollama credit, a HUMAN step at the spend gate only if the measured quote requires it; the optional variant arm runs only if the quote leaves room | O2 revision |
 | Q-X55 | First-pass agent/grading network (RA-12/RA-13; clarifies Q-X39a) | "No GitHub; grading hosts ok (Recommended)" — agent phase: model proxy + apt/PyPI/npm/crates only, tasks needing github.com excluded and replaced from the seeded order; grading phase may reach the hosts its verifier needs; integrity scan still runs | O2 revision |
+| Q-X56 | First-pass optional phase-4 variant = V5 `rsn-drop` (spec v0.2 default) | | ratification |
+| Q-X57 | First-pass phase 4 = one pre-registered single contrast, a scoped departure from Q-X15 explore→confirm (kept for later passes) | | ratification |
+| Q-X58 | Paid-window run rows stay `Kind: skeleton` until their gate passes, then a scoped decompose-spec insert fleshes them | | ratification / decomposition |
+| Q-X59 | Pre-authorize remediation for a secret found after HF upload: rotate, purge the dataset revision, tombstone the index entry | | ratification |
+| Q-X60 | Each window gate pre-authorizes one harvest-only VM restart (≤ 1 h) after a dead-man stop | | ratification |
+| Q-X61 | Original and HH-native mini-swe-agent protected from cost-based dropping; truncation order V5 → Claude Code → Pi | | ratification |
+| Q-X62 | First-pass spend gate (FP-S) waits for the E2-T8 rung record; hosted-only fallback fires if G-L1 has not passed 14 days after FP-S is otherwise ready (14 is a synthesis placeholder) | | ratification (operator fixes the number) |
+| Q-X63 | Any purchased Ollama credit counts in full against the $100, used or not | | ratification |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -229,3 +237,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-07T01:14:55Z — O1 done: `docs/experiments-spec.md` v0.1 (Draft for operator review; §0–§10 + Appendices A–F; 424 source candidates → 338 adopted / 84 merged / 2 superseded, plus 16 synthesis-allocated IDs REQ-XH-101…106 (receipt archive, AR-20) and REQ-XH-110…119 (first pass) flagged for O2; decision register C-01…C-34, S-1…S-13, FP-1…FP-12; first-pass budget: expected model $12.6–31.4, hard-bounded total $62.7, ≤ $85 authorizable under the $100 ceiling). Outline trace: all 18 OL rows mapped, none de-scoped. O2 assignment: two independent fresh-context reviewers (R-A: §0–§5 + Appendices A–D vs streams A–C; R-B: §6–§10 + Appendix F vs streams D–F/H; both read §0, §1, §10.1), findings to `design/41_spec-review.md` (coordinator merges), dispositions folded into Appendix E.
 - 2026-11-07T01:31:11Z — Recorded Q-X51 (implementation worker = Cognition SWE-2, High effort, 256k context) as a binding sizing input for O3/O4. O2 reviewer B finished (25 findings: 2 blockers, 12 major, 11 minor); reviewer A running.
 - 2026-11-07T01:36:59Z — O2 reviews complete: R-A 37 findings (2 blocker / 17 major / 18 minor), R-B 25 (2 / 12 / 11); assembled verbatim as `design/41_spec-review.md`. Operator decisions on the review's decision-bearing findings recorded verbatim as Q-X52…Q-X55 (received 2026-11-07, planning conversation dialog). Coordinator scope reduction (no operator answer contradicted): the paid Harbor R-live runner check (RA-14) is dropped from the first pass; the $0 replay-equality check stays. Revision to v0.2 dispatched to a fresh-context reviser that folds every accept/adapt finding and fills Appendix E.
+- 2026-11-07T02:09:27Z — Spec v0.2 by a fresh-context reviser: 62/62 findings dispositioned (36 accept, 26 adapt, 0 rebut, 0 defer) in Appendix E; 14 new IDs; ID-sync 0 errors (368 adopted body IDs = index; 454 index rows). First-pass budget rebuilt on the high-effort planning line ($66.7 planning without V5 vs $56 model cap at $70 authorization; compute $19.79/$20). New pending Q-X56…Q-X63 mirrored from Appendix B. O2 closed; a fresh delta re-review verifies the four blockers before O3 ratification.
