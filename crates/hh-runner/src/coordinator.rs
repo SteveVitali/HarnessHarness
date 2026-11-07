@@ -9,7 +9,7 @@
 //! and replans within bounds. A paid agent phase is never resumed mid-run
 //! — a dead attempt is replanned as a NEW attempt.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
@@ -77,7 +77,8 @@ pub struct CoordinatorConfig {
     pub max_parallel: usize,
 }
 
-/// A live worker process the coordinator reaps and binds.
+/// A live worker process the coordinator reaps and binds — plus the
+/// slot's declared deadline (the cut-off's in-flight set, R6.16).
 pub struct WorkerProcess {
     /// The attempt's plan key.
     pub run_plan_id: String,
@@ -104,6 +105,11 @@ pub struct DriveReport {
     pub settled: Vec<(String, Json)>,
     /// The close status string.
     pub close_status: String,
+    /// The `hh-runner-window/1` record when the drive ran scheduled
+    /// (R6.16) — the C inputs, packing rule, actual start order,
+    /// withheld/unresolved sets, catalog snapshots and the harvest
+    /// manifest, blob-deposited into the experiment store.
+    pub window: Option<Json>,
 }
 
 /// Build the engine's resolver context from the declared packet (deposits
@@ -539,8 +545,22 @@ fn finish_attempt(
     let _ = (eid, run_id);
     // The subject run id and its live writer lease come from the launch
     // record — bind under them (a re-acquire under the live lease would
-    // read as the same WouldBlock fence a foreign holder sees).
-    bind_subject(store, subject_run_id, slot_root, slot_run, subject_lease)?;
+    // read as the same WouldBlock fence a foreign holder sees). When the
+    // armed lease has already expired on this clock — a worker that
+    // outlived the manifest's writer TTL — the owned takeover is the
+    // same fenced `acquire_writer` `bind_or_crash` uses (an expired
+    // lease never binds; the takeover is audited, never bypassed).
+    if subject_lease.expires_at_ms > store.now_ms() {
+        bind_subject(store, subject_run_id, slot_root, slot_run, subject_lease)?;
+    } else {
+        bind_or_crash(
+            store,
+            subject_run_id,
+            slot_root,
+            slot_run,
+            packet.writer_ttl_ms,
+        )?;
+    }
     let out = with_engine(store, docs, packet, run_id, lease, |eng| {
         eng.settle(run_plan_id).map_err(RunnerError::Engine)
     })?;
@@ -569,6 +589,9 @@ pub fn drive(
     cfg: &CoordinatorConfig,
     hh_runner: &Path,
 ) -> Result<DriveReport, RunnerError> {
+    if packet.window.is_some() {
+        return drive_window(store, docs, packet, cfg, hh_runner, &mut || {});
+    }
     let (eid, run_id, mut lease) = open_or_attach(store, docs, packet)?;
     // Resume derives only from durable records: close every launched-but-
     // unsettled attempt before dispatching new work.
@@ -712,5 +735,535 @@ pub fn drive(
         run_id,
         settled,
         close_status,
+        window: None,
+    })
+}
+
+// ── R6.16 Stage 1 — the scheduled window drive ─────────────────────────
+
+/// `mark_unadmitted` — the dead-man/budget resolution rows: a
+/// never-attempted open plan is `withheld{<reason>}`; an attempted one
+/// (a gated retry) is `unresolved` (REQ-XH-125 — the slot keeps its
+/// last attempt's inconclusive disposition; no retry is carried to a
+/// later window). Returns `(withheld_rows, unresolved_rows, newly
+/// closed ids)` — the caller lands them in the window record.
+fn mark_unadmitted(
+    units: &[crate::schedule::PackingUnit],
+    closed: &BTreeSet<String>,
+    attempted: &BTreeSet<String>,
+    inflight: &BTreeSet<String>,
+    reason: &str,
+) -> (Vec<Json>, Vec<Json>, Vec<String>) {
+    let mut w = Vec::new();
+    let mut u = Vec::new();
+    let mut newly = Vec::new();
+    for unit in units {
+        for id in &unit.members {
+            if closed.contains(id) || inflight.contains(id.as_str()) {
+                continue;
+            }
+            if attempted.contains(id) {
+                u.push(Json::obj([
+                    ("run_plan_id", Json::str(id)),
+                    ("disposition", Json::str("unresolved")),
+                    ("cause", Json::str(format!("retry gated by {reason}"))),
+                ]));
+            } else {
+                w.push(Json::obj([
+                    ("run_plan_id", Json::str(id)),
+                    ("disposition", Json::str(format!("withheld{{{reason}}}"))),
+                ]));
+            }
+            newly.push(id.clone());
+        }
+    }
+    (w, u, newly)
+}
+
+/// `drive_window` — the declared-window drive (R6.16; REQ-XB-121/127/
+/// 128/214, REQ-XH-016/017, REQ-XD-060/111, REQ-XH-125): the schedule
+/// kinds order packing units (a coupled pair launches in one step,
+/// never split); first-fit admits under the declared bounds +
+/// lookahead and the C rule; the dead-man cut-off withholds what it
+/// cannot admit — never-attempted plans `withheld{window_deadline}`,
+/// an attempted replan gated past its window `unresolved`; every
+/// settled slot lands in the incremental harvest manifest; the sweep
+/// removes only own-labelled containers with a teardown receipt per
+/// container. `step_hook` fires at the top of every loop turn — the
+/// deterministic seam a simulated clock advances through (production
+/// passes `&mut || {}`).
+pub fn drive_window(
+    store: &mut Store,
+    docs: &LabDocs,
+    packet: &DrivePacket,
+    cfg: &CoordinatorConfig,
+    hh_runner: &Path,
+    step_hook: &mut dyn FnMut(),
+) -> Result<DriveReport, RunnerError> {
+    let window = packet
+        .window
+        .clone()
+        .ok_or_else(|| io("drive_window requires a declared window"))?;
+    let (eid, run_id, mut lease) = open_or_attach(store, docs, packet)?;
+    recover(store, docs, packet, cfg, &eid, &run_id, &mut lease)?;
+    // Stage 2 — the declared supervision: fold prior ledgers read-only
+    // (a refusal stops the window before either process spawns), then
+    // the proxy on its Json control channel and the mediator on its
+    // ready handshake — each a separate sole-writer process.
+    let mut sup = packet
+        .supervision
+        .as_ref()
+        .map(|sd| {
+            let pbin = crate::supervision::resolve_bin(
+                sd.proxy.bin.as_deref(),
+                crate::supervision::PROXY_BIN_ENV,
+                crate::supervision::PROXY_BIN_NAME,
+            )
+            .map_err(|e| io(format!("proxy bin: {}", e.detail)))?;
+            let mbin = sd
+                .mediator
+                .as_ref()
+                .map(|md| {
+                    crate::supervision::resolve_bin(
+                        md.bin.as_deref(),
+                        crate::supervision::MEDIATOR_BIN_ENV,
+                        crate::supervision::MEDIATOR_BIN_NAME,
+                    )
+                    .map_err(|e| io(format!("mediator bin: {}", e.detail)))
+                })
+                .transpose()?;
+            crate::supervision::Supervision::open(sd, &pbin, mbin.as_deref())
+                .map_err(|e| io(format!("supervision open: {}", e.detail)))
+        })
+        .transpose()?;
+    if let Some(s) = &mut sup {
+        s.boundary("window_open");
+    }
+    let facts: Vec<crate::schedule::PlanFact> = {
+        let view = with_engine(store, docs, packet, &run_id, &mut lease, |eng| {
+            eng.project().map_err(RunnerError::Engine)
+        })?;
+        let mut v: Vec<crate::schedule::PlanFact> = view
+            .plans
+            .values()
+            .map(|ps| crate::schedule::PlanFact {
+                run_plan_id: ps.run_plan_id.clone(),
+                cell_id: ps.cell_id.clone(),
+                arm_id: ps.arm_id.clone(),
+                task_id: ps.task_id.clone(),
+                replicate_index: ps.replicate_index,
+                split_label: ps.split_label.clone(),
+                order_pos: ps.order_pos,
+            })
+            .collect();
+        v.sort_by_key(|p| p.order_pos);
+        v
+    };
+    let fact = |id: &str| facts.iter().find(|f| f.run_plan_id == id);
+    let units = crate::schedule::build_schedule(&facts, &window.schedule);
+    let c = (cfg.max_parallel as u64).min(window.concurrency_c()).max(1) as usize;
+    let bounds = crate::schedule::PackingBounds {
+        memory_mb: window
+            .host_memory_mb
+            .saturating_sub(window.memory_reserve_mb),
+        cpus: window.vcpu_budget,
+        model_pool: window.model_in_flight_limit,
+    };
+    let slot_use = crate::schedule::ResourceUse {
+        memory_mb: window.slot_memory_mb,
+        cpus: window.slot_cpus,
+        model_slots: u64::from(window.agent_phase),
+    };
+    let mut settled: Vec<(String, Json)> = Vec::new();
+    let mut workers: Vec<WorkerProcess> = Vec::new();
+    let mut closed: BTreeSet<String> = BTreeSet::new();
+    let mut attempted: BTreeSet<String> = BTreeSet::new();
+    let mut start_order: Vec<Json> = Vec::new();
+    let mut withheld: Vec<Json> = Vec::new();
+    let mut unresolved: Vec<Json> = Vec::new();
+    let mut snapshots: Vec<Json> = vec![Json::obj([
+        ("seq", Json::Int(0)),
+        ("boundary", Json::str("window_open")),
+        ("block", Json::Int(0)),
+        ("catalog_id", Json::str(&window.schedule.catalog_id)),
+    ])];
+    let mut harvest = crate::schedule::HarvestManifest::default();
+    let manifest_path = cfg.packet_dir.join("harvest-manifest.json");
+    let mut open_in_block: BTreeMap<u32, u64> = BTreeMap::new();
+    for u in &units {
+        *open_in_block.entry(u.block).or_insert(0) += u.members.len() as u64;
+    }
+    let mut budget_stop = false;
+    std::fs::create_dir_all(&cfg.packet_dir).map_err(|e| io(format!("mkdir: {e}")))?;
+    let total_plans: usize = units.iter().map(|u| u.members.len()).sum();
+
+    loop {
+        step_hook();
+        let now = store.now_ms();
+        // Reap exited workers — the durable record decides bind vs crash.
+        let mut i = 0;
+        while i < workers.len() {
+            match workers[i].child.try_wait() {
+                Ok(Some(_status)) => {
+                    let w = workers.remove(i);
+                    finish_attempt(
+                        store,
+                        docs,
+                        packet,
+                        &eid,
+                        &run_id,
+                        &mut lease,
+                        &w.run_plan_id,
+                        &w.slot_root,
+                        &w.slot_run,
+                        &w.subject_run_id,
+                        &w.subject_lease,
+                        &mut settled,
+                    )
+                    .map_err(|e| io(format!("finish_attempt {}: {e:?}", w.run_plan_id)))?;
+                    // Slot close — revoke the attempt's token
+                    // (`security.credential.revoked`; X-05: no token
+                    // outlives its slot, replanned or not).
+                    if let Some(s) = &mut sup {
+                        s.slot_close(&w.slot_run)
+                            .map_err(|e| io(format!("slot_close: {}", e.detail)))?;
+                    }
+                    let row = &settled.last().map(|(_, r)| r.clone()).unwrap_or(Json::Null);
+                    let replanned = row
+                        .get("replanned")
+                        .and_then(crate::json_ext::JsonExt::as_bool)
+                        .unwrap_or(false);
+                    harvest.record(
+                        &w.run_plan_id,
+                        &w.slot_run,
+                        w.attempt_no,
+                        row.get("outcome_class")
+                            .and_then(Json::as_str)
+                            .unwrap_or(""),
+                        None,
+                    );
+                    let _ = harvest.persist(&manifest_path, &window.window_id, None);
+                    if !replanned {
+                        closed.insert(w.run_plan_id.clone());
+                        if let Some(u) = units.iter().find(|u| u.members.contains(&w.run_plan_id)) {
+                            let b = u.block;
+                            if let Some(v) = open_in_block.get_mut(&b) {
+                                *v = v.saturating_sub(1);
+                                if *v == 0 {
+                                    if let Some(s) = &mut sup {
+                                        s.boundary(&format!("block_end:{b}"));
+                                    }
+                                    snapshots.push(Json::obj([
+                                        ("seq", Json::Int(snapshots.len() as i64)),
+                                        ("boundary", Json::str("block_end")),
+                                        ("block", Json::Int(b as i64)),
+                                        ("catalog_id", Json::str(&window.schedule.catalog_id)),
+                                    ]));
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(None) => i += 1,
+                Err(e) => return Err(io(format!("wait: {e}"))),
+            }
+        }
+        if closed.len() >= total_plans && workers.is_empty() {
+            break;
+        }
+        // Admission — first-fit over the units' schedule order. A unit
+        // starts when every open member is engine-eligible now (a pair
+        // is admitted together or withheld together, never split).
+        if !budget_stop && (workers.len()) < c {
+            let inflight: BTreeSet<String> =
+                workers.iter().map(|w| w.run_plan_id.clone()).collect();
+            let view = with_engine(store, docs, packet, &run_id, &mut lease, |eng| {
+                eng.project().map_err(RunnerError::Engine)
+            })?;
+            let mut cands: Vec<(usize, Vec<String>)> = Vec::new();
+            for (ui, u) in units.iter().enumerate() {
+                let open: Vec<String> = u
+                    .members
+                    .iter()
+                    .filter(|id| !closed.contains(*id) && !inflight.contains(id.as_str()))
+                    .cloned()
+                    .collect();
+                if open.is_empty() {
+                    continue;
+                }
+                let all_eligible = open.iter().all(|id| {
+                    view.plans
+                        .get(id)
+                        .map(|ps| ps.open_at(now))
+                        .unwrap_or(false)
+                });
+                if all_eligible {
+                    cands.push((ui, open));
+                }
+            }
+            let uses: Vec<crate::schedule::ResourceUse> = cands
+                .iter()
+                .map(|(_, m)| crate::schedule::ResourceUse {
+                    memory_mb: slot_use.memory_mb.saturating_mul(m.len() as u64),
+                    cpus: slot_use.cpus.saturating_mul(m.len() as u64),
+                    model_slots: slot_use.model_slots.saturating_mul(m.len() as u64),
+                })
+                .collect();
+            let used = crate::schedule::ResourceUse {
+                memory_mb: slot_use.memory_mb.saturating_mul(workers.len() as u64),
+                cpus: slot_use.cpus.saturating_mul(workers.len() as u64),
+                model_slots: slot_use.model_slots.saturating_mul(workers.len() as u64),
+            };
+            let picks = crate::schedule::first_fit(&uses, &used, &bounds, window.lookahead);
+            for pi in picks {
+                if workers.len() >= c {
+                    break;
+                }
+                let (ui, members) = &cands[pi];
+                // The dead-man cut-off (REQ-XB-128): in-flight slots
+                // carry the declared per-slot deadline; the candidate
+                // joins the set inside `admit`.
+                let dl: Vec<u64> = workers.iter().map(|_| window.slot_deadline_ms).collect();
+                if !window.admit(now, dl) {
+                    let (w, u2, newly) =
+                        mark_unadmitted(&units, &closed, &attempted, &inflight, "window_deadline");
+                    withheld.extend(w);
+                    unresolved.extend(u2);
+                    closed.extend(newly);
+                    break;
+                }
+                // One packing step — claim every member, then launch.
+                let step: Result<Vec<(String, LaunchOutcome)>, RunnerError> =
+                    with_engine(store, docs, packet, &run_id, &mut lease, |eng| {
+                        let mut tickets = Vec::new();
+                        for id in members {
+                            let t = eng
+                                .claim(id, COORDINATOR_HOLDER)
+                                .map_err(RunnerError::Engine)?;
+                            tickets.push((id.clone(), t));
+                        }
+                        let mut ls = Vec::new();
+                        for (id, t) in tickets {
+                            let l = eng
+                                .launch(&t, SUBJECT_HOLDER)
+                                .map_err(RunnerError::Engine)?;
+                            ls.push((id, l));
+                        }
+                        Ok(ls)
+                    });
+                let launches = match step {
+                    Ok(ls) => ls,
+                    Err(RunnerError::Engine(ExperimentError::InsufficientBudget { .. })) => {
+                        budget_stop = true;
+                        let (w, u2, newly) =
+                            mark_unadmitted(&units, &closed, &attempted, &inflight, "budget");
+                        withheld.extend(w);
+                        unresolved.extend(u2);
+                        closed.extend(newly);
+                        break;
+                    }
+                    Err(RunnerError::Engine(
+                        ExperimentError::WouldBlock { .. }
+                        | ExperimentError::PoolExhausted { .. }
+                        | ExperimentError::BadPlanState { .. },
+                    )) => break, // blocked — try again next turn
+                    Err(e) => return Err(e),
+                };
+                for (id, launch) in launches {
+                    let f = fact(&id).cloned().unwrap_or(crate::schedule::PlanFact {
+                        run_plan_id: id.clone(),
+                        cell_id: String::new(),
+                        arm_id: String::new(),
+                        task_id: String::new(),
+                        replicate_index: 0,
+                        split_label: "dev".into(),
+                        order_pos: 0,
+                    });
+                    let recipe =
+                        packet
+                            .recipes
+                            .get(&f.task_id)
+                            .cloned()
+                            .unwrap_or(SlotRecipe::Scored {
+                                reward_ppm: 1_000_000,
+                                end_cause: crate::disposition::EndCause::Exited(0),
+                                consumed_model_calls: 1,
+                            });
+                    let mut sp = slot_packet(
+                        packet,
+                        cfg,
+                        &eid,
+                        &id,
+                        &f.cell_id,
+                        &f.arm_id,
+                        &f.task_id,
+                        f.replicate_index,
+                        &f.split_label,
+                        &launch,
+                        recipe,
+                    );
+                    sp.cell.insert(
+                        "schedule".to_string(),
+                        Json::obj([
+                            ("unit", Json::Int(*ui as i64)),
+                            ("block", Json::Int(units[*ui].block as i64)),
+                            ("kind", Json::str(window.schedule.kind.as_str())),
+                            ("start_order_pos", Json::Int(start_order.len() as i64)),
+                        ]),
+                    );
+                    // Slot open — the fresh per-attempt proxy token and
+                    // the phase-granted sockets land in the slot's cell
+                    // record (the upstream credential never enters it).
+                    let slot_run = slot_run_id(&id, launch.attempt_no);
+                    if let Some(s) = &mut sup {
+                        let stamp = s
+                            .slot_open(&slot_run)
+                            .map_err(|e| io(format!("slot_open: {}", e.detail)))?;
+                        if let Some(env) = stamp.get("env") {
+                            sp.cell.insert("env".to_string(), env.clone());
+                        }
+                        if let Some(grants) = stamp.get("grants") {
+                            sp.cell.insert("grants".to_string(), grants.clone());
+                        }
+                    }
+                    let packet_path = cfg
+                        .packet_dir
+                        .join(format!("slot-{slot_run}-a{}.json", launch.attempt_no));
+                    workers.push(spawn_worker(hh_runner, &sp, &packet_path, &launch)?);
+                    attempted.insert(id.clone());
+                    start_order.push(Json::obj([
+                        ("seq", Json::Int(start_order.len() as i64)),
+                        ("run_plan_id", Json::str(&id)),
+                        ("attempt_no", Json::Int(launch.attempt_no as i64)),
+                        ("unit", Json::Int(*ui as i64)),
+                        ("block", Json::Int(units[*ui].block as i64)),
+                        ("in_flight_at_start", Json::Int((workers.len() - 1) as i64)),
+                    ]));
+                }
+            }
+        }
+        let remaining_open = total_plans.saturating_sub(closed.len() + workers.len());
+        if remaining_open == 0 && workers.is_empty() {
+            break;
+        }
+        if workers.is_empty() && remaining_open > 0 {
+            // Can anything still be admitted before its deadline? A
+            // never-attempted plan is admissible while `admit(now)`;
+            // an attempted replan is admissible at max(now, not_before)
+            // — a retry scheduled past the cut-off is unresolved.
+            let view = with_engine(store, docs, packet, &run_id, &mut lease, |eng| {
+                eng.project().map_err(RunnerError::Engine)
+            })?;
+            let mut can_admit = false;
+            'outer: for u in &units {
+                for id in &u.members {
+                    if closed.contains(id) {
+                        continue;
+                    }
+                    let at = if attempted.contains(id) {
+                        view.plans
+                            .get(id)
+                            .map(|p| p.not_before_ms.max(now))
+                            .unwrap_or(now)
+                    } else {
+                        now
+                    };
+                    if window.admit(at, vec![window.slot_deadline_ms]) {
+                        can_admit = true;
+                        break 'outer;
+                    }
+                }
+            }
+            if !can_admit {
+                let inflight: BTreeSet<String> =
+                    workers.iter().map(|w| w.run_plan_id.clone()).collect();
+                let (w, u2, newly) =
+                    mark_unadmitted(&units, &closed, &attempted, &inflight, "window_deadline");
+                withheld.extend(w);
+                unresolved.extend(u2);
+                closed.extend(newly);
+                continue;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    // Own-label sweep + per-container teardown receipts (REQ-XB-127).
+    let mut teardowns: Vec<Json> = Vec::new();
+    if let Some(bin) = &packet.podman_bin {
+        teardowns = crate::schedule::sweep_experiment(Path::new(bin), &eid)
+            .map_err(|e| io(format!("sweep: {}", e.detail)))?;
+    }
+    let manifest_ref = {
+        let at = Some(store.now_ms());
+        let _ = harvest.persist(&manifest_path, &window.window_id, at);
+        let doc = harvest.to_json(&window.window_id, at);
+        let addr = store
+            .put_blob(doc.to_canonical_string().as_bytes(), "application/json")
+            .map_err(RunnerError::Ledger)?;
+        format!("{}:{}", addr.algorithm, addr.digest)
+    };
+    let settled_ids: Vec<String> = settled.iter().map(|(id, _)| id.clone()).collect();
+    let covers = harvest.covers(&settled_ids);
+    let mut wrec = match window.record_json(c as u64) {
+        Json::Obj(m) => m,
+        _ => BTreeMap::new(),
+    };
+    // Withheld/unresolved plans stay engine-open by construction — the
+    // close is partial exactly then (the dossier records them).
+    let partial = !withheld.is_empty() || !unresolved.is_empty();
+    wrec.insert("start_order".into(), Json::Arr(start_order));
+    wrec.insert("withheld".into(), Json::Arr(withheld));
+    wrec.insert("unresolved".into(), Json::Arr(unresolved));
+    wrec.insert("catalog_snapshots".into(), Json::Arr(snapshots));
+    wrec.insert("teardown_receipts".into(), Json::Arr(teardowns));
+    wrec.insert("harvest_manifest_ref".into(), Json::str(&manifest_ref));
+    wrec.insert("harvest_manifest_covers".into(), Json::Bool(covers));
+    // Window end — `stop` the proxy (catalog end-probe) and the
+    // mediator; the finished proxy ledger is this window's harvested
+    // record for the next window's carry-in fold.
+    if let Some(s) = sup.take() {
+        wrec.insert(
+            "supervised".into(),
+            Json::obj([
+                ("proxy_run", Json::str(&s.proxy.run_id)),
+                (
+                    "proxy_root",
+                    Json::str(s.proxy.store_root.display().to_string()),
+                ),
+                ("proxy_listen", Json::str(&s.proxy.listen)),
+                (
+                    "mediator_run",
+                    s.mediator
+                        .as_ref()
+                        .map(|m| Json::str(&m.run_id))
+                        .unwrap_or(Json::Null),
+                ),
+            ]),
+        );
+        s.close();
+    }
+    let window_json = Json::Obj(wrec);
+    let _window_record_ref = {
+        let addr = store
+            .put_blob(
+                window_json.to_canonical_string().as_bytes(),
+                "application/json",
+            )
+            .map_err(RunnerError::Ledger)?;
+        format!("{}:{}", addr.algorithm, addr.digest)
+    };
+    let close_status = {
+        let mut eng = bound_engine(store, docs, packet, &run_id, &lease);
+        eng.close(partial)
+            .map_err(RunnerError::Engine)?
+            .status
+            .as_str()
+            .to_string()
+    };
+    Ok(DriveReport {
+        run_id,
+        settled,
+        close_status,
+        window: Some(window_json),
     })
 }
