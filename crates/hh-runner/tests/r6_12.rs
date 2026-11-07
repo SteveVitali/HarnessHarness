@@ -279,7 +279,12 @@ fn fold_recompute_equals_committed_packet_and_no_archive_bytes_in_git() {
     // (cross-implementation corpus), not an experiment archive —
     // excluded explicitly so the check stays honest.
     let out = Command::new("git")
-        .args(["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--show-toplevel"])
+        .args([
+            "-C",
+            env!("CARGO_MANIFEST_DIR"),
+            "rev-parse",
+            "--show-toplevel",
+        ])
         .output()
         .expect("git rev-parse");
     let root = String::from_utf8(out.stdout).unwrap().trim().to_string();
