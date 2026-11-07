@@ -1,0 +1,98 @@
+{
+  "schema": "hh-compute-decl/1",
+  "mode": "full",
+  "phase": "p1",
+  "window": "w1-example",
+  "ticket": "R6.xx",
+
+  "project_id": "hh-p1-a1b2c3",
+  "region": "us-central1",
+  "zone": "us-central1-a",
+
+  "machine_type": "e2-standard-8",
+  "provisioning_model": "STANDARD",
+  "boot_disk": { "type": "pd-balanced", "size_gib": 300 },
+  "image": {
+    "project": "debian-cloud",
+    "name": "debian-12-bookworm-v20261014"
+  },
+  "packages": {
+    "podman": "4.3.1+ds1-8+deb12u1",
+    "crun": "1.8.1-1+deb12u1",
+    "conmon": "2.1.6+ds1-1+deb12u1",
+    "netavark": "1.4.0-4",
+    "compose_frontend": { "name": "podman-compose", "version": "1.0.6-2" }
+  },
+
+  "network": {
+    "external_ipv4": "ephemeral",
+    "nat": false,
+    "ingress": [
+      { "proto": "tcp", "port": 22, "source": "35.235.240.0/20" }
+    ]
+  },
+  "service_account": "none",
+  "labels": {
+    "hh-phase": "p1",
+    "hh-window": "w1-example",
+    "hh-ticket": "r6-xx",
+    "ttl": "window"
+  },
+
+  "dead_man": {
+    "max_run_duration_hours": 12,
+    "action": "STOP",
+    "in_guest_timer_minutes": 735
+  },
+  "restart": { "preauthorized_hours": 1 },
+  "h_r_hours": 6,
+
+  "runner": {
+    "commit": "0000000000000000000000000000000000000000",
+    "build": "source"
+  },
+  "proxy_on_vm": true,
+  "model_line": "authorized",
+
+  "images": [
+    {
+      "task": "oracle-fixture",
+      "ref": "registry.example.invalid/hh/oracle-cell",
+      "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "disk_floor_gib": 20,
+  "concurrency": {
+    "memory_gib_available": 26,
+    "memory_per_trial_gib": 6,
+    "vcpu_budget": 8,
+    "model_in_flight_limit": 4,
+    "model_wait_fraction": 0.5
+  },
+
+  "rate_table": {
+    "path": "docs/build/reports/live/pricing.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+
+  "authorization": {
+    "gate": "PROV-W1",
+    "readout_path": "docs/build/readouts/PROV-W1.md",
+    "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "quote_id": "pq-0000000000000000",
+    "ceiling_micros": 5050000,
+    "model_line": "authorized"
+  },
+
+  "quote_inputs": {
+    "trials": 20,
+    "surfaces": 1,
+    "per_trial_planning_seconds": 600,
+    "per_trial_bound_seconds": 1200,
+    "overhead_hours": 1.5,
+    "egress_gib_estimate": 6
+  },
+
+  "phase_close": false,
+  "last_model_call_utc": null
+}

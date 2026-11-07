@@ -26,6 +26,7 @@ pub(crate) mod json_ext;
 pub mod cell;
 pub mod condenser;
 pub mod coordinator;
+pub mod diskwatch;
 pub mod disposition;
 pub mod facts;
 pub mod packet;
