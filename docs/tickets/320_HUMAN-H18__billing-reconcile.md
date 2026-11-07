@@ -34,7 +34,7 @@ One dated entry per window, appended in window order as each falls due:
 - [ ] **W2** — as above (R6.40), compute and the model line.
 - [ ] **W3** — as above (R6.44), or `N/A` citing R6.44's `unused{…}` record when GATE-G27 recorded `not_run{…}`.
 - [ ] **Wc** — as above (R6.45), or `N/A` citing R6.45's `unused{not_triggered}` record when GATE-G28 recorded "not triggered; Wc unused".
-- [ ] **W4** — as above (R6.47), including the GCP project deletion receipt's UTC where W4 is the last window.
+- [ ] **W4** — as above (R6.47), including the GCP project deletion receipt's UTC; or `N/A` citing R6.47's `unused{scope_end}` record (and its project-deletion receipt UTC) when GATE-G30 recorded `end_after_w2`.
 
 Every entry: read UTC, the window, the read result token, the figure(s) in the phase spend ledger's unit, and the source (console/export) named generically. The billing-account id never enters the record (REQ-XB-219); credentials only `provided: yes/no`.
 
@@ -49,6 +49,10 @@ A row that runs before this completes opens a `DF-*` row in `DEFERRALS.md` — w
 ## Notes
 
 - Contributes to REQ-XH-110 (owner CAP6.2): the closure recompute uses the billed figure wherever an entry exists.
-- Under GATE-G30 `end_after_w2`, R6.47 is fleshed to `unused{scope_end}` and W4 has no teardown; the plan names `N/A` only for W3 and Wc. Resolve at the trigger against §10.3 whether W4's entry is `N/A` citing R6.47's unused record — record the operator's words verbatim.
+
+> Consistency fix 2026-11-07: under GATE-G30 `end_after_w2`, W4 never provisions, so its entry is `N/A` citing R6.47's `unused{scope_end}` record; R6.47 still issues the project deletion, whose receipt UTC is cited (§3.9 step 7). (item 11)
+
 - REQ-XH-008's "GATE-PROV → PROV → runs → TEARDOWN → HUMAN-reconcile" is realized as the ordered per-window subsequence (plan tradeoff 10; confirmed at GATE-G20).
 - Follow [Round-6 invariants](../build/planning/2026-11-07_round6-invariants.md) (X-02, X-03, X-05) and the manifest operating rules.
+
+> Consistency fix 2026-11-07: `N/A` here is a per-window entry token (window did not run); the row's `Status:` is non-PENDING once all five entries are recorded. HUMAN-H15 uses `NOT_NEEDED` and HUMAN-H17 `N/A`/`DECLINED`, all R6.1 tokens. (item 16)

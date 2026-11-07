@@ -52,6 +52,12 @@ The readout presents, and the operator decides, exactly this content (never pre-
 
 No outcome is re-presented more favorably than its packet; no threshold or label changes after data.
 
+**Pre-registered dispositions (none pre-answered)**, recorded with R6.1's templates; a PASSED basis never contains the tokens `FAILED` or `NOT PASSABLE`:
+
+- **`PASSED — publish`** (the presented scope, or a narrower one recorded verbatim) → R6.50 commits the record for exactly that scope; HUMAN-H17 follows when the decision includes the dataset.
+- **`PASSED — publication withheld`** → no public act: no first-pass `hh-site-publication/1` record, no deploy, and the dataset stays private (REQ-XH-105's first sentence); the three REQ-XH-105 decisions are recorded where the operator states them, else `n/a{publication_withheld}`; HUMAN-H17 records `Status: N/A` citing this readout; R6.50 lands the no-publication state.
+- **refuse** → `Status: NOT-PASSABLE` with what would pass it; the chain stops.
+
 ## Disposition
 
 Record exact operator words, UTC, channel, the decided scope (which pages, which input set), the three REQ-XH-105 decisions verbatim, expiry/void conditions and explicit confirmation of the agent-draft hash. Append the readout signature and the matching LEDGER GATE DECISIONS row; old acceptance (GATE-G22) never substitutes. A decision not to publish, or to publish a narrower scope, is recorded verbatim using R6.1's gate-disposition templates (Round-5 GATE-G16 "PASSED — out-of-scope disposition" precedent); its basis never contains the tokens `FAILED` or `NOT PASSABLE`. A refusal stops the chain.
@@ -63,3 +69,7 @@ No OPEN scoped technical deferral is silently passed. Resolve it or obtain an ex
 ## Operating clauses
 
 Follow [Round-6 invariants](../build/planning/2026-11-07_round6-invariants.md) (X-03, X-05, X-08; XO-06) and the manifest operating rules. No code branch is created by a gate.
+
+## Notes
+
+> Consistency fix 2026-11-07: added the pre-registered `PASSED — publish` / `PASSED — publication withheld` dispositions so that declining first-pass publication never stops the chain; R6.50 records the Appendix D gate outcome `declined` and HUMAN-H17 records `N/A`. (item 13)

@@ -67,3 +67,5 @@ Q-X47/Q-X50), X-05. No code branch is created by a HUMAN row.
 
 - Owns no REQ id. Readout tokens (`NOT_NEEDED`, `DEFERRED` + DF id) from R6.1.
 - Q-X63 is decided at FP-E (Appendix B); this row records the operator's treatment as stated at purchase time, and GATE-G30 confirms it — resolve any difference at GATE-G30, never here.
+
+> Consistency fix 2026-11-07: this row's row-level token is `NOT_NEEDED` (plan row 311; R6.1's readout tokens, all non-PENDING and landing the row): the trigger condition is computed absent from R6.46's quote. `N/A` is reserved for an act made inapplicable by a recorded disposition (HUMAN-H17 under a withheld publication; HUMAN-H18's per-window entries). (item 16)

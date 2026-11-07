@@ -16,7 +16,7 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      DONE
+nextTicket:      GATE-G20
 lastCompleted:   R5.59
 blockedOn: (none)
 pauseRequested:  false
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-bl-reconcile
+chainTip:         main
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
-round:           5
+round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-06T23:06:00Z
+updatedAt:        2026-11-07T05:25:31Z
 ```
 
 ## OPEN FINDINGS
@@ -125,6 +125,8 @@ updatedAt:        2026-11-06T23:06:00Z
   authorized post-tail extension rows; the acceptance-gate filename check evaluates the same window.
   The 14-case negative fixture battery still rejects every case; the repair is machinery, not a
   contract change. Without it the extension's own first row could never route DISPATCH.
+
+- 2026-11-07 · **Round-6 insertion — guard environment note (owned by R6.1).** With the stock validator at `~/agent-skills` `e981ec5`, `check-build-memory.sh .` reports 0 violations / 54 warnings on `main` `185c16c7`, 46 of them legacy `reqcov` warnings (round-1 tickets citing footnoted `R-2.x¹` ids) that the guard's reviewed baseline (`2026-10-30_evidence-legacy-baseline.json`, 8 classes) does not list, so `check-supplement-guard.sh` WITH that checker reports `unexplained-diagnostic` (the BL-RECONCILE run recorded 8 warnings — the warning count depends on the validator version in use). GATE-G20 authorizes R6.1 under the guard's `--no-checker` ROUTE + the stock validator at 0 violations; R6.1 classifies the legacy classes into the reviewed baseline with dated provenance (never silently) so the guard with the stock checker returns PASS. Also: `chainTip` set to `main` at insertion because `codex/harnessharness-bl-reconcile` / `-r5.59` no longer resolve as local refs.
 
 ## GATE DECISIONS
 
@@ -1263,3 +1265,7 @@ updatedAt:        2026-11-06T23:06:00Z
 - 2026-11-06T21:20Z · **S4-30SLOT-REPAIRS done — full 300/300 cohort carries real receipts** — operator authorized all three repairs verbatim "let's do these" (non-manifest supplement between GATE-G19 and R5.59; manifest untouched). Branch `codex/harnessharness-s4-slot-repairs` · PR #289 · base `origin/main` @`7e70b0dc`. Epoch `s4-30slot-repairs-gce` on `podman-s4-backend`, same `protocol_id 9edc5327`, no re-pick; the 30-slot residue of `s4-completion-gce` re-executed, verbatim classes: `machinery_repair: declared_workdir` ×10 (astropy — OUR driver's `cd /app` hardcode vs declared `WORKDIR /app/astropy`; `task_workdir` verbatim from `podman image inspect`; same class as the ANSI fix), `env_repair: archive_mirror` ×10 (qemu-alpine-ssh — EOL bullseye deb404; mirror-patched `localhost/s4-mirror/debian-bullseye-slim` + FROM-only rewritten Dockerfile, no task file changes), `env_repair: vendored_mirror` ×10 (fix-git — Software Heritage `swh:1:snp:b2cbd547…` git-bare vendored at `~/tb-work/vendored/fix-git/`; `git url.insteadOf` redirect for the verbatim setup.sh clone leg only; pinned `d7d3e4ba93…` verified; upstream head still clones the dead URL — no task-version admission existed). **Result:** 30/30 executed — 20 resolved (fix-git + astropy ×10 ea), 10 unresolved (qemu — verifier-decided `test_sshpass` failed); 0 inconclusive/failed; sentinels/observer/seals intact; 120 ws syncs; USD $0.00 + ≈$1.41 billed instance-h (~4.7h @ ~$0.30, inside ~$20; VM stays provisioned — deprovision = R5.59). Packet `hh-s4-30slot-repairs/1`; combined **300/300** (220/80), first subjects **60/60** (44 resolved); three prior packets byte-untouched. **Verify:** guard PASS (`HOLD — gate GATE-G19 pending — RETURN PASS`) · deferrals-open empty · fmt n/a. **Deferrals:** none. **Deviations:** none — run ledger `runs/S4-30SLOT-REPAIRS.md`. chainTip → codex/harnessharness-s4-slot-repairs · next → (unchanged — GATE-G19 pending) · layer live-executed · harness: devin-desktop/swe-2-high/subagent
 - 2026-11-06T22:20Z · **R5.59 done — round closed** — branch `codex/harnessharness-r5.59` · base `origin/main` @`75883daa`. GATE-G19 **PASSED** verbatim "confirmed and proceed" (readout `docs/build/readouts/GATE-G19.md`, block sha256 `13471dbdc0e4`, GATE DECISIONS row) — complete-cohort admission: all 300/300 slots receipted across 4 epochs. **Efficacy verdict** `computed{strata:easy,hard,medium}` — `reports/2026-11-06-r5.59-efficacy.json` (`hh-s4-efficacy/1`) through the landed `finite_manifest_contrast` (REQ-D-107/109): observed 0 / posterior 0 ppm; credible95 easy [-151752,154000] / hard [-117507,112741] / medium [-86161,85618] ppm; 64000 draws, tol 1 ppm — honest null-equivalent, never inflated. **Study recompute** `reports/2026-11-06-r5.59-study-report.json` — `reported`, 11 legs verified, new `efficacy` leg (cells re-add to committed fold), confirmation `executed{300_300}`, `s4_unmet:false`, `study: unmet{s1_failed}`; 14 packets / 90 gated / $0.00; prior packets byte-untouched (`LEGS_V1`). **GCE deprovision (mandatory AC)** — verbatim teardown receipted 2026-11-06T22:15:40Z: `podman-s4-backend` deleted + project `harnessharness-evidence-8d7a99` `DELETE_REQUESTED`; `instances list` → `Listed 0 items`; forwards killed; ≈$1.41 billed instance-hours (inside ~$20). study.rs epoch-chain + efficacy leg + StudyFold; r5_49 rebuilt + r5_54/55 era-bound. **Verify:** `cargo test -p hharness-env` 0 failures · fmt clean · deferrals-open empty · guard PASS DISPATCH R5.59 pre + close. Final state: engineering executed; research has real parity+confirmation+efficacy evidence; participant/publication withheld-by-decision. lastCompleted → R5.59 · chainTip → codex/harnessharness-r5.59 · nextTicket → DONE (the 251-row chain is complete) · harness: devin-desktop/swe-2-high/subagent.
 - 2026-11-06T23:06Z · **BL-50…BL-53 reconcile** — branch `codex/harnessharness-bl-reconcile` · PR #291 · base `origin/main` `@09fe8523` (non-manifest records-in reconcile; manifest chain DONE — guard PASS route HOLD, no DISPATCH exists). **BL-52 discharged satisfied** — its named exit met: executed `hh-s1-useful/1` `2026-11-05-df-cap5.1-s1-useful.json` (`disposition: executed`, 7/7 legs verified, `useful_acceptance: marked`) + independent Decided artifacts `…-s1-decided-artifacts.json` (both subjects `decided` reward_ppm 1000000); DF-CAP5.1-1 DONE. **BL-53 discharged satisfied** — `hh-guard-boundary-evidence/1` `2026-11-05-df-r5.1-evidence.json` (EV-1..6 verified; 67/67 dispatch boundaries guard pre+post `PASS DISPATCH`); DF-R5.1-1 DONE. **BL-51 discharged scope-dispositioned — never satisfied** — DF-H9-1's verbatim 2026-11-05T16:04:15Z operator disposition (permanently unmet-by-decision) is the fresh scope disposition its exit names. **BL-50 stays open** — R-layer legs discharged by evidence (parity verified 30/30 tranche-3; S4 300/300 four epochs; efficacy computed null-equivalent; GATE-G19 PASSED; study reported `unmet{s1_failed}` verbatim); P-layer legs (REQ-G-201/202/206/207/209) still voided/carried — no publication/adoption evidence or authorization; += 33 re-homed matrix ids (all 73 round-5 PARTIAL ids on the one open carrier; CAP5.1 verdicts not re-verdicted — matrix re-verdict owed to next capstone). **Verify:** deferrals-open DF empty · --bl → BL-50 only · check-bm-tools OK · check-backlog exit 0 both modes (206 + 73 expected) · bm `.`/`--staged` 0 viol (8 warn) · guard PASS HOLD. **Deferrals:** none opened/closed. **Deviations:** none. chainTip → codex/harnessharness-bl-reconcile · next → (unchanged — nextTicket DONE) · layer: engineered (records-in, USD $0.00) · harness: devin-desktop/swe-2-high/subagent
+
+## PHASE LOG — Round 6
+
+- 2026-11-07T05:25:31Z · ROUND6 round · experiments first pass inserted by decompose-spec mode=extend: spec `docs/experiments-spec.md` (canonical v0.3, Q-X20); 74 rows 252–325 (45 tickets + 4 tail runs = 49 implement-spec; 5 skeletons; 13 gates; 7 HUMAN); tail minimal + reconciliation capstone (banner `tail=minimal`); partition/coverage/invariants under `docs/build/planning/2026-11-07_round6-*`; nextTicket GATE-G20 (RETURN PASS); chainTip main; the plan is revisable at run time by scoped inserts; no spend authorized.

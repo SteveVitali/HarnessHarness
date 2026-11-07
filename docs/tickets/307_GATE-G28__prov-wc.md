@@ -50,7 +50,7 @@ Cited requirements, verbatim:
 **Pre-registered dispositions** (each recorded `PASSED — …; basis: <verbatim>`, GATE-G15 precedent; the basis never contains the tokens `FAILED` or `NOT PASSABLE`):
 
 - `triggered{W1′|W3′|restart}` — items 1–6 met and authorized; R6.45 is fleshed for the Wc body.
-- `PASSED — not triggered; Wc unused` — no triggering record exists; R6.45 is fleshed in place to `unused{not_triggered}` with `n/a{wc_unused}`; HUMAN-H18's Wc entry is `N/A`; at FP-E Wc's reservation is released except one restart-overflow reservation (REQ-XH-126(b)).
+- `PASSED — not triggered; Wc unused` — no triggering record exists, or a triggering record exists and the operator records verbatim that Wc is not authorized for it (the basis carries which; SR-1 fold precedent); R6.45 is fleshed in place to `unused{not_triggered}` with `n/a{wc_unused}`; HUMAN-H18's Wc entry is `N/A`; at FP-E Wc's reservation is released except one restart-overflow reservation (REQ-XH-126(b)).
 
 Only an operator refusal stops the chain.
 
@@ -76,3 +76,5 @@ manifest operating rules; X-02, X-03, X-07. No code branch is created by a gate.
 - Owns no REQ id; contributes the readout leg of REQ-XH-004 (owner R6.1).
 - Placement (plan tradeoff 5): the block sits between W3 and G-L1 for its likeliest trigger (W3′). A W1′ repair (before W2) or a post-W4 restart overflow moves the block by a scoped insert, never by re-presenting this gate in place.
 - REQ-XH-118 also allows a W1 export overrun Wc cannot absorb to make "that gate refuse until a recorded scope decision names what shrinks" — if that case arises it is presented here as a recorded scope decision, not decided in advance.
+
+> Consistency fix 2026-11-07: a gate-A L1 failure record is a W3′ trigger and is always presented here as `triggered{W3′}` for authorization; if Wc is not authorized (or already served another trigger), GATE-G29 records `fallback` with that basis (its pre-registered dispositions). (item 14)

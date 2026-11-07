@@ -72,7 +72,7 @@ The readout carries, from R6.46's FP-E quote and the committed records, cost fie
 
 - `run{full}` — GATE-G29 recorded `full`; W4 runs the arms the quote includes; R6.47 is fleshed for the W4 body.
 - `run{hosted-only}` — GATE-G29 recorded `fallback`; W4 runs original mini-swe-agent, Pi and Claude Code alone; P3-L2 and P4-FP stay `withheld{l1_not_passed}`.
-- `end_after_w2` — REQ-XH-127(b)'s recorded scope decision (a held original mini-swe-agent); the pass ends after W2; R6.47 is fleshed in place to `unused{scope_end}` with `n/a` upload and settlement; every first-pass claim withheld by the hold's typed reason.
+- `end_after_w2` — REQ-XH-127(b)'s recorded scope decision (a held original mini-swe-agent); the pass ends after W2; R6.47 is fleshed in place to `unused{scope_end}` with `n/a` upload and settlement and still issues the phase-close project deletion (§3.9 step 7) as its only production act; HUMAN-H18's W4 entry is `N/A`; every first-pass claim withheld by the hold's typed reason (the held arm's R6.8 member `admission:AG<n>` or `admission:pp0_infra_hold`, REQ-XH-127).
 
 Only an operator refusal stops the chain.
 
@@ -97,3 +97,5 @@ X-07. No code branch is created by a gate.
 ## Notes
 
 - Owns no REQ id; contributes readout legs of REQ-XH-004 (R6.1), REQ-XH-007 and REQ-XH-013 (GATE-G26), REQ-XH-120 (R6.11).
+
+> Consistency fix 2026-11-07: `end_after_w2` is a disposition, not a `withheld{…}` member; under it the typed reason is the held arm's R6.8 member, R6.47's unused fleshing deletes the project, and HUMAN-H18's W4 entry is `N/A`. (item 11)

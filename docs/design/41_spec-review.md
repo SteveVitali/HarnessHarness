@@ -481,7 +481,7 @@ With the two blockers and the §4.10 fixes folded in, and the RA-10/12/13/14 ope
 - **Reviewer:** R-B (independent, fresh context; did not author the spec)
 - **Scope:** `docs/experiments-spec.md` v0.1 §0.3 and §1 (context), §6, §7, §8, §9, §10 (especially §10.1, §10.3, §10.5, §10.6), Appendix F with `docs/experiments-OUTLINE_TRACE.md`. §0–§5 and Appendices A–D belong to the other reviewer.
 - **Date:** 2026-11-07T01:18:22Z (`date -u +%FT%TZ`)
-- **Baseline:** worktree `/Users/stevenvitali/MetaHarness-harnessharness-experiments`, HEAD `0877244d` (spec v0.1) on `96c743a5` / `09fe8523`. Note: `main` is now `185c16c7` (BL-RECONCILE; touches `docs/build/LEDGER.md`, `BACKLOG.*`). `scripts/deferrals-open.sh` printed nothing (zero open rows) at this baseline.
+- **Baseline:** worktree `~/MetaHarness-harnessharness-experiments`, HEAD `0877244d` (spec v0.1) on `96c743a5` / `09fe8523`. Note: `main` is now `185c16c7` (BL-RECONCILE; touches `docs/build/LEDGER.md`, `BACKLOG.*`). `scripts/deferrals-open.sh` printed nothing (zero open rows) at this baseline.
 - **Procedure:** `~/agent-skills/skills/synthesize-spec/modes/review.md`: internal consistency, ledger coverage, MVP realism, self-contradiction.
 - **Recomputation code** (stdlib Python, run with `python3 -I`, no network), under `/private/tmp/claude-501/-Users-stevenvitali-MetaHarness-harnessharness/4210edcb-e16b-4f68-bf87-84c31bfd2161/scratchpad/calc/`:
   - `rb.py`: budget tables.
@@ -909,3 +909,5 @@ The first-pass plan has the right goal: one seeded task set, every arm on it, k 
 **What it does well:** the operator-decision departures from Q-X15 (and ε, V5) are flagged pending, and no gate content is pre-answered.
 
 It is not ready to ratify until RB-1 and RB-2 are resolved and RB-3 to RB-8 are folded in. Most fixes are textual; RB-2(a) is the one design change worth putting to the operator, because it removes RB-2 and RB-11 together for about $8 of planning headroom.
+
+> 2026-11-07 (coordinator): absolute home-directory paths replaced by `~` so this file passes `scripts/check-living-docs.sh` (launch ruling L4.1); no other byte changed.

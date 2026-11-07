@@ -33,9 +33,9 @@ updatedAt:       2026-11-07T03:24:22Z
 
 **Current phase:** ratified (Q-X20) and frozen; the spec is canonical v0.3 and the decomposition hand-off is `docs/experiments-decomposition-prompt.md`. O4 (`decompose-spec mode=extend`, Round 6) is downstream build planning, recorded in the build memory, not in this ledger.
 
-**Working location.** The shared build worktree `/Users/stevenvitali/MetaHarness-harnessharness`
+**Working location.** The shared build worktree `~/MetaHarness-harnessharness`
 belongs to the session driving the round-5 chain. This program works only in the separate
-worktree `/Users/stevenvitali/MetaHarness-harnessharness-experiments` on branch
+worktree `~/MetaHarness-harnessharness-experiments` on branch
 `claude/experiments-spec` (base `main` `75883daa`). Workers never run `git checkout`, `git stash`
 or any branch-moving command in either worktree.
 
@@ -239,3 +239,5 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-07T01:36:59Z — O2 reviews complete: R-A 37 findings (2 blocker / 17 major / 18 minor), R-B 25 (2 / 12 / 11); assembled verbatim as `design/41_spec-review.md`. Operator decisions on the review's decision-bearing findings recorded verbatim as Q-X52…Q-X55 (received 2026-11-07, planning conversation dialog). Coordinator scope reduction (no operator answer contradicted): the paid Harbor R-live runner check (RA-14) is dropped from the first pass; the $0 replay-equality check stays. Revision to v0.2 dispatched to a fresh-context reviser that folds every accept/adapt finding and fills Appendix E.
 - 2026-11-07T02:09:27Z — Spec v0.2 by a fresh-context reviser: 62/62 findings dispositioned (36 accept, 26 adapt, 0 rebut, 0 defer) in Appendix E; 14 new IDs; ID-sync 0 errors (368 adopted body IDs = index; 454 index rows). First-pass budget rebuilt on the high-effort planning line ($66.7 planning without V5 vs $56 model cap at $70 authorization; compute $19.79/$20). New pending Q-X56…Q-X63 mirrored from Appendix B. O2 closed; a fresh delta re-review verifies the four blockers before O3 ratification.
 - 2026-11-07T03:24:22Z — O3: operator ratified (Q-X20 verbatim above). Spec flipped to canonical v0.3 (pre-flip sha256 `7373d5205f8a602de74f4cb285802f79bd284316fc5bd6526f0a84927386dda9`); all pending §Q rows take their recorded defaults (confirmation points per spec Appendix B); Q-X62 reply recorded verbatim as a clarification request. Decomposition hand-off written. **Ledger frozen at ratification, round 1.**
+
+> 2026-11-07 (coordinator): absolute home-directory paths replaced by `~` so this file passes `scripts/check-living-docs.sh` (launch ruling L4.1); no other byte changed.

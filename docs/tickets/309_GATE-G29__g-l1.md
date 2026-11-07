@@ -58,7 +58,7 @@ The L1 result itself is binary and deterministic (one failure is a fail; §7.4).
 **Pre-registered dispositions** — either is recorded `PASSED — disposition <token>; basis: <verbatim>` (GATE-G15 precedent); the basis never contains the tokens `FAILED` or `NOT PASSABLE` (write "did not pass"):
 
 - `full` — L1 passed for the exact H, frozen by digest here; the HH-native arms may run in W4 (REQ-XD-102); R6.46 quotes five arms.
-- `fallback` — the Q-X62 trigger fired, or L1 did not pass on either gate partition; FP-E is held in its hosted-only form; P3-L2 and P4-FP are `withheld{l1_not_passed}` (REQ-XH-123); R6.46 quotes the three hosted arms.
+- `fallback` — the Q-X62 trigger fired, or L1 did not pass on either gate partition, or L1 did not pass on gate-A and no gate-B rerun is runnable in the first pass because GATE-G28 recorded Wc unused or Wc served another trigger (§10.1.4 Wc row: at most one contingency window; §7.4: a fail is never relabelled — the basis cites GATE-G28's readout and the Q-X62 trigger instant, which then necessarily finds L1 unpassed); FP-E is held in its hosted-only form; P3-L2 and P4-FP are `withheld{l1_not_passed}` (REQ-XH-123); R6.46 quotes the three hosted arms.
 
 Only an operator refusal stops the chain. Never pre-answered: which disposition applies is read from
 the presented records at presentation.
@@ -83,4 +83,6 @@ gate, not parity evidence). No code branch is created by a gate.
 ## Notes
 
 - Owns no REQ id. Consumes `hh-l1-conformance/1` / `hh-l1-diff/1` / the L1 pass id (R6.28), the readiness record (R6.33) and the H set (R6.23 kit, built in R6.44).
-- **Ambiguity — resolve at presentation against §10.1.4 and §7.4, do not decide here:** L1 did not pass on gate-A, no gate-B rerun ran (Wc unused or unrunnable) and the trigger has not fired. That state matches neither `full` nor `fallback` as pre-registered; present it to the operator as such.
+
+> Consistency fix 2026-11-07: the state "gate-A did not pass, no gate-B rerun" is pre-registered: a gate-A failure is a W3′ trigger presented at GATE-G28; if Wc runs W3′, this gate reads gate-B; if Wc is unused or served another trigger, this gate records `fallback` with that basis. Never `full`, never a relabel. (item 14)
+

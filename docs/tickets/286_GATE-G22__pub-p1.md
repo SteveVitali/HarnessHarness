@@ -43,7 +43,8 @@
 
 **Pre-registered dispositions (none pre-answered):**
 - **approve** → `Status: PASSED` with the operator's words verbatim, naming the approved `inputs_digest`. This authorizes only R6.31: committing that record, the README site link and the `[results-site]` transition, and the deploy that follows the operator's merge to `main`.
-- **refuse** → `Status: NOT-PASSABLE` with what would pass it. The plan pre-registers no alternative disposition for this gate (SR-1 table), so a refusal stops the chain; any route that continues without phase-1 publication is a new operator decision and a scoped insert, not something this gate implies.
+- **`PASSED — publication withheld`** → `Status: PASSED` with the operator's words verbatim (R6.1's PASSED-with-disposition template; GATE-G16 precedent): no public act — no `hh-site-publication/1` record, no README site link, no `[results-site]` transition, no deploy; the site stays unpublished (internal profile only). R6.31 then lands the no-publication state. Declining to publish never stops the engineering chain.
+- **refuse** → `Status: NOT-PASSABLE` with what would pass it (a technical or content defect the operator names); a refusal stops the chain. Declining to publish is the `publication withheld` disposition above, not a refusal.
 
 This gate authorizes no spend, no dataset visibility change, no transcript publication and no other phase's pages.
 
@@ -58,3 +59,7 @@ Recorded only from the operator's own words, never ticked or signed by an agent:
 ## Operating clauses
 
 Follow [Round-6 invariants](../build/planning/2026-11-07_round6-invariants.md) XO-01…XO-06 (X-03, X-08) and the [manifest operating rules](00_MANIFEST.md#operating-rules). No code branch is created by a gate; no gate cell writes the publication record (R6.31 does).
+
+## Notes
+
+> Consistency fix 2026-11-07: added the pre-registered `PASSED — publication withheld` disposition so that declining phase-1 publication is a non-stopping outcome; R6.31 records it as the Appendix D gate outcome `declined` (no `withheld{…}` member is minted). The plan's SR-1 table, which lists no alternative for this gate, needs the matching plan-sync note. (item 12)

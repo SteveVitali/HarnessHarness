@@ -123,5 +123,7 @@ cap), X-03, X-05, X-07. No code branch is created by a gate.
 ## Notes
 
 - Owns REQ-XH-007 and REQ-XH-013 (register rule O3); contributes the readout legs of REQ-XH-004 (R6.1), REQ-XH-120 (R6.11) and REQ-XE-120 (R6.39's rung record).
-- Whether REQ-XC-127's settlement applies to W1 ($0 model, no proxy spend) before this gate: resolve at presentation against §4.7; do not decide here.
+
+> Consistency fix 2026-11-07: W1 is $0 model with no `deliver-secret` (§10.1.4 W1 row), so it has no model calls, no REQ-XC-127 settlement clock and no model settlement; its settlement is compute-only — R6.32's `hh-compute-cost/1` record plus HUMAN-H18's W1 consolidated billing read when due. The readout records model settlement `n/a{no_model_calls}` for W1 and cites the compute record. (item 15)
+
 - If the operator rules a level, priority or trigger number other than the recorded default, R6.33's packet is re-issued and re-hashed by a scoped insert before W2.
