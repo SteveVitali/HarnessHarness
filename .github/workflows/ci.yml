@@ -115,6 +115,7 @@ jobs:
           bash scripts/ci/test-check-position.sh
           bash scripts/ci/test-check-trace.sh
           bash scripts/ci/test-check-site.sh
+          bash scripts/ci/test-check-pages-workflow.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh
 
@@ -123,6 +124,7 @@ jobs:
         run: |
           bash scripts/ci/check-ci-gating.sh .github/workflows/ci.yml
           bash scripts/ci/check-live-verify-workflow.sh
+          bash scripts/ci/check-pages-workflow.sh
 
       # ci-mode: both — the guard reads committed living human-facing files
       # (markdown, manifests, workflows), which a docs-only head can change;
