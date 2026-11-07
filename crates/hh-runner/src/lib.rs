@@ -35,5 +35,6 @@ pub mod receipt_index;
 pub mod schedule;
 pub mod slot_costs;
 pub mod slot_record;
+pub mod supervision;
 pub mod verdict;
 pub mod worker;

@@ -447,6 +447,9 @@ pub struct DrivePacket {
     /// declared, never PATH-defaulted in a scheduled window; R6.16
     /// REQ-XB-127). Absent = no container sweep.
     pub podman_bin: Option<String>,
+    /// `supervision{…}` — the declared proxy/mediator process members
+    /// (R6.16 Stage 2; RUNNER-SUPERVISION). Absent = unsupervised.
+    pub supervision: Option<crate::supervision::SupervisionDecl>,
 }
 
 impl DrivePacket {
@@ -540,6 +543,13 @@ impl DrivePacket {
                 .get("podman_bin")
                 .and_then(Json::as_str)
                 .map(str::to_string),
+            supervision: m
+                .get("supervision")
+                .map(|s| {
+                    crate::supervision::SupervisionDecl::from_json(s)
+                        .map_err(|e| PacketError { detail: e.detail })
+                })
+                .transpose()?,
         })
     }
 }

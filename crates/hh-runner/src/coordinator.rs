@@ -804,10 +804,41 @@ pub fn drive_window(
         .window
         .clone()
         .ok_or_else(|| io("drive_window requires a declared window"))?;
-    let (eid, run_id, mut lease) =
-        open_or_attach(store, docs, packet).map_err(|e| io(format!("open_or_attach: {e:?}")))?;
-    recover(store, docs, packet, cfg, &eid, &run_id, &mut lease)
-        .map_err(|e| io(format!("recover: {e:?}")))?;
+    let (eid, run_id, mut lease) = open_or_attach(store, docs, packet)?;
+    recover(store, docs, packet, cfg, &eid, &run_id, &mut lease)?;
+    // Stage 2 — the declared supervision: fold prior ledgers read-only
+    // (a refusal stops the window before either process spawns), then
+    // the proxy on its Json control channel and the mediator on its
+    // ready handshake — each a separate sole-writer process.
+    let mut sup = packet
+        .supervision
+        .as_ref()
+        .map(|sd| {
+            let pbin = crate::supervision::resolve_bin(
+                sd.proxy.bin.as_deref(),
+                crate::supervision::PROXY_BIN_ENV,
+                crate::supervision::PROXY_BIN_NAME,
+            )
+            .map_err(|e| io(format!("proxy bin: {}", e.detail)))?;
+            let mbin = sd
+                .mediator
+                .as_ref()
+                .map(|md| {
+                    crate::supervision::resolve_bin(
+                        md.bin.as_deref(),
+                        crate::supervision::MEDIATOR_BIN_ENV,
+                        crate::supervision::MEDIATOR_BIN_NAME,
+                    )
+                    .map_err(|e| io(format!("mediator bin: {}", e.detail)))
+                })
+                .transpose()?;
+            crate::supervision::Supervision::open(sd, &pbin, mbin.as_deref())
+                .map_err(|e| io(format!("supervision open: {}", e.detail)))
+        })
+        .transpose()?;
+    if let Some(s) = &mut sup {
+        s.boundary("window_open");
+    }
     let facts: Vec<crate::schedule::PlanFact> = {
         let view = with_engine(store, docs, packet, &run_id, &mut lease, |eng| {
             eng.project().map_err(RunnerError::Engine)
@@ -890,6 +921,13 @@ pub fn drive_window(
                         &mut settled,
                     )
                     .map_err(|e| io(format!("finish_attempt {}: {e:?}", w.run_plan_id)))?;
+                    // Slot close — revoke the attempt's token
+                    // (`security.credential.revoked`; X-05: no token
+                    // outlives its slot, replanned or not).
+                    if let Some(s) = &mut sup {
+                        s.slot_close(&w.slot_run)
+                            .map_err(|e| io(format!("slot_close: {}", e.detail)))?;
+                    }
                     let row = &settled.last().map(|(_, r)| r.clone()).unwrap_or(Json::Null);
                     let replanned = row
                         .get("replanned")
@@ -912,6 +950,9 @@ pub fn drive_window(
                             if let Some(v) = open_in_block.get_mut(&b) {
                                 *v = v.saturating_sub(1);
                                 if *v == 0 {
+                                    if let Some(s) = &mut sup {
+                                        s.boundary(&format!("block_end:{b}"));
+                                    }
                                     snapshots.push(Json::obj([
                                         ("seq", Json::Int(snapshots.len() as i64)),
                                         ("boundary", Json::str("block_end")),
@@ -1070,11 +1111,24 @@ pub fn drive_window(
                             ("start_order_pos", Json::Int(start_order.len() as i64)),
                         ]),
                     );
-                    let packet_path = cfg.packet_dir.join(format!(
-                        "slot-{}-a{}.json",
-                        slot_run_id(&id, launch.attempt_no),
-                        launch.attempt_no
-                    ));
+                    // Slot open — the fresh per-attempt proxy token and
+                    // the phase-granted sockets land in the slot's cell
+                    // record (the upstream credential never enters it).
+                    let slot_run = slot_run_id(&id, launch.attempt_no);
+                    if let Some(s) = &mut sup {
+                        let stamp = s
+                            .slot_open(&slot_run)
+                            .map_err(|e| io(format!("slot_open: {}", e.detail)))?;
+                        if let Some(env) = stamp.get("env") {
+                            sp.cell.insert("env".to_string(), env.clone());
+                        }
+                        if let Some(grants) = stamp.get("grants") {
+                            sp.cell.insert("grants".to_string(), grants.clone());
+                        }
+                    }
+                    let packet_path = cfg
+                        .packet_dir
+                        .join(format!("slot-{slot_run}-a{}.json", launch.attempt_no));
                     workers.push(spawn_worker(hh_runner, &sp, &packet_path, &launch)?);
                     attempted.insert(id.clone());
                     start_order.push(Json::obj([
@@ -1164,6 +1218,30 @@ pub fn drive_window(
     wrec.insert("teardown_receipts".into(), Json::Arr(teardowns));
     wrec.insert("harvest_manifest_ref".into(), Json::str(&manifest_ref));
     wrec.insert("harvest_manifest_covers".into(), Json::Bool(covers));
+    // Window end — `stop` the proxy (catalog end-probe) and the
+    // mediator; the finished proxy ledger is this window's harvested
+    // record for the next window's carry-in fold.
+    if let Some(s) = sup.take() {
+        wrec.insert(
+            "supervised".into(),
+            Json::obj([
+                ("proxy_run", Json::str(&s.proxy.run_id)),
+                (
+                    "proxy_root",
+                    Json::str(s.proxy.store_root.display().to_string()),
+                ),
+                ("proxy_listen", Json::str(&s.proxy.listen)),
+                (
+                    "mediator_run",
+                    s.mediator
+                        .as_ref()
+                        .map(|m| Json::str(&m.run_id))
+                        .unwrap_or(Json::Null),
+                ),
+            ]),
+        );
+        s.close();
+    }
     let window_json = Json::Obj(wrec);
     let _window_record_ref = {
         let addr = store

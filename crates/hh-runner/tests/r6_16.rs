@@ -42,6 +42,10 @@ use hharness_runner::schedule::{
     self, HarvestManifest, PlanFact, ResourceUse, ScheduleDecl, ScheduleKind, WindowDecl,
 };
 use hharness_runner::slot_record::RunnerIdentity;
+use hharness_runner::supervision::{
+    MediatorProc, SupervisionDecl, MEDIATOR_BIN_ENV, MEDIATOR_BIN_NAME, PROXY_BIN_ENV,
+    PROXY_BIN_NAME,
+};
 use hharness_wire::json::{self, Json};
 
 fn arr(j: &Json) -> &Vec<Json> {
@@ -55,6 +59,13 @@ fn boolv(j: &Json) -> Option<bool> {
     match j {
         Json::Bool(b) => Some(*b),
         _ => None,
+    }
+}
+
+fn obj(j: &Json) -> &BTreeMap<String, Json> {
+    match j {
+        Json::Obj(m) => m,
+        _ => panic!("not an object"),
     }
 }
 
@@ -273,6 +284,7 @@ fn drive_packet(
         costs: BTreeMap::new(),
         window,
         podman_bin,
+        supervision: None,
     }
 }
 
@@ -901,4 +913,245 @@ fn ac5_withheld_uses_the_closed_member() {
     };
     assert_eq!(d.as_str(), "withheld{window_deadline}");
     assert!(Disposition::parse("withheld{window_deadline}").is_ok());
+}
+
+// ── Stage 2 e2e — the supervised drive (RUNNER-SUPERVISION): the proxy
+// and mediator run as separate sole-writer processes; every attempt's
+// token mints at slot open and revokes at close; the cell record
+// carries the slot token and phase grants, never the upstream
+// credential (DF-R6.7-1's cell-environment leg).
+
+const CREDENTIAL: &str = "fixture-credential-do-not-project";
+const CREDENTIAL_ENV: &str = "HH_TEST_OLLAMA_KEY";
+
+fn ensure_bin(pkg: &str, bin: &str, env_var: &str) -> PathBuf {
+    if let Ok(e) = std::env::var(env_var) {
+        return PathBuf::from(e);
+    }
+    let exe = std::env::current_exe().unwrap();
+    let debug = exe.parent().unwrap().parent().unwrap().to_path_buf();
+    let path = debug.join(bin);
+    if !path.is_file() {
+        let st = std::process::Command::new(env!("CARGO"))
+            .args(["build", "-p", pkg, "--bin", bin])
+            .status()
+            .unwrap();
+        assert!(st.success(), "cargo build -p {pkg} --bin {bin}");
+    }
+    assert!(path.is_file(), "{bin} did not build");
+    path
+}
+
+fn supervision_json(root: &Path) -> Json {
+    let policy_path = root.join("mediator-policy.json");
+    std::fs::write(
+        &policy_path,
+        hharness_containment::policy::kernel_default(1)
+            .to_json()
+            .to_canonical_string(),
+    )
+    .unwrap();
+    let grants = |paths: &[&str]| {
+        Json::obj([(
+            "layer",
+            Json::obj([(
+                "net",
+                Json::obj([(
+                    "unix_sockets",
+                    Json::obj([(
+                        "allow",
+                        Json::Arr(paths.iter().map(|x| Json::str(*x)).collect()),
+                    )]),
+                )]),
+            )]),
+        )])
+    };
+    let both = grants(&[
+        "\u{2f}run\u{2f}hh\u{2f}model.sock",
+        "\u{2f}run\u{2f}hh\u{2f}egress.sock",
+    ]);
+    let egress = grants(&["\u{2f}run\u{2f}hh\u{2f}egress.sock"]);
+    Json::obj([
+        (
+            "proxy",
+            Json::obj([
+                (
+                    "bin",
+                    Json::str(
+                        ensure_bin("hharness-hosting", PROXY_BIN_NAME, PROXY_BIN_ENV)
+                            .display()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "store_root",
+                    Json::str(root.join("proxy").display().to_string()),
+                ),
+                ("run_id", Json::str("proxy-W1")),
+                ("listen", Json::str("127.0.0.1:0")),
+                (
+                    "lane",
+                    Json::obj([
+                        ("lane_id", Json::str("lane:r6_16")),
+                        ("endpoint_ref", Json::str("endpoint:fixture")),
+                        ("upstream_host", Json::str("127.0.0.1")),
+                        ("model", Json::str("model:fixture")),
+                        (
+                            "reservation",
+                            Json::obj([
+                                ("kind", Json::str("fixture_bound")),
+                                ("micros", Json::Int(1_000_000)),
+                            ]),
+                        ),
+                    ]),
+                ),
+                ("credential_env", Json::str(CREDENTIAL_ENV)),
+                (
+                    "authorization",
+                    Json::obj([
+                        ("verbatim", Json::str("auth:verbatim")),
+                        ("gate_record_ref", Json::str("gate:fixture")),
+                        ("authorized_micros", Json::Int(100_000_000)),
+                        ("available_credit_micros", Json::Int(100_000_000)),
+                        ("m_ppm", Json::Int(10_000)),
+                    ]),
+                ),
+                ("prior_ledgers", Json::Arr(vec![])),
+                ("slice_micros", Json::Int(1_000)),
+                (
+                    "child_env",
+                    Json::obj([(CREDENTIAL_ENV, Json::str(CREDENTIAL))]),
+                ),
+            ]),
+        ),
+        (
+            "mediator",
+            Json::obj([
+                (
+                    "bin",
+                    Json::str(
+                        ensure_bin("hharness-env", MEDIATOR_BIN_NAME, MEDIATOR_BIN_ENV)
+                            .display()
+                            .to_string(),
+                    ),
+                ),
+                (
+                    "store_root",
+                    Json::str(root.join("egress").display().to_string()),
+                ),
+                (
+                    "socket",
+                    Json::str(root.join("egress.sock").display().to_string()),
+                ),
+                ("policy", Json::str(policy_path.display().to_string())),
+                ("env_handle", Json::str("env:fixture")),
+                ("effect_id", Json::str("effect:fixture")),
+                ("participant", Json::str("participant:fixture")),
+                ("run_id", Json::str("med-run-1")),
+            ]),
+        ),
+        (
+            "phase_schedule",
+            Json::obj([("setup", both.clone()), ("agent", both), ("verify", egress)]),
+        ),
+    ])
+}
+
+#[test]
+fn ac9_supervised_drive_end_to_end() {
+    let root = tmp("supdrive");
+    let mut store = Store::open_with(
+        &root,
+        Box::new(ManualClock::at(1_000)),
+        None,
+        DEFAULT_BLOB_MAX_BYTES,
+    )
+    .unwrap();
+    let docs = LabDocs::open(&root).unwrap();
+    let mut packet = drive_packet(
+        BTreeMap::new(),
+        spec_2x3x2(reattempt(0, 0, 1_000_000)),
+        Some(window(ScheduleKind::KRoundInterleave, 86_400_000)),
+        None,
+    );
+    packet.supervision = Some(SupervisionDecl::from_json(&supervision_json(&root)).unwrap());
+    let report = coordinator::drive(
+        &mut store,
+        &docs,
+        &packet,
+        &cfg_for(&root, &packet),
+        &hh_runner(),
+    )
+    .unwrap();
+    // The supervised topology lands in the window record.
+    let wrec = report.window.as_ref().unwrap();
+    let supv = wrec.get("supervised").unwrap();
+    assert_eq!(
+        supv.get("proxy_run").and_then(|v| v.as_str()),
+        Some("proxy-W1")
+    );
+    assert_eq!(
+        supv.get("mediator_run").and_then(|v| v.as_str()),
+        Some("med-run-1")
+    );
+    // Every attempt minted one token at open and revoked it at close —
+    // 12 slots, 1 attempt each (X-05: no token outlives its slot).
+    let proxy_store = Store::open(root.join("proxy")).unwrap();
+    let evs = proxy_store.events("proxy-W1").unwrap();
+    assert_eq!(
+        evs.iter()
+            .filter(|e| e.class == "security.credential.bound")
+            .count(),
+        report.settled.len()
+    );
+    assert_eq!(
+        evs.iter()
+            .filter(|e| e.class == "security.credential.revoked")
+            .count(),
+        report.settled.len()
+    );
+    // The slot packet's cell record: `env` holds the slot token and the
+    // loopback no_proxy — never the upstream credential; `grants` is the
+    // sealed phase schedule (model+egress setup/agent, egress verify).
+    let dir = cfg_for(&root, &packet).packet_dir;
+    let slot_files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| {
+            let p = e.unwrap().path();
+            let is_slot = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("slot-") && n.ends_with(".json"))
+                .unwrap_or(false);
+            is_slot.then_some(p)
+        })
+        .collect();
+    assert!(!slot_files.is_empty());
+    for f in &slot_files {
+        let doc = json::parse(&std::fs::read_to_string(f).unwrap()).unwrap();
+        let cell = doc.get("cell").unwrap();
+        let env = cell.get("env").map(obj).unwrap();
+        for (k, v) in env {
+            assert_ne!(
+                v.as_str().unwrap_or(""),
+                CREDENTIAL,
+                "cell env member {k} carries the upstream credential ({})",
+                f.display()
+            );
+        }
+        let tok = env.get("OPENAI_API_KEY").and_then(|v| v.as_str()).unwrap();
+        assert!(!tok.is_empty());
+        let grants = cell.get("grants").map(obj).unwrap();
+        for phase in ["setup", "agent", "verify"] {
+            assert!(
+                grants
+                    .get(phase)
+                    .map(arr)
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false),
+                "phase {phase} grant missing"
+            );
+        }
+    }
+    let _ = MediatorProc::stop; // keep the type referenced
 }
