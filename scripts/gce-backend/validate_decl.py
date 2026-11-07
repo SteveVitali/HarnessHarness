@@ -279,7 +279,11 @@ def main():
     closed(
         qi,
         {"trials", "surfaces", "per_trial_planning_seconds",
-         "per_trial_bound_seconds", "overhead_hours", "egress_gib_estimate"},
+         "per_trial_bound_seconds", "overhead_hours", "egress_gib_estimate",
+         # R6.14 / REQ-XH-118 — first-pass terms (optional in the decl;
+         # `fpcheck` requires them where the first-pass rule binds)
+         "retry_trials", "load_hours", "admission_cutoff_hours",
+         "export_size_gib", "work_items"},
         "quote_inputs",
     )
     for k in ("trials", "surfaces"):
@@ -289,6 +293,17 @@ def main():
               "overhead_hours", "egress_gib_estimate"):
         if not is_num(need(qi, k, "quote_inputs")):
             refuse(f"quote_inputs.{k}")
+    for k in ("retry_trials",):
+        if k in qi and (not is_int(qi[k]) or qi[k] < 0):
+            refuse(f"quote_inputs.{k}")
+    for k in ("load_hours", "admission_cutoff_hours", "export_size_gib"):
+        if k in qi and qi[k] is not None and not is_num(qi[k]):
+            refuse(f"quote_inputs.{k}")
+    if "work_items" in qi and not (
+        isinstance(qi["work_items"], list)
+        and all(isinstance(w, str) and w for w in qi["work_items"])
+    ):
+        refuse("quote_inputs.work_items")
 
     if not isinstance(need(d, "phase_close", "decl"), bool):
         refuse("phase_close")

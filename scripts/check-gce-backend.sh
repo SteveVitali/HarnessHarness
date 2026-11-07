@@ -15,6 +15,24 @@ BIN="$T/bin"; STATE="$T/state"; LIVE="$STATE/live"; REPORTS="$T/reports"
 DECLS="$T/decls"; ENV="$T/operator.env"
 mkdir -p "$BIN" "$STATE/ssh" "$STATE/scp_src" "$LIVE" "$REPORTS" "$DECLS" \
          "$STATE/fail" "$STATE/warn" "$STATE/ssh_rc"
+export HH_PHASE_SPEND="$T/PHASE_SPEND.jsonl"
+
+# the pinned hh-live-pricing/2 rate table fixture (R6.14 priced quotes —
+# B3 default rows summing to r = 314140 µ$/h = $0.31414/h)
+RATES="$T/pricing.json"
+cat > "$RATES" <<'EOF'
+{"schema":"hh-live-pricing/2","compute":{"currency":"USD","rows":[
+ {"sku":"e2-standard-8","unit":"hour","price_micros":268040,
+  "source":"https://cloud.google.com/compute/vm-instance-pricing","retrieved":"2026-11-07"},
+ {"sku":"pd-balanced","unit":"gib_hour","price_micros":137,
+  "source":"https://cloud.google.com/compute/disks-image-pricing","retrieved":"2026-11-07"},
+ {"sku":"ipv4","unit":"hour","price_micros":5000,
+  "source":"https://cloud.google.com/vpc/network-pricing","retrieved":"2026-11-07"},
+ {"sku":"egress","unit":"gib","price_micros":120000,
+  "source":"https://cloud.google.com/vpc/network-pricing","retrieved":"2026-11-07"},
+ {"sku":"nat_gateway","unit":"hour","price_micros":44000,
+  "source":"https://cloud.google.com/nat/pricing","retrieved":"2026-11-07"}]}}
+EOF
 LOG="$T/argv.log"; : > "$LOG"
 export HH_SHIM_LOG="$LOG" HH_SHIM_STATE="$STATE" HH_SHIM_LIVE="$LIVE"
 export HH_COMPUTE_REPORTS_DIR="$REPORTS"
@@ -138,7 +156,7 @@ export PATH="$BIN:$PATH"
 # ── declarations ────────────────────────────────────────────────────────
 # $1 out-file, $2 python mutation over `d` ("" = none)
 mkdecl() {
-  python3 -I - "$1" "$2" <<'PY'
+  python3 -I - "$1" "$2" "$RATES" <<'PY'
 import json, sys
 d = {
  "schema":"hh-compute-decl/1","mode":"full","phase":"p1","window":"w1x",
@@ -163,12 +181,16 @@ d = {
  "disk_floor_gib":20,
  "concurrency":{"memory_gib_available":26,"memory_per_trial_gib":6,
    "vcpu_budget":8,"model_in_flight_limit":4,"model_wait_fraction":0.5},
- "rate_table":{"path":"build/reports/live/pricing.json","sha256":"0"*64},
+ "rate_table":{"path":sys.argv[3],"sha256":"0"*64},
  "authorization":{"gate":"PROV-W1","readout_path":"build/readouts/PROV-W1.md",
-   "verbatim_sha256":"2"*64,"quote_id":"TO_FILL","ceiling_micros":5050000,
+   "verbatim_sha256":"2"*64,"quote_id":"TO_FILL","ceiling_micros":0,
    "model_line":"authorized"},
  "quote_inputs":{"trials":20,"surfaces":1,"per_trial_planning_seconds":600,
-   "per_trial_bound_seconds":1200,"overhead_hours":1.5,"egress_gib_estimate":6},
+   "per_trial_bound_seconds":1200,"overhead_hours":1.5,"egress_gib_estimate":6,
+   "retry_trials":2,"load_hours":0.25,"admission_cutoff_hours":0.65,
+   "export_size_gib":4.0,
+   "work_items":["observe_pass","rust_build","admission_build",
+     "layer_export","census","smoke_battery"]},
  "phase_close":False,"last_model_call_utc":"2026-11-07T14:23:00Z",
 }
 if sys.argv[2]:
@@ -176,17 +198,20 @@ if sys.argv[2]:
 json.dump(d, open(sys.argv[1], "w"))
 PY
 }
-set_qid() { # fill quote_id with the deterministic pre-quote id
+set_qid() { # fill rate_table sha + quote_id + ceiling from the priced quote
   python3 -I - "$1" <<'PY'
-import hashlib, json, sys
+import hashlib, json, os, sys
 sys.path.insert(0, "scripts/gce-backend")
 import importlib.util
 spec = importlib.util.spec_from_file_location(
     "receipt_lib", "scripts/gce-backend/receipt_lib.py")
 lib = importlib.util.module_from_spec(spec); spec.loader.exec_module(lib)
 d = json.load(open(sys.argv[1]))
-d["authorization"]["quote_id"] = "pq-" + lib.sha256_text(
-    lib.canon(lib.quote_doc(d)))[:16]
+d["rate_table"]["sha256"] = hashlib.sha256(
+    open(d["rate_table"]["path"], "rb").read()).hexdigest()
+q = lib.quote_doc(d, os.getcwd())
+d["authorization"]["quote_id"] = "pq-" + lib.sha256_text(lib.canon(q))[:16]
+d["authorization"]["ceiling_micros"] = q["pricing"]["ceiling_micros"]
 json.dump(d, open(sys.argv[1], "w"))
 PY
 }
@@ -275,11 +300,11 @@ lacks(){ grep -qFe "$1" "$LOG" && bad "$2 — forbidden in argv log: $1" || ok "
 lnof() { grep -nFe "$1" "$LOG" | head -1 | cut -d: -f1; }
 G() { bash scripts/gce-backend.sh "$@"; }
 
-# ── 1 · quote — pre-quote, quantities only, no network (AC-9) ───────────
+# ── 1 · quote — the priced §3.10 quote in integer µ$, no network (AC-9) ─
 : > "$LOG"
 QOUT="$(G quote "$DECLS/base.json")"
-printf '%s' "$QOUT" | grep -q '"label": "pre-quote"' \
-  && ok "quote labelled pre-quote" || bad "quote label"
+printf '%s' "$QOUT" | grep -q '"label": "quote"' \
+  && ok "quote labelled quote" || bad "quote label"
 MISSING=0
 for q in machine_type disk_gib external_ipv4 nat trials surfaces \
          per_trial_planning_seconds per_trial_bound_seconds concurrency \
@@ -290,8 +315,14 @@ done
 [ "$MISSING" -eq 0 ] && ok "quote carries every §3.10 input quantity"
 printf '%s' "$QOUT" | grep -q '"label": "estimated"' \
   && ok "egress labelled estimated" || bad "egress estimate label"
-printf '%s' "$QOUT" | grep -q 'n/a{compute_pricing' \
-  && ok "no money computed" || bad "pre-quote pricing"
+# REQ-XB-213 — planning/bound/ceiling in integer µ$, every ceiling term
+printf '%s' "$QOUT" | grep -q '"hourly_micros": 314140' \
+  && ok "golden: r = 314140 µ$/h (B3 default shape)" || bad "hourly µ$"
+for t in '"ceiling_micros"' '"planning_micros"' '"bound_micros"' \
+         '"restart_hours"' '"residual_disk_gib_hours"' '"egress_micros"'; do
+  printf '%s' "$QOUT" | grep -q "$t" || { bad "pricing missing $t"; MISSING=1; }
+done
+[ "$MISSING" -eq 0 ] && ok "quote prices every ceiling term"
 [ -s "$LOG" ] && bad "quote touched gcloud" || ok "quote made no network call"
 
 # ── 2 · missing gcloud exits 7 (AC-1) ────────────────────────────────────
@@ -437,9 +468,18 @@ cp "$STATE/new_instance_describe.json" "$LIVE/instance_describe.json"
 
 # ── 10 · harvest + teardown nine-step ordering (AC-12/14) ───────────────
 prep_live() { # reset live state; callers then plant after_* mutations
-  rm -rf "$REPORTS"/* "$LIVE"/after_*
+  rm -rf "$REPORTS"/* "$LIVE"/after_* "$HH_PHASE_SPEND"
   printf '[{"name":"hh-p1-w1x","status":"RUNNING"}]\n' > "$LIVE/instances_list.json"
   cp "$STATE/new_instance_describe.json" "$LIVE/instance_describe.json"
+  # the window's provision receipt — the cost record reads
+  # resources.creation_timestamp from it (a deleted VM describes {})
+  python3 - "$REPORTS" <<'PY'
+import json, sys
+r = {"schema": "hh-compute-receipt/1", "kind": "provision",
+     "phase": "p1", "window": "w1x", "ticket": "R6.13",
+     "resources": {"creation_timestamp": "2026-11-07T10:00:00.000Z"}}
+json.dump(r, open(sys.argv[1] + "/2026-11-07-p1-w1x-provision.json", "w"))
+PY
 }
 teardown_case() { prep_live; G teardown "$1"; }
 : > "$LOG"
@@ -454,10 +494,44 @@ L3="$(grep -nFe 'instances] [list' "$LOG" | tail -1 | cut -d: -f1)"
   [ "$L1" -lt "$L2" ] && [ "$L2" -lt "$L3" ] \
   && ok "teardown ordering: inventory → delete → re-inventory" \
   || bad "teardown ordering ($L1/$L2/$L3)"
-grep -q '"cost_record": "n/a{compute_cost_record: R6.14}"' "$TR" \
-  && ok "cost-record hook is n/a until R6.14" || bad "cost_record member"
-if ls "$REPORTS"/*cost* >/dev/null 2>&1; then bad "hh-compute-cost/1 written"
-else ok "no hh-compute-cost/1 written"; fi
+# R6.14 — the step-9 hook is wired: one hh-compute-cost/1 per window,
+# billed: pending, intervals from the receipt's lifecycle stamps, and the
+# compute estimate row lands in the phase spend ledger.
+CR="$REPORTS/$(date -u +%F)-p1-w1x-cost.json"
+[ -f "$CR" ] && ok "hh-compute-cost/1 written at teardown" \
+  || bad "no hh-compute-cost/1"
+grep -q '"cost_record"' "$TR" && grep -q '"sha256"' "$TR" \
+  && ok "receipt carries the cost-record reference" || bad "cost_record member"
+grep -q '"status": "pending"' "$CR" \
+  && ok "cost record billed: pending" || bad "billed status"
+python3 - "$CR" "$TR" <<'PY' && ok "cost-record intervals == receipt lifecycle" \
+  || bad "interval mismatch"
+import json, sys
+c = json.load(open(sys.argv[1])); t = json.load(open(sys.argv[2]))
+iv = c["usage"]["instance"]["intervals"][0]
+lc = t["lifecycle"]
+assert iv["from"] == "2026-11-07T10:00:00.000Z", iv
+assert iv["to"] == (lc.get("last_stop_timestamp")
+                    or lc["deletion_operation_end"]), (iv, lc)
+PY
+python3 -I scripts/gce-backend/cost_lib.py costvalidate "$CR" "$TR" "$REPO" \
+  && ok "cost validator recomputes total_micros" || bad "cost validator"
+# a second record for the same window refuses (append-only)
+PRV="$(ls "$REPORTS"/*-provision.json | head -1)"
+expect_rc 2 "cost-record rewrite refuses" \
+  python3 -I scripts/gce-backend/cost_lib.py costrecord \
+  "$DECLS/base.json" "$TR" "$PRV" "$REPORTS" "$REPO"
+# the estimate spend row is in the phase spend ledger
+python3 - "$HH_PHASE_SPEND" <<'PY' && ok "compute estimate row in ledger" \
+  || bad "ledger estimate row"
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1])]
+r = rows[-1]
+assert r["kind"] == "compute" and r["authority"] == "gcp_billing" \
+    and r["basis"] == "estimate" and r["window"] == "w1x", r
+PY
+python3 -I scripts/gce-backend/cost_lib.py spend-validate "$HH_PHASE_SPEND" \
+  && ok "phase spend ledger validates" || bad "ledger validator"
 grep -q '"last_model_call_utc_hour": "2026-11-07T14:00Z"' "$TR" \
   && ok "settlement carries the UTC hour boundary" || bad "settlement clock"
 grep -q '"exceeded": false' "$TR" \
@@ -603,6 +677,116 @@ OTHERS="$(grep -rln 'gcloud' scripts/ --include='*.sh' | grep -v 'gce-backend\.s
 if grep -rn 'fix-ollama-fake-secret' scripts/gce-backend.sh scripts/gce-backend/ \
     >/dev/null 2>&1; then bad "fake secret literal committed"
 else ok "no secret literals in recipe"; fi
+
+# ── 15 · R6.14 — phase spend ledger rules + reconciliation + REQ-XH-118 ─
+SLIB="scripts/gce-backend/cost_lib.py"
+LED="$T/ledger.jsonl"
+python3 - "$LED" <<'PY'
+import json, sys
+rows = [
+ {"type":"ceilings","kind":"model","ceiling_micros":70000000,"phase":"p1"},
+ {"type":"ceilings","kind":"compute","ceiling_micros":20000000,"phase":"p1"},
+ {"type":"spend","ts":"2026-11-07T20:00:00Z","ticket":"R6.14",
+  "leg":"compute-estimate","cost_usd":1.5,"cumulative_usd":1.5,
+  "record":"r1","kind":"compute","authority":"gcp_billing",
+  "basis":"estimate","phase":"p1","window":"w1x","row_id":"sp-est-1"},
+ {"type":"spend","ts":"2026-11-07T20:05:00Z","ticket":"R6.14",
+  "leg":"compute-estimate","cost_usd":2.0,"cumulative_usd":3.5,
+  "record":"r2","kind":"compute","authority":"gcp_billing",
+  "basis":"estimate","phase":"p1","window":"w2x","row_id":"sp-est-2"},
+ {"type":"spend","ts":"2026-11-08T01:00:00Z","ticket":"R6.14",
+  "leg":"compute-reconcile","cost_usd":1.4,"cumulative_usd":3.4,
+  "record":"r3","kind":"compute","authority":"gcp_billing",
+  "basis":"billed","phase":"p1","window":"w1x","row_id":"sp-bill-1",
+  "supersedes":"sp-est-1"},
+]
+open(sys.argv[1], "w").write("".join(json.dumps(r) + "\n" for r in rows))
+PY
+python3 -I "$SLIB" spend-validate "$LED" \
+  && ok "valid ledger passes" || bad "valid ledger refused"
+fold_out() { python3 -I "$SLIB" spend-fold "$LED"; }
+printf '%s' "$(fold_out)" | grep -q '"compute_micros": 3400000' \
+  && ok "billed row supersedes estimate in totals" || bad "supersede fold"
+append_row() {
+  printf '%s\n' "$1" > "$T/row.json"
+  python3 -I "$SLIB" spend-append "$LED" "$T/row.json"
+}
+expect_rc 2 "window counted twice refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"compute","authority":"gcp_billing","basis":"estimate","phase":"p1","window":"w2x"}'
+expect_rc 2 "compute line on model credit refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"compute","authority":"ollama_usage","basis":"estimate","phase":"p1","window":"w9x"}'
+expect_rc 2 "model line on gcp billing refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"model","authority":"gcp_billing","basis":"estimate","phase":"p1","window":"w9x"}'
+expect_rc 2 "billed without supersedes refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"compute","authority":"gcp_billing","basis":"billed","phase":"p1","window":"w9x"}'
+expect_rc 2 "billed superseding no estimate refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"compute","authority":"gcp_billing","basis":"billed","phase":"p1","window":"w9x","supersedes":"sp-none"}'
+expect_rc 2 "per-kind ceiling exceeded refuses" append_row \
+  '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":25000000,"record":"r","kind":"compute","authority":"gcp_billing","basis":"estimate","phase":"p1","window":"w9x"}'
+# a validator-level double-count over a doctored file
+printf '%s\n' '{"type":"spend","ts":"t","ticket":"R6.14","leg":"x","cost_usd":1,"record":"r","kind":"compute","authority":"gcp_billing","basis":"estimate","phase":"p1","window":"w2x","row_id":"sp-dup"}' >> "$LED"
+expect_rc 2 "validator rejects window counted twice" \
+  python3 -I "$SLIB" spend-validate "$LED"
+python3 -c "open('$LED','w').write(''.join(open('$LED').readlines()[:-1]))"
+# ── compute reconciliation statuses (REQ-XB-216 / AC-3.10-4) ────────────
+prep_live; G teardown "$DECLS/base.json" >/dev/null || bad "teardown for reconcile failed"
+TR="$REPORTS/$(date -u +%F)-p1-w1x-teardown.json"
+CR="$REPORTS/$(date -u +%F)-p1-w1x-cost.json"
+EST="$(python3 -c "import json;print(json.load(open('$CR'))['estimate']['total_micros'])")"
+printf '{"amount_micros": %s}\n' "$EST" > "$T/bill-within.json"
+python3 -I "$SLIB" reconcile "$CR" "$T/bill-within.json" "$REPORTS" "$REPO" \
+  >/dev/null && ok "reconcile within appends" || bad "reconcile within"
+RC="$REPORTS/$(date -u +%F)-p1-w1x-cost-reconcile.json"
+grep -q '"verdict": "within"' "$RC" && ok "within verdict" || bad "within verdict"
+python3 -I "$SLIB" costvalidate "$RC" "$TR" "$REPO" \
+  && ok "reconcile record validates" || bad "reconcile record invalid"
+rm -f "$RC"
+printf '{"amount_micros": %s, "explanation": "egress estimate under"}\n' \
+  "$((EST + EST/2))" > "$T/bill-out.json"
+python3 -I "$SLIB" reconcile "$CR" "$T/bill-out.json" "$REPORTS" "$REPO" \
+  >/dev/null && ok "reconcile outside w/ explanation" || bad "reconcile outside"
+grep -q '"verdict": "outside"' "$RC" && ok "outside verdict" || bad "outside verdict"
+rm -f "$RC"
+printf '{"amount_micros": %s}\n' "$((EST + EST/2))" > "$T/bill-out2.json"
+expect_rc 2 "outside without explanation refuses" \
+  python3 -I "$SLIB" reconcile "$CR" "$T/bill-out2.json" "$REPORTS" "$REPO"
+python3 -I "$SLIB" reconcile "$CR" - "$REPORTS" "$REPO" >/dev/null \
+  && grep -q '"unavailable"' "$RC" \
+  && ok "unavailable{reason} folds" || bad "unavailable fold"
+rm -f "$RC"
+# ── REQ-XH-118 first-pass declaration checks (AC-10.1-9) ────────────────
+mkdecl "$DECLS/w1.json" 'd["window"]="w1x"; d["labels"]["hh-window"]="w1x"'
+set_qid "$DECLS/w1.json"
+mkdecl "$DECLS/wc.json" 'd["window"]="wcx"; d["labels"]["hh-window"]="wcx"; d["quote_inputs"]["work_items"]=[]; d["dead_man"]["max_run_duration_hours"]=4; d["dead_man"]["in_guest_timer_minutes"]=255; d["model_line"]="none"; d["authorization"]["model_line"]="none"'
+set_qid "$DECLS/wc.json"
+mkdecl "$DECLS/w3.json" 'd["window"]="w3x"; d["labels"]["hh-window"]="w3x"; d["quote_inputs"]["work_items"]=["hset_build","export"]'
+set_qid "$DECLS/w3.json"
+python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/w3.json" "$DECLS/wc.json" \
+  && ok "fpcheck passes the declaration set" || bad "fpcheck happy"
+mkdecl "$DECLS/badsum.json" 'd["window"]="w9x"; d["labels"]["hh-window"]="w9x"; d["dead_man"]["max_run_duration_hours"]=2000; d["dead_man"]["in_guest_timer_minutes"]=120015'
+set_qid "$DECLS/badsum.json"
+expect_rc 2 "Σ ceilings above twenty refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/badsum.json" "$DECLS/wc.json"
+mkdecl "$DECLS/badexport.json" 'd["window"]="w1x"; d["labels"]["hh-window"]="w1x"; d["quote_inputs"]["export_size_gib"]=40'
+set_qid "$DECLS/badexport.json"
+expect_rc 2 "W1 export above egress line refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/badexport.json" "$DECLS/wc.json"
+mkdecl "$DECLS/baditems.json" 'd["window"]="w1x"; d["labels"]["hh-window"]="w1x"; d["quote_inputs"]["work_items"]=["observe_pass"]'
+set_qid "$DECLS/baditems.json"
+expect_rc 2 "W1 quote missing items refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/baditems.json" "$DECLS/wc.json"
+mkdecl "$DECLS/badcut.json" 'd["window"]="w1x"; d["labels"]["hh-window"]="w1x"; d["dead_man"]["max_run_duration_hours"]=2; d["dead_man"]["in_guest_timer_minutes"]=135'
+set_qid "$DECLS/badcut.json"
+expect_rc 2 "W_p > D − cut-off refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/badcut.json" "$DECLS/wc.json"
+expect_rc 2 "no contingency window refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/w3.json"
+python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/wc.json" \
+  --export-measured-gib 10 >/dev/null \
+  && ok "export overrun absorbed by Wc" || bad "overrun absorb"
+expect_rc 2 "overrun Wc cannot absorb refuses" \
+  python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/wc.json" \
+  --export-measured-gib 300
 
 printf 'check-gce-backend: %d passed, %d failed\n' "$PASS" "$FAILED"
 [ "$FAILED" -eq 0 ] || exit 1

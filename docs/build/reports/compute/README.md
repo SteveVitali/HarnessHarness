@@ -16,7 +16,9 @@ provision | verify | prepull | harvest | teardown`.
 - **Secrets:** receipts record `provided: yes/no` only — never a value,
   credential, key, billing id, or token. Every receipt is leak-scanned
   before it is written; a scan hit refuses the write.
-- **Cost:** `cost_record: n/a{compute_cost_record: R6.14}` — no
-  `hh-compute-cost/1` is written here; R6.14 owns it.
+- **Cost:** teardown step 9 writes one `hh-compute-cost/1` per window
+  (R6.14; `billed: pending`, intervals from lifecycle timestamps) and
+  appends the compute estimate row to the phase spend ledger
+  (`docs/build/reports/live/PHASE_SPEND.jsonl`, ADR-0432).
 - Harvest trees land under `harvest/` (run-root tarball + manifest +
   serial + usage + journal) and are themselves leak-scanned.

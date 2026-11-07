@@ -35,8 +35,35 @@ if not os.path.exists(pricing_path):
     bad("pricing.json absent")
 else:
     pricing = json.load(open(pricing_path))
-    if pricing.get("schema") != "hh-live-pricing/1":
-        bad("pricing.json: schema != hh-live-pricing/1")
+    # hh-live-pricing/1 committed rows stay valid; /2 adds the AR-14/R6.14
+    # compute section (integer micro-unit rows, each with source + retrieved).
+    if pricing.get("schema") not in ("hh-live-pricing/1", "hh-live-pricing/2"):
+        bad("pricing.json: schema not in hh-live-pricing/{1,2}")
+    if pricing.get("schema") == "hh-live-pricing/2":
+        comp = pricing.get("compute")
+        if not isinstance(comp, dict) or not isinstance(comp.get("rows"), list):
+            bad("pricing.json: hh-live-pricing/2 lacks compute.rows")
+        else:
+            for i, row in enumerate(comp["rows"]):
+                if not isinstance(row, dict):
+                    bad(f"pricing.json: compute.rows[{i}] not an object")
+                    continue
+                if set(row) - {"sku", "unit", "price_micros", "source", "retrieved"}:
+                    bad(f"pricing.json: compute.rows[{i}] unknown member")
+                if not isinstance(row.get("sku"), str) or not row["sku"]:
+                    bad(f"pricing.json: compute.rows[{i}].sku")
+                if not isinstance(row.get("unit"), str) or not row["unit"]:
+                    bad(f"pricing.json: compute.rows[{i}].unit")
+                if not isinstance(row.get("price_micros"), int) \
+                        or isinstance(row.get("price_micros"), bool) \
+                        or row["price_micros"] < 0:
+                    bad(f"pricing.json: compute.rows[{i}].price_micros")
+                if not isinstance(row.get("source"), str) \
+                        or not row["source"].startswith("http"):
+                    bad(f"pricing.json: compute.rows[{i}].source")
+                if not isinstance(row.get("retrieved"), str) \
+                        or not re.match(r"^\d{4}-\d{2}-\d{2}$", row["retrieved"]):
+                    bad(f"pricing.json: compute.rows[{i}].retrieved")
     cap = pricing.get("cap_usd")
     if not isinstance(cap, (int, float)) or cap <= 0:
         bad("pricing.json: cap_usd not a positive number")

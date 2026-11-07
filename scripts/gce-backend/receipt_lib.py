@@ -18,7 +18,9 @@
 #       print pq-<16 hex> — the deterministic pre-quote id.
 import hashlib
 import json
+import os
 import sys
+from fractions import Fraction
 
 
 def sha256_file(path):
@@ -126,7 +128,34 @@ def cmd_count(_argv=None):
     print(len(doc) if isinstance(doc, list) else -1)
 
 
-def quote_doc(decl):
+def _ceil_frac(fr):
+    # ceil of a non-negative Fraction → int
+    return -(-fr.numerator // fr.denominator)
+
+
+def load_rate_rows(decl, repo):
+    # The one compute pricing source (REQ-XB-213): the pinned
+    # hh-live-pricing/2 table the declaration names — the sha must match
+    # the pin before any rate is read.
+    rt = decl["rate_table"]
+    path = os.path.join(repo, rt["path"])
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError:
+        fail_typed("Refused", f"rate_table.absent:{rt['path']}")
+    if hashlib.sha256(raw).hexdigest() != rt["sha256"]:
+        fail_typed("Refused", "rate_table.sha256")
+    doc = json.loads(raw.decode("utf-8"))
+    if doc.get("schema") != "hh-live-pricing/2":
+        fail_typed("Refused", f"rate_table.schema:{doc.get('schema')}")
+    rows = {}
+    for r in doc["compute"]["rows"]:
+        rows[r["sku"]] = r
+    return rows, doc
+
+
+def quote_doc(decl, repo=None):
     cc = decl["concurrency"]
     qi = decl["quote_inputs"]
     dm = decl["dead_man"]
@@ -142,9 +171,92 @@ def quote_doc(decl):
         if decl.get("mode") == "restart-only"
         else decl["restart"]["preauthorized_hours"]
     )
+    retry = qi.get("retry_trials", 0)
+    load_h = qi.get("load_hours", 0)
+    trials_eff = qi["trials"] + retry
+    pricing = "n/a{rate_table:not priced}"
+    if repo is not None:
+        rows, _table = load_rate_rows(decl, repo)
+        F = Fraction
+        r_vm = rows.get(decl["machine_type"], {}).get("price_micros")
+        if r_vm is None:
+            fail_typed("Refused", f"rate_table.missing:{decl['machine_type']}")
+        r_disk = rows.get(decl["boot_disk"]["type"], {}).get("price_micros")
+        if r_disk is None:
+            fail_typed("Refused", f"rate_table.missing:{decl['boot_disk']['type']}")
+        s_gib = decl["boot_disk"]["size_gib"]
+        r_ip = 0
+        if decl["network"]["external_ipv4"] == "ephemeral":
+            r_ip = rows.get("ipv4", {}).get("price_micros")
+            if r_ip is None:
+                fail_typed("Refused", "rate_table.missing:ipv4")
+        r_nat = 0
+        if decl["network"]["nat"]:
+            r_nat = rows.get("nat_gateway", {}).get("price_micros")
+            if r_nat is None:
+                fail_typed("Refused", "rate_table.missing:nat_gateway")
+        r_eg = rows.get("egress", {}).get("price_micros")
+        if r_eg is None:
+            fail_typed("Refused", "rate_table.missing:egress")
+        r_hourly = r_vm + s_gib * r_disk + r_ip + r_nat
+        e_gib = F(str(qi["egress_gib_estimate"]))
+        c_f = F(c_val)
+        ho = F(str(qi["overhead_hours"])) + F(str(load_h))
+        wp = ho + F(trials_eff) * F(str(qi["per_trial_planning_seconds"])) / (3600 * c_f)
+        wb = ho + F(trials_eff) * F(str(qi["per_trial_bound_seconds"])) / (3600 * c_f)
+        d_h = F(str(dm["max_run_duration_hours"]))
+        hrs = F(str(restart_h))
+        h_r = F(str(decl["h_r_hours"]))
+        # §3.10 template — integer µ$, each line rounded up.
+        eg_plan = r_eg * max(F(0), e_gib - 1)
+        eg_full = r_eg * e_gib
+        lines = {
+            "planning": {
+                "instance_hours": str(wp),
+                "micros": _ceil_frac(F(r_hourly) * wp),
+                "egress_micros": _ceil_frac(eg_plan),
+            },
+            "bound": {
+                "instance_hours": str(wb),
+                "micros": _ceil_frac(F(r_hourly) * wb),
+                "egress_micros": _ceil_frac(eg_full),
+            },
+            "ceiling": {
+                "instance_hours": str(d_h + hrs),
+                "dead_man_hours": str(d_h),
+                "restart_hours": str(hrs),
+                "instance_micros": _ceil_frac(F(r_hourly) * (d_h + hrs)),
+                "residual_disk_gib_hours": str(F(s_gib) * h_r),
+                "residual_disk_micros": _ceil_frac(F(s_gib * r_disk) * h_r),
+                "egress_micros": _ceil_frac(eg_full),
+            },
+        }
+        planning_m = lines["planning"]["micros"] + lines["planning"]["egress_micros"]
+        bound_m = lines["bound"]["micros"] + lines["bound"]["egress_micros"]
+        ceiling_m = (
+            lines["ceiling"]["instance_micros"]
+            + lines["ceiling"]["residual_disk_micros"]
+            + lines["ceiling"]["egress_micros"]
+        )
+        pricing = {
+            "hourly_micros": r_hourly,
+            "rate_rows": {
+                "machine_type": r_vm,
+                "disk_gib_hour": r_disk,
+                "ipv4_hour": r_ip,
+                "nat_gateway_hour": r_nat,
+                "egress_gib": r_eg,
+            },
+            "lines": lines,
+            "planning_micros": planning_m,
+            "bound_micros": bound_m,
+            "ceiling_micros": ceiling_m,
+            "egress": {"gib": str(e_gib), "label": "estimated"},
+            "rounding": "ceil per line",
+        }
     return {
-        "schema": "hh-compute-pre-quote/1",
-        "label": "pre-quote",
+        "schema": "hh-compute-quote/1",
+        "label": "quote",
         "phase": decl["phase"],
         "window": decl["window"],
         "ticket": decl["ticket"],
@@ -156,6 +268,8 @@ def quote_doc(decl):
             "external_ipv4": decl["network"]["external_ipv4"],
             "nat": decl["network"]["nat"],
             "trials": qi["trials"],
+            "retry_trials": retry,
+            "trials_effective": trials_eff,
             "surfaces": qi["surfaces"],
             "per_trial_planning_seconds": qi["per_trial_planning_seconds"],
             "per_trial_bound_seconds": qi["per_trial_bound_seconds"],
@@ -171,7 +285,11 @@ def quote_doc(decl):
                 },
             },
             "overhead_hours": qi["overhead_hours"],
+            "load_hours": load_h,
+            "admission_cutoff_hours": qi.get("admission_cutoff_hours"),
             "egress_gib": {"value": qi["egress_gib_estimate"], "label": "estimated"},
+            "export_size_gib": qi.get("export_size_gib"),
+            "work_items": qi.get("work_items", []),
             "dead_man_hours": dm["max_run_duration_hours"],
             "residual_disk_hours": decl["h_r_hours"],
             "restart_hours": restart_h,
@@ -182,29 +300,34 @@ def quote_doc(decl):
         },
         # the §3.10 template symbols → the declaration quantities they take
         "symbols": {
-            "N": qi["trials"], "s": qi["surfaces"],
+            "N": qi["trials"], "N_retry": retry, "s": qi["surfaces"],
             "t_p": qi["per_trial_planning_seconds"],
             "t_b": qi["per_trial_bound_seconds"],
-            "C": c_val, "H_o": qi["overhead_hours"],
+            "C": c_val, "H_o": qi["overhead_hours"], "H_load": load_h,
             "E_gib": {"value": qi["egress_gib_estimate"], "label": "estimated"},
             "D": dm["max_run_duration_hours"],
             "h_r": decl["h_r_hours"], "H_rs": restart_h,
         },
-        # REQ-XD-051: declaration quantities only until AR-13/R6.14 price them
-        "pricing": "n/a{compute_pricing: R6.14}",
+        # REQ-XB-213: priced in integer µ$ from the pinned rate table —
+        # the only compute pricing code path (R6.14).
+        "pricing": pricing,
     }
 
 
 def cmd_quote(argv):
+    # quote <decl> [repo-root] — priced when the repo root is given
     with open(argv[2], "r", encoding="utf-8") as f:
         decl = json.load(f)
-    print(json.dumps(quote_doc(decl), indent=2, sort_keys=True))
+    repo = argv[3] if len(argv) > 3 else "."
+    print(json.dumps(quote_doc(decl, repo), indent=2, sort_keys=True))
 
 
 def cmd_quoteid(argv):
+    # quoteid <decl> [repo-root]
     with open(argv[2], "r", encoding="utf-8") as f:
         decl = json.load(f)
-    print("pq-" + sha256_text(canon(quote_doc(decl)))[:16])
+    repo = argv[3] if len(argv) > 3 else "."
+    print("pq-" + sha256_text(canon(quote_doc(decl, repo)))[:16])
 
 
 def fail_typed(kind, reason, rc=2):

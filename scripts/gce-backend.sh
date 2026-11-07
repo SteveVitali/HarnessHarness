@@ -237,7 +237,7 @@ step() { # teardown step record
 # ── shared legs ─────────────────────────────────────────────────────────
 check_authorization() { # $1 auth record path
   [ -f "$1" ] || refuse "authorization.absent:$1"
-  local qid; qid="$(python3 -I "$LIB" quoteid "$DECL")"
+  local qid; qid="$(python3 -I "$LIB" quoteid "$DECL" "$REPO")"
   python3 -I "$LIB" authcheck "$DECL" "$1" "$qid" || exit $?
 }
 
@@ -295,7 +295,7 @@ cmd_quote() {
   require python3
   load_decl
   local out=""; [ "${1:-}" = "--out" ] && { out="$2"; }
-  local q; q="$(python3 -I "$LIB" quote "$DECL")"
+  local q; q="$(python3 -I "$LIB" quote "$DECL" "$REPO")"
   if [ -n "$out" ]; then printf '%s\n' "$q" > "$out"; say "wrote $out"; else printf '%s\n' "$q"; fi
 }
 
@@ -837,9 +837,10 @@ patch = {
     "settlement": {"last_model_call_utc_hour": hour},
     "h_r": {"declared_hours": hr, "elapsed_hours": elapsed,
             "exceeded": exceeded, "requires_dated_df_row": exceeded},
-    # §3.9 step 9 — the declared cost-record hook; R6.14 owns
-    # hh-compute-cost/1 and wires it (billed: pending). This row writes none.
-    "cost_record": "n/a{compute_cost_record: R6.14}",
+    # §3.9 step 9 — the cost-record hook wired by R6.14 (REQ-XB-215):
+    # hh-compute-cost/1 lands alongside, billed: pending; the receipt
+    # carries its path+sha256.
+    "cost_record": "n/a{written_after_receipt: R6.14}",
 }
 json.dump({"patch": patch, "exceeded": exceeded}, open(sys.argv[3], "w"))
 PY
@@ -847,6 +848,41 @@ PY
   python3 -c 'import json;json.dump(json.load(open("'"$RECEIPT_PATCH_FILE"'"))["patch"],open("'"$RECEIPT_PATCH_FILE"'","w"))'
   local rp; rp="$(write_receipt teardown)"
   say "teardown receipt: $rp"
+  # REQ-XB-215 — one hh-compute-cost/1 per window, intervals from the
+  # teardown receipt's lifecycle timestamps, `billed: pending`. The
+  # record is leak-scanned like every committed artifact.
+  local prv cr
+  prv="$(ls -t "$REPORTS"/*-"${PHASE}-${WINDOW}-provision.json" 2>/dev/null | head -1 || true)"
+  [ -n "$prv" ] || refuse "teardown.provision_receipt_absent"
+  cr="$(python3 -I "$BACKEND/cost_lib.py" costrecord "$DECL" "$rp" "$prv" \
+    "$REPORTS" "$REPO" --slot-wall-ms "${HH_SLOT_WALL_MS:-0}")" || exit $?
+  leak_scan "$cr"
+  # patch the receipt's cost_record member to the written reference and
+  # append the compute estimate row to the phase spend ledger
+  # (REQ-XB-217 — kind compute, authority gcp_billing, basis estimate).
+  python3 -I - "$rp" "$cr" <<'PY'
+import hashlib, json, sys
+rp, cr = sys.argv[1], sys.argv[2]
+r = json.load(open(rp))
+r["cost_record"] = {"path": cr,
+                    "sha256": hashlib.sha256(open(cr, "rb").read()).hexdigest()}
+json.dump(r, open(rp, "w"), indent=2, sort_keys=True)
+PY
+  local spend="${HH_PHASE_SPEND:-$REPO/docs/build/reports/live/PHASE_SPEND.jsonl}"
+  python3 -I - "$cr" "$TMPD/spend-row.json" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1]))
+row = {"type": "spend", "ts": c["recorded_at"], "ticket": c["ticket"],
+       "leg": "compute-estimate",
+       "cost_usd": round(c["estimate"]["total_micros"] / 1e6, 6),
+       "record": sys.argv[1].rsplit("/", 1)[-1],
+       "kind": "compute", "authority": "gcp_billing",
+       "basis": "estimate", "phase": c["phase"], "window": c["window"]}
+json.dump(row, open(sys.argv[2], "w"))
+PY
+  python3 -I "$BACKEND/cost_lib.py" spend-append "$spend" "$TMPD/spend-row.json" \
+    || exit $?
+  step 9 teardown_receipt_and_cost_record '"written"'
   if [ -n "$inconcl" ]; then
     printf 'post_state inconclusive:%s\n' "$inconcl" >&2
     exit 6
