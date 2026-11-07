@@ -18,6 +18,7 @@
 //! S2.1).
 
 pub mod activation;
+pub mod admitted_costs;
 pub mod capture;
 pub mod cell_spec;
 pub mod confirm;

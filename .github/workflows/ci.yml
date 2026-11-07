@@ -259,6 +259,13 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-gce-backend.sh
 
+      # R6.14 (manifest 267): the offline settlement battery — fake-clock
+      # + fixture reads, no Ollama call; builds fixtures, not committed
+      # docs content, so it stays gated like the build legs.
+      - name: Settlement act + poller battery (offline)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-settlement.sh
+
       # L4.7: the README's hermetic quickstart block executed verbatim
       # from a clean clone of this head (clone → build → doctor → a
       # scripted-lane run). Reads only README.md at the repo root —

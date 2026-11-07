@@ -449,6 +449,11 @@ def spend_append_rows(path, new_rows):
     est_ids = {r.get("row_id") for r in rows
                if r.get("type") == "spend" and r.get("basis") == "estimate"}
     for row in new_rows:
+        if row.get("type") != "spend":
+            if not row.get("window") or not row.get("class"):
+                refuse("spend.row_missing_window_class")
+            rows.append(row)
+            continue
         for k in ("kind", "authority", "basis", "phase", "window"):
             if not row.get(k):
                 refuse(f"spend.missing:{k}")
