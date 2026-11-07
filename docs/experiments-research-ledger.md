@@ -19,7 +19,7 @@ whose state it never writes.
 ```text
 projectStatus:   IN_PROGRESS
 nextUnit:        D3
-lastCompleted:   E2
+lastCompleted:   F2
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-06T23:58:49Z
+updatedAt:       2026-11-07T00:15:06Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -121,7 +121,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
 | F1 | **Reference-site study.** The HF harness leaderboard (Space source, blog draft, charts, metrics, interactions) and Artificial Analysis's coding-agents page (layout, charts, typography, colour, interaction); what makes each effective; accessibility and performance; what an HH-native visual identity could draw on. Reqs `REQ-XF-001…`. | R | done | [29_reference-sites.md](research/29_reference-sites.md) |
-| F2 | **Results-site design.** Information architecture and pages, visual identity, components and charts, the records→site data contract (every figure recomputed from committed packets), a zero-dependency generator, Pages deployment under ADR-0362 path modes and `check-ci-gating.sh`, claims-language checks applied to the site, publication gates. Depends F1, D1. Reqs `REQ-XF-101…`. | D | in-progress | → `design/39_results-site.md` |
+| F2 | **Results-site design.** Information architecture and pages, visual identity, components and charts, the records→site data contract (every figure recomputed from committed packets), a zero-dependency generator, Pages deployment under ADR-0362 path modes and `check-ci-gating.sh`, claims-language checks applied to the site, publication gates. Depends F1, D1. Reqs `REQ-XF-101…`. | D | done | [39_results-site.md](design/39_results-site.md) |
 
 ## H. Program plan
 
@@ -191,6 +191,7 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X40 | Phase-2 confirmatory design choices (D1): reference harness for Holm many-vs-one (D1: mini-swe-agent), dev-pool size (D1: 20 of 87 reserved for phase 4), one Holm family per tranche, the unresolved-cell policy (one residual unresolved slot blocks that task's pairs), keep or drop the five tasks needing extra download hosts, who reviews flagged passes, optional contender-set test | | ratification (D1 recommendations stand until then) |
 | Q-X41 | Harbor pin given `skip_install` landed after v0.25.0 (C4): wait for the first release containing it (C4 recommends), pin untagged commit `ff2a1ef4`, or keep v0.25.0 with differing O-surface images | | ratification / first phase-2 build gate |
 | Q-X42 | Terminus-2 HIR stage as a later gated block after mini-swe-agent's L1 gate passes, not the first Round-6 build (E2 recommends; ~3 more ADRs, ~6 tickets) | | H1, ratification |
+| Q-X43 | Results-site choices (F2 Q-F2-1…6): approve the "Instrument — calibrated readout" identity at a rendered mock-review gate after the first site ticket; system fonts only in v1 vs vendored OFL fonts via ADR; trajectories fetched in-site from the public HF dataset (F2 recommends; conflicts with F1's no-third-party-request pattern) vs dataset links only vs unpublished; Pages via SHA-pinned Actions + ADR vs `gh-pages` branch; default project URL vs custom domain; a `[results-site]` card in `docs/evidence.md` | | mock-review gate (identity); ratification (rest) |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -209,3 +210,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:32:51Z — Accepted B2 (`design/31`, 18 findings, REQ-XB-101…127; new `hharness-runner` crate + `hh-runner` binary over the existing experiment engine; one `allowlist_mediated` egress profile — cells on `--network none` reaching C2's model-proxy socket and a B2 registry-mediator socket; F18 records the C2 reconciliation: ADR-C2-C folds into B2's egress ADR, two sockets per cell, separate store roots — H1 confirms). Wave-3 assignments: C4 → `design/34_harness-hosting.md`; E2 → `design/38_hir-native-gaps.md`. New pending Q-X39.
 - 2026-11-06T23:58:43Z — Accepted D1 (`design/35`, 17 findings, REQ-XD-001…092; primary contrasts reuse §4.3 machinery at k=5; n-arm protocol + quote need ADRs; 87 tasks after 2 QEMU exclusions → 20 dev / 67 held-out; tranche 1 = 37 held-out ≤900 s tasks; recommendations Q-X22 `high`, Q-X27 latest stable at pre-registration with exact locks (mini-swe-agent 2.4.6, LiteLLM pinned), Q-X28 8×10×2 + 24-trial smoke ≈ $44), C4 (`design/34`, 18 findings, REQ-XC-301…329; blocking finding: Harbor `skip_install` post-dates v0.25.0), E2 (`design/38`, 19 findings, 23 gaps incl. new G18 — model never sees exec stdout on the live path; REQ-XE-101…132; 1 canonical-spec amendment + 3 ADRs + 1 hh-embed schema change for mini-swe-agent). Stream B/C checkpoint answers recorded verbatim: Q-X37, Q-X39a, Q-X35. New pending Q-X40…Q-X42. Disk pressure noted (data volume 98%; coordinator removed only its own read-only scratch clones; another session's 33 GB `target/` is the main consumer). Wave-4 next: D3, F2.
 - 2026-11-06T23:58:49Z — Wave-4 assignments: D3 → `design/37_sweep-method.md` (inputs design/35, 36, 38; research/25–28); F2 → `design/39_results-site.md` (inputs research/29, design/35, 30, 33; coordinator visual-pass notes passed in the assignment).
+- 2026-11-07T00:15:06Z — Accepted F2 (`design/39`, identity "Instrument — the calibrated readout"; stdlib-Python generator under `scripts/site/` → drift-checked `docs/results/site-data/`; shared `scripts/claims-lexicon.json`; claims checker 14 legs / 21 mutations; separate gated `pages.yml`; contrast script passes WCAG 4.5:1 both themes; scatter identifies harnesses by monogram + direct label because the 8-colour palette fails ΔE in scatters). Beauty explicitly unestablished until a rendered mock — carried as a mock-review gate. New pending Q-X43.
