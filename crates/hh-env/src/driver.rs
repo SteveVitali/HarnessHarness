@@ -500,6 +500,30 @@ impl EnvDriver {
             c if c.needs_adapter() => self.declared_capabilities(c),
             _ => EnvCapabilityDeclaration::stage1_local_sandboxed(),
         };
+        // AR-05 (R6.15): a record admitted under `allowlist_mediated`
+        // stamps `per_phase_network_policy = supported` — the sealed
+        // `set_phase` schedule is host-side policy, honestly declared.
+        // Any other spelling refuses, never coerced.
+        let capabilities = match record
+            .ext
+            .get(crate::egress_allowlist::PER_PHASE_FIELD)
+            .and_then(|j| j.as_str())
+        {
+            Some("supported") => {
+                let mut c = capabilities;
+                c.per_phase_network_policy = crate::handle::Tri::Supported;
+                c
+            }
+            Some(other) => {
+                return Err(EnvError::Unsupported {
+                    capability: "per_phase_network_policy",
+                    detail: format!(
+                        "unsupported per_phase_network_policy spelling `{other}` (only `supported` is admitted)"
+                    ),
+                })
+            }
+            None => capabilities,
+        };
         // DF-S1.12-2 — `resources → BudgetNode`: the declared bounds
         // allocate a pool child under the run's root budget before the
         // handle lands — a refusal aborts the provision typed, never
@@ -534,6 +558,7 @@ impl EnvDriver {
             applied_event_ref: None,
             phase: None,
             cell_spec: crate::cell_spec::CellSpec::from_record(record)?,
+            mediated_cell: crate::egress_allowlist::MediatedCell::from_record(record)?,
             provider: provider_handle,
             hosted: None,
             created_ms: now,
@@ -650,6 +675,7 @@ impl EnvDriver {
             applied_event_ref: None,
             phase: None,
             cell_spec: crate::cell_spec::CellSpec::from_record(record)?,
+            mediated_cell: crate::egress_allowlist::MediatedCell::from_record(record)?,
             provider: None,
             hosted: Some(binding.clone()),
             created_ms: now,
@@ -875,6 +901,9 @@ impl EnvDriver {
                     );
                     if let Some(spec) = &h.cell_spec {
                         args.extend(spec.helper_args());
+                    }
+                    if let Some(mc) = &h.mediated_cell {
+                        args.extend(mc.helper_args());
                     }
                     ("podman".to_string(), args)
                 }
@@ -2307,6 +2336,7 @@ impl EnvDriver {
             applied_event_ref: None,
             phase: None,
             cell_spec: parent.cell_spec.clone(),
+            mediated_cell: parent.mediated_cell.clone(),
             provider: parent.provider.clone(),
             hosted: parent.hosted.clone(),
             created_ms: now,

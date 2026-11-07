@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_216 ADRs: 164 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_217 ADRs: 165 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -200,6 +200,7 @@ _216 ADRs: 164 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0430 | The L1 gate (R6.21+) needing cross-connection hash keying beyond `sequence_then_hash`, multi-slot trajectory bundling, or canonicalizer rulesets past `hh-l1-canon/1` — each is a new declaration, not an edit to this record. |
 | ADR-0431 | Re-open if (a) a second provisioning surface is admitted (new tool, new cloud, or a second `gcloud` call site) — the single-home assertion and this ADR must be re-cut; (b) `hh-compute-decl/1` or `hh-compute-receipt/1` gains or drops members — the schemas are closed and this record documents the field set; (c) R6.14 lands pricing and the `cost_record`/`billed: pending` hook is wired; or (d) REQ-XB-212's live evidence (R6.47) surfaces a fixture/live divergence the battery cannot express. |
 | ADR-0432 | Revisit when (a) GCP reprices any pinned compute row (the register `retrieved` dates are the staleness bound), (b) the first billed reconciliation appends `basis: billed` rows against these estimates — the `within\|outside` spread then measures the estimate methodology — or (c) a phase spend leg needs a third `kind` or `authority` value, which is a new AR item, not an in-place edit. |
+| ADR-0433 | - If `hh-cell-relay` gains a third pair name, this ADR and the closed-set checks in `hh-env`, `hh-helper` and `hh_cell_relay` move together. - If `comparative_protocol/1` (R6.18) lands, the freeze record's `protocol_id` becomes a typed ref — amend by a dated note. - If the model route stops being unix-socket-only, the `side_channel`/ `unix_socket` residual set and this profile's grant shape reopen. |
 
 ## Fired-and-answered triggers (BL-48)
 

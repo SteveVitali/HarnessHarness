@@ -478,6 +478,36 @@ impl ExperimentSlot {
                 return Err(err(format!("identity.{k} required")));
             }
         }
+        // `identity.infrastructure` (REQ-XC-330; AR-05/R6.15) — the
+        // infrastructure-set digests; optional now (the full set is
+        // R6.23's), strictly member-checked when present.
+        if let Some(infra_j) = id.get("infrastructure") {
+            let im = infra_j
+                .as_obj()
+                .ok_or_else(|| err("identity.infrastructure must be an object"))?;
+            for (k, v) in im {
+                if ![
+                    "runner",
+                    "helper",
+                    "relay",
+                    "model_proxy",
+                    "egress_mediator",
+                ]
+                .contains(&k.as_str())
+                {
+                    return Err(err(format!("identity.infrastructure: unknown member {k}")));
+                }
+                let vm = v
+                    .as_obj()
+                    .ok_or_else(|| err(format!("identity.infrastructure.{k} must be an object")))?;
+                no_unknown(
+                    vm,
+                    &["binary_sha256", "commit"],
+                    "identity.infrastructure.*",
+                )?;
+                str_member(vm, "binary_sha256")?;
+            }
+        }
         let ss = obj(j.get("identity").unwrap(), "slot_store")?;
         no_unknown(
             ss,

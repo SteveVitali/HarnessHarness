@@ -205,6 +205,8 @@ fn cell_verbs_carry_verbatim_argv_and_refuse_work_alias() {
         network: false,
         extra_args: vec![],
         cell: CellSpec::default(),
+        mounts: vec![],
+        relay: None,
     };
     // /work aliasing refuses *before* argv — no log line.
     assert!(b.cp_in("/host/tests", "/work/tests").is_err());
