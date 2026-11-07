@@ -1,0 +1,109 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "sf2f929815f4812fb529cff9f5fd11271f2f73bae3c12154d93e8c0a0757d0448-r1-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 6113,
+      "name": "verdict.log",
+      "sha256": "ba67ec65e163f91f1417bed0f0c710e70f3762dc41b3744cd0394834368cc967"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 640,
+      "name": "solution.log",
+      "sha256": "6c709c85cd0c4007ee95fbfae0d650911ea3ce54cc89a659dc3cafb37272b140"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 2478,
+      "name": "verdict_verbatim.log",
+      "sha256": "554bb2472b9959422c590aeb9d95b3cf452dca725d33a01129d4845157fa2651"
+    },
+    {
+      "bytes": 1281,
+      "name": "solution.sh",
+      "sha256": "300ca96b79db8d77f14742109aaf76048aafc4644ced750b1bc5c2761e8d0175"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__git-multibranch:latest",
+  "input_tokens": 240,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 9231,
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 1,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:f2f929815f4812fb529cff9f5fd11271f2f73bae3c12154d93e8c0a0757d0448",
+  "solution_kind": "sh",
+  "solution_log_bytes": 640,
+  "solution_log_sha256": "6c709c85cd0c4007ee95fbfae0d650911ea3ce54cc89a659dc3cafb37272b140",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "git-multibranch",
+  "tokens_freed": 232,
+  "triggered": false,
+  "verdict.log.bytes": 6113,
+  "verdict.log.sha256": "ba67ec65e163f91f1417bed0f0c710e70f3762dc41b3744cd0394834368cc967",
+  "verdict.rc": "0",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 2478,
+  "verdict_verbatim.log.sha256": "554bb2472b9959422c590aeb9d95b3cf452dca725d33a01129d4845157fa2651",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 23559,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 23.56,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_multi_branch_https_deploy": "passed"
+    },
+    "raw_bytes": 6113,
+    "stripped_bytes": 6113,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

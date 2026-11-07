@@ -1,0 +1,98 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "s751e5bdf163001220cc306a203ace2220180117ebb65859bc949d6298a75e5c7-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 18214,
+      "name": "solution.log",
+      "sha256": "091ae456e73e6ed9709b0a4d8d255a7c92cb2fe5311c1bef3d79c7cb2cf942ea"
+    },
+    {
+      "bytes": 136,
+      "name": "run-tests.sh",
+      "sha256": "028e21a2253fdd0c80d79279aa6d88c115b3165c7d6af7cfc3f65a84b3cc62d5"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 3108,
+      "name": "verdict_verbatim.log",
+      "sha256": "7621ee7169a22aac7f2cc76a4ad72af0c137e4fff384ec4880001d2e50ef86ee"
+    },
+    {
+      "bytes": 3566,
+      "name": "solution.sh",
+      "sha256": "8755f511e5775c56b53cf7a83043d7d52f2af8061fa924826c0ab349ee7cd6ed"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__jupyter-notebook-server:latest",
+  "input_tokens": 4633,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 21322,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:751e5bdf163001220cc306a203ace2220180117ebb65859bc949d6298a75e5c7",
+  "solution_kind": "sh",
+  "solution_log_bytes": 18214,
+  "solution_log_sha256": "091ae456e73e6ed9709b0a4d8d255a7c92cb2fe5311c1bef3d79c7cb2cf942ea",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "jupyter-notebook-server",
+  "tokens_freed": 4625,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 3108,
+  "verdict_verbatim.log.sha256": "7621ee7169a22aac7f2cc76a4ad72af0c137e4fff384ec4880001d2e50ef86ee",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 13870,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 13.87,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_jupyter_server_running": "passed",
+      "test_jupyter_config_exists": "passed",
+      "test_sample_notebook_exists": "passed",
+      "test_password_authentication": "passed"
+    },
+    "raw_bytes": 3108,
+    "stripped_bytes": 3108,
+    "ansi_stripped": false
+  },
+  "egress_evidence": "Temporary failure resolving",
+  "disposition": "executed"
+}

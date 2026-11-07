@@ -1,0 +1,97 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "sc29da31c6dd8b8732aed06168bf71ad67689d7f8d26327327f0074c1c13f7e95-r3-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 255,
+      "name": "solution.log",
+      "sha256": "fd1c41db3e47ab007fd6c8c8508a4979df5a755565bc9129a51f74c30e832879"
+    },
+    {
+      "bytes": 68,
+      "name": "run-tests.sh",
+      "sha256": "70e5a2d8f55add1de16819041bebd91d543fb2b437d5cf6f888d4075f56f8e80"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1690,
+      "name": "verdict_verbatim.log",
+      "sha256": "597fb0449371166c079a17e5ae2b907bfa4ff65f3772c12113a4e11b3cd62441"
+    },
+    {
+      "bytes": 123,
+      "name": "stream.sh",
+      "sha256": "ca1deaba18f226349582c41835e424c09424dc05681eb04955754977dfc11344"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 0,
+  "image": "localhost/s4-tb__incompatible-python-fasttext-base_with_hint:latest",
+  "input_tokens": 143,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 1945,
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 3,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:c29da31c6dd8b8732aed06168bf71ad67689d7f8d26327327f0074c1c13f7e95",
+  "solution_kind": "yaml",
+  "solution_log_bytes": 255,
+  "solution_log_sha256": "fd1c41db3e47ab007fd6c8c8508a4979df5a755565bc9129a51f74c30e832879",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "incompatible-python-fasttext.base_with_hint",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 1690,
+  "verdict_verbatim.log.sha256": "597fb0449371166c079a17e5ae2b907bfa4ff65f3772c12113a4e11b3cd62441",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 2228,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 2.23,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_predict_raises_no_error": "passed",
+      "test_correct_output": "passed",
+      "test_site_packages_not_overly_changed": "passed"
+    },
+    "raw_bytes": 1690,
+    "stripped_bytes": 1690,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

@@ -1,0 +1,427 @@
+Starting harness run
+Run ID: 2026-11-05__16-17-31
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/qemu-startup: Command '['docker', 'compose', '-p', 'qemu-startup-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/qemu-startup/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'qemu-startup-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/qemu-startup/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/oom: Command '['docker', 'compose', '-p', 'oom-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/oom/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'oom-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/oom/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/git-workflow-hack: Command '['docker', 'compose', '-p', 'git-workflow-hack-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/git-workflow-hack/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'git-workflow-hack-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/git-workflow-hack/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/configure-git-webserver: Command '['docker', 'compose', '-p', 'configure-git-webserver-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/configure-git-webserver/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'configure-git-webserver-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/configure-git-webserver/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/csv-to-parquet: Command '['docker', 'compose', '-p', 'csv-to-parquet-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/csv-to-parquet/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'csv-to-parquet-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/csv-to-parquet/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/crack-7z-hash: Command '['docker', 'compose', '-p', 'crack-7z-hash-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/crack-7z-hash/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'crack-7z-hash-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/crack-7z-hash/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/build-initramfs-qemu: Command '['docker', 'compose', '-p', 'build-initramfs-qemu-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/build-initramfs-qemu/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'build-initramfs-qemu-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/build-initramfs-qemu/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/cartpole-rl-training: Command '['docker', 'compose', '-p', 'cartpole-rl-training-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/cartpole-rl-training/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'cartpole-rl-training-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/cartpole-rl-training/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/new-encrypt-command: Command '['docker', 'compose', '-p', 'new-encrypt-command-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/new-encrypt-command/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'new-encrypt-command-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/new-encrypt-command/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/solana-data: Command '['docker', 'compose', '-p', 'solana-data-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/solana-data/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'solana-data-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/solana-data/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/heterogeneous-dates: Command '['docker', 'compose', '-p', 'heterogeneous-dates-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/heterogeneous-dates/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'heterogeneous-dates-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/heterogeneous-dates/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/get-bitcoin-nodes: Command '['docker', 'compose', '-p', 'get-bitcoin-nodes-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/get-bitcoin-nodes/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'get-bitcoin-nodes-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/get-bitcoin-nodes/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/sqlite-with-gcov: Command '['docker', 'compose', '-p', 'sqlite-with-gcov-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/sqlite-with-gcov/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'sqlite-with-gcov-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/sqlite-with-gcov/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/extract-moves-from-video: Command '['docker', 'compose', '-p', 'extract-moves-from-video-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/extract-moves-from-video/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'extract-moves-from-video-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/extract-moves-from-video/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/simple-sheets-put: Command '['docker', 'compose', '-p', 'simple-sheets-put-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/simple-sheets-put/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'simple-sheets-put-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/simple-sheets-put/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/extract-safely: Command '['docker', 'compose', '-p', 'extract-safely-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/extract-safely/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'extract-safely-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/extract-safely/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Harness execution failed for /Users/stevenvitali/tb-work/dataset/build-tcc-qemu: Command '['docker', 'compose', '-p', 'build-tcc-qemu-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/build-tcc-qemu/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Traceback (most recent call last):
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 1011, in _execute_single_trial
+    trial_results = self._run_trial(trial_handler)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/harness/harness.py", line 717, in _run_trial
+    with spin_up_terminal(
+         ^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 176, in spin_up_terminal
+    terminal.start()
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/terminal.py", line 102, in start
+    self.container = self._compose_manager.start()
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 126, in start
+    self._run_docker_compose_command(["build"])
+  File "/Users/stevenvitali/.local/share/uv/tools/terminal-bench/lib/python3.12/site-packages/terminal_bench/terminal/docker_compose_manager.py", line 101, in _run_docker_compose_command
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "/Users/stevenvitali/.local/share/uv/python/cpython-3.12.14-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['docker', 'compose', '-p', 'build-tcc-qemu-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/build-tcc-qemu/docker-compose.yaml', 'build']' returned non-zero exit status 1.
+Error cleaning up docker compose services: Command '['docker', 'compose', '-p', 'run-pdp11-code-1-of-1-2026-11-05__16-17-31', '-f', '/Users/stevenvitali/tb-work/dataset/run-pdp11-code/docker-compose.yaml', 'down']' returned non-zero exit status 1.
+Error parsing results for task run-pdp11-code: No short test summary info found in the provided content.. It's possible that the tests failed to run. Inspect /Users/stevenvitali/tb-work/parity-runs/o-side/2026-11-05__16-17-31/run-pdp11-code/run-pdp11-code.1-of-1.2026-11-05__16-17-31/panes/post-test.txt for more information.
+  Running tasks (30/30, Accuracy: 36.67%) - Last: run-pdp11-code ✗ ━━━ 100% 0:0…
+
+Results Summary:
++-------------------+---------+
+| Metric            | Value   |
++===================+=========+
+| Resolved Trials   | 11      |
++-------------------+---------+
+| Unresolved Trials | 19      |
++-------------------+---------+
+| Accuracy          | 36.67%  |
++-------------------+---------+
+
+Results written to 
+/Users/stevenvitali/tb-work/parity-runs/o-side/2026-11-05__16-17-31/results.json

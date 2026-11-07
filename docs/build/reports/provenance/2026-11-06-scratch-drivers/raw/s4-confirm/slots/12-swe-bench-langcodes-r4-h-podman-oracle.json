@@ -1,0 +1,95 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "s90d86c516442ca5753c1dbb9d5c8cbf7e5b93013a83da71eb0a8842232b7a7cc-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 406,
+      "name": "solution.log",
+      "sha256": "8cee37f984aa51fbf8ab9a530bba4c95f0772159e3e80819af82092b2ccd3f60"
+    },
+    {
+      "bytes": 1011,
+      "name": "run-tests.sh",
+      "sha256": "6fe4a440a8424d30dab1c1fda2c2e59560e39b88da9503f80df02d786393f6ea"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "bytes": 3109,
+      "name": "verdict_verbatim.log",
+      "sha256": "7978a8b3083ebf159b5681d6ad95f16ee1d870cd9bc8bc0cc46e53ffa87f4e51"
+    },
+    {
+      "bytes": 1003,
+      "name": "solution.sh",
+      "sha256": "22bf8d127e77a32e57852c5797ad1c798bab49c27a870fc78f603217165274f5"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 0,
+  "image": "localhost/s4-tb__swe-bench-langcodes:latest",
+  "input_tokens": 181,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 3515,
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:90d86c516442ca5753c1dbb9d5c8cbf7e5b93013a83da71eb0a8842232b7a7cc",
+  "solution_kind": "sh",
+  "solution_log_bytes": 406,
+  "solution_log_sha256": "8cee37f984aa51fbf8ab9a530bba4c95f0772159e3e80819af82092b2ccd3f60",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "swe-bench-langcodes",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 3109,
+  "verdict_verbatim.log.sha256": "7978a8b3083ebf159b5681d6ad95f16ee1d870cd9bc8bc0cc46e53ffa87f4e51",
+  "verdict_verbatim.rc": "1",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 15637,
+  "work_dispatch": "observed:applied",
+  "work_exit": "1",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 15.65,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "unresolved",
+    "verdict_reason": "some_tests_failed",
+    "parsed": {
+      "test__hash__": "failed"
+    },
+    "raw_bytes": 3109,
+    "stripped_bytes": 3109,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

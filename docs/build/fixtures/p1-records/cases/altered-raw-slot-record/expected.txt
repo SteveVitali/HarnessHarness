@@ -1,0 +1,1 @@
+RC-3 — an altered raw record no longer equals its packet slot (AC-2.2-6)

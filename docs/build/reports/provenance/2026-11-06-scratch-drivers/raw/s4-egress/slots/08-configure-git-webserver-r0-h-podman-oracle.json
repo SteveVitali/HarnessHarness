@@ -1,0 +1,101 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "se64f12f5265ee2d8d5d92dfff4226f014151d4e64267d8a3a844725b8e200da6-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1878,
+      "name": "solution.log",
+      "sha256": "982c7e9c9f9c784960923736823fe4a19ab82f2229332d1c9f06b0d096b57da6"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 3623,
+      "name": "verdict_verbatim.log",
+      "sha256": "76d8b3c2a4435afbd01d3602a0ec70f3abde7685f077211f2c165e75b5b8e35b"
+    },
+    {
+      "bytes": 2354,
+      "name": "solution.sh",
+      "sha256": "c31cd92ecb1b357d8c0abcf4821717e83a1770cf58f028620cd0ee3e6b1e4c62"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 3,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__configure-git-webserver:latest",
+  "input_tokens": 549,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 5501,
+  "policy_net_mode": "public",
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:e64f12f5265ee2d8d5d92dfff4226f014151d4e64267d8a3a844725b8e200da6",
+  "solution_kind": "sh",
+  "solution_log_bytes": 1878,
+  "solution_log_sha256": "982c7e9c9f9c784960923736823fe4a19ab82f2229332d1c9f06b0d096b57da6",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "configure-git-webserver",
+  "tokens_freed": 541,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 3623,
+  "verdict_verbatim.log.sha256": "76d8b3c2a4435afbd01d3602a0ec70f3abde7685f077211f2c165e75b5b8e35b",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 19991,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 20.0,
+  "prior_disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_hello_file_exists_example": "passed"
+    },
+    "raw_bytes": 3623,
+    "stripped_bytes": 2529,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

@@ -1,0 +1,9 @@
+[package]
+name = "s4-helper-egress"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+hharness-helper = { path = "/Users/stevenvitali/MetaHarness-harnessharness/crates/hh-helper" }
+
+[workspace]

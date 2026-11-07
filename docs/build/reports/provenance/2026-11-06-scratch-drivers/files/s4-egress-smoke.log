@@ -1,0 +1,12 @@
+[ 3/30] git-workflow-hack supplement_slots=10
+    declared_deps={'apt': False, 'pip': False, 'uv_bootstrap': True, 'git_clone': False, 'fetch': False, 'hf_hub': False, 'remote_rpc': False} -> egress:bridge
+    slot 03-git-workflow-hack-r0-o-tb-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=674ms
+    slot 03-git-workflow-hack-r0-h-podman-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=733ms
+    slot 03-git-workflow-hack-r1-o-tb-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=519ms
+    slot 03-git-workflow-hack-r1-h-podman-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=645ms
+    slot 03-git-workflow-hack-r2-o-tb-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=585ms
+    slot 03-git-workflow-hack-r2-h-podman-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=598ms
+    slot 03-git-workflow-hack-r3-o-tb-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=569ms
+    slot 03-git-workflow-hack-r3-h-podman-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=547ms
+    slot 03-git-workflow-hack-r4-o-tb-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=486ms
+    slot 03-git-workflow-hack-r4-h-podman-oracle -> inconclusive{cell_setup_failed:cell_setup_panicked} - wall=486ms

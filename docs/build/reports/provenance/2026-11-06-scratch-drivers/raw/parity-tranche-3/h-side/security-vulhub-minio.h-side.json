@@ -1,0 +1,87 @@
+{
+  "task_id": "security-vulhub-minio",
+  "runner": "h-podman-exec",
+  "started_at": "2026-11-06T00:47:37-0500",
+  "max_test_timeout_sec": 60.0,
+  "image": "docker.io/library/tb__security-vulhub-minio__client:latest",
+  "container": "tb__security-vulhub-minio-client-t3",
+  "compose_services": [
+    "client",
+    "node1",
+    "node2",
+    "node3"
+  ],
+  "network": "hh-parity-net-tb__security-vulhub-minio",
+  "image_preexisting": true,
+  "image_id_digest": "facec4d79ab78423d5a0818c60bbfd6562eb0be0cc4d2ded364f84cfdcde8642 sha256:dba09fff3e3c282b30fa3d246a805ce59bc9a6e2316421d2e13508a4b844abea",
+  "skipped_host_ports": [
+    "node1:9000:9000",
+    "node1:9001:9001"
+  ],
+  "sidecars": {
+    "node1": {
+      "up": {
+        "rc": 0,
+        "stdout": "dc246bd3d0b6cf71daf0ceb9bbfbd8ae36f639b1a6f43f1ea476a549062388da\n",
+        "stderr": "WARNING: image platform (linux/amd64) does not match the expected platform (linux/arm64)\n",
+        "duration_sec": 0.54,
+        "timeout": false
+      },
+      "name": "tb__security-vulhub-minio-node1-t3"
+    },
+    "node2": {
+      "up": {
+        "rc": 0,
+        "stdout": "c5c9121d32c00f125fc21c02919534ab4ad73ef548be316ddb7df430de5e1a6d\n",
+        "stderr": "WARNING: image platform (linux/amd64) does not match the expected platform (linux/arm64)\n",
+        "duration_sec": 0.43,
+        "timeout": false
+      },
+      "name": "tb__security-vulhub-minio-node2-t3"
+    },
+    "node3": {
+      "up": {
+        "rc": 0,
+        "stdout": "52343ce4f9df3c69b4066b0dc74837ff4334042e7c0a6d8e89e4807274edff6f\n",
+        "stderr": "WARNING: image platform (linux/amd64) does not match the expected platform (linux/arm64)\n",
+        "duration_sec": 0.43,
+        "timeout": false
+      },
+      "name": "tb__security-vulhub-minio-node3-t3"
+    }
+  },
+  "container_up": {
+    "rc": 0,
+    "stdout": "debb731dbb920086bda6336ea2ecd0dc78bfc8005b8ac61bd43db4fa5e8e6d09\n",
+    "stderr": "",
+    "duration_sec": 0.49,
+    "timeout": false
+  },
+  "solution_kind": "sh",
+  "solution_copy_rc": 0,
+  "solution_exec": {
+    "rc": 0,
+    "stdout": "Get:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease [256 kB]\nGet:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]\nGet:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]\nGet:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]\nGet:5 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages [1776 kB]\nGet:6 http://ports.ubuntu.com/ubuntu-ports noble/multiverse arm64 Packages [274 kB]\nGet:7 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 Packages [19.0 MB]\nGet:8 http://ports.ubuntu.com/ubuntu-ports noble/restricted arm64 Packages [113 kB]\nGet:9 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [1823 kB]\nGet:10 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [3325 kB]\nGet:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/multiverse arm64 Packages [107 kB]\nGet:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [2229 kB]\nGet:13 http://ports.ubuntu.com/ubuntu-ports noble-backports/universe arm64 Packages [36.3 kB]\nGet:14 http://ports.ubuntu.com/ubuntu-ports noble-backports/multiverse arm64 Packages [669 B]\nGet:15 http://ports.ubuntu.com/ubuntu-ports noble-backports/main arm64 Packages [49.0 kB]\nGet:16 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages [1489 kB]\nGet:17 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1652 kB]\nGet:18 http://ports.ubuntu.com/ubuntu-ports noble-security/multiverse arm64 Packages [102 kB]\nGet:19 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted arm64 Packages [3148 kB]\nFetched 35.8 MB in 3s (11.6 MB/s)\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\nThe following additional packages will be installed:\n  krb5-locales libbrotli1 libcurl4t64 libgssapi-krb5-2 libk5crypto3\n  libkeyutils1 libkrb5-3 libkrb5support0 libldap-common libldap2 libnghttp2-14\n  libpsl5t64 librtmp1 libsasl2-2 libsasl2-modules libsasl2-modules-db libssh-4\n  publicsuffix\nSuggested packages:\n  krb5-doc krb5-user libsasl2-modules-gssapi-mit\n  | libsasl2-modules-gssapi-heimdal libsasl2-modules-ldap libsasl2-modules-otp\n  libsasl2-modules-sql\nThe following NEW packages will be installed:\n  curl krb5-locales libbrotli1 libcurl4t64 libgssapi-krb5-2 libk5crypto3\n  libkeyutils1 libkrb5-3 libkrb5support0 libldap-common libldap2 libnghttp2-14\n  libpsl5t64 librtmp1 libsasl2-2 libsasl2-modules libsasl2-modules-db libssh-4\n  publicsuffix\n0 upgraded, 19 newly installed, 0 to remove and 63 not upgraded.\nNeed to get 2422 kB of archives.\nAfter this operation, 7567 kB of additional disk space will be used.\nGet:1 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 krb5-locales all 1.20.1-6ubuntu2.10 [15.3 kB]\nGet:2 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libkrb5support0 arm64 1.20.1-6ubuntu2.10 [35.4 kB]\nGet:3 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libk5crypto3 arm64 1.20.1-6ubuntu2.10 [85.8 kB]\nGet:4 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libkeyutils1 arm64 1.6.3-3build1 [9654 B]\nGet:5 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libkrb5-3 arm64 1.20.1-6ubuntu2.10 [350 kB]\nGet:6 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libgssapi-krb5-2 arm64 1.20.1-6ubuntu2.10 [142 kB]\nGet:7 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnghttp2-14 arm64 1.59.0-1ubuntu0.4 [74.8 kB]\nGet:8 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libpsl5t64 arm64 0.21.2-1.1build1 [57.4 kB]\nGet:9 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 publicsuffix all 20231001.0357-0.1 [129 kB]\nGet:10 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libbrotli1 arm64 1.1.0-2ubuntu0.1 [340 kB]\nGet:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsasl2-modules-db arm64 2.1.28+dfsg1-5ubuntu3.1 [21.6 kB]\nGet:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsasl2-2 arm64 2.1.28+dfsg1-5ubuntu3.1 [54.7 kB]\nGet:13 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libldap2 arm64 2.6.10+dfsg-0ubuntu0.24.04.1 [196 kB]\nGet:14 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 librtmp1 arm64 2.4+20151223.gitfa8646d.1-2build7 [57.8 kB]\nGet:15 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libssh-4 arm64 0.10.6-2ubuntu0.5 [192 kB]\nGet:16 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libcurl4t64 arm64 8.5.0-2ubuntu10.16 [337 kB]\nGet:17 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 curl arm64 8.5.0-2ubuntu10.16 [222 kB]\nGet:18 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libldap-common all 2.6.10+dfsg-0ubuntu0.24.04.1 [32.9 kB]\nGet:19 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsasl2-modules arm64 2.1.28+dfsg1-5ubuntu3.1 [69.6 kB]\nFetched 2422 kB in 1s (2300 kB/s)\nSelecting previously unselected package krb5-locales.\r\n(Reading database ... \r(Reading database ... 5%\r(Reading database ... 10%\r(Reading database ... 15%\r(Reading database ... 20%\r(Reading database ... 25%\r(Reading database ... 30%\r(Reading database ... 35%\r(Reading database ... 40%\r(Reading database ... 45%\r(Reading database ... 50%\r(Reading database ... 55%\r(Reading database ... 60%\r(Reading database ... 65%\r(Reading database ... 70%\r(Reading database ... 75%\r(Reading database ... 80%\r(Reading database ... 85%\r(Reading database ... 90%\r(Reading database ... 95%\r(Reading database ... 100%\r(Reading database ... 6332 files and directories currently installed.)\r\nPreparing to unpack .../00-krb5-locales_1.20.1-6ubuntu2.10_all.deb ...\r\nUnpacking krb5-locales (1.20.1-6ubuntu2.10) ...\r\nSelecting previously unselected package libkrb5support0:arm64.\r\nPreparing to unpack .../01-libkrb5support0_1.20.1-6ubuntu2.10_arm64.deb ...\r\nUnpacking libkrb5support0:arm64 (1.20.1-6ubuntu2.10) ...\r\nSelecting previously unselected package libk5crypto3:arm64.\r\nPreparing to unpack .../02-libk5crypto3_1.20.1-6ubuntu2.10_arm64.deb ...\r\nUnpacking libk5crypto3:arm64 (1.20.1-6ubuntu2.10) ...\r\nSelecting previously unselected package libkeyutils1:arm64.\r\nPreparing to unpack .../03-libkeyutils1_1.6.3-3build1_arm64.deb ...\r\nUnpacking libkeyutils1:arm64 (1.6.3-3build1) ...\r\nSelecting previously unselected package libkrb5-3:arm64.\r\nPreparing to unpack .../04-libkrb5-3_1.20.1-6ubuntu2.10_arm64.deb ...\r\nUnpacking libkrb5-3:arm64 (1.20.1-6ubuntu2.10) ...\r\nSelecting previously unselected package libgssapi-krb5-2:arm64.\r\nPreparing to unpack .../05-libgssapi-krb5-2_1.20.1-6ubuntu2.10_arm64.deb ...\r\nUnpacking libgssapi-krb5-2:arm64 (1.20.1-6ubuntu2.10) ...\r\nSelecting previously unselected package libnghttp2-14:arm64.\r\nPreparing to unpack .../06-libnghttp2-14_1.59.0-1ubuntu0.4_arm64.deb ...\r\nUnpacking libnghttp2-14:arm64 (1.59.0-1ubuntu0.4) ...\r\nSelecting previously unselected package libpsl5t64:arm64.\r\nPreparing to unpack .../07-libpsl5t64_0.21.2-1.1build1_arm64.deb ...\r\nUnpacking libpsl5t64:arm64 (0.21.2-1.1build1) ...\r\nSelecting previously unselected package publicsuffix.\r\nPreparing to unpack .../08-publicsuffix_20231001.0357-0.1_all.deb ...\r\nUnpacking publicsuffix (20231001.0357-0.1) ...\r\nSelecting previously unselected package libbrotli1:arm64.\r\nPreparing to unpack .../09-libbrotli1_1.1.0-2ubuntu0.1_arm64.deb ...\r\nUnpacking libbrotli1:arm64 (1.1.0-2ubuntu0.1) ...\r\nSelecting previously unselected package libsasl2-modules-db:arm64.\r\nPreparing to unpack .../10-libsasl2-modules-db_2.1.28+dfsg1-5ubuntu3.1_arm64.deb ...\r\nUnpacking libsasl2-modules-db:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSelecting previously unselected package libsasl2-2:arm64.\r\nPreparing to unpack .../11-libsasl2-2_2.1.28+dfsg1-5ubuntu3.1_arm64.deb ...\r\nUnpacking libsasl2-2:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSelecting previously unselected package libldap2:arm64.\r\nPreparing to unpack .../12-libldap2_2.6.10+dfsg-0ubuntu0.24.04.1_arm64.deb ...\r\nUnpacking libldap2:arm64 (2.6.10+dfsg-0ubuntu0.24.04.1) ...\r\nSelecting previously unselected package librtmp1:arm64.\r\nPreparing to unpack .../13-librtmp1_2.4+20151223.gitfa8646d.1-2build7_arm64.deb ...\r\nUnpacking librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2build7) ...\r\nSelecting previously unselected package libssh-4:arm64.\r\nPreparing to unpack .../14-libssh-4_0.10.6-2ubuntu0.5_arm64.deb ...\r\nUnpacking libssh-4:arm64 (0.10.6-2ubuntu0.5) ...\r\nSelecting previously unselected package libcurl4t64:arm64.\r\nPreparing to unpack .../15-libcurl4t64_8.5.0-2ubuntu10.16_arm64.deb ...\r\nUnpacking libcurl4t64:arm64 (8.5.0-2ubuntu10.16) ...\r\nSelecting previously unselected package curl.\r\nPreparing to unpack .../16-curl_8.5.0-2ubuntu10.16_arm64.deb ...\r\nUnpacking curl (8.5.0-2ubuntu10.16) ...\r\nSelecting previously unselected package libldap-common.\r\nPreparing to unpack .../17-libldap-common_2.6.10+dfsg-0ubuntu0.24.04.1_all.deb ...\r\nUnpacking libldap-common (2.6.10+dfsg-0ubuntu0.24.04.1) ...\r\nSelecting previously unselected package libsasl2-modules:arm64.\r\nPreparing to unpack .../18-libsasl2-modules_2.1.28+dfsg1-5ubuntu3.1_arm64.deb ...\r\nUnpacking libsasl2-modules:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSetting up libkeyutils1:arm64 (1.6.3-3build1) ...\r\nSetting up libbrotli1:arm64 (1.1.0-2ubuntu0.1) ...\r\nSetting up libsasl2-modules:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSetting up libpsl5t64:arm64 (0.21.2-1.1build1) ...\r\nSetting up libnghttp2-14:arm64 (1.59.0-1ubuntu0.4) ...\r\nSetting up krb5-locales (1.20.1-6ubuntu2.10) ...\r\nSetting up libldap-common (2.6.10+dfsg-0ubuntu0.24.04.1) ...\r\nSetting up libkrb5support0:arm64 (1.20.1-6ubuntu2.10) ...\r\nSetting up libsasl2-modules-db:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSetting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2build7) ...\r\nSetting up libk5crypto3:arm64 (1.20.1-6ubuntu2.10) ...\r\nSetting up libsasl2-2:arm64 (2.1.28+dfsg1-5ubuntu3.1) ...\r\nSetting up libkrb5-3:arm64 (1.20.1-6ubuntu2.10) ...\r\nSetting up publicsuffix (20231001.0357-0.1) ...\r\nSetting up libldap2:arm64 (2.6.10+dfsg-0ubuntu0.24.04.1) ...\r\nSetting up libgssapi-krb5-2:arm64 (1.20.1-6ubuntu2.10) ...\r\nSetting up libssh-4:arm64 (0.10.6-2ubuntu0.5) ...\r\nSetting up libcurl4t64:arm64 (8.5.0-2ubuntu10.16) ...\r\nSetting up curl (8.5.0-2ubuntu10.16) ...\r\nProcessing triggers for libc-bin (2.39-0ubuntu8.4) ...\r\n",
+    "stderr": "debconf: delaying package configuration, since apt-utils is not installed\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\r  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0curl: (6) Could not resolve host: node1\n",
+    "duration_sec": 5.83,
+    "timeout": false
+  },
+  "run_tests_copy_rc": 0,
+  "tests_copy_rc": 0,
+  "test_exec": {
+    "rc": 0,
+    "stdout": "Hit:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nHit:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nHit:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nHit:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\ncurl is already the newest version (8.5.0-2ubuntu10.16).\n0 upgraded, 0 newly installed, 0 to remove and 63 not upgraded.\ninstalling to /root/.local/bin\n  uv\n  uvx\neverything's installed!\n\nTo add $HOME/.local/bin to your PATH, either restart your shell or run:\n\n    source $HOME/.local/bin/env (sh, bash, zsh)\n    source $HOME/.local/bin/env.fish (fish)\n============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /tests\ncollected 1 item\n\n../tests/test_outputs.py .                                               [100%]\n\n==================================== PASSES ====================================\n=========================== short test summary info ============================\nPASSED ../tests/test_outputs.py::test_command_output_content\n============================== 1 passed in 0.00s ===============================\n",
+    "stderr": "downloading uv 0.13.7 aarch64-unknown-linux-gnu\nInitialized project `app`\nUsing CPython 3.12.3 interpreter at: /usr/bin/python3.12\nCreating virtual environment at: .venv\nResolved 7 packages in 147ms\n   Building app @ file:///app\n      Built app @ file:///app\nDownloading pygments (1.2MiB)\n Downloaded pygments\nPrepared 6 packages in 118ms\nInstalled 6 packages in 144ms\n + app==0.1.0 (from file:///app)\n + iniconfig==2.3.1\n + packaging==26.3\n + pluggy==1.7.0\n + pygments==2.21.0\n + pytest==9.2.0\n",
+    "duration_sec": 3.34,
+    "timeout": false
+  },
+  "verdict_input_raw_len": 1778,
+  "verdict_input_stripped_len": 1778,
+  "ansi_stripped": false,
+  "parsed": {
+    "test_command_output_content": "passed"
+  },
+  "verdict": "resolved",
+  "verdict_reason": "all_tests_passed",
+  "ended_at": "2026-11-06T00:47:59-0500"
+}

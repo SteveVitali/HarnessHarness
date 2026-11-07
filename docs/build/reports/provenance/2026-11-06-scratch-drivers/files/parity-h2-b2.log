@@ -1,0 +1,20 @@
+[ 1/6] extract-moves-from-video
+      -> resolved (all_tests_passed)
+[ 2/6] git-multibranch
+      -> resolved (all_tests_passed)
+[ 3/6] password-recovery
+      -> resolved (all_tests_passed)
+[ 4/6] blind-maze-explorer-algorithm.hard
+      -> resolved (all_tests_passed)
+[ 5/6] eval-mteb.hard
+      -> unresolved (build_failure)
+[ 6/6] security-vulhub-minio
+      -> resolved (all_tests_passed)
+{
+  "extract-moves-from-video": "resolved",
+  "git-multibranch": "resolved",
+  "password-recovery": "resolved",
+  "blind-maze-explorer-algorithm.hard": "resolved",
+  "eval-mteb.hard": "unresolved",
+  "security-vulhub-minio": "resolved"
+}

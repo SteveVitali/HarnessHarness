@@ -1,0 +1,80 @@
+[ 1/26] crack-7z-hash
+      -> resolved (all_tests_passed)
+[ 2/26] build-tcc-qemu
+      -> unresolved (some_tests_failed)
+[ 3/26] qemu-startup
+      -> unresolved (build_failure)
+[ 4/26] git-workflow-hack
+      -> resolved (all_tests_passed)
+[ 5/26] configure-git-webserver
+      -> resolved (all_tests_passed)
+[ 6/26] solana-data
+      -> unresolved (some_tests_failed)
+[ 7/26] fibonacci-server
+      -> resolved (all_tests_passed)
+[ 8/26] intrusion-detection
+      -> resolved (all_tests_passed)
+[ 9/26] sqlite-with-gcov
+      -> resolved (all_tests_passed)
+[10/26] blind-maze-explorer-algorithm.easy
+      -> resolved (all_tests_passed)
+[11/26] get-bitcoin-nodes
+      -> resolved (all_tests_passed)
+[12/26] csv-to-parquet
+      -> resolved (all_tests_passed)
+[13/26] cartpole-rl-training
+      -> unresolved (test_timeout)
+[14/26] oom
+      -> unresolved (build_failure)
+[15/26] swe-bench-langcodes
+      -> resolved (all_tests_passed)
+[16/26] build-initramfs-qemu
+      -> unresolved (some_tests_failed)
+[17/26] extract-moves-from-video
+      -> resolved (all_tests_passed)
+[18/26] new-encrypt-command
+      -> resolved (all_tests_passed)
+[19/26] extract-safely
+      -> resolved (all_tests_passed)
+[20/26] pytorch-model-cli.hard
+      -> resolved (all_tests_passed)
+[21/26] heterogeneous-dates
+      -> unresolved (parse_error:No short test summary info found in the provided content.)
+[22/26] gpt2-codegolf
+      -> unresolved (some_tests_failed)
+[23/26] download-youtube
+      -> resolved (all_tests_passed)
+[24/26] simple-sheets-put
+      -> unresolved (runner_exception:could not convert string to float: '5s')
+[25/26] security-vulhub-minio
+      -> resolved (all_tests_passed)
+[26/26] pytorch-model-cli
+      -> resolved (all_tests_passed)
+{
+  "crack-7z-hash": "resolved",
+  "build-tcc-qemu": "unresolved",
+  "qemu-startup": "unresolved",
+  "git-workflow-hack": "resolved",
+  "configure-git-webserver": "resolved",
+  "solana-data": "unresolved",
+  "fibonacci-server": "resolved",
+  "intrusion-detection": "resolved",
+  "sqlite-with-gcov": "resolved",
+  "blind-maze-explorer-algorithm.easy": "resolved",
+  "get-bitcoin-nodes": "resolved",
+  "csv-to-parquet": "resolved",
+  "cartpole-rl-training": "unresolved",
+  "oom": "unresolved",
+  "swe-bench-langcodes": "resolved",
+  "build-initramfs-qemu": "unresolved",
+  "extract-moves-from-video": "resolved",
+  "new-encrypt-command": "resolved",
+  "extract-safely": "resolved",
+  "pytorch-model-cli.hard": "resolved",
+  "heterogeneous-dates": "unresolved",
+  "gpt2-codegolf": "unresolved",
+  "download-youtube": "resolved",
+  "simple-sheets-put": "unresolved",
+  "security-vulhub-minio": "resolved",
+  "pytorch-model-cli": "resolved"
+}

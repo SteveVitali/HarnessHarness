@@ -1,0 +1,103 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "s6de4def4412265771be192e483b54d016831e713db0305fed28638de371cc03d-r2-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 265,
+      "name": "solution.log",
+      "sha256": "2d33e931c8869de1e7c25fa59c1aea38491972bc590708fd34343812659f932b"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 10037,
+      "name": "verdict_verbatim.log",
+      "sha256": "bb980b4d3c21722942bf2f7be0e74809669b683d2d8d13836dfa1cf5f267e6bc"
+    },
+    {
+      "bytes": 1737,
+      "name": "solution.sh",
+      "sha256": "d0fdae9cde4a45ee6f804b642f85cdd53d39f5326d41d5d74a49081e048f6e68"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 0,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__modernize-fortran-build:latest",
+  "input_tokens": 146,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 10302,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 2,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:6de4def4412265771be192e483b54d016831e713db0305fed28638de371cc03d",
+  "solution_kind": "sh",
+  "solution_log_bytes": 265,
+  "solution_log_sha256": "2d33e931c8869de1e7c25fa59c1aea38491972bc590708fd34343812659f932b",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "modernize-fortran-build",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 10037,
+  "verdict_verbatim.log.sha256": "bb980b4d3c21722942bf2f7be0e74809669b683d2d8d13836dfa1cf5f267e6bc",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 5938,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 5.94,
+  "prior_disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_output_file_exists_and_content_is_correct": "passed",
+      "test_target_executable_was_created_and_is_executable": "passed",
+      "test_makefile_compilation_process": "passed"
+    },
+    "raw_bytes": 10037,
+    "stripped_bytes": 4997,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

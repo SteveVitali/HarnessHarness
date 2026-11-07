@@ -1,0 +1,20 @@
+[ 1/6] jupyter-notebook-server
+      -> resolved (all_tests_passed)
+[ 2/6] swe-bench-astropy-2
+      -> resolved (all_tests_passed)
+[ 3/6] modernize-fortran-build
+      -> resolved (all_tests_passed)
+[ 4/6] blind-maze-explorer-algorithm.easy
+      -> resolved (all_tests_passed)
+[ 5/6] decommissioning-service-with-sensitive-data
+      -> resolved (all_tests_passed)
+[ 6/6] hf-model-inference
+      -> unresolved (some_tests_failed)
+{
+  "jupyter-notebook-server": "resolved",
+  "swe-bench-astropy-2": "resolved",
+  "modernize-fortran-build": "resolved",
+  "blind-maze-explorer-algorithm.easy": "resolved",
+  "decommissioning-service-with-sensitive-data": "resolved",
+  "hf-model-inference": "unresolved"
+}

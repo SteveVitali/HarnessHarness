@@ -1,0 +1,52 @@
+{
+  "task_id": "get-bitcoin-nodes",
+  "runner": "h-podman-exec",
+  "started_at": "2026-11-06T00:35:31-0500",
+  "max_test_timeout_sec": 60.0,
+  "image": "docker.io/library/tb__get-bitcoin-nodes__client:latest",
+  "container": "tb__get-bitcoin-nodes-client-t3",
+  "compose_services": [
+    "client"
+  ],
+  "network": null,
+  "image_preexisting": true,
+  "image_id_digest": "96861cd0fbd1f255f9102333dee3fd1daadbc7d2183597d166a3e28d49d04b23 sha256:41eab58fd3cdd69385f0f894842a77e34345ba7b88d058df758bda4c0f00b798",
+  "container_up": {
+    "rc": 0,
+    "stdout": "c0a0f3683b0948519ad7d9e0e556a8580963395753f3956b2b4365fae4658cf3\n",
+    "stderr": "WARNING: image platform (linux/amd64) does not match the expected platform (linux/arm64)\n",
+    "duration_sec": 0.59,
+    "timeout": false
+  },
+  "solution_kind": "sh",
+  "solution_copy_rc": 0,
+  "solution_exec": {
+    "rc": 0,
+    "stdout": "Setting up Bitcoin Data Service...\nInstalling required dependencies...\nCollecting flask\n  Downloading flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)\nCollecting requests\n  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)\nCollecting python-bitcoinlib\n  Downloading python_bitcoinlib-0.12.2-py3-none-any.whl.metadata (4.4 kB)\nCollecting blinker>=1.9.0 (from flask)\n  Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)\nCollecting click>=8.1.3 (from flask)\n  Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)\nCollecting itsdangerous>=2.2.0 (from flask)\n  Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)\nCollecting jinja2>=3.1.2 (from flask)\n  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)\nCollecting markupsafe>=2.1.1 (from flask)\n  Downloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)\nCollecting werkzeug>=3.1.0 (from flask)\n  Downloading werkzeug-3.1.9-py3-none-any.whl.metadata (4.1 kB)\nCollecting charset_normalizer<4,>=2 (from requests)\n  Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)\nCollecting idna<4,>=2.5 (from requests)\n  Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)\nCollecting urllib3<3,>=1.26 (from requests)\n  Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)\nCollecting certifi>=2023.5.7 (from requests)\n  Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)\nDownloading flask-3.1.3-py3-none-any.whl (103 kB)\nDownloading requests-2.34.2-py3-none-any.whl (73 kB)\nDownloading python_bitcoinlib-0.12.2-py3-none-any.whl (106 kB)\nDownloading blinker-1.9.0-py3-none-any.whl (8.5 kB)\nDownloading certifi-2026.10.23-py3-none-any.whl (135 kB)\nDownloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)\nDownloading click-8.5.0-py3-none-any.whl (125 kB)\nDownloading idna-3.20-py3-none-any.whl (69 kB)\nDownloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)\nDownloading jinja2-3.1.6-py3-none-any.whl (134 kB)\nDownloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (23 kB)\nDownloading urllib3-2.8.0-py3-none-any.whl (135 kB)\nDownloading werkzeug-3.1.9-py3-none-any.whl (228 kB)\nInstalling collected packages: python-bitcoinlib, urllib3, markupsafe, itsdangerous, idna, click, charset_normalizer, certifi, blinker, werkzeug, requests, jinja2, flask\nSuccessfully installed blinker-1.9.0 certifi-2026.10.23 charset_normalizer-3.5.2 click-8.5.0 flask-3.1.3 idna-3.20 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.4 python-bitcoinlib-0.12.2 requests-2.34.2 urllib3-2.8.0 werkzeug-3.1.9\nCreating service files...\nStarting Bitcoin Data Service in the background...\nService started with PID: 23\n",
+    "stderr": "WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.\n\n[notice] A new release of pip is available: 24.3.1 -> 26.3\n[notice] To update, run: pip install --upgrade pip\n",
+    "duration_sec": 18.98,
+    "timeout": false
+  },
+  "run_tests_copy_rc": 0,
+  "tests_copy_rc": 0,
+  "test_exec": {
+    "rc": 0,
+    "stdout": "Collecting pytest\n  Downloading pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)\nRequirement already satisfied: requests in /usr/local/lib/python3.13/site-packages (2.34.2)\nCollecting psutil\n  Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)\nCollecting iniconfig>=2 (from pytest)\n  Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)\nCollecting packaging>=24 (from pytest)\n  Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)\nCollecting pluggy<2,>=1.6 (from pytest)\n  Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)\nCollecting pygments>=2.15 (from pytest)\n  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)\nRequirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.13/site-packages (from requests) (3.5.2)\nRequirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.13/site-packages (from requests) (3.20)\nRequirement already satisfied: urllib3<3,>=1.26 in /usr/local/lib/python3.13/site-packages (from requests) (2.8.0)\nRequirement already satisfied: certifi>=2023.5.7 in /usr/local/lib/python3.13/site-packages (from requests) (2026.10.23)\nDownloading pytest-9.2.0-py3-none-any.whl (411 kB)\nDownloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)\nDownloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)\nDownloading packaging-26.3-py3-none-any.whl (129 kB)\nDownloading pluggy-1.7.0-py3-none-any.whl (27 kB)\nDownloading pygments-2.21.0-py3-none-any.whl (1.3 MB)\n   \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 1.3/1.3 MB 38.7 MB/s eta 0:00:00\nInstalling collected packages: pygments, psutil, pluggy, packaging, iniconfig, pytest\nSuccessfully installed iniconfig-2.3.1 packaging-26.3 pluggy-1.7.0 psutil-7.2.2 pygments-2.21.0 pytest-9.2.0\n============================= test session starts ==============================\nplatform linux -- Python 3.13.1, pytest-9.2.0, pluggy-1.7.0 -- /usr/local/bin/python3.13\ncachedir: .pytest_cache\nrootdir: /tests\ncollecting ... collected 5 items\n\n../tests/test_outputs.py::test_service_process_running PASSED            [ 20%]\n../tests/test_outputs.py::test_service_responding PASSED                 [ 40%]\n../tests/test_outputs.py::test_block_endpoint PASSED                     [ 60%]\n../tests/test_outputs.py::test_transaction_endpoint PASSED               [ 80%]\n../tests/test_outputs.py::test_error_handling PASSED                     [100%]\n\n==================================== PASSES ====================================\n=========================== short test summary info ============================\nPASSED ../tests/test_outputs.py::test_service_process_running\nPASSED ../tests/test_outputs.py::test_service_responding\nPASSED ../tests/test_outputs.py::test_block_endpoint\nPASSED ../tests/test_outputs.py::test_transaction_endpoint\nPASSED ../tests/test_outputs.py::test_error_handling\n============================== 5 passed in 0.64s ===============================\n",
+    "stderr": "WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.\n\n[notice] A new release of pip is available: 24.3.1 -> 26.3\n[notice] To update, run: pip install --upgrade pip\n",
+    "duration_sec": 13.88,
+    "timeout": false
+  },
+  "verdict_input_raw_len": 3488,
+  "verdict_input_stripped_len": 3488,
+  "ansi_stripped": false,
+  "parsed": {
+    "test_service_process_running": "passed",
+    "test_service_responding": "passed",
+    "test_block_endpoint": "passed",
+    "test_transaction_endpoint": "passed",
+    "test_error_handling": "passed"
+  },
+  "verdict": "resolved",
+  "verdict_reason": "all_tests_passed",
+  "ended_at": "2026-11-06T00:36:15-0500"
+}

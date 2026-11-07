@@ -1,0 +1,14 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:9ca075c298b1afdd4d164610d4ec8c0ce4aca83361634ea15429f8cd83725077",
+  "task_id": "oom",
+  "arm_id": "arm:h-podman-oracle",
+  "strategy": "clear_tool_results",
+  "round": 1,
+  "first": false,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

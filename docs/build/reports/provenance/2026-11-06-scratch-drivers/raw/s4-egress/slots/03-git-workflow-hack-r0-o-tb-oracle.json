@@ -1,0 +1,101 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s7c1535174ea664c25223b5c2a896672384826816d8c49fe8302ba1141a3ec596-r0-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 0,
+      "name": "solution.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1765,
+      "name": "verdict_verbatim.log",
+      "sha256": "defa33e0d6faae616ff43e83eccb6fb479f941baf804368290c6e8cf612daa86"
+    },
+    {
+      "bytes": 345,
+      "name": "solution.sh",
+      "sha256": "f1c761c6677e1e9f40eae66aca05c975022f4d0ed04334e2bab1003680da40ef"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": false,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": true,
+  "forgotten_count": 0,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__git-workflow-hack:latest",
+  "input_tokens": 81,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 1765,
+  "policy_net_mode": "public",
+  "pressure_opportunity": false,
+  "probe": "ok:undeterminable",
+  "request_changed": false,
+  "round": 0,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:7c1535174ea664c25223b5c2a896672384826816d8c49fe8302ba1141a3ec596",
+  "solution_kind": "sh",
+  "solution_log_bytes": 0,
+  "solution_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "git-workflow-hack",
+  "tokens_freed": 0,
+  "triggered": false,
+  "verdict_verbatim.log.bytes": 1765,
+  "verdict_verbatim.log.sha256": "defa33e0d6faae616ff43e83eccb6fb479f941baf804368290c6e8cf612daa86",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 8619,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 8.67,
+  "prior_disposition": "inconclusive{verifier_unavailable:no_parseable_verdict}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_token_leak": "passed"
+    },
+    "raw_bytes": 1765,
+    "stripped_bytes": 1765,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

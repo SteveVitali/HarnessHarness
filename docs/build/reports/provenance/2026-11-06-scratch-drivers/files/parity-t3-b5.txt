@@ -1,0 +1,6 @@
+jupyter-notebook-server
+swe-bench-astropy-2
+modernize-fortran-build
+blind-maze-explorer-algorithm.easy
+decommissioning-service-with-sensitive-data
+hf-model-inference

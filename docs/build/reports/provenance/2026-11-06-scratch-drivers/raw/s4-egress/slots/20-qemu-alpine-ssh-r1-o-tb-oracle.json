@@ -1,0 +1,19 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:03dfe7217ce2104709fef80ad7c9b1f107b4032d081ccb3dd522a67bb965a0bd",
+  "task_id": "qemu-alpine-ssh",
+  "arm_id": "arm:o-tb-oracle",
+  "strategy": "evict_oldest",
+  "round": 1,
+  "first": false,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "prior_disposition": "inconclusive{image_unavailable:client_build_failed}",
+  "supplement_epoch": "egress-profile-rerun",
+  "egress_profile": "declared_deps",
+  "cell_network": "bridge",
+  "policy_net_mode": "public",
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

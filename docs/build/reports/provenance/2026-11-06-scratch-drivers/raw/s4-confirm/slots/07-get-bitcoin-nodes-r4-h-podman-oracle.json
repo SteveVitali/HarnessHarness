@@ -1,0 +1,99 @@
+{
+  "arm_id": "arm:h-podman-oracle",
+  "attempts": [
+    "scd6d013b710ecf9ab8fe98251932836114b8acbf2e038ad04d318326d4159512-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 1956,
+      "name": "solution.log",
+      "sha256": "568db34e47ae84b4185573c03ccbe5aa254a4c3f8437905b73122a1a8033a769"
+    },
+    {
+      "bytes": 132,
+      "name": "run-tests.sh",
+      "sha256": "00a027492204f1b321fab096f77f57c75655e2b76af5287908d62c688da48b4c"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 2842,
+      "name": "verdict_verbatim.log",
+      "sha256": "3f024b48b26fdccb7f6b164d587e4cd3e51273a49d2a79ba5c125c05313609fa"
+    },
+    {
+      "bytes": 10890,
+      "name": "solution.sh",
+      "sha256": "3fcaa05cf790e72bdeb1eb2b08b221d8366092f49edd0181e54288b47ca0f64b"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__get-bitcoin-nodes:latest",
+  "input_tokens": 569,
+  "intervals": 3,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 4798,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/clear-tool-results@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:cd6d013b710ecf9ab8fe98251932836114b8acbf2e038ad04d318326d4159512",
+  "solution_kind": "sh",
+  "solution_log_bytes": 1956,
+  "solution_log_sha256": "568db34e47ae84b4185573c03ccbe5aa254a4c3f8437905b73122a1a8033a769",
+  "staging_dispatch": "observed:applied",
+  "strategy": "clear_tool_results",
+  "task_id": "get-bitcoin-nodes",
+  "tokens_freed": 561,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 2842,
+  "verdict_verbatim.log.sha256": "3f024b48b26fdccb7f6b164d587e4cd3e51273a49d2a79ba5c125c05313609fa",
+  "verdict_verbatim.rc": "0",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_ms": 59514,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 59.52,
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_service_process_running": "passed",
+      "[1] ../tests/test_outputs.py:48: Bitcoin service does not appear to be running": "passed",
+      "[1] ../tests/test_outputs.py:61: Bitcoin service does not appear to be running": "passed",
+      "[1] ../tests/test_outputs.py:93: Bitcoin service does not appear to be running": "passed",
+      "[1] ../tests/test_outputs.py:132: Bitcoin service does not appear to be running": "passed"
+    },
+    "raw_bytes": 2842,
+    "stripped_bytes": 2842,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

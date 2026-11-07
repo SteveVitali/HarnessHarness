@@ -1,0 +1,1 @@
+RC-1 — a one-byte mutation inside files/ must fail the archive hash check (AC-2.2-6)

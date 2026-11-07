@@ -1,0 +1,19 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:090e14b058b78f10baf487ca81ef2a1766a63a69ad271fecb4a9a8c34f706763",
+  "task_id": "eval-mteb.hard",
+  "arm_id": "arm:h-podman-oracle",
+  "strategy": "clear_tool_results",
+  "round": 2,
+  "first": false,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "prior_disposition": "inconclusive{image_unavailable:client_build_failed}",
+  "supplement_epoch": "egress-profile-rerun",
+  "egress_profile": "declared_deps",
+  "cell_network": "bridge",
+  "policy_net_mode": "public",
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

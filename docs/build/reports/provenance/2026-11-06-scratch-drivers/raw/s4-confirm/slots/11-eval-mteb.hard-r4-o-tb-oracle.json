@@ -1,0 +1,14 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:a2a68bb19dd7d2e9e3a6202065185a2ac9c5b58eb185bba56791145ec617c27c",
+  "task_id": "eval-mteb.hard",
+  "arm_id": "arm:o-tb-oracle",
+  "strategy": "evict_oldest",
+  "round": 4,
+  "first": false,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

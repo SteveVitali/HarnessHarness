@@ -1,0 +1,119 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "s3d6fbce7b6f4fd185df564aa66f234eb1e4afb528596619f04e5197eae3c4670-r2-c0"
+  ],
+  "backend": "podman",
+  "calls": 4,
+  "cell_attempted": true,
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 6406,
+      "name": "verdict.log",
+      "sha256": "486691a3f64501475b4e1b4eef76ab7ad6952adc893240812a45cded9bc4a69d"
+    },
+    {
+      "bytes": 4,
+      "name": "verdict_verbatim.rc",
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe"
+    },
+    {
+      "bytes": 59753,
+      "name": "solution.log",
+      "sha256": "bdd088d2755c0fdda1ebe67628c3c415dad62800330217c7660e13bfd6f7b573"
+    },
+    {
+      "bytes": 202,
+      "name": "run-tests.sh",
+      "sha256": "65bd71d075ab0a57b45e90cf089cdb8207b9d252d0a73fae4a953307bcb1baa4"
+    },
+    {
+      "bytes": 2,
+      "name": "solution.rc",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "bytes": 10586,
+      "name": "verdict_verbatim.log",
+      "sha256": "6001b05ecb59a8075f43ffae198a67693463ecf50dadd876f6d2f1708ed050f5"
+    },
+    {
+      "bytes": 10066,
+      "name": "solution.sh",
+      "sha256": "cef838526be81811e9309ec0f57b45594d15eb1da9c2d58631601659678f69eb"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "image": "localhost/s4-tb__blind-maze-explorer-algorithm-easy:latest",
+  "input_tokens": 15018,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 76745,
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 2,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:3d6fbce7b6f4fd185df564aa66f234eb1e4afb528596619f04e5197eae3c4670",
+  "solution_kind": "sh",
+  "solution_log_bytes": 59753,
+  "solution_log_sha256": "bdd088d2755c0fdda1ebe67628c3c415dad62800330217c7660e13bfd6f7b573",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "blind-maze-explorer-algorithm.easy",
+  "tokens_freed": 15010,
+  "triggered": true,
+  "verdict.log.bytes": 6406,
+  "verdict.log.sha256": "486691a3f64501475b4e1b4eef76ab7ad6952adc893240812a45cded9bc4a69d",
+  "verdict.rc": "0",
+  "verdict_vendored_dispatch": "observed:applied",
+  "verdict_verbatim.log.bytes": 10586,
+  "verdict_verbatim.log.sha256": "6001b05ecb59a8075f43ffae198a67693463ecf50dadd876f6d2f1708ed050f5",
+  "verdict_verbatim.rc": "127",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": false,
+  "wall_ms": 16980,
+  "work_dispatch": "observed:applied",
+  "work_exit": "0",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 16.98,
+  "receipt": {
+    "channel": "vendored_offline",
+    "verdict": "resolved",
+    "verdict_reason": "all_tests_passed",
+    "parsed": {
+      "test_maze_map_files_exist": "passed",
+      "test_maze_map_contents[1]": "passed",
+      "test_maze_map_contents[2]": "passed",
+      "test_maze_map_contents[3]": "passed",
+      "test_maze_map_contents[4]": "passed",
+      "test_maze_map_contents[5]": "passed",
+      "test_maze_map_contents[6]": "passed",
+      "test_maze_map_contents[7]": "passed",
+      "test_maze_map_contents[8]": "passed",
+      "test_maze_map_contents[9]": "passed",
+      "test_maze_map_contents[10]": "passed"
+    },
+    "raw_bytes": 6384,
+    "stripped_bytes": 6384,
+    "ansi_stripped": false
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

@@ -1,0 +1,20 @@
+[ 1/6] polyglot-c-py
+      -> resolved (all_tests_passed)
+[ 2/6] get-bitcoin-nodes
+      -> resolved (all_tests_passed)
+[ 3/6] configure-git-webserver
+      -> resolved (all_tests_passed)
+[ 4/6] blind-maze-explorer-algorithm.hard
+      -> resolved (all_tests_passed)
+[ 5/6] new-encrypt-command
+      -> resolved (all_tests_passed)
+[ 6/6] eval-mteb.hard
+      -> unresolved (build_failure)
+{
+  "polyglot-c-py": "resolved",
+  "get-bitcoin-nodes": "resolved",
+  "configure-git-webserver": "resolved",
+  "blind-maze-explorer-algorithm.hard": "resolved",
+  "new-encrypt-command": "resolved",
+  "eval-mteb.hard": "unresolved"
+}

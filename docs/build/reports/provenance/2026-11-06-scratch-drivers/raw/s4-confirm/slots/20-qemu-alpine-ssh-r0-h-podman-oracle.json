@@ -1,0 +1,14 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:7a9da08e5803444eb461cc76ef7735106e43d1e76bb9dc37119ac5a55531c365",
+  "task_id": "qemu-alpine-ssh",
+  "arm_id": "arm:h-podman-oracle",
+  "strategy": "clear_tool_results",
+  "round": 0,
+  "first": true,
+  "lane_id": "lane:o-docker-compose-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}

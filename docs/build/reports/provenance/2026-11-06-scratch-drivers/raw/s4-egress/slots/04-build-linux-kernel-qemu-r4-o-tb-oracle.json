@@ -1,0 +1,96 @@
+{
+  "arm_id": "arm:o-tb-oracle",
+  "attempts": [
+    "sefd349e85afcd7a63d6fada1062b4c2b91e49512b6b3aa5d9e3925d61126af1b-r4-c0"
+  ],
+  "backend": "podman",
+  "calls": 3,
+  "cell_attempted": true,
+  "cell_network": "bridge",
+  "collected": [
+    {
+      "bytes": 2,
+      "name": "verdict_verbatim.rc",
+      "sha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3"
+    },
+    {
+      "bytes": 743624,
+      "name": "solution.log",
+      "sha256": "49e8fbee2050c39b8c240a30786c8687858a8ee2e6fe1a39013abba24fcac6d7"
+    },
+    {
+      "bytes": 81,
+      "name": "run-tests.sh",
+      "sha256": "38cd63059daafc6a15b3d1ec58a7d551eb13b3a076a0d3fa7861a1568d489dca"
+    },
+    {
+      "bytes": 3637,
+      "name": "verdict_verbatim.log",
+      "sha256": "ea1a2e8cabe8744883694c9f048e03f480c4d1d35f4434fb392e9bebd5605795"
+    },
+    {
+      "bytes": 854,
+      "name": "solution.sh",
+      "sha256": "eca1f6f93280f567c491beb2efd97359aa853213cc6babcb1c0037f95b31c633"
+    }
+  ],
+  "compaction_completed": true,
+  "compaction_started": true,
+  "compaction_status": "applied",
+  "egress_profile": "declared_deps",
+  "executor_backend": "container",
+  "first": false,
+  "forgotten_count": 3,
+  "helper_bin": "/tmp/s4-helper-egress/target/debug/s4-helper-egress",
+  "image": "localhost/s4-tb__build-linux-kernel-qemu:latest",
+  "input_tokens": 184758,
+  "intervals": 3,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "next_dispatch_after": true,
+  "observer_survived": true,
+  "output_bytes": 742352,
+  "policy_net_mode": "public",
+  "pressure_opportunity": true,
+  "probe": "ok:undeterminable",
+  "request_changed": true,
+  "round": 4,
+  "schema": "hh-s4-slot/1",
+  "seal": "sealed",
+  "sentinel_intact": true,
+  "served_variant": "hh/evict-oldest@1",
+  "setup_retries": 0,
+  "slot_ref": "slot:efd349e85afcd7a63d6fada1062b4c2b91e49512b6b3aa5d9e3925d61126af1b",
+  "solution_kind": "sh",
+  "solution_log_bytes": 738715,
+  "solution_log_sha256": "87f0680c1ded26f293bf1ae5f61a3c2145c45e27ce71491e828909d861b5f1fc",
+  "staging_dispatch": "observed:applied",
+  "strategy": "evict_oldest",
+  "task_id": "build-linux-kernel-qemu",
+  "tokens_freed": 184750,
+  "triggered": true,
+  "verdict_verbatim.log.bytes": 3637,
+  "verdict_verbatim.log.sha256": "ea1a2e8cabe8744883694c9f048e03f480c4d1d35f4434fb392e9bebd5605795",
+  "verdict_verbatim.rc": "2",
+  "verdict_verbatim_dispatch": "observed:applied",
+  "verifier_verbatim_produced_pytest": true,
+  "wall_cap_breach": true,
+  "wall_ms": 1815747,
+  "work_dispatch": "unknown:executor_error",
+  "_driver_rc": 0,
+  "_driver_duration_sec": 1815.8,
+  "prior_disposition": "inconclusive{environment:cell_network_isolated:Temporary failure resolving}",
+  "supplement_epoch": "egress-profile-rerun",
+  "receipt": {
+    "channel": "verbatim",
+    "verdict": "unresolved",
+    "verdict_reason": "some_tests_failed",
+    "parsed": {
+      "../tests/test_outputs.py - TypeError: bad operand type for unary +: 'str'": "failed"
+    },
+    "raw_bytes": 3637,
+    "stripped_bytes": 2543,
+    "ansi_stripped": true
+  },
+  "egress_evidence": null,
+  "disposition": "executed"
+}

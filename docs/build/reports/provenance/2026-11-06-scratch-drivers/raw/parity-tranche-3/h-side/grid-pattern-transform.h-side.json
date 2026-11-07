@@ -1,0 +1,50 @@
+{
+  "task_id": "grid-pattern-transform",
+  "runner": "h-podman-exec",
+  "started_at": "2026-11-06T00:47:21-0500",
+  "max_test_timeout_sec": 120.0,
+  "image": "docker.io/library/tb__grid-pattern-transform__client:latest",
+  "container": "tb__grid-pattern-transform-client-t3",
+  "compose_services": [
+    "client"
+  ],
+  "network": null,
+  "image_preexisting": true,
+  "image_id_digest": "9e2e831f574ac5415ea84eb0f21d1fedfcfe70f9d329a1bfb1c1a88ccd8c1e3a sha256:ca17556c808260ca5d412de77728185e5e5ad4cd737a6f550f417b3e481f71e2",
+  "container_up": {
+    "rc": 0,
+    "stdout": "8329654a81f605337dd9ebb50f3e895cd88c960906a0ca110e7101fbac1f85ad\n",
+    "stderr": "",
+    "duration_sec": 0.55,
+    "timeout": false
+  },
+  "solution_kind": "sh",
+  "solution_copy_rc": 0,
+  "solution_exec": {
+    "rc": 0,
+    "stdout": "",
+    "stderr": "",
+    "duration_sec": 0.09,
+    "timeout": false
+  },
+  "run_tests_copy_rc": 0,
+  "tests_copy_rc": 0,
+  "test_exec": {
+    "rc": 0,
+    "stdout": "Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]\nGet:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]\nGet:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]\nGet:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]\nGet:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]\nGet:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [360 kB]\nFetched 9297 kB in 1s (11.0 MB/s)\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\nThe following additional packages will be installed:\n  libbrotli1 libcurl4 libldap-2.5-0 libldap-common libnghttp2-14 libpsl5\n  librtmp1 libsasl2-2 libsasl2-modules libsasl2-modules-db libssh2-1\n  publicsuffix\nSuggested packages:\n  libsasl2-modules-gssapi-mit | libsasl2-modules-gssapi-heimdal\n  libsasl2-modules-ldap libsasl2-modules-otp libsasl2-modules-sql\nThe following NEW packages will be installed:\n  curl libbrotli1 libcurl4 libldap-2.5-0 libldap-common libnghttp2-14 libpsl5\n  librtmp1 libsasl2-2 libsasl2-modules libsasl2-modules-db libssh2-1\n  publicsuffix\n0 upgraded, 13 newly installed, 0 to remove and 51 not upgraded.\nNeed to get 1769 kB of archives.\nAfter this operation, 5028 kB of additional disk space will be used.\nGet:1 http://deb.debian.org/debian-security bookworm-security/main arm64 libbrotli1 arm64 1.0.9-2+deb12u1 [267 kB]\nGet:2 http://deb.debian.org/debian-security bookworm-security/main arm64 libsasl2-modules-db arm64 2.1.28+dfsg-10+deb12u1 [21.0 kB]\nGet:3 http://deb.debian.org/debian-security bookworm-security/main arm64 libsasl2-2 arm64 2.1.28+dfsg-10+deb12u1 [58.3 kB]\nGet:4 http://deb.debian.org/debian bookworm/main arm64 libldap-2.5-0 arm64 2.5.13+dfsg-5 [171 kB]\nGet:5 http://deb.debian.org/debian bookworm/main arm64 libnghttp2-14 arm64 1.52.0-1+deb12u3 [69.0 kB]\nGet:6 http://deb.debian.org/debian bookworm/main arm64 libpsl5 arm64 0.21.2-1 [58.6 kB]\nGet:7 http://deb.debian.org/debian bookworm/main arm64 librtmp1 arm64 2.4+20151223.gitfa8646d.1-2+b2 [59.4 kB]\nGet:8 http://deb.debian.org/debian-security bookworm-security/main arm64 libssh2-1 arm64 1.10.0-3+deb12u1 [169 kB]\nGet:9 http://deb.debian.org/debian bookworm/main arm64 libcurl4 arm64 7.88.1-10+deb12u15 [367 kB]\nGet:10 http://deb.debian.org/debian bookworm/main arm64 curl arm64 7.88.1-10+deb12u15 [310 kB]\nGet:11 http://deb.debian.org/debian bookworm/main arm64 libldap-common all 2.5.13+dfsg-5 [29.3 kB]\nGet:12 http://deb.debian.org/debian-security bookworm-security/main arm64 libsasl2-modules arm64 2.1.28+dfsg-10+deb12u1 [63.3 kB]\nGet:13 http://deb.debian.org/debian bookworm/main arm64 publicsuffix all 20230209.2326-1 [126 kB]\nFetched 1769 kB in 0s (12.9 MB/s)\nSelecting previously unselected package libbrotli1:arm64.\r\n(Reading database ... \r(Reading database ... 5%\r(Reading database ... 10%\r(Reading database ... 15%\r(Reading database ... 20%\r(Reading database ... 25%\r(Reading database ... 30%\r(Reading database ... 35%\r(Reading database ... 40%\r(Reading database ... 45%\r(Reading database ... 50%\r(Reading database ... 55%\r(Reading database ... 60%\r(Reading database ... 65%\r(Reading database ... 70%\r(Reading database ... 75%\r(Reading database ... 80%\r(Reading database ... 85%\r(Reading database ... 90%\r(Reading database ... 95%\r(Reading database ... 100%\r(Reading database ... 7584 files and directories currently installed.)\r\nPreparing to unpack .../00-libbrotli1_1.0.9-2+deb12u1_arm64.deb ...\r\nUnpacking libbrotli1:arm64 (1.0.9-2+deb12u1) ...\r\nSelecting previously unselected package libsasl2-modules-db:arm64.\r\nPreparing to unpack .../01-libsasl2-modules-db_2.1.28+dfsg-10+deb12u1_arm64.deb ...\r\nUnpacking libsasl2-modules-db:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSelecting previously unselected package libsasl2-2:arm64.\r\nPreparing to unpack .../02-libsasl2-2_2.1.28+dfsg-10+deb12u1_arm64.deb ...\r\nUnpacking libsasl2-2:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSelecting previously unselected package libldap-2.5-0:arm64.\r\nPreparing to unpack .../03-libldap-2.5-0_2.5.13+dfsg-5_arm64.deb ...\r\nUnpacking libldap-2.5-0:arm64 (2.5.13+dfsg-5) ...\r\nSelecting previously unselected package libnghttp2-14:arm64.\r\nPreparing to unpack .../04-libnghttp2-14_1.52.0-1+deb12u3_arm64.deb ...\r\nUnpacking libnghttp2-14:arm64 (1.52.0-1+deb12u3) ...\r\nSelecting previously unselected package libpsl5:arm64.\r\nPreparing to unpack .../05-libpsl5_0.21.2-1_arm64.deb ...\r\nUnpacking libpsl5:arm64 (0.21.2-1) ...\r\nSelecting previously unselected package librtmp1:arm64.\r\nPreparing to unpack .../06-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_arm64.deb ...\r\nUnpacking librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...\r\nSelecting previously unselected package libssh2-1:arm64.\r\nPreparing to unpack .../07-libssh2-1_1.10.0-3+deb12u1_arm64.deb ...\r\nUnpacking libssh2-1:arm64 (1.10.0-3+deb12u1) ...\r\nSelecting previously unselected package libcurl4:arm64.\r\nPreparing to unpack .../08-libcurl4_7.88.1-10+deb12u15_arm64.deb ...\r\nUnpacking libcurl4:arm64 (7.88.1-10+deb12u15) ...\r\nSelecting previously unselected package curl.\r\nPreparing to unpack .../09-curl_7.88.1-10+deb12u15_arm64.deb ...\r\nUnpacking curl (7.88.1-10+deb12u15) ...\r\nSelecting previously unselected package libldap-common.\r\nPreparing to unpack .../10-libldap-common_2.5.13+dfsg-5_all.deb ...\r\nUnpacking libldap-common (2.5.13+dfsg-5) ...\r\nSelecting previously unselected package libsasl2-modules:arm64.\r\nPreparing to unpack .../11-libsasl2-modules_2.1.28+dfsg-10+deb12u1_arm64.deb ...\r\nUnpacking libsasl2-modules:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSelecting previously unselected package publicsuffix.\r\nPreparing to unpack .../12-publicsuffix_20230209.2326-1_all.deb ...\r\nUnpacking publicsuffix (20230209.2326-1) ...\r\nSetting up libpsl5:arm64 (0.21.2-1) ...\r\nSetting up libbrotli1:arm64 (1.0.9-2+deb12u1) ...\r\nSetting up libsasl2-modules:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSetting up libnghttp2-14:arm64 (1.52.0-1+deb12u3) ...\r\nSetting up libldap-common (2.5.13+dfsg-5) ...\r\nSetting up libsasl2-modules-db:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSetting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...\r\nSetting up libsasl2-2:arm64 (2.1.28+dfsg-10+deb12u1) ...\r\nSetting up libssh2-1:arm64 (1.10.0-3+deb12u1) ...\r\nSetting up publicsuffix (20230209.2326-1) ...\r\nSetting up libldap-2.5-0:arm64 (2.5.13+dfsg-5) ...\r\nSetting up libcurl4:arm64 (7.88.1-10+deb12u15) ...\r\nSetting up curl (7.88.1-10+deb12u15) ...\r\nProcessing triggers for libc-bin (2.36-9+deb12u9) ...\r\ninstalling to /root/.local/bin\n  uv\n  uvx\neverything's installed!\n\nTo add $HOME/.local/bin to your PATH, either restart your shell or run:\n\n    source $HOME/.local/bin/env (sh, bash, zsh)\n    source $HOME/.local/bin/env.fish (fish)\n============================= test session starts ==============================\nplatform linux -- Python 3.13.1, pytest-9.2.0, pluggy-1.7.0\nrootdir: /tests\ncollected 3 items\n\n../tests/test_outputs.py ...                                             [100%]\n\n==================================== PASSES ====================================\n=========================== short test summary info ============================\nPASSED ../tests/test_outputs.py::test_transformation_case1\nPASSED ../tests/test_outputs.py::test_transformation_case2\nPASSED ../tests/test_outputs.py::test_transformation_case3\n============================== 3 passed in 0.17s ===============================\n",
+    "stderr": "debconf: delaying package configuration, since apt-utils is not installed\ndownloading uv 0.13.7 aarch64-unknown-linux-gnu\nInitialized project `app`\nUsing CPython 3.13.1 interpreter at: /usr/local/bin/python3.13\nCreating virtual environment at: .venv\nResolved 7 packages in 149ms\n   Building app @ file:///app\n      Built app @ file:///app\nDownloading pygments (1.2MiB)\n Downloaded pygments\nPrepared 6 packages in 117ms\nInstalled 6 packages in 48ms\n + app==0.1.0 (from file:///app)\n + iniconfig==2.3.1\n + packaging==26.3\n + pluggy==1.7.0\n + pygments==2.21.0\n + pytest==9.2.0\nResolved 8 packages in 158ms\n   Building app @ file:///app\n      Built app @ file:///app\nDownloading numpy (15.0MiB)\n Downloaded numpy\nPrepared 2 packages in 335ms\nUninstalled 1 package in 0.20ms\nInstalled 2 packages in 92ms\n ~ app==0.1.0 (from file:///app)\n + numpy==2.5.4\n",
+    "duration_sec": 4.61,
+    "timeout": false
+  },
+  "verdict_input_raw_len": 8274,
+  "verdict_input_stripped_len": 4588,
+  "ansi_stripped": true,
+  "parsed": {
+    "test_transformation_case1": "passed",
+    "test_transformation_case2": "passed",
+    "test_transformation_case3": "passed"
+  },
+  "verdict": "resolved",
+  "verdict_reason": "all_tests_passed",
+  "ended_at": "2026-11-06T00:47:37-0500"
+}

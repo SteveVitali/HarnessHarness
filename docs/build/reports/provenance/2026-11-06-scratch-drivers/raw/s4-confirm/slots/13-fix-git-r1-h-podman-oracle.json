@@ -1,0 +1,14 @@
+{
+  "schema": "hh-s4-slot/1",
+  "slot_ref": "slot:57c7fd03d078cb3356b6277829ae242a8acdac7f68d881edec8744b2f01ccb0b",
+  "task_id": "fix-git",
+  "arm_id": "arm:h-podman-oracle",
+  "strategy": "clear_tool_results",
+  "round": 1,
+  "first": false,
+  "lane_id": "lane:h-podman-exec-podman-vm",
+  "cell_attempted": false,
+  "attempts": [],
+  "calls": 0,
+  "disposition": "inconclusive{image_unavailable:client_build_failed}"
+}
