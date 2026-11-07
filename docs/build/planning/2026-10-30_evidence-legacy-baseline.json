@@ -167,5 +167,27 @@
     "disposition": "PASSED \u2014 accept ADR-0226",
     "sha256": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
   },
-  "policy": "Only the nextTicket pointer and moved historical-region line offsets changed as expected. New or unknown warnings/violations are not waived; active round must never dispatch legacy GATE-G1."
+  "policy": "Only the nextTicket pointer and moved historical-region line offsets changed as expected. New or unknown warnings/violations are not waived; active round must never dispatch legacy GATE-G1.",
+  "amendments": [
+    {
+      "id": "legacy-reqcov-46",
+      "date": "2026-11-07",
+      "recorded_by": "R6.1 (GUARD-X, REQ-XH-002 AC-3) \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+      "kind": "bounded-family-classification",
+      "emission": "version-dependent \u2014 never required. The observed emission count depends on the stock validator version: the planning-time observation (LEDGER OPEN FINDING 2026-11-07, stock validator ~/agent-skills e981ec5 on main 185c16c7) reported 46 legacy `reqcov` warnings on manifest rows 083\u2013164f (round-1 tickets citing footnoted `R-2.x\u00b9` ids), while GATE-G20's readout item 6 recorded ZERO reqcov emissions at presentation and R6.1 re-verified 0 on this environment (0 violations / 8 warnings, all standing baseline classes). A vanished family member is therefore NOT a missing-historical-diagnostic; an emitted one within the recorded bound is explained; a 47th or out-of-family warning still fails unexplained-diagnostic.",
+      "provenance": {
+        "finding": "docs/build/LEDGER.md OPEN FINDINGS \u2014 2026-11-07 Round-6 insertion guard-environment note (owned by R6.1)",
+        "gate": "docs/build/readouts/GATE-G20.md item 6 \u2014 'the disclosed warnings list's sha256 is therefore n/a{empty_at_presentation}'",
+        "warning_list_sha256": "n/a{empty_at_presentation}",
+        "handoff": "docs/experiments-decomposition-prompt.md \u00a74 \u2014 'Pre-existing (not caused by this program): \u2026 46 `unexplained-diagnostic` legacy `reqcov` warnings absent from its reviewed baseline; record as an OPEN FINDING for the guard-extension row, never silently re-baselined.'",
+        "r61_observation": "2026-11-07 verbatim on this environment (main 35dbe0f1, AGENT_SKILLS_ROOT=$HOME/agent-skills e981ec5): `check-build-memory.sh .` \u2192 0 violations / 8 warnings, zero reqcov lines; a literal reproduction of the validator's reqcov leg (grep -oE 'R-2\\.[0-9]+\\.[0-9]+[a-z]?' per ticket vs spec ids) yields 0 candidate warnings; same result on the experiments worktree. Corroborating enumeration: 12 ticket files in manifest rows 083\u2013164f cite footnoted `R-2.x\u207f` ids (33 distinct ids)."
+      },
+      "family": {
+        "check": "reqcov",
+        "file_pattern": "^docs/tickets/(0(8[3-9]|9[0-9])|1[0-5][0-9]|16[0-4])[a-z]*_.+\\.md$",
+        "message_pattern": "^ticket \\S+ cites \\S+ which is not in the spec$",
+        "max_emitted": 46
+      }
+    }
+  ]
 }

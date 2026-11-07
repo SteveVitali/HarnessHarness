@@ -19,23 +19,39 @@ for case_dir in "$FIXDIR"/cases/*; do
   name=$(basename "$case_dir")
   expected=$(head -1 "$case_dir/expected.txt" | tr -d '[:space:]')
   root=$(mktemp -d "${TMPDIR:-/tmp}/supguard-${name}.XXXXXX")
-  mkdir -p "$root/docs/build/planning" "$root/docs/build/readouts" "$root/docs/tickets"
-  cp docs/evidence-and-adoption-spec.md "$root/docs/"
+  mkdir -p "$root/docs/build/planning" "$root/docs/build/readouts" "$root/docs/tickets" \
+         "$root/docs/research" "$root/docs/design"
+  cp docs/evidence-and-adoption-spec.md docs/experiments-spec.md "$root/docs/"
   cp docs/tickets/*.md "$root/docs/tickets/"
+  cp docs/research/*.md "$root/docs/research/" 2>/dev/null || true
+  cp docs/design/*.md "$root/docs/design/" 2>/dev/null || true
   cp docs/build/LEDGER.md docs/build/BUILD_INDEX.md "$root/docs/build/"
   cp docs/build/planning/2026-10-30_evidence-coverage.md \
      docs/build/planning/2026-10-30_evidence-coverage.json \
      docs/build/planning/2026-10-30_evidence-legacy-baseline.json \
+     docs/build/planning/2026-11-07_round6-coverage.md \
+     docs/build/planning/2026-11-07_round6-coverage.json \
+     docs/build/planning/2026-11-07_round6-decomposition.md \
      "$root/docs/build/planning/"
   cp docs/build/readouts/*.md "$root/docs/build/readouts/"
   checker="$GREEN"
   [ -f "$case_dir/checker.json" ] && checker="$case_dir/checker.json"
   bash "$case_dir/patch.sh" "$root"
   out=$(python3 "$GUARD" --root "$root" --checker-json "$checker" 2>&1) && rc=0 || rc=$?
+  if [ "$expected" = "PASS" ]; then
+    # positive case: the mutated scratch tree must still pass (exit 0)
+    if [ "$rc" -eq 0 ]; then
+      echo "  ✓ $name — accepted (verdict PASS)"
+      pass=$((pass + 1))
+    else
+      echo "  ✗ $name — expected exit 0 PASS, got rc=$rc" >&2
+      printf '%s\n' "$out" | tail -15 >&2
+      fail=$((fail + 1))
+    fi
   # grep -F: the bracketed code is a literal, never a regex character class
   # (R5.2 repair — "\[$expected\]" matched any listed char, so a wrong
   # diagnostic could satisfy a case).
-  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qF "[$expected]"; then
+  elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qF "[$expected]"; then
     echo "  ✓ $name — rejected with [$expected]"
     pass=$((pass + 1))
   else
@@ -45,5 +61,5 @@ for case_dir in "$FIXDIR"/cases/*; do
   fi
   rm -rf "$root"
 done
-echo "run-fixtures: $pass rejected, $fail failures"
+echo "run-fixtures: $pass accepted/rejected as expected, $fail failures"
 [ "$fail" -eq 0 ]

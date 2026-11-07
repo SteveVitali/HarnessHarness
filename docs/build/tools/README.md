@@ -1,9 +1,14 @@
 # docs/build/tools — the retained supplemental coverage/routing guard
 
-`hh-supplement-guard/1` (tool version 1.0.0), landed by R5.1 under the GATE-G8
-bounded bootstrap authorization. It is the guard the supplemental spec §9.4
-requires before any product dispatch; the named bootstrap exception covers only
-its own implementation.
+`hh-supplement-guard/1` (tool version 1.1.0), landed by R5.1 under the GATE-G8
+bounded bootstrap authorization and extended to the Round-6 experiments
+supplement by R6.1 (GUARD-X) under GATE-G20's scoped bootstrap authorization
+(REQ-XH-001/002/003/004/008/024/025/026, AR-31). It is the guard the
+supplemental spec §9.4 and experiments spec REQ-XH-002 require before any
+product dispatch; the named bootstrap exceptions cover only the guard's own
+implementation rows. One guard, two frozen sources (CC1): the Round-5
+evidence-and-adoption register's checks and counts stay byte-for-byte in
+force beside the Round-6 REQ-X register.
 
 ## Properties
 
@@ -45,7 +50,12 @@ a missing prerequisite is never a pass.
 | `nextticket`, `old-gate-routing`, `skeleton-dispatch`, `pending-prerequisite`, `failed-gate`, `last-completed`, `legacy-completion` | `nextTicket` is the active round's first row without landed evidence (BUILD_INDEX row for work kinds; PASSED GATE DECISIONS for gates; recorded decision/non-pending readout for human rows); legacy GATE-G1 completion evidence byte-preserved; skeletons and pre-round rows never dispatch |
 | `signature-reuse` | Active-round gate verbatims never replay a pre-round signature from GATE DECISIONS or readouts |
 | `chain-tip`, `git-ancestry` | `chainTip`/`buildBranchBase` agree; `pinnedBaseSha` is a git ancestor of the chain tip (noted skipped outside a checkout) |
-| `unexplained-diagnostic`, `missing-historical-diagnostic`, `stock-violation`, `baseline` | Stock checker diagnostics match the reviewed baseline's exact check/path/row classes one-for-one — never an arbitrary warning count; violations are always fatal |
+| `unexplained-diagnostic`, `missing-historical-diagnostic`, `stock-violation`, `baseline`, `classified-diagnostic` | Stock checker diagnostics match the reviewed baseline's exact check/path/row classes one-for-one — never an arbitrary warning count; violations are always fatal. Append-only dated `amendments` may classify a bounded warning *family* (check + file + message patterns + `max_emitted`) with recorded provenance: emissions within the bound are explained, a further warning still fails `unexplained-diagnostic`, and an unemitted family never fails `missing-historical-diagnostic` (emission is validator-version dependent). The R6.1 amendment classifies the 46 observed legacy `reqcov` warnings on rows 083–164f (list sha256 `n/a{empty_at_presentation}` at GATE-G20) |
+| REQ-X register (same `coverage-*`, `owner`, `ac-anchor`, `alias-predicate`, `disposition`, `layer`, `foreign-id`, `omitted-id`, `duplicate-id`, `coverage-md`, `frozen-source`, `coverage-json` families) | The 456 REQ-X candidates: 370 adopted / 81 merged / 5 superseded; the second frozen-source digest (`docs/experiments-spec.md` sha256 `4329b274…`); ids sourced from spec Appendix A (no `id="req-…"` anchors); `spec_anchor` existence; AC hooks resolved `appendix-a-row` under the widened `AC-\d+(\.\d+)*-\d+`; `literal_row`/`source_sha256` and `literal_source(_sha256)` recompute and verbatim-in-source; one primary owner per adopted id with contract file + `acceptance_anchor`; owner-kind and CAP6.2 routing rules; md owner table + owner index agree with json |
+| `plan-*` (table, totals, chain, deps, tail, rows, skeleton, human, size, fold, linearization, owner, shared) | The frozen Round-6 partition plan as a committed planning record — the legs folded from `check_round6_coverage.py` (row table, totals, backward-only deps and the B′ permutation, minimal tail, five gate-dependent skeletons, HUMAN placement, sizes, record-only fold, row-table↔register owner equality, shared-decision ordering) so one implementation remains (SR-23, CC1) |
+| `gate-criterion`, `gate-disposition`, `readout-fields` | Every active-round gate contract's `## Criterion (verbatim from the spec)` `> |` quotes appear in the frozen spec (REQ-XH-025); a recorded PASSED disposition-gate decision carries a pre-registered form (G27 `run`/`not_run{…}`, G28 `triggered{…}`/`not triggered; Wc unused`, G29 `full`/`fallback`, G30 `run{…}`/`end_after_w2`; a basis containing `FAILED` or `NOT PASSABLE` stays non-PASSED); the spend gates carry the REQ-XH-004 readout fields (model authorization, compute authorization separately, quote id, hard-cap formula) |
+| `human-marker`, `human-deferred` | Each HUMAN contract names owner, trigger, exit and withheld claims (REQ-XH-026); a `DEFERRED` readout must cite an existing DEFERRALS row naming the HUMAN row — `DECLINED`, `NOT_NEEDED` and `N/A` land the row |
+| `paid-body`, `window-order` | A paid window body is a skeleton until its gate is PASSED (REQ-XH-001/024); a later-round (7/8) row may appear only as a skeleton; per window the PROV gate → window body → HUMAN-reconcile entry stays an ordered subsequence (consolidated HUMAN-H18; GATE-G20 D-1/D-2) |
 
 Route verdicts: `DISPATCH <id>` (first unlanded row, deps satisfied, Run line
 present), `HOLD` (gate/human pending — RETURN PASS, or round complete),

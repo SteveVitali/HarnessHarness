@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.1
-lastCompleted:   GATE-G20
+nextTicket:      R6.2
+lastCompleted:   R6.1
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         main
+chainTip:         codex/harnessharness-r6.1
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-07T05:25:31Z
+updatedAt:        2026-11-07T06:27:38Z
 ```
 
 ## OPEN FINDINGS
@@ -127,6 +127,7 @@ updatedAt:        2026-11-07T05:25:31Z
   contract change. Without it the extension's own first row could never route DISPATCH.
 
 - 2026-11-07 · **Round-6 insertion — guard environment note (owned by R6.1).** With the stock validator at `~/agent-skills` `e981ec5`, `check-build-memory.sh .` reports 0 violations / 54 warnings on `main` `185c16c7`, 46 of them legacy `reqcov` warnings (round-1 tickets citing footnoted `R-2.x¹` ids) that the guard's reviewed baseline (`2026-10-30_evidence-legacy-baseline.json`, 8 classes) does not list, so `check-supplement-guard.sh` WITH that checker reports `unexplained-diagnostic` (the BL-RECONCILE run recorded 8 warnings — the warning count depends on the validator version in use). GATE-G20 authorizes R6.1 under the guard's `--no-checker` ROUTE + the stock validator at 0 violations; R6.1 classifies the legacy classes into the reviewed baseline with dated provenance (never silently) so the guard with the stock checker returns PASS. Also: `chainTip` set to `main` at insertion because `codex/harnessharness-bl-reconcile` / `-r5.59` no longer resolve as local refs.
+  - *Closed 2026-11-07 (R6.1, GUARD-X AC-3):* the 46 legacy `reqcov` warnings are classified into the reviewed baseline by an append-only, dated `amendments` entry in `docs/build/planning/2026-10-30_evidence-legacy-baseline.json` — a bounded family (check `reqcov`; files `docs/tickets` rows 083–164f; message `ticket <b> cites <rid> which is not in the spec`; `max_emitted: 46`) with recorded provenance citing GATE-G20's `n/a{empty_at_presentation}` list sha256, never a rewrite of the standing 8 classes and never a silent re-baseline. Emission is validator-version dependent and never required (a vanished family is not `missing-historical-diagnostic`; a 47th or out-of-family warning still fails `unexplained-diagnostic` — fixture `x-47th-warning`). R6.1 verbatim re-observation on this environment (main `35dbe0f1`, `~/agent-skills` `e981ec5`): `check-build-memory.sh .` → **0 violations / 8 warnings, zero `reqcov` lines** — matching GATE-G20's presentation record; a literal reproduction of the validator's reqcov leg yields 0 candidate warnings on this tree and on the experiments worktree. Post-landing: `check-supplement-guard.sh` with the stock checker returns verdict PASS with `DISPATCH — R6.2`.
 
 ## GATE DECISIONS
 | 2026-11-07T06:10Z | GATE-G20 | review the Round-6 plan and authorize the GUARD-X bootstrap | disposition | "accept all and proceed" (operator verbatim, interactive, 2026-11-07T06:10Z — readout docs/build/readouts/GATE-G20.md Status: PASSED) | **PASSED** — artifact identity confirmed (spec sha256 `4329b2740fe6be0f…` post-§10.6-amendment; 0 reqcov observed at presentation vs disclosed 46 — OPEN FINDING to R6.1 AC-3); partition+register accepted (74 rows, 456 candidates/370 adopted); **Q-X46 = A** (plan order — "accept all" accepts the plan as presented; B′ not selected); D-1…D-6 all accepted; twelve ambiguity resolutions + "second row"=R6.2 confirmed. Scope: R6.1 only; expiry at R6.1 landing; stock-checker PASS required from R6.2. No spend/provisioning/publication/merges. lastCompleted → GATE-G20 · next → R6.1. | decision |
@@ -1270,3 +1271,4 @@ updatedAt:        2026-11-07T05:25:31Z
 ## PHASE LOG — Round 6
 
 - 2026-11-07T05:25:31Z · ROUND6 round · experiments first pass inserted by decompose-spec mode=extend: spec `docs/experiments-spec.md` (canonical v0.3, Q-X20); 74 rows 252–325 (45 tickets + 4 tail runs = 49 implement-spec; 5 skeletons; 13 gates; 7 HUMAN); tail minimal + reconciliation capstone (banner `tail=minimal`); partition/coverage/invariants under `docs/build/planning/2026-11-07_round6-*`; nextTicket GATE-G20 (RETURN PASS); chainTip main; the plan is revisable at run time by scoped inserts; no spend authorized.
+- 2026-11-07T06:27:38Z · R6.1 done — branch `codex/harnessharness-r6.1` · base main (@35dbe0f1 — local main tip, GATE-G20 record; `origin/codex/harnessharness-gate-g20-record` carries the same commit for separate merge). **GUARD-X landed:** `hh-supplement-guard/1` v1.1.0 — second frozen source (experiments-spec sha256 `4329b2740fe6be0f…`), REQ-X register legs (456 candidates/370 adopted/81 merged/5 superseded; Appendix A ids; `appendix-a-row` hooks under widened `AC-\d+(\.\d+)*-\d+`; literal+verbatim recompute; one owner per adopted id; owner-kind + CAP6.2 routing; md tables agree), folded plan legs (`plan-*`, SR-23/CC1), Round-6 routing + `tail=minimal`, gate criterion/disposition/spend-field legs, HUMAN marker + DEFERRED-DF legs, paid-body/later-round/window-order legs. **AC-3:** append-only dated `amendments` entry `legacy-reqcov-46` classifies the 46 legacy `reqcov` warnings as a bounded family (max_emitted 46, emission version-dependent, never required; list sha256 `n/a{empty_at_presentation}` verbatim from GATE-G20) — verbatim re-observation here: stock validator `e981ec5` → 0 violations/8 warnings, 0 reqcov. OPEN FINDING closed. **Battery:** 64/64 fixtures (16 retained byte-identical + 48 new). **Guard:** pre `--no-checker` + stock → `PASS DISPATCH — R6.1`; post both modes → `PASS DISPATCH — R6.2`. REQ-XH-001/002/003/004/008/024/025/026 + REQ-XH-102 contributing. AR-31 recorded (no ADR listed). chainTip → codex/harnessharness-r6.1 · next → R6.2.
