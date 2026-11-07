@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # gce-backend.sh — the compute recipe (manifest 266/R6.13; spec §3.9/§3.10
 # inputs/§3.11; ADR-0431/AR-15). The single provisioning home — bash 3.2,
-# `gcloud` + `ssh` + POSIX + `python3 -I`. No Terraform. A missing `gcloud`
+# `gcloud` + `ssh` + POSIX + `python3 -I` (`HH_GCLOUD_BIN` overrides the
+# gcloud binary, the HH_PODMAN_BIN convention). No Terraform. A missing `gcloud`
 # exits 7 "required tool absent" like live-verify.sh.
 #
 #   gce-backend.sh quote          <decl> [--out FILE]
@@ -48,6 +49,7 @@ usage() {
   exit "${1:-1}"
 }
 require() { command -v "$1" >/dev/null 2>&1 || { fail "required tool absent: $1"; exit 7; }; }
+GCLOUD="${HH_GCLOUD_BIN:-gcloud}"  # gcloud binary override (HH_PODMAN_BIN convention)
 refuse() { printf 'Refused{%s}\n' "$1" >&2; exit 2; }
 unsupported() { printf 'Unsupported{backend.%s}\n' "$1" >&2; exit 4; }
 utc() { date -u +%FT%TZ; }
@@ -127,7 +129,7 @@ gdo() {
   local out err started ended rc
   out="$(mktemp "$TMPD/out.XXXXXX")"; err="$(mktemp "$TMPD/err.XXXXXX")"
   started="$(utc)"
-  if gcloud "$@" >"$out" 2>"$err"; then rc=0; else rc=$?; fi
+  if "$GCLOUD" "$@" >"$out" 2>"$err"; then rc=0; else rc=$?; fi
   ended="$(utc)"
   python3 -I "$LIB" command "$CMDS_JSONL" "$started" "$ended" "$rc" "$out" "$err" -- "$@"
   printf '%s' "$rc" > "$TMPD/last_rc"
@@ -302,7 +304,7 @@ cmd_provision() {
   while [ $# -gt 0 ]; do
     case "$1" in --authorization) auth="$2"; shift 2;; *) usage 1;; esac
   done
-  require gcloud; require ssh; require python3
+  require "$GCLOUD"; require ssh; require python3
   load_decl
   tmpd
   # REQ-XB-204: the declaration and startup script are leak-swept; no
@@ -426,7 +428,7 @@ PY
 }
 
 cmd_verify() {
-  require gcloud; require ssh; require python3
+  require "$GCLOUD"; require ssh; require python3
   load_decl
   tmpd
   ensure_provided
@@ -528,7 +530,7 @@ PY
 }
 
 cmd_prepull() {
-  require gcloud; require ssh; require python3
+  require "$GCLOUD"; require ssh; require python3
   load_decl
   [ "$MODE" = "restart-only" ] && refuse "restart_only.prepull"
   tmpd
@@ -574,7 +576,7 @@ PY
 
 cmd_deliver_secret() {
   local name="${1:-}"
-  require gcloud; require ssh; require python3
+  require "$GCLOUD"; require ssh; require python3
   load_decl
   tmpd
   # §3.11 / REQ-XB-219 / REQ-XB-224 / REQ-XH-023 — stdin-only path.
@@ -597,7 +599,7 @@ cmd_deliver_secret() {
 }
 
 cmd_status() {
-  require gcloud; require python3
+  require "$GCLOUD"; require python3
   load_decl
   tmpd
   local d; d="$(describe_instance)" || true
@@ -666,7 +668,7 @@ PY
 }
 
 cmd_harvest() {
-  require gcloud; require ssh; require python3; require tar
+  require "$GCLOUD"; require ssh; require python3; require tar
   { command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1; } \
     || { fail "required tool absent: sha256sum/shasum"; exit 7; }
   load_decl
@@ -679,14 +681,14 @@ cmd_harvest() {
 }
 
 cmd_inventory() {
-  require gcloud; require python3
+  require "$GCLOUD"; require python3
   load_decl
   tmpd
   inventory_all
 }
 
 cmd_teardown() {
-  require gcloud; require ssh; require python3; require tar
+  require "$GCLOUD"; require ssh; require python3; require tar
   { command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1; } \
     || { fail "required tool absent: sha256sum/shasum"; exit 7; }
   load_decl

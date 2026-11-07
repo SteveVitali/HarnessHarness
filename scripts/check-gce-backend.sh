@@ -296,6 +296,7 @@ printf '%s' "$QOUT" | grep -q 'n/a{compute_pricing' \
 
 # ── 2 · missing gcloud exits 7 (AC-1) ────────────────────────────────────
 expect_rc 7 "missing gcloud exits 7" env PATH="/usr/bin:/bin" \
+  HH_GCLOUD_BIN="$T/no-such-gcloud" \
   bash "$REPO/scripts/gce-backend.sh" provision "$DECLS/base.json" \
   --authorization "$T/auth.json"
 
