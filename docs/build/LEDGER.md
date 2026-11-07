@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.2
-lastCompleted:   R6.1
+nextTicket:      R6.3
+lastCompleted:   R6.2
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-07T06:27:38Z
+updatedAt:        2026-11-07T02:10:00Z
 ```
 
 ## OPEN FINDINGS
@@ -1269,6 +1269,8 @@ updatedAt:        2026-11-07T06:27:38Z
 - 2026-11-06T23:06Z · **BL-50…BL-53 reconcile** — branch `codex/harnessharness-bl-reconcile` · PR #291 · base `origin/main` `@09fe8523` (non-manifest records-in reconcile; manifest chain DONE — guard PASS route HOLD, no DISPATCH exists). **BL-52 discharged satisfied** — its named exit met: executed `hh-s1-useful/1` `2026-11-05-df-cap5.1-s1-useful.json` (`disposition: executed`, 7/7 legs verified, `useful_acceptance: marked`) + independent Decided artifacts `…-s1-decided-artifacts.json` (both subjects `decided` reward_ppm 1000000); DF-CAP5.1-1 DONE. **BL-53 discharged satisfied** — `hh-guard-boundary-evidence/1` `2026-11-05-df-r5.1-evidence.json` (EV-1..6 verified; 67/67 dispatch boundaries guard pre+post `PASS DISPATCH`); DF-R5.1-1 DONE. **BL-51 discharged scope-dispositioned — never satisfied** — DF-H9-1's verbatim 2026-11-05T16:04:15Z operator disposition (permanently unmet-by-decision) is the fresh scope disposition its exit names. **BL-50 stays open** — R-layer legs discharged by evidence (parity verified 30/30 tranche-3; S4 300/300 four epochs; efficacy computed null-equivalent; GATE-G19 PASSED; study reported `unmet{s1_failed}` verbatim); P-layer legs (REQ-G-201/202/206/207/209) still voided/carried — no publication/adoption evidence or authorization; += 33 re-homed matrix ids (all 73 round-5 PARTIAL ids on the one open carrier; CAP5.1 verdicts not re-verdicted — matrix re-verdict owed to next capstone). **Verify:** deferrals-open DF empty · --bl → BL-50 only · check-bm-tools OK · check-backlog exit 0 both modes (206 + 73 expected) · bm `.`/`--staged` 0 viol (8 warn) · guard PASS HOLD. **Deferrals:** none opened/closed. **Deviations:** none. chainTip → codex/harnessharness-bl-reconcile · next → (unchanged — nextTicket DONE) · layer: engineered (records-in, USD $0.00) · harness: devin-desktop/swe-2-high/subagent
 
 ## PHASE LOG — Round 6
+
+- 2026-11-07T02:10Z · R6.2 done — branch `codex/harnessharness-r6.2` · base local `main` @`dc6b0e2e`. **P1-A + P1-B landed:** the 71 scratch drivers + verbatim manifest (sha256 `f80859977e5a…`) committed as unmaintained provenance under `docs/build/reports/provenance/2026-11-06-scratch-drivers/` with `index.json` + README (historical re-run recipe — fresh execution, never replay); `raw/` 587-file record set + `raw/SHA256SUMS`; `sha256tree/1` dataset digests beside the FNV `catalogue_identity`; `p1_records.py` (`hh-p1-records-check/1`, RC-1…6, exit 0; battery 6/6). Cross-check: basis A 16/14/2, basis B 26/30, basis C 260/300 records; `hf-model-inference` `inconclusive_with_receipt` confound; estimators verbatim: `MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}` / `UnequalDesign{pairs 16 ≠ T·R 30}` / `MissingMargin` (margins empty, floors stated, no `verdict` member); REQ-XA-006 arm counts (A 150→150 evict; B 150→90 clear+60 evict). Emitted `2026-11-07-p1-surface-xcheck.json` + `-p1-estimators.json`; re-emission byte-equal. cargo test -p hharness-env green; fmt/ci-gating/living-docs OK; secret scan clean; no CI reference to the archive. Guard with stock checker → `PASS DISPATCH — R6.2` pre + post. chainTip → codex/harnessharness-r6.2 · next → R6.3.
 
 - 2026-11-07T05:25:31Z · ROUND6 round · experiments first pass inserted by decompose-spec mode=extend: spec `docs/experiments-spec.md` (canonical v0.3, Q-X20); 74 rows 252–325 (45 tickets + 4 tail runs = 49 implement-spec; 5 skeletons; 13 gates; 7 HUMAN); tail minimal + reconciliation capstone (banner `tail=minimal`); partition/coverage/invariants under `docs/build/planning/2026-11-07_round6-*`; nextTicket GATE-G20 (RETURN PASS); chainTip main; the plan is revisable at run time by scoped inserts; no spend authorized.
 - 2026-11-07T06:27:38Z · R6.1 done — branch `codex/harnessharness-r6.1` · base main (@35dbe0f1 — local main tip, GATE-G20 record; `origin/codex/harnessharness-gate-g20-record` carries the same commit for separate merge). **GUARD-X landed:** `hh-supplement-guard/1` v1.1.0 — second frozen source (experiments-spec sha256 `4329b2740fe6be0f…`), REQ-X register legs (456 candidates/370 adopted/81 merged/5 superseded; Appendix A ids; `appendix-a-row` hooks under widened `AC-\d+(\.\d+)*-\d+`; literal+verbatim recompute; one owner per adopted id; owner-kind + CAP6.2 routing; md tables agree), folded plan legs (`plan-*`, SR-23/CC1), Round-6 routing + `tail=minimal`, gate criterion/disposition/spend-field legs, HUMAN marker + DEFERRED-DF legs, paid-body/later-round/window-order legs. **AC-3:** append-only dated `amendments` entry `legacy-reqcov-46` classifies the 46 legacy `reqcov` warnings as a bounded family (max_emitted 46, emission version-dependent, never required; list sha256 `n/a{empty_at_presentation}` verbatim from GATE-G20) — verbatim re-observation here: stock validator `e981ec5` → 0 violations/8 warnings, 0 reqcov. OPEN FINDING closed. **Battery:** 64/64 fixtures (16 retained byte-identical + 48 new). **Guard:** pre `--no-checker` + stock → `PASS DISPATCH — R6.1`; post both modes → `PASS DISPATCH — R6.2`. REQ-XH-001/002/003/004/008/024/025/026 + REQ-XH-102 contributing. AR-31 recorded (no ADR listed). chainTip → codex/harnessharness-r6.1 · next → R6.2.
