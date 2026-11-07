@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        O1
-lastCompleted:   H1
+nextUnit:        O2
+lastCompleted:   O1
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-07T01:00:51Z
+updatedAt:       2026-11-07T01:14:55Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -133,8 +133,8 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
-| O1 | Synthesize `docs/experiments-spec.md` from the accepted notes (front matter, §0 conventions with `req_id_pattern: REQ-X[A-H]-[0-9]+`, decision register, body by phase, appendices A–F incl. outline-superset proof). | S | in-progress | — |
-| O2 | Fresh-context adversarial review; dispositions in Appendix E (`accept/adapt/rebut/defer`). | S | open | — |
+| O1 | Synthesize `docs/experiments-spec.md` from the accepted notes (front matter, §0 conventions with `req_id_pattern: REQ-X[A-H]-[0-9]+`, decision register, body by phase, appendices A–F incl. outline-superset proof). | S | done | [experiments-spec.md](experiments-spec.md) v0.1 draft |
+| O2 | Fresh-context adversarial review; dispositions in Appendix E (`accept/adapt/rebut/defer`). | S | in-progress | — |
 | O3 | Operator ratification; freeze this ledger; write `docs/experiments-decomposition-prompt.md`. | S | open | — |
 | O4 | (Downstream, not a synthesis unit) `decompose-spec mode=extend` appending Round 6 after row 251, on top of `main` once R5.59 has landed (Q-X3/Q-X18). | S | open | — |
 
@@ -221,3 +221,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-07T00:17:16Z — Accepted D3 (`design/37`, 16 findings, REQ-XD-201…225; 9 levels over 7 factors; exploration 550 trials ≈ $28–187; confirmation 555 trials ≈ $28–189; simulated false-confirmation ≤ 2.6%, power for a true +5 pt gain 0.13–0.26 — "not confirmed" is the likely honest outcome). All A–F rows done. New pending Q-X44. Wave-5 assignment: H1 → `design/40_program-plan.md` (inputs: every accepted note's closing sections + targeted bodies via a coordinator digest; resolves cross-note conflicts; ADR/amendment register; gates; sizing).
 - 2026-11-07T00:40:39Z — Accepted H1 (`design/40`, 12 findings, 34 cross-note rulings, ADR/amendment register, gates/HUMAN rows, budget envelope, ~180–195-row three-round plan). **Correction to the coordinator's earlier spot-check (entry of the A2 acceptance):** the coordinator's 17/15 count wrongly included `hf-model-inference`, whose two first slots are dispositioned `inconclusive{environment:cell_network_isolated:…}` while still carrying an `unresolved` receipt verdict; counting that receipt relabels an inconclusive slot. A2's 16/14 stands (verified by the coordinator from the packet at 2026-11-07T00:40:39Z). New pending Q-X45, Q-X46. All research/design rows done; O1 synthesis dispatched to a fresh-context synthesizer (inputs: brief, ledger, outline trace, H1 note in full, the coordinator digest of all notes, targeted note reads; output `docs/experiments-spec.md` + outline-trace mapping).
 - 2026-11-07T01:00:51Z — Operator-initiated constraint Q-X47 ($100 hard ceiling for the first pass) received during O1; coordinator designed the response (first pass = Round 6; shared-arm design over one seeded 10-task set; cost-only spending ladder with gates; later passes for the 8-harness field, all strata, ±.15 parity, full explore→confirm, Terminus-2), presented it, and recorded Q-X22 (`high`), Q-X48…Q-X50 verbatim. Both the constraint and the answers were sent to the running O1 synthesizer. The single pre-registered phase-4 contrast in the first pass is a scoped deviation from Q-X15 to confirm at ratification.
+- 2026-11-07T01:14:55Z — O1 done: `docs/experiments-spec.md` v0.1 (Draft for operator review; §0–§10 + Appendices A–F; 424 source candidates → 338 adopted / 84 merged / 2 superseded, plus 16 synthesis-allocated IDs REQ-XH-101…106 (receipt archive, AR-20) and REQ-XH-110…119 (first pass) flagged for O2; decision register C-01…C-34, S-1…S-13, FP-1…FP-12; first-pass budget: expected model $12.6–31.4, hard-bounded total $62.7, ≤ $85 authorizable under the $100 ceiling). Outline trace: all 18 OL rows mapped, none de-scoped. O2 assignment: two independent fresh-context reviewers (R-A: §0–§5 + Appendices A–D vs streams A–C; R-B: §6–§10 + Appendix F vs streams D–F/H; both read §0, §1, §10.1), findings to `design/41_spec-review.md` (coordinator merges), dispositions folded into Appendix E.
