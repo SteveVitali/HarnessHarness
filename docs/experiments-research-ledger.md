@@ -18,8 +18,8 @@ whose state it never writes.
 
 ```text
 projectStatus:   IN_PROGRESS
-nextUnit:        D3
-lastCompleted:   F2
+nextUnit:        H1
+lastCompleted:   D3
 blockedOn:       (nothing)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ specOut:         docs/experiments-spec.md
 memoryRoot:      docs
 autonomy:        checkpoint-per-stream
 round:           1
-updatedAt:       2026-11-07T00:15:06Z
+updatedAt:       2026-11-07T00:17:16Z
 ```
 
 **Current phase:** wave 1 (A1, B1, C1, C3, E1, F1) dispatched in parallel to fresh-context workers; `nextUnit` names the first of them.
@@ -107,7 +107,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 |---|---|---|---|---|
 | D1 | **Comparative-evaluation method.** Estimands, reuse of the admitted §4.3 machinery (finite-manifest Beta-binomial, whole-task paired bootstrap, Holm), HF-style metrics (ties with leader, flip rates, all-k/any-k, $/solve) and which need method admission, the pilot→quote→gate design with a precision simulation, seeded TB 2.1 task selection, pre-registration packet, infra-failure missingness, reward-hacking/cheating scan policy, stop rules. Depends B1, C1, C3. Reqs `REQ-XD-001…`. | D | done | [35_comparative-method.md](design/35_comparative-method.md) |
 | D2 | **HIR parity method.** L1 request-level conformance (recorded-response replay, canonicalization), L2 paired task-verdict KL parity with gate-set margin and pilot-quoted N, L3 descriptive trace shape; dimension map and §4.4 admission for an LLM participant ("same participant" with a served model lacking a digest). Depends C1, E1. Reqs `REQ-XD-101…`. | D | done | [36_hir-parity-method.md](design/36_hir-parity-method.md) |
-| D3 | **Sweep method.** OFAT explore on development tasks → pre-registered held-out confirmation; factor/level registry; multiplicity and winner's-curse controls; when a knob is exercised (e.g. compaction under a large context window); budgets. Depends D1, E2. Reqs `REQ-XD-201…`. | D | in-progress | → `design/37_sweep-method.md` |
+| D3 | **Sweep method.** OFAT explore on development tasks → pre-registered held-out confirmation; factor/level registry; multiplicity and winner's-curse controls; when a knob is exercised (e.g. compaction under a large context window); budgets. Depends D1, E2. Reqs `REQ-XD-201…`. | D | done | [37_sweep-method.md](design/37_sweep-method.md) |
 
 ## E. HIR native representation
 
@@ -127,7 +127,7 @@ into the spec's convention verbatim; IDs are append-only and never renumbered.
 
 | id | item | owner | status | evidence |
 |---|---|---|---|---|
-| H1 | **Program plan and synthesis readiness.** Phase ordering and dependency DAG, every gate (provisioning, spend, parity margin, publication) and HUMAN row, budget envelopes, the amendment/ADR register (incl. the TB 2.0→1.0 substitution never recorded, `evaluate_costs`, claims graduation), sizing for decomposition, cross-note conflict resolution. Depends on all other rows. Reqs `REQ-XH-001…`. | A | open | → `design/40_program-plan.md` |
+| H1 | **Program plan and synthesis readiness.** Phase ordering and dependency DAG, every gate (provisioning, spend, parity margin, publication) and HUMAN row, budget envelopes, the amendment/ADR register (incl. the TB 2.0→1.0 substitution never recorded, `evaluate_costs`, claims graduation), sizing for decomposition, cross-note conflict resolution. Depends on all other rows. Reqs `REQ-XH-001…`. | A | in-progress | → `design/40_program-plan.md` |
 
 ## O. Spec synthesis & review process
 
@@ -192,6 +192,7 @@ an agent recommendation is never recorded as an operator answer.
 | Q-X41 | Harbor pin given `skip_install` landed after v0.25.0 (C4): wait for the first release containing it (C4 recommends), pin untagged commit `ff2a1ef4`, or keep v0.25.0 with differing O-surface images | | ratification / first phase-2 build gate |
 | Q-X42 | Terminus-2 HIR stage as a later gated block after mini-swe-agent's L1 gate passes, not the first Round-6 build (E2 recommends; ~3 more ADRs, ~6 tickets) | | H1, ratification |
 | Q-X43 | Results-site choices (F2 Q-F2-1…6): approve the "Instrument — calibrated readout" identity at a rendered mock-review gate after the first site ticket; system fonts only in v1 vs vendored OFL fonts via ADR; trajectories fetched in-site from the public HF dataset (F2 recommends; conflicts with F1's no-third-party-request pattern) vs dataset links only vs unpublished; Pages via SHA-pinned Actions + ADR vs `gh-pages` branch; default project URL vs custom domain; a `[results-site]` card in `docs/evidence.md` | | mock-review gate (identity); ratification (rest) |
+| Q-X44 | Phase-4 design choices (D3): compaction tested as "strategy under a declared window cap W" (W fixed by a token-count-only rule; never padding) or dropped from phase 4; reasoning effort as a factor (`low`/`max` around a `high` pin); explore on 11 cheapest-band dev tasks vs all 20; confirm 1 vs 2 configurations (+ combination?) on 37 vs 54 held-out tasks; fund an `edit_file` capability for the tool-surface level; start exploration after the phase-3 L2 verdict (D3 recommends) vs right after L1; a later cost-reduction claim track (needs a new admitted method) | | ratification (D3 recommendations stand until then) |
 | Q-X20 | Ratify the reviewed spec and hand it to decomposition | | O3 |
 
 ## Change log
@@ -211,3 +212,4 @@ an agent recommendation is never recorded as an operator answer.
 - 2026-11-06T23:58:43Z — Accepted D1 (`design/35`, 17 findings, REQ-XD-001…092; primary contrasts reuse §4.3 machinery at k=5; n-arm protocol + quote need ADRs; 87 tasks after 2 QEMU exclusions → 20 dev / 67 held-out; tranche 1 = 37 held-out ≤900 s tasks; recommendations Q-X22 `high`, Q-X27 latest stable at pre-registration with exact locks (mini-swe-agent 2.4.6, LiteLLM pinned), Q-X28 8×10×2 + 24-trial smoke ≈ $44), C4 (`design/34`, 18 findings, REQ-XC-301…329; blocking finding: Harbor `skip_install` post-dates v0.25.0), E2 (`design/38`, 19 findings, 23 gaps incl. new G18 — model never sees exec stdout on the live path; REQ-XE-101…132; 1 canonical-spec amendment + 3 ADRs + 1 hh-embed schema change for mini-swe-agent). Stream B/C checkpoint answers recorded verbatim: Q-X37, Q-X39a, Q-X35. New pending Q-X40…Q-X42. Disk pressure noted (data volume 98%; coordinator removed only its own read-only scratch clones; another session's 33 GB `target/` is the main consumer). Wave-4 next: D3, F2.
 - 2026-11-06T23:58:49Z — Wave-4 assignments: D3 → `design/37_sweep-method.md` (inputs design/35, 36, 38; research/25–28); F2 → `design/39_results-site.md` (inputs research/29, design/35, 30, 33; coordinator visual-pass notes passed in the assignment).
 - 2026-11-07T00:15:06Z — Accepted F2 (`design/39`, identity "Instrument — the calibrated readout"; stdlib-Python generator under `scripts/site/` → drift-checked `docs/results/site-data/`; shared `scripts/claims-lexicon.json`; claims checker 14 legs / 21 mutations; separate gated `pages.yml`; contrast script passes WCAG 4.5:1 both themes; scatter identifies harnesses by monogram + direct label because the 8-colour palette fails ΔE in scatters). Beauty explicitly unestablished until a rendered mock — carried as a mock-review gate. New pending Q-X43.
+- 2026-11-07T00:17:16Z — Accepted D3 (`design/37`, 16 findings, REQ-XD-201…225; 9 levels over 7 factors; exploration 550 trials ≈ $28–187; confirmation 555 trials ≈ $28–189; simulated false-confirmation ≤ 2.6%, power for a true +5 pt gain 0.13–0.26 — "not confirmed" is the likely honest outcome). All A–F rows done. New pending Q-X44. Wave-5 assignment: H1 → `design/40_program-plan.md` (inputs: every accepted note's closing sections + targeted bodies via a coordinator digest; resolves cross-note conflicts; ADR/amendment register; gates; sizing).
