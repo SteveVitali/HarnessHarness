@@ -659,9 +659,18 @@ fn ac4_engine_reattempts_within_bounds() {
     // The attempt's claim lease expires on the store clock — the
     // simulated clock advances past `claim_ttl_ms` each turn so the
     // engine's re-claim fences the stale one (production waits real
-    // ms); the writer TTL stays far above a turn's advance so subject
-    // binds survive a launch→reap crossing.
+    // ms). The quantum must stay tiny: `step_hook` runs once per
+    // scheduling TURN, and a turn is ~15ms of wall time whether or not
+    // a spawned slot-worker has exited — so a large fixed advance
+    // couples the simulated window to host speed and a loaded CI leg
+    // walks `now` past the dead-man cut-off mid-drive (ubuntu CI:
+    // retries withheld, `by_plan` never reached 3). With
+    // `claim_ttl_ms = 1` and a 1ms advance a claim armed this turn
+    // fences deterministically on the next (`expires_at <= now`) and
+    // same-turn `launch` still satisfies `expires_at > now`; the
+    // window needs ~86M turns to cut off — unreachable under any load.
     packet.writer_ttl_ms = 86_400_000;
+    packet.claim_ttl_ms = 1;
     let clock2 = clock.clone();
     let report = coordinator::drive_window(
         &mut store,
@@ -669,7 +678,7 @@ fn ac4_engine_reattempts_within_bounds() {
         &packet,
         &cfg_for(&root, &packet),
         &hh_runner(),
-        &mut move || clock2.advance(31_000),
+        &mut move || clock2.advance(1),
     )
     .unwrap();
     let events = store.events(&report.run_id).unwrap().to_vec();
