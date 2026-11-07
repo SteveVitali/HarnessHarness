@@ -100,6 +100,205 @@ impl Json {
     }
 }
 
+/// `PJson` — the **provider-bytes** tree (R6.10; design/33 F6;
+/// REQ-XC-103). Same grammar and the same one scanner as [`Json`], but a
+/// non-integer number lexeme is preserved as `Num(lexeme)` — *distinct
+/// from* `Str`, so a pass-through codec can mutate a request body and
+/// re-serialize without quoting `0.7` into `"0.7"`. Objects ride a
+/// `BTreeMap`, so `to_provider_string` is canonical (sorted keys,
+/// compact) — the canonicalizer's own spelling, never a second one
+/// (CC1). `PJson` never content-addresses: the canonical `Json`
+/// projection (`to_json` / [`parse`]/[`parse_provider`]) stays
+/// float-free and remains the only hashable form.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PJson {
+    /// `null`.
+    Null,
+    /// `true` | `false`.
+    Bool(bool),
+    /// An integer literal.
+    Int(i64),
+    /// A non-integer number lexeme, verbatim (`0.7`, `1e-3`).
+    Num(String),
+    /// A string.
+    Str(String),
+    /// An array.
+    Arr(Vec<PJson>),
+    /// An object (sorted-key by construction).
+    Obj(BTreeMap<String, PJson>),
+}
+
+impl PJson {
+    /// `get(key)` — object member lookup.
+    pub fn get(&self, key: &str) -> Option<&PJson> {
+        match self {
+            PJson::Obj(m) => m.get(key),
+            _ => None,
+        }
+    }
+
+    /// Mutable object-member lookup.
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut PJson> {
+        match self {
+            PJson::Obj(m) => m.get_mut(key),
+            _ => None,
+        }
+    }
+
+    /// The object map, when this is an object.
+    pub fn as_obj(&self) -> Option<&BTreeMap<String, PJson>> {
+        match self {
+            PJson::Obj(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// The object map mutably, when this is an object.
+    pub fn as_obj_mut(&mut self) -> Option<&mut BTreeMap<String, PJson>> {
+        match self {
+            PJson::Obj(m) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// The items, when this is an array.
+    pub fn as_arr(&self) -> Option<&Vec<PJson>> {
+        match self {
+            PJson::Arr(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// The items mutably, when this is an array.
+    pub fn as_arr_mut(&mut self) -> Option<&mut Vec<PJson>> {
+        match self {
+            PJson::Arr(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// The string, when this is a string.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            PJson::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The boolean, when this is a boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            PJson::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    /// The numeric value as `f64` — `Int` or `Num` (the lexeme parsed;
+    /// an unparseable lexeme is `None`, never fabricated).
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            PJson::Int(i) => Some(*i as f64),
+            PJson::Num(lex) => lex.parse::<f64>().ok(),
+            _ => None,
+        }
+    }
+
+    /// The integer value — `Int` directly; a `Num` lexeme only when it
+    /// parses back to the same integer it spells (a usage count the
+    /// provider spelled `123.0` reads as `123`, never truncated).
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            PJson::Int(i) => Some(*i),
+            PJson::Num(lex) => lex
+                .parse::<f64>()
+                .ok()
+                .filter(|f| f.fract() == 0.0 && f.is_finite())
+                .map(|f| f as i64),
+            _ => None,
+        }
+    }
+
+    /// Serialize for the wire: canonical (sorted-key, compact) and
+    /// `Num` lexemes emitted **unquoted** — the byte-faithful
+    /// pass-through form (upstream bytes = downstream bytes + declared
+    /// mutations, REQ-XC-103).
+    pub fn to_provider_string(&self) -> String {
+        let mut out = String::new();
+        self.write_provider(&mut out);
+        out
+    }
+
+    fn write_provider(&self, out: &mut String) {
+        match self {
+            PJson::Null => out.push_str("null"),
+            PJson::Bool(true) => out.push_str("true"),
+            PJson::Bool(false) => out.push_str("false"),
+            PJson::Int(i) => {
+                let _ = write!(out, "{i}");
+            }
+            PJson::Num(lex) => out.push_str(lex),
+            PJson::Str(s) => write_json_string(s, out),
+            PJson::Arr(items) => {
+                out.push('[');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    item.write_provider(out);
+                }
+                out.push(']');
+            }
+            PJson::Obj(map) => {
+                out.push('{');
+                for (i, (k, v)) in map.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    write_json_string(k, out);
+                    out.push(':');
+                    v.write_provider(out);
+                }
+                out.push('}');
+            }
+        }
+    }
+
+    /// The canonical-`Json` projection under provider semantics: every
+    /// `Num` lexeme becomes `Json::Str` (the `parse_provider` rule — no
+    /// float ever enters the hashable form).
+    pub fn to_json(&self) -> Json {
+        match self {
+            PJson::Null => Json::Null,
+            PJson::Bool(b) => Json::Bool(*b),
+            PJson::Int(i) => Json::Int(*i),
+            PJson::Num(lex) | PJson::Str(lex) => Json::str(lex.clone()),
+            PJson::Arr(items) => Json::Arr(items.iter().map(PJson::to_json).collect()),
+            PJson::Obj(m) => Json::Obj(
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.to_json()))
+                    .collect::<BTreeMap<_, _>>(),
+            ),
+        }
+    }
+}
+
+/// `parse_preserve(input)` — the pass-through read: the one scanner,
+/// `Num` lexemes preserved typed (R6.10). Malformed input refuses
+/// exactly as [`parse`] does.
+pub fn parse_preserve(input: &str) -> Result<PJson, JsonError> {
+    let mut p = Parser {
+        bytes: input.as_bytes(),
+        pos: 0,
+    };
+    p.skip_ws();
+    let v = p.value()?;
+    p.skip_ws();
+    if p.pos != p.bytes.len() {
+        return Err(JsonError(format!("trailing data at byte {}", p.pos)));
+    }
+    Ok(v)
+}
+
 fn write_json_string(s: &str, out: &mut String) {
     out.push('"');
     for c in s.chars() {
@@ -133,7 +332,7 @@ impl std::error::Error for JsonError {}
 /// objects, arrays, strings, integers, booleans and null. Floats are rejected (integers
 /// only — see the canonicalization rule above).
 pub fn parse(input: &str) -> Result<Json, JsonError> {
-    parse_impl(input, false)
+    parse_preserve(input).and_then(|v| project(v, false))
 }
 
 /// `parse_provider(input)` — the *inbound* provider-bytes read (R4.5b):
@@ -145,30 +344,48 @@ pub fn parse(input: &str) -> Result<Json, JsonError> {
 /// `to_canonical_string` stays deterministic). The *outbound* direction
 /// keeps `parse`'s strictness — the kernel never emits a float.
 pub fn parse_provider(input: &str) -> Result<Json, JsonError> {
-    parse_impl(input, true)
+    parse_preserve(input).and_then(|v| project(v, true))
 }
 
-fn parse_impl(input: &str, float_lexemes: bool) -> Result<Json, JsonError> {
-    let mut p = Parser {
-        bytes: input.as_bytes(),
-        pos: 0,
-        float_lexemes,
-    };
-    p.skip_ws();
-    let v = p.value()?;
-    p.skip_ws();
-    if p.pos != p.bytes.len() {
-        return Err(JsonError(format!("trailing data at byte {}", p.pos)));
+/// Project a parsed [`PJson`] to the canonical [`Json`]: strict mode
+/// refuses `Num` (the `parse` rule); provider mode folds it to
+/// `Json::Str` (the `parse_provider` rule). One scanner, two
+/// projections — the projection is the only difference between the two
+/// public parses (CC1).
+fn project(v: PJson, provider: bool) -> Result<Json, JsonError> {
+    match v {
+        PJson::Null => Ok(Json::Null),
+        PJson::Bool(b) => Ok(Json::Bool(b)),
+        PJson::Int(i) => Ok(Json::Int(i)),
+        PJson::Num(lex) => {
+            if provider {
+                // The raw lexeme preserved as a string — a value the
+                // model plane can surface verbatim (e.g. usage
+                // `timings`) without inventing a float type into the
+                // canonical form.
+                Ok(Json::Str(lex))
+            } else {
+                Err(JsonError("non-integer numbers are not permitted".into()))
+            }
+        }
+        PJson::Str(s) => Ok(Json::Str(s)),
+        PJson::Arr(items) => Ok(Json::Arr(
+            items
+                .into_iter()
+                .map(|i| project(i, provider))
+                .collect::<Result<_, _>>()?,
+        )),
+        PJson::Obj(m) => Ok(Json::Obj(
+            m.into_iter()
+                .map(|(k, v)| project(v, provider).map(|v| (k, v)))
+                .collect::<Result<_, _>>()?,
+        )),
     }
-    Ok(v)
 }
 
 struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
-    /// `true` = provider mode (`parse_provider`): a non-integer number
-    /// lexeme parses to `Json::Str(lexeme)` — the raw token preserved.
-    float_lexemes: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -186,12 +403,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn value(&mut self) -> Result<Json, JsonError> {
+    fn value(&mut self) -> Result<PJson, JsonError> {
         self.skip_ws();
         match self.peek() {
             Some(b'{') => self.object(),
             Some(b'[') => self.array(),
-            Some(b'"') => Ok(Json::Str(self.string()?)),
+            Some(b'"') => Ok(PJson::Str(self.string()?)),
             Some(b't') | Some(b'f') => self.boolean(),
             Some(b'n') => self.null(),
             Some(b) if b == b'-' || b.is_ascii_digit() => self.number(),
@@ -200,13 +417,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn object(&mut self) -> Result<Json, JsonError> {
+    fn object(&mut self) -> Result<PJson, JsonError> {
         self.pos += 1; // {
         let mut map = BTreeMap::new();
         self.skip_ws();
         if self.peek() == Some(b'}') {
             self.pos += 1;
-            return Ok(Json::Obj(map));
+            return Ok(PJson::Obj(map));
         }
         loop {
             self.skip_ws();
@@ -228,20 +445,20 @@ impl<'a> Parser<'a> {
                 }
                 Some(b'}') => {
                     self.pos += 1;
-                    return Ok(Json::Obj(map));
+                    return Ok(PJson::Obj(map));
                 }
                 _ => return Err(JsonError("expected ',' or '}'".into())),
             }
         }
     }
 
-    fn array(&mut self) -> Result<Json, JsonError> {
+    fn array(&mut self) -> Result<PJson, JsonError> {
         self.pos += 1; // [
         let mut items = Vec::new();
         self.skip_ws();
         if self.peek() == Some(b']') {
             self.pos += 1;
-            return Ok(Json::Arr(items));
+            return Ok(PJson::Arr(items));
         }
         loop {
             let val = self.value()?;
@@ -253,7 +470,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(b']') => {
                     self.pos += 1;
-                    return Ok(Json::Arr(items));
+                    return Ok(PJson::Arr(items));
                 }
                 _ => return Err(JsonError("expected ',' or ']'".into())),
             }
@@ -312,7 +529,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn number(&mut self) -> Result<Json, JsonError> {
+    fn number(&mut self) -> Result<PJson, JsonError> {
         let start = self.pos;
         if self.peek() == Some(b'-') {
             self.pos += 1;
@@ -325,9 +542,10 @@ impl<'a> Parser<'a> {
             }
         }
         // The fraction/exponent tail — `.`/`e`/`E` opens it, a `+`/`-`
-        // binds only immediately after an exponent marker. Strict mode
-        // refuses the first non-integer byte; provider mode scans the
-        // whole lexeme and preserves it verbatim as `Json::Str`.
+        // binds only immediately after an exponent marker. The whole
+        // lexeme scans under every mode; strictness lives in the
+        // `project` step (`parse` refuses `Num`, `parse_provider`
+        // folds it to `Str`, `parse_preserve` keeps it typed).
         let mut is_float = false;
         while let Some(b) = self.peek() {
             let opens = b == b'.' || b == b'e' || b == b'E';
@@ -339,9 +557,6 @@ impl<'a> Parser<'a> {
                 );
             if !(opens || exp_sign) {
                 break;
-            }
-            if opens && !is_float && !self.float_lexemes {
-                return Err(JsonError("non-integer numbers are not permitted".into()));
             }
             is_float = true;
             self.pos += 1;
@@ -355,32 +570,29 @@ impl<'a> Parser<'a> {
         }
         let text = std::str::from_utf8(&self.bytes[start..self.pos]).unwrap();
         if is_float {
-            // The raw lexeme preserved as a string — a value the model
-            // plane can surface verbatim (e.g. usage `timings`) without
-            // inventing a float type into the canonical form.
-            return Ok(Json::Str(text.to_string()));
+            return Ok(PJson::Num(text.to_string()));
         }
         text.parse::<i64>()
-            .map(Json::Int)
+            .map(PJson::Int)
             .map_err(|_| JsonError(format!("bad integer {text:?}")))
     }
 
-    fn boolean(&mut self) -> Result<Json, JsonError> {
+    fn boolean(&mut self) -> Result<PJson, JsonError> {
         if self.bytes[self.pos..].starts_with(b"true") {
             self.pos += 4;
-            Ok(Json::Bool(true))
+            Ok(PJson::Bool(true))
         } else if self.bytes[self.pos..].starts_with(b"false") {
             self.pos += 5;
-            Ok(Json::Bool(false))
+            Ok(PJson::Bool(false))
         } else {
             Err(JsonError("bad literal".into()))
         }
     }
 
-    fn null(&mut self) -> Result<Json, JsonError> {
+    fn null(&mut self) -> Result<PJson, JsonError> {
         if self.bytes[self.pos..].starts_with(b"null") {
             self.pos += 4;
-            Ok(Json::Null)
+            Ok(PJson::Null)
         } else {
             Err(JsonError("bad literal".into()))
         }

@@ -303,7 +303,7 @@ impl EmbedService {
             bound_eid
                 .as_ref()
                 .and_then(|eid| self.store.events(eid).ok())
-                .map(|evs| hharness_experiment::view::ExperimentView::fold(&evs))
+                .map(hharness_experiment::view::ExperimentView::fold)
         } else {
             None
         };

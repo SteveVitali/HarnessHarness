@@ -682,6 +682,41 @@ impl HttpModelTransport {
         body: &[u8],
         auth: Option<AuthKind>,
     ) -> Result<RawExchange, ModelError> {
+        self.forward_raw_method(
+            "POST",
+            credential,
+            endpoint_ref,
+            op,
+            kept_headers,
+            body,
+            auth,
+        )
+    }
+
+    /// `forward_raw_method(method, …)` — [`HttpModelTransport::forward_raw`]
+    /// under a caller-declared HTTP method: the §4.2 table's
+    /// `GET /v1/models` forward is the only non-POST surface
+    /// (REQ-XC-105); everything else rides `forward_raw`'s POST.
+    /// A `GET`/`HEAD` carries an empty body by construction — a
+    /// non-empty body on a body-less method is a typed
+    /// `invalid_request` refusal, never silently dropped.
+    #[allow(clippy::too_many_arguments)]
+    pub fn forward_raw_method(
+        &mut self,
+        method: &str,
+        credential: &CredentialHandle,
+        endpoint_ref: &str,
+        op: &str,
+        kept_headers: &[(&str, &str)],
+        body: &[u8],
+        auth: Option<AuthKind>,
+    ) -> Result<RawExchange, ModelError> {
+        if matches!(method, "GET" | "HEAD") && !body.is_empty() {
+            return Err(ModelError::new(
+                ModelErrorClass::InvalidRequest,
+                format!("forward_raw_method: {method} carries no body"),
+            ));
+        }
         // `kept_headers` never carry an auth header — the lane derives
         // the wire form from its declared `auth_kinds` (a second auth
         // header would be either a duplicate or a downgrade).
@@ -713,7 +748,7 @@ impl HttpModelTransport {
             headers.push(auth_pair);
         }
         headers.extend_from_slice(kept_headers);
-        http::write_request(&mut sock, "POST", &target, &headers, body)
+        http::write_request(&mut sock, method, &target, &headers, body)
             .map_err(|e| map_io(e, TimeoutKind::Attempt))?;
         let t0 = std::time::Instant::now();
         let at = || t0.elapsed().as_millis() as u64;

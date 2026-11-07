@@ -170,14 +170,11 @@ pub fn token_eq(expected: &str, presented: &str) -> bool {
     acc == 0
 }
 
-/// Mint a ≥128-bit capability token (P2 — `/dev/urandom`, one-shot per
-/// server start).
-pub fn mint_token() -> std::io::Result<String> {
-    use std::io::Read;
-    let mut buf = [0u8; 16];
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
-    Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
-}
+// `mint_token` relocated to `hh-secrets::tokens` (the one lower-layer
+// home — design/33 F4; AR-08; R6.10): this file's local copy was a
+// second implementation; the re-export keeps the surface byte-identical
+// (CC1).
+pub use hharness_secrets::tokens::mint_token;
 
 /// The response hardening header set (P7) — applied to every response;
 /// `api` adds the no-store cache directive (static assets are immutable

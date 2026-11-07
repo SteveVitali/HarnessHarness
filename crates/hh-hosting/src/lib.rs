@@ -59,6 +59,7 @@ pub mod fixture;
 pub mod hosted_status;
 pub mod probes;
 pub mod proj;
+pub mod proxy;
 pub mod records;
 pub mod service;
 

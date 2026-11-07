@@ -97,6 +97,7 @@ pub mod metrics;
 pub mod patterns;
 pub mod redact;
 pub mod signer;
+pub mod tokens;
 pub mod types;
 
 pub use aead::{RingBlobCipher, BLOB_AEAD_ALG};
@@ -134,6 +135,7 @@ pub use signer::{
     LedgerSignerKey, LedgerSignerResolver, SIGNER_ACTIVE_FILE, SIGNER_CHANNEL_ID, SIGNER_FILE_MODE,
     SIGNER_FILE_PREFIX, SIGNER_VAULT_REF,
 };
+pub use tokens::{mint_token, token_matches};
 pub use types::{
     AccessClass, BindingState, KernelPurpose, Placeholder, ProvidedSecret, SecretFingerprint,
     SecretRef, SecretUnavailable,

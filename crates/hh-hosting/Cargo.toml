@@ -23,6 +23,13 @@ hharness-ontology = { path = "../hh-ontology", version = "0.1.0" }
 hharness-hir = { path = "../hh-hir", version = "0.1.0" }
 hharness-ledger = { path = "../hh-ledger", version = "0.1.0" }
 hharness-budget = { path = "../hh-budget", version = "0.1.0" }
+hharness-gateway = { path = "../hh-gateway", version = "0.1.0" }
+hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
+hharness-tls = { path = "../hh-tls", version = "0.1.0" }
+
+[[bin]]
+name = "hh-model-proxy"
+path = "src/bin/hh-model-proxy.rs"
 
 [dev-dependencies]
 hharness-telemetry = { path = "../hh-telemetry" }

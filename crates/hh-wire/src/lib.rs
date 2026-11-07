@@ -10,6 +10,7 @@ pub mod canonical;
 pub mod http;
 pub mod json;
 pub mod jsonrpc;
+pub mod l1_canon;
 pub mod sha256;
 pub mod sha512;
 

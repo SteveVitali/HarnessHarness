@@ -534,12 +534,15 @@ name = "hharness-hosting"
 version = "0.1.0"
 dependencies = [
  "hharness-budget",
+ "hharness-gateway",
  "hharness-hir",
  "hharness-identity",
  "hharness-ledger",
  "hharness-ontology",
  "hharness-provenance",
+ "hharness-secrets",
  "hharness-telemetry",
+ "hharness-tls",
  "hharness-wire",
 ]
 

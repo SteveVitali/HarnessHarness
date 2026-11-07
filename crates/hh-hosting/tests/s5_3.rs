@@ -89,6 +89,7 @@ fn policy() -> GenParamPolicy {
         default: [("top_p".to_string(), Json::Int(1_000_000))]
             .into_iter()
             .collect(),
+        ..Default::default()
     }
 }
 

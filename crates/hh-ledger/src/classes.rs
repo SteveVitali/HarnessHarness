@@ -1404,6 +1404,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.analysis.superseded", "none"),
     // ── measurement:cost ──
     ("measurement.cost.attributed", "hint"),
+    ("measurement.cost.reconciled", "hint"),
     // ── measurement:evolution ──
     ("measurement.evolution.candidate.transitioned", "hint"),
     ("measurement.evolution.campaign.opened", "hint"),
@@ -1437,6 +1438,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.experiment.selection_revision", "none"),
     // ── measurement:export ──
     ("measurement.export.delivered", "none"),
+    // ── measurement:provider ──
+    ("measurement.provider.usage.observed", "hint"),
     // ── measurement:harness_edit ──
     ("measurement.harness_edit.applied", "none"),
     // ── measurement:leaderboard ──
@@ -2162,6 +2165,20 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // provenance, basis}`; ADR-0043's measurement stamps ride the payload).
     // Kernel-produced (the account derives it), provenance mandatory.
     row("measurement.cost.attributed",     Led, O::Events, false, true,  None, None),
+    // AR-08 (R6.10; design/33 F8; REQ-XC-108): the phase proxy run's two
+    // provider-telemetry classes — `measurement.provider.usage.observed`
+    // (one `/api/usage` or `/api/balance` snapshot: `{endpoint, query,
+    // read_ms, status, body_ref}` — the body rides a blob ref) and
+    // `measurement.cost.reconciled` (`{window, hh_micros,
+    // provider_micros, diff_micros, status}` — HH sums vs provider
+    // buckets, signed difference, verdict). Both ledgered and
+    // audit-grade with `kernel_origin` — the `hh-model-proxy` process is
+    // its phase run's sole writer and mints
+    // `producer.component_class = "kernel"` (the `hh-runner`
+    // precedent); the payload dossier is the proxy's own §4.3 contract,
+    // so the open partition stands.
+    row_audit("measurement.provider.usage.observed", O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("measurement.cost.reconciled",       O::Events, true, OPEN_AUDIT, &[], None, None),
     // `measurement.export.delivered{sink_id, view_kind, seq_range,
     // content_classes, loss_report_ref}` (§5h.1 §2.2/§6 — "the only ledger append
     // an exporter may make", a kernel-appended fact with mandatory provenance
