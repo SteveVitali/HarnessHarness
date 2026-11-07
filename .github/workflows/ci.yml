@@ -272,6 +272,13 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-runner-edges.sh
 
+      # R6.12 / REQ-XC-125 (ADR-0430): every proxy-machinery acceptance
+      # test runs on a fixture or replay upstream; a live endpoint
+      # literal must be #[ignore]d and cite ADR-0363.
+      - name: Proxy offline-only check (REQ-XC-125)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-proxy-offline.sh
+
       # L4.3 / MINOR-2: rustdoc warnings are build noise the public repo
       # cannot carry; one matrix leg suffices.
       - name: Rustdoc warnings gate

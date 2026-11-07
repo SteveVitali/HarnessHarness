@@ -1460,6 +1460,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("model.call.requested", "model.call.started"),
     // ── model:profile ──
     ("model.profile.expired_used", "hint"),
+    // ── model:proxy ──
+    ("model.proxy.recording.sealed", "none"),
     ("model.profile.probed", "hint"),
     ("model.profile.status.changed", "hint"),
     // ── model:rerouted ──
@@ -1734,6 +1736,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // (R-2.3.3): the declared-probe outcome for a bound profile
     // (`status`, `capability`, `rule_id`, `report_ref` members).
     row("model.profile.probed",            Led, O::ModelIo, false, false, None, None),
+    // `model.proxy.recording.sealed` — the §4.9 record-mode seal row
+    // (R6.12; REQ-XC-122): `{slot_id, recording_ref, calls,
+    // provenance, schema}` — the manifest rides a blob ref; minted
+    // kernel-origin by the `hh-model-proxy` sole writer like the
+    // attempt rows above.
+    row("model.proxy.recording.sealed", Led, O::ModelIo, false, false, None, None),
     // `model.profile.status.changed` — the §5b.3 g-i/b.4 re-resolve
     // transition record (R-2.3.3): a bound profile's declared
     // `expiry.status` moved under re-resolution; `from`/`to`/`trigger`/

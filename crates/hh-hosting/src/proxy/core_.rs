@@ -29,6 +29,7 @@ use hharness_budget::usage::TokenDecomposition;
 use hharness_gateway::dialect::WireDialect;
 use hharness_gateway::gateway::CredentialHandle;
 use hharness_gateway::http_transport::{HttpModelTransport, RawExchange, RawFailure};
+use hharness_gateway::replay::{canonicalizer_for, MatchVerdict};
 use hharness_gateway::snapshot::ModelSnapshotRecord;
 use hharness_gateway::vocab::ModelErrorClass;
 use hharness_ledger::event::{Event, Producer, Scope};
@@ -52,6 +53,10 @@ use super::budget::{
     parse_rfc3339_ms, refusal_is_premature, reservation_micros, ProxyAuthorization,
 };
 use super::lane::{ProxyLane, Reservation, Route, Surface};
+use super::replay::{
+    rechunk, replay_pick, Keying, LatencyMode, ProxyMode, RecordedCall, RecordedReleased,
+    RecordedResponse, Recording, ReplayPick, RECORDING_SCHEMA,
+};
 use super::{FilteredHeaders, PROXY_VERSION, RECEIPT_MEDIA, RECEIPT_SCHEMA};
 
 /// The component variant spelling stamped on every row.
@@ -109,6 +114,12 @@ pub struct ProxyConfig {
     /// (REQ-XC-112, REQ-XH-005, REQ-XH-120). A missing authorization
     /// refuses typed at `configure`.
     pub authorization: ProxyAuthorization,
+    /// The proxy mode (§4.9; REQ-XC-122): `live` (R6.10/11's path),
+    /// `record` (live + the per-slot capture `seal_recording` seals),
+    /// `replay` (no upstream port, no budget charge — the recorded
+    /// responses serve the slot sequences under the declared
+    /// canonicalizer + divergence policy).
+    pub mode: ProxyMode,
 }
 
 /// One registered slot.
@@ -154,6 +165,17 @@ struct Core {
     /// opens exactly one turn at configure (`lifecycle.turn.started`)
     /// and every call's scope carries it.
     turn_id: String,
+    /// `record` mode — the per-slot capture `seal_recording` seals into
+    /// a `hh.model_proxy.recording/1` manifest (REQ-XC-122).
+    recording: BTreeMap<String, Vec<RecordedCall>>,
+    /// `replay` mode — served recording indices per slot (the
+    /// `sequence` position is the smallest unserved index;
+    /// `sequence_then_hash` may serve ahead and leave gaps that stay
+    /// outstanding).
+    replay_used: BTreeMap<String, std::collections::BTreeSet<usize>>,
+    /// `replay` mode, strict — a slot that hit `replay_diverged` is
+    /// ended: every later request refuses the same verdict.
+    slot_diverged: std::collections::BTreeSet<String>,
 }
 
 impl Core {
@@ -527,6 +549,9 @@ impl Proxy {
             catalog_baseline: None,
             drift_observed: false,
             turn_id: String::new(),
+            recording: BTreeMap::new(),
+            replay_used: BTreeMap::new(),
+            slot_diverged: std::collections::BTreeSet::new(),
         };
         if resumed {
             // The restart path (REQ-XC-124): adopt the phase turn and
@@ -581,9 +606,13 @@ impl Proxy {
             // The root pool — `spend` hard ceiling = the carried phase
             // cap `A_eff × (1 − m) − Σ priors` (REQ-XC-112, REQ-XH-005,
             // REQ-XH-120; one proxy run per paid phase, one slice per
-            // slot under it).
+            // slot under it). §4.9 `replay` allocates no pool at all —
+            // no budget charge by construction (no `control.budget.*`
+            // row lands for a replay run).
             let pool = cfg.authorization.pool_micros()?;
-            let root = {
+            let root = if matches!(cfg.mode, ProxyMode::Replay(_)) {
+                "replay:none".to_string()
+            } else {
                 let mut acct = Account::open(&mut core.store, &core.cfg.run_id)
                     .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
                 acct.allocate(
@@ -606,9 +635,19 @@ impl Proxy {
             };
             core.cfg.lane.root_budget_id = root;
         }
+        // §4.9 — a replay run has no upstream port: the declared
+        // canonicalizer must bind at configure (an unknown spelling is
+        // a config refusal, never a silent `identity` fallback) and the
+        // catalog probe is skipped — replay makes no upstream contact.
+        if let ProxyMode::Replay(rc) = &cfg.mode {
+            canonicalizer_for(&rc.canonicalizer_id, &rc.cell_facts)
+                .map_err(|e| ProxyError::Config(format!("replay canonicalizer: {}", e.detail)))?;
+        }
         // §4.6 — the run-start catalog probe (REQ-XC-119): `model.profile.probed`
         // with the `/api/tags` + `/api/show` bodies and the identity tuple.
-        probe_catalog(&mut core, "run_start")?;
+        if !matches!(cfg.mode, ProxyMode::Replay(_)) {
+            probe_catalog(&mut core, "run_start")?;
+        }
         let listener = TcpListener::bind(&cfg.listen)
             .map_err(|e| ProxyError::Io(format!("bind {}: {e}", cfg.listen)))?;
         let bound = listener
@@ -712,6 +751,19 @@ impl Proxy {
                     Err(e) => err_json(&format!("{e}")),
                 }
             }
+            // §4.9 — `record` mode seals the slot's capture into a
+            // `hh.model_proxy.recording/1` manifest (blob-deposited,
+            // leak-scanned; the sealed row is `model.proxy.recording.sealed`).
+            "seal_recording" => {
+                let slot_id = params.get("slot_id").and_then(Json::as_str).unwrap_or("");
+                match self.seal_recording(slot_id) {
+                    Ok((r, doc)) => Json::obj([(
+                        "ok",
+                        Json::obj([("recording_ref", Json::str(r)), ("recording", doc)]),
+                    )]),
+                    Err(e) => err_json(&format!("{e}")),
+                }
+            }
             // §4.6 — run end probes once more before teardown.
             "stop" => match probe_catalog(&mut self.core, "run_end") {
                 Ok(()) => Json::obj([("ok", Json::obj([]))]),
@@ -739,7 +791,11 @@ impl Proxy {
         }
         let token = mint_token().map_err(|e| ProxyError::Io(format!("mint: {e}")))?;
         let binding_id = core.store.alloc_id("bind");
-        let budget_id = {
+        // §4.9 `replay` — no slice budget: the slot binds its token and
+        // effort but allocates nothing (no `control.budget.*` row).
+        let budget_id = if matches!(core.cfg.mode, ProxyMode::Replay(_)) {
+            "replay:none".to_string()
+        } else {
             let mut acct = Account::open(&mut core.store, &core.cfg.run_id)
                 .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
             acct.allocate(
@@ -829,11 +885,52 @@ impl Proxy {
             vec![],
         );
         append(core, vec![ev])?;
-        let mut acct = Account::open(&mut core.store, &core.cfg.run_id)
-            .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
-        acct.complete(&core.lease, &budget_id)
-            .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
+        // §4.9 `replay` — no slice was allocated; nothing to complete.
+        if !matches!(core.cfg.mode, ProxyMode::Replay(_)) {
+            let mut acct = Account::open(&mut core.store, &core.cfg.run_id)
+                .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
+            acct.complete(&core.lease, &budget_id)
+                .map_err(|e| ProxyError::Ledger(format!("{e}")))?;
+        }
         Ok(())
+    }
+
+    /// `seal_recording(slot_id)` — `record` mode only: seal the slot's
+    /// captured calls into a `hh.model_proxy.recording/1` manifest,
+    /// deposit it (leak-scanned like every blob), land
+    /// `model.proxy.recording.sealed`, and return `(ref, doc)`.
+    pub fn seal_recording(&mut self, slot_id: &str) -> Result<(String, Json), ProxyError> {
+        let core = &mut self.core;
+        if !matches!(core.cfg.mode, ProxyMode::Record) {
+            return Err(ProxyError::Config(
+                "seal_recording: mode is not record".into(),
+            ));
+        }
+        let calls = core.recording.remove(slot_id).unwrap_or_default();
+        let rec = Recording {
+            slot_id: slot_id.to_string(),
+            provenance: "recorded".to_string(),
+            calls,
+        };
+        let doc = rec.to_json();
+        let n = rec.calls.len();
+        let bytes = doc.to_canonical_string().into_bytes();
+        let (r, _hits) = deposit(core, "recording", &bytes, BLOB_MEDIA)?;
+        let ev = mint(
+            core,
+            "model.proxy.recording.sealed",
+            Json::obj([
+                ("slot_id", Json::str(slot_id)),
+                ("recording_ref", Json::str(&r)),
+                ("calls", Json::Int(n as i64)),
+                ("provenance", Json::str("recorded")),
+                ("schema", Json::str(RECORDING_SCHEMA)),
+            ]),
+            Scope::default(),
+            vec![],
+        );
+        append(core, vec![ev])?;
+        Ok((r, doc))
     }
 
     /// `tick` — accept and fully handle at most one connection;
@@ -978,6 +1075,11 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
         bound_violated: false,
         served_model: None,
         served_model_match: None,
+        upstream_body: Vec::new(),
+        exchange_capture: None,
+        failure_capture: None,
+        replay: None,
+        replay_consumed: false,
     };
     macro_rules! finish {
         ($disposition:expr, $refusal:expr, $upstream:expr, $released:expr, $reservation:expr, $slot:expr, $gone:expr) => {{
@@ -1169,6 +1271,28 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
             }
         }
     }
+    // ── §4.9 replay — the lane transforms have run (the upstream-bound
+    // body is computed below and matched — P8); there is no
+    // reservation (no budget charge by construction) and no dispatch
+    // (no upstream port). The recorded sequence serves the call
+    // (REQ-XC-122). ──
+    if matches!(core.cfg.mode, ProxyMode::Replay(_)) {
+        call.upstream_body = if matches!(route, Route::Models) {
+            Vec::new()
+        } else {
+            pbody.to_provider_string().into_bytes()
+        };
+        replay_serve(
+            core,
+            &mut stream,
+            &mut timing,
+            &mut call,
+            &slot_id,
+            release_mode,
+            streaming,
+        );
+        return;
+    }
     // ── step 2: the worst-case reservation before queueing
     // (REQ-XC-113) — `ceil(rate_in·(body_bytes + template_overhead) +
     // rate_out·max_output_bound)` at the uncached input rate for
@@ -1339,6 +1463,7 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
     } else {
         pbody.to_provider_string().into_bytes()
     };
+    call.upstream_body = upstream_body.clone();
     let q_wait = gate.admit();
     timing.queue_wait_ms = q_wait;
     timing.dequeued_ms = Some(core.store.now_ms());
@@ -1434,6 +1559,26 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
     match dispatched {
         Err(f) => {
             let detail = format!("{}", f.error);
+            // `record` capture — the transport failure + the partial
+            // exchange (§4.9's ordered upstream exchanges include the
+            // failed leg).
+            call.failure_capture = Some((
+                match f.error.class {
+                    ModelErrorClass::Timeout(_) => "timeout",
+                    ModelErrorClass::Network => "network",
+                    _ => "other",
+                }
+                .to_string(),
+                detail.clone(),
+            ));
+            if f.partial.status != 0 || !f.partial.body.is_empty() {
+                call.exchange_capture = Some(RawExchange {
+                    status: f.partial.status,
+                    headers: f.partial.headers.clone(),
+                    body: f.partial.body.clone(),
+                    chunk_stamps: f.partial.chunk_stamps.clone(),
+                });
+            }
             let ev = mint(
                 core,
                 "model.call.attempt.failed",
@@ -1511,6 +1656,7 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
                     release_mode,
                     identical_to_upstream: false,
                     head_committed: streaming,
+                    chunks: None,
                 }),
                 reservation,
                 Some(&slot_id),
@@ -1556,6 +1702,13 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
                     return;
                 }
             };
+            // `record` capture — the verbatim exchange (§4.9).
+            call.exchange_capture = Some(RawExchange {
+                status: ex.status,
+                headers: ex.headers.clone(),
+                body: ex.body.clone(),
+                chunk_stamps: ex.chunk_stamps.clone(),
+            });
             call.usage = call.surface.map(|s| usage_cost(&s, &ex, &core.cfg.lane));
             call.released_headers = Some(out_headers(&ex.headers));
             call.upstream_refs = Some((req_ref, Some(resp_ref), ex.status, true));
@@ -1600,6 +1753,7 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
                         release_mode,
                         identical_to_upstream: !streaming,
                         head_committed: streaming,
+                        chunks: None,
                     }),
                     reservation,
                     Some(&slot_id),
@@ -1628,6 +1782,7 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
                         release_mode,
                         identical_to_upstream: false,
                         head_committed: true,
+                        chunks: None,
                     }),
                     reservation,
                     Some(&slot_id),
@@ -1646,6 +1801,7 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
                     release_mode,
                     identical_to_upstream: true,
                     head_committed: streaming,
+                    chunks: None,
                 }),
                 reservation,
                 Some(&slot_id),
@@ -1667,6 +1823,9 @@ struct ReleaseBody {
     release_mode: &'static str,
     identical_to_upstream: bool,
     head_committed: bool,
+    /// `replay` streaming serve — the deterministic chunk segmentation
+    /// (P7). `None` writes `bytes` as one chunk (the live path).
+    chunks: Option<Vec<Vec<u8>>>,
 }
 
 impl ReleaseBody {
@@ -1680,6 +1839,7 @@ impl ReleaseBody {
             release_mode: "buffered",
             identical_to_upstream: false,
             head_committed: false,
+            chunks: None,
         }
     }
 }
@@ -1729,6 +1889,61 @@ fn finish(
     // §4.8 — the client abandoned before release: the receipt says
     // `client_gone`, the charge still lands.
     let gone = gone_hint || (released.is_some() && client_gone(stream));
+    // §4.9 `record` — capture the call into the slot's in-memory
+    // recording (the manifest `seal_recording` seals; REQ-XC-122).
+    if matches!(core.cfg.mode, ProxyMode::Record) {
+        if let Some(id) = slot_id {
+            core.recording
+                .entry(id.to_string())
+                .or_default()
+                .push(RecordedCall {
+                    k: seq,
+                    downstream_method: call.method.clone(),
+                    downstream_path: call.path.clone(),
+                    downstream_body: call.body.clone(),
+                    upstream_request: if call.upstream_body.is_empty() {
+                        None
+                    } else {
+                        Some(call.upstream_body.clone())
+                    },
+                    upstream_response: call.exchange_capture.as_ref().map(|ex| RecordedResponse {
+                        status: ex.status,
+                        headers: ex.headers.clone(),
+                        body: ex.body.clone(),
+                        chunk_stamps: ex.chunk_stamps.clone(),
+                    }),
+                    failure: call.failure_capture.clone(),
+                    released: released.as_ref().map(|rb| RecordedReleased {
+                        status: rb.status,
+                        headers: rb.headers.iter().cloned().collect(),
+                        body: rb.bytes.clone(),
+                    }),
+                    disposition: disposition.to_string(),
+                    latency_ms: released
+                        .as_ref()
+                        .and_then(|_| timing.released_ms.or(timing.receipted_ms))
+                        .unwrap_or(0)
+                        .saturating_sub(timing.received_ms),
+                });
+        }
+    }
+    // §4.9 `replay` — a slot-bound request that reaches the receipt
+    // tail without a serve-leg verdict refused locally (route, policy,
+    // an ended slot); it still consumes one sequence index so the
+    // positions stay aligned with the record-mode capture.
+    if matches!(core.cfg.mode, ProxyMode::Replay(_)) && !call.replay_consumed {
+        if let Some(id) = slot_id {
+            let used = core.replay_used.entry(id.to_string()).or_default();
+            let i = (0usize..).find(|i| !used.contains(i)).unwrap_or(0);
+            used.insert(i);
+            if call.replay.is_none() {
+                call.replay = Some(Json::obj([
+                    ("k", Json::Int(i as i64)),
+                    ("verdict", Json::str("refused_local")),
+                ]));
+            }
+        }
+    }
     let uc = call.usage.take();
     let doc = receipt_doc(
         core,
@@ -1751,6 +1966,7 @@ fn finish(
         refusal.as_ref().map(Refusal::to_json),
         &call.token_hits,
         seq,
+        call.replay.clone(),
     );
     let receipt_bytes = doc.to_canonical_string().into_bytes();
     let receipt_ref = match deposit(core, "receipt", &receipt_bytes, RECEIPT_MEDIA) {
@@ -1918,8 +2134,18 @@ fn finish(
             if rb.head_committed {
                 // `buffered_heartbeat` — the SSE head went out at
                 // dispatch; the buffered body + the terminal
-                // zero-chunk close the stream.
-                let _ = write_chunk(stream, &rb.bytes);
+                // zero-chunk close the stream. A replay serve carries
+                // its declared re-chunk segmentation (P7).
+                match &rb.chunks {
+                    Some(chunks) => {
+                        for c in chunks {
+                            let _ = write_chunk(stream, c);
+                        }
+                    }
+                    None => {
+                        let _ = write_chunk(stream, &rb.bytes);
+                    }
+                }
                 let _ = finish_chunked(stream);
             } else {
                 let mut hdrs = rb.headers.clone();
@@ -1959,6 +2185,23 @@ struct CallCtx {
     /// `Some(false)` when the lane declared `served_model_expected`
     /// and the served spelling is outside it.
     served_model_match: Option<bool>,
+    /// The upstream-bound body after the lane transforms (capture
+    /// point 2 — `record` captures it, `replay` canonicalizes and
+    /// matches it). Empty until the dispatch stage computes it.
+    upstream_body: Vec<u8>,
+    /// `record` mode — the captured upstream exchange
+    /// `(status, headers, body, chunk_stamps)`.
+    exchange_capture: Option<RawExchange>,
+    /// `record` mode — the captured transport failure `(kind, detail)`.
+    failure_capture: Option<(String, String)>,
+    /// `replay` mode — the per-call verdict record for the receipt's
+    /// `proxy.replay` member (`{k, verdict, first_diff_path?, …}`); the
+    /// `consumed` flag marks whether the call already took a sequence
+    /// index (a locally-refused request still consumes one).
+    replay: Option<Json>,
+    /// `replay` mode — the call's sequence index was already consumed
+    /// by the replay serve leg (so `finish` doesn't take a second).
+    replay_consumed: bool,
 }
 
 fn route_surface(route: &Route) -> Option<Surface> {
@@ -1976,6 +2219,454 @@ fn route_label(route: &Route) -> &'static str {
         Route::Models => "models",
         Route::Refused => "refused_route",
     }
+}
+
+/// The §4.9 replay serve leg (REQ-XC-122): no upstream port, no
+/// reservation (no budget charge by construction — X-02), and the
+/// recorded sequence serves the call with a per-call match verdict
+/// on the receipt. The receipt's `disposition` is the recorded call's
+/// own — a recorded `upstream_error` releases the recorded error bytes.
+#[allow(clippy::too_many_lines)]
+fn replay_serve(
+    core: &mut Core,
+    stream: &mut TcpStream,
+    timing: &mut Timing,
+    call: &mut CallCtx,
+    slot_id: &str,
+    release_mode: &'static str,
+    streaming: bool,
+) {
+    let mc = call.mc.clone();
+    // Extract the replay declaration (clone what the serve needs —
+    // `core` borrows mutably below).
+    let (rec, canon_id, cell_facts, strict, keying, latency) = match &core.cfg.mode {
+        ProxyMode::Replay(rc) => (
+            rc.recordings.get(slot_id).cloned(),
+            rc.canonicalizer_id.clone(),
+            rc.cell_facts.clone(),
+            rc.strict,
+            rc.keying,
+            rc.latency,
+        ),
+        _ => return,
+    };
+    let refuse = |core: &mut Core,
+                  stream: &mut TcpStream,
+                  timing: &mut Timing,
+                  call: &mut CallCtx,
+                  disposition: &str,
+                  kind: &'static str,
+                  status: u16,
+                  detail: &str| {
+        finish(
+            core,
+            stream,
+            timing,
+            call,
+            disposition,
+            Some(Refusal {
+                status,
+                kind,
+                path: None,
+                detail: detail.to_string(),
+            }),
+            None,
+            Some(ReleaseBody::json(
+                error_body(call.surface, "hh_proxy", kind, detail).into_bytes(),
+                status,
+            )),
+            None,
+            Some(slot_id),
+            false,
+        );
+    };
+    // An ended slot refuses every later request the same way.
+    if core.slot_diverged.contains(slot_id) {
+        call.replay = Some(Json::obj([("verdict", Json::str("slot_ended"))]));
+        call.replay_consumed = true;
+        refuse(
+            core,
+            stream,
+            timing,
+            call,
+            "replay_diverged",
+            "replay_diverged",
+            409,
+            "slot ended by an earlier strict divergence",
+        );
+        return;
+    }
+    let Some(recording) = rec else {
+        call.replay = Some(Json::obj([("verdict", Json::str("no_recording"))]));
+        call.replay_consumed = true;
+        refuse(
+            core,
+            stream,
+            timing,
+            call,
+            "replay_no_recording",
+            "replay_no_recording",
+            409,
+            "slot carries no recording",
+        );
+        return;
+    };
+    let canon = match canonicalizer_for(&canon_id, &cell_facts) {
+        Ok(c) => c,
+        Err(e) => {
+            call.replay_consumed = true;
+            refuse(
+                core,
+                stream,
+                timing,
+                call,
+                "replay_canon_error",
+                "replay_canon_error",
+                400,
+                &e.detail,
+            );
+            return;
+        }
+    };
+    let surface_label = call.surface.map(|s| s.as_str()).unwrap_or("");
+    let pick = {
+        let used = core.replay_used.entry(slot_id.to_string()).or_default();
+        match replay_pick(
+            &recording,
+            used,
+            keying,
+            canon.as_ref(),
+            surface_label,
+            &call.upstream_body,
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                call.replay_consumed = true;
+                refuse(
+                    core,
+                    stream,
+                    timing,
+                    call,
+                    "replay_canon_error",
+                    "replay_canon_error",
+                    400,
+                    &e.detail,
+                );
+                return;
+            }
+        }
+    };
+    let (index, verdict, canonical) = match pick {
+        ReplayPick::Exhausted => {
+            // P5 — the typed end-of-sequence refusal.
+            call.replay = Some(Json::obj([
+                ("verdict", Json::str("exhausted")),
+                ("canonicalizer", Json::str(&canon_id)),
+            ]));
+            call.replay_consumed = true;
+            refuse(
+                core,
+                stream,
+                timing,
+                call,
+                "replay_exhausted",
+                "replay_exhausted",
+                409,
+                "recorded sequence exhausted — an extra request counts as a fail",
+            );
+            return;
+        }
+        ReplayPick::NoRecording => unreachable!("recording checked above"),
+        ReplayPick::Serve {
+            index,
+            verdict,
+            canonical,
+        } => (index, verdict, canonical),
+    };
+    // Consume the served index and record the verdict (P4).
+    core.replay_used
+        .entry(slot_id.to_string())
+        .or_default()
+        .insert(index);
+    call.replay_consumed = true;
+    {
+        let mut rj = BTreeMap::new();
+        rj.insert("k".into(), Json::Int(index as i64));
+        rj.insert("verdict".into(), Json::str(verdict.as_str()));
+        if let MatchVerdict::Diverged { first_diff_path } = &verdict {
+            rj.insert("first_diff_path".into(), Json::str(first_diff_path));
+        }
+        rj.insert("canonicalizer".into(), Json::str(canon.id()));
+        rj.insert(
+            "keying".into(),
+            Json::str(match keying {
+                Keying::Sequence => "sequence",
+                Keying::SequenceThenHash => "sequence_then_hash",
+            }),
+        );
+        rj.insert("strict".into(), Json::Bool(strict));
+        if let Some(c) = &canonical {
+            if !c.dropped_paths.is_empty() {
+                rj.insert(
+                    "dropped_paths".into(),
+                    Json::Arr(c.dropped_paths.iter().map(Json::str).collect()),
+                );
+            }
+        }
+        call.replay = Some(Json::Obj(rj));
+    }
+    // Strict — a divergence stops with the typed 409 and ends the slot
+    // (the declared divergence policy; design/33 F15 `on_divergence`).
+    if strict && matches!(verdict, MatchVerdict::Diverged { .. }) {
+        core.slot_diverged.insert(slot_id.to_string());
+        let path = match &verdict {
+            MatchVerdict::Diverged { first_diff_path } => first_diff_path.clone(),
+            _ => String::new(),
+        };
+        refuse(
+            core,
+            stream,
+            timing,
+            call,
+            "replay_diverged",
+            "replay_diverged",
+            409,
+            &format!("upstream-bound divergence at k={index} first_diff_path={path}"),
+        );
+        return;
+    }
+    let recorded = &recording.calls[index];
+    // ── the replay attempt rows (same §4.3 shape; no reservation) ──
+    let ev = mint(
+        core,
+        "model.call.attempt.started",
+        Json::obj([
+            ("model_call_id", Json::str(&mc)),
+            ("attempt_no", Json::Int(1)),
+            ("queue_wait_ms", Json::Int(0)),
+        ]),
+        Scope::default(),
+        vec![],
+    );
+    if append(core, vec![ev]).is_err() {
+        return;
+    }
+    let served_status = recorded
+        .upstream_response
+        .as_ref()
+        .map(|r| r.status)
+        .or_else(|| recorded.released.as_ref().map(|r| r.status))
+        .unwrap_or(0);
+    let ev = mint(
+        core,
+        "model.call.attempt.completed",
+        Json::obj([
+            ("model_call_id", Json::str(&mc)),
+            ("attempt_no", Json::Int(1)),
+            ("status", Json::Int(served_status as i64)),
+        ]),
+        Scope::default(),
+        vec![],
+    );
+    let _ = append(core, vec![ev]);
+    // Capture point 2 — deposit the upstream-bound bytes the verdict
+    // compared (the same blob shape the live path deposits).
+    let req_ref = match deposit(core, "upstream_request", &call.upstream_body, BLOB_MEDIA) {
+        Ok((r, h)) => {
+            call.token_hits.extend(h);
+            r
+        }
+        Err(e) => {
+            refuse_now(stream, &e.to_string());
+            return;
+        }
+    };
+    if let Some(resp) = &recorded.upstream_response {
+        match deposit(core, "upstream_response", &resp.body, BLOB_MEDIA) {
+            Ok((r, h)) => {
+                call.token_hits.extend(h);
+                call.upstream_refs = Some((req_ref.clone(), Some(r), resp.status, true));
+            }
+            Err(e) => {
+                refuse_now(stream, &e.to_string());
+                return;
+            }
+        }
+        let ex = RawExchange {
+            status: resp.status,
+            headers: resp.headers.clone(),
+            body: resp.body.clone(),
+            chunk_stamps: resp.chunk_stamps.clone(),
+        };
+        call.usage = call.surface.map(|s| usage_cost(&s, &ex, &core.cfg.lane));
+        served_model_check(core, call, &ex);
+    } else {
+        call.upstream_refs = Some((req_ref.clone(), None, 0, false));
+    }
+    // P9 — `recorded` latency replays the recorded wait before release.
+    if matches!(latency, LatencyMode::Recorded) && recorded.latency_ms > 0 {
+        std::thread::sleep(Duration::from_millis(recorded.latency_ms));
+    }
+    // Serve: the recorded downstream release when present (what the
+    // socket read — refusal bodies included), else the recorded
+    // upstream response through the same release rules, else the
+    // recorded failure's surface-shaped error.
+    if let Some(rel) = &recorded.released {
+        let rb = ReleaseBody {
+            bytes: rel.body.clone(),
+            status: rel.status,
+            headers: rel
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+            release_mode,
+            identical_to_upstream: recorded.disposition == "forwarded",
+            head_committed: streaming,
+            chunks: if streaming {
+                Some(rechunk(
+                    recorded
+                        .upstream_response
+                        .as_ref()
+                        .map(|r| r.chunk_stamps.as_slice())
+                        .unwrap_or(&[]),
+                    &rel.body,
+                ))
+            } else {
+                None
+            },
+        };
+        if streaming {
+            let _ = write_response_head_chunked(
+                stream,
+                rel.status.max(200),
+                &[
+                    ("content-type", "text/event-stream"),
+                    ("cache-control", "no-cache"),
+                    ("connection", "close"),
+                ],
+            );
+        }
+        finish(
+            core,
+            stream,
+            timing,
+            call,
+            &recorded.disposition,
+            None,
+            None,
+            Some(rb),
+            None,
+            Some(slot_id),
+            false,
+        );
+        return;
+    }
+    if let (Some(resp), None) = (&recorded.upstream_response, &recorded.failure) {
+        let streamed = streaming && looks_like_sse(&resp.body);
+        let rb = if streaming {
+            ReleaseBody {
+                bytes: resp.body.clone(),
+                status: resp.status,
+                headers: vec![("content-type".to_string(), "text/event-stream".to_string())],
+                release_mode,
+                identical_to_upstream: false,
+                head_committed: true,
+                chunks: Some(rechunk(&resp.chunk_stamps, &resp.body)),
+            }
+        } else {
+            ReleaseBody {
+                bytes: resp.body.clone(),
+                status: resp.status,
+                headers: out_headers(&resp.headers),
+                release_mode,
+                identical_to_upstream: recorded.disposition == "forwarded",
+                head_committed: false,
+                chunks: None,
+            }
+        };
+        if streamed {
+            let _ = write_response_head_chunked(
+                stream,
+                resp.status.max(200),
+                &[
+                    ("content-type", "text/event-stream"),
+                    ("cache-control", "no-cache"),
+                    ("connection", "close"),
+                ],
+            );
+        }
+        finish(
+            core,
+            stream,
+            timing,
+            call,
+            &recorded.disposition,
+            None,
+            None,
+            Some(rb),
+            None,
+            Some(slot_id),
+            false,
+        );
+        return;
+    }
+    // The recorded failure leg — surface-shaped error bytes like the
+    // live §4.8 arm (recorded `kind` decides the class).
+    let (kind, detail) = recorded.failure.clone().unwrap_or_else(|| {
+        (
+            "other".to_string(),
+            "recorded call carried no response".to_string(),
+        )
+    });
+    let disposition = match kind.as_str() {
+        "timeout" => "upstream_timeout",
+        _ => "upstream_error",
+    };
+    let status = if kind == "timeout" { 504 } else { 502 };
+    let (rbytes, ctype) = if streaming {
+        (
+            in_stream_error(call.surface, disposition, &detail),
+            "text/event-stream",
+        )
+    } else {
+        (
+            error_body(call.surface, "api_error", disposition, &detail).into_bytes(),
+            "application/json",
+        )
+    };
+    if streaming {
+        let _ = write_response_head_chunked(
+            stream,
+            200,
+            &[
+                ("content-type", "text/event-stream"),
+                ("cache-control", "no-cache"),
+                ("connection", "close"),
+            ],
+        );
+    }
+    finish(
+        core,
+        stream,
+        timing,
+        call,
+        disposition,
+        None,
+        None,
+        Some(ReleaseBody {
+            bytes: rbytes,
+            status,
+            headers: vec![("content-type".to_string(), ctype.to_string())],
+            release_mode,
+            identical_to_upstream: false,
+            head_committed: streaming,
+            chunks: None,
+        }),
+        None,
+        Some(slot_id),
+        false,
+    );
 }
 
 /// A hard-fail path that never mints rows — used only when the ledger
@@ -2017,6 +2708,7 @@ fn receipt_doc(
     refused: Option<Json>,
     token_hits: &[String],
     seq: u64,
+    replay: Option<Json>,
 ) -> Json {
     let sha = |b: &[u8]| hharness_wire::sha256::sha256_hex(b);
     let mut proxy = BTreeMap::new();
@@ -2027,7 +2719,14 @@ fn receipt_doc(
         slot_id.map(Json::str).unwrap_or(Json::Null),
     );
     proxy.insert("slot_call_seq".into(), Json::Int(seq as i64));
-    proxy.insert("mode".into(), Json::str("live"));
+    proxy.insert(
+        "mode".into(),
+        Json::str(match core.cfg.mode {
+            ProxyMode::Live => "live",
+            ProxyMode::Record => "record",
+            ProxyMode::Replay(_) => "replay",
+        }),
+    );
     proxy.insert("proxy_version".into(), Json::str(PROXY_VERSION));
     proxy.insert("surface".into(), Json::str(surface_label));
     let mut dn = BTreeMap::new();
@@ -2163,7 +2862,25 @@ fn receipt_doc(
     }
     proxy.insert("usage".into(), Json::Obj(uj));
     proxy.insert("reservation".into(), reservation.unwrap_or(Json::Null));
-    proxy.insert("replay".into(), Json::Null);
+    // §4.9 — the replay member carries the per-call match verdict
+    // `{k, verdict, first_diff_path?, canonicalizer, keying, strict}`;
+    // a slot-bound local refusal records `refused_local`, an unbound
+    // request `unbound`. Live/record calls carry `null`.
+    proxy.insert(
+        "replay".into(),
+        match (&core.cfg.mode, replay) {
+            (ProxyMode::Replay(_), Some(r)) => r,
+            (ProxyMode::Replay(_), None) => Json::obj([(
+                "verdict",
+                Json::str(if slot_id.is_some() {
+                    "refused_local"
+                } else {
+                    "unbound"
+                }),
+            )]),
+            _ => Json::Null,
+        },
+    );
     proxy.insert("disposition".into(), Json::str(disposition));
     if let Some(r) = refused {
         proxy.insert("refusal".into(), r);

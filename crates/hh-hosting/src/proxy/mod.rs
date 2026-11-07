@@ -33,6 +33,7 @@ pub mod apply;
 pub mod budget;
 pub mod core_;
 pub mod lane;
+pub mod replay;
 
 pub use apply::{apply_policy, error_body, filter_headers, FilteredHeaders, Mutations, Refusal};
 pub use budget::{
@@ -41,6 +42,11 @@ pub use budget::{
 };
 pub use core_::{ControlOutcome, Proxy, ProxyConfig, ProxyError};
 pub use lane::{FieldOp, FieldRule, ProxyLane, Reservation, ReservationFormula, Route, Surface};
+pub use replay::{
+    body_json, rechunk, replay_pick, Keying, LatencyMode, ProxyMode, RecordedCall,
+    RecordedReleased, RecordedResponse, Recording, RecordingError, ReplayConfig, ReplayPick,
+    RECORDING_SCHEMA,
+};
 
 /// The proxy implementation identity — lands in every receipt's
 /// `proxy_version` member and the participant identity hash

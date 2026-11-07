@@ -762,6 +762,7 @@ dependencies = [
  "hharness-ledger",
  "hharness-ontology",
  "hharness-provenance",
+ "hharness-secrets",
  "hharness-wire",
 ]
 

@@ -286,6 +286,14 @@ fn canon_walk(
     }
 }
 
+/// `first_diff_path(a, b)` — the first structural difference path
+/// between two provider-bytes trees (the replay matcher's
+/// `diverged{first_diff_path}` input; the L1 allowlist's own
+/// `first_unmasked` leg). `None` when the trees are equal.
+pub fn first_diff_path(a: &PJson, b: &PJson) -> Option<String> {
+    first_diff(a, b, "")
+}
+
 /// The first structural difference path between two canonical views.
 fn first_diff(a: &PJson, b: &PJson, path: &str) -> Option<String> {
     match (a, b) {
