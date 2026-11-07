@@ -295,6 +295,90 @@ impl PricingTableRef {
     }
 }
 
+/// `rate_unit ∈ {micro_per_token, micro_per_1k_tokens}` — the denomination a
+/// pricing carrier's integer rates are spelled in (AR-09; REQ-XC-116). The
+/// default is `micro_per_token`: every pre-existing row keeps its meaning.
+/// `micro_per_1k_tokens` aligns a table with the per-1k convention
+/// `pricing.json` and the router's `DeclaredPricing` already spell (F11) —
+/// a provider rate that lands non-integral at the declared unit is refused
+/// `NoPrice{unrepresentable_rate}`, never rounded into place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RateUnit {
+    /// Micro-units per token.
+    MicroPerToken,
+    /// Micro-units per 1k tokens.
+    MicroPer1kTokens,
+}
+
+impl RateUnit {
+    /// The closed set.
+    pub const ALL: [RateUnit; 2] = [RateUnit::MicroPerToken, RateUnit::MicroPer1kTokens];
+
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RateUnit::MicroPerToken => "micro_per_token",
+            RateUnit::MicroPer1kTokens => "micro_per_1k_tokens",
+        }
+    }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<RateUnit> {
+        RateUnit::ALL.iter().copied().find(|u| u.as_str() == s)
+    }
+
+    /// The nano-µ$ one `rate × token` product yields under this unit —
+    /// the exact per-call sum accumulates nano-units, then rounds once.
+    fn nano_scale(self) -> i64 {
+        match self {
+            // µ$/token × tokens is already µ$ — scale to nano-µ$.
+            RateUnit::MicroPerToken => 1_000,
+            // µ$/1k tokens × tokens is nano-µ$ directly.
+            RateUnit::MicroPer1kTokens => 1,
+        }
+    }
+
+    /// Convert a provider-published `micro-units per 1M tokens` rate to
+    /// this unit's integer spelling — `NoPrice{unrepresentable_rate}`
+    /// when the rate is not integral at this unit (a per-1M rate like
+    /// glm-5.3-flash's $0.15/M is 0.15 µ$/token: unrepresentable at
+    /// `micro_per_token`, exactly 150 at `micro_per_1k_tokens`; F11).
+    pub fn rate_from_micro_per_1m(
+        self,
+        micro_per_1m: i64,
+        model_ref: &str,
+        role: &str,
+    ) -> Result<i64, SpendError> {
+        let denom: i64 = match self {
+            RateUnit::MicroPerToken => 1_000_000,
+            RateUnit::MicroPer1kTokens => 1_000,
+        };
+        if micro_per_1m % denom != 0 {
+            return Err(SpendError::NoPrice {
+                model_ref: model_ref.to_string(),
+                detail: format!(
+                    "unrepresentable_rate: {role} {micro_per_1m} micro-units/1M is not integral at {}",
+                    self.as_str()
+                ),
+            });
+        }
+        Ok(micro_per_1m / denom)
+    }
+}
+
+/// `PricingUnit` — the declared [`RateUnit`] a pricing-table carrier binds
+/// (AR-09 D2; REQ-XC-116). `PricingTable` carries `micro_per_token` by
+/// construction — the spec's default — and [`RatedPricingTable`] carries a
+/// declared non-default unit beside the same rows. One table type, one
+/// pricing path (CC1): the carrier annotates the unit, it never re-spells
+/// the rows or adds a second rate representation.
+pub trait PricingUnit {
+    /// The unit this carrier's `PricingRow` rates are spelled in.
+    fn rate_unit(&self) -> RateUnit;
+    /// The underlying table (row lookup; `derivation.table_priced` refs).
+    fn pricing_table(&self) -> &PricingTable;
+}
+
 /// One `PricingTable` row (§8.2 §3): per-role micro-unit rates for one `model_ref`,
 /// `input_cache_write` priced by `ttl_class`, optional `tiers`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,6 +407,48 @@ pub struct PricingRow {
     /// The rate's provenance note (e.g. `"provider page, 2026-08"`) — record, never
     /// parsed.
     pub source: String,
+}
+
+impl PricingRow {
+    /// Declare a row from provider-published `micro-units per 1M tokens`
+    /// rates at `unit` — `NoPrice{unrepresentable_rate}` on the first
+    /// role whose rate is not integral at the declared unit (AR-09;
+    /// REQ-XC-116). `input_cache_write` is empty (per-ttl rates declare
+    /// their own rows) and `output_reasoning` is absent — reasoning
+    /// prices at the visible rate, the audited provider default.
+    pub fn from_micro_per_1m(
+        unit: RateUnit,
+        model_ref: &str,
+        input: i64,
+        cache_read: i64,
+        output: i64,
+        valid_from: &str,
+        source: &str,
+    ) -> Result<PricingRow, SpendError> {
+        Ok(PricingRow {
+            model_ref: model_ref.to_string(),
+            input_uncached: unit.rate_from_micro_per_1m(
+                input,
+                model_ref,
+                Role::InputUncached.as_str(),
+            )?,
+            input_cache_read: unit.rate_from_micro_per_1m(
+                cache_read,
+                model_ref,
+                Role::InputCacheRead.as_str(),
+            )?,
+            input_cache_write: BTreeMap::new(),
+            output_visible: unit.rate_from_micro_per_1m(
+                output,
+                model_ref,
+                Role::OutputVisible.as_str(),
+            )?,
+            output_reasoning: None,
+            tiers: vec![],
+            valid_from: valid_from.to_string(),
+            source: source.to_string(),
+        })
+    }
 }
 
 /// A `tiers[]` entry: `{threshold_tokens, rates{role → micro-per-unit}}`.
@@ -363,6 +489,101 @@ impl PricingTable {
             pin,
         }
     }
+
+    /// The declared rate unit — `micro_per_token` by construction (the
+    /// REQ-XC-116 default; AR-09): a bare `PricingTable`'s rates are
+    /// micro-units per token, and a non-default unit rides
+    /// [`PricingTable::at_unit`] instead of a new field the frozen
+    /// literal construction sites could not spell.
+    pub fn rate_unit(&self) -> RateUnit {
+        RateUnit::MicroPerToken
+    }
+
+    /// This table under a declared non-default unit — the carrier
+    /// [`RatedPricingTable`] the unit-aware `price`/`attribute_spend`
+    /// read (AR-09; REQ-XC-116).
+    pub fn at_unit(self, rate_unit: RateUnit) -> RatedPricingTable {
+        RatedPricingTable {
+            table: self,
+            rate_unit,
+        }
+    }
+}
+
+impl PricingUnit for PricingTable {
+    fn rate_unit(&self) -> RateUnit {
+        RateUnit::MicroPerToken
+    }
+    fn pricing_table(&self) -> &PricingTable {
+        self
+    }
+}
+
+/// `RatedPricingTable { table, rate_unit }` — the one pricing table plus a
+/// declared non-default rate unit (AR-09 D2; REQ-XC-116). The rows and
+/// their integer rates live only in the wrapped `PricingTable` — the
+/// carrier adds the unit, never a second rate representation (CC1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RatedPricingTable {
+    /// The table whose rows this carrier prices.
+    pub table: PricingTable,
+    /// The unit the rows' rates are spelled in.
+    pub rate_unit: RateUnit,
+}
+
+impl RatedPricingTable {
+    /// `new(table, rate_unit)` — a table priced under a declared unit.
+    pub fn new(table: PricingTable, rate_unit: RateUnit) -> RatedPricingTable {
+        RatedPricingTable { table, rate_unit }
+    }
+
+    /// The row covering `model_ref` — `None` ⇒ [`SpendError::NoPrice`].
+    pub fn row(&self, model_ref: &str) -> Option<&PricingRow> {
+        self.table.row(model_ref)
+    }
+
+    /// This table's ref (for `derivation.table_priced` / `pricing_ref`).
+    pub fn as_ref(&self, pin: Option<String>) -> PricingTableRef {
+        self.table.as_ref(pin)
+    }
+}
+
+impl PricingUnit for RatedPricingTable {
+    fn rate_unit(&self) -> RateUnit {
+        self.rate_unit
+    }
+    fn pricing_table(&self) -> &PricingTable {
+        &self.table
+    }
+}
+
+/// The round-6 Ollama pricing table (AR-09; REQ-XC-116): glm-5.3-flash at
+/// the provider's published rates — $0.15 input / $0.03 cached input /
+/// $0.50 output per 1M tokens (experiments-spec §4.1) — spelled
+/// 150 / 30 / 500 micro-units per 1k tokens under
+/// `micro_per_1k_tokens`. The published rates land integrally at per-1k;
+/// at `micro_per_token` the same declaration refuses
+/// `NoPrice{unrepresentable_rate}` (0.15 µ$/token is unrepresentable —
+/// C1 F14). Built through [`PricingRow::from_micro_per_1m`] so the
+/// conversion path is the row's own.
+pub fn ollama_glm_5_3_flash() -> RatedPricingTable {
+    let row = PricingRow::from_micro_per_1m(
+        RateUnit::MicroPer1kTokens,
+        "glm-5.3-flash@ollama",
+        150_000, // $0.15 input / 1M tokens
+        30_000,  // $0.03 cached input / 1M tokens
+        500_000, // $0.50 output / 1M tokens
+        "2026-10-22",
+        "Ollama Cloud pricing — $0.15/$0.03/$0.50 per 1M (experiments-spec §4.1; design/33 C1, retrieved 2026-11-06)",
+    )
+    .expect("the published glm-5.3-flash rates are integral at micro_per_1k_tokens");
+    PricingTable {
+        table_id: "ollama".to_string(),
+        version: "2026-10-22".to_string(),
+        currency: "USD".to_string(),
+        rows: vec![row],
+    }
+    .at_unit(RateUnit::MicroPer1kTokens)
 }
 
 /// The spend-provenance input to `attribute_spend` — where the usage number came from.
@@ -542,16 +763,28 @@ fn rate(
     t.or(base)
 }
 
-/// Price a [`TokenDecomposition`] against a [`PricingTable`] — pure micro-unit
-/// arithmetic. `Err(NoPrice)` on any missing row/rate, never a silent zero
-/// (§8.2 `attribute_spend`; the silent-zero failure mode's containment).
+/// Price a [`TokenDecomposition`] against a pricing-table carrier —
+/// pure micro-unit arithmetic. `Err(NoPrice)` on any missing row/rate,
+/// never a silent zero (§8.2 `attribute_spend`; the silent-zero failure
+/// mode's containment).
+///
+/// The carrier's declared [`RateUnit`] fixes the denomination
+/// (AR-09; REQ-XC-116): the exact per-call nano-µ$ sum `Σ rate·qty·scale`
+/// is computed over every role, then rounded **once** — ceil to the µ$,
+/// never per-role. `roles` itemizes each role's floor share; a
+/// `rounding` role carries the residual the floors don't cover, so the
+/// itemization always sums exactly to `money` (the role is present iff
+/// the residual is non-zero — a `micro_per_token` call's nano-sum is
+/// always integral, so pre-existing itemizations are byte-identical).
 ///
 /// Returns `(Money, roles)` — `roles` itemizes per-role micro amounts.
-pub fn price(
+pub fn price<T: PricingUnit + ?Sized>(
     decomp: &TokenDecomposition,
     model_ref: &ModelRef,
-    table: &PricingTable,
+    table: &T,
 ) -> Result<(Money, BTreeMap<String, i64>), SpendError> {
+    let unit = table.rate_unit();
+    let table = table.pricing_table();
     let row = table
         .row(&model_ref.pricing_key())
         .ok_or_else(|| SpendError::NoPrice {
@@ -566,7 +799,8 @@ pub fn price(
         .filter(|t| t.threshold_tokens <= input_total)
         .max_by_key(|t| t.threshold_tokens);
     let mut roles: BTreeMap<String, i64> = BTreeMap::new();
-    let mut sum: i64 = 0;
+    let mut nano: i128 = 0;
+    let scale = unit.nano_scale() as i128;
     let mut add =
         |role: Role, qty: i64, ttl: Option<&str>, key: String| -> Result<(), SpendError> {
             if qty == 0 {
@@ -576,9 +810,17 @@ pub fn price(
                 model_ref: model_ref.pricing_key(),
                 detail: format!("no rate for {} (ttl {:?})", role.as_str(), ttl),
             })?;
-            let micro = r * qty;
-            roles.insert(key, micro);
-            sum += micro;
+            // The role's exact nano-µ$ (rate in the declared unit × qty ×
+            // scale); the itemized share is the floor — the once-rounded
+            // residual rides the `rounding` role, never a per-role ceil.
+            let n = (r as i128) * (qty as i128) * scale;
+            let floor = i64::try_from(n.div_euclid(1_000)).map_err(|_| {
+                SpendError::ConfidenceViolation {
+                    detail: format!("{} role exceeds i64 micro-units", role.as_str()),
+                }
+            })?;
+            roles.insert(key, floor);
+            nano += n;
             Ok(())
         };
     add(
@@ -613,9 +855,23 @@ pub fn price(
         None,
         Role::OutputReasoning.as_str().into(),
     )?;
+    // One rounding for the whole call: ceil to the µ$.
+    let money_nano = nano;
+    let mut money = money_nano.div_euclid(1_000);
+    if money_nano.rem_euclid(1_000) != 0 {
+        money += 1;
+    }
+    let money = i64::try_from(money).map_err(|_| SpendError::ConfidenceViolation {
+        detail: "per-call spend exceeds i64 micro-units".to_string(),
+    })?;
+    let floor_sum: i64 = roles.values().sum();
+    let rounding = money - floor_sum;
+    if rounding != 0 {
+        roles.insert("rounding".to_string(), rounding);
+    }
     Ok((
         Money {
-            micro_units: sum,
+            micro_units: money,
             currency: table.currency.clone(),
         },
         roles,
@@ -630,11 +886,11 @@ pub fn price(
 /// `pin` is the content-address id of the pinned table snapshot (the bundle member —
 /// `pricing_ref`); the table itself is the value it resolves to.
 #[allow(clippy::too_many_arguments)] // a table row is a row — the arity is the row's.
-pub fn attribute_spend(
+pub fn attribute_spend<T: PricingUnit + ?Sized>(
     source_event: EventRef,
     decomp: &TokenDecomposition,
     model_ref: &ModelRef,
-    table: &PricingTable,
+    table: &T,
     pin: Option<String>,
     source: &SpendSource,
     coverage_ppm: i64,
@@ -687,8 +943,8 @@ pub fn attribute_spend(
         provenance,
         provenance_class: provenance.class(),
         derivation: Derivation::TablePriced {
-            table_ref: table.table_id.clone(),
-            table_version: table.version.clone(),
+            table_ref: table.pricing_table().table_id.clone(),
+            table_version: table.pricing_table().version.clone(),
             tier: None,
             ttl_class: None,
         },

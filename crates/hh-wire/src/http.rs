@@ -466,7 +466,12 @@ pub fn reason(status: u16) -> &'static str {
         405 => "Method Not Allowed",
         411 => "Length Required",
         413 => "Payload Too Large",
+        402 => "Payment Required",
+        429 => "Too Many Requests",
         500 => "Internal Server Error",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+        504 => "Gateway Timeout",
         _ => "Status",
     }
 }
@@ -490,6 +495,56 @@ pub fn write_response(
     w.write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
         .map_err(|e| HttpError::Io(e.to_string()))?;
     w.write_all(body)
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    w.flush().map_err(|e| HttpError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Write a response head for a `Transfer-Encoding: chunked` body — the
+/// streaming half of `write_response` (R6.7; the model-medication
+/// proxy's buffered release writes the head once, then [`write_chunk`]
+/// per flushed piece and [`finish_chunked`] at the end). The codec adds
+/// `Transfer-Encoding: chunked` itself; `Connection` policy stays the
+/// caller's.
+pub fn write_response_head_chunked(
+    w: &mut impl Write,
+    status: u16,
+    headers: &[(&str, &str)],
+) -> Result<(), HttpError> {
+    let head = format!("HTTP/1.1 {} {}\r\n", status, reason(status));
+    w.write_all(head.as_bytes())
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    for (k, v) in headers {
+        w.write_all(format!("{k}: {v}\r\n").as_bytes())
+            .map_err(|e| HttpError::Io(e.to_string()))?;
+    }
+    w.write_all(b"Transfer-Encoding: chunked\r\n\r\n")
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    w.flush().map_err(|e| HttpError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Write one chunk of a chunked response body (`<len-hex>\r\n<bytes>\r\n`;
+/// an empty `bytes` is skipped — the terminal zero-chunk is
+/// [`finish_chunked`]'s alone, never emitted mid-body).
+pub fn write_chunk(w: &mut impl Write, bytes: &[u8]) -> Result<(), HttpError> {
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    w.write_all(format!("{:x}\r\n", bytes.len()).as_bytes())
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    w.write_all(bytes)
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    w.write_all(b"\r\n")
+        .map_err(|e| HttpError::Io(e.to_string()))?;
+    w.flush().map_err(|e| HttpError::Io(e.to_string()))?;
+    Ok(())
+}
+
+/// Write the terminal `0\r\n\r\n` of a chunked response body (no trailers —
+/// the codec's declared bound).
+pub fn finish_chunked(w: &mut impl Write) -> Result<(), HttpError> {
+    w.write_all(b"0\r\n\r\n")
         .map_err(|e| HttpError::Io(e.to_string()))?;
     w.flush().map_err(|e| HttpError::Io(e.to_string()))?;
     Ok(())

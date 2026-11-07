@@ -85,8 +85,9 @@ pub use matchspec::{
     MatchMode, MatchSpec, ModelScope, ResultsRowFields, ResultsSpend,
 };
 pub use pricing::{
-    attribute_spend, price, Confidence, CostProvenance, Derivation, PricingRow, PricingTable,
-    PricingTableRef, ProvenanceClass, SpendRow, SpendSource,
+    attribute_spend, ollama_glm_5_3_flash, price, Confidence, CostProvenance, Derivation,
+    PricingRow, PricingTable, PricingTableRef, PricingUnit, ProvenanceClass, RateUnit,
+    RatedPricingTable, SpendRow, SpendSource,
 };
 pub use quantity::{MeteringFormula, Money, ResourceQuantity, ResourceVector};
 pub use spec::{
