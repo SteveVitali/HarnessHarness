@@ -212,3 +212,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0420](ADR-0420-r5.42-exposure-quote-landing.md) | R5.42 per-stage readiness and full exposure quote — landing decisions | R5.42 (Per-stage readiness and full exposure quote) | Accepted |
 | [ADR-0421](ADR-0421-r5.56-egress-variant.md) | R5.56 admits the scoped `bridge`-network cell profile as a first-class `PodmanBackend` variant | R5.56 (egress variant — S4-completion extension, manifest | Accepted |
 | [ADR-0422](ADR-0422-r5.57-verifier-bound.md) | R5.57 admits the scoped verifier-bound relaxation for `swe-bench-astropy-2` | R5.57 (verifier bound — S4-completion extension, manifest | Accepted |
+| [ADR-0423](ADR-0423-r6.3-tb-edition-substitution.md) | Retroactive — TB 2.0 → `terminal-bench-core==0.1.1` substitution (89 → 80 tasks) and the `catalogue_identity` label correction (AR-01) | R6.3 (manifest row 255; experiments supplement §10.5 AR-01) | Accepted |

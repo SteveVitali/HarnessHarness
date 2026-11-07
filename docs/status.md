@@ -110,6 +110,20 @@ the per-surface reader account is [evidence and readiness](evidence.md).
 Three deferrals (DF-R5.1-1, DF-H9-1, DF-CAP5.1-1) remain open and the
 chain's PRs merge under `mergePolicy: OPERATOR` only.
 
+*Update 2026-11-07 (R6.3, phase-1 corrections):* the post-R5.59 record
+state is corrected append-only — the efficacy contrast's zero is
+structural (the oracle participant makes it 0 by construction, not an
+efficacy result), the parity tranche's `verified` is its own
+exact-agreement rule over `tb` and a reference runner (the landed
+`parity_admission` refuses the design), and the S4 300/300 is a
+four-epoch composite outside the frozen reattempt bound (dated
+[deviation record](build/reports/2026-11-07-s4-protocol-deviations.md)).
+The records-in [cross-check](build/reports/2026-11-07-p1-surface-xcheck.json)
+agrees with the `tb` verdicts on 14 of 16 first-attempt tasks.
+`bash scripts/deferrals-open.sh` reports zero open DF rows. The dated
+[phase-1 execution-surface replay record](results/phase1-execution-surface-replay.md)
+carries the account as an internal record — not outside-verified.
+
 ## How to read the evidence
 
 Per-surface gate states — what is available with scoped evidence, not

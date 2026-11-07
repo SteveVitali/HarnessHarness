@@ -34,8 +34,11 @@ Readiness first — each route names its current state before you invest:
   until a real, independently checked task receipt lands.
 - **Inspect a recorded result** — *available with scoped evidence*:
   the offline example below produces a durable, inspectable run
-  (fixture-verified); [evidence and readiness](docs/evidence.md)
-  explains what its receipt does and does not prove.
+  (fixture-verified); the
+  [phase-1 execution-surface replay record](docs/results/phase1-execution-surface-replay.md)
+  is an internal record, not outside-verified;
+  [evidence and readiness](docs/evidence.md) explains what its
+  receipt does and does not prove.
 - **Learn offline** — *available with scoped evidence*: four versioned
   [example cards](scripts/examples/README.md) run without a provider —
   setup/inspect/replay/verify (EX-01), a two-arm Lab lesson (EX-02),

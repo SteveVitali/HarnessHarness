@@ -116,6 +116,32 @@ def link_failures(doc, doc_rel):
 
 ENTRIES = ["Run a useful task", "Inspect a recorded result", "Learn offline"]
 STATES = ["Available", "Not yet available", "Restricted", "Unsupported"]
+RECORD_REL = "docs/results/phase1-execution-surface-replay.md"
+# REQ-XA-119 — the thirteen honest-bounds statements (experiments
+# supplement §2.6), matched as exact substrings after whitespace
+# collapse inside the record's <!-- bounds --> block.
+BOUNDS = [
+    "The parity tranches compared `tb run -a oracle` with a reference podman runner that is not HarnessHarness; HH cells were not a parity surface.",
+    "Each tranche ran one first attempt per task per runner (R=1).",
+    "`verified` is the tranche's own exact-agreement rule; the landed `parity_admission` refuses this design: on the strict records-only rung with `MissingKey{pins.rights_ref}`, and on the labelled design-probe rung with `AdapterFloor{repeats:1}`.",
+    "Of the 30 agreements, 22 are both-resolved, 4 both-failed tests and 4 are pairs in which both builds failed; 26 of 30 H runs reused the O-built image.",
+    "0.115703 is a descriptive concentration endpoint at N=30 with zero discordance, not a registered margin or an equivalence verdict; no margin was registered.",
+    "The confirmation cohort ran through HH cells and has no original-runner comparison of its own; the records-in cross-check against tranche 3's `tb` verdicts agrees on 14 of 16 tasks with a first-attempt HH verdict and disagrees on 2; on the final fold it agrees on 26 of 30.",
+    "With the oracle participant the compaction arms cannot change an outcome; the efficacy contrast is 0 by construction and is not efficacy evidence.",
+    "300/300 is a four-epoch composite: 140 slots were re-attempted beyond the frozen reattempt bound, across two backends (arm64 applehv, amd64 GCE) and two network modes.",
+    "Grading ran tb's `PytestParser` in scratch Python outside HH; 100 of 300 final receipts used the `vendored_offline` channel.",
+    "Inference cost was $0.00 (structured in every packet); compute was a rate-card estimate of ≈$1.72 for the VM's life (16:32Z–22:15:40Z), originally recorded as ≈$1.41, recorded in prose only, billing not read; local VM time is uncosted.",
+    "Benchmark edition: `terminal-bench-core==0.1.1` (80 tasks), substituted for the TB 2.0 the supplement names ([ADR-0423]",
+    "The ANSI-strip and declared-workdir repairs were made in scratch drivers;",
+    "The drivers that produced these packets are preserved verbatim as unmaintained provenance; the packets are recomputable records-in from the committed raw set, not re-executable from the repository.",
+]
+# REQ-XA-120 — record-surface bans, scanned case-insensitive and
+# word-bounded over the record, evidence.md and the spine.
+RECORD_BANNED = [
+    "null-equivalent", "parity verified", "verified for hh",
+    "proof of correctness", "proof-of-correctness",
+    "equivalence verified", "efficacy result shows",
+]
 
 # ── canon from the frozen supplement (never mirrored by hand) ─────────
 spec_rel = "docs/evidence-and-adoption-spec.md"
@@ -237,6 +263,7 @@ REQUIRED = {
     "interchange": "Restricted",
     "evidence-access": "Restricted",
     "contribute": "Available",
+    "replay-record": "Available",
 }
 if ev:
     for key, want in REQUIRED.items():
@@ -312,6 +339,53 @@ if ev:
             fail("sources", m)
         ok("sources", "benefit/overlap/exclusion/revisit claims map to real sources")
 
+# ── record: the phase-1 record and its pinned surfaces ────────────────
+try:
+    record = read_rel(RECORD_REL)
+except OSError as e:
+    record = ""
+    fail("record", f"cannot read {RECORD_REL}: {e}")
+if record:
+    head = record.split("\n", 8)[:8]
+    if "internal record; not outside-verified" not in "\n".join(head):
+        fail("record", "record header lacks 'internal record; not outside-verified'")
+    bb = re.sub(r"\s+", " ", marked(record, "bounds"))
+    for b in BOUNDS:
+        if re.sub(r"\s+", " ", b) not in bb:
+            fail("record", f"bounds statement absent: {b[:60]}…")
+    for m in link_failures(record, RECORD_REL):
+        fail("record", m)
+    ok("record", "record exists; header, bounds block and links verified")
+# the [replay-record] card carries the class + links the record
+if ev and "replay-record" in cards:
+    sect = ev.split("### Card — ")[1:]
+    sect = [s for s in sect if "[replay-record]" in s.split("\n")[0]]
+    if not sect:
+        fail("record", "[replay-record] card section absent")
+    else:
+        body = sect[0].split("\n### ")[0].split("\n## ")[0]
+        if "internal record; not outside-verified" not in body:
+            fail("record", "[replay-record] lacks the internal-record phrase")
+        evl = re.search(r"^- \*\*Evidence:\*\*(.*?)(?=\n- \*\*|\Z)", body, re.S | re.M)
+        if not evl or "phase1-execution-surface-replay.md" not in evl.group(1):
+            fail("record", "[replay-record] Evidence does not link the record")
+# the spine links the record and names the class
+if "docs/results/phase1-execution-surface-replay.md" not in spine or \
+        "not outside-verified" not in spine:
+    fail("record", "the spine does not link the record as not outside-verified")
+# the study card links the record
+if ev and "study" in cards:
+    sect = [s for s in ev.split("### Card — ")[1:] if "[study]" in s.split("\n")[0]]
+    if not sect or "phase1-execution-surface-replay.md" not in sect[0].split("\n### ")[0]:
+        fail("record", "the study card does not link the record")
+
+# ── record-surface bans (RECORD_BANNED over record + evidence + spine) ──
+if ev:
+    rhay = (record + "\n" + ev + "\n" + spine).lower()
+    for b in RECORD_BANNED:
+        if re.search(rf"\b{re.escape(b)}\b", rhay):
+            fail("record", f"record-banned phrase {b!r} on the record surfaces")
+
 # ── honesty: no favorable-treatment or scientific-claim language ──────
 BANNED = [
     "proven", "guarantee", "guaranteed", "production-ready",
@@ -321,7 +395,7 @@ BANNED = [
     "best-in-class", "superior",
 ]
 if ev:
-    hay = ev + "\n" + spine
+    hay = ev + "\n" + spine + "\n" + record
     low = hay.lower()
     for b in BANNED:
         if re.search(rf"\b{re.escape(b)}\b", low):

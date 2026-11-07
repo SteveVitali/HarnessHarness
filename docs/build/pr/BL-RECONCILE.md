@@ -9,3 +9,11 @@ Reconciles the four stale backlog rows opened at REC5.1 (2026-11-05) against the
 - **Dedup kept** — the 33 still-PARTIAL matrix ids of the three closed rows re-home to BL-50's `sources` cell (BL-12/BL-21 convention): all 73 round-5 PARTIAL ids sit on the one open carrier exactly once. CAP5.1-era matrix verdicts are not re-verdicted by this records-only reconcile — that pass is owed to the next capstone.
 
 Verify: `deferrals-open.sh` empty (0 open DF) · `--bl` → BL-50 only · `check-bm-tools.sh` OK · `check-backlog.sh` exit 0 both modes (206 + 73 expected) · `check-build-memory.sh` 0 violations (8-warning baseline) · supplement guard PASS, route HOLD (round landed — no dispatch route exists). LEDGER PHASE LOG entry 1,878 B. No deferrals opened or closed. Merge policy: OPERATOR.
+
+*Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03):* "parity verified
+30/30" above is the tranche's own exact-agreement verdict (`tb` ↔ a
+scratch reference runner, R=1 — `parity_admission` refuses the design:
+`MissingKey{pins.rights_ref}` / `AdapterFloor{repeats:1}`); "efficacy
+computed, honest null-equivalent" is 0 by construction (oracle
+participant — arms cannot change outcomes), not efficacy evidence. The
+row dispositions stand.

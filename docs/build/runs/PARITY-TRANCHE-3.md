@@ -371,3 +371,19 @@ pipeline/diskwatch logs `/tmp/parity-t3-*.log`,
 - No hh-parity or tb task containers/networks remain.
 - `~/tb-work/parity-runs/` holds all raw records (external working
   dir, not committed).
+
+## Correction — 2026-11-07 (R6.3 · REQ-XA-114 / AR-03)
+
+The "parity admitted → S3 met" and "**S3 met.**" phrasings above are the
+tranche's own exact-agreement endpoint, not an admission outcome under
+the landed machinery. `parity_admission` refuses this design verbatim —
+strict records-only rung `MissingKey{pins.rights_ref}`, labelled
+design-probe rung `AdapterFloor{repeats:1}` (recomputed records-in,
+`docs/build/reports/2026-11-07-p1-estimators.json`). The comparison was
+`tb run -a oracle` against the scratch reference runner
+`parity-h-side.py` — not HarnessHarness cells — at R=1, on one arm64
+applehv VM; 26/30 H runs reused the O-built image. "≈ 0.116" is the
+closed-form zero-discordance endpoint 1 − .025^(1/30) = 0.11570, not an
+estimator output and not a registered margin. The fold's `s3_unmet:
+false` flag is the parity predicate — not the supplement's S3
+(compaction study) scenario, which stays unmet.
