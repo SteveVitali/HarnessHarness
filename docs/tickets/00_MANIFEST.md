@@ -69,6 +69,16 @@ stack, protect `main`, tag `v0.1.0` → release, `cargo publish` in order, repo 
 first, merge bottom-up via checks-required merges only, wait for the full CI matrix + gitleaks green on `main` HEAD, record
 the merged-main SHA, then tag it; any gitleaks finding → rotate first, history-rewrite decision recorded verbatim.
 
+
+**Round 6 HUMAN rows (experiments first pass)** — owner: the operator; each marker names its trigger, exit and withheld claims; credentials are recorded `provided: yes/no` only.
+- **HUMAN-H12** (`285_HUMAN-H12__pages-enable.md`): Enable GitHub Pages (Source: GitHub Actions)
+- **HUMAN-H13** (`288_HUMAN-H13__billing-alert.md`): GCP billing alert (default $20; 50/90/100 %); billing account and controller `gcloud` auth `provided: yes`; recipients `provided: yes`
+- **HUMAN-H14** (`299_HUMAN-H14__account-setup.md`): Pre-FP-S account setup, one operator batch with three items: (1) Ollama automatic usage billing off (or meter-only recorded), exclusivity per window, `OLLAMA_API_KEY provided: yes` in `HH_OPERATOR_ENV_FILE`; (2) HF data…
+- **HUMAN-H15** (`311_HUMAN-H15__credit-purchase.md`): Ollama credit purchase (≤ $10) only if the FP-E quote needs it; A_eff re-declared; readout `Status: NOT_NEEDED` otherwise
+- **HUMAN-H16** (`315_HUMAN-H16__flagged-review.md`): Flagged-pass review: dispositions with excerpt hashes before the results freeze; `Status: DEFERRED` + DF id withholds the freeze claim
+- **HUMAN-H17** (`318_HUMAN-H17__dataset-flip.md`): HF dataset visibility flip after both scans; revision pinned; `Status: DEFERRED` + DF id withholds the viewer claim
+- **HUMAN-H18** (`320_HUMAN-H18__billing-reconcile.md`): Consolidated billing reconciliation: one dated entry per window (W1, W2, W3, Wc, W4), each a billing read ≥ 24 h after that window’s teardown, appended as soon as it is due; W3/Wc entries `N/A` when the window did not r…
+
 ## The chain
 
 | # | file | phase | kind | scope | gate |
@@ -489,6 +499,88 @@ Source: [ratified supplemental specification](../evidence-and-adoption-spec.md);
 | 250 | `250_GATE-G19__efficacy-ruling.md` | Round 5 | gate | S4-completion extension (## Plan extensions): rule the efficacy-inference admission — complete-cohort vs bounded-inference on the executed base (~290/300 ceiling given fix-git) | STOP |
 | 251 | `251_R5.59__efficacy-closure.md` | Round 5 | ticket | S4-completion extension (## Plan extensions): efficacy verdict + study recompute over the completed cohort + deprovision the GCE backend (mandatory tracked AC, teardown receipt) + round closure | — |
 
+
+### Round 6 — 2026-11-07 · experiments first pass (decompose-spec mode=extend; tail=minimal)
+
+Source: [ratified experiments supplement](../experiments-spec.md) (canonical v0.3, Q-X20) and its [frozen hand-off](../experiments-decomposition-prompt.md); supplemental pattern `REQ-X[A-H]-[0-9]+` (a second supplement beside round 5's `REQ-[A-H]-[0-9]+`; no mixed matcher). [Partition, Phase-4 review, operator re-partition and tail split](../build/planning/2026-11-07_round6-decomposition.md) · [REQ-X owner register](../build/planning/2026-11-07_round6-coverage.md) ([json](../build/planning/2026-11-07_round6-coverage.json); checker `docs/build/tools/check_round6_coverage.py`) · [Round-6 contract invariants](../build/planning/2026-11-07_round6-invariants.md). 74 rows: 45 tickets + 4 tail runs = 49 implement-spec rows; 5 window skeletons; 13 gates; 7 HUMAN rows. The whole first pass is capped at $100 (model ≤ $70, compute ≤ $20, $10 unauthorized reserve); no row authorizes spend — only the recorded spend/provisioning gates do. No row is landed and no gate is pre-signed.
+
+| # | file | phase | kind | scope | gate |
+|---|---|---|---|---|---|
+| 252 | `252_GATE-G20__bootstrap.md` | Round 6 | gate | Review the re-partitioned plan and coverage register; operator decides Q-X46 (A recommended, B′ offered), the W1 upload deviation (now hosted as W2’s first step) and the… | STOP |
+| 253 | `253_R6.1__guard-x.md` | Round 6 | ticket | GUARD-X (a): Extend `hh-supplement-guard/1`: second frozen source, REQ-X register legs over this JSON (Appendix A id source; § anchors + Appendix-A hook resolution), Rou… | — |
+| 254 | `254_R6.2__p1-provenance-hardening.md` | Round 6 | ticket | P1-A: Commit the scratch archive (operator-disk input, manifest sha256 pinned; typed refusal if absent), raw records, content digests and `p1_records.py` with its battery | — |
+| 255 | `255_R6.3__p1-corrections-record.md` | Round 6 | ticket | P1-C + P1-D: Dated corrections, S4 deviation record, AR-01 (+AR-02/AR-03 records; Q-X25 default) and the dated study recompute folding DF-CAP5.1-1; R5.59 bytes unchanged | — |
+| 256 | `256_R6.4__site-shell.md` | Round 6 | ticket | Instrument design system, tokens test, glyph rasterizer, shell and all-absent site | — |
+| 257 | `257_GATE-G21__mock-review.md` | Round 6 | gate | Operator views the rendered mock (both themes, four viewports); approve "Instrument" or redirect (Q-X43) | STOP |
+| 258 | `258_R6.5__site-generator-phase1.md` | Round 6 | ticket | F2-b: Stdlib generator core, `hh-site-data/1`, named inputs, derivations D-1…D-8, drift | — |
+| 259 | `259_R6.6__site-claims-pages.md` | Round 6 | ticket | F2-f: `claims-lexicon.json` (C-25 byte-identical refactor), `check-site.sh` legs, mutation battery, ci step | — |
+| 260 | `260_R6.7__price-lane.md` | Round 6 | ticket | PRICE: `PricingTable.rate_unit`; the integer-µ$ money unit and the one rounding rule (shared owner); `NoPrice{unrepresentable_rate}` (AR-09) | — |
+| 261 | `261_R6.8__runner-core.md` | Round 6 | ticket | RUNNER-CORE (a): `hharness-runner` crate, engine drive, K-2 edge check, `hh-experiment-slot/1` with the closed `withheld{…}` member set, outcome map (AR-04) | — |
+| 262 | `262_R6.9__cell-deadline-verdict.md` | Round 6 | ticket | CELL-SPEC: Helper WORKDIR, cpu/memory limits, kernel-mediated copy-in/out, digest-only images (AR-06) | — |
+| 263 | `263_R6.10__proxy-core-canon.md` | Round 6 | ticket | PROXY-CORE-a: `hh-model-proxy` server, Json control channel, token gate, surfaces, field policy, `GenParamPolicy`, durable receipts (AR-08, AR-10) | — |
+| 264 | `264_R6.11__proxy-release-budget.md` | Round 6 | ticket | PROXY-CORE-b: Release modes, non-stream deadline, failure taxonomy, crash recovery, catalog identity stop | — |
+| 265 | `265_R6.12__replay-archive-index.md` | Round 6 | ticket | REPLAY: Proxy record/replay modes, `RequestCanonicalizer` (identity, json_canonical, `hh-l1-canon`), `RecordedTransport` | — |
+| 266 | `266_R6.13__recipe.md` | Round 6 | ticket | RECIPE-a: `gce-backend.sh` quote (declaration quantities only, labelled `pre-quote`) / provision / verify, declaration schema, receipts, fake-shim battery (AR-15) | — |
+| 267 | `267_R6.14__cost-reconcile.md` | Round 6 | ticket | COST-RECORD: `hh-compute-cost/1`, `hh-live-pricing/2` compute rows, phase spend ledger, the §3.10 ceiling formula in µ$ (sole compute pricing; AR-14) | — |
+| 268 | `268_R6.15__egress.md` | Round 6 | ticket | EGRESS (a): `allowlist_mediated` admission, model socket, static-musl `hh-cell-relay`, residuals (AR-05) | — |
+| 269 | `269_R6.16__runner-schedule-supervision.md` | Round 6 | ticket | RUNNER-CORE (c): Packing, schedule kinds (k-round, pair-coupled), reattempt policy, admission cut-off, C rule | — |
+| 270 | `270_R6.17__harbor-reproof.md` | Round 6 | ticket | HARBOR-O: Harbor pin (Q-X41 rule at dispatch, S-4), job-config writer, read-only ingest, image-drift, host venv | — |
+| 271 | `271_R6.18__select-protocol.md` | Round 6 | ticket | SELECT: `task-selection/1` materializer in hh-eval; seeded split; outcome-field refusals | — |
+| 272 | `272_R6.19__estimators.md` | Round 6 | ticket | Single-arm FM rate, flips, $/solve, tied-with-leader route, Holm family, `hh-comparative-results/1` (C-33) | — |
+| 273 | `273_R6.20__site-leaderboard.md` | Round 6 | ticket | Leaderboard and frontier components over `hh-comparative-results/1` fixtures | — |
+| 274 | `274_R6.21__site-noise-grid-viewer.md` | Round 6 | ticket | F2-c (b): Noise, pilot/smoke, quote and refusal views over fixtures | — |
+| 275 | `275_R6.22__admit.md` | Round 6 | ticket | ADMIT-CORE (a): `hh-harness-admission/1` record + validator (AG1–AG9), terms, versions, declarations (AR-18) | — |
+| 276 | `276_R6.23__binary-sets-upload-kit.md` | Round 6 | ticket | BINARY-SETS: Carried artifacts: infrastructure and H binary sets plus layers and bundles — pinned-container build recipe, export with sha256 into `artifacts`, IAP load p… | — |
+| 277 | `277_R6.24__adapters.md` | Round 6 | ticket | ADAPT-CHAT-PY + ADAPT-CHAT-NODE: Golden renderers for original mini-swe-agent and Pi; closed env; effort; instruction pre-check | — |
+| 278 | `278_R6.25__capture-smoke.md` | Round 6 | ticket | CAPTURE: `/logs/agent` copy-out, post-hoc ATIF, integrity bundle, receipt reconciliation, self-modification flag | — |
+| 279 | `279_R6.26__ps0-legs-runner-check.md` | Round 6 | ticket | PS0 + LEGS: PS0 probe driver (≤ $0.05 plan: one call per dialect + seed, `tool_choice`, `cache_control`) and `live-verify.sh` legs `ps0`, `pp0`, `corpus`, `w4-main` | — |
+| 280 | `280_R6.27__method-dossier-answer-scan.md` | Round 6 | ticket | D1-b (b): Comparative battery incl. first-pass T = 10 / H = 3 / H = 2 grid; review record; AR-17, AR-33 dossier | — |
+| 281 | `281_GATE-G23__method-admission.md` | Round 6 | gate | Admit or refuse the protocol, quote, estimators, schedule randomization and AR-33 departures | STOP |
+| 282 | `282_R6.28__l1-corpus-runner.md` | Round 6 | ticket | K2 + K3: Observation-replay executor (original run in a cell), synthetic fixtures M1–M19, turn-1 census generator, recorded-response driver | — |
+| 283 | `283_R6.29__fp-continuation-holds.md` | Round 6 | ticket | FP runner rules: Cost-only continuation, projection formulas, per-arm caps (expected-cost admission), wall-time rule, stop rules | — |
+| 284 | `284_R6.30__fp-seal-select.md` | Round 6 | ticket | FP seal: Outcome seal: sealed projections for readouts, checkpoint, dev partition and internal site profile | — |
+| 285 | `285_HUMAN-H12__pages-enable.md` | Round 6 | human | Enable GitHub Pages (Source: GitHub Actions) | — |
+| 286 | `286_GATE-G22__pub-p1.md` | Round 6 | gate | Phase-1 publication: `hh-site-publication/1` pinning the phase-1 input set; labels; card transition | STOP |
+| 287 | `287_R6.31__pub-p1-record.md` | Round 6 | ticket | Commit the phase-1 publication record; README site link; `[results-site]` transition; deploy read | — |
+| 288 | `288_HUMAN-H13__billing-alert.md` | Round 6 | human | GCP billing alert (default $20; 50/90/100 %); billing account and controller `gcloud` auth `provided: yes`; recipients `provided: yes` | — |
+| 289 | `289_GATE-G25__prov-w1.md` | Round 6 | gate | PROV-W1: compute quote, dead-man + restart, network posture (Q-X55), re-proof scope, export estimate, Q-X39b | STOP |
+| 290 | `290_R6.32__w1-run.md` | Round 6 | skeleton | W1 window body: infrastructure-set + bundle + layer builds and export, observe/freeze/prove re-proof, census, smokes, R-replay, teardown, harvest manifest verified (W1’s… | — |
+| 291 | `291_R6.33__fp-prereg.md` | Round 6 | ticket | Post-replacement list frozen; pre-registration packet hashed (V5 declaration, fallback trigger); W2 quote; FP-S readiness record (Q-X62 clock) | — |
+| 292 | `292_R6.34__e2-adr-wire.md` | Round 6 | ticket | E2-T0: Docs-only ADR bundle AR-21, AR-22, AR-23 and the AR-24 §5e.1 amendment text | — |
+| 293 | `293_R6.35__tmpl-surface.md` | Round 6 | ticket | E2-T3: `hh-tmpl/1` engine, strict undefined, whitespace control, ledgered uname probe | — |
+| 294 | `294_R6.36__surface-tools-renderers.md` | Round 6 | ticket | E2-T2 (b): Extends R6.35's renderer: `tools[]` verbatim, completion surface, `tool_choice` only when declared | — |
+| 295 | `295_R6.37__observation-plumbing.md` | Round 6 | ticket | G18: durable model-view rendering of exec observations, replay re-serves it | — |
+| 296 | `296_GATE-G24__ar24-amendment.md` | Round 6 | gate | AR-24 canonical amendment `stop_rule.submit{marker, line, require_returncode}`: approve or refuse | STOP |
+| 297 | `297_R6.38__strategy-exec.md` | Round 6 | ticket | E2-T5: Strategy params from slots, submit marker detection, format-error semantics, retry policy | — |
+| 298 | `298_R6.39__exec-defaults-topology.md` | Round 6 | ticket | E2-T6 (b): `exec_defaults`, helper merged stdio, in-cell process-tree kill, `returncode = -1` rendering | — |
+| 299 | `299_HUMAN-H14__account-setup.md` | Round 6 | human | Pre-FP-S account setup, one operator batch with three items: (1) Ollama automatic usage billing off (or meter-only recorded), exclusivity per window, `OLLAMA_API_KEY pro… | — |
+| 300 | `300_GATE-G26__fp-s.md` | Round 6 | gate | FP-S first-pass spend: verbatim A ≤ $70, m, A_eff, caps, wall-time rule, fallback trigger, W2 quote, prereg hash, upload authorization (covers every window’s ARCHIVE-UPL… | STOP |
+| 301 | `301_R6.40__w2-run.md` | Round 6 | skeleton | W2 window body: first, ARCHIVE-UPLOAD-W1 from the controller under the FP-S upload authorization (operator-accepted deviation; read-back verify, index commit), refusing… | — |
+| 302 | `302_R6.41__compaction-participant.md` | Round 6 | ticket | E2-T7: `compaction_strategy` slot wiring; absent slot byte-identical | — |
+| 303 | `303_R6.42__partition-mini-hir.md` | Round 6 | ticket | FP-RECORD-PARTITION: Partition the W2 corpus by task (dev/gate-A/gate-B); commit digests; sealed dev projection | — |
+| 304 | `304_R6.43__sweep-d3fp.md` | Round 6 | ticket | E2-T10: Enumerate → sealed levels → `LevelSpec.ref_`; declared-delta and liveness refusal | — |
+| 305 | `305_GATE-G27__prov-w3.md` | Round 6 | gate | PROV-W3: compute quote incl. H-set build/export and load; frozen H record named; disposition `run` \ | STOP |
+| 306 | `306_R6.44__w3-run.md` | Round 6 | skeleton | W3 window body: load, H-set build + export, L1.0/L1.1/L1.2 on gate-A, teardown, harvest, ARCHIVE-UPLOAD-W3 (FP-S upload authorization); or fleshed in place to `unused{…}… | — |
+| 307 | `307_GATE-G28__prov-wc.md` | Round 6 | gate | PROV-Wc (at most once): `triggered{W1′\ | STOP |
+| 308 | `308_R6.45__wc-run.md` | Round 6 | skeleton | Wc contingency body (W1′ repair re-proof, W3′ L1 rerun on gate-B, or restart overflow) with its harvest and ARCHIVE-UPLOAD-Wc; not triggered → fleshed in place to a tick… | — |
+| 309 | `309_GATE-G29__g-l1.md` | Round 6 | gate | G-L1 decision gate: `full` (pass for the exact H, frozen by digest) \ | STOP |
+| 310 | `310_R6.46__fp-quote-e-l2.md` | Round 6 | ticket | FP-E quote: FP-E quote for the recorded G-L1 disposition (`full`: five arms; `fallback`: three hosted arms + `withheld{l1_not_passed}`); W2 measurement packet; D_max, ca… | — |
+| 311 | `311_HUMAN-H15__credit-purchase.md` | Round 6 | human | Ollama credit purchase (≤ $10) only if the FP-E quote needs it; A_eff re-declared; readout `Status: NOT_NEEDED` otherwise | — |
+| 312 | `312_GATE-G30__fp-e.md` | Round 6 | gate | FP-E main window: arm inclusion by priority, D_max, caps, m, A_eff, W4 quote, holds; `run{full\ | STOP |
+| 313 | `313_R6.47__w4-run.md` | Round 6 | skeleton | W4 window body: load, lane probe, rounds 1–2, checkpoint, rounds 3–5, teardown, GCP project deletion (last window), harvest, ARCHIVE-UPLOAD-W4 + SETTLE-W4; fleshed per s… | — |
+| 314 | `314_R6.48__fp-results.md` | Round 6 | ticket | FP-RESULTS (a): Seal opens; answer-scan; P2-FP packet; P4-FP packet, or typed `withheld{l1_not_passed}` under `fallback` | — |
+| 315 | `315_HUMAN-H16__flagged-review.md` | Round 6 | human | Flagged-pass review: dispositions with excerpt hashes before the results freeze; `Status: DEFERRED` + DF id withholds the freeze claim | — |
+| 316 | `316_R6.49__site-phase34-freeze.md` | Round 6 | ticket | F2-h: `/phase-3/` and `/phase-4/` pages on fixtures; first-pass labels; §8.8 phrases; typed `withheld` renderings | — |
+| 317 | `317_GATE-G31__pub-fp.md` | Round 6 | gate | First-pass publication: `hh-site-publication/1`; flip as separate HUMAN act; terms read (Q-H1-6) | STOP |
+| 318 | `318_HUMAN-H17__dataset-flip.md` | Round 6 | human | HF dataset visibility flip after both scans; revision pinned; `Status: DEFERRED` + DF id withholds the viewer claim | — |
+| 319 | `319_R6.50__pub-fp-record.md` | Round 6 | ticket | Commit the first-pass publication record; pinned dataset revision; deploy read | — |
+| 320 | `320_HUMAN-H18__billing-reconcile.md` | Round 6 | human | Consolidated billing reconciliation: one dated entry per window (W1, W2, W3, Wc, W4), each a billing read ≥ 24 h after that window’s teardown, appended as soon as it is… | — |
+| 321 | `321_CAP6.1__cap1.md` | Round 6 | capstone | Independent whole-round gap analysis (fresh-context verdicts over the REQ-X `COVERAGE_MATRIX.csv` before any run ledger; seam hunt over the shared-decision table) plus t… | — |
+| 322 | `322_CAP6.2__closure.md` | Round 6 | capstone | Closure capstone: two sums, the $100 recompute from billed figures (HUMAN-H18), spend per kind and phase, `compute-open.sh` empty, `DELETE_REQUESTED`; then `reconcile-bu… | — |
+| 323 | `323_CAP6.3__reconcile.md` | Round 6 | capstone | Reconciliation capstone: `reconcile-build` spec reconciliation (landed code, ADRs, REQ-X coverage, §0.3 history), then the integration plan from actual stack CI and bran… | — |
+| 324 | `324_GATE-G32__accept.md` | Round 6 | gate | Round-6 acceptance (GATE-ACCEPT role) over the minimal tail: CAP6.1’s verdicts, CAP6.2’s closure, live reads and routing register, and CAP6.3’s reconciliation and integr… | STOP |
+| 325 | `325_DOC6.1__docs.md` | Round 6 | docs | Docs refresh: `refresh-repo-docs` (reader docs from accepted evidence), then `agent-docs` (agent docs from the landed implementation) | — |
+
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
 
@@ -559,6 +651,22 @@ FINAL proposed disposition (resolve-with-evidence · adopt-interim-as-final · d
 keep-open proposals; OQ-170 custody proposal concrete; OQ-388 ratification text drafted; R4.8's trust-field section exists.
 The operator's adopt/amend/decline rows drive a scoped `mode=extend` that fleshes R4.15a–e. Never pre-answered.
 
+
+**Round 6 gates (experiments first pass)** — each marker quotes its criterion and pre-registered thresholds verbatim from the [experiments spec](../experiments-spec.md) §10.3; none is pre-answered; a pending gate is RETURN PASS.
+- **GATE-G20** (`252_GATE-G20__bootstrap.md`): Review the re-partitioned plan and coverage register; operator decides Q-X46 (A recommended, B′ offered), the W1 upload deviation (now hosted as W2’s first step) and the consolidated reconcile placement, and accepts ver…
+- **GATE-G21** (`257_GATE-G21__mock-review.md`): Operator views the rendered mock (both themes, four viewports); approve "Instrument" or redirect (Q-X43)
+- **GATE-G23** (`281_GATE-G23__method-admission.md`): Admit or refuse the protocol, quote, estimators, schedule randomization and AR-33 departures
+- **GATE-G22** (`286_GATE-G22__pub-p1.md`): Phase-1 publication: `hh-site-publication/1` pinning the phase-1 input set; labels; card transition
+- **GATE-G25** (`289_GATE-G25__prov-w1.md`): PROV-W1: compute quote, dead-man + restart, network posture (Q-X55), re-proof scope, export estimate, Q-X39b
+- **GATE-G24** (`296_GATE-G24__ar24-amendment.md`): AR-24 canonical amendment `stop_rule.submit{marker, line, require_returncode}`: approve or refuse
+- **GATE-G26** (`300_GATE-G26__fp-s.md`): FP-S first-pass spend: verbatim A ≤ $70, m, A_eff, caps, wall-time rule, fallback trigger, W2 quote, prereg hash, upload authorization (covers every window’s ARCHIVE-UPLOAD, W1’s included as W2’s first step); waits for…
+- **GATE-G27** (`305_GATE-G27__prov-w3.md`): PROV-W3: compute quote incl. H-set build/export and load; frozen H record named; disposition `run` \
+- **GATE-G28** (`307_GATE-G28__prov-wc.md`): PROV-Wc (at most once): `triggered{W1′\
+- **GATE-G29** (`309_GATE-G29__g-l1.md`): G-L1 decision gate: `full` (pass for the exact H, frozen by digest) \
+- **GATE-G30** (`312_GATE-G30__fp-e.md`): FP-E main window: arm inclusion by priority, D_max, caps, m, A_eff, W4 quote, holds; `run{full\
+- **GATE-G31** (`317_GATE-G31__pub-fp.md`): First-pass publication: `hh-site-publication/1`; flip as separate HUMAN act; terms read (Q-H1-6)
+- **GATE-G32** (`324_GATE-G32__accept.md`): Round-6 acceptance (GATE-ACCEPT role) over the minimal tail: CAP6.1’s verdicts, CAP6.2’s closure, live reads and routing register, and CAP6.3’s reconciliation and integration plan; accepted deviations listed
+
 ## Phase gates & ownership notes
 - **Removability** (CC6): from Stage 2, every stage gate runs `removability(0…3)` — the build with
   tiers > n absent passes the tier-n acceptance suite unchanged; the hosting-absent, C3-absent and
@@ -599,6 +707,10 @@ No previous-round provider/model/harness/budget/production authority carries for
 
 Full-target D/E/R/P closure is distinct from bounded ticket completion: at an early owner close, create/update exact owed DF predicates naming later contributors and withheld claims. The coverage map's forward **evidence** references are not dispatch/branch dependencies. Use explicit operator scope disposition for unmet research/participant outcomes; optional or skipped work earns no positive claim. Read current inputs and require a new review if admitted semantics materially change the unexecuted contract.
 
+### Round 6 scope
+
+[Round-6 contract invariants](../build/planning/2026-11-07_round6-invariants.md) X-01–X-08 and XO-01–XO-06 apply to every Round-6 row (the round-5 clauses continue wherever round-5 machinery is touched). Dispatch: GATE-G20 authorizes R6.1 only, with the retained guard's ROUTE computed in `--no-checker` mode plus the stock validator at 0 violations (GATE-G8 precedent); from R6.2 on, `check-supplement-guard.sh` → `PASS` with `DISPATCH — <id>` before and after each dispatch boundary. Paid/provisioning window bodies are skeletons fleshed by a scoped `decompose-spec` insert after their gate. Merges remain `mergePolicy: OPERATOR`.
+
 ## Out of scope
 No ticket builds any of these (the scope-creep guard; ADR-0006 D3):
 - N1 — not a general-purpose framework for others' core loops (the LCD trap)
@@ -621,6 +733,8 @@ Inherited spec-level deferrals (tickets inherit; they do not re-decide):
 - Stage deferral ADRs (each carries an assumption-debt record + a MUST-data default / interim rule in force until its OQ closes): ADR-0212 (Stage 0–1), ADR-0213 (Stage 2–3, incl. OQ-256 routed here), ADR-0214 (Stage 4–6), ADR-0215 (program-level / promotion test OQ-440), ADR-0211 (D-1…D-6 entry + OQ-461/462), ADR-0216 (OQ-465/467/468). A ticket at a gated stage applies the interim rule; it never guesses past a MUST-data placeholder.
 - Evolution deferrals D-1…D-6 (ADR-0207/0211; §11.3) sit OUTSIDE the build ladder and enter only by an ADR passing the entry test: D-1 human directory/rotations, D-2 multi-tenant fleets, D-3 value-at-risk pricing of irreversibility, D-4 dispatch prioritization by expected value, D-5 reconciler-side source mirroring, D-6 cross-item shared-state coordination. Interim proxies are in force; no Stage 0–6 ticket builds them.
 - R-2.12.3 (language/ecosystem selection) is ratified by ADR-0050 (polyglot split, late-bound surface layer); GATE-G1 evaluates the Stage-0 revalidation trigger. R-2.12.4 (packaging/licensing/OSS governance/docs/community) is the one `deferred(ADR-0210)` scope row — WS-L6, out of build scope; ADR-0210 holds its interim rule + entry tests. R-2.12.5 (novelty/naming thesis, §1) is program-level, no code.
+
+- **Round 6:** everything the [experiments spec](../experiments-spec.md) §10.6 assigns to later passes (tranches beyond the 10-task first pass, the full L2, explore → confirm sweeps, the remaining harnesses, Terminus-2) — routed by CAP6.2's later-pass register, never implemented in Round 6.
 
 ## Requirement-ID → ticket index
 Authoritative for coverage. Each base R-id maps to the ticket(s) that land its slices across stages.
@@ -697,6 +811,10 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 
 The original canonical source and legacy matcher/index above remain unchanged. Supplemental canonical source: `docs/evidence-and-adoption-spec.md`; literal ERE: `REQ-[A-H]-[0-9]+`. [180-row literal owner/alias table](../build/planning/2026-10-30_evidence-coverage.md) and [machine-readable literal companion](../build/planning/2026-10-30_evidence-coverage.json) bind all 167 adopted targets to exactly one primary contract/numbered AC/layer, retaining 12 merged and one superseded alias, original row hashes, legacy relations, contributors and 24 OL links. No full-target acceptance has been earned. This is explicit supplemental coverage; do not enable mixed-namespace `req_index_literal_from`.
 
+### Round 6 supplemental requirement ownership
+
+Supplemental canonical source: `docs/experiments-spec.md` (canonical v0.3); literal ERE `REQ-X[A-H]-[0-9]+`. The [456-row owner/alias register](../build/planning/2026-11-07_round6-coverage.md) and its [machine-readable companion](../build/planning/2026-11-07_round6-coverage.json) bind all 370 adopted ids to exactly one primary Round-6 row (336 first-pass; 34 routed to later passes by CAP6.2), retaining 81 merged and 5 superseded aliases with their literal predicates. No acceptance is earned by this table.
+
 ## Spec amendments applied
 (none — the spec is ratified v1.0-rc2, gate-passed PASS 7/7; amend via the protocol above.)
 
@@ -726,6 +844,7 @@ The original canonical source and legacy matcher/index above remain unchanged. S
 - 2026-10-22 · §3.3.5 `AssemblyDiagnostic.stage` closed set + §06 `AssemblyDiagnostic` row (CF-492; R-2.1.4) · before: `stage ∈ {desugar, compose, resolve, validate:1..7, link, lower, instantiate, resume}` — no `seal` spelling, so the stage-5 seal self-check's `C-SEAL-1` could only borrow `validate:6b` · after: `seal` minted in the closed set; the producing check reports `stage: "seal"` · approver: GATE-G7 "Adopt all" · `docs/build/planning/round4-bl30-adjudication-briefs.md` (CF-492) + `crates/hh-assembly/src/diagnostics.rs` `Stage::Seal`
 - 2026-10-22 · §7.1 `[[DEFERRED ADR-0216: OQ-468]]` marker + §7.4 `amend`/`list_leases`/`archive`/`grant`/`revoke_lease` rows (OQ-468; R-2.11.1, R-2.11.4) · before: the five ops `experimental`-tier carrying `AssumptionDebtRecord{removal_test: promoted_to_stable | zero_uses}`, gated `ExperimentalRequired` · after: `stable` tier in the CF-488-adopted grouping — `amend` W, `list_leases` R, `archive`/`grant`/`revoke_lease` S (staged `Refused{stage_pending}`); marker flipped `[[ANSWERED OQ-468]]`; the frozen error sums publish the named refusals · approver: GATE-G7 "Adopt all" · ADR-0176/0177/0216 amendment logs + `crates/hh-embed-schema/src/ops.rs`
 - 2026-10-22 · CANONICAL front matter · before: the status line named amendments R4.15b2 as the latest · after: names amendments R4.15c as applied · approver: GATE-G7 "Adopt all" · CF-492/OQ-468 conforms above
+- 2026-11-07 · experiments spec §10.6 (decomposition handoff) · before: "First-cut size ≈ 100–110 rows, of which about 85–90 are implement-spec rows"; "`tail = full` per round"; pre-split RECIPE (a/b) · after: Round 6 = 74 rows / 49 implement-spec rows; tail = minimal + a reconciliation capstone (CAP6.1, CAP6.2, CAP6.3, GATE-G32 accept, DOC6.1); RECIPE merged with B3's seam kept as an in-row stage boundary (accepted deviation listed at GATE-G20) · approver: the operator, planning conversation 2026-11-07 — "~45 tickets (Recommended)", "3-run tail (Recommended)", then "Split into 4-run tail (Recommended)" · no ADR (process sizing, no design change); dated note appended to the spec §10.6
 
 ## Decomposition decisions
 - **Grain:** one ticket per scope-item **slice at one stage** (subagent dispatch ceiling — each ticket
@@ -1010,6 +1129,13 @@ The original canonical source and legacy matcher/index above remain unchanged. S
 - Initial architecture/method admission, earned numerical verification, and actual study authorization are distinct gates. EX-02 receives its early routed finite-task method and does not wait for paid collection or parity. Actual external pins/authority yield skeletons with no Run line. The complete default chain includes manual day-30/day-90 follow-up; it is not an uninterrupted unattended build. An earlier capability release requires explicit scoped gate/plan disposition retaining S3.
 - [Partition and conscious tradeoffs](../build/planning/2026-10-30_evidence-decomposition.md); fresh independent review/dispositions will be linked there before handoff. Source maps are analysis, not new design authority or runtime evidence.
 
+### Round 6 decomposition decisions
+
+- Round 6 is the experiments program's first pass (≤ $100); later passes are decomposed only after their gates. Tail: the operator chose a minimal tail, then split its closure for the per-run ceiling — CAP.1→CAP6.1; CAP.3+REC.1→CAP6.2 (closure, live reads, later-pass routing register); REC.2+REC.3→CAP6.3; GATE-ACCEPT→GATE-G32; DOC.1+DOC.2→DOC6.1. The retained guard honours the banner's declared `tail=minimal` (contiguous capstone, capstone, gate, docs), added 2026-11-07 in the same change as this round.
+- Granularity: the operator judged 97 implement-spec runs too fine for SWE-2 (High, 256k) and chose ~45; rows are sized ≤ 95k focused + 10k verification reserve, merged along shared code and decisions, with the record-only rows folded into the work they record and HUMAN rows consolidated by trigger. The plan is revisable at run time by a scoped `decompose-spec` insert; a measured overflow stops at its next boundary for a scoped re-plan.
+- G-L1 (GATE-G29) is a decision gate with pre-registered `full` | `fallback` dispositions, each recorded PASSED with its basis, so the hosted-only fallback is routable in a linear chain; results rows land honestly under either.
+- [Partition, Phase-4 independent review record, re-partition merge map and tail split](../build/planning/2026-11-07_round6-decomposition.md).
+
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
 - 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.
@@ -1170,3 +1296,5 @@ The original canonical source and legacy matcher/index above remain unchanged. S
   (branch off `origin/main` `9f952d02`; the cited parity/S4 evidence records land via
   `codex/harnessharness-evidence-s3-s4`, PR #283). Guard `tail-roles` repaired to tail-presence for
   authorized post-tail extension rows (OPEN FINDING, this branch).
+
+- 2026-11-07T05:25:31Z · **Round 6 extension — experiments first pass (decompose-spec mode=extend):** operator authorization verbatim (planning conversation, 2026-11-07): "I want you to continue on until you're totally done, the new tickets are inserted, there's a new PR with the changes, and I can let ~/MetaHarness-harnessharness Devin session know the new tickets and build files and so on have been added and we're safe to resume". Spec ratified under Q-X20 ("Ratify with recorded defaults (Recommended)"). Rows 252–325 (74) appended after row 251 under the `### Round 6` banner; no existing file renamed, no row superseded, no gate pre-signed. LEDGER: round 6, nextTicket GATE-G20 (RETURN PASS until the operator dispositions it), lastCompleted R5.59, chainTip `main` (the round-5 tips no longer resolve locally). This records planning authorization only; no implementation, provisioning, spend, publication or merge is authorized by it.

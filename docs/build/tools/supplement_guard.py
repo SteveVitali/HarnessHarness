@@ -40,6 +40,12 @@ LAYER = re.compile(r"^[DERP](/[DERP])*$")
 CHAIN_KINDS = {"ticket", "gate", "human", "skeleton", "capstone", "reconcile", "docs"}
 TAIL_KINDS = ["capstone", "capstone", "capstone", "gate",
               "reconcile", "reconcile", "reconcile", "docs", "docs"]
+# A round banner may declare the decompose-spec minimal tail
+# (`### Round <n> — … (…; tail=minimal)`): gap-analysis capstone, closure
+# capstone, operator-acceptance gate, one docs row. Added 2026-11-07 for
+# Round 6 by operator decision (planning conversation: "3-run tail
+# (Recommended)"); an undeclared round keeps the full nine-role tail.
+TAIL_KINDS_MINIMAL = ["capstone", "capstone", "gate", "docs"]
 EXPECTED_DISPOSITIONS = {"adopted": 167, "merged-with": 12, "superseded-by": 1}
 
 
@@ -144,10 +150,13 @@ class Guard:
         """All chain rows in document order; active_round marked per '### Round <n>'."""
         rows = []   # {seq, file, id, kind, phase, gate, round}
         current_round = None
+        self.round_tail = {}
         for line in text.splitlines():
             rb = re.match(r"^### Round (\d+)", line)
             if rb:
                 current_round = int(rb.group(1))
+                if re.search(r"\btail=minimal\b", line):
+                    self.round_tail[current_round] = "minimal"
                 continue
             if line.startswith("## "):
                 current_round = None
@@ -418,12 +427,15 @@ class Guard:
         # presence, not strictly-last. (Repaired 2026-11-06 — same class as the
         # DONE-token routing repair; LEDGER OPEN FINDINGS.)
         kinds = [r["kind"] for r in active]
-        n = len(TAIL_KINDS)
+        tail = (TAIL_KINDS_MINIMAL
+                if getattr(self, "round_tail", {}).get(active_round) == "minimal"
+                else TAIL_KINDS)
+        n = len(tail)
         win = next((i for i in range(len(kinds) - n + 1)
-                    if kinds[i:i + n] == TAIL_KINDS), None)
+                    if kinds[i:i + n] == tail), None)
         if win is None:
             self.err("tail-roles",
-                     f"active-round rows contain no contiguous tail {TAIL_KINDS}")
+                     f"active-round rows contain no contiguous tail {tail}")
         elif not any("accept" in r["file"]
                      for r in active[win:win + n] if r["kind"] == "gate"):
             self.err("tail-roles", "tail gate row is not the operator-acceptance role")

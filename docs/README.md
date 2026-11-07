@@ -26,6 +26,7 @@ history behind it.
 | Read the behavioral contract | [Canonical specification](../spec/CANONICAL_SPEC.md) and its [source sections](../spec/sections/) |
 | Understand a design decision | [ADR index](adr/README.md) |
 | Review the evidence and adoption program | [Round-5 partition](build/planning/2026-10-30_evidence-decomposition.md), [ownership trace](build/planning/2026-10-30_evidence-coverage.md), [Ratification guide](spec-ratification-review.md), [ratified supplement](evidence-and-adoption-spec.md), [decomposition handoff](decomposition-prompt.md), [protocol/resource review](protocol-resource-review.md); [founding brief](brief.md), [research/design ledger](research-ledger.md), and [outline trace](OUTLINE_TRACE.md) |
+| Review the experiments program (harness evaluations, HIR parity, sweeps, results site) | [Round-6 partition](build/planning/2026-11-07_round6-decomposition.md), [REQ-X ownership register](build/planning/2026-11-07_round6-coverage.md), [ratified experiments supplement](experiments-spec.md), [decomposition hand-off](experiments-decomposition-prompt.md); [founding brief](experiments-brief.md), [research/design ledger](experiments-research-ledger.md), and [outline trace](experiments-OUTLINE_TRACE.md) |
 | Trace the build | [Build records](build/README.md), [ticket manifest](tickets/00_MANIFEST.md), and [build index](build/BUILD_INDEX.md) |
 
 Start each work session with `bash scripts/deferrals-open.sh` from the repository
@@ -67,6 +68,11 @@ entries under the applicable record protocol.
 | [research-ledger.md](research-ledger.md) | frozen | Completed upstream work units, exact operator decisions and append-only history; frozen at Q-7 ratification |
 | [OUTLINE_TRACE.md](OUTLINE_TRACE.md) | frozen | All 24 founding obligations mapped to ratified supplemental-spec requirements; downstream build records add ticket/evidence links |
 | [decomposition-prompt.md](decomposition-prompt.md) | frozen | Exact extend-mode invocation, binding constraints and validation/dispatch prerequisites for the later ticket/build-artifact phase |
+| [experiments-brief.md](experiments-brief.md) | frozen | Experiments-program founding intent (operator handoff brief verbatim + charter-time addenda) |
+| [experiments-spec.md](experiments-spec.md) | frozen | Q-X20-ratified experiments supplement (phases 1–4, results site, the ≤ $100 first pass); amended only by dated notes and the manifest protocol |
+| [experiments-research-ledger.md](experiments-research-ledger.md) | frozen | Experiments research/design units, verbatim operator decisions Q-X1…Q-X63 and history; frozen at Q-X20 ratification |
+| [experiments-OUTLINE_TRACE.md](experiments-OUTLINE_TRACE.md) | frozen | The 18 founding obligations mapped to experiments-spec sections |
+| [experiments-decomposition-prompt.md](experiments-decomposition-prompt.md) | frozen | Extend-mode invocation, binding constraints and guard mechanics for the Round-6 decomposition |
 | [research/](research/) | living conventions + frozen accepted notes | New evidence/adoption research; [note conventions](research/CONVENTIONS.md). Distinct from the frozen root `research/` tree. Design notes use the directory below under the same conventions. |
 | [README.md](README.md) | living | This navigation and edit-mode map |
 | [AGENTS.md](AGENTS.md) | living | Agent instructions for editing guides and preserving historical records |
