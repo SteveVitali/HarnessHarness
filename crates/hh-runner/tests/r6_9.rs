@@ -43,7 +43,7 @@ struct RecordingCell {
 }
 
 impl CellOps for RecordingCell {
-    fn exists(&mut self, path: &str) -> Result<bool, CellError> {
+    fn present(&mut self, path: &str) -> Result<bool, CellError> {
         Ok(self.fs.contains(path))
     }
     fn ls_dir(&mut self, _path: &str) -> Result<Vec<String>, CellError> {

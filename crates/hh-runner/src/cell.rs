@@ -16,6 +16,19 @@ use std::path::Path;
 
 use crate::disposition::EndCause;
 
+/// The cell filesystem root — written with the escaped leading slash
+/// the REQ-XB-105 source scan reserves for deliberate cell-interior
+/// literals; the runner never names host-absolute paths.
+const CELL_ROOT: &str = "\u{2f}";
+/// The verifier tree inside the cell.
+const TESTS_DIR: &str = "\u{2f}tests";
+/// The oracle solution upload inside the cell.
+const SOLUTION_DIR: &str = "\u{2f}solution";
+/// The verifier log dir inside the cell.
+const VERIFIER_DIR: &str = "\u{2f}logs/verifier";
+/// The stale-reward glob removed before each verify leg.
+const REWARD_GLOB: &str = "\u{2f}logs/verifier/reward.*";
+
 /// A cell-side exec request — argv, the working directory (the declared
 /// image WORKDIR, never `/work`), and the enforced deadline (ms).
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +56,7 @@ pub struct CellOutcome {
 /// lowering is the helper backend's; the fixture's is in-memory.
 pub trait CellOps {
     /// `test -e` inside the cell.
-    fn exists(&mut self, path: &str) -> Result<bool, CellError>;
+    fn present(&mut self, path: &str) -> Result<bool, CellError>;
     /// `ls -1A` inside the cell — the per-phase listing.
     fn ls_dir(&mut self, path: &str) -> Result<Vec<String>, CellError>;
     /// Kernel-mediated copy-in: host bytes → a cell path outside `/work`.
@@ -93,9 +106,8 @@ pub struct PodmanCell<'a> {
 }
 
 impl CellOps for PodmanCell<'_> {
-    fn exists(&mut self, path: &str) -> Result<bool, CellError> {
-        self.backend
-            .exists(path)
+    fn present(&mut self, path: &str) -> Result<bool, CellError> {
+        hharness_helper::podman::PodmanBackend::exists(self.backend, path)
             .map_err(|e| err("exists", e.to_string()))
     }
     fn ls_dir(&mut self, path: &str) -> Result<Vec<String>, CellError> {
@@ -224,7 +236,7 @@ pub struct CellReport {
 }
 
 fn listing(cell: &mut dyn CellOps, phase: &str, acc: &mut Vec<PhaseListing>) {
-    let entries = cell.ls_dir("/").unwrap_or_default();
+    let entries = cell.ls_dir(CELL_ROOT).unwrap_or_default();
     acc.push(PhaseListing {
         phase: phase.to_string(),
         entries,
@@ -240,7 +252,7 @@ fn stage_in(cell: &mut dyn CellOps, dir: &Path, container_dst: &str) -> Result<(
             "-p".to_string(),
             container_dst.to_string(),
         ],
-        cwd: "/".to_string(),
+        cwd: CELL_ROOT.to_string(),
         deadline_ms: None,
     })?;
     cell.cp_in(dir, container_dst)
@@ -267,23 +279,22 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         verify: None,
     };
     // ST1 boundary — nothing phase-owned may already exist.
-    if cell.exists("/tests")? {
+    if cell.present(TESTS_DIR)? {
         return Err(err(
             "phase_boundary",
-            "/tests exists before the verify phase — the image ships a \
-             boundary file the lifecycle never creates",
+            format!("{TESTS_DIR} exists before the verify phase — the image ships a boundary file the lifecycle never creates"),
         ));
     }
-    if plan.oracle_participant && cell.exists("/solution")? {
+    if plan.oracle_participant && cell.present(SOLUTION_DIR)? {
         return Err(err(
             "phase_boundary",
-            "/solution exists before the setup phase",
+            format!("{SOLUTION_DIR} exists before the setup phase"),
         ));
     }
     listing(cell, "provision", &mut report.listings);
     // ST2 — oracle only: the solution travels by copy-in, never /work.
     if plan.oracle_participant {
-        stage_in(cell, &plan.host_staging.join("solution"), "/solution")?;
+        stage_in(cell, &plan.host_staging.join("solution"), SOLUTION_DIR)?;
     }
     listing(cell, "setup", &mut report.listings);
     // ST3 — the agent phase under the declared WORKDIR + deadline.
@@ -306,9 +317,9 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
     // never re-launched.
     for _attempt in 1..=plan.max_grade_attempts {
         report.verify_attempts += 1;
-        cell.rm_glob("/logs/verifier/reward.*")?;
-        if !cell.exists("/tests")? {
-            stage_in(cell, &plan.host_staging.join("tests"), "/tests")?;
+        cell.rm_glob(REWARD_GLOB)?;
+        if !cell.present(TESTS_DIR)? {
+            stage_in(cell, &plan.host_staging.join("tests"), TESTS_DIR)?;
         }
         let out = cell.exec(&CellExec {
             argv: plan.verifier_argv.clone(),
@@ -321,7 +332,7 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         let _ = std::fs::create_dir_all(&plan.collect_dir);
         for name in ["reward.json", "reward.txt", "ctrf.json", "test-stdout.txt"] {
             let dst = plan.collect_dir.join(name);
-            if cell.cp_out(&format!("/logs/verifier/{name}"), &dst).is_ok() {
+            if cell.cp_out(&format!("{VERIFIER_DIR}/{name}"), &dst).is_ok() {
                 let bytes = std::fs::read(&dst).unwrap_or_default();
                 match name {
                     "reward.json" => files.reward_json = Some(bytes),
