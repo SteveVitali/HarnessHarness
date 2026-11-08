@@ -49,6 +49,7 @@ pub mod exposure_quote;
 pub mod facts;
 pub mod faults;
 pub mod finite_manifest;
+pub mod fp_select;
 pub mod hosted_metrics;
 pub mod interventions;
 pub mod judge;
