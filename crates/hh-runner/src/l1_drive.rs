@@ -18,7 +18,7 @@
 //!   the declared lane, no receipts.
 //! - [`HttpEndpoint`] — a real-socket `POST` client, so a harness is
 //!   driven end-to-end over TCP in the fixture.
-//! - [`L1Exec`] impls — [`ObsReplay`] rides `crate::l1_obs`;
+//! - [`L1Exec`] impls — [`crate::l1_obs::ObsReplay`] rides `crate::l1_obs`;
 //!   [`LiveExec`] runs the command for real (the L1.2 cell seam at
 //!   fixture level — `sh -c`, merged output, deadline ⇒ `rc -1` +
 //!   `exception_info`, E1 A.4).
