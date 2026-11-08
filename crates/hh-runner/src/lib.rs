@@ -31,6 +31,7 @@ pub mod capture;
 pub mod carried;
 pub mod cell;
 pub mod condenser;
+pub mod continuation;
 pub mod coordinator;
 pub mod diskwatch;
 pub mod disposition;
