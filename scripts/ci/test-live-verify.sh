@@ -42,6 +42,8 @@ HH_PS_STAGE_RECORD=$T/ps0-stage.json
 HH_PP_EVIDENCE_DIR=$T/pp0-evidence
 HH_MAIN_BASE_URL=http://127.0.0.1:9/unreachable
 HH_MAIN_SCHEDULE_REF=schedule-ref-not-a-value
+HH_LANE_BASE_URL=http://127.0.0.1:9/unreachable
+HH_LANE_SLOT_TOKEN=slot-token-ref-not-a-value
 EOF
 printf 'UNRELATED=nothing\n' > "$T/empty.env"
 
@@ -163,11 +165,12 @@ else
   skip "python3-absent"
 fi
 
-# ── 10. R6.26 legs (ps0/pp0/corpus/w4-main; REQ-XH-027 contribution) ──
+# ── 10. R6.26/R6.29 legs (ps0/pp0/corpus/w4-lane-probe/w4-main;
+# REQ-XH-027 contribution) ──
 # Registered: --check-names accepts each; no pricing.json allocation is
 # written for the window tickets, so any non-zero --budget exits 3
 # (SPEND CAP) before any call; a missing required NAME exits 4.
-for leg in ps0 pp0 corpus w4-main; do
+for leg in ps0 pp0 corpus w4-lane-probe w4-main; do
   out=$(run bash "$LV" --check-names "$leg" 2>&1)
   rc=$?
   [ "$rc" -eq 0 ] || bad "--check-names $leg: exit $rc (leg not registered)"
@@ -178,10 +181,14 @@ check "pp0 over-allocation refuses (exit 3)" 3 \
   run bash "$LV" pp0 --budget 0.01
 check "corpus over-allocation refuses (exit 3)" 3 \
   run bash "$LV" corpus --budget 0.01
+check "w4-lane-probe over-allocation refuses (exit 3)" 3 \
+  run bash "$LV" w4-lane-probe --budget 0.01
 check "w4-main over-allocation refuses (exit 3)" 3 \
   run bash "$LV" w4-main --budget 0.01
 check "ps0 missing NAME refuses (exit 4)" 4 \
   env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" ps0 --budget 0
+check "w4-lane-probe missing NAME refuses (exit 4)" 4 \
+  env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" w4-lane-probe --budget 0
 check "w4-main missing NAME refuses (exit 4)" 4 \
   env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" w4-main --budget 0
 

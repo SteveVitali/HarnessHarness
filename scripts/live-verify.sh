@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-main" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-lane-probe" "w4-main" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -260,6 +260,11 @@ leg_field() { # $1 leg, $2 field
     corpus:kind)     printf 'script';;
     corpus:names)    printf 'HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS_STAGE_RECORD HH_PP_EVIDENCE_DIR';;
     corpus:test)     printf 'hh-runner:r6_26:live_corpus_record';;
+    w4-lane-probe:ticket)   printf 'R6.47';;
+    w4-lane-probe:provider) printf 'hh-model-proxy';;
+    w4-lane-probe:kind)     printf 'script';;
+    w4-lane-probe:names)    printf 'HH_LANE_BASE_URL HH_LANE_SLOT_TOKEN';;
+    w4-lane-probe:test)     printf 'hh-runner:r6_29b:live_w4_lane_probe';;
     w4-main:ticket)   printf 'R6.47';;
     w4-main:provider) printf 'hh-model-proxy';;
     w4-main:kind)     printf 'script';;
@@ -1588,6 +1593,11 @@ run_leg_corpus() {
   else
     RESULT="skipped(executes-in-W2-under-R6.40)"
   fi
+}
+
+run_leg_w4_lane_probe() {
+  ASSERTIONS="the HH-native lane probe (≤ \$0.05 worst-case plan; one receipted call per pinned effort path through the proxy's loopback listener on the slot token; hh-lane-probe/1 with per-call dispositions, recorded before W4's first HH-native slot — a failed probe or ≥ 1 infra-failed slot among the arm's first 3 is withheld{admission:native_lane_hold}): registered by R6.29, executed in W4 under FP-E by R6.47 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W4-under-R6.47)"
 }
 
 run_leg_w4_main() {
