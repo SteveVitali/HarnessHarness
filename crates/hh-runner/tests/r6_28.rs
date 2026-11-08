@@ -343,3 +343,411 @@ fn ac3_census_generator_emits_one_entry_per_task() {
     }
 }
 
+// ── AC-4/5/6/7 — stage 2 (K4) appended below ────────────────────────
+
+use hharness_eval::parity_admission as pa;
+use hharness_runner::l1_drive::L1Drive;
+use hharness_runner::l1_gate::{
+    check_l1_conformance, check_l1_diff, compare_drives, conformance_record, refuse_parity_input,
+    run_sequence, L1Sequence, L1_CONFORMANCE_SCHEMA, L1_DIFF_SCHEMA, L1_LABEL,
+};
+use hharness_runner::l1_obs::raws_from_recording;
+
+fn bm01_seq(obs_b: Option<Vec<RawObservation>>) -> L1Sequence {
+    let rec = bm_fixtures()[0].recording.to_json();
+    let rec = Recording::parse(&rec).unwrap();
+    L1Sequence {
+        seq_id: "bm01".into(),
+        calls: rec.calls.clone(),
+        obs_a: vec![raw("hi\n", 0), raw(&format!("{SUBMIT_MARKER}\n"), 0)],
+        obs_b,
+    }
+}
+
+#[test]
+fn ac4_legs_stable_prefix_and_first_divergence() {
+    // L1.0 defines s(S): obs_b diverges at step 1 → request 2 differs → s = 1.
+    let seq = bm01_seq(Some(vec![
+        raw("DIFFERENT\n", 0),
+        raw(&format!("{SUBMIT_MARKER}\n"), 0),
+    ]));
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h(),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert_eq!(out.stable, 1, "s(S) counts leading equal requests");
+    assert_eq!(out.total, 2);
+
+    // A faithful H passes every leg when the env is reproducible.
+    let seq = bm01_seq(None);
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h(),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert_eq!(out.stable, out.total);
+    assert_eq!(out.l1_1.result, "pass");
+    assert_eq!(out.l1_2.result, "pass");
+    assert!(out.diffs.is_empty());
+
+    // Injected request divergence at turn 2 → detected at the right
+    // step and leg (strict L1.1 refuses; the diff record names it).
+    let mut plan = DivergencePlan::default();
+    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h_div(plan),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert_eq!(out.l1_1.result, "fail");
+    let d = out
+        .l1_1
+        .divergences
+        .iter()
+        .find(|d| d.gated && d.level == "request")
+        .expect("the strict refusal records a request-level divergence");
+    assert_eq!(d.turn, Some(2));
+    assert!(out.diffs.iter().any(|r| {
+        r.get("leg").unwrap().as_str() == Some("l1_1")
+            && r.get("k").and_then(Json::as_int) == Some(2)
+    }));
+}
+
+#[test]
+fn ac4_l12_gates_inside_prefix_reports_beyond() {
+    // s(S) = 1 (obs_b diverges at step 1): a divergence at k ≤ s fails;
+    // beyond s is reported, never evaluated.
+    let seq = bm01_seq(Some(vec![
+        raw("DIFFERENT\n", 0),
+        raw(&format!("{SUBMIT_MARKER}\n"), 0),
+    ]));
+    // Divergence at turn 1 (within the stable prefix) → fail.
+    let mut plan = DivergencePlan::default();
+    plan.request_patch = Some((1, vec![("temperature".into(), Json::Int(1))]));
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h_div(plan),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert_eq!(out.l1_2.result, "fail");
+    // Divergence only at turn 2 (= s+1, the excluded turn) → reported,
+    // never a fail.
+    let mut plan = DivergencePlan::default();
+    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h_div(plan),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert_eq!(out.stable, 1);
+    assert_eq!(
+        out.l1_2.result, "pass",
+        "post-prefix divergence reports only"
+    );
+    assert!(out
+        .l1_2
+        .divergences
+        .iter()
+        .any(|d| !d.gated && d.turn == Some(2)));
+}
+
+// ── AC-5 (E; AC-7.4-4) — one failing-alone test per equality level ──
+
+fn base_drive() -> L1Drive {
+    let mut d = L1Drive::default();
+    for (i, cmd) in ["echo hi", "echo submit"].iter().enumerate() {
+        let body = Json::obj([("model", Json::str("m")), ("i", Json::Int(i as i64))])
+            .to_canonical_string()
+            .into_bytes();
+        d.requests.push(hharness_runner::l1_drive::CapturedRequest {
+            turn: i + 1,
+            method: "POST".into(),
+            path: "\u{2f}v1".into(),
+            content_type: Some("application/json".into()),
+            body: body.clone(),
+            upstream_body: body,
+        });
+        d.parsed_actions
+            .push(vec![hharness_runner::l1_drive::L1Action {
+                command: cmd.to_string(),
+                tool_call_id: "c".into(),
+            }]);
+        d.executed_actions
+            .push(d.parsed_actions.last().unwrap().clone());
+    }
+    d.termination = "submitted".into();
+    d.submission = Some("done".into());
+    d
+}
+
+fn gated_count(v: &[hharness_runner::l1_gate::L1Divergence]) -> usize {
+    v.iter().filter(|d| d.gated).count()
+}
+
+#[test]
+fn ac5_each_equality_level_fails_alone() {
+    let canon = canon();
+    let o = base_drive();
+    // request — canonicalized upstream-bound bytes differ.
+    let mut h = base_drive();
+    h.requests[0].upstream_body = Json::obj([("model", Json::str("OTHER"))])
+        .to_canonical_string()
+        .into_bytes();
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "request"));
+    // action — parsed action differs from O's executed list.
+    let mut h = base_drive();
+    h.parsed_actions[0][0].command = "echo other".into();
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "action"));
+    // request_count.
+    let mut h = base_drive();
+    h.requests.pop();
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "request_count"));
+    // termination.
+    let mut h = base_drive();
+    h.termination = "repeated_format_error".into();
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "termination"));
+    // submission.
+    let mut h = base_drive();
+    h.submission = Some("other".into());
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "submission"));
+    // extra_request.
+    let mut h = base_drive();
+    h.extra_request = true;
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert!(v.iter().any(|d| d.gated && d.level == "extra_request"));
+    // downstream-only difference → diagnostic, never a fail.
+    let mut h = base_drive();
+    h.requests[0].body = Json::obj([
+        ("model", Json::str("m")),
+        ("i", Json::Int(0)),
+        ("x", Json::Int(1)),
+    ])
+    .to_canonical_string()
+    .into_bytes();
+    let v = compare_drives(canon.as_ref(), "", &o, &h, usize::MAX, 2);
+    assert_eq!(gated_count(&v), 0);
+    assert!(v.iter().any(|d| d.level == "downstream" && !d.gated));
+    // clean baseline → zero divergences.
+    let v = compare_drives(canon.as_ref(), "", &o, &base_drive(), usize::MAX, 2);
+    assert!(v.is_empty());
+}
+
+// ── AC-6 (E; AC-7.4-8) — records, diff-per-fail, coverage refusal ───
+
+#[test]
+fn ac6_records_shape_and_diff_per_failed_trajectory() {
+    let seq = bm01_seq(None);
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h(),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    let corpus = corpus_manifest(
+        bm_fixtures().iter().map(|f| (f.id, f.branches)).collect(),
+        vec!["t1".into()],
+    );
+    let coverage = check_corpus(&corpus, &["t1".to_string()]).unwrap();
+    let conf = conformance_record(
+        &[&out],
+        &coverage,
+        1,
+        "hh-l1-canon/1",
+        "sha256:corpus",
+        &h_id(),
+        &o_id(),
+        "2026-11-08T00:00:00Z",
+    );
+    assert_eq!(
+        conf.get("schema").unwrap().as_str().unwrap(),
+        L1_CONFORMANCE_SCHEMA
+    );
+    assert_eq!(conf.get("label").unwrap().as_str().unwrap(), L1_LABEL);
+    assert_eq!(conf.get("result").unwrap().as_str().unwrap(), "pass");
+    assert!(conf
+        .get("pass_id")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .starts_with("l1-pass:sha256:"));
+    assert_eq!(check_l1_conformance(&conf), Vec::<String>::new());
+    // A failed trajectory emits a diff record per gated divergence and
+    // the conformance carries it; validators pin the shape.
+    let mut plan = DivergencePlan::default();
+    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h_div(plan),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    assert!(
+        !out.diffs.is_empty(),
+        "every failed trajectory has a diff record"
+    );
+    for d in &out.diffs {
+        assert_eq!(d.get("schema").unwrap().as_str().unwrap(), L1_DIFF_SCHEMA);
+        assert_eq!(check_l1_diff(d), Vec::<String>::new());
+    }
+    let conf = conformance_record(
+        &[&out],
+        &coverage,
+        1,
+        "hh-l1-canon/1",
+        "sha256:corpus",
+        &h_id(),
+        &o_id(),
+        "2026-11-08T00:00:00Z",
+    );
+    assert_eq!(conf.get("result").unwrap().as_str().unwrap(), "fail");
+    assert!(conf.get("pass_id").is_none());
+    assert!(conf
+        .get("diffs")
+        .unwrap()
+        .as_arr()
+        .unwrap()
+        .iter()
+        .all(|d| check_l1_diff(d).is_empty()));
+    // The stable-prefix histogram + coverage table ride the record.
+    assert!(conf
+        .get("stable_prefix")
+        .unwrap()
+        .get("histogram")
+        .unwrap()
+        .as_obj()
+        .unwrap()
+        .contains_key("full"));
+    assert!(conf
+        .get("coverage")
+        .unwrap()
+        .get("branches")
+        .unwrap()
+        .as_obj()
+        .unwrap()
+        .contains_key("BM17"));
+    // A missing-branch corpus refuses the gate (AC-3 also pins the
+    // typed refusal) — here: coverage check upstream of the record.
+    let missing = corpus_manifest(
+        bm_fixtures()
+            .iter()
+            .take(5)
+            .map(|f| (f.id, f.branches))
+            .collect(),
+        vec!["t1".into()],
+    );
+    assert_eq!(
+        check_corpus(&missing, &["t1".to_string()])
+            .unwrap_err()
+            .rule,
+        "coverage"
+    );
+}
+
+// ── AC-7 (E) — an L1 record is never L2 parity evidence ─────────────
+
+#[test]
+fn ac7_l1_record_refuses_as_parity_evidence() {
+    let seq = bm01_seq(None);
+    let out = run_sequence(
+        &seq,
+        &make_o(),
+        &make_h(),
+        "hh-l1-canon/1",
+        &[],
+        "openai.chat",
+        "2026-11-08T00:00:00Z",
+        &h_id(),
+        &o_id(),
+    );
+    let corpus = corpus_manifest(
+        bm_fixtures().iter().map(|f| (f.id, f.branches)).collect(),
+        vec!["t1".into()],
+    );
+    let coverage = check_corpus(&corpus, &["t1".to_string()]).unwrap();
+    let conf = conformance_record(
+        &[&out],
+        &coverage,
+        1,
+        "hh-l1-canon/1",
+        "sha256:corpus",
+        &h_id(),
+        &o_id(),
+        "2026-11-08T00:00:00Z",
+    );
+    let pass_id = conf.get("pass_id").unwrap().as_str().unwrap().to_string();
+    // The landed path: recorded model I/O as admission evidence →
+    // InauthenticEvidence (evidence spec §4.4).
+    let decl = pa::ParityAdmissionDecl {
+        participant_ref: "p".into(),
+        policies: vec!["reference".into()],
+        evidence: pa::AdmissionEvidence::RecordedModelIo {
+            corpus_ref: pass_id,
+        },
+        dimension_map: None,
+        applicability: pa::PolicyApplicability::BothPolicies {
+            evidence: vec![pa::PolicyEvidence {
+                policy: "reference".into(),
+                evidence_ref: "l1-conformance".into(),
+            }],
+        },
+        transfer: None,
+        pins: pa::SourcePins {
+            source_ref: "s".into(),
+            verifier_ref: "v".into(),
+            rights_ref: "r".into(),
+        },
+        use_as: None,
+    };
+    let e = pa::parity_admission(&decl, &[]).unwrap_err();
+    assert!(matches!(e, pa::AdmissionError::InauthenticEvidence { .. }));
+    // The runner's own belt: typed refusal on the record itself.
+    let e = refuse_parity_input(&conf).unwrap_err();
+    assert_eq!(e.rule, "l1_not_parity");
+    assert!(refuse_parity_input(&Json::obj([("schema", Json::str("x"))])).is_ok());
+}
