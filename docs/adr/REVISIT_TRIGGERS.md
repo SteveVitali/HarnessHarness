@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_219 ADRs: 167 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_220 ADRs: 168 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -203,6 +203,7 @@ _219 ADRs: 167 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0433 | - If `hh-cell-relay` gains a third pair name, this ADR and the closed-set checks in `hh-env`, `hh-helper` and `hh_cell_relay` move together. - If `comparative_protocol/1` (R6.18) lands, the freeze record's `protocol_id` becomes a typed ref — amend by a dated note. - If the model route stops being unix-socket-only, the `side_channel`/ `unix_socket` residual set and this profile's grant shape reopen. |
 | ADR-0434 | Revisit when a recorded replay test verifies seed honouring or cache bypass for a hosted participant (the `unverified` declaration and the `declared_unsupported` claim class then upgrade by new declaration, not edit), when a phase-2 arm needs a fourth support member (a new member is a new declaration, not an extension of this ADR), or when any claim under `declared_unsupported` needs wording the class does not carry — that is a new AR item, not a widening of this gate. |
 | ADR-0435 | Revisit when the first tranche gate provisions the derived envelope quantities (the `pre-quote` label and this ADR's interim state then resolve into a cited `provisioned:{ref}`), when a phase-3/4 quote needs a column REQ-XD-050 does not name (a new AR item, not an in-place extension), or when the §3.10 pricing path changes — every `hh-compute-quote/1` citation shape here re-opens with it. |
+| ADR-0436 | Revisit when W1's measured bundle/layer digests land (fixture members flip from `fixture-verified` to measured), when a fourth harness is admitted (later pass), when AR-19 admits a `lab_host` slot, or when the Claude Code binary sha256 is first measured on the VM. |
 
 ## Fired-and-answered triggers (BL-48)
 
