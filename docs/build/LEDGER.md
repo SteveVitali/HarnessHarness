@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      GATE-G23
-lastCompleted:   R6.27
+nextTicket:      R6.28
+lastCompleted:   GATE-G23
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.27
+chainTip:         codex/harnessharness-gate-g23
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-08T07:51:01Z
+updatedAt:        2026-11-08T20:42:00Z
 ```
 
 ## OPEN FINDINGS
@@ -131,6 +131,7 @@ updatedAt:        2026-11-08T07:51:01Z
 
 ## GATE DECISIONS
 | 2026-11-07T09:20Z | GATE-G21 | site identity mock review: approve "Instrument" or redirect | disposition | "approve and proceed" (operator verbatim, interactive, 2026-11-07T09:20Z — readout docs/build/readouts/GATE-G21.md Status PASSED; agent-draft block sha256 5aa64df94daf confirmed) | **PASSED — "Instrument — the calibrated readout" is the site identity** (Q-X43 resolved approve). Shown: internal mock (20pp, tree ca66c699…) + all-absent (19pp, 472ae59f…), both themes, all four viewports; test_tokens 40/40 above floor; R6.4 run record agrees. R6.5 released. lastCompleted → GATE-G21 · next → R6.5. | decision |
+| 2026-11-08T20:42Z | GATE-G23 | method admission: protocol, quote, estimators, schedule randomization and AR-33 departures | disposition | "approve all and continue" (operator verbatim, interactive, 2026-11-08T20:42Z — readout docs/build/readouts/GATE-G23.md Status PASSED; agent-draft block sha256 c3c524fd9eb3 confirmed) | **PASSED** — all six items admitted: (a) comparative_protocol/1, (b) comparative-quote/1, (c) descriptive estimators + single-arm finite-manifest rate, (d) slot_schedule_randomization, (e) one Holm family per tranche (Q-X40 default confirmed), (f) AR-33 first-pass departures (first-pass scoped). AR-17→ADR-0438 + AR-33→ADR-0439 adopted (status→admitted, dated notes). Scope: method machinery only — no spend/confirmatory/first-pass outcome; Q-X57 stays pending. R6.28 released. lastCompleted → GATE-G23 · next → R6.28. | decision |
 | 2026-11-07T06:10Z | GATE-G20 | review the Round-6 plan and authorize the GUARD-X bootstrap | disposition | "accept all and proceed" (operator verbatim, interactive, 2026-11-07T06:10Z — readout docs/build/readouts/GATE-G20.md Status: PASSED) | **PASSED** — artifact identity confirmed (spec sha256 `4329b2740fe6be0f…` post-§10.6-amendment; 0 reqcov observed at presentation vs disclosed 46 — OPEN FINDING to R6.1 AC-3); partition+register accepted (74 rows, 456 candidates/370 adopted); **Q-X46 = A** (plan order — "accept all" accepts the plan as presented; B′ not selected); D-1…D-6 all accepted; twelve ambiguity resolutions + "second row"=R6.2 confirmed. Scope: R6.1 only; expiry at R6.1 landing; stock-checker PASS required from R6.2. No spend/provisioning/publication/merges. lastCompleted → GATE-G20 · next → R6.1. | decision |
 
 | date | ticket | gate | item | answer | consequence |
@@ -237,6 +238,7 @@ updatedAt:        2026-11-08T07:51:01Z
 |---|---|---|---|
 
 ## PHASE LOG
+- 2026-11-08 · **GATE-G23 PASSED — method admission (manifest 281)** — operator verbatim "approve all and continue" (interactive, 2026-11-08T20:42Z). All six items admitted: (a) comparative_protocol/1, (b) comparative-quote/1, (c) descriptive estimators + single-arm finite-manifest rate, (d) slot_schedule_randomization, (e) one Holm family per tranche (Q-X40 default confirmed), (f) AR-33 first-pass departures (first-pass scoped). Readout docs/build/readouts/GATE-G23.md PASSED (agent-draft sha256 c3c524fd9eb3); AR-17→ADR-0438 + AR-33→ADR-0439 adopted (status→admitted + dated notes; adr-index regenerated). Scope: method machinery only — no spend, confirmatory analysis, or first-pass outcome authorized; Q-X57 stays pending; ε (±.20), V5 level, arm priority, fallback trigger all at FP-S. Records branch codex/harnessharness-gate-g23; no product branch (gate row). chainTip → codex/harnessharness-gate-g23 · nextTicket → R6.28 · engineered (offline, $0.00) · devin-cli/swe-2-high/coordinator
 - 2026-11-08 · **R6.24 done — first-pass harness renderers (manifest 277 · ADAPT-CHAT-PY + ADAPT-CHAT-NODE + ADAPT-MESSAGES)** — `codex/harnessharness-r6.24` · base `origin/main` @`b8b88ed`. `render.rs` — `hh-harness-render/1`: pure admission × slot → {argv,env,files} for mini-swe-agent 2.4.6 / Pi / Claude Code mirroring the Harbor adapters at `ff2a1ef4` (line-level offline review; locators in the run ledger). Closed REQ-XC-308 env (slot token sole credential; mandatory `no_proxy`; declared `NAME=value` switches; image `HOME`/`USER`); native effort `high` beside the proxy pin; `py_shlex_quote`/`py_json_str` byte-parity; hazard pre-check (Pi leading `-`, NUL, non-UTF-8) flagged + render-refused; `LITELLM_LOCAL_MODEL_COST_MAP`; slot-invariant rendered files → `template_hash` re-minted to true ST2 composites at declared P=8080; mini participant identity (`-c` spec list, `mini.yaml` sha256, limits `ceiling_binding:infra_uncertain` — REQ-XE-001/XD-122); `litellm_version` + `check_recording_key` (REQ-XD-121); Q-X26 realized (AUTH_TOKEN only, empties, 5 aliases, `qx26_black_box` refusal) + `sm_pos_assert` records-level check R6.25 reuses (REQ-XC-327). Verify: r6_24 12/12 · runner suites green · fmt/clippy(new 0)/rustdoc/edges OK · guard PASS DISPATCH R6.24 pre. Deviations: ~1.7k vs ≤1400 recorded; one commit (stages share the module); template_hash re-mint (declared-shape, fixture-verified). chainTip → codex/harnessharness-r6.24 · nextTicket → R6.25 · engineered (offline, $0.00) · devin-desktop/swe-2-high/subagent
 
 
