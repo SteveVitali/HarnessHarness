@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.24
-lastCompleted:   R6.23
+nextTicket:      R6.25
+lastCompleted:   R6.24
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.23
+chainTip:         codex/harnessharness-r6.24
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-08T02:12:56Z
+updatedAt:        2026-11-08T06:47:40Z
 ```
 
 ## OPEN FINDINGS
@@ -237,6 +237,8 @@ updatedAt:        2026-11-08T02:12:56Z
 |---|---|---|---|
 
 ## PHASE LOG
+- 2026-11-08 · **R6.24 done — first-pass harness renderers (manifest 277 · ADAPT-CHAT-PY + ADAPT-CHAT-NODE + ADAPT-MESSAGES)** — `codex/harnessharness-r6.24` · base `origin/main` @`b8b88ed`. `render.rs` — `hh-harness-render/1`: pure admission × slot → {argv,env,files} for mini-swe-agent 2.4.6 / Pi / Claude Code mirroring the Harbor adapters at `ff2a1ef4` (line-level offline review; locators in the run ledger). Closed REQ-XC-308 env (slot token sole credential; mandatory `no_proxy`; declared `NAME=value` switches; image `HOME`/`USER`); native effort `high` beside the proxy pin; `py_shlex_quote`/`py_json_str` byte-parity; hazard pre-check (Pi leading `-`, NUL, non-UTF-8) flagged + render-refused; `LITELLM_LOCAL_MODEL_COST_MAP`; slot-invariant rendered files → `template_hash` re-minted to true ST2 composites at declared P=8080; mini participant identity (`-c` spec list, `mini.yaml` sha256, limits `ceiling_binding:infra_uncertain` — REQ-XE-001/XD-122); `litellm_version` + `check_recording_key` (REQ-XD-121); Q-X26 realized (AUTH_TOKEN only, empties, 5 aliases, `qx26_black_box` refusal) + `sm_pos_assert` records-level check R6.25 reuses (REQ-XC-327). Verify: r6_24 12/12 · runner suites green · fmt/clippy(new 0)/rustdoc/edges OK · guard PASS DISPATCH R6.24 pre. Deviations: ~1.7k vs ≤1400 recorded; one commit (stages share the module); template_hash re-mint (declared-shape, fixture-verified). chainTip → codex/harnessharness-r6.24 · nextTicket → R6.25 · engineered (offline, $0.00) · devin-desktop/swe-2-high/subagent
+
 
 - 2026-11-08 · **R6.19 done — comparative estimators + confirmatory family + `hh-comparative-results/1` (manifest 272)** — `codex/harnessharness-r6.19` · PR #313 · base `origin/main` @`6803758`. `comparative_estimators.rs` (new): the §6.4 admission-map apparatus — `finite_manifest_rate` (Beta(1,1), 8,000 draws + doubling; IS the contrast machinery's per-arm marginal via new `arm_marginal_interval` over shared `cell_posterior_draws`, `population::arm_bounds` beside), `rerun_flip`/`swap_flip`+`harness_excess` (REQ-XF-123 verbatim member), `cost_routes` ($/trial bootstrap + $/solve ratio, `estimator_undefined` at 0 solves, declared provenance), `pass_rates`, `tied_with_leader` (argmax leader, interval-covers-0, selection caveat; equivalence claims refuse `UnsupportedClaim`), `comparative_estimand` (REQ-XD-001: unresolved cell → named `refusal` + all-planned bounds + completion envelope + labelled conditional secondary — §6.8/REQ-XD-061), `confirmatory_family` (per-tranche many-to-one Holm α=.05 + exploratory BH; unavailable members retained at worst mass — §10.1.3), `validate_results_packet` (C-33: every §6.11 quantity + intervals + REQ-XD-092 labels + harness_excess intervals + REQ-XA-006 counts + typed absent states). `task_mixture` admits `slot_schedule_randomization` beside `lane_randomization` — recomputing `ScheduleEvidence` required (`RandomizationRecord`), gated uses refuse `MethodNotAdmitted` until GATE-G23 PASSED (REQ-XD-023/021; `hh-analysis` decodes `filters.schedule_randomization`/`use_class`/`admission`). Every new piece not admitted — gated `use_as` refuses typed. Verify: r6_19 9/9 · eval+analysis suites green · fmt/clippy(new-code 0)/rustdoc -D warnings OK · guard PASS DISPATCH R6.19 pre / post → R6.20 nextTicket. Deviations: ~3.9k vs ≤1000 (conjunctive AC surface); analyze-leg decode-only; packet serializer is R6.48's. REQ-XD-001/022/030/031/061·XF-123 (contrib XA-006, XD-021/023/090). chainTip → codex/harnessharness-r6.19 · nextTicket → R6.20 · engineered (offline, $0.00) · devin-desktop/swe-2-high/subagent
 - 2026-11-07 · **R6.18 done — SELECT + D1-a: task-selection/1 + comparative_protocol/1 + comparative-quote/1 + AR-12/AR-13 (manifest 271)** — `codex/harnessharness-r6.18` · base `origin/main` @`babe12d`. S1 `87e2c7d8`: ADR-0434 (AR-12 — declared-unsupported supports admitted under weaker claim class, gate amended never boolean-flipped; central_protocol byte-unchanged) + ADR-0435 (AR-13 — envelopes derive from declared timeouts/pilot measures, §3.10-only compute ceilings, round-5 §9.2 constants unchanged, envelope_adr + pre-quote label); `task_selection.rs` — task-selection/1: declared-field census in, exclusions/split/draws/replacement-orders out under `comparative_protocol.split`; seeded band×difficulty largest-remainder dev pool (B1 census → §6.2 dev row 11/5/4/0 verified); seeded stratified draw + within-cell replacement order (3/25/9 → 1/7/2); three-part pin `latest` refuses; outcome-field manifest refusals. S2 `cbf04e9e`: `comparative_protocol.rs` — H≥2 admitted/pinned arms, T ⊆ held-out of consumed selection, k≥5 confirmatory floor, seeded k_round_interleave randomization record + digest (REQ-XD-021), declared-unsupported supports under AR-12 (FingerprintGate refuses), pooling REQ-XD-004 (undeclared/changed-pin refuse), full refusal matrix, byte-stable protocol_id; `comparative_quote.rs` — comparative-quote/1 menu N=H·T·k: expected Σ mean·T·k·(1+infra), ceiling Σ max(mean,P90)·T·k·1.2, wall/instance from occupied+wait at C, sim cells echoed (unresolved never fabricated), verdict vs .10/.08; compute lines verbatim pq- citations (no second pricing — source-vocabulary test); envelope_adr ADR-0435 + pre-quote label. Verify: r6_18 18/18 · eval suites green · fmt/clippy(new-code 0)/rustdoc/triggers --check OK · guard PASS DISPATCH R6.18 pre / post PASS DISPATCH R6.19 (committed LEDGER's nextTicket). Deviations: crack-7z-hash agent-timeout band boundary (dev row identical both readings — recorded); fixture dataset.toml digests labelled (real: R6.30); ~2.1k vs ≤1000 recorded. REQ-XB-122·XD-011·XH-012·XC-010·XD-002/004/020/021/050/051·XH-030 (aliases XB-001, XB-221; contrib XH-116, XD-010/014). chainTip → codex/harnessharness-r6.18 · nextTicket → R6.19 · engineered (offline, $0.00) · devin-desktop/swe-2-high/subagent

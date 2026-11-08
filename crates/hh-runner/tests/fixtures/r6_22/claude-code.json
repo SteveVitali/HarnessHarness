@@ -65,7 +65,7 @@
   "config": {
     "renderer_id": "adpt.claude_code",
     "renderer_version": "1",
-    "template_hash": "sha256:4e3a2437587b1bf105bea7059404a368e6d24505fc7a9b3848674492bfb4b363",
+    "template_hash": "sha256:5bfda49c06695c9bb163b1d99ee18a17ba3625bbc5b284ce1e6b922b8026a506",
     "effort": {"mechanism": "--effort", "value": "high"},
     "limits_ref": "q-x29:harbor-in-agent-defaults",
     "disable_switches": [
