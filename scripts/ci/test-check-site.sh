@@ -192,28 +192,31 @@ D=$(seed mut-m)
 mutate "$D/scripts/site/assets/tokens.css" 's|  --ink-3: #5E6A73;|  --ink-3: #C4CDD4;|'
 expect_leg "a11y-static" "(m) token below 4.5:1" "$D"
 
-# (n) $0.00 for $/solve at 0 solves — labels
+# (n) $0.00 for $/solve at 0 solves — labels (R6.21: seeded on
+# the undefined-solve renderer — a dollar figure in $/solve context is
+# the defect the labels leg names)
 D=$(seed mut-n)
 python3 - "$D/scripts/site/hhsite/sitepages.py" <<'PY'
 import sys
 p = sys.argv[1]; t = open(p).read()
-old = "Re-attempt share (descriptive, no "
+old = '>undefined (0 solves)<'
 assert old in t
-open(p, "w").write(t.replace(
-    old, "$/solve $0.00 · " + old, 1))
+open(p, "w").write(t.replace(old, '>$/solve $0.00<', 1))
+
 PY
 expect_leg "labels" '(n) dollar zero for $/solve at 0 solves' "$D"
 
 # (o) a trajectory link while the index is private — no-third-party
+# (R6.21: seeded inside the viewer block — the private index shows the
+# sha256 and never a link)
 D=$(seed mut-o)
 python3 - "$D/scripts/site/hhsite/sitepages.py" <<'PY'
 import sys
 p = sys.argv[1]; t = open(p).read()
-old = "limits</a></li>"
+old = "'withheld{dataset_private} — no link while private</span>'"
 assert old in t
 open(p, "w").write(t.replace(
-    old, 'limits</a> <a href="https://huggingface.co/datasets/x/y">'
-         'trajectory</a></li>', 1))
+    old, "'withheld{dataset_private} <a href=\"https://huggingface.co/x\">trajectory</a></span>'", 1))
 PY
 expect_leg "no-third-party" "(o) trajectory link while private" "$D"
 
