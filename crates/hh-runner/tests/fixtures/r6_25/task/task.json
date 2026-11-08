@@ -1,0 +1,21 @@
+{
+ "schema": "hh-smoke-task/1",
+ "task_id": "hh-smoke/write-file",
+ "authored_by": "hh",
+ "never_tb_task": true,
+ "instruction_sha256": "sha256:5b991019cc4f7ee208f48c9b35556d17032a6418bff67a6806edab451fd74ef1",
+ "instruction": "Write `ok` to `/app/hh_smoke.txt`.",
+ "workdir": "/app",
+ "verifier": {
+  "argv": [
+   "bash",
+   "/tests/test.sh"
+  ],
+  "timeout_sec": 60
+ },
+ "reward": {
+  "rule": "reward 1 iff /app/hh_smoke.txt holds `ok`",
+  "max_ppm": 1000000
+ },
+ "agent_deadline_sec": 60
+}

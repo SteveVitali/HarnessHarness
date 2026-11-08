@@ -613,9 +613,18 @@ impl ExperimentSlot {
             compute: cm.get("compute").map(CostRef::from_json).transpose()?,
         };
         let tm = obj(j, "trajectory")?;
+        // `native_log` (R6.25/REQ-XC-317 — the hashed `/logs/agent`
+        // copy-out) and `atif_absent` (REQ-XC-318 — the reported
+        // attribute when post-hoc ATIF is absent) extend the §3.3 set.
         no_unknown(
             tm,
-            &["atif_ref", "atif_schema", "proxy_transcript_ref"],
+            &[
+                "atif_ref",
+                "atif_schema",
+                "atif_absent",
+                "native_log",
+                "proxy_transcript_ref",
+            ],
             "trajectory",
         )?;
         let verdict = match m.get("verdict") {

@@ -1,0 +1,54 @@
+{
+ "schema": "hh-smoke-battery/1",
+ "task": "hh-smoke/write-file",
+ "task_ref": "task/task.json",
+ "replay": {
+  "keying": "sequence",
+  "on_divergence": "serve_recorded",
+  "latency": "immediate"
+ },
+ "variants": [
+  "SM-pos",
+  "SM-429",
+  "SM-402",
+  "SM-slow",
+  "SM-hang"
+ ],
+ "injected": {
+  "SM-pos": null,
+  "SM-429": {
+   "call": 0,
+   "answer": {
+    "status": 429,
+    "headers": {
+     "retry-after": "1"
+    }
+   }
+  },
+  "SM-402": {
+   "call": 1,
+   "answer": {
+    "disposition": "refused_budget"
+   }
+  },
+  "SM-slow": {
+   "latency": "recorded",
+   "release_mode": [
+    "buffered_heartbeat",
+    "buffered"
+   ]
+  },
+  "SM-hang": {
+   "call": 0,
+   "tool_args": "sleep 100000",
+   "deadline_sec": 60
+  }
+ },
+ "recordings": {
+  "mini-swe-agent": "recordings/mini-swe-agent.json",
+  "pi": "recordings/pi.json",
+  "claude-code": "recordings/claude-code.json"
+ },
+ "executes": "W1 (R6.32) on the phase backend at $0 \u2014 records become AG3/AG5/AG6/AG8 evidence",
+ "evidence_class": "fixture-verified"
+}

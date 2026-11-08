@@ -306,6 +306,13 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-proxy-offline.sh
 
+      # R6.25 / REQ-XC-329: hosting-machinery acceptance is offline —
+      # smoke, build and runner-check live legs must be #[ignore]d and
+      # cite ADR-0363.
+      - name: Hosting offline-only check (REQ-XC-329)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-hosting-offline.sh
+
       # L4.3 / MINOR-2: rustdoc warnings are build noise the public repo
       # cannot carry; one matrix leg suffices.
       - name: Rustdoc warnings gate

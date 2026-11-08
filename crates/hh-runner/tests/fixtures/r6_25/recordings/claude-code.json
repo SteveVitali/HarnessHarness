@@ -1,0 +1,107 @@
+{
+ "schema": "hh.model_proxy.recording/1",
+ "slot_id": "sm-pos-claude-code",
+ "provenance": "synthetic",
+ "calls": [
+  {
+   "k": 0,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "body_sha256": "sha256:66220df27f5a3c6755da54987ba13a9a6e56563136f687b22249e7897dba9075",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":4096,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"name\":\"Bash\",\"description\":\"run a shell command\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}]}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:66220df27f5a3c6755da54987ba13a9a6e56563136f687b22249e7897dba9075",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":4096,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"name\":\"Bash\",\"description\":\"run a shell command\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}]}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:762e6f9450084e83006e878139c3cf4259b263c9003456f2f9d45452a7fd1075",
+    "body": {
+     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"tool_use\\\",\\\"id\\\":\\\"toolu_1\\\",\\\"name\\\":\\\"Bash\\\",\\\"input\\\":{}}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"input_json_delta\\\",\\\"partial_json\\\":\\\"{\\\\\\\"command\\\\\\\":\\\\\\\"printf 'ok' > /app/hh_smoke.txt\\\\\\\"}\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+    },
+    "chunk_stamps": [
+     [
+      0,
+      150
+     ],
+     [
+      55,
+      200
+     ],
+     [
+      30,
+      90
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:762e6f9450084e83006e878139c3cf4259b263c9003456f2f9d45452a7fd1075",
+    "body": {
+     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"tool_use\\\",\\\"id\\\":\\\"toolu_1\\\",\\\"name\\\":\\\"Bash\\\",\\\"input\\\":{}}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"input_json_delta\\\",\\\"partial_json\\\":\\\"{\\\\\\\"command\\\\\\\":\\\\\\\"printf 'ok' > /app/hh_smoke.txt\\\\\\\"}\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 180
+  },
+  {
+   "k": 1,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "body_sha256": "sha256:f2917c676f0af8e48e4514fa1a00466aebd003a95a54dae3c0310ca091cd6744",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":4096,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{\"command\":\"printf 'ok' > /app/hh_smoke.txt\"}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\",\"content\":\"\"}]}],\"tools\":[{\"name\":\"Bash\",\"description\":\"run a shell command\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}]}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:f2917c676f0af8e48e4514fa1a00466aebd003a95a54dae3c0310ca091cd6744",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":4096,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{\"command\":\"printf 'ok' > /app/hh_smoke.txt\"}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\",\"content\":\"\"}]}],\"tools\":[{\"name\":\"Bash\",\"description\":\"run a shell command\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}]}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:c0af5eb6810d8a6a5f761180c4af0c05619d61ce788956c2fc17107016cc42ff",
+    "body": {
+     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"\\\"}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"text_delta\\\",\\\"text\\\":\\\"ok written \\u2014 task complete\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+    },
+    "chunk_stamps": [
+     [
+      0,
+      160
+     ],
+     [
+      60,
+      140
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:c0af5eb6810d8a6a5f761180c4af0c05619d61ce788956c2fc17107016cc42ff",
+    "body": {
+     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"\\\"}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"text_delta\\\",\\\"text\\\":\\\"ok written \\u2014 task complete\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 130
+  }
+ ]
+}
