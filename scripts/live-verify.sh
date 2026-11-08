@@ -248,22 +248,22 @@ leg_field() { # $1 leg, $2 field
     ps0:ticket)   printf 'R6.40';;
     ps0:provider) printf 'hh-model-proxy';;
     ps0:kind)     printf 'script';;
-    ps0:names)    printf 'HH_PS0_BASE_URL HH_PS0_SLOT_TOKEN';;
+    ps0:names)    printf 'HH_PS_BASE_URL HH_PS_SLOT_TOKEN';;
     ps0:test)     printf 'hh-runner:r6_26:live_ps0_probe_driver';;
     pp0:ticket)   printf 'R6.40';;
     pp0:provider) printf 'hh-model-proxy';;
     pp0:kind)     printf 'script';;
-    pp0:names)    printf 'HH_PP0_BASE_URL HH_PP0_SLOT_TOKENS';;
+    pp0:names)    printf 'HH_PP_BASE_URL HH_PP_SLOT_TOKENS';;
     pp0:test)     printf 'hh-runner:r6_26:live_pp0_harness_smoke';;
     corpus:ticket)   printf 'R6.40';;
     corpus:provider) printf 'hh-model-proxy';;
     corpus:kind)     printf 'script';;
-    corpus:names)    printf 'HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS0_STAGE_RECORD HH_PP0_EVIDENCE_DIR';;
+    corpus:names)    printf 'HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS_STAGE_RECORD HH_PP_EVIDENCE_DIR';;
     corpus:test)     printf 'hh-runner:r6_26:live_corpus_record';;
     w4-main:ticket)   printf 'R6.47';;
     w4-main:provider) printf 'hh-model-proxy';;
     w4-main:kind)     printf 'script';;
-    w4-main:names)    printf 'HH_W4_BASE_URL HH_W4_SCHEDULE_REF';;
+    w4-main:names)    printf 'HH_MAIN_BASE_URL HH_MAIN_SCHEDULE_REF';;
     w4-main:test)     printf 'hh-runner:r6_26:live_w4_main_rounds';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
@@ -280,9 +280,9 @@ all_names() {
     OPENAI_API_KEY ANTHROPIC_API_KEY \
     HH_GITHUB_OAUTH_CLIENT_ID HH_GITHUB_SANDBOX_REPO \
     HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_WEBHOOK_SECRET HH_SELFTEST_TOKEN \
-    HH_PS0_BASE_URL HH_PS0_SLOT_TOKEN HH_PP0_BASE_URL HH_PP0_SLOT_TOKENS \
-    HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS0_STAGE_RECORD \
-    HH_PP0_EVIDENCE_DIR HH_W4_BASE_URL HH_W4_SCHEDULE_REF | sort -u
+    HH_PS_BASE_URL HH_PS_SLOT_TOKEN HH_PP_BASE_URL HH_PP_SLOT_TOKENS \
+    HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS_STAGE_RECORD \
+    HH_PP_EVIDENCE_DIR HH_MAIN_BASE_URL HH_MAIN_SCHEDULE_REF | sort -u
 }
 
 load_env() { # names only; unexported shell vars, never traced
@@ -1579,8 +1579,8 @@ run_leg_corpus() {
   # PS0 stage record passed and every original-mini PP0 evidence row
   # passes AG3/AG5/AG6/AG8 (reads no verdict field).
   local bin="$REPO/target/debug/hh-runner" out
-  if [ -x "$bin" ] && [ -f "${HH_PS0_STAGE_RECORD:-}" ] && [ -d "${HH_PP0_EVIDENCE_DIR:-}" ]; then
-    if out=$("$bin" corpus-precondition --ps0-stage "$HH_PS0_STAGE_RECORD" --pp0-evidence "$HH_PP0_EVIDENCE_DIR" 2>&1); then
+  if [ -x "$bin" ] && [ -f "${HH_PS_STAGE_RECORD:-}" ] && [ -d "${HH_PP_EVIDENCE_DIR:-}" ]; then
+    if out=$("$bin" corpus-precondition --ps0-stage "$HH_PS_STAGE_RECORD" --pp0-evidence "$HH_PP_EVIDENCE_DIR" 2>&1); then
       RESULT="skipped(executes-in-W2-under-R6.40)"
     else
       RESULT="skipped(corpus_precondition:${out%%$'\n'*})"

@@ -32,16 +32,16 @@ HH_SELFTEST_TOKEN=selftest-token-not-a-credential
 HH_PLANTED_API_KEY=$FAKE_SECRET
 HH_LOCAL_BASE_URL=http://127.0.0.1:9/unreachable
 HH_LOCAL_MODEL=never-served-model
-HH_PS0_BASE_URL=http://127.0.0.1:9/unreachable
-HH_PS0_SLOT_TOKEN=slot-token-ref-not-a-value
-HH_PP0_BASE_URL=http://127.0.0.1:9/unreachable
-HH_PP0_SLOT_TOKENS=slot-token-refs-not-values
+HH_PS_BASE_URL=http://127.0.0.1:9/unreachable
+HH_PS_SLOT_TOKEN=slot-token-ref-not-a-value
+HH_PP_BASE_URL=http://127.0.0.1:9/unreachable
+HH_PP_SLOT_TOKENS=slot-token-refs-not-values
 HH_CORPUS_BASE_URL=http://127.0.0.1:9/unreachable
 HH_CORPUS_SLOT_TOKEN=slot-token-ref-not-a-value
-HH_PS0_STAGE_RECORD=$T/ps0-stage.json
-HH_PP0_EVIDENCE_DIR=$T/pp0-evidence
-HH_W4_BASE_URL=http://127.0.0.1:9/unreachable
-HH_W4_SCHEDULE_REF=schedule-ref-not-a-value
+HH_PS_STAGE_RECORD=$T/ps0-stage.json
+HH_PP_EVIDENCE_DIR=$T/pp0-evidence
+HH_MAIN_BASE_URL=http://127.0.0.1:9/unreachable
+HH_MAIN_SCHEDULE_REF=schedule-ref-not-a-value
 EOF
 printf 'UNRELATED=nothing\n' > "$T/empty.env"
 
