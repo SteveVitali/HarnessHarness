@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.25
-lastCompleted:   R6.24
+nextTicket:      R6.26
+lastCompleted:   R6.25
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.24
+chainTip:         codex/harnessharness-r6.25
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-08T06:47:40Z
+updatedAt:        2026-11-08T07:51:01Z
 ```
 
 ## OPEN FINDINGS
@@ -1306,5 +1306,4 @@ updatedAt:        2026-11-08T06:47:40Z
 
 - 2026-11-08 · **R6.23 done — BINARY-SETS (SR-4) + ARCHIVE (b): carried artifacts + `hf` upload kit (manifest 276)** — `codex/harnessharness-r6.23` · base `origin/main` @`76c2867`. AR-20/ADR-0437 docs-first (BL-47 += ADR-0437, regen). S1 `0c594987`: `carried.rs` — closed INFRA/H member tables + `set_digest`/`hh-binary-set/1` + `BinarySetRecipe` (pinned Containerfile); `ExportPlan` (podman-save/oci-dir/base-blobs/tar argv) + `run_export` (`hh-carried-export/1` argv+sha256+elapsed + `artifact_export:<role>:<name>` egress line); `LoadPlan` gcloud scp/ssh `--tunnel-through-iap` + `run_load` (`hh-carried-load/1` + image-id verify — RepoDigest never identity → `withheld{admission:harness_layer_mismatch}`); `carried_rebuild_guard` (gate{new_version}); `artifact_upload_decision` (proprietary → `digest_only` absent redistribution record); `identity.infrastructure.set_digest` + `identity.h_set` codec (hh_native/v5 + G-L1). S2 `aab124a6`: `archive_upload.rs` — `hf`/huggingface_hub 2.4.0 admission; `hh-archive-upload/1` codec (private-only, provided yes/no); 3-tier `pre_upload_scan` (hh-secrets CC1); `verify_readback` (`archive_verified`/`inconclusive{readback_unavailable}`); `supersede_index`; `remediation_records` (rotation HUMAN → purge Q-X59 → tombstone); `hf-upload.sh` + `check-hf-upload.sh` 31/31 + CI leg; `carried-artifacts`+`archive-upload` legs skipped(executes-* R6.32/40/44/45/47); DF-R6.23-1 opened. Verify: r6_23 13/13 + suites green · fmt/rustdoc/edges/living-docs/ci-gating/bm/triggers/live-verify/gitleaks OK · clippy new 0 (3 pre-existing) · guard PASS DISPATCH R6.23 pre+post. Deviations: ~2.5k vs ≤1600 (AMEND precedent); purge recorded not executed (Q-X59 pending). REQ-XC-330/XH-102/103/104/107 + XF-124/XH-101/118/023/XB-203/220/XC-109 · AR-20/ADR-0437. chainTip → codex/harnessharness-r6.23 · nextTicket → R6.24 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 
-
-
+- 2026-11-08 · **R6.25 done — CAPTURE + SMOKE-BATTERY: §5.6 capture, the $0 smoke battery and the §5.8 classifier (manifest 278)** — `codex/harnessharness-r6.25` · base `origin/main` @`1ac9229`. `capture.rs` — CopyoutSpec + run_cell ST4 leg (kernel-mediated cp_out after agent end, before verify; /work alias refused) hashed into trajectory.native_log (recomputes); AtifConverter seam at pin ff2a1ef4 (absence -> atif_absent, never a gate; publication_check_input requires proxy_transcript_ref, C-16); hh-integrity-bundle/1 recompute; reconcile_receipts -> inconclusive{infra:unreceipted_call} (never-scored precedence); st4_plan/st4_verify -> harness_self_modified stays scored. `smoke.rs` — hh-smoke/write-file task + 3 scripted recordings (own schema+stream mode; strict codec stays hh-hosting, no K-2 edge) + hh-smoke-battery/1 (sequence, serve_recorded, 5 variants); check_smoke records-in per variant x3 harnesses (incl. R6.24 sm_pos_assert reuse); egress.probe + AG5; model-socket assert; n/a{endpoint}; native_status; classify_hosting (every §5.8 row incl. infra:model_route:<d>); facts_from_records recompute == stored; check-hosting-offline.sh + CI; live legs ADR-0363-ignored (W1/R6.32 -> AG3/5/6/8). Verify: r6_25 14/14+2ign · suites green · fmt/clippy(0 new; 3 pre-existing)/rustdoc/edges/ci-gating OK · guard PASS pre. Deviations: ~4.0k vs <=1600 (AMEND precedent); one commit; trajectory += native_log/atif_absent; admissions += egress.probe. REQ-XC-317/318/328/207/203/311/312/321/323/324/329 (XB-013 superseded; XC-205->311; contrib XC-327/302/322). chainTip -> codex/harnessharness-r6.25 · nextTicket -> R6.26 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
