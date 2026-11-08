@@ -284,6 +284,72 @@ pub struct RandomizationRecord {
     pub digest: String,
 }
 
+/// Recompute the randomization-record digest — the **one** construction
+/// [`materialize_comparative`] seals and sign-flip consumers verify
+/// (REQ-XD-021; CC1). `slot_order` is the emitted slot-ref order the
+/// digest binds.
+pub fn randomization_digest(record: &RandomizationRecord, slot_order: &[String]) -> String {
+    let rand_json = Json::obj([
+        ("kind", Json::str(&record.kind)),
+        ("seed", Json::str(&record.seed)),
+        ("rounds", Json::Int(record.rounds as i64)),
+        ("exchangeability", Json::str(&record.exchangeability)),
+        (
+            "slot_order",
+            Json::Arr(slot_order.iter().map(Json::str).collect()),
+        ),
+    ]);
+    idp_digest(DOMAIN_SCHED, rand_json.to_canonical_string().as_bytes())
+}
+
+/// The evidence a sharp-null sign-flip consumer must carry to use
+/// `slot_schedule_randomization`: the recorded randomization record
+/// plus the emitted slot order its digest seals (REQ-XD-021; R6.19).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduleEvidence {
+    /// The recorded randomization record.
+    pub record: RandomizationRecord,
+    /// The emitted slot order (slot refs) the digest seals.
+    pub slot_order: Vec<String>,
+}
+
+impl ScheduleEvidence {
+    /// The evidence a materialized protocol carries.
+    pub fn of(protocol: &ComparativeProtocol) -> ScheduleEvidence {
+        ScheduleEvidence {
+            record: protocol.randomization.clone(),
+            slot_order: protocol
+                .schedule
+                .iter()
+                .map(|s| s.slot_ref.clone())
+                .collect(),
+        }
+    }
+
+    /// `Ok(())` when the record carries the admitted kind and
+    /// exchangeability spelling and its digest recomputes over the
+    /// carried slot order; `Err(detail)` names the mismatch.
+    pub fn check(&self) -> Result<(), String> {
+        if self.record.kind != SCHEDULE_KIND {
+            return Err(format!("kind {} is not {SCHEDULE_KIND}", self.record.kind));
+        }
+        if self.record.exchangeability != EXCHANGEABILITY {
+            return Err(format!(
+                "exchangeability {} is not {EXCHANGEABILITY}",
+                self.record.exchangeability
+            ));
+        }
+        if self.record.seed.is_empty() || self.record.rounds == 0 || self.slot_order.is_empty() {
+            return Err("empty seed/rounds/slot_order".to_string());
+        }
+        let want = randomization_digest(&self.record, &self.slot_order);
+        if want != self.record.digest {
+            return Err("digest does not recompute over the carried slot order".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// One recorded arm with its derived claim class.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArmRecord {
@@ -888,23 +954,15 @@ pub fn materialize_comparative(
             });
         }
     }
-    let rand_json = Json::obj([
-        ("kind", Json::str(&decl.schedule.kind)),
-        ("seed", Json::str(&decl.schedule.seed)),
-        ("rounds", Json::Int(decl.k as i64)),
-        ("exchangeability", Json::str(EXCHANGEABILITY)),
-        (
-            "slot_order",
-            Json::Arr(schedule.iter().map(|s| Json::str(&s.slot_ref)).collect()),
-        ),
-    ]);
-    let randomization = RandomizationRecord {
+    let slot_order: Vec<String> = schedule.iter().map(|s| s.slot_ref.clone()).collect();
+    let mut randomization = RandomizationRecord {
         kind: decl.schedule.kind.clone(),
         seed: decl.schedule.seed.clone(),
         rounds: decl.k,
         exchangeability: EXCHANGEABILITY.to_string(),
-        digest: idp_digest(DOMAIN_SCHED, rand_json.to_canonical_string().as_bytes()),
+        digest: String::new(),
     };
+    randomization.digest = randomization_digest(&randomization, &slot_order);
 
     let arms: Vec<ArmRecord> = decl
         .arms

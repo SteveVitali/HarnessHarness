@@ -49,6 +49,10 @@ pub const SIGNFLIP_DRAWS: u64 = 8_000;
 /// The registered exchangeability argument — the only admitted
 /// spelling (the fair task-level lane-randomization coin, §4.1).
 pub const REGISTERED_EXCHANGEABILITY: &str = "lane_randomization";
+/// The second admitted spelling (§6.3 REQ-XD-021; R6.19) — the seeded
+/// schedule randomization, admitted **only** with the carried
+/// randomization record ([`crate::comparative_protocol::ScheduleEvidence`]).
+pub const SLOT_SCHEDULE_EXCHANGEABILITY: &str = "slot_schedule_randomization";
 /// The only admitted null spelling (never weak-mean/practical-margin).
 pub const SHARP_NULL: &str = "sharp_no_effect";
 /// The frozen Holm level — `α = .05` over the primary family.
@@ -127,6 +131,17 @@ pub struct TaskMixtureDecl {
     pub family: Option<FamilyDecl>,
     /// The frozen exploratory family (absent = no BH leg).
     pub exploratory: Option<NamedFamily>,
+    /// The R6.18 schedule-randomization evidence — required when
+    /// `exchangeability == "slot_schedule_randomization"` (REQ-XD-021;
+    /// R6.19). `None` refuses `ExchangeabilityNotAdmitted`.
+    pub schedule_randomization: Option<crate::comparative_protocol::ScheduleEvidence>,
+    /// The declared downstream use — `confirmatory`/`first_pass` uses
+    /// of the new `slot_schedule_randomization` spelling require a
+    /// GATE-G23 PASSED record (REQ-XD-023; absent reads `confirmatory`,
+    /// the strict default); `descriptive`/`exploratory` compute.
+    pub use_class: Option<String>,
+    /// The method-admission record for the new spelling.
+    pub admission: Option<crate::comparative_estimators::AdmissionRecord>,
 }
 
 /// The closed refusal set — typed facts, never warnings.
@@ -231,6 +246,20 @@ pub enum TaskMixtureError {
         /// The strata the candidates carry.
         strata: Vec<String>,
     },
+    /// The carried randomization record fails its recompute or the
+    /// admitted kind/spelling (REQ-XD-021; R6.19).
+    RandomizationRecord {
+        /// The mismatch detail.
+        detail: String,
+    },
+    /// A confirmatory/first-pass use of `slot_schedule_randomization`
+    /// without a GATE-G23 PASSED record (REQ-XD-023; R6.19).
+    MethodNotAdmitted {
+        /// The new piece.
+        piece: String,
+        /// The gate whose PASSED record is owed.
+        gate: String,
+    },
 }
 
 impl std::fmt::Display for TaskMixtureError {
@@ -278,6 +307,13 @@ impl std::fmt::Display for TaskMixtureError {
             E::StrataSelectionRequired { strata } => {
                 write!(f, "candidate slots span strata {strata:?} — declare filters.stratum")
             }
+            E::RandomizationRecord { detail } => {
+                write!(f, "randomization record mismatch: {detail}")
+            }
+            E::MethodNotAdmitted { piece, gate } => write!(
+                f,
+                "method not admitted: {piece} refuses confirmatory/first-pass use until a {gate} PASSED record exists (REQ-XD-023)"
+            ),
         }
     }
 }
@@ -299,6 +335,9 @@ pub enum SignFlip {
     Computed {
         /// `exact` (`T ≤ 20` full enumeration) or `monte_carlo`.
         mode: String,
+        /// The admitted exchangeability spelling the p ran under
+        /// (`lane_randomization` | `slot_schedule_randomization`).
+        exchangeability: String,
         /// Monte-Carlo draws actually consumed (0 for exact).
         draws: u64,
         /// Two-sided p in ppm (`(extreme+1)/(draws+1)` for MC; exact
@@ -476,10 +515,15 @@ impl TaskMixture {
                 "sign_flip",
                 match &self.sign_flip {
                     SignFlip::NotDeclared => Json::obj([("status", Json::str("not_declared"))]),
-                    SignFlip::Computed { mode, draws, p_ppm } => Json::obj([
+                    SignFlip::Computed {
+                        mode,
+                        exchangeability,
+                        draws,
+                        p_ppm,
+                    } => Json::obj([
                         ("status", Json::str("computed")),
                         ("null", Json::str(SHARP_NULL)),
-                        ("exchangeability", Json::str(REGISTERED_EXCHANGEABILITY)),
+                        ("exchangeability", Json::str(exchangeability)),
                         ("mode", Json::str(mode)),
                         ("draws", Json::Int(*draws as i64)),
                         ("p_ppm", Json::Int(*p_ppm)),
@@ -634,13 +678,52 @@ pub fn task_mixture(
                 declared: n.clone(),
             });
         }
-        if decl.exchangeability.as_deref() != Some(REGISTERED_EXCHANGEABILITY) {
-            return Err(TaskMixtureError::ExchangeabilityNotAdmitted {
-                declared: decl
-                    .exchangeability
+        match decl.exchangeability.as_deref() {
+            Some(REGISTERED_EXCHANGEABILITY) => {}
+            Some(SLOT_SCHEDULE_EXCHANGEABILITY) => {
+                // REQ-XD-021 route: the recorded randomization record
+                // must be carried and recompute; a confirmatory/
+                // first-pass use needs GATE-G23 PASSED (REQ-XD-023).
+                let ev = decl.schedule_randomization.as_ref().ok_or_else(|| {
+                    TaskMixtureError::ExchangeabilityNotAdmitted {
+                        declared: format!(
+                            "{SLOT_SCHEDULE_EXCHANGEABILITY} (no randomization record)"
+                        ),
+                    }
+                })?;
+                ev.check()
+                    .map_err(|detail| TaskMixtureError::RandomizationRecord { detail })?;
+                let use_class = decl
+                    .use_class
                     .clone()
-                    .unwrap_or_else(|| "(absent)".into()),
-            });
+                    .unwrap_or_else(|| "confirmatory".into());
+                let u = crate::comparative_estimators::UseClass::parse(&use_class).ok_or_else(
+                    || TaskMixtureError::NonFiniteInput {
+                        detail: format!("use_class {use_class}"),
+                    },
+                )?;
+                crate::comparative_estimators::check_method_admission(
+                    SLOT_SCHEDULE_EXCHANGEABILITY,
+                    u,
+                    decl.admission.as_ref(),
+                )
+                .map_err(|e| match e {
+                    crate::comparative_estimators::EstimatorError::MethodNotAdmitted {
+                        piece,
+                        gate,
+                    } => TaskMixtureError::MethodNotAdmitted { piece, gate },
+                    other => TaskMixtureError::NonFiniteInput {
+                        detail: format!("{other}"),
+                    },
+                })?;
+            }
+            other => {
+                return Err(TaskMixtureError::ExchangeabilityNotAdmitted {
+                    declared: other
+                        .map(str::to_string)
+                        .unwrap_or_else(|| "(absent)".into()),
+                })
+            }
         }
     }
     if !matches!(decl.bootstrap.as_str(), "bca" | "percentile") {
@@ -829,15 +912,21 @@ pub fn task_mixture(
             &format!("{seed_material}|signflip"),
         )
         .ok_or(TaskMixtureError::DegenerateBootstrap)?;
+        let exch = decl
+            .exchangeability
+            .clone()
+            .unwrap_or_else(|| REGISTERED_EXCHANGEABILITY.to_string());
         if tasks_n <= SIGNFLIP_EXACT_MAX_N {
             SignFlip::Computed {
                 mode: "exact".to_string(),
+                exchangeability: exch,
                 draws: 0,
                 p_ppm: p,
             }
         } else {
             SignFlip::Computed {
                 mode: "monte_carlo".to_string(),
+                exchangeability: exch,
                 draws: SIGNFLIP_DRAWS,
                 p_ppm: p,
             }

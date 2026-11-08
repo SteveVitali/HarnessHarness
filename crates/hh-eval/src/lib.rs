@@ -14,6 +14,11 @@
 //!   `comparative_protocol/1` materializer and `comparative-quote/1`
 //!   artifact (H ≥ 2 arms, declared T and k, the schedule-randomization
 //!   record, the single phase-2–4 quote; R6.18);
+//! - [`comparative_estimators`] — the §6.4 admission-map apparatus
+//!   (single-arm FM rate, flips, $/solve, tied-with-leader, the
+//!   per-tranche Holm family, `hh-comparative-results/1`), each piece
+//!   not-admitted for confirmatory/first-pass use until GATE-G23
+//!   (R6.19; REQ-XD-023);
 //! - [`vetoes`], [`compliance`], [`opacity`], [`faults`] — the metric
 //!   families over facts;
 //! - [`mod@compare`]/[`benefits`]/[`scorecard`] — `compare`, the three benefit
@@ -31,6 +36,7 @@ pub mod accounting;
 pub mod benefits;
 pub mod catalogue;
 pub mod central_protocol;
+pub mod comparative_estimators;
 pub mod comparative_protocol;
 pub mod comparative_quote;
 pub mod compare;

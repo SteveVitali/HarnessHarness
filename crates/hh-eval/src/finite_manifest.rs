@@ -506,36 +506,7 @@ pub fn finite_manifest_contrast(
     let deltas = draw_deltas(&core.cells, decl.prior, &mut rng, CAP_DRAWS);
 
     // ── equal-tail endpoints per ladder level + the doubling record ───
-    let mut levels = Vec::new();
-    let mut d = BASE_DRAWS;
-    while d <= CAP_DRAWS {
-        levels.push(d);
-        d = d.saturating_mul(2).min(CAP_DRAWS + 1);
-    }
-    let mut endpoints: Vec<Interval> = Vec::with_capacity(levels.len());
-    for &n in &levels {
-        let draws = &deltas[..n as usize];
-        endpoints.push(Interval {
-            lo: quantile(draws, TAIL_PPM).unwrap_or(0),
-            hi: quantile(draws, PPM - TAIL_PPM).unwrap_or(0),
-        });
-    }
-    let mut doubling: Vec<DoublingStep> = Vec::with_capacity(levels.len());
-    let mut numerical_error_ppm = 0i64;
-    for (i, &n) in levels.iter().enumerate() {
-        let delta = if i == 0 {
-            0
-        } else {
-            (endpoints[i].lo - endpoints[i - 1].lo)
-                .abs()
-                .max((endpoints[i].hi - endpoints[i - 1].hi).abs())
-        };
-        numerical_error_ppm = numerical_error_ppm.max(delta);
-        doubling.push(DoublingStep {
-            draws: n,
-            max_delta_ppm: delta,
-        });
-    }
+    let (endpoints, doubling, numerical_error_ppm) = endpoint_ladder(&deltas);
 
     let mut keys = BTreeMap::new();
     keys.insert("population".into(), decl.population.as_str().to_string());
@@ -871,31 +842,146 @@ fn resolve_core(
     })
 }
 
+/// `cell_posterior_draws` — `n` draws × `cells.len()` cell posteriors:
+/// per draw, per `(c, n)` cell in order, `p ~ Beta(c+a, n−c+b)` via the
+/// seeded inverse-CDF (interior uniforms — the CDF endpoints are never
+/// drawn). The **one** draw construction the admitted machinery
+/// consumes: the pairwise contrast reads the interleaved
+/// `(test, control)` order; the single-arm marginal (R6.19's
+/// `finite_manifest_rate`, §6.4 route (b)) reads one arm's cells
+/// directly — the per-arm marginal is the same machinery, never a
+/// second implementation.
+fn cell_posterior_draws(
+    cells: &[(u64, u64)],
+    prior: (u64, u64),
+    rng: &mut XorShift64,
+    n: u64,
+) -> Vec<Vec<i64>> {
+    let (a, b) = prior;
+    let mut out: Vec<Vec<i64>> = Vec::with_capacity(n as usize);
+    for _ in 0..n {
+        let mut draw = Vec::with_capacity(cells.len());
+        for &(c, m) in cells {
+            let u = 1 + rng.below((PPM - 1) as usize) as i64;
+            draw.push(beta_inv_ppm(u, c + a, m - c + b));
+        }
+        out.push(draw);
+    }
+    out
+}
+
+/// `endpoint_ladder` — the frozen equal-tail endpoints per ladder level
+/// (`BASE_DRAWS` doubling through `CAP_DRAWS`) and the doubling record
+/// with the max endpoint delta (S.3 — a recorded fact, never a silent
+/// retry). Shared by the contrast and the per-arm marginal.
+fn endpoint_ladder(draws: &[i64]) -> (Vec<Interval>, Vec<DoublingStep>, i64) {
+    let mut levels = Vec::new();
+    let mut d = BASE_DRAWS;
+    while d <= CAP_DRAWS {
+        levels.push(d);
+        d = d.saturating_mul(2).min(CAP_DRAWS + 1);
+    }
+    let mut endpoints: Vec<Interval> = Vec::with_capacity(levels.len());
+    for &n in &levels {
+        let part = &draws[..n as usize];
+        endpoints.push(Interval {
+            lo: quantile(part, TAIL_PPM).unwrap_or(0),
+            hi: quantile(part, PPM - TAIL_PPM).unwrap_or(0),
+        });
+    }
+    let mut doubling: Vec<DoublingStep> = Vec::with_capacity(levels.len());
+    let mut numerical_error_ppm = 0i64;
+    for (i, &n) in levels.iter().enumerate() {
+        let delta = if i == 0 {
+            0
+        } else {
+            (endpoints[i].lo - endpoints[i - 1].lo)
+                .abs()
+                .max((endpoints[i].hi - endpoints[i - 1].hi).abs())
+        };
+        numerical_error_ppm = numerical_error_ppm.max(delta);
+        doubling.push(DoublingStep {
+            draws: n,
+            max_delta_ppm: delta,
+        });
+    }
+    (endpoints, doubling, numerical_error_ppm)
+}
+
 /// `draw_deltas` — `n` posterior contrast draws under the declared prior
-/// `(a,b)`: per cell `p ~ Beta(c+a, n−c+a+b)` via the seeded inverse-CDF
-/// (interior uniforms — the CDF endpoints are never drawn), equal-task
-/// mean `Σ w_t (p_Bt − p_At)`, `w_t = 1/T`.
+/// `(a,b)` over the interleaved `(test, control)` cell order — equal-task
+/// mean `Σ w_t (p_Bt − p_At)`, `w_t = 1/T`. Bit-identical to the
+/// pre-refactor per-task draw order (test uniform then control uniform
+/// per task per draw).
 fn draw_deltas(
     cells: &[ContrastCell],
     prior: (u64, u64),
     rng: &mut XorShift64,
     n: u64,
 ) -> Vec<i64> {
-    let (a, b) = prior;
+    let merged: Vec<(u64, u64)> = cells
+        .iter()
+        .flat_map(|c| [(c.test_c, c.test_n), (c.control_c, c.control_n)])
+        .collect();
+    let draws = cell_posterior_draws(&merged, prior, rng, n);
     let t_n = cells.len() as i128;
-    let mut deltas: Vec<i64> = Vec::with_capacity(n as usize);
-    for _ in 0..n {
-        let mut sum: i128 = 0;
-        for c in cells {
-            let u_b = 1 + rng.below((PPM - 1) as usize) as i64;
-            let p_b = beta_inv_ppm(u_b, c.test_c + a, c.test_n - c.test_c + b);
-            let u_a = 1 + rng.below((PPM - 1) as usize) as i64;
-            let p_a = beta_inv_ppm(u_a, c.control_c + a, c.control_n - c.control_c + b);
-            sum += i128::from(p_b) - i128::from(p_a);
-        }
-        deltas.push(round_div(sum, t_n));
+    draws
+        .iter()
+        .map(|d| {
+            let mut sum: i128 = 0;
+            for (t, _) in cells.iter().enumerate() {
+                sum += i128::from(d[2 * t]) - i128::from(d[2 * t + 1]);
+            }
+            round_div(sum, t_n)
+        })
+        .collect()
+}
+
+/// One arm's marginal interval report — the 95% equal-tail **credible**
+/// interval at [`BASE_DRAWS`] with the frozen doubling record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarginalInterval {
+    /// The reported interval.
+    pub interval: Interval,
+    /// Declared draws (the frozen base).
+    pub draws_requested: u64,
+    /// Actual draws consumed (the full frozen ladder through the cap).
+    pub draws_used: u64,
+    /// The doubling record — one entry per ladder level.
+    pub doubling: Vec<DoublingStep>,
+    /// The max endpoint delta over the doubling ladder.
+    pub numerical_error_ppm: i64,
+}
+
+/// `arm_marginal_interval(cells, prior, seed_material)` — the contrast
+/// machinery's **per-arm marginal**: `θ^(b) = Σ_t w_t p_t^(b)`,
+/// `w_t = 1/T`, over the same `cell_posterior_draws` the pairwise
+/// estimator consumes, with the same frozen doubling ladder. `cells`
+/// are `(c, n)` resolved members (the caller derives them under the
+/// population contract's one counting rule). R6.19's single-arm
+/// `finite_manifest_rate` IS this marginal (§6.4 route (b): "the
+/// single-arm interval equals the contrast machinery's per-arm
+/// marginal").
+pub fn arm_marginal_interval(
+    cells: &[(u64, u64)],
+    prior: (u64, u64),
+    seed_material: &str,
+) -> MarginalInterval {
+    let mut rng = XorShift64::seeded(seed_material);
+    let draws = cell_posterior_draws(cells, prior, &mut rng, CAP_DRAWS);
+    let t_n = cells.len() as i128;
+    let thetas: Vec<i64> = draws
+        .iter()
+        .map(|d| round_div(d.iter().map(|&p| i128::from(p)).sum(), t_n))
+        .collect();
+    let (endpoints, doubling, numerical_error_ppm) = endpoint_ladder(&thetas);
+    MarginalInterval {
+        interval: endpoints[0],
+        draws_requested: BASE_DRAWS,
+        draws_used: CAP_DRAWS,
+        doubling,
+        numerical_error_ppm,
     }
-    deltas
 }
 
 /// The estimator's reported headline — identical validation, cells,
