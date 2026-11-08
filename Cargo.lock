@@ -759,6 +759,7 @@ dependencies = [
  "hharness-experiment",
  "hharness-gateway",
  "hharness-helper",
+ "hharness-hir",
  "hharness-identity",
  "hharness-lab",
  "hharness-ledger",

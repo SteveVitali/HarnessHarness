@@ -37,6 +37,8 @@ hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
 # machinery (CC1 — never a second JSON scheme); no hh-embed/cli/hosting
 # edge (REQ-XB-103 — scripts/check-runner-edges.sh).
 hharness-gateway = { path = "../hh-gateway", version = "0.1.0" }
-
-[dev-dependencies]
-hharness-containment = { path = "../hh-containment" }
+# R6.28: the observation-replay executor doubles `hh-env`'s ToolExecutor
+# seam; the declaration vocabulary lives in hh-hir/hh-containment
+# (both already transitive — no new edge class, REQ-XB-103 clean).
+hharness-hir = { path = "../hh-hir", version = "0.1.0" }
+hharness-containment = { path = "../hh-containment", version = "0.1.0" }
