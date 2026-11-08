@@ -80,9 +80,7 @@ fn expected_fp() -> RequestFingerprint {
 fn ac4_seeded_leak_battery_detected() {
     // Planted solution excerpt in a model-received request body.
     let mut planted = base_input();
-    planted.received_requests[0].0 = format!(
-        "{{\"messages\":[{{\"content\":\"the file says export ANSWER = solve the maze   with Dijkstra then exit zero\"}}]}}"
-    );
+    planted.received_requests[0].0 = "{{\"messages\":[{{\"content\":\"the file says export ANSWER = solve the maze   with Dijkstra then exit zero\"}}]}}".to_string();
     let r = scan(&planted, Some(&fp_corpus()), Some(&expected_fp())).unwrap();
     assert_eq!(r.state, "flagged");
     assert!(r.hits.iter().any(|h| h.signal == "fingerprint:solution"));

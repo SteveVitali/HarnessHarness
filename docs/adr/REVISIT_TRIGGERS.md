@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_221 ADRs: 169 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_223 ADRs: 171 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -205,6 +205,8 @@ _221 ADRs: 169 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0435 | Revisit when the first tranche gate provisions the derived envelope quantities (the `pre-quote` label and this ADR's interim state then resolve into a cited `provisioned:{ref}`), when a phase-3/4 quote needs a column REQ-XD-050 does not name (a new AR item, not an in-place extension), or when the §3.10 pricing path changes — every `hh-compute-quote/1` citation shape here re-opens with it. |
 | ADR-0436 | Revisit when W1's measured bundle/layer digests land (fixture members flip from `fixture-verified` to measured), when a fourth harness is admitted (later pass), when AR-19 admits a `lab_host` slot, or when the Claude Code binary sha256 is first measured on the VM. |
 | ADR-0437 | Re-open if (a) a second upload tool or a public dataset is admitted (the single-tool admission and `private`-only refusal must be re-cut); (b) `hf`'s argv surface changes such that `upload`/`download` or `HF_TOKEN` semantics diverge from the pinned version; (c) Q-X59 resolves against pre-authorized purge — the remediation order or its record shape may then tighten; or (d) a W-skeleton measures a load path that cannot carry base-blob re-pull by digest (RD-13's UNVERIFIED terms). |
+| ADR-0438 | Revisit when GATE-G23 returns its decision (this proposal is admitted, refused, or amended there), or when a later-pass tranche proposes a cross-tranche pooled estimand (its contrasts form their own family per F8). |
+| ADR-0439 | Revisit when GATE-G23 returns, when Q-X57 is answered (FP-6's pending ruling firms or revises member 2), or when a later pass supersedes the first-pass design (each member's scope is first-pass only). |
 
 ## Fired-and-answered triggers (BL-48)
 

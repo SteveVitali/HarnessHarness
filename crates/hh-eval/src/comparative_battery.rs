@@ -662,6 +662,7 @@ fn contrast_deltas(
 /// One dataset's outcome under the exact pipeline — facts, never
 /// verdicts on the method.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant, clippy::type_complexity)] // Computed carries every leg's recorded facts.
 pub enum COutcome {
     /// The pipeline computed — every leg's recorded facts.
     Computed {
@@ -670,7 +671,7 @@ pub enum COutcome {
         /// The ref arm's reported θ interval and observed θ̂.
         rate: Option<RateLeg>,
         /// The family rows `(member, status, raw_p, adjusted, rejected, mode)`.
-        family: Vec<(String, String, Option<i64>, i64, bool, Option<String>)>,
+        family: Vec<FamilyRowFact>,
         /// Exploratory member count.
         exploratory_members: u64,
         /// Per-primary-member non-tied task count `m` (`member → m`).
@@ -698,6 +699,19 @@ pub enum COutcome {
     /// `population::assemble` failed — a generator failure, retained.
     GeneratorFailure(String),
 }
+
+/// One family row's recorded fact tuple `(member, status, raw_p, adjusted, rejected, mode)`.
+pub type FamilyRowFact = (String, String, Option<i64>, i64, bool, Option<String>);
+/// The descriptive legs' points `(rerun, swap, excess, pass_all5, pass_any5, per_trial, per_solve)`.
+pub type DescrPoints = (
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    i64,
+    Option<i64>,
+);
 
 /// The measured-contrast leg's recorded facts.
 #[derive(Debug)]
@@ -811,7 +825,7 @@ pub fn eval_cb_dataset(s: &CScenario, proto: &ComparativeProtocol, data: &CDatas
         let mut cn: Vec<(u64, u64)> = Vec::new();
         let mut refused = false;
         let mut obs_sum: i128 = 0;
-        for (_, (m, s_, u)) in &cells {
+        for (m, s_, u) in cells.values() {
             if *u > 0 {
                 refused = true;
             }
@@ -860,7 +874,7 @@ pub fn eval_cb_dataset(s: &CScenario, proto: &ComparativeProtocol, data: &CDatas
     };
     let (family_rows, exploratory_n, nontied) = match &fam {
         Some(f) => {
-            let rows: Vec<(String, String, Option<i64>, i64, bool, Option<String>)> = f
+            let rows: Vec<FamilyRowFact> = f
                 .family
                 .1
                 .iter()

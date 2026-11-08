@@ -87,7 +87,7 @@ fn ac1_seed_rule_byte_identical() {
                     sl.arm_id.clone(),
                     sl.task_id.clone(),
                     sl.subjects[0].success,
-                    sl.subjects[0].availability.clone(),
+                    sl.subjects[0].availability,
                     sl.subjects[0].veto_tripped.clone(),
                 )
             })
