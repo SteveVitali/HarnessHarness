@@ -196,6 +196,10 @@ pub struct CellPlan {
     pub verifier_deadline_ms: Option<u64>,
     /// The frozen same-cell regrade bound (proposed 2 — REQ-XB-111).
     pub max_grade_attempts: u32,
+    /// The optional ST4 `/logs/agent` copy-out leg (R6.25/REQ-XC-317) —
+    /// validated by [`crate::capture::copyout_spec`]; `None` = no
+    /// native-log capture (an oracle slot).
+    pub logs_copyout: Option<crate::capture::CopyoutSpec>,
 }
 
 /// A per-phase filesystem listing (`phase → sorted /` entries) — the
@@ -233,6 +237,9 @@ pub struct CellReport {
     pub verify_attempts: u32,
     /// The final verify outcome.
     pub verify: Option<VerifyOutcome>,
+    /// The hashed `/logs/agent` copy-out (REQ-XC-317 — `None` where the
+    /// plan carries no capture leg).
+    pub native_log: Option<crate::capture::NativeLogBundle>,
 }
 
 fn listing(cell: &mut dyn CellOps, phase: &str, acc: &mut Vec<PhaseListing>) {
@@ -277,6 +284,7 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         agent_terminated: false,
         verify_attempts: 0,
         verify: None,
+        native_log: None,
     };
     // ST1 boundary — nothing phase-owned may already exist.
     if cell.present(TESTS_DIR)? {
@@ -311,8 +319,13 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         report.agent_end_cause = EndCause::Exited(agent.exit_code.unwrap_or(-1));
     }
     listing(cell, "agent", &mut report.listings);
-    // ST4 — seal is the store-side row; the drive records the boundary.
+    // ST4 — seal is the store-side row; the drive records the boundary,
+    // then the kernel-mediated `/logs/agent` copy-out (REQ-XC-317 —
+    // after agent end, before verification, never through `/work`).
     listing(cell, "seal", &mut report.listings);
+    if let Some(spec) = &plan.logs_copyout {
+        report.native_log = Some(crate::capture::copy_out_logs(cell, spec)?);
+    }
     // ST5 — verify legs in the same cell, bounded; the participant is
     // never re-launched.
     for _attempt in 1..=plan.max_grade_attempts {

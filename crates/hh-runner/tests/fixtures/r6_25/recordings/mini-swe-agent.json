@@ -1,0 +1,95 @@
+{
+ "schema": "hh.model_proxy.recording/1",
+ "slot_id": "sm-pos-mini-swe-agent",
+ "provenance": "synthetic",
+ "calls": [
+  {
+   "k": 0,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "body_sha256": "sha256:0927a79eacd08450679015991e0e91bcb3106b82e791138d83caae901156233e",
+    "body": {
+     "utf8": "{\"model\":\"ollama/hh-smoke\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"description\":\"run a shell command\",\"parameters\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}}],\"tool_choice\":\"auto\",\"stream\":false,\"reasoning_effort\":\"high\"}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:0927a79eacd08450679015991e0e91bcb3106b82e791138d83caae901156233e",
+    "body": {
+     "utf8": "{\"model\":\"ollama/hh-smoke\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"description\":\"run a shell command\",\"parameters\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}}],\"tool_choice\":\"auto\",\"stream\":false,\"reasoning_effort\":\"high\"}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "application/json"
+    },
+    "body_sha256": "sha256:fbb6be8b84d2ba1ce2dc6df7a4565de78c01ef5e36cbd0f7e3937c3837c786f7",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sm1\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":12,\"total_tokens\":52}}"
+    },
+    "chunk_stamps": [
+     [
+      0,
+      357
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:fbb6be8b84d2ba1ce2dc6df7a4565de78c01ef5e36cbd0f7e3937c3837c786f7",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sm1\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":12,\"total_tokens\":52}}"
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 120
+  },
+  {
+   "k": 1,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "body_sha256": "sha256:ca68fb9ce451aa35c91102d2852eadab37aba85f66ab079e9fb6da9c499807b3",
+    "body": {
+     "utf8": "{\"model\":\"ollama/hh-smoke\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"description\":\"run a shell command\",\"parameters\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}}],\"tool_choice\":\"auto\",\"stream\":false,\"reasoning_effort\":\"high\"}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:ca68fb9ce451aa35c91102d2852eadab37aba85f66ab079e9fb6da9c499807b3",
+    "body": {
+     "utf8": "{\"model\":\"ollama/hh-smoke\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"description\":\"run a shell command\",\"parameters\":{\"type\":\"object\",\"properties\":{\"command\":{\"type\":\"string\"}},\"required\":[\"command\"]}}}],\"tool_choice\":\"auto\",\"stream\":false,\"reasoning_effort\":\"high\"}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "application/json"
+    },
+    "body_sha256": "sha256:e209fd8be39a418bcb765dddc86d38621de5247f06aae23ea1cd395cc4c39a3e",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sm2\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":60,\"completion_tokens\":8,\"total_tokens\":68}}"
+    },
+    "chunk_stamps": [
+     [
+      0,
+      250
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:e209fd8be39a418bcb765dddc86d38621de5247f06aae23ea1cd395cc4c39a3e",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sm2\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":60,\"completion_tokens\":8,\"total_tokens\":68}}"
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 95
+  }
+ ]
+}

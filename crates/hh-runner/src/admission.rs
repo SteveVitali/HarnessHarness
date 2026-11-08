@@ -677,7 +677,8 @@ pub fn validate(rec: &Json, ctx: &ValidationContext) -> Result<(), AdmissionErro
     sfield(c, "base_url_suffix", "config")?;
     // ── egress ─────────────────────────────────────────────────────────
     let e = obj(rec, "egress")?;
-    no_unknown(e, &["expected_denied", "must_reach"], "egress")?;
+    no_unknown(e, &["expected_denied", "must_reach", "probe"], "egress")?;
+    let mut expected: Vec<String> = Vec::new();
     match e.get("expected_denied").and_then(Json::as_arr) {
         Some(a) if !a.is_empty() => {
             for (n, x) in a.iter().enumerate() {
@@ -685,7 +686,7 @@ pub fn validate(rec: &Json, ctx: &ValidationContext) -> Result<(), AdmissionErro
                     err("expected_denied", format!("expected_denied[{n}] object"))
                 })?;
                 no_unknown(xm, &["host_or_pattern", "purpose"], "expected_denied")?;
-                sfield(xm, "host_or_pattern", "expected_denied")?;
+                expected.push(sfield(xm, "host_or_pattern", "expected_denied")?);
             }
         }
         _ => {
@@ -698,6 +699,49 @@ pub fn validate(rec: &Json, ctx: &ValidationContext) -> Result<(), AdmissionErro
     match e.get("must_reach").and_then(Json::as_arr) {
         Some(a) if a.len() == 1 && a[0].as_str() == Some(MODEL_RELAY) => {}
         _ => return Err(err("must_reach", "egress.must_reach must be [model_relay]")),
+    }
+    // REQ-XC-311 — the admission includes an egress probe: `probe` names
+    // the recorded probe log and its observed non-model attempts, each
+    // covered by `expected_denied` (a probe the admission never logged
+    // refuses — AC-5.3-6).
+    match e.get("probe").and_then(Json::as_obj) {
+        Some(p) => {
+            no_unknown(p, &["log_ref", "observed"], "egress.probe")?;
+            if sfield(p, "log_ref", "egress.probe")?.is_empty() {
+                return Err(err(
+                    "egress_probe",
+                    "egress.probe.log_ref empty — the probe log is required",
+                ));
+            }
+            let host_ok = |h: &str| {
+                expected.iter().any(|pat| match pat.strip_prefix("*.") {
+                    Some(sfx) => h == sfx || h.ends_with(&format!(".{sfx}")),
+                    None => pat == h,
+                })
+            };
+            for (n, x) in p
+                .get("observed")
+                .and_then(Json::as_arr)
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .enumerate()
+            {
+                let h = x.as_str().unwrap_or("");
+                if !host_ok(h) {
+                    return Err(err(
+                        "egress_probe",
+                        format!("probe.observed[{n}] {h} not covered by expected_denied"),
+                    ));
+                }
+            }
+        }
+        None => {
+            return Err(err(
+                "egress_probe",
+                "egress.probe required — every admission includes an egress probe log (REQ-XC-311)",
+            ))
+        }
     }
     // ── client (REQ-XC-322 contributing — known or typed unknown) ──────
     let cl = obj(rec, "client")?;

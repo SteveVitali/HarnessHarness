@@ -610,6 +610,37 @@ pub fn st2_verify(rec: &Json, obs: &St2Observation) -> Result<(), AdmissionReaso
     Ok(())
 }
 
+/// `st4_plan(rec)` — the REQ-XC-328 post-agent probe set: the adapter's
+/// version command re-run and the install-tree re-hash over
+/// `install_tree_paths[0]` (ST2's own two legs, re-observed after agent
+/// end; the observation compares against the ST2 baseline).
+pub fn st4_plan(rec: &Json) -> Result<St2Plan, AdmissionError> {
+    let i = rec
+        .get("install")
+        .and_then(Json::as_obj)
+        .ok_or_else(|| err("member_missing", "install required"))?;
+    let vp = i
+        .get("version_probe")
+        .and_then(Json::as_arr)
+        .ok_or_else(|| err("member_missing", "install.version_probe required"))?;
+    let tree = i
+        .get("install_tree_paths")
+        .and_then(Json::as_arr)
+        .and_then(|a| a.first())
+        .and_then(Json::as_str)
+        .ok_or_else(|| err("member_missing", "install_tree_paths[0] required"))?;
+    Ok(St2Plan {
+        probes: vec![
+            probe(
+                vp.iter()
+                    .map(|x| x.as_str().unwrap_or("").to_string())
+                    .collect(),
+            ),
+            probe(tree_hash_argv(tree)),
+        ],
+    })
+}
+
 /// The BTreeMap helper the fixtures use to keep member order canonical.
 pub fn obj_map(pairs: Vec<(&str, Json)>) -> BTreeMap<String, Json> {
     pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()

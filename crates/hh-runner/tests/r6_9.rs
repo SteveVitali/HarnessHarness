@@ -127,6 +127,7 @@ fn plan(dir: &Path) -> CellPlan {
         verifier_argv: vec!["bash".to_string(), "/tests/test.sh".to_string()],
         verifier_deadline_ms: Some(12_000_000),
         max_grade_attempts: 2,
+        logs_copyout: None,
     }
 }
 

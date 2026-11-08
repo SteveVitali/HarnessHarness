@@ -1,0 +1,99 @@
+{
+ "schema": "hh.model_proxy.recording/1",
+ "slot_id": "sm-pos-pi",
+ "provenance": "synthetic",
+ "calls": [
+  {
+   "k": 0,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "body_sha256": "sha256:cb555d817b816d3aa70df2e62b61e7dee233e0bee97c86cad67abe5cde6242d1",
+    "body": {
+     "utf8": "{\"model\":\"pi-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"read\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"edit\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"write\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}}],\"stream\":true,\"reasoning\":true}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:cb555d817b816d3aa70df2e62b61e7dee233e0bee97c86cad67abe5cde6242d1",
+    "body": {
+     "utf8": "{\"model\":\"pi-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"read\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"edit\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"write\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}}],\"stream\":true,\"reasoning\":true}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:2446d2d1778e47e3d680cd12b47a96cce8252ea968f86a0df3a2f629a65e8d7f",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}"
+    },
+    "chunk_stamps": [
+     [
+      0,
+      80
+     ],
+     [
+      40,
+      120
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:2446d2d1778e47e3d680cd12b47a96cce8252ea968f86a0df3a2f629a65e8d7f",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}"
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 140
+  },
+  {
+   "k": 1,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "body_sha256": "sha256:1b396dc3af93dd7b35ede19e80aac4569b3892ed15b8bd8b8629299abfe68b9a",
+    "body": {
+     "utf8": "{\"model\":\"pi-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_p1\",\"content\":\"\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"read\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"edit\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"write\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}}],\"stream\":true,\"reasoning\":true}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:1b396dc3af93dd7b35ede19e80aac4569b3892ed15b8bd8b8629299abfe68b9a",
+    "body": {
+     "utf8": "{\"model\":\"pi-1\",\"messages\":[{\"role\":\"user\",\"content\":\"Write `ok` to `/app/hh_smoke.txt`.\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_p1\",\"content\":\"\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"bash\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"read\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"edit\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}},{\"type\":\"function\",\"function\":{\"name\":\"write\",\"parameters\":{\"type\":\"object\",\"properties\":{}}}}],\"stream\":true,\"reasoning\":true}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:9820d8e4c5ddc7313c8a9a195c077439219b5f80a90f3a83b8943c4320376daf",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}"
+    },
+    "chunk_stamps": [
+     [
+      0,
+      200
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {},
+    "body_sha256": "sha256:9820d8e4c5ddc7313c8a9a195c077439219b5f80a90f3a83b8943c4320376daf",
+    "body": {
+     "utf8": "{\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}"
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 110
+  }
+ ]
+}

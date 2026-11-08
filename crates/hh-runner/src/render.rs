@@ -1035,7 +1035,10 @@ pub fn anthropic_host(host: &str) -> bool {
     host == "anthropic.com" || host.ends_with(".anthropic.com")
 }
 
-fn pattern_covers(pattern: &str, host: &str) -> bool {
+/// `pattern_covers(pattern, host)` — an `expected_denied` pattern covers
+/// `host` (`*.s` = the suffix itself or a subdomain). Exported for the
+/// R6.25 smoke/mediator legs (CC1 — one coverage rule).
+pub fn pattern_covers(pattern: &str, host: &str) -> bool {
     match pattern.strip_prefix("*.") {
         Some(suffix) => host == suffix || host.ends_with(&format!(".{suffix}")),
         None => pattern == host,
