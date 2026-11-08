@@ -1874,6 +1874,80 @@ pub fn analyze(
                     members: family_members(f.get("members").unwrap_or(&Json::Null))?,
                 }),
             };
+            // R6.19 — the `slot_schedule_randomization` spelling rides
+            // with its evidence record and the REQ-XD-023 admission
+            // members (records-in; absent members stay `None` — the
+            // estimator's typed refusals decide).
+            let schedule_randomization = match filters.get("schedule_randomization") {
+                None => None,
+                Some(j) => {
+                    let rec = j.get("record").ok_or_else(|| AnalysisError::BadSpec {
+                        member: "query.filters.schedule_randomization.record".into(),
+                        detail: "record required".into(),
+                    })?;
+                    let slot_order = match j.get("slot_order") {
+                        Some(Json::Arr(a)) => a
+                            .iter()
+                            .map(|s| {
+                                s.as_str().map(str::to_string).ok_or_else(|| {
+                                    AnalysisError::BadSpec {
+                                        member: "slot_order[]".into(),
+                                        detail: "strings only".into(),
+                                    }
+                                })
+                            })
+                            .collect::<Result<Vec<String>, _>>()?,
+                        _ => {
+                            return Err(AnalysisError::BadSpec {
+                                member: "query.filters.schedule_randomization.slot_order".into(),
+                                detail: "array required".into(),
+                            })
+                        }
+                    };
+                    let f = |m: &str| -> Result<String, AnalysisError> {
+                        rec.get(m)
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .ok_or_else(|| AnalysisError::BadSpec {
+                                member: format!("schedule_randomization.record.{m}"),
+                                detail: "string required".into(),
+                            })
+                    };
+                    Some(hharness_eval::comparative_protocol::ScheduleEvidence {
+                        record: hharness_eval::comparative_protocol::RandomizationRecord {
+                            kind: f("kind")?,
+                            seed: f("seed")?,
+                            rounds: rec
+                                .get("rounds")
+                                .and_then(Json::as_int)
+                                .map(|v| v as u32)
+                                .ok_or_else(|| AnalysisError::BadSpec {
+                                    member: "schedule_randomization.record.rounds".into(),
+                                    detail: "int required".into(),
+                                })?,
+                            exchangeability: f("exchangeability")?,
+                            digest: f("digest")?,
+                        },
+                        slot_order,
+                    })
+                }
+            };
+            let admission = match filters.get("admission") {
+                None => None,
+                Some(j) => {
+                    let s = |m: &str| {
+                        j.get(m)
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .unwrap_or_default()
+                    };
+                    Some(hharness_eval::comparative_estimators::AdmissionRecord {
+                        gate: s("gate"),
+                        status: s("status"),
+                        record_ref: s("record_ref"),
+                    })
+                }
+            };
             let pop = crate::population::planned_population(
                 view,
                 &runs,
@@ -1902,6 +1976,9 @@ pub fn analyze(
                     seed: input.seed,
                     family,
                     exploratory,
+                    schedule_randomization,
+                    use_class: opt_filter_str(&filters, "use_class").map(str::to_string),
+                    admission,
                 },
             )?;
             sections.push((tm::KIND, out.to_json()));

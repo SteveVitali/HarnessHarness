@@ -881,3 +881,76 @@ pub fn contrast_bounds(
         },
     })
 }
+
+/// One arm's §3.2 all-planned bound — `[s/M,(s+u)/M]` per task and the
+/// equal-task manifest bound `[⌊Σ w_t lo_t⌋, ⌈Σ w_t hi_t⌉]`, computed
+/// with the same inward-compute/outward-round rule as
+/// [`contrast_bounds`] (R6.19's single-arm θ_h companion; §6.8's
+/// "all-planned bounds" member).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArmBounds {
+    /// The arm.
+    pub arm_id: String,
+    /// The named population the bound reads.
+    pub population: String,
+    /// Per-task cells, task-sorted.
+    pub per_task: Vec<(String, CellBound)>,
+    /// `⌊Σ_t w_t lo_t⌋`, `w_t = 1/T`.
+    pub lo_ppm: i64,
+    /// `⌈Σ_t w_t hi_t⌉`.
+    pub hi_ppm: i64,
+    /// `true` only when every cell resolved.
+    pub full: bool,
+}
+
+/// `arm_bounds(pop, kind, arm)` — the single-arm all-planned bound over
+/// the named population. One counting rule (`contrib`); an absent arm
+/// is `EmptyUniverse`, never a zero bound.
+pub fn arm_bounds(
+    pop: &PlannedPopulation,
+    kind: PopulationKind,
+    arm: &str,
+) -> Result<ArmBounds, PopulationError> {
+    let mut per_task: BTreeMap<String, CellBound> = BTreeMap::new();
+    for res in pop.slots.iter().filter(|s| s.arm_id == arm) {
+        let c = per_task.entry(res.task_id.clone()).or_insert(CellBound {
+            m: 0,
+            s: 0,
+            f: 0,
+            u: 0,
+            lo_ppm: 0,
+            hi_ppm: 0,
+        });
+        c.m += 1;
+        let (ds, df, du) = contrib(kind, res);
+        c.s += ds;
+        c.f += df;
+        c.u += du;
+    }
+    if per_task.is_empty() {
+        return Err(PopulationError::EmptyUniverse);
+    }
+    let mut full = pop.complete;
+    let (mut lo_sum, mut hi_sum) = (0i128, 0i128);
+    let mut cells = Vec::with_capacity(per_task.len());
+    for (task_id, mut c) in per_task {
+        let m = i128::from(c.m);
+        c.lo_ppm = floor_div(i128::from(c.s) * i128::from(PPM), m);
+        c.hi_ppm = ceil_div((i128::from(c.s) + i128::from(c.u)) * i128::from(PPM), m);
+        if c.u > 0 {
+            full = false;
+        }
+        lo_sum += i128::from(c.lo_ppm);
+        hi_sum += i128::from(c.hi_ppm);
+        cells.push((task_id, c));
+    }
+    let t_n = i128::from(cells.len() as u64);
+    Ok(ArmBounds {
+        arm_id: arm.to_string(),
+        population: kind.as_str().to_string(),
+        per_task: cells,
+        lo_ppm: floor_div(lo_sum, t_n),
+        hi_ppm: ceil_div(hi_sum, t_n),
+        full,
+    })
+}
