@@ -32,7 +32,9 @@ MD_BOUNDS_FORMAT = "markdown-bounds"
 # row (REQ-XH-121). An input of a gated schema is admitted only when
 # the inputs.json entry AND the packet document each carry
 # ``fixture: true``; anything else is refused at load (exit 2).
-FIXTURE_GATED_SCHEMAS = frozenset({"hh-comparative-results/1"})
+FIXTURE_GATED_SCHEMAS = frozenset({
+    "hh-comparative-results/1", "hh-pilot-measure/1",
+    "comparative-quote/1"})
 
 
 def sha256_bytes(b):

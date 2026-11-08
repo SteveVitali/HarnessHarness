@@ -58,8 +58,10 @@ def leg_pages(tmp):
     cp = (ROOT / "scripts" / "check-position.sh").read_text()
     m = re.search(r"BOUNDS = (\[.*?\n\])", cp, re.S)
     bounds = ast.literal_eval(m.group(1))
-    m2 = re.search(r"RECORD_BANNED = (\[.*?\n\])", cp, re.S)
-    banned = ast.literal_eval(m2.group(1))
+    # RECORD_BANNED moved to scripts/claims-lexicon.json at R6.6 —
+    # read the lexicon verbatim (single source of truth).
+    banned = json.loads((ROOT / "scripts" / "claims-lexicon.json")
+                        .read_text())["record_banned"]
 
     out = Path(tmp) / "site"
     inputs, digest, bodies = build.emit_bodies()

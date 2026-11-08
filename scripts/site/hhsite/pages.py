@@ -51,7 +51,7 @@ URL_MAP = [
     ("phase-2/", "Phase 2 — comparative overview",
      ("not_yet_available", "comparative-quote/1", "FP-S"), "phase-2"),
     ("phase-2/pilot/", "Phase 2 — pilot",
-     ("not_yet_available", "hh-experiment-slot/1", "FP-S"), "phase-2"),
+     ("not_yet_available", "hh-pilot-measure/1", "FP-S"), "phase-2"),
     ("phase-2/quote/", "Phase 2 — quote menu",
      ("not_yet_available", "comparative-quote/1", "FP-E"), "phase-2"),
     ("phase-2/fp/", "Phase 2 — first-pass tranche",
@@ -92,13 +92,20 @@ def _script_hash():
 
 
 def shell(title, path, body, labels, section="", calib=None,
-          noindex=False):
+          noindex=False, viewer=False, connect_extra=""):
     """Base template: head (theme init + hashed CSP + stylesheet), header
     (glyph + wordmark + nav + theme toggle), label banner, main, footer
     with the calibration block. calib=None renders the mock's fields —
     R6.5's generator passes the REQ-XF-139 packet values. noindex adds
     the robots meta trial pages carry (REQ-XF-133); default False keeps
-    mock output byte-identical."""
+    mock output byte-identical. viewer=True loads the dormant
+    transcript-viewer script; connect_extra appends the declared
+    dataset origins to connect-src (the REQ-XF-132 exception — empty
+    while the index is private)."""
+    csp = CSP % _script_hash()
+    if connect_extra.strip():
+        csp = csp.replace("connect-src 'self'",
+                          "connect-src 'self' " + connect_extra.strip())
     p = _prefix(path)
     nav = "".join(
         '<a href="%s%s"%s>%s</a>'
@@ -131,6 +138,7 @@ def shell(title, path, body, labels, section="", calib=None,
             "<link rel=\"stylesheet\" href=\"%sassets/tokens.css\">"
             "<link rel=\"stylesheet\" href=\"%sassets/site.css\">"
             "<script src=\"%sassets/site.js\" defer></script>"
+            "%s"
             "</head><body>"
             "<header class=\"site-head\"><div class=\"shell\">"
             "<a class=\"brand\" href=\"%s\">"
@@ -150,8 +158,10 @@ def shell(title, path, body, labels, section="", calib=None,
             "</div></footer></body></html>"
             % (ESC(title), ESC(title),
                '<meta name="robots" content="noindex">' if noindex else "",
-               CSP % _script_hash(), ESC(title),
+               csp, ESC(title),
                p, THEME_INIT, p, p, p, p, p,
+               ('<script src="%sassets/viewer.js" defer></script>' % p)
+               if viewer else "",
                p or "./", p, nav, banner, body, calib, p, p, p))
 
 
