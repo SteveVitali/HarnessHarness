@@ -471,7 +471,10 @@ fn arm_cells(
 
 /// The `(c, n)` cell list a fully-resolved arm carries — `UnresolvedCell`
 /// on any `u > 0`, `ShortCell` below the R ≥ 5 floor.
-fn resolved_cells(cells: &ArmCellMap, arm: &str) -> Result<Vec<(String, u64, u64)>, EstimatorError> {
+fn resolved_cells(
+    cells: &ArmCellMap,
+    arm: &str,
+) -> Result<Vec<(String, u64, u64)>, EstimatorError> {
     let mut out = Vec::with_capacity(cells.len());
     for (task, &(m, s, u)) in cells {
         if u > 0 {
