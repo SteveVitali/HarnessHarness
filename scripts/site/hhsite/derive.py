@@ -169,6 +169,9 @@ LAYOUT_MODULES = frozenset({"raster", "tokparse", "contrast", "pages"})
 LAYOUT_FUNCS = frozenset({
     ("components", "interval_svg"), ("components", "cost_axis_svg"),
     ("components", "_skeleton_bodies"), ("components", "receipt_rail"),
+    # R6.20: the frontier's log-scale coordinates and deterministic
+    # label placement are drawing math, recorded here — not derivations.
+    ("components", "frontier_svg"),
 })
 # The auditor's own public API — scanned differently (it formats violation
 # strings; it never transforms packet values). Not a derivation.

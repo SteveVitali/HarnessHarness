@@ -109,12 +109,14 @@ def manifest(inputs, inputs_digest):
                        for i in inputs],
         "phases": {
             "phase-1": "internal record; not outside-verified",
-            "phase-2": "not_yet_available{publication pending}",
+            "phase-2": "fixture-rendered — internal profile only; "
+                       "publication pending",
             "phase-3": "not_yet_available{publication pending}",
             "phase-4": "not_yet_available{publication pending}",
         },
         "site_files": ["changelog.json", "claims.json", "manifest.json",
-                       "method.json", "phase1.json", "spend.json"],
+                       "method.json", "phase1.json", "spend.json",
+                       "tfp.json"],
     }
 
 
@@ -500,6 +502,250 @@ def changelog(inputs, generator_version):
     }
 
 
+# ── tfp.json — the phase-2 first-pass tranche (R6.20; F2-c (a)) ────────
+# The fixture packet is admitted under the seal (packets.FIXTURE_GATED_
+# SCHEMAS): it is a presentation fixture, never a first-pass result.
+# Every rendered quantity is copied with its per-field pointer; the only
+# transforms are the registered derivations (D-3 ordering, D-5 Pareto
+# membership). A packet absent stays a typed absent — the packet's own
+# state word is carried verbatim in ``absent_state``.
+#
+# The packet's leader_group labels are not copied: the observed-leader
+# band's wording is the spec-fixed site label (REQ-XF-111), rendered by
+# the page, not stored here.
+
+
+def _iv3(inp, unit, kind, level, point_ptr, lo_ptr, hi_ptr, label=None):
+    """One (point, lo, hi) quantity as three value objects sharing the
+    quantity's lo/hi/interval meta — each src'd to its own packet field
+    so every rendered numeral carries resolvable provenance."""
+    lo_raw, lo_src = field(inp, lo_ptr)
+    hi_raw, hi_src = field(inp, hi_ptr)
+    iv = {"kind": kind, "level_ppm": level}
+    # Wrapper keys are "low"/"high" — a container must never reuse the
+    # value-object member names lo/hi/interval (the intervals leg would
+    # read the container itself as an estimate).
+    out = {
+        "high": value(hi_raw, unit, hi_src, lo=lo_raw, hi=hi_raw,
+                      interval=iv),
+        "low": value(lo_raw, unit, lo_src, lo=lo_raw, hi=hi_raw,
+                     interval=iv),
+    }
+    if point_ptr is not None:
+        raw, src = field(inp, point_ptr)
+        if not isinstance(raw, int) or isinstance(raw, bool):
+            raise Refusal("point %s#%s is not an integer field"
+                          % (inp.path, point_ptr))
+        out["point"] = value(raw, unit, src, lo=lo_raw, hi=hi_raw,
+                             interval=iv, label=label)
+    return out
+
+
+def _absent_of(raw):
+    """Carry a packet typed absent verbatim: the packet's state word is
+    the evidence — never mapped onto a different site vocabulary."""
+    out = {"absent_state": raw.get("state")}
+    if raw.get("reason") is not None:
+        out["reason"] = raw["reason"]
+    if raw.get("variant") is not None:
+        out["variant"] = raw["variant"]
+    return out
+
+
+def _cost_basis(pkt, ptr):
+    """One cost basis block: per-trial and per-solve with intervals,
+    provenance and label — verbatim packet values."""
+    out = {}
+    for name in ("per_trial", "per_solve"):
+        raw, src = field(pkt, "%s/%s" % (ptr, name))
+        if isinstance(raw, dict) and raw.get("state"):
+            out[name] = _absent_of(raw)
+            continue
+        iv, _ = field(pkt, "%s/%s/interval" % (ptr, name))
+        out[name] = _iv3(pkt, "micros_usd", iv["kind"],
+                         iv["level_ppm"], "%s/%s/micros" % (ptr, name),
+                         "%s/%s/interval/lo_ppm" % (ptr, name),
+                         "%s/%s/interval/hi_ppm" % (ptr, name))
+    out["provenance"] = _t(pkt, "%s/provenance" % ptr)
+    out["label"] = _t(pkt, "%s/label" % ptr)
+    return out
+
+
+def _harness_row(pkt, hid):
+    """One §9.2 leaderboard row over the packet's harness entry."""
+    base = "/harnesses/%s" % hid
+    th_iv, _ = field(pkt, "%s/theta/interval" % base)
+    th_kind, th_level = th_iv["kind"], th_iv["level_ppm"]
+    b_iv, _ = field(pkt, "%s/theta/bounds" % base)
+    theta = _iv3(pkt, "ppm", th_kind, th_level,
+                 "%s/theta/ppm" % base,
+                 "%s/theta/lo_ppm" % base,
+                 "%s/theta/hi_ppm" % base)
+    theta["bounds"] = {
+        "high": _v(pkt, "%s/theta/bounds/hi_ppm" % base, "ppm"),
+        "kind": _t(pkt, "%s/theta/bounds/kind" % base),
+        "low": _v(pkt, "%s/theta/bounds/lo_ppm" % base, "ppm"),
+    }
+    theta["label"] = _t(pkt, "%s/theta/label" % base)
+
+    pops = {
+        "raw": {
+            "rate": _v(pkt, "%s/secondary_populations/raw/rate_ppm"
+                       % base, "ppm"),
+            "label": _t(pkt, "%s/secondary_populations/raw/label"
+                        % base),
+        },
+        "errors_zero": {
+            "bound_lo": _v(pkt, "%s/secondary_populations/errors_zero/"
+                           "bound_lo_ppm" % base, "ppm"),
+            "bound_hi": _v(pkt, "%s/secondary_populations/errors_zero/"
+                           "bound_hi_ppm" % base, "ppm"),
+            "label": _t(pkt, "%s/secondary_populations/errors_zero/"
+                        "label" % base),
+        },
+    }
+
+    d_raw, d_src = field(pkt, "%s/delta_vs_ref" % base)
+    if isinstance(d_raw, dict) and d_raw.get("state"):
+        delta = _absent_of(d_raw)
+    else:
+        d_iv = d_raw["interval"]
+        delta = _iv3(pkt, "ppm", d_iv["kind"], d_iv["level_ppm"],
+                     "%s/delta_vs_ref/ppm" % base,
+                     "%s/delta_vs_ref/interval/lo_ppm" % base,
+                     "%s/delta_vs_ref/interval/hi_ppm" % base)
+        delta["p_raw"] = _v(pkt, "%s/delta_vs_ref/p_raw_ppm" % base,
+                            "ppm")
+        delta["p_holm"] = _v(pkt, "%s/delta_vs_ref/p_holm_ppm" % base,
+                             "ppm")
+        delta["separated"] = _flag(pkt,
+                                   "%s/delta_vs_ref/separated" % base)
+        delta["label"] = _t(pkt, "%s/delta_vs_ref/label" % base)
+
+    lg = {
+        "member": _flag(pkt, "%s/leader_group/member" % base),
+        "diff": _iv3(pkt, "ppm",
+                     pkt.resolve("%s/leader_group/diff_interval/kind"
+                                 % base),
+                     pkt.resolve("%s/leader_group/diff_interval/"
+                                 "level_ppm" % base),
+                     None,
+                     "%s/leader_group/diff_interval/lo_ppm" % base,
+                     "%s/leader_group/diff_interval/hi_ppm" % base),
+    }
+
+    esc = lambda k: k.replace("~", "~0").replace("/", "~1")
+    counts = {
+        "analysis_basis": _t(pkt, "%s/counts/analysis_basis" % base),
+        # version keys are packet member names — plain strings, never
+        # data-src'd (a pointer resolves to the count, not the key).
+        "intended": [
+            {"count": _v(pkt, "%s/counts/intended/%s" % (base, esc(k)),
+                         "count"),
+             "version": k}
+            for k in sorted(pkt.resolve("%s/counts/intended" % base))],
+        "served": [
+            {"count": _v(pkt, "%s/counts/served/%s" % (base, esc(k)),
+                         "count"),
+             "version": k}
+            for k in sorted(pkt.resolve("%s/counts/served" % base))],
+    }
+
+    completion = {m: _v(pkt, "%s/completion/%s" % (base, m), "count")
+                  for m in ("planned", "first", "recovered",
+                            "unresolved")}
+
+    integrity = {
+        "cleared": _v(pkt, "%s/integrity/cleared" % base, "count"),
+        "confirmed": _v(pkt, "%s/integrity/confirmed" % base, "count"),
+        "coverage": _v(pkt, "%s/integrity/coverage_ppm" % base, "ppm"),
+        "detector": _t(pkt, "%s/integrity/detector" % base),
+        "flagged": _v(pkt, "%s/integrity/flagged" % base, "count"),
+        "label": _t(pkt, "%s/integrity/label" % base),
+    }
+
+    row = {
+        "agent_time": absent(
+            "not_computed",
+            reason="hh-comparative-results/1 carries no agent-time "
+                   "field"),
+        "completion": completion,
+        "costs": {"model_spend_only": _cost_basis(pkt, "%s/cost" % base)},
+        "counts": counts,
+        "delta": delta,
+        "id": hid,
+        "integrity": integrity,
+        "leader_group": lg,
+        "populations": pops,
+        "theta": theta,
+    }
+    if _present(pkt, "%s/cost_with_compute" % base):
+        row["costs"]["with_compute"] = _cost_basis(
+            pkt, "%s/cost_with_compute" % base)
+    return row
+
+
+def tfp(inputs):
+    """tfp.json — leaderboard + frontier projection of the first-pass
+    tranche fixture (REQ-XF-115; no new derivation: D-3 ordering by the
+    displayed theta, D-5 Pareto membership over complete entries)."""
+    i = _by_id(inputs)
+    pkt = i["p2-fp"]
+
+    rows = [_harness_row(pkt, hid)
+            for hid in sorted(pkt.resolve("/harnesses"))]
+    sortable = [{"id": r["id"], "theta": r["theta"]["point"]["v"]}
+                for r in rows]
+    order_ids = [s["id"] for s in derive.DERIVATIONS["D-3"]["order"](
+        sortable, "theta", reverse=True)]
+    by_id = {r["id"]: r for r in rows}
+    rows = [by_id[k] for k in order_ids]
+
+    fentries = [{"cost": r["costs"]["model_spend_only"]
+                 ["per_trial"]["point"]["v"],
+                 "id": r["id"],
+                 "theta": r["theta"]["point"]["v"]}
+                for r in rows]
+    pareto = derive.DERIVATIONS["D-5"]["pareto"](fentries, "cost",
+                                               "theta")
+
+    return {
+        "family": {
+            "alpha": _v(pkt, "/family/alpha_ppm", "ppm"),
+            "id": _t(pkt, "/family/id"),
+            "method": _t(pkt, "/family/method"),
+            "reference": _t(pkt, "/family/reference"),
+        },
+        "fixture": True,
+        "frontier": {
+            "entries": [
+                {"cost": e["cost"],
+                 "id": e["id"],
+                 "pareto": e["id"] in pareto,
+                 "theta": e["theta"]}
+                for e in fentries],
+            "pareto_members": derived(
+                "D-5",
+                [{"path": pkt.path, "ptr": "/harnesses",
+                  "sha256": pkt.sha256}],
+                pareto),
+        },
+        "labels": {k: _t(pkt, "/labels/%s" % k)
+                   for k in sorted(pkt.resolve("/labels"))},
+        "metric": _t(pkt, "/metric"),
+        "order": derived(
+            "D-3",
+            [{"path": pkt.path, "ptr": "/harnesses",
+              "sha256": pkt.sha256}],
+            order_ids),
+        "populations": [_t(pkt, "/populations/%d" % n)
+                        for n in range(len(pkt.resolve("/populations")))],
+        "rows": rows,
+        "tranche": {"band": _t(pkt, "/tranche/band"),
+                    "id": _t(pkt, "/tranche/id")},
+    }
+
+
 # file name -> (projection, consumed input ids). The envelope records the
 # inputs each file consumed; manifest consumes all.
 FILES = {
@@ -510,4 +756,5 @@ FILES = {
                            "deviations", "record")),
     "method.json": (method, ("s4-repairs", "deviations")),
     "claims.json": (claims, ("estimators", "record")),
+    "tfp.json": (tfp, ("p2-fp",)),
 }

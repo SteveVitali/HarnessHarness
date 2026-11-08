@@ -321,3 +321,89 @@ def cost_axis_svg(marks, lo_usd=0.01, hi_usd=100.0, label="cost — log scale",
 
 PARETO_CAPTION = ("Pareto frontier among complete entries only · "
                   "descriptive")
+
+
+# ── accuracy-vs-cost frontier (REQ-XF-103/108) ─────────────────────────
+def frontier_svg(entries, lo_usd=0.01, hi_usd=10.0, width=560,
+                 height=320, label="accuracy vs cost — frontier"):
+    """The frontier chart: fixed 0–100% rate domain on y, a labelled
+    log10 cost axis on x. Entries are dicts {id, monogram, name,
+    theta_ppm, cost_micros, pareto} — the caller (site-data) supplies
+    every value incl. D-5 Pareto membership; this draws, never derives.
+    Identity is typographic (REQ-XF-103): monogram + direct label; a
+    series token raises via scatter_mark. The label placer is a pure
+    function of the cost-ordered entry list — two renders place labels
+    identically (right of the mark, left past the 72% column, vertical
+    stagger by stable order parity)."""
+    import math
+    from . import derive
+    if lo_usd <= 0 or hi_usd <= lo_usd:
+        raise GuardError("log cost axis needs 0 < lo < hi")
+    ml, mr, mt, mb = 48, 14, 14, 38
+    pw, ph = width - ml - mr, height - mt - mb
+    lo_l, hi_l = math.log10(lo_usd), math.log10(hi_usd)
+    xspan = hi_l - lo_l
+    fx = lambda usd: ml + (math.log10(usd) - lo_l) / xspan * pw
+    fy = lambda pct: mt + (100.0 - pct) / 100.0 * ph
+    pct_of = derive.DERIVATIONS["D-1"]["ppm_to_percent"]
+    parts = ['<svg class="needle-fig frontier" width="%d" height="%d" '
+             'role="img" aria-label="%s" viewBox="0 0 %d %d">'
+             % (width, height, ESC(label), width, height)]
+    parts.append('<rect x="%d" y="%d" width="%d" height="%d" fill="none"'
+                 ' stroke="var(--ink-3)" stroke-width="1"/>'
+                 % (ml, mt, pw, ph))
+    for pct in (0, 25, 50, 75, 100):
+        parts.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" '
+                     'stroke="var(--ink-3)" stroke-width="0.5"/>'
+                     % (ml, fy(pct), ml + pw, fy(pct)))
+        parts.append('<text x="%d" y="%.1f" text-anchor="end" '
+                     'class="axis-label">%d%%</text>'
+                     % (ml - 6, fy(pct) + 3, pct))
+    e0, e1 = int(math.floor(lo_l)), int(math.ceil(hi_l))
+    for e in range(e0, e1 + 1):
+        usd = 10.0 ** e
+        if usd < lo_usd or usd > hi_usd:
+            continue
+        parts.append('<line x1="%.1f" y1="%d" x2="%.1f" y2="%d" '
+                     'stroke="var(--ink-3)" stroke-width="0.5"/>'
+                     % (fx(usd), mt, fx(usd), mt + ph))
+        lab = ("$%.2f" % usd).rstrip("0").rstrip(".") if usd < 1 \
+            else "$%d" % int(usd)
+        parts.append('<text x="%.1f" y="%d" text-anchor="middle" '
+                     'class="axis-label">%s</text>'
+                     % (fx(usd), height - 8, lab))
+    pts = []
+    for n, en in enumerate(entries):
+        scatter_mark(en["monogram"], en["name"])
+        usd = en["cost_micros"] / 1000000.0
+        if usd <= 0:
+            continue  # $0 cannot plot on a log axis — caller notes it
+        pts.append((fx(min(max(usd, lo_usd), hi_usd)),
+                    fy(pct_of(en["theta_ppm"])), en, n))
+    ordered = sorted(pts, key=lambda p: (p[0], -p[1], p[2]["id"]))
+    pareto_pts = [p for p in ordered if p[2]["pareto"]]
+    if pareto_pts:
+        pl = ' '.join('%.1f,%.1f' % (x, y) for x, y, _e, _n in pareto_pts)
+        parts.append('<polyline points="%s" fill="none" '
+                     'stroke="var(--needle)" stroke-width="1" '
+                     'class="pareto-line"/>' % pl)
+    for lx_i, (x, y, en, _n) in enumerate(ordered):
+        side = -1 if x > ml + pw * 0.72 else 1
+        parts.append('<g class="frontier-mark%s">'
+                     % (" pareto" if en["pareto"] else ""))
+        parts.append('<rect x="%.1f" y="%.1f" width="22" height="16" '
+                     'rx="3" fill="var(--panel)" '
+                     'stroke="var(--ink-2)" stroke-width="1"/>'
+                     % (x - 11, y - 8))
+        parts.append('<text x="%.1f" y="%.1f" text-anchor="middle" '
+                     'class="mono-chip">%s</text>'
+                     % (x, y + 3.5, ESC(en["monogram"])))
+        lx = x + 16 * side
+        anchor = "start" if side > 0 else "end"
+        ly = y + 4 + (12 if lx_i % 2 else -8)
+        parts.append('<text x="%.1f" y="%.1f" text-anchor="%s" '
+                     'class="frontier-label">%s</text>'
+                     % (lx, ly, anchor, ESC(en["name"])))
+        parts.append('</g>')
+    parts.append('<title>%s</title></svg>' % ESC(label))
+    return "".join(parts)

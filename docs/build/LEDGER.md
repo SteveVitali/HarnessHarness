@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.20
-lastCompleted:   R6.19
+nextTicket:      R6.21
+lastCompleted:   R6.20
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.19
+chainTip:         codex/harnessharness-r6.20
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-08T01:15:00Z
+updatedAt:        2026-11-08T02:12:56Z
 ```
 
 ## OPEN FINDINGS
@@ -1296,3 +1296,5 @@ updatedAt:        2026-11-08T01:15:00Z
 - 2026-11-07 · **R6.16 done — RUNNER-CORE-c + RUNNER-SUPERVISION (manifest 269)** — `codex/harnessharness-r6.16` · PR #310 · base `origin/main` @`909dcd0`. S1 `611dfd73`: `schedule.rs`+`drive_window` — `hh-runner-window/1` declared dead-man/`declared_harvest_ms`/C inputs; `ScheduleKind{k_round_interleave|pair_coupled|composed}` seeded recompute; first-fit packing in recorded order under mem/cpu/model-pool+lookahead (REQ-XB-121); `C=min(mem,vcpu,⌈K/f⌉)` + `c_inputs` (REQ-XB-214); cut-off → `withheld{window_deadline}`, gated retry → `unresolved` (REQ-XH-125); incremental `hh-runner-harvest/1`; own-label `hh-experiment=` sweep + teardown receipts (REQ-XB-127); pairs launch in one packing step (REQ-XH-017/XD-111). S2 `1b9cdf44`: `supervision.rs` — `hh-model-proxy`/`hh-egress-mediator` as separate sole-writer processes (REQ-XC-101, no hosting dep); Json ops `configure`/`register_slot`/`revoke_slot`/`catalog_boundary`/`status`/`stop`; `fold_prior_window` read-only (unharvested/unverified refuse before spawn, X-02/REQ-XH-120); per-attempt token mint+revoke (X-05/REQ-XC-109); sealed-phase socket grants; `credential_env` name-only → **DF-R6.7-1 closed**. `finish_attempt` fenced takeover on expired subject lease. Verify: r6_16 11/11 + r6_16b 8/8 + suites green · fmt/clippy/runner-edges OK · guard PASS DISPATCH R6.16 pre+post. Deviation ~3.8k vs ≤1000 recorded (AMEND precedent). chainTip → codex/harnessharness-r6.16 · nextTicket → R6.17 · engineered (offline, $0.00)
 - 2026-11-07 · **R6.17 done — HARBOR-O + REPROOF machinery (manifest 270)** — `codex/harnessharness-r6.17` · base `origin/main` @`8ac1ec2`. Live-read (one network act, $0): `git ls-remote --tags + HEAD` harbor-framework/harbor 2026-11-07T22:52Z — newest stable tag v0.25.0=`fdba28fc`, `skip_install` landed `0a576fa5` after it → Q-X41 `commit_fallback` → pin `ff2a1ef48070a8df374669138e4d4db79b77f013` in committed `hh-harbor-pin/1` + ADR-0427 dated amendment (`uv` admitted; diff obligation n/a — commit, not tag > v0.25.0). S1 `78198c3c`: `harbor.rs` — pin record, `hh-harbor-venv/1` recipe (`uv sync --frozen`; lock hash+LiteLLM pending W1, mismatch refuses), `hh-harbor-job-config/1` (`-r 0` enforced, `--upload` refuses, `--ak skip_install=true`+layer digest at a containing pin), image identity (digest pull, local tag, post-job assert → `withheld{image_drift}`; tree digests vs dataset.toml refuse), read-only `hh-harbor-ingest/1`+`hh-harbor-trial/1` (sha256+blob pool, ATIF, pinned cause map, tree byte-unchanged); `identity.harbor.pin` through packets→slot record. S2 `0dda30cc`: `reproof.rs` — observe→freeze→prove driver, admit rule R/R×3, o_fail/flaky→`oracle_fails_on_O{cause}`, machinery→repair never excluded, allowlist_gap→`allowlist_gap{host}`, append-only `hh-reproof-register/1`, `hh-reproof-packet/1` pinned label + committed `parity_admission` refusal `inauthentic_evidence{oracle_transport_equality}` + live-executed gate; `reproof` leg registered (R6.32's, skipped until W1); check-live-evidence packet leg + test-live-verify coverage. Verify: r6_17 8/8 + r6_17b 4/4 + suites green · fmt/clippy(new-code 0)/rustdoc/runner-edges/live-verify OK · guard PASS DISPATCH R6.17 pre+post. Deviation ~2.6k vs ≤1600 recorded (AMEND precedent). REQ-XB-123/124·XC-306/315·XH-014·XB-126·XH-027 (aliases XB-011/018, XB-002; contributing XB-125/XH-116/XB-110). chainTip → codex/harnessharness-r6.17 · nextTicket → R6.18 · engineered+live-read ($0.00) · devin-cli/swe-2-high/subagent
 
+
+- 2026-11-08 · **R6.20 done — SITE leaderboard+frontier over hh-comparative-results/1 fixtures (manifest 273)** — `codex/harnessharness-r6.20` · PR #314 · base `origin/main` @`9f8f7b08` (R6.19 tip). F2-c (a): `/phase-2/fp/` leaderboard + `…/frontier/` through R6.5 generator/R6.4 components; declared-fixture packet (4-member observed-leader band, 1 Holm-separated, 3 populations, 2 cost bases, refused{UnresolvedCell} row) validated by `validate_results_packet` (REQ-XF-123); the seal X-07 — `FIXTURE_GATED_SCHEMAS` refuses non-fixture results inputs; D-3 order by displayed θ never rank (no rank column/ordinal/`#n`); `.emph` only `data-separated="holm"`; band label REQ-XF-111 byte-for-byte (conditional leg pins it; lexicon exempts that exact string); population/cost chips switch pre-rendered variants — JS sets `hidden` only, zero arithmetic; frontier monograms+direct labels, D-5 Pareto captioned descriptive, deterministic label placer; `tfp.json` site-data + `frontier_svg` in LAYOUT_FUNCS; public profile publication-pending (REQ-XF-142); hygiene scoped to fp paths. Verify: check-site 14/14 internal+public+--head · mutation battery (a)–(v) OK · site batteries + r6_20 2/2 · fmt/rustdoc clean · clippy 9 pre-existing recorded · guard PASS DISPATCH R6.20 pre+post. Deviations: 3 pre-existing audit violations repaired (recorded); cost_with_compute fixture extra; ~1.1k vs ≤900 recorded. REQ-XF-110/111/115 (alias XF-004→110; contrib XF-103/108/123). chainTip → codex/harnessharness-r6.20 · nextTicket → R6.21 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent

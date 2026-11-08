@@ -188,3 +188,14 @@ figure.fig summary { font: 500 0.8125rem/1.5 var(--mono); color: var(--ink-2); c
   details > * { display: block; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font: 400 0.75rem/1 var(--mono); color: var(--ink-3); }
 }
+
+/* leaderboard (R6.20) — band rows carry --floor; emphasis only on
+   data-separated="holm" (the Holm family separated the entry). */
+.toggle-row { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; margin: var(--sp-2) 0; }
+table.lb .micro { color: var(--ink-2); }
+tr.lb-band-label td { padding: 0; }
+tr.in-band td { background: var(--floor); border-top: 1px solid var(--floor-edge); border-bottom: 1px solid var(--floor-edge); }
+tr.lb-row.emph td { box-shadow: inset 3px 0 0 var(--needle); }
+.mono-chip { font: 600 9px/1 var(--mono); fill: var(--ink); }
+.frontier-label { font: 500 10px/1 var(--sans); fill: var(--ink); }
+.frontier-mark.pareto .mono-chip { fill: var(--needle); }

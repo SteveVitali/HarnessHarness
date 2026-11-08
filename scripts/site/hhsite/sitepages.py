@@ -190,10 +190,11 @@ def _absent_page(claims, title, path, reason, schema, gate, section,
                  calib):
     """A §9.2 path without its renderer or input: the designed absent
     state under the real label banner (never the mock label)."""
-    sprite = pages._prefix(path) + "assets/glyphs.svg"
-    body = ('<h1 class="display-2">%s</h1>' % ESC(title)
-            + absent_block(reason, schema, gate,
-                           bars=("w-wide", "w-mid"), sprite=sprite))
+    sprite = "%sassets/glyphs.svg" % pages._prefix(path)
+    body = ('%s%s' % ('<h1 class="display-2">%s</h1>' % ESC(title),
+                      absent_block(reason, schema, gate,
+                                   bars=("w-wide", "w-mid"),
+                                   sprite=sprite)))
     return pages.shell(title, path, body, _labels(claims), section,
                        calib=calib, noindex="/trial/" in path)
 
@@ -201,10 +202,11 @@ def _absent_page(claims, title, path, reason, schema, gate, section,
 def _pub_absent_page(claims, title, path, schema, gate, section, calib):
     """The public profile's unpublished state (design/39 F10):
     'not yet published — publication gate pending', with no numbers."""
-    sprite = pages._prefix(path) + "assets/glyphs.svg"
-    body = ('<h1 class="display-2">%s</h1>' % ESC(title)
-            + absent_block(PUB_ABSENT, schema, gate,
-                           bars=("w-wide", "w-mid"), sprite=sprite))
+    sprite = "%sassets/glyphs.svg" % pages._prefix(path)
+    body = ('%s%s' % ('<h1 class="display-2">%s</h1>' % ESC(title),
+                      absent_block(PUB_ABSENT, schema, gate,
+                                   bars=("w-wide", "w-mid"),
+                                   sprite=sprite)))
     return pages.shell(title, path, body, _labels(claims), section,
                        calib=calib, noindex="/trial/" in path)
 
@@ -785,6 +787,392 @@ def data_page(sd, pkts, commit):
                                     commit))
 
 
+# ── phase-2 first-pass fixture pages (R6.20; F2-c (a)) ─────────────────
+# The spec-fixed observed-leader band label (REQ-XF-111). The checker's
+# conditional leg pins this byte-for-byte; the packet's own leader_group
+# label strings are never copied onto a page.
+BAND_LABEL = ("observed-leader group · descriptive · 95% interval of "
+              "difference covers 0 · leader selected from the same data")
+P2_FP_PATHS = ("phase-2/fp/", "phase-2/fp/frontier/")
+FIXTURE_PAGES = {"phase-2/fp/index.html", "phase-2/fp/frontier/index.html"}
+POP_CHOICES = (("joint", "joint"), ("raw", "raw"),
+               ("errors_zero", "errors=0"))
+COST_CHOICES = (("model_spend_only", "model only"),
+                ("with_compute", "with compute"))
+
+
+def _pct(o):
+    return derive.DERIVATIONS["D-1"]["ppm_to_percent"](o["v"])
+
+
+def _pkt_absent(d):
+    """Render a packet typed absent verbatim (absent_state is the
+    packet's own state word — never remapped)."""
+    bits = [d["absent_state"]]
+    if d.get("reason"):
+        bits.append(d["reason"])
+    if d.get("variant"):
+        bits.append(d["variant"])
+    return '<span class="absent-token">%s</span>' % ESC(" — ".join(bits))
+
+
+def _iv_text(q, sign=False):
+    """'point [lo, hi]' at the interval's own precision — every numeral a
+    num-class provenance span."""
+    p = _span(q["point"])
+    if sign and q["point"]["v"] > 0:
+        p = "+" + p
+    lo = _span(q["low"])
+    hi = _span(q["high"])
+    if sign:
+        if q["low"]["v"] > 0:
+            lo = "+" + lo
+        if q["high"]["v"] > 0:
+            hi = "+" + hi
+    return "%s <span class=\"micro\">[%s, %s]</span>" % (p, lo, hi)
+
+
+def _pop_variant(r, choice):
+    """The θ cell's three pre-rendered population views (REQ-XF-115):
+    the browser only switches which is shown."""
+    th = r["theta"]
+    if choice == "joint":
+        svg = interval_svg(_pct(th["low"]), _pct(th["point"]),
+                           _pct(th["high"]), domain=(0, 100),
+                           label="%s — resolve rate" % r["id"])
+        return "%s %s" % (svg, _iv_text(th))
+    if choice == "raw":
+        return ("%s <span class=\"micro\">%s</span>"
+                % (_span(r["populations"]["raw"]["rate"]),
+                   ESC(r["populations"]["raw"]["label"]["text"])))
+    ez = r["populations"]["errors_zero"]
+    return ("<span class=\"micro\">[%s, %s] %s</span>"
+            % (_span(ez["bound_lo"]), _span(ez["bound_hi"]),
+               ESC(ez["label"]["text"])))
+
+
+def _toggle_group(name, choices, active):
+    """Chip group switching pre-rendered variants (JS toggles `hidden`
+    only — REQ-XF-115: nothing is computed in the browser)."""
+    chips = "".join(
+        '<button class="chip" data-toggle-value="%s" aria-pressed="%s"'
+        '>%s</button>'
+        % (v, "true" if v == active else "false", ESC(label))
+        for v, label in choices)
+    return ('<span class="chips" data-toggle-group="%s" role="group" '
+            'aria-label="%s">%s</span>' % (name, name, chips))
+
+
+def _variant(name, choice, inner, active):
+    return ('<span data-variant-of="%s" data-variant="%s"%s>%s</span>'
+            % (name, choice, "" if choice == active else " hidden",
+               inner))
+
+
+def _cost_cell(basis):
+    per = basis["per_trial"]
+    if "absent_state" in per:
+        return _pkt_absent(per)
+    return _iv_text(per)
+
+
+def _solve_cell(basis):
+    per = basis["per_solve"]
+    if "absent_state" in per:
+        return _pkt_absent(per)
+    return _iv_text(per)
+
+
+def _delta_cell(r, fam_id):
+    d = r["delta"]
+    if "absent_state" in d:
+        if d["absent_state"] == "not_applicable":
+            return '<span class="micro">reference</span>'
+        bounds = r["theta"]["bounds"]
+        return ('<span class="absent-token">%s — %s</span>'
+                '<br><span class="micro">all-planned [%s, %s]</span>'
+                % (ESC(d["absent_state"]),
+                   ESC(d.get("variant", "")),
+                   _span(bounds["low"]), _span(bounds["high"])))
+    sep = d["separated"]["v"]
+    tag = ('<span class="micro">separated — Holm-adjusted p &lt; .05 '
+           '(family %s)</span>' if sep else
+           '<span class="micro">not separated — Holm-adjusted p ≥ .05 '
+           '(family %s)</span>')
+    return "%s<br>%s" % (_iv_text(d, sign=True), tag % ESC(fam_id))
+
+
+def _lb_row(r, harnesses, fam_ref, fam_id):
+    h = harnesses["harnesses"].get(r["id"],
+                                   {"monogram": "??", "name": r["id"]})
+    sep = (isinstance(r["delta"], dict)
+           and r["delta"].get("separated", {}).get("v") is True)
+    parts_ = ["lb-row"]
+    attrs = ""
+    if r["leader_group"]["member"]["v"]:
+        parts_.append("in-band")
+    if sep:
+        parts_.append("emph")
+        attrs = ' data-separated="holm"'
+    cls = " ".join(parts_)
+    served = r["counts"]["served"]
+    version = served[0]["version"] if served else ""
+    name_cell = ('<td class="name">%s%s<br><span class="micro">%s</span>'
+                 '</td>'
+                 % (components.monogram(h["monogram"], h["name"]),
+                    ESC(h["name"]), ESC(version)))
+    theta_cell = ('<td class="num">%s</td>'
+                  % "".join(_variant("population", c,
+                                     _pop_variant(r, c), "joint")
+                            for c, _l in POP_CHOICES))
+    b = r["theta"]["bounds"]
+    bounds_cell = ('<td class="num"><span class="micro">all-planned</span>'
+                   ' [%s, %s]</td>'
+                   % (_span(b["low"]), _span(b["high"])))
+    delta_cell = '<td class="num">%s</td>' % _delta_cell(r, fam_id)
+    trial_cell = ('<td class="num">%s</td>'
+                  % "".join(_variant("cost", c,
+                                     _cost_cell(r["costs"][c]),
+                                     "model_spend_only")
+                            for c, _l in COST_CHOICES
+                            if c in r["costs"]))
+    solve_cell = ('<td class="num">%s</td>'
+                  % "".join(_variant("cost", c,
+                                     _solve_cell(r["costs"][c]),
+                                     "model_spend_only")
+                            for c, _l in COST_CHOICES
+                            if c in r["costs"]))
+    time_cell = '<td class="num">%s</td>' % _absent_span(r["agent_time"])
+    c = r["completion"]
+    comp_cell = ('<td class="num">%s<span class="micro"> planned · </span>'
+                 '%s<span class="micro"> first · </span>'
+                 '%s<span class="micro"> rec · </span>'
+                 '%s<span class="micro"> unres</span></td>'
+                 % (_span(c["planned"]), _span(c["first"]),
+                    _span(c["recovered"]), _span(c["unresolved"])))
+    ig = r["integrity"]
+    integ_cell = ('<td class="num">%s'
+                  '<br><span class="micro">flagged %s · confirmed %s · '
+                  'cleared %s — %s</span></td>'
+                  % (stamp("flagged", "integrity"),
+                     _span(ig["flagged"]), _span(ig["confirmed"]),
+                     _span(ig["cleared"]), ESC(ig["label"]["text"])))
+    return ('<tr class="%s"%s>%s%s%s%s%s%s%s%s%s</tr>'
+            % (cls, attrs, name_cell, theta_cell, bounds_cell,
+               delta_cell, trial_cell, solve_cell, time_cell, comp_cell,
+               integ_cell))
+
+
+def _lb_table(rows, harnesses, fam_ref, fam_id):
+    """The leaderboard: rows ordered by the packet's displayed θ (D-3 —
+    order never implies rank; no rank column, ordinal or '#n'). The
+    observed-leader band wraps its member rows and carries the fixed
+    label (REQ-XF-111); emphasis only on data-separated=\"holm\"."""
+    head = ('<thead><tr><th>harness</th><th class="num">θ — resolve rate'
+            '</th><th class="num">bounds</th><th class="num">Δ vs %s · '
+            'Holm</th><th class="num">cost/trial</th>'
+            '<th class="num">cost/solve</th><th class="num">agent time'
+            '</th><th class="num">completion</th><th class="num">⚑'
+            '</th></tr></thead>' % ESC(fam_ref))
+    band, rest = [], []
+    for r in rows:
+        (band if r["leader_group"]["member"]["v"] else rest).append(r)
+    body = []
+    if band:
+        body.append('<tr class="lb-band-label"><td colspan="9">'
+                    '<div class="floor-band"><span class="micro">%s'
+                    '</span></div></td></tr>' % ESC(BAND_LABEL))
+        body.extend(_lb_row(r, harnesses, fam_ref, fam_id) for r in band)
+    body.extend(_lb_row(r, harnesses, fam_ref, fam_id) for r in rest)
+    return ('<table class="data lb"><colgroup></colgroup>%s<tbody>%s'
+            '</tbody></table>' % (head, "".join(body)))
+
+
+def _lb_data_table(rows):
+    """The always-present data table (REQ-XF-109): every packet value of
+    the view, including both toggled bases and all three populations."""
+    lines = []
+    for r in rows:
+        th, pops, cst = r["theta"], r["populations"], r["costs"]
+        lines.append(("<b>%s</b> — θ (joint)" % r["id"], _iv_text(th)))
+        lines.append(("  θ bounds (all-planned)",
+                      '<span class="micro">[%s, %s]</span>'
+                      % (_span(th["bounds"]["low"]),
+                         _span(th["bounds"]["high"]))))
+        lines.append(("  raw (secondary population)",
+                      _span(pops["raw"]["rate"])))
+        lines.append(("  errors=0 bound",
+                      '<span class="micro">[%s, %s]</span>'
+                      % (_span(pops["errors_zero"]["bound_lo"]),
+                         _span(pops["errors_zero"]["bound_hi"]))))
+        d = r["delta"]
+        if "absent_state" in d:
+            lines.append(("  Δ vs reference",
+                          _pkt_absent(d)))
+        else:
+            lines.append(("  Δ vs reference", _iv_text(d, sign=True)))
+            lines.append(("  Holm-adjusted p (ppm)",
+                          _span(d["p_holm"])))
+            lines.append(("  separated",
+                          _span(d["separated"])))
+        lines.append(("  Δ vs observed-leader",
+                      '<span class="micro">[%s, %s]</span>'
+                      % (_span(r["leader_group"]["diff"]["low"]),
+                         _span(r["leader_group"]["diff"]["high"]))))
+        for ckey, clab in COST_CHOICES:
+            if ckey not in cst:
+                continue
+            lines.append(("  cost/trial (%s)" % clab,
+                          _iv_text(cst[ckey]["per_trial"])
+                          if "point" in cst[ckey]["per_trial"]
+                          else _pkt_absent(cst[ckey]["per_trial"])))
+            lines.append(("  cost/solve (%s)" % clab,
+                          _iv_text(cst[ckey]["per_solve"])
+                          if "point" in cst[ckey]["per_solve"]
+                          else _pkt_absent(cst[ckey]["per_solve"])))
+        c = r["completion"]
+        lines.append(("  completion planned/first/recovered/unresolved",
+                      '%s / %s / %s / %s'
+                      % (_span(c["planned"]), _span(c["first"]),
+                         _span(c["recovered"]), _span(c["unresolved"]))))
+        ig = r["integrity"]
+        lines.append(("  integrity flagged/confirmed/cleared",
+                      '%s / %s / %s <span class="micro">(%s)</span>'
+                      % (_span(ig["flagged"]), _span(ig["confirmed"]),
+                         _span(ig["cleared"]),
+                         ESC(ig["label"]["text"]))))
+    return _val_table(lines)
+
+
+def leaderboard_page(sd, pkts, commit):
+    """`/phase-2/fp/` — the first-pass tranche leaderboard over the
+    declared fixture packet (the seal keeps real outcomes out)."""
+    claims = json.loads(sd["claims.json"])["body"]
+    t = json.loads(sd["tfp.json"])["body"]
+    fam = t["family"]
+    fam_ref = fam["reference"]["text"]
+    harnesses = json.loads(
+        (Path(__file__).resolve().parent.parent / "config"
+         / "harnesses.json").read_text())
+    rows = t["rows"]
+
+    labels = _labels(claims, results=True)
+    labels.append(pages.fixture_label())
+
+    chips = ('<div class="toggle-row" data-toggle-root>'
+             '<span class="micro">population</span> %s '
+             '<span class="micro">cost basis</span> %s '
+             '<span class="micro">Δ vs the reference is joint-'
+             'population only — the family’s declared estimand</span>'
+             '</div>'
+             % (_toggle_group("population", POP_CHOICES, "joint"),
+                _toggle_group("cost", COST_CHOICES,
+                              "model_spend_only")))
+
+    subtitle = ("θ with its FM interval · Δ vs %s under confirmatory "
+                "family %s (Holm α = %s) — ordered by displayed θ, "
+                "never rank"
+                % (ESC(fam_ref), ESC(fam["id"]["text"]),
+                   ESC(_fmt_value(fam["alpha"]))))
+    howto = [
+        ("estimand", "task_success rate θ and Δ(h − %s), joint "
+                     "population" % fam_ref),
+        ("N × k", "50 slots per harness · k = 5 (fixture)"),
+        ("interval method + level", "FM credible 95% (packet-declared); "
+         "bounds all-planned"),
+        ("population", "joint; raw and errors=0 as secondary "
+                       "populations (toggle)"),
+        ("exclusions", "fixture packet — presentation only; no "
+                       "first-pass outcome exists"),
+        ("source", pkts["p2-fp"]["path"]),
+    ]
+    fig = figure(
+        "fig-lb-fp", "Tranche fp — leaderboard (fixture)",
+        subtitle, "%s%s" % (chips, _lb_table(rows, harnesses, fam_ref,
+                                             fam["id"]["text"])),
+        _receipt(pkts["p2-fp"], commit), howto,
+        _lb_data_table(rows))
+    body = ['<h1 class="display-2">Phase 2 — first-pass tranche '
+            '(fixture)</h1>',
+            '<p class="prose">fixture-labelled tranche %s (band %s) · '
+            '%s · %s — presentation fixtures, never a first-pass '
+            'result.</p>'
+            % (ESC(t["tranche"]["id"]["text"]),
+               ESC(t["tranche"]["band"]["text"]),
+               ESC(t["metric"]["text"]),
+               ESC(t["labels"]["finite_manifest_scope"]["text"])),
+            '<h2>Leaderboard</h2>', fig]
+    return pages.shell("Phase 2 — first-pass tranche",
+                       "phase-2/fp/", "".join(body), labels, "phase-2",
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit))
+
+
+def frontier_page(sd, pkts, commit):
+    """`/phase-2/fp/frontier/` — accuracy vs cost over the same fixture
+    entries: monogram + direct label, never series colour (REQ-XF-103);
+    Pareto membership captioned descriptive."""
+    claims = json.loads(sd["claims.json"])["body"]
+    t = json.loads(sd["tfp.json"])["body"]
+    harnesses = json.loads(
+        (Path(__file__).resolve().parent.parent / "config"
+         / "harnesses.json").read_text())
+    by_id = {r["id"]: r for r in t["rows"]}
+    entries = []
+    for e in t["frontier"]["entries"]:
+        h = harnesses["harnesses"].get(e["id"],
+                                       {"monogram": "??",
+                                        "name": e["id"]})
+        entries.append({"cost_micros": e["cost"],
+                        "id": e["id"], "monogram": h["monogram"],
+                        "name": h["name"], "pareto": e["pareto"],
+                        "theta_ppm": e["theta"]})
+    svg = components.frontier_svg(
+        entries, label="θ vs cost/trial — frontier (fixture)")
+    chart = "%s<p class=\"micro\">%s</p>" % (svg,
+                                           ESC(components.PARETO_CAPTION))
+    trows = []
+    for e in entries:
+        r = by_id[e["id"]]
+        trows.append(("<b>%s</b> %s"
+                      % (e["id"], components.monogram(e["monogram"],
+                                                    e["name"])),
+                      "%s · %s · pareto %s"
+                      % (_span(r["theta"]["point"]),
+                         _span(r["costs"]["model_spend_only"]
+                               ["per_trial"]["point"]),
+                         "yes" if e["pareto"] else "no")))
+    table = _val_table(trows)
+    labels = _labels(claims, results=True)
+    labels.append(pages.fixture_label())
+    fig = figure(
+        "fig-frontier-fp", "Accuracy vs cost — frontier (fixture)",
+        "fixed 0–100% rate domain · log cost axis · Pareto membership "
+        "among complete entries · descriptive",
+        chart, _receipt(pkts["p2-fp"], commit),
+        [("estimand", "task_success rate θ (joint) vs $/trial (model "
+                      "spend only)"),
+         ("N × k", "50 slots per harness · k = 5 (fixture)"),
+         ("interval method + level", "points only — interval views live "
+                                     "on the tranche page"),
+         ("population", "joint"),
+         ("exclusions", "fixture packet — presentation only"),
+         ("source", pkts["p2-fp"]["path"])],
+        table)
+    body = ['<h1 class="display-2">Phase 2 — accuracy vs cost frontier '
+            '(fixture)</h1>',
+            '<p class="prose">fixture-labelled tranche %s — harnesses '
+            'are identified by monogram and direct label; Pareto '
+            'membership is a descriptive overlay, not a ranking.</p>'
+            % ESC(t["tranche"]["id"]["text"]),
+            '<h2>Leaderboard</h2>', fig]
+    return pages.shell("Phase 2 — accuracy vs cost frontier",
+                       "phase-2/fp/frontier/", "".join(body), labels,
+                       "phase-2",
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit))
+
+
 def about_page(sd, pkts, commit):
     claims = json.loads(sd["claims.json"])["body"]
     vocab = "".join('<li class="small">%s</li>' % ESC(v)
@@ -851,6 +1239,10 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
     published = {doc["phase"] for _rel, doc in publications} if public \
         else None
     p1_live = not public or (published and "phase-1" in published)
+    # The seal (X-07): the fp pages render only the declared fixture in
+    # the internal profile — never in public (REQ-XF-142), and only when
+    # the fixture input is present.
+    fp_live = (not public) and "p2-fp" in {i.id for i in inputs}
 
     out = Path(out_dir)
     if out.exists():
@@ -903,6 +1295,9 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
                                              publications),
         "data/": lambda: data_page(bodies, pkts, commit),
         "about/": lambda: about_page(bodies, pkts, commit),
+        "phase-2/fp/": lambda: leaderboard_page(bodies, pkts, commit),
+        "phase-2/fp/frontier/": lambda: frontier_page(bodies, pkts,
+                                                     commit),
     }
     for path, title, absent, section in pages.URL_MAP:
         if path == "specimen/":
@@ -913,6 +1308,21 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
                     "not_yet_available", "hh-site-data/1", "GATE-G22")
                 emit(path, _pub_absent_page(claims, title, path, schema,
                                             gate, section, calib()))
+            elif path in P2_FP_PATHS and not fp_live:
+                if public:
+                    reason, schema, gate = absent or (
+                        "not_yet_available", "hh-comparative-results/1",
+                        "FP-RESULTS")
+                    emit(path, _pub_absent_page(claims, title, path,
+                                                schema, gate, section,
+                                                calib()))
+                else:
+                    reason, schema, gate = absent or (
+                        "not_yet_available", "hh-comparative-results/1",
+                        "FP-RESULTS")
+                    emit(path, _absent_page(claims, title, path, reason,
+                                            schema, gate, section,
+                                            calib()))
             else:
                 emit(path, real[path]())
         elif absent:

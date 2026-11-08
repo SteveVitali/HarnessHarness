@@ -38,7 +38,7 @@ PHASE_GATES = {
     "phase-1": "GATE-G22",
     "phase-2": "GATE-G31",
 }
-PHASES = tuple(sorted(PHASE_GATES) + ["phase-3", "phase-4"])
+PHASES = tuple(sorted(set(PHASE_GATES) | {"phase-3", "phase-4"}))
 
 # Manifest rows an agent can never perform (REQ-XF-130): enabling Pages,
 # the per-phase publication decisions, and the dataset visibility flip.

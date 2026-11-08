@@ -314,7 +314,13 @@ try:
 except OSError:
     hay["record"] = ""
 hits = []
+# The spec-fixed REQ-XF-111 band label is allowed verbatim — its second
+# "leader" is defined text, exempt like the record's bounds block.
+BAND_LABEL_FIXED = (
+    "observed-leader group · descriptive · 95% interval of difference "
+    "covers 0 · leader selected from the same data")
 for where, t in hay.items():
+    t = t.replace(BAND_LABEL_FIXED, " ")
     for entry in BANNED + RECORD_BANNED + SITE_BANNED:
         for phrase, ex in banned_hits(entry, t):
             hits.append("%s: banned phrase %r (%s…)" % (where, phrase, ex))
@@ -338,6 +344,15 @@ for entry in CONDITIONAL:
                 and not re.search(pat, s, re.I):
             bad.append("%s: %r outside its allowed form — %r"
                        % (where, phrase, s[:90]))
+# REQ-XF-111: wherever the observed-leader band renders it carries the
+# fixed label byte-for-byte (a dropped or altered word fails this leg).
+LEADER_BAND_LABEL = (
+    "observed-leader group · descriptive · 95% interval of difference "
+    "covers 0 · leader selected from the same data")
+for rel, h in htmls.items():
+    if 'class="floor-band"' in h and LEADER_BAND_LABEL not in texts[rel]:
+        bad.append("%s: observed-leader band without its fixed label"
+                   % rel)
 if bad:
     for b in bad[:8]:
         fail("conditional", b)
@@ -924,13 +939,22 @@ for name, b in committed.items():
 for rel, b in tree.items():
     if rel.endswith((".html", ".css", ".js", ".json", ".txt", ".svg")):
         scan["site:" + rel] = b.decode("utf-8", errors="replace")
+# Fixture labels are legal only on the declared fixture pages in the
+# internal profile (R6.20; REQ-XF-142 refuses them anywhere else and in
+# every public-profile surface). Preview markers are never legal.
+FIXTURE_PAGES = (("site:phase-2/fp/index.html",
+                  "site:phase-2/fp/frontier/index.html")
+                 if profile == "internal" else ())
 for where, t in scan.items():
     hit = values.hygiene_scan(t)
     if hit:
         bad.append("%s: local/host path %r" % (where, hit))
     for m in re.finditer(
-            r"fixture ·|fixture-labelled|mock preview|internal preview|"
-            r"INTERNAL PREVIEW", t):
+            r"mock preview|internal preview|INTERNAL PREVIEW", t):
+        bad.append("%s: preview marker %r" % (where, m.group(0)))
+    if where in FIXTURE_PAGES:
+        continue
+    for m in re.finditer(r"fixture ·|fixture-labelled", t):
         bad.append("%s: fixture/preview marker %r" % (where, m.group(0)))
     for pat in SECRET_RES:
         if re.search(pat, t):

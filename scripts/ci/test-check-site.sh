@@ -82,9 +82,10 @@ open(p, "w").write(json.dumps(d) + "\n")
 PY
 expect_leg "intervals" "(a) interval dropped" "$D"
 
-# (b) a rank in the leader band — ranks
+# (b) a rank in the leader band — ranks (R6.20: seeded on the
+# leaderboard fixture's band label)
 D=$(seed mut-b)
-mutate "$D/scripts/site/hhsite/sitepages.py" 's|tb oracle vs a reference podman runner|#1 · tb oracle vs a reference podman runner|'
+mutate "$D/scripts/site/hhsite/sitepages.py" 's|("observed-leader group|("#1 observed-leader group|'
 expect_leg "ranks" "(b) ordinal in leader band" "$D"
 
 # (c) phase 2 Available with no packet — availability
