@@ -141,7 +141,8 @@ pub fn schema(detail: impl Into<String>) -> ContinuationError {
 }
 
 /// `check_cost_only(j)` — the firewall scan: any member named in
-/// [`OUTCOME_FIELDS`] at any nesting level refuses [`OutcomeField`].
+/// [`OUTCOME_FIELDS`] at any nesting level refuses
+/// [`ContinuationError::OutcomeField`].
 /// Also refuses a `disposition`-shaped member whose value opens an
 /// `executed{…}` outcome member — `inconclusive{infra:*}` is an infra
 /// field and passes (REQ-XH-121's carve-out).
@@ -427,7 +428,8 @@ impl Scope {
 
 /// The cost-only continuation input — strict decode of
 /// `hh-fp-continuation-input/1`. The firewall scan runs first: an
-/// outcome member refuses [`OutcomeField`] before any shape check.
+/// outcome member refuses [`ContinuationError::OutcomeField`] before
+/// any shape check.
 #[derive(Debug, Clone)]
 pub struct ContinuationInput {
     /// The decision scope.
@@ -966,9 +968,8 @@ pub fn p99_report(
     let mut samples: Vec<i64> = Vec::new();
     for rows in measured.values() {
         for t in rows {
-            match (t.queue_wait_ms, t.latency_ms) {
-                (Some(q), Some(l)) => samples.push(q + l),
-                _ => {}
+            if let (Some(q), Some(l)) = (t.queue_wait_ms, t.latency_ms) {
+                samples.push(q + l);
             }
         }
     }

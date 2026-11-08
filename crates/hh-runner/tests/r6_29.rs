@@ -526,7 +526,7 @@ fn ac4_pair_atomic_window_deadline() {
     }
     // A withheld set covering one side refuses pair closure.
     let half: BTreeMap<String, ()> = BTreeMap::from([("pair7-o".to_string(), ())]);
-    assert!(continuation::check_pair_closure(&half, &[pair.clone()]).is_err());
+    assert!(continuation::check_pair_closure(&half, std::slice::from_ref(&pair)).is_err());
     let whole: BTreeMap<String, ()> =
         BTreeMap::from([("pair7-o".to_string(), ()), ("pair7-h".to_string(), ())]);
     assert!(continuation::check_pair_closure(&whole, &[pair]).is_ok());
