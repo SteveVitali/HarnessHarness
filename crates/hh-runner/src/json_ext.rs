@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use hharness_wire::json::Json;
 
 /// Object/array/bool views over `Json`.
-pub(crate) trait JsonExt {
+pub trait JsonExt {
     /// The `Obj` map view.
     fn as_obj(&self) -> Option<&BTreeMap<String, Json>>;
     /// The `Arr` view.

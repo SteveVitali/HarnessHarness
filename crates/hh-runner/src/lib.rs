@@ -21,8 +21,10 @@
 //! only downward and adds no edge into hh-embed, hh-cli or hharness-hosting
 //! (REQ-XB-103).
 
-pub(crate) mod json_ext;
+pub mod json_ext;
 
+pub mod admission;
+pub mod admission_build;
 pub mod cell;
 pub mod condenser;
 pub mod coordinator;

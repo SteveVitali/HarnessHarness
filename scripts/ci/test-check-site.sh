@@ -303,6 +303,11 @@ PY
 expect ok "--head ignores working-tree dirt" --head "$D"
 expect_leg "lexicon" "working-tree mode sees the dirt" "$D"
 
+# (w) a third-party logo mark without a recorded permission — logos
+D=$(seed mut-w)
+mutate "$D/scripts/site/hhsite/sitepages.py" 's|keeps its receipts.</h1>|keeps its receipts.</h1><img src="claude-logo.png" alt="vendor logo">|'
+expect_leg "logos" "(w) third-party logo mark" "$D"
+
 # usage / malformed input exits 2
 out=$(bash "$CHK" --bogus "$D" 2>&1) && bad "usage: --bogus accepted" \
   || { [ $? -eq 2 ] && say "ok  usage exit 2" || bad "usage exit != 2: $out"; }

@@ -1,0 +1,125 @@
+{
+  "schema": "hh-harness-admission/1",
+  "admission_timing": "outcome_blind",
+  "harness": {
+    "name": "mini-swe-agent",
+    "role": "reference",
+    "harbor_agent": "mini-swe-agent",
+    "version": "2.4.6",
+    "version_source": "pypi",
+    "freeze_at": "2026-11-08T00:00:00Z",
+    "legal": {
+      "posture": "open",
+      "license_spdx": "MIT",
+      "branding": "name_only"
+    }
+  },
+  "install": {
+    "recipe_ref": {
+      "derived_from": {
+        "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013",
+        "adapter": "mini_swe_agent",
+        "member": "install()",
+        "attribution": "Harbor install templates (Apache-2.0)"
+      },
+      "deviations": [
+        {
+          "what": "litellm pinned at 1.103.5",
+          "why": "Harbor installs litellm[mcp] unpinned; a later resolution broke the agent's first call"
+        },
+        {
+          "what": "UV_EXCLUDE_NEWER resolution cutoff at freeze_at",
+          "why": "exact lock per REQ-XD-081"
+        }
+      ]
+    },
+    "bundle": {
+      "digest": "sha256:148756af1a888a5ad57b3b9b28f27443f47bc6b53137dbc8ee6d269db4fa6115",
+      "builder_base": "docker.io/library/debian@sha256:4864455f8be6a549425df071d539eb2f261d1ae03046196639203c52bd00fe10",
+      "resolved_manifest_ref": "sha256:2b02118285f06849512ca2a3e3d9d8cdc5b07a1eb52856948b2e90be03796ee7",
+      "build_log_ref": "sha256:609d5910010f99d433024dbd96969e3f2eb0dec54f6dbf95aba063d952c25566",
+      "built_at": "pending:W1"
+    },
+    "system_deps": {
+      "set": ["curl", "git", "ca-certificates"],
+      "per_image_delta_ref": "sha256:d43a4756c30b9af4364ba84d85a31aaa6971f6bd75f28ca0a30013bfc68c8d2e"
+    },
+    "layers": {
+      "docker.io/alexgshaw/task-base-a@sha256:37bbbbed5fd87cbc8c1b2084b1c48b52170cfe0d9d0ac70f0ebe26ef3d835c9b": "hh-admit/mini-swe-agent-2.4.6@sha256:4538051c1b972bd7c7ca680818488a5e655a041150b228762d3eff661303ecb1",
+      "docker.io/alexgshaw/task-base-b@sha256:b977da3c7aa32912c9718c37e6bc5830f89543921c9427bdaf3f6c8397210114": "hh-admit/mini-swe-agent-2.4.6@sha256:4141761ede11bb962722314c9f9032746614df3520fa23f4b004db2620bd00cf"
+    },
+    "install_tree_paths": ["/opt/hh-harness/mini-swe-agent-2.4.6"],
+    "version_probe": ["/opt/hh-harness/mini-swe-agent-2.4.6/bin/mini-swe-agent", "--version"]
+  },
+  "runtime": {
+    "python": {"version": "3.12.8"},
+    "litellm": {"version": "1.103.5"}
+  },
+  "config": {
+    "renderer_id": "adpt.mini_swe_agent",
+    "renderer_version": "1",
+    "template_hash": "sha256:b601207d9ed976ae52e41c4acf69af2c1c3537068e7b78c91928ecb8077cc61f",
+    "effort": {"mechanism": "model_kwargs.reasoning_effort", "value": "high"},
+    "limits_ref": "q-x29:harbor-in-agent-defaults",
+    "disable_switches": [
+      {"switch": "LITELLM_LOCAL_MODEL_COST_MAP=True", "purpose": "remote cost-map fetch off (hidden parity variable)"},
+      {"switch": "MSWEA_CONFIGURED=true", "purpose": "no interactive configure"},
+      {"switch": "MSWEA_COST_TRACKING=ignore_errors", "purpose": "no cost fetch"}
+    ],
+    "instruction_passing": "argv",
+    "model_selector": "openai/glm-5.3-flash",
+    "surface": "openai.chat",
+    "base_url_suffix": "/v1",
+    "rendered_paths": ["/opt/hh-harness/mini-swe-agent-2.4.6/.hh-config.json"]
+  },
+  "egress": {
+    "expected_denied": [
+      {"host_or_pattern": "pypi.org", "purpose": "package index — build-time only; denied at run"},
+      {"host_or_pattern": "*.litellm.ai", "purpose": "cost-map and telemetry fetch"}
+    ],
+    "must_reach": ["model_relay"]
+  },
+  "client": {
+    "model_timeout_s": 3600,
+    "retry_policy": "litellm default (unverified)",
+    "streaming": false,
+    "tolerates": {"heartbeat": "unknown", "payment_refusal": "unknown", "rate_limit": "unknown"}
+  },
+  "completion": {
+    "detector": "process_exit",
+    "native_status_parser": "mini-swe-agent exit status"
+  },
+  "artifacts": {
+    "native_paths": ["/logs/agent/mini-swe-agent.trajectory.json", "/logs/agent/mini-swe-agent.txt"],
+    "atif": {"converter_at": "ff2a1ef48070a8df374669138e4d4db79b77f013"}
+  },
+  "gates": {
+    "AG1": {"result": "pass", "evidence_ref": "legal:spdx-MIT"},
+    "AG2": {"result": "pass", "evidence_ref": "adapter:api_base+model_kwargs"},
+    "AG3": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG4": {"result": "pass", "evidence_ref": "install:uv-tool+exclude-newer"},
+    "AG5": {"result": "pass", "evidence_ref": "egress:expected_denied+pending:W1-smoke"},
+    "AG6": {"result": "pass", "evidence_ref": "proxy:receipts-only+pending:W1-smoke"},
+    "AG7": {"result": "pass", "evidence_ref": "config:template_hash+effort-pin"},
+    "AG8": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG9": {"result": "pass", "evidence": {"harbor_adapter": "mini-swe-agent", "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013", "same_image": true}}
+  },
+  "posture": {
+    "placement": "in_environment",
+    "residuals": ["side_channel{model_route_reachable_from_agent_tools}"]
+  },
+  "attributes": {
+    "a1_wire_format": "openai.chat; native tool calls",
+    "a2_cached_share": "unmeasured",
+    "a3_trajectory": "own trajectory.json → ATIF converter",
+    "a4_install": "uv tool install + litellm pin",
+    "a5_known_issues": "litellm[mcp] unpinned break — pinned at admission",
+    "a6_priors": "HF board prior, labelled non-replication",
+    "a7_maintenance": "active (operator-named reference)"
+  },
+  "verification": {
+    "class": "fixture-verified",
+    "unverified_until": "W1",
+    "members": ["bundle.digest", "layers", "config.template_hash", "gates.AG3", "gates.AG5", "gates.AG6", "gates.AG8"]
+  }
+}
