@@ -33,6 +33,10 @@ hharness-env = { path = "../hh-env", version = "0.1.0" }
 hharness-helper = { path = "../hh-helper", version = "0.1.0" }
 hharness-secrets = { path = "../hh-secrets", version = "0.1.0" }
 hharness-experiment = { path = "../hh-experiment", version = "0.1.0" }
+# R6.26: the runner check consumes R6.12's canonicalizer + match
+# machinery (CC1 — never a second JSON scheme); no hh-embed/cli/hosting
+# edge (REQ-XB-103 — scripts/check-runner-edges.sh).
+hharness-gateway = { path = "../hh-gateway", version = "0.1.0" }
 
 [dev-dependencies]
 hharness-containment = { path = "../hh-containment" }

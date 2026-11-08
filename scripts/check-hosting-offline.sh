@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-FILES="crates/hh-runner/tests/r6_25.rs"
+FILES="crates/hh-runner/tests/r6_25.rs crates/hh-runner/tests/r6_26.rs"
 
 scan() {
     local f="$1" fail=0

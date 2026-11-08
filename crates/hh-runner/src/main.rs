@@ -24,7 +24,7 @@ fn arg(args: &[String], name: &str) -> Option<String> {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage:\n  hh-runner coordinator --packet <drive.json> --experiment-root <dir> --slots-dir <dir> --packet-dir <dir>\n  hh-runner slot-worker --packet <slot.json>\n  hh-runner store-probe --root <dir> --mode <read|write> [--run <id>] [--writer-ms <n>] [--appends <n>]"
+        "usage:\n  hh-runner coordinator --packet <drive.json> --experiment-root <dir> --slots-dir <dir> --packet-dir <dir>\n  hh-runner slot-worker --packet <slot.json>\n  hh-runner store-probe --root <dir> --mode <read|write> [--run <id>] [--writer-ms <n>] [--appends <n>]\n  hh-runner corpus-precondition --ps0-stage <record.json> --pp0-evidence <dir>"
     );
     ExitCode::from(2)
 }
@@ -189,6 +189,32 @@ fn store_probe(args: &[String]) -> Result<String, String> {
     }
 }
 
+/// `corpus-precondition` — the §10.1.4 W2(b) corpus start condition:
+/// a passed `hh-ps0-stage/1` plus original mini-swe-agent's
+/// `hh-pp0-ag-evidence/1` rows passing AG3/AG5/AG6/AG8. Machinery
+/// evidence only — reads no verdict field. The `corpus` live-verify
+/// leg calls this before the W2 corpus may start (R6.26; R6.40 fleshes
+/// the window).
+fn corpus_precondition(args: &[String]) -> Result<String, String> {
+    let stage_path = arg(args, "--ps0-stage").ok_or("missing --ps0-stage")?;
+    let ev_dir = arg(args, "--pp0-evidence").ok_or("missing --pp0-evidence")?;
+    let stage =
+        read_json(&stage_path).map_err(|e| format!("corpus_precondition:ps0_not_passed: {e}"))?;
+    let mut evidence = Vec::new();
+    let rd = std::fs::read_dir(&ev_dir)
+        .map_err(|e| format!("corpus_precondition:pp0_evidence_absent: {e}"))?;
+    for e in rd.flatten() {
+        if e.path().extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        let p = e.path();
+        evidence.push(read_json(&p.to_string_lossy())?);
+    }
+    hharness_runner::ps0::check_corpus_precondition(&stage, &evidence)
+        .map_err(|r| r.to_string())?;
+    Ok(Json::obj([("result", Json::str("pass"))]).to_canonical_string())
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(cmd) = args.first() else {
@@ -199,6 +225,7 @@ fn main() -> ExitCode {
         "coordinator" => coordinator(rest),
         "slot-worker" => slot_worker(rest),
         "store-probe" => store_probe(rest),
+        "corpus-precondition" => corpus_precondition(rest),
         _ => return usage(),
     };
     match out {
