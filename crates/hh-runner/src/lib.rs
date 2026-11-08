@@ -25,6 +25,7 @@ pub mod json_ext;
 
 pub mod admission;
 pub mod admission_build;
+pub mod answer_scan;
 pub mod archive_upload;
 pub mod capture;
 pub mod carried;

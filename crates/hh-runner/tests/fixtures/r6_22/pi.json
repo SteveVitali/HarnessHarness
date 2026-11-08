@@ -91,7 +91,7 @@
   "expected_denied": [
    {
     "host_or_pattern": "registry.npmjs.org",
-    "purpose": "package index — build-time only; denied at run"
+    "purpose": "package index \u2014 build-time only; denied at run"
    }
   ],
   "must_reach": [
@@ -178,7 +178,7 @@
  "attributes": {
   "a1_wire_format": "openai.chat; 4-tool minimal design",
   "a2_cached_share": "unmeasured",
-  "a3_trajectory": "session jsonl → trajectory.json",
+  "a3_trajectory": "session jsonl \u2192 trajectory.json",
   "a4_install": "npm install -g --ignore-scripts + nvm node",
   "a5_known_issues": "leading-dash instruction exits (declared hazard)",
   "a6_priors": "HF board prior, labelled non-replication",
@@ -196,6 +196,14 @@
    "gates.AG6",
    "gates.AG8",
    "harness.version"
+  ]
+ },
+ "request_fingerprint": {
+  "user_agent": "pi-ai/0.38.2",
+  "header_names": [
+   "authorization",
+   "content-type",
+   "user-agent"
   ]
  }
 }

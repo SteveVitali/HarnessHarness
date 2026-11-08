@@ -36,6 +36,7 @@ pub mod accounting;
 pub mod benefits;
 pub mod catalogue;
 pub mod central_protocol;
+pub mod comparative_battery;
 pub mod comparative_estimators;
 pub mod comparative_protocol;
 pub mod comparative_quote;

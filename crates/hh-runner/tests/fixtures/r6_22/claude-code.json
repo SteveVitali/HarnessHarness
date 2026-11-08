@@ -94,11 +94,11 @@
    },
    {
     "switch": "ANTHROPIC_API_KEY=",
-    "purpose": "no API key — the slot token is the only credential"
+    "purpose": "no API key \u2014 the slot token is the only credential"
    },
    {
     "switch": "CLAUDE_CODE_OAUTH_TOKEN=",
-    "purpose": "no OAuth — no Claude account (Q-X26 term 2)"
+    "purpose": "no OAuth \u2014 no Claude account (Q-X26 term 2)"
    },
    {
     "switch": "IS_SANDBOX=1",
@@ -118,7 +118,7 @@
   "expected_denied": [
    {
     "host_or_pattern": "api.anthropic.com",
-    "purpose": "vendor model host — all Anthropic hosts denied and counted (REQ-XC-327)"
+    "purpose": "vendor model host \u2014 all Anthropic hosts denied and counted (REQ-XC-327)"
    },
    {
     "host_or_pattern": "statsig.anthropic.com",
@@ -214,7 +214,7 @@
   "a2_cached_share": "presumed absent for planning (C1 F3)",
   "a3_trajectory": "session jsonl",
   "a4_install": "npm package pinned; unmodified binary",
-  "a5_known_issues": "count_tokens route refused by proxy — estimate fallback (§5.4)",
+  "a5_known_issues": "count_tokens route refused by proxy \u2014 estimate fallback (\u00a75.4)",
   "a6_priors": "HF board prior, labelled non-replication",
   "a7_maintenance": "vendor-maintained, closed"
  },
@@ -231,6 +231,14 @@
    "gates.AG8",
    "harness.version",
    "legal.qx26.binary_sha256"
+  ]
+ },
+ "request_fingerprint": {
+  "user_agent": "claude-cli/2.1.50 (external, cli)",
+  "header_names": [
+   "authorization",
+   "content-type",
+   "user-agent"
   ]
  }
 }
