@@ -486,6 +486,12 @@ impl ExperimentSlot {
                 .as_obj()
                 .ok_or_else(|| err("identity.infrastructure must be an object"))?;
             for (k, v) in im {
+                // `set_digest` (R6.23/REQ-XC-330) — the one carried
+                // infrastructure-set digest beside the per-binary rows.
+                if k == "set_digest" {
+                    str_member(im, "set_digest")?;
+                    continue;
+                }
                 if ![
                     "runner",
                     "helper",
@@ -507,6 +513,47 @@ impl ExperimentSlot {
                 )?;
                 str_member(vm, "binary_sha256")?;
             }
+        }
+        // `identity.h_set` (REQ-XC-330; R6.23) — the H-set digest frozen
+        // at G-L1, required on HH-native and V5 slots; strictly
+        // member-checked when present.
+        if let Some(hj) = id.get("h_set") {
+            let hm = hj
+                .as_obj()
+                .ok_or_else(|| err("identity.h_set must be an object"))?;
+            for (k, v) in hm {
+                if ![
+                    "digest",
+                    "frozen_at",
+                    "hh_kernel",
+                    "hir",
+                    "compiled_artifacts",
+                ]
+                .contains(&k.as_str())
+                {
+                    return Err(err(format!("identity.h_set: unknown member {k}")));
+                }
+                if k != "digest" && k != "frozen_at" {
+                    let vm = v
+                        .as_obj()
+                        .ok_or_else(|| err(format!("identity.h_set.{k} must be an object")))?;
+                    no_unknown(vm, &["sha256"], "identity.h_set.*")?;
+                    str_member(vm, "sha256")?;
+                }
+            }
+            for k in [
+                "digest",
+                "frozen_at",
+                "hh_kernel",
+                "hir",
+                "compiled_artifacts",
+            ] {
+                if !hm.contains_key(k) {
+                    return Err(err(format!("identity.h_set.{k} required")));
+                }
+            }
+            str_member(hm, "digest")?;
+            str_member(hm, "frozen_at")?;
         }
         // `identity.harbor` (REQ-XH-014; AR-04/R6.17) — the program-wide
         // Harbor pin when the slot serves the O surface; strictly

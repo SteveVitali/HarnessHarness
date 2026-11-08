@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -233,6 +233,14 @@ leg_field() { # $1 leg, $2 field
     admission-build:provider) printf 'none';;
     admission-build:kind)     printf 'script';;
     admission-build:names)    printf '';;
+    carried-artifacts:ticket) printf 'R6.32/R6.44/R6.47';;
+    carried-artifacts:provider) printf 'none';;
+    carried-artifacts:kind)   printf 'script';;
+    carried-artifacts:names)  printf '';;
+    archive-upload:ticket)    printf 'R6.40/R6.44/R6.45/R6.47';;
+    archive-upload:provider)  printf 'none';;
+    archive-upload:kind)      printf 'script';;
+    archive-upload:names)     printf '';;
     reproof:ticket)   printf 'R6.32';;
     reproof:provider) printf 'pinned-harbor';;
     reproof:kind)     printf 'script';;
@@ -1510,6 +1518,16 @@ run_leg_plugin_tracker_fixture() { run_leg_plugin_oop "plugin-tracker-fixture"; 
 run_leg_admission_build() {
   ASSERTIONS="the \$0 admission build (podman build bundle + layer per first-pass harness, --iidfile digest capture, package-delta manifest): registered by R6.22, executed in W1 by R6.32 — until then every packet labels recorded execution"
   RESULT="skipped(executes-in-W1-under-R6.32)"
+}
+
+run_leg_carried_artifacts() {
+  ASSERTIONS="the REQ-XC-330 carried artifacts (binary-set build, podman save export, IAP scp load, image-id verify): registered by R6.23, executed in W1/W3/W4 under R6.32/R6.44/R6.47 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W1-W4-under-R6.32-44-47)"
+}
+
+run_leg_archive_upload() {
+  ASSERTIONS="the §4.10 per-window archive upload (hf upload to the private dataset, read-back archive_verified): registered by R6.23, executed per window by R6.40/44/45/47 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-per-window-under-R6.40-47)"
 }
 
 run_leg_reproof() {

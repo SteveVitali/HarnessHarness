@@ -226,3 +226,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0434](ADR-0434-r6.18-protocol-support-gate.md) | The comparative-protocol support gate for stochastic hosted participants (AR-12) | R6.18 (SELECT + D1-a) | accepted (lands with manifest 271/R6.18) |
 | [ADR-0435](ADR-0435-r6.18-experiments-envelope-quote-ceilings.md) | Experiments envelopes and quote ceilings (AR-13) | R6.18 (SELECT + D1-a) | accepted (lands with manifest 271/R6.18) |
 | [ADR-0436](ADR-0436-r6.22-harness-admission.md) | Harness admission record, two-stage build, ST2 verify-only (AR-18) | R6.22 (ADMIT-CORE (a)+(b)) | accepted (lands with manifest 275/R6.22) |
+| [ADR-0437](ADR-0437-r6.23-carried-artifacts-upload-kit.md) | REQ-XC-330 carried artifacts and the AR-20 upload kit (`hf` admission, scan, read-back, remediation) — R6.23 | R6.23 (manifest 276) | Accepted |
