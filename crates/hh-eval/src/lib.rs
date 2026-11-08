@@ -8,6 +8,8 @@
 //!   clustered-CLT, paired bootstrap, Bayesian-beta, pass^k/pass@k);
 //! - [`runs`]/[`facts`] — the canonical `EvalRun` view and the ledger →
 //!   facts projection;
+//! - [`task_selection`] — the `task-selection/1` materializer (seeded
+//!   declared-field split/draw, TB 2.1 pin, outcome refusals; R6.18);
 //! - [`vetoes`], [`compliance`], [`opacity`], [`faults`] — the metric
 //!   families over facts;
 //! - [`mod@compare`]/[`benefits`]/[`scorecard`] — `compare`, the three benefit
@@ -50,6 +52,7 @@ pub mod selection;
 pub mod sim_battery;
 pub mod stats;
 pub mod task_mixture;
+pub mod task_selection;
 pub mod vetoes;
 
 pub use benefits::{
