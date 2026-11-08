@@ -9,11 +9,9 @@ use hharness_runner::receipt_index::{validate_index, RECEIPT_INDEX_SCHEMA};
 use hharness_wire::json::{parse, Json};
 
 fn fixture() -> Json {
-    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-        "../../scripts/site/fixtures/phase2-receipt-index.json",
-    );
-    parse(&std::fs::read_to_string(p).expect("fixture readable"))
-        .expect("fixture parses")
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/site/fixtures/phase2-receipt-index.json");
+    parse(&std::fs::read_to_string(p).expect("fixture readable")).expect("fixture parses")
 }
 
 #[test]
@@ -50,10 +48,9 @@ fn receipt_index_fixture_validates_private() {
             _ => panic!("attempt is an object"),
         };
         assert!(
-            files.iter().any(|f| f
-                .get("role")
-                .and_then(Json::as_str)
-                == Some("transcript")),
+            files
+                .iter()
+                .any(|f| f.get("role").and_then(Json::as_str) == Some("transcript")),
             "every attempt indexes its transcript"
         );
     }
