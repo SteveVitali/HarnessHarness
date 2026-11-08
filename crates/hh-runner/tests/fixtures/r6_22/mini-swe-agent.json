@@ -58,7 +58,7 @@
   "config": {
     "renderer_id": "adpt.mini_swe_agent",
     "renderer_version": "1",
-    "template_hash": "sha256:b601207d9ed976ae52e41c4acf69af2c1c3537068e7b78c91928ecb8077cc61f",
+    "template_hash": "sha256:949efd2c0749641b41c140bfc35d449b1ad19d680c29e070aa8e3c29926162cb",
     "effort": {"mechanism": "model_kwargs.reasoning_effort", "value": "high"},
     "limits_ref": "q-x29:harbor-in-agent-defaults",
     "disable_switches": [

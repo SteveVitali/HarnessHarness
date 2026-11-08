@@ -56,7 +56,7 @@
   "config": {
     "renderer_id": "adpt.pi",
     "renderer_version": "1",
-    "template_hash": "sha256:a7afe442bf999511196aff5f60f24b162301e0034287056a878cebe729dd026f",
+    "template_hash": "sha256:7775f082ca457d570e7386f2d7bec3e9702ea747926b721f659714d103f2eaf8",
     "effort": {"mechanism": "--thinking", "value": "high"},
     "limits_ref": "q-x29:harbor-in-agent-defaults",
     "disable_switches": [
