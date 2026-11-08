@@ -103,7 +103,7 @@
   "expected_denied": [
    {
     "host_or_pattern": "pypi.org",
-    "purpose": "package index — build-time only; denied at run"
+    "purpose": "package index \u2014 build-time only; denied at run"
    },
    {
     "host_or_pattern": "*.litellm.ai",
@@ -195,9 +195,9 @@
  "attributes": {
   "a1_wire_format": "openai.chat; native tool calls",
   "a2_cached_share": "unmeasured",
-  "a3_trajectory": "own trajectory.json → ATIF converter",
+  "a3_trajectory": "own trajectory.json \u2192 ATIF converter",
   "a4_install": "uv tool install + litellm pin",
-  "a5_known_issues": "litellm[mcp] unpinned break — pinned at admission",
+  "a5_known_issues": "litellm[mcp] unpinned break \u2014 pinned at admission",
   "a6_priors": "HF board prior, labelled non-replication",
   "a7_maintenance": "active (operator-named reference)"
  },
@@ -212,6 +212,14 @@
    "gates.AG5",
    "gates.AG6",
    "gates.AG8"
+  ]
+ },
+ "request_fingerprint": {
+  "user_agent": "litellm/1.103.5",
+  "header_names": [
+   "authorization",
+   "content-type",
+   "user-agent"
   ]
  }
 }

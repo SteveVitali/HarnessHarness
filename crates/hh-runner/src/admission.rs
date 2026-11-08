@@ -357,6 +357,7 @@ pub fn validate(rec: &Json, ctx: &ValidationContext) -> Result<(), AdmissionErro
             "artifacts",
             "gates",
             "posture",
+            "request_fingerprint",
             "attributes",
             "verification",
         ],
@@ -845,6 +846,27 @@ pub fn validate(rec: &Json, ctx: &ValidationContext) -> Result<(), AdmissionErro
                 "posture_residual",
                 format!("an in_environment harness declares {SIDE_CHANNEL_MODEL_ROUTE}"),
             ));
+        }
+    }
+    // ── request fingerprint (REQ-XC-313) ────────────────────────────
+    let fp = obj(rec, "request_fingerprint")?;
+    no_unknown(fp, &["user_agent", "header_names"], "request_fingerprint")?;
+    if sfield(fp, "user_agent", "request_fingerprint")?.is_empty() {
+        return Err(err(
+            "member_missing",
+            "request_fingerprint.user_agent must be non-empty",
+        ));
+    }
+    match fp.get("header_names").and_then(Json::as_arr) {
+        Some(a)
+            if !a.is_empty()
+                && a.iter()
+                    .all(|x| x.as_str().map(|h| !h.is_empty()).unwrap_or(false)) => {}
+        _ => {
+            return Err(err(
+                "member_missing",
+                "request_fingerprint.header_names must be a non-empty string array",
+            ))
         }
     }
     // ── attributes A1–A7 ───────────────────────────────────────────────
