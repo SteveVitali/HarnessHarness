@@ -405,6 +405,95 @@ pub struct SkipInstall {
     pub layer_digest: String,
 }
 
+/// `ORoute` — the O-surface model route (REQ-XC-326, R6.26): one
+/// Harbor job per O slot, model calls only through the HH proxy via
+/// the host relay on the podman bridge gateway — never Ollama
+/// directly, and no key material in any Harbor environment (the slot
+/// token travels by env NAME only).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ORoute {
+    /// The host-relay base URL the job's model calls target
+    /// (`http://<bridge-gateway>:<port>/v1` — never an upstream host).
+    pub relay_base_url: String,
+    /// The env NAME carrying the per-slot token (value never in the
+    /// config — `provided: yes` in records, X-05).
+    pub api_key_name: String,
+    /// `openai.chat` | `anthropic.messages` (the `--api-format` spelling).
+    pub api_format: String,
+    /// The slot token's record ref (identity, never the value).
+    pub slot_token_ref: String,
+    /// The slot's proxy slice in µ$ (per-slot budget — one job per slot).
+    pub slice_micros: i64,
+}
+
+/// The upstream model hosts the O surface must never reach directly —
+/// a host matching any marker refuses (REQ-XC-326: only the HH proxy).
+pub const UPSTREAM_HOST_MARKERS: [&str; 7] = [
+    "ollama.com",
+    "api.ollama.com",
+    "api.openai.com",
+    "api.anthropic.com",
+    "openai.com",
+    "anthropic.com",
+    ":11434",
+];
+
+/// `sweep_no_upstream(j)` — every string leaf of the job config (and,
+/// via [`JobConfig::check_no_upstream`], its emitted argv): no upstream
+/// model host and no credential material — an env spelling
+/// `NAME=<nonempty>` on a `*_API_KEY`|`*_AUTH_TOKEN`|`*_SECRET` member
+/// flags unless the value is a `$NAME` reference or the elision
+/// tombstone; a bare `--api-key` flag or `api_key=<literal>` flags.
+pub fn sweep_no_upstream(j: &Json) -> Vec<String> {
+    fn looks_secret_name(n: &str) -> bool {
+        n.ends_with("_API_KEY") || n.ends_with("_AUTH_TOKEN") || n.ends_with("_SECRET")
+    }
+    fn name_shaped(v: &str) -> bool {
+        !v.is_empty()
+            && v.bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    }
+    let mut out = Vec::new();
+    let walk = |j: &Json, path: &str, out: &mut Vec<String>| {
+        let mut stack = vec![(j, path.to_string())];
+        while let Some((j, path)) = stack.pop() {
+            match j {
+                Json::Str(s) => {
+                    if UPSTREAM_HOST_MARKERS.iter().any(|m| s.contains(m)) {
+                        out.push(format!("{path}: upstream host marker in {s:?}"));
+                    }
+                    if s == "--api-key" || s == "--api-key=" || s.starts_with("api_key=") {
+                        out.push(format!("{path}: direct key flag {s:?}"));
+                    }
+                    if let Some((n, v)) = s.split_once('=') {
+                        if looks_secret_name(n)
+                            && !v.is_empty()
+                            && !v.starts_with('$')
+                            && !v.starts_with("<secret")
+                            && !name_shaped(v)
+                        {
+                            out.push(format!("{path}: key material in env {n}"));
+                        }
+                    }
+                }
+                Json::Arr(a) => {
+                    for (i, v) in a.iter().enumerate() {
+                        stack.push((v, format!("{path}.{i}")));
+                    }
+                }
+                Json::Obj(m) => {
+                    for (k, v) in m {
+                        stack.push((v, format!("{path}.{k}")));
+                    }
+                }
+                _ => {}
+            }
+        }
+    };
+    walk(j, "$", &mut out);
+    out
+}
+
 /// `hh-harbor-job-config/1` — the committed config the runner writes
 /// for each `harbor run`. `max_retries` is 0 by construction-class
 /// refusal (a nonzero value decodes, then refuses — the golden carries
@@ -435,8 +524,47 @@ pub struct JobConfig {
     /// The `skip_install` leg (REQ-XC-306) — present only at a pin
     /// containing the knob and only with the declared layer digest.
     pub skip_install: Option<SkipInstall>,
+    /// The O-surface model route (REQ-XC-326) — present on the
+    /// per-slot O jobs only; `None` on oracle/re-proof jobs.
+    pub o_route: Option<ORoute>,
     /// `--jobs-dir` — the scratch jobs root ingest walks.
     pub jobs_dir: String,
+}
+
+/// `check_o_route(o)` — the REQ-XC-326 route rules.
+fn check_o_route(o: &ORoute) -> Result<(), HarborError> {
+    if !crate::smoke::PROXIED_SURFACES.contains(&o.api_format.as_str()) {
+        return Err(err(format!(
+            "api_format {} outside the proxied surfaces",
+            o.api_format
+        )));
+    }
+    if o.slice_micros <= 0 {
+        return Err(err("slice_micros must be positive — per-slot slice"));
+    }
+    if o.api_key_name.is_empty()
+        || !o
+            .api_key_name
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    {
+        return Err(err(format!(
+            "api_key_name {:?} is not an env NAME — the token travels by name only",
+            o.api_key_name
+        )));
+    }
+    let u = &o.relay_base_url;
+    if !u.starts_with("http://") || u.contains('@') {
+        return Err(err(format!(
+            "relay_base_url {u:?} — http://host:port only, no userinfo"
+        )));
+    }
+    if UPSTREAM_HOST_MARKERS.iter().any(|m| u.contains(m)) {
+        return Err(err(format!(
+            "relay_base_url {u:?} carries an upstream host — O reaches the model only through the HH proxy"
+        )));
+    }
+    Ok(())
 }
 
 /// The external-write argv the program never emits (REQ-XB-123).
@@ -475,8 +603,42 @@ impl JobConfig {
             max_retries: 0,
             no_force_build: true,
             skip_install,
+            o_route: None,
             jobs_dir: jobs_dir.to_string(),
         })
+    }
+
+    /// `with_o_route(self, o)` — attach the REQ-XC-326 O-surface route:
+    /// one Harbor job per O slot, the slot's token channel and slice,
+    /// model calls through the host relay only. Refuses typed: the O
+    /// surface runs the same layer, so `skip_install` is required; the
+    /// relay URL must not carry an upstream host or credential
+    /// material; `api_key_name` is a NAME, never a value; `api_format`
+    /// is a proxied surface; the slice is positive.
+    pub fn with_o_route(mut self, o: ORoute) -> Result<JobConfig, HarborError> {
+        if self.skip_install.is_none() {
+            return Err(err(
+                "o_route requires skip_install — the O surface runs the same layer digest",
+            ));
+        }
+        check_o_route(&o)?;
+        self.o_route = Some(o);
+        Ok(self)
+    }
+
+    /// `check_no_upstream(&self)` — the REQ-XC-326 sweep over the
+    /// committed record and the emitted argv: no Ollama key or
+    /// upstream host anywhere.
+    pub fn check_no_upstream(&self) -> Result<(), HarborError> {
+        let mut hits = sweep_no_upstream(&self.to_json());
+        for a in self.to_argv("harbor")? {
+            hits.extend(sweep_no_upstream(&Json::str(a)));
+        }
+        if hits.is_empty() {
+            Ok(())
+        } else {
+            Err(err(format!("upstream sweep: {}", hits.join("; "))))
+        }
     }
 
     /// `check(cfg)` — the decode-time refusals (a hand-edited record
@@ -496,6 +658,14 @@ impl JobConfig {
         }
         if self.env != "podman" {
             return Err(err(format!("env {} refused — podman only", self.env)));
+        }
+        if let Some(o) = &self.o_route {
+            check_o_route(o)?;
+            if self.skip_install.is_none() {
+                return Err(err(
+                    "o_route without skip_install refused — same layer digest required",
+                ));
+            }
         }
         Ok(())
     }
@@ -551,6 +721,18 @@ impl JobConfig {
             argv.push("--ak".to_string());
             argv.push("skip_install=true".to_string());
         }
+        if let Some(o) = &self.o_route {
+            // design/34 §1.8 + B1 F12: the host-relay route as Harbor's
+            // own spellings — the slot token travels by env NAME only.
+            argv.extend([
+                "--base-url".to_string(),
+                o.relay_base_url.clone(),
+                "--api-key-name".to_string(),
+                o.api_key_name.clone(),
+                "--api-format".to_string(),
+                o.api_format.clone(),
+            ]);
+        }
         JobConfig::check_argv(&argv)?;
         Ok(argv)
     }
@@ -583,6 +765,18 @@ impl JobConfig {
                 ]),
             ));
         }
+        if let Some(o) = &self.o_route {
+            m.push((
+                "o_route",
+                Json::obj([
+                    ("relay_base_url", Json::str(&o.relay_base_url)),
+                    ("api_key_name", Json::str(&o.api_key_name)),
+                    ("api_format", Json::str(&o.api_format)),
+                    ("slot_token_ref", Json::str(&o.slot_token_ref)),
+                    ("slice_micros", Json::Int(o.slice_micros)),
+                ]),
+            ));
+        }
         Json::obj(m)
     }
 
@@ -604,6 +798,7 @@ impl JobConfig {
                 "max_retries",
                 "no_force_build",
                 "skip_install",
+                "o_route",
                 "jobs_dir",
             ],
             "config",
@@ -657,6 +852,34 @@ impl JobConfig {
                 .and_then(Json::as_bool)
                 .ok_or_else(|| err("no_force_build must be a bool"))?,
             skip_install,
+            o_route: match m.get("o_route") {
+                None | Some(Json::Null) => None,
+                Some(oj) => {
+                    let om = oj
+                        .as_obj()
+                        .ok_or_else(|| err("o_route must be an object"))?;
+                    no_unknown(
+                        om,
+                        &[
+                            "relay_base_url",
+                            "api_key_name",
+                            "api_format",
+                            "slot_token_ref",
+                            "slice_micros",
+                        ],
+                        "o_route",
+                    )?;
+                    Some(ORoute {
+                        relay_base_url: need_str(om, "relay_base_url")?,
+                        api_key_name: need_str(om, "api_key_name")?,
+                        api_format: need_str(om, "api_format")?,
+                        slot_token_ref: need_str(om, "slot_token_ref")?,
+                        slice_micros: need(om, "slice_micros")?
+                            .as_int()
+                            .ok_or_else(|| err("o_route.slice_micros must be an integer"))?,
+                    })
+                }
+            },
             jobs_dir: need_str(m, "jobs_dir")?,
         };
         cfg.check()?;

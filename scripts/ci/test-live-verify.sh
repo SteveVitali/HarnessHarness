@@ -32,6 +32,16 @@ HH_SELFTEST_TOKEN=selftest-token-not-a-credential
 HH_PLANTED_API_KEY=$FAKE_SECRET
 HH_LOCAL_BASE_URL=http://127.0.0.1:9/unreachable
 HH_LOCAL_MODEL=never-served-model
+HH_PS0_BASE_URL=http://127.0.0.1:9/unreachable
+HH_PS0_SLOT_TOKEN=slot-token-ref-not-a-value
+HH_PP0_BASE_URL=http://127.0.0.1:9/unreachable
+HH_PP0_SLOT_TOKENS=slot-token-refs-not-values
+HH_CORPUS_BASE_URL=http://127.0.0.1:9/unreachable
+HH_CORPUS_SLOT_TOKEN=slot-token-ref-not-a-value
+HH_PS0_STAGE_RECORD=$T/ps0-stage.json
+HH_PP0_EVIDENCE_DIR=$T/pp0-evidence
+HH_W4_BASE_URL=http://127.0.0.1:9/unreachable
+HH_W4_SCHEDULE_REF=schedule-ref-not-a-value
 EOF
 printf 'UNRELATED=nothing\n' > "$T/empty.env"
 
@@ -152,6 +162,28 @@ EOF
 else
   skip "python3-absent"
 fi
+
+# ── 10. R6.26 legs (ps0/pp0/corpus/w4-main; REQ-XH-027 contribution) ──
+# Registered: --check-names accepts each; no pricing.json allocation is
+# written for the window tickets, so any non-zero --budget exits 3
+# (SPEND CAP) before any call; a missing required NAME exits 4.
+for leg in ps0 pp0 corpus w4-main; do
+  out=$(run bash "$LV" --check-names "$leg" 2>&1)
+  rc=$?
+  [ "$rc" -eq 0 ] || bad "--check-names $leg: exit $rc (leg not registered)"
+done
+check "ps0 over-allocation refuses (exit 3)" 3 \
+  run bash "$LV" ps0 --budget 0.01
+check "pp0 over-allocation refuses (exit 3)" 3 \
+  run bash "$LV" pp0 --budget 0.01
+check "corpus over-allocation refuses (exit 3)" 3 \
+  run bash "$LV" corpus --budget 0.01
+check "w4-main over-allocation refuses (exit 3)" 3 \
+  run bash "$LV" w4-main --budget 0.01
+check "ps0 missing NAME refuses (exit 4)" 4 \
+  env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" ps0 --budget 0
+check "w4-main missing NAME refuses (exit 4)" 4 \
+  env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" w4-main --budget 0
 
 [ "$fails" -eq 0 ] || { echo "test-live-verify: $fails failure(s)" >&2; exit 1; }
 echo "test-live-verify: OK"

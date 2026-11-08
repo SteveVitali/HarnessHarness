@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-main" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -245,6 +245,26 @@ leg_field() { # $1 leg, $2 field
     reproof:provider) printf 'pinned-harbor';;
     reproof:kind)     printf 'script';;
     reproof:names)    printf '';;
+    ps0:ticket)   printf 'R6.40';;
+    ps0:provider) printf 'hh-model-proxy';;
+    ps0:kind)     printf 'script';;
+    ps0:names)    printf 'HH_PS0_BASE_URL HH_PS0_SLOT_TOKEN';;
+    ps0:test)     printf 'hh-runner:r6_26:live_ps0_probe_driver';;
+    pp0:ticket)   printf 'R6.40';;
+    pp0:provider) printf 'hh-model-proxy';;
+    pp0:kind)     printf 'script';;
+    pp0:names)    printf 'HH_PP0_BASE_URL HH_PP0_SLOT_TOKENS';;
+    pp0:test)     printf 'hh-runner:r6_26:live_pp0_harness_smoke';;
+    corpus:ticket)   printf 'R6.40';;
+    corpus:provider) printf 'hh-model-proxy';;
+    corpus:kind)     printf 'script';;
+    corpus:names)    printf 'HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS0_STAGE_RECORD HH_PP0_EVIDENCE_DIR';;
+    corpus:test)     printf 'hh-runner:r6_26:live_corpus_record';;
+    w4-main:ticket)   printf 'R6.47';;
+    w4-main:provider) printf 'hh-model-proxy';;
+    w4-main:kind)     printf 'script';;
+    w4-main:names)    printf 'HH_W4_BASE_URL HH_W4_SCHEDULE_REF';;
+    w4-main:test)     printf 'hh-runner:r6_26:live_w4_main_rounds';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -259,7 +279,10 @@ all_names() {
   printf '%s\n' HH_LOCAL_BASE_URL HH_LOCAL_MODEL HH_LOCAL_EMBED_MODEL \
     OPENAI_API_KEY ANTHROPIC_API_KEY \
     HH_GITHUB_OAUTH_CLIENT_ID HH_GITHUB_SANDBOX_REPO \
-    HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_WEBHOOK_SECRET HH_SELFTEST_TOKEN | sort -u
+    HH_GITHUB_SANDBOX_TOKEN HH_GITHUB_WEBHOOK_SECRET HH_SELFTEST_TOKEN \
+    HH_PS0_BASE_URL HH_PS0_SLOT_TOKEN HH_PP0_BASE_URL HH_PP0_SLOT_TOKENS \
+    HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS0_STAGE_RECORD \
+    HH_PP0_EVIDENCE_DIR HH_W4_BASE_URL HH_W4_SCHEDULE_REF | sort -u
 }
 
 load_env() { # names only; unexported shell vars, never traced
@@ -1533,6 +1556,43 @@ run_leg_archive_upload() {
 run_leg_reproof() {
   ASSERTIONS="the \$0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor \`harbor run -r 0 --no-force-build\` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 — until then every packet labels recorded execution"
   RESULT="skipped(executes-in-W1-under-R6.32)"
+}
+
+# R6.26 (REQ-XH-027) — the W2/W4 live legs, registered so their
+# `hh-live-evidence/1` records may earn `live-executed`; each executes
+# only inside its window after that window's gate passes (FP-S → W2;
+# FP-E → W4) and is honestly `skipped(...)` until the owning skeleton
+# (R6.40 / R6.47) wires the driver here.
+run_leg_ps0() {
+  ASSERTIONS="the §6.6 PS0 dialect probe (≤ \$0.05 worst-case plan; one call per dialect + seed, tool_choice and cache_control probes; every call receipted on a slot token; hh-ps0-stage/1 with per-probe dispositions + measured cached share): registered by R6.26, executed in W2 under FP-S by R6.40 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W2-under-R6.40)"
+}
+
+run_leg_pp0() {
+  ASSERTIONS="the §6.6 PP0 harness smoke (3 development tasks × 1 × 3 hosted arms; AG3/AG5/AG6/AG8 admission evidence, never verdict success): registered by R6.26, executed in W2 by R6.40 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W2-under-R6.40)"
+}
+
+run_leg_corpus() {
+  ASSERTIONS="the W2(b) corpus start condition — PS0 passed + original mini-swe-agent PP0 AG3/AG5/AG6/AG8 passed (admission evidence, never verdict) — then the L1 RECORD corpus (original mini-swe-agent, 7 development tasks × 4): registered by R6.26, executed in W2 by R6.40 — until then every packet labels recorded execution"
+  # The §10.1.4 start condition is mechanical: refuse typed unless the
+  # PS0 stage record passed and every original-mini PP0 evidence row
+  # passes AG3/AG5/AG6/AG8 (reads no verdict field).
+  local bin="$REPO/target/debug/hh-runner" out
+  if [ -x "$bin" ] && [ -f "${HH_PS0_STAGE_RECORD:-}" ] && [ -d "${HH_PP0_EVIDENCE_DIR:-}" ]; then
+    if out=$("$bin" corpus-precondition --ps0-stage "$HH_PS0_STAGE_RECORD" --pp0-evidence "$HH_PP0_EVIDENCE_DIR" 2>&1); then
+      RESULT="skipped(executes-in-W2-under-R6.40)"
+    else
+      RESULT="skipped(corpus_precondition:${out%%$'\n'*})"
+    fi
+  else
+    RESULT="skipped(executes-in-W2-under-R6.40)"
+  fi
+}
+
+run_leg_w4_main() {
+  ASSERTIONS="the W4 main rounds (load + lane probe + rounds 1–5 of the seeded interleaved O/H schedule + checkpoint + teardown/harvest): registered by R6.26, executed in W4 under FP-E by R6.47 — until then every packet labels recorded execution"
+  RESULT="skipped(executes-in-W4-under-R6.47)"
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────
