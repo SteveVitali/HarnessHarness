@@ -132,7 +132,9 @@ impl std::fmt::Display for ContinuationError {
 }
 impl std::error::Error for ContinuationError {}
 
-fn schema(detail: impl Into<String>) -> ContinuationError {
+/// A schema refusal on strict decode — shared by the continuation
+/// and hold decoders.
+pub fn schema(detail: impl Into<String>) -> ContinuationError {
     ContinuationError::Schema {
         detail: detail.into(),
     }

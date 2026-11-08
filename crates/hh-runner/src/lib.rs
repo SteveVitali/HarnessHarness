@@ -37,6 +37,7 @@ pub mod diskwatch;
 pub mod disposition;
 pub mod facts;
 pub mod harbor;
+pub mod holds;
 pub mod l1_corpus;
 pub mod l1_drive;
 pub mod l1_gate;
