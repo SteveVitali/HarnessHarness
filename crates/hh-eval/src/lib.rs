@@ -8,6 +8,12 @@
 //!   clustered-CLT, paired bootstrap, Bayesian-beta, pass^k/pass@k);
 //! - [`runs`]/[`facts`] — the canonical `EvalRun` view and the ledger →
 //!   facts projection;
+//! - [`task_selection`] — the `task-selection/1` materializer (seeded
+//!   declared-field split/draw, TB 2.1 pin, outcome refusals; R6.18);
+//! - [`comparative_protocol`]/[`comparative_quote`] — the
+//!   `comparative_protocol/1` materializer and `comparative-quote/1`
+//!   artifact (H ≥ 2 arms, declared T and k, the schedule-randomization
+//!   record, the single phase-2–4 quote; R6.18);
 //! - [`vetoes`], [`compliance`], [`opacity`], [`faults`] — the metric
 //!   families over facts;
 //! - [`mod@compare`]/[`benefits`]/[`scorecard`] — `compare`, the three benefit
@@ -25,6 +31,8 @@ pub mod accounting;
 pub mod benefits;
 pub mod catalogue;
 pub mod central_protocol;
+pub mod comparative_protocol;
+pub mod comparative_quote;
 pub mod compare;
 pub mod compliance;
 pub mod context_metrics;
@@ -50,6 +58,7 @@ pub mod selection;
 pub mod sim_battery;
 pub mod stats;
 pub mod task_mixture;
+pub mod task_selection;
 pub mod vetoes;
 
 pub use benefits::{
