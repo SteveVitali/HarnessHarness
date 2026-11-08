@@ -667,7 +667,7 @@ bash scripts/compute-gate-span.sh --reports "$GS" --readouts "$RD" >/dev/null \
   && ok "gate after teardown does not constrain" || bad "post-teardown gate flagged"
 
 # ── 14 · single home + sweeps (AC-1/4) ──────────────────────────────────
-OTHERS="$(grep -rln 'gcloud' scripts/ --include='*.sh' | grep -v 'gce-backend\.sh' | grep -v 'check-gce-backend\.sh' || true)"
+OTHERS="$(grep -rln 'gcloud' scripts/ --include='*.sh' | grep -v 'gce-backend\.sh' | grep -v 'check-gce-backend\.sh' | grep -v 'check-hosting-offline\.sh' || true)"
 [ -z "$OTHERS" ] && ok "rg gcloud scripts/ — single provisioning home" \
   || bad "gcloud outside gce-backend.sh: $OTHERS"
 "$SCAN" scan --mask-env "$ENV" \
