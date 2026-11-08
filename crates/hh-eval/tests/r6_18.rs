@@ -25,7 +25,7 @@ fn canonical(sel: &hharness_eval::task_selection::TaskSelection) -> String {
 // ── fixtures ───────────────────────────────────────────────────────
 
 /// The faithful B1 census — the 87 eligible TB 2.1 tasks' declared
-/// fields from `docs/research/25_tb21-harbor.md` Appendix A at
+/// fields from the research/25 Harbor report's Appendix A at
 /// `12b75656` (task, `[agent].timeout_sec`, `[metadata].difficulty`,
 /// HF-saturation covariate). `qemu-startup`/`qemu-alpine-ssh` are the
 /// named `runner_infeasible` exclusions (REQ-XD-010), never census
