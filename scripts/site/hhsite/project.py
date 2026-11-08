@@ -115,8 +115,9 @@ def manifest(inputs, inputs_digest):
             "phase-4": "not_yet_available{publication pending}",
         },
         "site_files": ["changelog.json", "claims.json", "manifest.json",
-                       "method.json", "phase1.json", "spend.json",
-                       "tfp.json"],
+                       "method.json", "phase1.json", "pilot.json",
+                       "quote.json", "spend.json", "tfp.json",
+                       "trials-fp.json"],
     }
 
 
@@ -231,6 +232,84 @@ def phase1(inputs):
         derive.DERIVATIONS["D-4"]["counts"](
             repairs.resolve("/slots"), "disposition"))
 
+    # ── the /phase-1/tasks/ grid (R6.21; REQ-XF-131) ──────────────────
+    # 30 tasks × {tb O t3, reference runner H t3 (labelled "not HH" on
+    # the page), HH cells attempt-1 basis A, HH cells final fold basis B}.
+    # Verdict text is copied verbatim; the HH columns carry only packet
+    # flags (D-7 membership reads) — basis A's packet counts are the
+    # aggregate 14/16 and its per-task roster is not carried, so an
+    # unflagged attempt-1 cell is honestly "no per-task record".
+    d7 = derive.DERIVATIONS["D-7"]["member"]
+    disc_a = set(xcheck.resolve("/bases/A/discordant_tasks"))
+    disc_b = set(xcheck.resolve("/bases/B/discordant_tasks"))
+    o_stage = set(xcheck.resolve("/o_build_stage"))
+    conf_tasks = {c["task_id"] for c in xcheck.resolve("/confounds")}
+    repair_by_task = repairs.resolve("/repairs")
+    o_slots, h_slots = {}, {}
+    for n, s in enumerate(parity.resolve("/manifest/schedule")):
+        if not s.get("first"):
+            continue
+        key = s["task_id"]
+        if s["arm_id"].startswith("arm:o-"):
+            o_slots[key] = ("/manifest/schedule/%d/slot_ref" % n,
+                            s["slot_ref"])
+        else:
+            h_slots[key] = ("/manifest/schedule/%d/slot_ref" % n,
+                            s["slot_ref"])
+
+    def _xsrc(ptr):
+        return {"path": xcheck.path, "sha256": xcheck.sha256, "ptr": ptr}
+
+    grid = []
+    for n, pr in enumerate(parity.resolve("/pairs")):
+        tid = pr["task_id"]
+        b = "/pairs/%d" % n
+        rep = repair_by_task.get(tid)
+        a_mark, a_note = "unrostered", "no per-task record in the packet"
+        if tid in conf_tasks:
+            a_mark, a_note = "inconclusive", "inconclusive_with_receipt"
+        elif tid in disc_a:
+            a_mark, a_note = "discordant", "discordant{h_internal}"
+        if tid in conf_tasks:
+            b_mark = "inconclusive"
+        elif tid in disc_b:
+            b_mark = "discordant"
+        else:
+            b_mark = "agree"
+        cell = {
+            "task_id": _t(parity, "%s/task_id" % b),
+            "stratum": _t(parity, "%s/stratum" % b),
+            "o_verdict": _t(parity, "%s/o_verdict" % b),
+            "h_verdict": _t(parity, "%s/h_verdict" % b),
+            "hh_a": {
+                "mark": derived(
+                    "D-7", [_xsrc("/bases/A/discordant_tasks"),
+                            _xsrc("/confounds")], a_mark),
+                "note": a_note},
+            "hh_b": {
+                "mark": derived(
+                    "D-7", [_xsrc("/bases/B/discordant_tasks"),
+                            _xsrc("/confounds")], b_mark)},
+            "confound": derived("D-7", [_xsrc("/confounds")],
+                                tid in conf_tasks),
+            "o_build_stage": derived("D-7", [_xsrc("/o_build_stage")],
+                                     tid in o_stage),
+            "repair": ({"class": _t(repairs, "/repairs/%s/repair_class"
+                                  % tid)}
+                       if rep else absent(
+                           "not_computed", reason="no repair recorded")),
+            "trial": {
+                "slug": tid,
+                "o_slot": _t(parity, o_slots[tid][0])
+                if tid in o_slots else absent(
+                    "not_computed", reason="no first slot recorded"),
+                "h_slot": _t(parity, h_slots[tid][0])
+                if tid in h_slots else absent(
+                    "not_computed", reason="no first slot recorded"),
+            },
+        }
+        grid.append(cell)
+
     wall_raw, wall_src = field(repairs, "/costs/wall_ms")
     composite = _counts_tree(dev, "/composite")
 
@@ -281,6 +360,7 @@ def phase1(inputs):
                      "(TB-core 0.1.1, $0 oracle)",
         },
         "repairs_register": repairs_reg,
+        "tasks": grid,
         "tranche3": {
             "counts": {
                 "agree": t3count("agree"),
@@ -685,10 +765,95 @@ def _harness_row(pkt, hid):
     return row
 
 
+def _flip3(inp, ptr):
+    """One flip estimate {ppm, interval{kind, level_ppm, lo_ppm, hi_ppm}}
+    or its typed absent — verbatim with per-field pointers (R6.21)."""
+    raw, src = field(inp, ptr)
+    if isinstance(raw, dict) and raw.get("state"):
+        return _absent_of(raw)
+    return _iv3(inp, "ppm", raw["interval"]["kind"],
+                raw["interval"]["level_ppm"], "%s/ppm" % ptr,
+                "%s/interval/lo_ppm" % ptr, "%s/interval/hi_ppm" % ptr)
+
+
+def _flip_pairs(inp, ptr):
+    """swap_vs / harness_excess: an object of {other_arm: estimate}; each
+    member can be a typed absent or an interval-only pair."""
+    out = []
+    raw, _s = field(inp, ptr)
+    for other in sorted(raw):
+        e = raw[other]
+        if isinstance(e, dict) and e.get("state"):
+            out.append({"other": other, "estimate": _absent_of(e)})
+        elif "ppm" in e:
+            out.append({"other": other,
+                        "estimate": _flip3(inp, "%s/%s" % (ptr, other))})
+        else:
+            iv = e.get("interval", {})
+            if isinstance(iv, dict) and iv.get("state"):
+                out.append({"other": other,
+                            "estimate": _absent_of(iv)})
+            else:
+                out.append({"other": other, "estimate": _iv3(
+                    inp, "ppm", iv["kind"], iv["level_ppm"], None,
+                    "%s/%s/interval/lo_ppm" % (ptr, other),
+                    "%s/%s/interval/hi_ppm" % (ptr, other))})
+    return out
+
+
+def _noise_row(pkt, hid):
+    """One noise-page row: pass_at{k, all, any}, rerun flip, swap flips,
+    harness_excess — verbatim packet members (REQ-XF-112)."""
+    b = "/harnesses/%s" % hid
+    pa = pkt.resolve("%s/pass_at" % b)
+    row = {"id": hid, "k": _v(pkt, "%s/pass_at/k" % b, "count")}
+    for m in ("all_ppm", "any_ppm"):
+        e = pa.get(m)
+        if isinstance(e, dict) and e.get("state"):
+            row[m.split("_")[0]] = _absent_of(e)
+        else:
+            row[m.split("_")[0]] = _v(pkt, "%s/pass_at/%s" % (b, m), "ppm")
+    fl = "/harnesses/%s/flips" % hid
+    r = pkt.resolve("%s/rerun" % fl)
+    row["rerun"] = _absent_of(r) if isinstance(r, dict) and r.get("state") \
+        else _flip3(pkt, "%s/rerun" % fl)
+    row["swap_vs"] = _flip_pairs(pkt, "%s/swap_vs" % fl)
+    row["harness_excess"] = _flip_pairs(pkt, "%s/harness_excess" % fl)
+    return row
+
+
+def _grid_tasks(pkt):
+    """The per-task pip grid: task × arm cells carry the packet's own
+    pip spellings, discordance and repair flags and the trial slot id —
+    verbatim (REQ-XF-131; marks are packet flags, never computed)."""
+    out = []
+    for ti, t in enumerate(pkt.resolve("/tasks")):
+        cells = []
+        for arm in sorted(t["cells"]):
+            c = t["cells"][arm]
+            cells.append({
+                "arm": arm,
+                "slot": _t(pkt, "/tasks/%d/cells/%s/slot" % (ti, arm)),
+                "pips": [_t(pkt, "/tasks/%d/cells/%s/pips/%d"
+                              % (ti, arm, n))
+                         for n in range(len(c["pips"]))],
+                "discordant": _flag(pkt, "/tasks/%d/cells/%s/discordant"
+                                    % (ti, arm)),
+                "repaired": _flag(pkt, "/tasks/%d/cells/%s/repaired"
+                                  % (ti, arm)),
+                "flagged": _flag(pkt, "/tasks/%d/cells/%s/flagged"
+                                 % (ti, arm)),
+            })
+        out.append({"task_id": _t(pkt, "/tasks/%d/task_id" % ti),
+                    "band": _t(pkt, "/tasks/%d/band" % ti),
+                    "cells": cells})
+    return out
+
+
 def tfp(inputs):
-    """tfp.json — leaderboard + frontier projection of the first-pass
-    tranche fixture (REQ-XF-115; no new derivation: D-3 ordering by the
-    displayed theta, D-5 Pareto membership over complete entries)."""
+    """tfp.json — leaderboard + frontier + noise + grid projection of
+    the first-pass tranche fixture (REQ-XF-112/115/131/132; D-3 ordering
+    by displayed theta, D-5 Pareto membership — no new derivation)."""
     i = _by_id(inputs)
     pkt = i["p2-fp"]
 
@@ -733,6 +898,9 @@ def tfp(inputs):
         "labels": {k: _t(pkt, "/labels/%s" % k)
                    for k in sorted(pkt.resolve("/labels"))},
         "metric": _t(pkt, "/metric"),
+        "noise": {"arms": [_noise_row(pkt, hid)
+                          for hid in sorted(pkt.resolve("/harnesses"))]},
+        "tasks": _grid_tasks(pkt),
         "order": derived(
             "D-3",
             [{"path": pkt.path, "ptr": "/harnesses",
@@ -743,6 +911,168 @@ def tfp(inputs):
         "rows": rows,
         "tranche": {"band": _t(pkt, "/tranche/band"),
                     "id": _t(pkt, "/tranche/id")},
+    }
+
+
+# ── pilot.json — the §6.6 pilot/smoke page's measures (R6.21; F2-c (b)) ─
+def pilot(inputs):
+    """Per-arm nuisance measures verbatim (REQ-XD-043's fields; the
+    packet is a declared fixture while the producer schema is pending —
+    REQ-XF-113: measures, never ranks; D-3 name order at render)."""
+    i = _by_id(inputs)
+    pkt = i["p2-pilot"]
+    arms = []
+    for arm in sorted(pkt.resolve("/arms")):
+        b = "/arms/%s" % arm
+        ut = "%s/usd_per_trial" % b
+        arms.append({
+            "arm": arm,
+            "usd_per_trial": {m: _v(pkt, "%s/%s" % (ut, m), "micros_usd")
+                              for m in ("mean_micros", "p50_micros",
+                                        "p90_micros", "max_micros")},
+            "tokens": _v(pkt, "%s/tokens" % b, "count"),
+            "calls": _v(pkt, "%s/calls" % b, "count"),
+            "cached_share_ppm": _v(pkt, "%s/cached_share_ppm" % b, "ppm"),
+            "agent_wall_ms": _v(pkt, "%s/agent_wall_ms" % b, "ms"),
+            "model_occupied_ms": _v(pkt, "%s/model_occupied_ms" % b, "ms"),
+            "queue_wait_ms": _v(pkt, "%s/queue_wait_ms" % b, "ms"),
+            "infra_rate_ppm": _v(pkt, "%s/infra_rate_ppm" % b, "ppm"),
+            "infra_by_cause": _counts_tree(pkt, "%s/infra_by_cause" % b),
+            "timeout_rate_ppm": _v(pkt, "%s/timeout_rate_ppm" % b, "ppm"),
+            "egress_denials": _v(pkt, "%s/egress_denials" % b, "count"),
+            "proxy_rewrites": _v(pkt, "%s/proxy_rewrites" % b, "count"),
+            "receipt_completeness_ppm": _v(
+                pkt, "%s/receipt_completeness_ppm" % b, "ppm"),
+            "scan_flags": _v(pkt, "%s/scan_flags" % b, "count"),
+            "withheld_slots": _v(pkt, "%s/withheld_slots" % b, "count"),
+        })
+    return {
+        "label": _t(pkt, "/label"),
+        "stage": _t(pkt, "/stage"),
+        "arms": arms,
+        "global": _counts_tree(pkt, "/global"),
+    }
+
+
+# ── quote.json — the comparative-quote/1 menu (R6.21) ─────────────────
+def quote(inputs):
+    """Menu rows and precision verdicts verbatim — values copied, never
+    recomputed (REQ-XD-050; AC-6)."""
+    i = _by_id(inputs)
+    pkt = i["p2-quote"]
+    rows = []
+    for n, r in enumerate(pkt.resolve("/rows")):
+        b = "/rows/%d" % n
+        sim = pkt.resolve("%s/sim" % b)
+        rows.append({
+            "row_id": _t(pkt, "%s/row_id" % b),
+            "arms": [_t(pkt, "%s/arms/%d" % (b, m))
+                     for m in range(len(r["arms"]))],
+            "h": _v(pkt, "%s/h" % b, "count"),
+            "n_trials": _v(pkt, "%s/n_trials" % b, "count"),
+            "expected_micros": _v(pkt, "%s/model/expected_micros" % b,
+                                  "micros_usd"),
+            "ceiling_micros": _v(pkt, "%s/model/ceiling_micros" % b,
+                                 "micros_usd"),
+            "wall_millis": _v(pkt, "%s/wall_millis" % b, "ms"),
+            "instance_millis": _v(pkt, "%s/instance_millis" % b, "ms"),
+            "sim": (_counts_tree(pkt, "%s/sim" % b)
+                    if isinstance(sim, dict) and not sim.get("state")
+                    else _absent_of(sim) if isinstance(sim, dict)
+                    else absent("not_computed",
+                                reason="unresolved{sim_absent}")),
+            "verdict": _t(pkt, "%s/verdict" % b),
+        })
+    return {
+        "quote_id": _t(pkt, "/quote_id"),
+        "t": _v(pkt, "/t", "count"),
+        "k": _v(pkt, "/k", "count"),
+        "concurrency_c": _v(pkt, "/concurrency_c", "count"),
+        "rows": rows,
+        "compute": [
+            {"window": _t(pkt, "/compute/%d/window" % n),
+             "quote_id": _t(pkt, "/compute/%d/quote_id" % n),
+             "ceiling_micros": _v(pkt, "/compute/%d/ceiling_micros" % n,
+                                  "micros_usd")}
+            for n in range(len(pkt.resolve("/compute")))],
+        "compute_ceiling_micros": _v(pkt, "/compute_ceiling_micros",
+                                     "micros_usd"),
+        "envelope_label": _t(pkt, "/envelope_label"),
+        "envelope_adr": _t(pkt, "/envelope_adr"),
+    }
+
+
+# ── trials-fp.json — per-trial summaries + the receipt index (R6.21) ──
+def trials_fp(inputs):
+    """Per-(task, arm) trial summaries from the results fixture's
+    ``trials`` member plus the hh-receipt-index/1 entries verbatim.
+    A null packet member (revision, repair_class) becomes a typed
+    absent — never a bare null in site-data (REQ-XF-122)."""
+    i = _by_id(inputs)
+    pkt, idx = i["p2-fp"], i["p2-index"]
+
+    ds = idx.resolve("/dataset")
+    dataset = {
+        "repo": _t(idx, "/dataset/repo"),
+        "visibility": _t(idx, "/dataset/visibility"),
+        "revision": (_t(idx, "/dataset/revision")
+                     if ds.get("revision") else absent(
+                         "not_yet_available",
+                         reason="withheld{dataset_private}"))}
+
+    files = {}
+    for n, a in enumerate(idx.resolve("/attempts")):
+        key = (a["slot_id"], a["attempt"])
+        files[key] = [
+            {"role": _t(idx, "/attempts/%d/files/%d/role" % (n, m)),
+             "path": _t(idx, "/attempts/%d/files/%d/path" % (n, m)),
+             "sha256": _t(idx, "/attempts/%d/files/%d/sha256" % (n, m)),
+             "bytes": _v(idx, "/attempts/%d/files/%d/bytes" % (n, m),
+                         "count")}
+            for m in range(len(a["files"]))]
+
+    trials = []
+    for slot in sorted(pkt.resolve("/trials")):
+        t = pkt.resolve("/trials/%s" % slot)
+        b = "/trials/%s" % slot
+        att = []
+        for n, a in enumerate(t["attempts"]):
+            key = (slot, a["attempt"])
+            att.append({
+                "attempt": _v(pkt, "%s/attempts/%d/attempt" % (b, n),
+                              "count"),
+                "verdict": _t(pkt, "%s/attempts/%d/verdict" % (b, n)),
+                "disposition": _t(pkt, "%s/attempts/%d/disposition"
+                                  % (b, n)),
+                "phases": [
+                    {"name": _t(pkt, "%s/attempts/%d/phases/%d/name"
+                                 % (b, n, p)),
+                     "duration_ms": _v(pkt, "%s/attempts/%d/phases/%d/"
+                                       "duration_ms" % (b, n, p), "ms")}
+                    for p in range(len(a["phases"]))],
+                "cost_micros": _v(pkt, "%s/attempts/%d/cost_micros"
+                                  % (b, n), "micros_usd"),
+                "flagged": _flag(pkt, "%s/attempts/%d/flagged" % (b, n)),
+                "files": files.get(key, []),
+            })
+        rc = t.get("repair_class")
+        trials.append({
+            "slot": slot,
+            "task": _t(pkt, "%s/task" % b),
+            "arm": _t(pkt, "%s/arm" % b),
+            "repair_class": (_t(pkt, "%s/repair_class" % b) if rc
+                             else absent("not_computed",
+                                         reason="no repair recorded")),
+            "attempts": att,
+        })
+
+    return {
+        "dataset": dataset,
+        "scans": {
+            "secret_scan_ref": _t(idx, "/scans/secret_scan_ref"),
+            "contamination_scan_ref": _t(
+                idx, "/scans/contamination_scan_ref")},
+        "trials": trials,
     }
 
 
@@ -757,4 +1087,7 @@ FILES = {
     "method.json": (method, ("s4-repairs", "deviations")),
     "claims.json": (claims, ("estimators", "record")),
     "tfp.json": (tfp, ("p2-fp",)),
+    "pilot.json": (pilot, ("p2-pilot",)),
+    "quote.json": (quote, ("p2-quote",)),
+    "trials-fp.json": (trials_fp, ("p2-fp", "p2-index")),
 }

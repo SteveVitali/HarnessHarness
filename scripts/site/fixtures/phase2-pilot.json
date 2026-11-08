@@ -1,0 +1,164 @@
+{
+ "arms": {
+  "claude-code": {
+   "agent_wall_ms": 2197000,
+   "cached_share_ppm": 123000,
+   "calls": 64,
+   "egress_denials": 1,
+   "infra_by_cause": {
+    "runner_crash": 2,
+    "timeout": 1
+   },
+   "infra_rate_ppm": 44000,
+   "model_occupied_ms": 1561000,
+   "proxy_rewrites": 3,
+   "queue_wait_ms": 98000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 1,
+   "timeout_rate_ppm": 25000,
+   "tokens": 45100,
+   "usd_per_trial": {
+    "max_micros": 467000,
+    "mean_micros": 247111,
+    "p50_micros": 225000,
+    "p90_micros": 371000
+   },
+   "withheld_slots": 0
+  },
+  "hermes-agent": {
+   "agent_wall_ms": 2585000,
+   "cached_share_ppm": 135000,
+   "calls": 76,
+   "egress_denials": 5,
+   "infra_by_cause": {
+    "runner_crash": 6,
+    "timeout": 5
+   },
+   "infra_rate_ppm": 60000,
+   "model_occupied_ms": 1805000,
+   "proxy_rewrites": 7,
+   "queue_wait_ms": 130000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 1,
+   "timeout_rate_ppm": 45000,
+   "tokens": 65500,
+   "usd_per_trial": {
+    "max_micros": 655000,
+    "mean_micros": 395555,
+    "p50_micros": 365000,
+    "p90_micros": 535000
+   },
+   "withheld_slots": 0
+  },
+  "mini-swe-agent": {
+   "agent_wall_ms": 2100000,
+   "cached_share_ppm": 120000,
+   "calls": 61,
+   "egress_denials": 0,
+   "infra_by_cause": {
+    "runner_crash": 1,
+    "timeout": 0
+   },
+   "infra_rate_ppm": 40000,
+   "model_occupied_ms": 1500000,
+   "proxy_rewrites": 2,
+   "queue_wait_ms": 90000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 0,
+   "timeout_rate_ppm": 20000,
+   "tokens": 40000,
+   "usd_per_trial": {
+    "max_micros": 420000,
+    "mean_micros": 210000,
+    "p50_micros": 190000,
+    "p90_micros": 330000
+   },
+   "withheld_slots": 0
+  },
+  "opencode": {
+   "agent_wall_ms": 2391000,
+   "cached_share_ppm": 129000,
+   "calls": 70,
+   "egress_denials": 3,
+   "infra_by_cause": {
+    "runner_crash": 4,
+    "timeout": 3
+   },
+   "infra_rate_ppm": 52000,
+   "model_occupied_ms": 1683000,
+   "proxy_rewrites": 5,
+   "queue_wait_ms": 114000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 1,
+   "timeout_rate_ppm": 35000,
+   "tokens": 55300,
+   "usd_per_trial": {
+    "max_micros": 561000,
+    "mean_micros": 321333,
+    "p50_micros": 295000,
+    "p90_micros": 453000
+   },
+   "withheld_slots": 0
+  },
+  "openhands": {
+   "agent_wall_ms": 2294000,
+   "cached_share_ppm": 126000,
+   "calls": 67,
+   "egress_denials": 2,
+   "infra_by_cause": {
+    "runner_crash": 3,
+    "timeout": 2
+   },
+   "infra_rate_ppm": 48000,
+   "model_occupied_ms": 1622000,
+   "proxy_rewrites": 4,
+   "queue_wait_ms": 106000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 0,
+   "timeout_rate_ppm": 30000,
+   "tokens": 50200,
+   "usd_per_trial": {
+    "max_micros": 514000,
+    "mean_micros": 284222,
+    "p50_micros": 260000,
+    "p90_micros": 412000
+   },
+   "withheld_slots": 0
+  },
+  "pi": {
+   "agent_wall_ms": 2488000,
+   "cached_share_ppm": 132000,
+   "calls": 73,
+   "egress_denials": 4,
+   "infra_by_cause": {
+    "runner_crash": 5,
+    "timeout": 4
+   },
+   "infra_rate_ppm": 56000,
+   "model_occupied_ms": 1744000,
+   "proxy_rewrites": 6,
+   "queue_wait_ms": 122000,
+   "receipt_completeness_ppm": 1000000,
+   "scan_flags": 0,
+   "timeout_rate_ppm": 40000,
+   "tokens": 60400,
+   "usd_per_trial": {
+    "max_micros": 608000,
+    "mean_micros": 358444,
+    "p50_micros": 330000,
+    "p90_micros": 494000
+   },
+   "withheld_slots": 0
+  }
+ },
+ "fixture": true,
+ "fixture_label": "declared presentation fixture \u2014 the \u00a76.6 pilot packet's producer schema is pending (R6.40); fields follow REQ-XD-043 verbatim",
+ "global": {
+  "attained_concurrency": 4,
+  "instance_hours_micros": 6200000000,
+  "wall_hours_micros": 3100000000
+ },
+ "label": "exploratory; measures, never ranks",
+ "schema": "hh-pilot-measure/1",
+ "stage": "pp1"
+}

@@ -1,306 +1,8623 @@
 {
-  "schema": "hh-comparative-results/1",
-  "fixture": true,
-  "fixture_label": "presentation fixture for the phase-2 site components — never a first-pass result (the seal, X-07)",
-  "tranche": {"id": "fp", "band": "A"},
-  "family": {
-    "id": "P2-FP",
-    "method": "holm",
-    "alpha_ppm": 50000,
-    "reference": "mini-swe-agent",
-    "members": [
-      {"member": "hermes-agent", "status": "computed", "raw_p_ppm": 170000, "adjusted_ppm": 340000, "rejected_at_alpha": false},
-      {"member": "pi", "status": "computed", "raw_p_ppm": 190000, "adjusted_ppm": 380000, "rejected_at_alpha": false},
-      {"member": "claude-code", "status": "computed", "raw_p_ppm": 210000, "adjusted_ppm": 420000, "rejected_at_alpha": false},
-      {"member": "opencode", "status": "computed", "raw_p_ppm": 8000, "adjusted_ppm": 12000, "rejected_at_alpha": true},
-      {"member": "openhands", "status": "unavailable", "raw_p_ppm": null, "adjusted_ppm": 1000000, "rejected_at_alpha": false}
-    ]
-  },
-  "exploratory_family": {
-    "id": "P2-FP-expl",
-    "method": "benjamini_hochberg",
-    "members": [
-      {"member": "hermes-agent|pi", "raw_p_ppm": 400000, "adjusted_ppm": 400000},
-      {"member": "hermes-agent|claude-code", "raw_p_ppm": 420000, "adjusted_ppm": 420000},
-      {"member": "pi|claude-code", "raw_p_ppm": 390000, "adjusted_ppm": 390000}
-    ]
-  },
-  "metric": "capability.task_success",
-  "populations": ["joint_task_pass_without_observed_veto", "raw", "errors_zero"],
-  "labels": {
-    "internal_record": "internal record — not outside-verified",
-    "finite_manifest_scope": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
-    "hosted_participant": "stochastic hosted participant glm-5.3-flash via Ollama — catalog identity reported, not fingerprinted",
-    "allowlisted_network": "allowlisted agent network",
-    "not_leaderboard_comparable": "fewer than 89 tasks and other departures — not leaderboard-comparable",
-    "hf_context": "HF board figures are context from a different serving setup"
-  },
-  "harnesses": {
-    "hermes-agent": {
-      "theta": {
-        "ppm": 640000, "lo_ppm": 570000, "hi_ppm": 710000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 570000, "hi_ppm": 710000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 450000, "hi_ppm": 750000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 650000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 600000, "bound_hi_ppm": 700000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {
-        "ppm": 60000, "lo_ppm": -20000, "hi_ppm": 140000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -20000, "hi_ppm": 140000},
-        "p_raw_ppm": 170000, "p_holm_ppm": 340000, "separated": false,
-        "label": "confirmatory family P2-FP; α = .05 Holm"
-      },
-      "leader_group": {
-        "member": true, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -40000, "hi_ppm": 200000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 110000, "any_ppm": 890000},
-      "flips": {
-        "rerun": {"ppm": 420000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 300000, "hi_ppm": 540000}},
-        "swap_vs": {"pi": {"ppm": 360000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 240000, "hi_ppm": 480000}}},
-        "harness_excess": {"pi": {"ppm": 40000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -20000, "hi_ppm": 100000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 210000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 180000, "hi_ppm": 250000},
-                      "tails": {"p50_micros": 190000, "p90_micros": 240000, "p95_micros": 250000, "max_micros": 300000}},
-        "per_solve": {"micros": 330000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 440000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 340000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 300000, "hi_ppm": 390000}},
-        "per_solve": {"micros": 540000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 420000, "hi_ppm": 720000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v0.9.4": 50}, "served": {"hh/hermes-agent@0.9.4": 50}},
-      "completion": {"planned": 50, "first": 49, "recovered": 1, "unresolved": 0},
-      "integrity": {"flagged": 2, "confirmed": 1, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 1000000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+ "exploratory_family": {
+  "id": "P2-FP-expl",
+  "members": [
+   {
+    "adjusted_ppm": 400000,
+    "member": "hermes-agent|pi",
+    "raw_p_ppm": 400000
+   },
+   {
+    "adjusted_ppm": 420000,
+    "member": "hermes-agent|claude-code",
+    "raw_p_ppm": 420000
+   },
+   {
+    "adjusted_ppm": 390000,
+    "member": "pi|claude-code",
+    "raw_p_ppm": 390000
+   }
+  ],
+  "method": "benjamini_hochberg"
+ },
+ "family": {
+  "alpha_ppm": 50000,
+  "id": "P2-FP",
+  "members": [
+   {
+    "adjusted_ppm": 340000,
+    "member": "hermes-agent",
+    "raw_p_ppm": 170000,
+    "rejected_at_alpha": false,
+    "status": "computed"
+   },
+   {
+    "adjusted_ppm": 380000,
+    "member": "pi",
+    "raw_p_ppm": 190000,
+    "rejected_at_alpha": false,
+    "status": "computed"
+   },
+   {
+    "adjusted_ppm": 420000,
+    "member": "claude-code",
+    "raw_p_ppm": 210000,
+    "rejected_at_alpha": false,
+    "status": "computed"
+   },
+   {
+    "adjusted_ppm": 12000,
+    "member": "opencode",
+    "raw_p_ppm": 8000,
+    "rejected_at_alpha": true,
+    "status": "computed"
+   },
+   {
+    "adjusted_ppm": 1000000,
+    "member": "openhands",
+    "raw_p_ppm": null,
+    "rejected_at_alpha": false,
+    "status": "unavailable"
+   }
+  ],
+  "method": "holm",
+  "reference": "mini-swe-agent"
+ },
+ "fixture": true,
+ "fixture_label": "presentation fixture for the phase-2 site components \u2014 never a first-pass result (the seal, X-07)",
+ "harnesses": {
+  "claude-code": {
+   "completion": {
+    "first": 50,
+    "planned": 50,
+    "recovered": 0,
+    "unresolved": 0
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 380000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 240000
+     },
+     "micros": 300000
     },
-    "pi": {
-      "theta": {
-        "ppm": 620000, "lo_ppm": 550000, "hi_ppm": 700000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 550000, "hi_ppm": 700000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 430000, "hi_ppm": 740000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 630000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 580000, "bound_hi_ppm": 690000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {
-        "ppm": 40000, "lo_ppm": -40000, "hi_ppm": 120000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -40000, "hi_ppm": 120000},
-        "p_raw_ppm": 190000, "p_holm_ppm": 380000, "separated": false,
-        "label": "confirmatory family P2-FP; α = .05 Holm"
-      },
-      "leader_group": {
-        "member": true, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -60000, "hi_ppm": 180000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 120000, "any_ppm": 880000},
-      "flips": {
-        "rerun": {"ppm": 430000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 310000, "hi_ppm": 550000}},
-        "swap_vs": {"hermes-agent": {"ppm": 370000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 490000}}},
-        "harness_excess": {"hermes-agent": {"ppm": 45000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -15000, "hi_ppm": 105000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 300000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 260000, "hi_ppm": 350000},
-                      "tails": {"p50_micros": 290000, "p90_micros": 340000, "p95_micros": 355000, "max_micros": 410000}},
-        "per_solve": {"micros": 480000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 390000, "hi_ppm": 600000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 460000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 410000, "hi_ppm": 520000}},
-        "per_solve": {"micros": 740000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 610000, "hi_ppm": 900000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v1.4": 50}, "served": {"hh/pi@1.4": 50}},
-      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
-      "integrity": {"flagged": 0, "confirmed": 0, "cleared": 0, "detector": "answer-scan/1", "coverage_ppm": 1000000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 220000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 150000
+     },
+     "micros": 180000,
+     "tails": {
+      "max_micros": 260000,
+      "p50_micros": 175000,
+      "p90_micros": 215000,
+      "p95_micros": 225000
+     }
     },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 600000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 390000
+     },
+     "micros": 480000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 340000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 250000
+     },
+     "micros": 290000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v2.1.7": 50
+    },
+    "served": {
+     "hh/claude-code@2.1.7": 50
+    }
+   },
+   "delta_vs_ref": {
+    "hi_ppm": 110000,
+    "interval": {
+     "hi_ppm": 110000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": -50000
+    },
+    "label": "confirmatory family P2-FP; \u03b1 = .05 Holm",
+    "lo_ppm": -50000,
+    "p_holm_ppm": 420000,
+    "p_raw_ppm": 210000,
+    "ppm": 30000,
+    "separated": false
+   },
+   "flips": {
+    "harness_excess": {
+     "pi": {
+      "interval": {
+       "hi_ppm": 110000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": -10000
+      },
+      "ppm": 50000
+     }
+    },
+    "rerun": {
+     "interval": {
+      "hi_ppm": 560000,
+      "kind": "task_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 320000
+     },
+     "ppm": 440000
+    },
+    "swap_vs": {
+     "pi": {
+      "interval": {
+       "hi_ppm": 500000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": 260000
+      },
+      "ppm": 380000
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 1,
+    "confirmed": 0,
+    "coverage_ppm": 1000000,
+    "detector": "answer-scan/1",
+    "flagged": 1,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": 190000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -70000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": true
+   },
+   "pass_at": {
+    "all_ppm": 115000,
+    "any_ppm": 870000,
+    "k": 3
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 670000,
+     "bound_lo_ppm": 560000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 620000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 730000,
+     "kind": "all_planned",
+     "lo_ppm": 420000
+    },
+    "hi_ppm": 680000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 680000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 530000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 530000,
+    "ppm": 610000
+   }
+  },
+  "hermes-agent": {
+   "completion": {
+    "first": 49,
+    "planned": 50,
+    "recovered": 1,
+    "unresolved": 0
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 440000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 250000
+     },
+     "micros": 330000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 250000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 180000
+     },
+     "micros": 210000,
+     "tails": {
+      "max_micros": 300000,
+      "p50_micros": 190000,
+      "p90_micros": 240000,
+      "p95_micros": 250000
+     }
+    },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 720000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 420000
+     },
+     "micros": 540000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 390000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 300000
+     },
+     "micros": 340000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v0.9.4": 50
+    },
+    "served": {
+     "hh/hermes-agent@0.9.4": 50
+    }
+   },
+   "delta_vs_ref": {
+    "hi_ppm": 140000,
+    "interval": {
+     "hi_ppm": 140000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": -20000
+    },
+    "label": "confirmatory family P2-FP; \u03b1 = .05 Holm",
+    "lo_ppm": -20000,
+    "p_holm_ppm": 340000,
+    "p_raw_ppm": 170000,
+    "ppm": 60000,
+    "separated": false
+   },
+   "flips": {
+    "harness_excess": {
+     "pi": {
+      "interval": {
+       "hi_ppm": 100000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": -20000
+      },
+      "ppm": 40000
+     }
+    },
+    "rerun": {
+     "interval": {
+      "hi_ppm": 540000,
+      "kind": "task_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 300000
+     },
+     "ppm": 420000
+    },
+    "swap_vs": {
+     "pi": {
+      "interval": {
+       "hi_ppm": 480000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": 240000
+      },
+      "ppm": 360000
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 1,
+    "confirmed": 1,
+    "coverage_ppm": 1000000,
+    "detector": "answer-scan/1",
+    "flagged": 2,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": 200000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -40000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": true
+   },
+   "pass_at": {
+    "all_ppm": 110000,
+    "any_ppm": 890000,
+    "k": 5
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 700000,
+     "bound_lo_ppm": 600000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 650000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 750000,
+     "kind": "all_planned",
+     "lo_ppm": 450000
+    },
+    "hi_ppm": 710000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 710000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 570000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 570000,
+    "ppm": 640000
+   }
+  },
+  "mini-swe-agent": {
+   "completion": {
+    "first": 50,
+    "planned": 50,
+    "recovered": 0,
+    "unresolved": 0
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 115000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 70000
+     },
+     "micros": 90000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 62000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 40000
+     },
+     "micros": 50000,
+     "tails": {
+      "max_micros": 75000,
+      "p50_micros": 48000,
+      "p90_micros": 60000,
+      "p95_micros": 62000
+     }
+    },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 230000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 160000
+     },
+     "micros": 190000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 128000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 95000
+     },
+     "micros": 110000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v2.4.6": 50
+    },
+    "served": {
+     "hh/mini-swe-agent@2.4.6": 50
+    }
+   },
+   "delta_vs_ref": {
+    "reason": "reference arm",
+    "state": "not_applicable"
+   },
+   "flips": {
+    "harness_excess": {
+     "claude-code": {
+      "reason": "estimator absent from packet",
+      "state": "not_computed"
+     }
+    },
+    "rerun": {
+     "interval": {
+      "hi_ppm": 530000,
+      "kind": "task_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 290000
+     },
+     "ppm": 410000
+    },
+    "swap_vs": {
+     "claude-code": {
+      "interval": {
+       "hi_ppm": 470000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": 230000
+      },
+      "ppm": 350000
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 0,
+    "confirmed": 0,
+    "coverage_ppm": 1000000,
+    "detector": "answer-scan/1",
+    "flagged": 0,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": 160000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -80000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": true
+   },
+   "pass_at": {
+    "all_ppm": 100000,
+    "any_ppm": 850000,
+    "k": 5
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 650000,
+     "bound_lo_ppm": 540000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 590000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 700000,
+     "kind": "all_planned",
+     "lo_ppm": 400000
+    },
+    "hi_ppm": 660000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 660000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 500000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 500000,
+    "ppm": 580000
+   }
+  },
+  "opencode": {
+   "completion": {
+    "first": 50,
+    "planned": 50,
+    "recovered": 0,
+    "unresolved": 0
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 250000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 160000
+     },
+     "micros": 200000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 108000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 75000
+     },
+     "micros": 90000,
+     "tails": {
+      "max_micros": 125000,
+      "p50_micros": 88000,
+      "p90_micros": 105000,
+      "p95_micros": 108000
+     }
+    },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 430000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 290000
+     },
+     "micros": 350000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 185000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 140000
+     },
+     "micros": 160000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v1.0": 50
+    },
+    "served": {
+     "hh/opencode@1.0.2": 50
+    }
+   },
+   "delta_vs_ref": {
+    "hi_ppm": -50000,
+    "interval": {
+     "hi_ppm": -50000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": -210000
+    },
+    "label": "confirmatory family P2-FP; \u03b1 = .05 Holm",
+    "lo_ppm": -210000,
+    "p_holm_ppm": 12000,
+    "p_raw_ppm": 8000,
+    "ppm": -130000,
+    "separated": true
+   },
+   "flips": {
+    "harness_excess": {
+     "openhands": {
+      "interval": {
+       "hi_ppm": 115000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": -5000
+      },
+      "ppm": 55000
+     }
+    },
+    "rerun": {
+     "interval": {
+      "hi_ppm": 580000,
+      "kind": "task_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 340000
+     },
+     "ppm": 460000
+    },
+    "swap_vs": {
+     "openhands": {
+      "interval": {
+       "hi_ppm": 520000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": 280000
+      },
+      "ppm": 400000
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 2,
+    "confirmed": 1,
+    "coverage_ppm": 1000000,
+    "detector": "answer-scan/1",
+    "flagged": 3,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": -10000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -190000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": false
+   },
+   "pass_at": {
+    "all_ppm": {
+     "reason": "k < 3 \u2014 all-k/any-k needs >= 3 replicates",
+     "state": "not_computed"
+    },
+    "any_ppm": {
+     "reason": "k < 3 \u2014 all-k/any-k needs >= 3 replicates",
+     "state": "not_computed"
+    },
+    "k": 2
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 510000,
+     "bound_lo_ppm": 400000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 460000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 600000,
+     "kind": "all_planned",
+     "lo_ppm": 300000
+    },
+    "hi_ppm": 530000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 530000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 370000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 370000,
+    "ppm": 450000
+   }
+  },
+  "openhands": {
+   "completion": {
+    "first": 49,
+    "planned": 50,
+    "recovered": 0,
+    "unresolved": 1
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "reason": "0 solves",
+     "state": "undefined"
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 295000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 230000
+     },
+     "micros": 260000,
+     "tails": {
+      "max_micros": 340000,
+      "p50_micros": 255000,
+      "p90_micros": 290000,
+      "p95_micros": 298000
+     }
+    },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "reason": "0 solves",
+     "state": "undefined"
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 460000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 370000
+     },
+     "micros": 410000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v0.8.1": 50
+    },
+    "served": {
+     "hh/openhands@0.8.1": 49
+    }
+   },
+   "delta_vs_ref": {
+    "state": "refused",
+    "variant": "UnresolvedCell"
+   },
+   "flips": {
+    "harness_excess": {
+     "opencode": {
+      "reason": "k < 2 \u2014 a swap flip needs >= 2 replicates",
+      "state": "not_computed"
+     }
+    },
+    "rerun": {
+     "reason": "k < 2 \u2014 a rerun flip needs >= 2 replicates",
+     "state": "not_computed"
+    },
+    "swap_vs": {
+     "opencode": {
+      "interval": {
+       "reason": "k < 2 \u2014 a swap flip needs >= 2 replicates",
+       "state": "not_computed"
+      }
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 1,
+    "confirmed": 2,
+    "coverage_ppm": 980000,
+    "detector": "answer-scan/1",
+    "flagged": 4,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": -20000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -220000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": false
+   },
+   "pass_at": {
+    "all_ppm": {
+     "reason": "k < 3 \u2014 all-k/any-k needs >= 3 replicates",
+     "state": "not_computed"
+    },
+    "any_ppm": {
+     "reason": "k < 3 \u2014 all-k/any-k needs >= 3 replicates",
+     "state": "not_computed"
+    },
+    "k": 1
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 490000,
+     "bound_lo_ppm": 380000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 440000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 540000,
+     "kind": "all_planned",
+     "lo_ppm": 340000
+    },
+    "hi_ppm": 480000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 480000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 380000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 380000,
+    "ppm": 430000
+   }
+  },
+  "pi": {
+   "completion": {
+    "first": 50,
+    "planned": 50,
+    "recovered": 0,
+    "unresolved": 0
+   },
+   "cost": {
+    "label": "descriptive; model spend only",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 600000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 390000
+     },
+     "micros": 480000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 350000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 260000
+     },
+     "micros": 300000,
+     "tails": {
+      "max_micros": 410000,
+      "p50_micros": 290000,
+      "p90_micros": 340000,
+      "p95_micros": 355000
+     }
+    },
+    "provenance": "model_spend_only"
+   },
+   "cost_with_compute": {
+    "label": "descriptive; with compute",
+    "per_solve": {
+     "interval": {
+      "hi_ppm": 900000,
+      "kind": "task_resampled_ratio",
+      "level_ppm": 950000,
+      "lo_ppm": 610000
+     },
+     "micros": 740000
+    },
+    "per_trial": {
+     "interval": {
+      "hi_ppm": 520000,
+      "kind": "clustered_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 410000
+     },
+     "micros": 460000
+    },
+    "provenance": "with_compute"
+   },
+   "counts": {
+    "analysis_basis": "assignment",
+    "intended": {
+     "v1.4": 50
+    },
+    "served": {
+     "hh/pi@1.4": 50
+    }
+   },
+   "delta_vs_ref": {
+    "hi_ppm": 120000,
+    "interval": {
+     "hi_ppm": 120000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": -40000
+    },
+    "label": "confirmatory family P2-FP; \u03b1 = .05 Holm",
+    "lo_ppm": -40000,
+    "p_holm_ppm": 380000,
+    "p_raw_ppm": 190000,
+    "ppm": 40000,
+    "separated": false
+   },
+   "flips": {
+    "harness_excess": {
+     "hermes-agent": {
+      "interval": {
+       "hi_ppm": 105000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": -15000
+      },
+      "ppm": 45000
+     }
+    },
+    "rerun": {
+     "interval": {
+      "hi_ppm": 550000,
+      "kind": "task_bootstrap",
+      "level_ppm": 950000,
+      "lo_ppm": 310000
+     },
+     "ppm": 430000
+    },
+    "swap_vs": {
+     "hermes-agent": {
+      "interval": {
+       "hi_ppm": 490000,
+       "kind": "task_bootstrap",
+       "level_ppm": 950000,
+       "lo_ppm": 250000
+      },
+      "ppm": 370000
+     }
+    }
+   },
+   "integrity": {
+    "cleared": 0,
+    "confirmed": 0,
+    "coverage_ppm": 1000000,
+    "detector": "answer-scan/1",
+    "flagged": 0,
+    "label": "integrity panel \u2014 the confirmed count is a minimum"
+   },
+   "leader_group": {
+    "diff_interval": {
+     "hi_ppm": 180000,
+     "kind": "task_bootstrap",
+     "level_ppm": 950000,
+     "lo_ppm": -60000
+    },
+    "label": "exploratory; leader selected from the same data",
+    "leader_id": "hermes-agent",
+    "member": true
+   },
+   "pass_at": {
+    "all_ppm": 120000,
+    "any_ppm": 880000,
+    "k": 5
+   },
+   "secondary_populations": {
+    "errors_zero": {
+     "bound_hi_ppm": 690000,
+     "bound_lo_ppm": 580000,
+     "label": "secondary population \u2014 errors=0 all-planned bound"
+    },
+    "raw": {
+     "label": "secondary population",
+     "rate_ppm": 630000
+    }
+   },
+   "theta": {
+    "bounds": {
+     "hi_ppm": 740000,
+     "kind": "all_planned",
+     "lo_ppm": 430000
+    },
+    "hi_ppm": 700000,
+    "interval": {
+     "draws": 8000,
+     "hi_ppm": 700000,
+     "kind": "fm_credible",
+     "level_ppm": 950000,
+     "lo_ppm": 550000
+    },
+    "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "lo_ppm": 550000,
+    "ppm": 620000
+   }
+  }
+ },
+ "labels": {
+  "allowlisted_network": "allowlisted agent network",
+  "finite_manifest_scope": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+  "hf_context": "HF board figures are context from a different serving setup",
+  "hosted_participant": "stochastic hosted participant glm-5.3-flash via Ollama \u2014 catalog identity reported, not fingerprinted",
+  "internal_record": "internal record \u2014 not outside-verified",
+  "not_leaderboard_comparable": "fewer than 89 tasks and other departures \u2014 not leaderboard-comparable"
+ },
+ "metric": "capability.task_success",
+ "populations": [
+  "joint_task_pass_without_observed_veto",
+  "raw",
+  "errors_zero"
+ ],
+ "schema": "hh-comparative-results/1",
+ "tasks": [
+  {
+   "band": "A",
+   "cells": {
     "claude-code": {
-      "theta": {
-        "ppm": 610000, "lo_ppm": 530000, "hi_ppm": 680000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 530000, "hi_ppm": 680000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 420000, "hi_ppm": 730000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 620000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 560000, "bound_hi_ppm": 670000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {
-        "ppm": 30000, "lo_ppm": -50000, "hi_ppm": 110000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -50000, "hi_ppm": 110000},
-        "p_raw_ppm": 210000, "p_holm_ppm": 420000, "separated": false,
-        "label": "confirmatory family P2-FP; α = .05 Holm"
-      },
-      "leader_group": {
-        "member": true, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -70000, "hi_ppm": 190000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 115000, "any_ppm": 870000},
-      "flips": {
-        "rerun": {"ppm": 440000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 320000, "hi_ppm": 560000}},
-        "swap_vs": {"pi": {"ppm": 380000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 260000, "hi_ppm": 500000}}},
-        "harness_excess": {"pi": {"ppm": 50000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -10000, "hi_ppm": 110000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 180000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 150000, "hi_ppm": 220000},
-                      "tails": {"p50_micros": 175000, "p90_micros": 215000, "p95_micros": 225000, "max_micros": 260000}},
-        "per_solve": {"micros": 300000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 240000, "hi_ppm": 380000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 290000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 340000}},
-        "per_solve": {"micros": 480000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 390000, "hi_ppm": 600000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v2.1.7": 50}, "served": {"hh/claude-code@2.1.7": 50}},
-      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
-      "integrity": {"flagged": 1, "confirmed": 0, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 1000000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-alpha-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-alpha-hermes-agent"
     },
     "mini-swe-agent": {
-      "theta": {
-        "ppm": 580000, "lo_ppm": 500000, "hi_ppm": 660000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 500000, "hi_ppm": 660000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 400000, "hi_ppm": 700000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 590000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 540000, "bound_hi_ppm": 650000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {"state": "not_applicable", "reason": "reference arm"},
-      "leader_group": {
-        "member": true, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -80000, "hi_ppm": 160000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 100000, "any_ppm": 850000},
-      "flips": {
-        "rerun": {"ppm": 410000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 290000, "hi_ppm": 530000}},
-        "swap_vs": {"claude-code": {"ppm": 350000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 230000, "hi_ppm": 470000}}},
-        "harness_excess": {"claude-code": {"ppm": 35000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -25000, "hi_ppm": 95000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 50000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 40000, "hi_ppm": 62000},
-                      "tails": {"p50_micros": 48000, "p90_micros": 60000, "p95_micros": 62000, "max_micros": 75000}},
-        "per_solve": {"micros": 90000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 70000, "hi_ppm": 115000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 110000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 95000, "hi_ppm": 128000}},
-        "per_solve": {"micros": 190000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 160000, "hi_ppm": 230000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v2.4.6": 50}, "served": {"hh/mini-swe-agent@2.4.6": 50}},
-      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
-      "integrity": {"flagged": 0, "confirmed": 0, "cleared": 0, "detector": "answer-scan/1", "coverage_ppm": 1000000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+     "discordant": true,
+     "flagged": true,
+     "pips": [
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": true,
+     "slot": "fp-alpha-mini-swe-agent"
     },
     "opencode": {
-      "theta": {
-        "ppm": 450000, "lo_ppm": 370000, "hi_ppm": 530000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 370000, "hi_ppm": 530000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 300000, "hi_ppm": 600000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 460000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 400000, "bound_hi_ppm": 510000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {
-        "ppm": -130000, "lo_ppm": -210000, "hi_ppm": -50000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -210000, "hi_ppm": -50000},
-        "p_raw_ppm": 8000, "p_holm_ppm": 12000, "separated": true,
-        "label": "confirmatory family P2-FP; α = .05 Holm"
-      },
-      "leader_group": {
-        "member": false, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -190000, "hi_ppm": -10000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 70000, "any_ppm": 790000},
-      "flips": {
-        "rerun": {"ppm": 460000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 340000, "hi_ppm": 580000}},
-        "swap_vs": {"openhands": {"ppm": 400000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 280000, "hi_ppm": 520000}}},
-        "harness_excess": {"openhands": {"ppm": 55000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -5000, "hi_ppm": 115000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 90000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 75000, "hi_ppm": 108000},
-                      "tails": {"p50_micros": 88000, "p90_micros": 105000, "p95_micros": 108000, "max_micros": 125000}},
-        "per_solve": {"micros": 200000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 160000, "hi_ppm": 250000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 160000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 140000, "hi_ppm": 185000}},
-        "per_solve": {"micros": 350000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 290000, "hi_ppm": 430000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v1.0": 50}, "served": {"hh/opencode@1.0.2": 50}},
-      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
-      "integrity": {"flagged": 3, "confirmed": 1, "cleared": 2, "detector": "answer-scan/1", "coverage_ppm": 1000000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved"
+     ],
+     "repaired": false,
+     "slot": "fp-alpha-opencode"
     },
     "openhands": {
-      "theta": {
-        "ppm": 430000, "lo_ppm": 380000, "hi_ppm": 480000,
-        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 380000, "hi_ppm": 480000},
-        "bounds": {"kind": "all_planned", "lo_ppm": 340000, "hi_ppm": 540000},
-        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
-      },
-      "secondary_populations": {
-        "raw": {"rate_ppm": 440000, "label": "secondary population"},
-        "errors_zero": {"bound_lo_ppm": 380000, "bound_hi_ppm": 490000, "label": "secondary population — errors=0 all-planned bound"}
-      },
-      "delta_vs_ref": {"state": "refused", "variant": "UnresolvedCell"},
-      "leader_group": {
-        "member": false, "leader_id": "hermes-agent",
-        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -220000, "hi_ppm": -20000},
-        "label": "exploratory; leader selected from the same data"
-      },
-      "pass_at": {"k": 5, "all_ppm": 65000, "any_ppm": 760000},
-      "flips": {
-        "rerun": {"ppm": 450000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 330000, "hi_ppm": 570000}},
-        "swap_vs": {"opencode": {"ppm": 390000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 270000, "hi_ppm": 510000}}},
-        "harness_excess": {"opencode": {"ppm": 60000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 0, "hi_ppm": 120000}}}
-      },
-      "cost": {
-        "per_trial": {"micros": 260000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 230000, "hi_ppm": 295000},
-                      "tails": {"p50_micros": 255000, "p90_micros": 290000, "p95_micros": 298000, "max_micros": 340000}},
-        "per_solve": {"micros": 620000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 520000, "hi_ppm": 760000}},
-        "provenance": "model_spend_only",
-        "label": "descriptive; model spend only"
-      },
-      "cost_with_compute": {
-        "per_trial": {"micros": 410000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 370000, "hi_ppm": 460000}},
-        "per_solve": {"micros": 960000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 830000, "hi_ppm": 1150000}},
-        "provenance": "with_compute",
-        "label": "descriptive; with compute"
-      },
-      "counts": {"analysis_basis": "assignment", "intended": {"v0.8.1": 50}, "served": {"hh/openhands@0.8.1": 49}},
-      "completion": {"planned": 50, "first": 49, "recovered": 0, "unresolved": 1},
-      "integrity": {"flagged": 4, "confirmed": 2, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 980000,
-                    "label": "integrity panel — the confirmed count is a minimum"}
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-alpha-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "unresolved",
+      "infra",
+      "withheld",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-alpha-pi"
     }
+   },
+   "task_id": "swe-bench-fixture-alpha"
+  },
+  {
+   "band": "A",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-beta-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-beta"
+  },
+  {
+   "band": "A",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "unresolved",
+      "infra",
+      "withheld",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-gamma-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-gamma"
+  },
+  {
+   "band": "A",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-delta-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": false,
+     "slot": "fp-delta-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-delta-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-delta-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-delta-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": true,
+     "slot": "fp-delta-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-delta"
+  },
+  {
+   "band": "B",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": true,
+     "slot": "fp-epsilon-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-epsilon-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-epsilon-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-epsilon-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-epsilon-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "infra",
+      "withheld",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-epsilon-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-epsilon"
+  },
+  {
+   "band": "B",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-zeta-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-zeta"
+  },
+  {
+   "band": "B",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": true,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "withheld",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-eta-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-eta"
+  },
+  {
+   "band": "C",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-theta-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": true,
+     "pips": [
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": true,
+     "slot": "fp-theta-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": false,
+     "slot": "fp-theta-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-theta-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-theta-openhands"
+    },
+    "pi": {
+     "discordant": true,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved"
+     ],
+     "repaired": false,
+     "slot": "fp-theta-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-theta"
+  },
+  {
+   "band": "C",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-iota-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-iota-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-iota-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": true,
+     "flagged": false,
+     "pips": [
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-iota-opencode"
+    },
+    "openhands": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": true,
+     "slot": "fp-iota-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-iota-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-iota"
+  },
+  {
+   "band": "C",
+   "cells": {
+    "claude-code": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-claude-code"
+    },
+    "hermes-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "unresolved",
+      "infra",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-hermes-agent"
+    },
+    "mini-swe-agent": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-mini-swe-agent"
+    },
+    "opencode": {
+     "discordant": false,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-opencode"
+    },
+    "openhands": {
+     "discordant": true,
+     "flagged": false,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved",
+      "resolved"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-openhands"
+    },
+    "pi": {
+     "discordant": false,
+     "flagged": true,
+     "pips": [
+      "resolved",
+      "resolved",
+      "resolved",
+      "unresolved",
+      "infra"
+     ],
+     "repaired": false,
+     "slot": "fp-kappa-pi"
+    }
+   },
+   "task_id": "swe-bench-fixture-kappa"
   }
+ ],
+ "tranche": {
+  "band": "A",
+  "id": "fp"
+ },
+ "trials": {
+  "fp-alpha-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 124211,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 125188,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 126165,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 127142,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 128119,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-alpha-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 141055,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 142032,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 143009,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 143986,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 144963,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-alpha-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 120000,
+     "disposition": "executed{unresolved}",
+     "flagged": true,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 120977,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 121954,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 122931,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 123908,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": "machinery_repair",
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-alpha-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 132633,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 133610,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 134587,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 135564,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 136541,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-alpha-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 128422,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 129399,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 130376,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 131353,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 132330,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-alpha-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 136844,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 137821,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 138798,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 139775,
+     "disposition": "withheld{budget}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 140752,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-alpha"
+  },
+  "fp-beta-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 133348,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 134325,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 135302,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 136279,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 137256,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-beta-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 150192,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 151169,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 152146,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 153123,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 154100,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-beta-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 129137,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 130114,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 131091,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 132068,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 133045,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-beta-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 141770,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 142747,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 143724,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 144701,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 145678,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-beta-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 137559,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 138536,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 139513,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 140490,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 141467,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-beta-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 145981,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 146958,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 147935,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 148912,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 149889,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-beta"
+  },
+  "fp-delta-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 151622,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 152599,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 153576,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 154553,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 155530,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-delta-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 168466,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 169443,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 170420,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 171397,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 172374,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-delta-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 147411,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 148388,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 149365,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 150342,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 151319,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-delta-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 160044,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 161021,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 161998,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 162975,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 163952,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-delta-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 155833,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 156810,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 157787,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 158764,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 159741,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-delta-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 164255,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 165232,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 166209,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 167186,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 168163,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": "machinery_repair",
+   "task": "swe-bench-fixture-delta"
+  },
+  "fp-epsilon-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 160759,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 161736,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 162713,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 163690,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 164667,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": "machinery_repair",
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-epsilon-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 177603,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 178580,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 179557,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 180534,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 181511,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-epsilon-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 156548,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 157525,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 158502,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 159479,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 160456,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-epsilon-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 169181,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 170158,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 171135,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 172112,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 173089,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-epsilon-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 164970,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 165947,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 166924,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 167901,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 168878,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-epsilon-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 173392,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 174369,
+     "disposition": "withheld{budget}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 175346,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 176323,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 177300,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-epsilon"
+  },
+  "fp-eta-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 179033,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 180010,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 180987,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 181964,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 182941,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-eta-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 195877,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 196854,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 197831,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 198808,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 199785,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-eta-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 174822,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 175799,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 176776,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 177753,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 178730,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-eta-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 187455,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 188432,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 189409,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 190386,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 191363,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-eta-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 183244,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 184221,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 185198,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 186175,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 187152,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-eta-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 191666,
+     "disposition": "withheld{budget}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 192643,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 193620,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 194597,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 195574,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-eta"
+  },
+  "fp-gamma-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 142485,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 143462,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 144439,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 145416,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 146393,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-gamma-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 159329,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 160306,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 161283,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 162260,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 163237,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-gamma-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 138274,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 139251,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 140228,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 141205,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 142182,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-gamma-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 150907,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 151884,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 152861,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 153838,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 154815,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-gamma-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 146696,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 147673,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 148650,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 149627,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 150604,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-gamma-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 155118,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 156095,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 157072,
+     "disposition": "withheld{budget}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 158049,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 159026,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-gamma"
+  },
+  "fp-iota-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 197307,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 198284,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 199261,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 200238,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 201215,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-iota-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 214151,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 215128,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 216105,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 217082,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 218059,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-iota-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 193096,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 194073,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 195050,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 196027,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 197004,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-iota-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 205729,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 206706,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 207683,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 208660,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 209637,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-iota-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 201518,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 202495,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 203472,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 204449,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 205426,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": "machinery_repair",
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-iota-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 209940,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 210917,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 211894,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 212871,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 213848,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-iota"
+  },
+  "fp-kappa-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 206444,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 207421,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 208398,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 209375,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 210352,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-kappa-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 223288,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 224265,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 225242,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 226219,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 227196,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-kappa-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 202233,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 203210,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 204187,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 205164,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 206141,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-kappa-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 214866,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 215843,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 216820,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 217797,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 218774,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-kappa-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 210655,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 211632,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 212609,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 213586,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 214563,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-kappa-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 219077,
+     "disposition": "executed{resolved}",
+     "flagged": true,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 220054,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 221031,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 222008,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 222985,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-kappa"
+  },
+  "fp-theta-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 188170,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 189147,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 190124,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 191101,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 192078,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-theta-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 205014,
+     "disposition": "executed{resolved}",
+     "flagged": true,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 205991,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 206968,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 207945,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 208922,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": "machinery_repair",
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-theta-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 183959,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 184936,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 185913,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 186890,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 187867,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-theta-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 196592,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 197569,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 198546,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 199523,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 200500,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-theta-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 192381,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 193358,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 194335,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 195312,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 196289,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-theta-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 200803,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 201780,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 202757,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 203734,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 204711,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-theta"
+  },
+  "fp-zeta-claude-code": {
+   "arm": "claude-code",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 169896,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 170873,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 171850,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 172827,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 173804,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  },
+  "fp-zeta-hermes-agent": {
+   "arm": "hermes-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 186740,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 187717,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 188694,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 189671,
+     "disposition": "inconclusive{infra:runner_crash}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 190648,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  },
+  "fp-zeta-mini-swe-agent": {
+   "arm": "mini-swe-agent",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 165685,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 166662,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 167639,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 168616,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 169593,
+     "disposition": "executed{unresolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "unresolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  },
+  "fp-zeta-opencode": {
+   "arm": "opencode",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 178318,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 179295,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 180272,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 181249,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 182226,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  },
+  "fp-zeta-openhands": {
+   "arm": "openhands",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 174107,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 175084,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 176061,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 177038,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 178015,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  },
+  "fp-zeta-pi": {
+   "arm": "pi",
+   "attempts": [
+    {
+     "attempt": 1,
+     "cost_micros": 182529,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1200,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41000,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6300,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 2,
+     "cost_micros": 183506,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1217,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41331,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6341,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 3,
+     "cost_micros": 184483,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1234,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41662,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6382,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 4,
+     "cost_micros": 185460,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1251,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 41993,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6423,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    },
+    {
+     "attempt": 5,
+     "cost_micros": 186437,
+     "disposition": "executed{resolved}",
+     "flagged": false,
+     "phases": [
+      {
+       "duration_ms": 1268,
+       "name": "setup"
+      },
+      {
+       "duration_ms": 42324,
+       "name": "agent"
+      },
+      {
+       "duration_ms": 6464,
+       "name": "verify"
+      }
+     ],
+     "verdict": "resolved"
+    }
+   ],
+   "repair_class": null,
+   "task": "swe-bench-fixture-zeta"
+  }
+ }
 }

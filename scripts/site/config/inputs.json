@@ -10,6 +10,9 @@
     {"id": "estimators", "path": "docs/build/reports/2026-11-07-p1-estimators.json", "schema": "hh-p1-estimators/1", "phase": "phase-1"},
     {"id": "deviations", "path": "docs/build/reports/2026-11-07-s4-protocol-deviations.json", "schema": "hh-protocol-deviations/1", "phase": "phase-1"},
     {"id": "record", "path": "docs/results/phase1-execution-surface-replay.md", "schema": "hh-p1-bounds-record/1", "phase": "phase-1", "format": "markdown-bounds"},
-    {"id": "p2-fp", "path": "scripts/site/fixtures/phase2-fp-results.json", "schema": "hh-comparative-results/1", "phase": "phase-2", "fixture": true}
+    {"id": "p2-fp", "path": "scripts/site/fixtures/phase2-fp-results.json", "schema": "hh-comparative-results/1", "phase": "phase-2", "fixture": true},
+    {"id": "p2-pilot", "path": "scripts/site/fixtures/phase2-pilot.json", "schema": "hh-pilot-measure/1", "phase": "phase-2", "fixture": true, "note": "declared fixture for the §6.6 pilot packet — producer schema pending (R6.40); REQ-XD-043 fields only"},
+    {"id": "p2-quote", "path": "scripts/site/fixtures/phase2-quote.json", "schema": "comparative-quote/1", "phase": "phase-2", "fixture": true},
+    {"id": "p2-index", "path": "scripts/site/fixtures/phase2-receipt-index.json", "schema": "hh-receipt-index/1", "phase": "phase-2", "fixture": true, "note": "strict codec — the packet itself can carry no fixture member; dataset.visibility stays private so every trial renders withheld{dataset_private}"}
   ]
 }

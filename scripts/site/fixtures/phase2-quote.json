@@ -1,0 +1,91 @@
+{
+ "compute": [
+  {
+   "ceiling_micros": 8000000,
+   "quote_id": "pq-fixture-w4",
+   "window": "W4"
+  }
+ ],
+ "compute_ceiling_micros": 8000000,
+ "concurrency_c": 4,
+ "envelope_adr": "ADR-0435",
+ "envelope_label": "pre-quote",
+ "fixture": true,
+ "fixture_label": "declared presentation fixture (the seal, X-07)",
+ "k": 5,
+ "metadata": {
+  "method": "comparative_quote",
+  "note": "fixture \u2014 not a priced gate"
+ },
+ "quote_id": "sha256:e800c0c1a2c7c21aca48af449fa0fda3be5bfc9e01617b0d1ed9da76b4eaa6a2",
+ "rows": [
+  {
+   "arms": [
+    "mini-swe-agent",
+    "claude-code",
+    "pi",
+    "hermes-agent"
+   ],
+   "h": 4,
+   "instance_millis": 22000000,
+   "measure_refs": [
+    "fixture:hh-pilot-measure/1#mini-swe-agent",
+    "fixture:hh-pilot-measure/1#claude-code",
+    "fixture:hh-pilot-measure/1#pi",
+    "fixture:hh-pilot-measure/1#hermes-agent"
+   ],
+   "model": {
+    "ceiling_micros": 24400000,
+    "expected_micros": 17500000
+   },
+   "n_trials": 200,
+   "row_id": "menu-4-arm",
+   "sim": {
+    "bootstrap_hw_ppm": 210000,
+    "fm_hw_ppm": 180000,
+    "p_unresolved_ppm": 90000,
+    "power_ppm": 260000,
+    "source": "fixture:declared-sim-cells"
+   },
+   "verdict": "below_target{bootstrap_hw}",
+   "wall_millis": 11000000
+  },
+  {
+   "arms": [
+    "mini-swe-agent",
+    "claude-code",
+    "openhands",
+    "opencode",
+    "pi",
+    "hermes-agent"
+   ],
+   "h": 6,
+   "instance_millis": 30400000,
+   "measure_refs": [
+    "fixture:hh-pilot-measure/1#mini-swe-agent",
+    "fixture:hh-pilot-measure/1#claude-code",
+    "fixture:hh-pilot-measure/1#openhands",
+    "fixture:hh-pilot-measure/1#opencode",
+    "fixture:hh-pilot-measure/1#pi",
+    "fixture:hh-pilot-measure/1#hermes-agent"
+   ],
+   "model": {
+    "ceiling_micros": 36100000,
+    "expected_micros": 26800000
+   },
+   "n_trials": 300,
+   "row_id": "menu-6-arm",
+   "sim": {
+    "bootstrap_hw_ppm": 210000,
+    "fm_hw_ppm": 180000,
+    "p_unresolved_ppm": 90000,
+    "power_ppm": 260000,
+    "source": "fixture:declared-sim-cells"
+   },
+   "verdict": "below_target{bootstrap_hw}",
+   "wall_millis": 15200000
+  }
+ ],
+ "schema": "comparative-quote/1",
+ "t": 10
+}
