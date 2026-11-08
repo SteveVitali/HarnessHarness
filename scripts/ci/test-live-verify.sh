@@ -54,6 +54,9 @@ fi
 out=$(env HH_LIVE_ENV="$T/empty.env" HH_LIVE_DIR="$T/live" bash "$LV" --check-names local-reachability)
 printf '%s\n' "$out" | grep -q 'HH_LOCAL_BASE_URL provided: no' \
   || bad "--check-names <leg> did not report the leg's names"
+# admission-build (R6.22, W1/R6.32's) is registered and names-free
+out=$(run bash "$LV" --check-names admission-build 2>&1)
+[ $? -eq 0 ] || bad "--check-names admission-build: $out"
 
 # ── 2. missing NAME → exit 4 ────────────────────────────────────────────
 check "missing NAME refuses (exit 4)" 4 \

@@ -387,7 +387,14 @@ pub fn adapter_c_record(
         hosting_mechanism: hharness_ontology::participant::HostingMechanism::ContainerInstalled,
         participant_selector: Json::obj([("mechanism", Json::str("container_installed"))]),
         declaration_defaults: defaults,
-        placement_supported: [ProcessPlacement::InEnvironment].into_iter().collect(),
+        placement_supported: [
+            ProcessPlacement::InEnvironment,
+            // `lab_host` is declared now (REQ-XC-301; R6.22/ADR-0436) —
+            // a lab_host slot still refuses typed until AR-19.
+            ProcessPlacement::LabHost,
+        ]
+        .into_iter()
+        .collect(),
         lowering_table_ref: None,
         loss_report_ref: None,
         debt,

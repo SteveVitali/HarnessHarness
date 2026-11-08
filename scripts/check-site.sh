@@ -13,9 +13,9 @@
 # while drift/determinism still rebuild. Exit 0 green, 1 a leg failed,
 # 2 usage/malformed input.
 #
-# The fourteen legs of spec §9.4: lexicon, conditional, intervals,
+# The fifteen legs of spec §9.4: lexicon, conditional, intervals,
 # ranks, availability, provenance, labels, no-third-party, a11y-static,
-# links, budgets, determinism, drift, hygiene.
+# links, budgets, determinism, drift, hygiene, logos (R6.22).
 set -euo pipefail
 
 MODE=work
@@ -1005,6 +1005,43 @@ if bad:
 else:
     ok("hygiene", "no local paths, fixture labels, preview banners, "
        "secret shapes or private dataset paths")
+
+# ── leg 15: logos — no third-party logo without a recorded permission ──
+# REQ-XC-202 (R6.22/ADR-0436): the site carries no logo-shaped mark — an
+# <img> element, a class/id/alt/src/href naming "logo", or a logo-named
+# asset — unless a site-data record's `logo_permissions` member names it
+# (empty today; monograms are typographic marks, never vendor marks).
+permitted = set()
+for name, b in committed.items():
+    try:
+        rec = json.loads(b)
+    except Exception:
+        continue
+    if isinstance(rec, dict):
+        for m in rec.get("logo_permissions") or []:
+            permitted.add(str(m))
+bad = []
+LOGO_RES = [
+    r"<img[^>]*>",
+    r"(?:class|id|alt|src|href)\s*=\s*[\"'][^\"']*logo[^\"']*[\"']",
+]
+for where, t in scan.items():
+    for pat in LOGO_RES:
+        for m in re.finditer(pat, t, re.IGNORECASE):
+            mark = m.group(0)
+            if not any(p and p in mark for p in permitted):
+                bad.append("%s: logo-shaped mark %r without a recorded "
+                           "permission" % (where, mark[:60]))
+for rel in tree:
+    if "logo" in rel.lower() and rel not in permitted:
+        bad.append("site:%s: logo-named asset without a recorded "
+                   "permission" % rel)
+if bad:
+    for b in bad[:6]:
+        fail("logos", b)
+else:
+    ok("logos", "no third-party logo — the permission set is empty and "
+       "no logo-shaped mark is present")
 
 # ── summary ────────────────────────────────────────────────────────────
 if fails:

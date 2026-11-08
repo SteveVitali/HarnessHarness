@@ -225,3 +225,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0433](ADR-0433-r6.15-egress-allowlist-mediated.md) | `allowlist_mediated` — the paid-cell egress profile (AR-05) | R6.15 (EGRESS a+b — absorbs C2 EGRESS) | accepted (lands with manifest 268/R6.15) |
 | [ADR-0434](ADR-0434-r6.18-protocol-support-gate.md) | The comparative-protocol support gate for stochastic hosted participants (AR-12) | R6.18 (SELECT + D1-a) | accepted (lands with manifest 271/R6.18) |
 | [ADR-0435](ADR-0435-r6.18-experiments-envelope-quote-ceilings.md) | Experiments envelopes and quote ceilings (AR-13) | R6.18 (SELECT + D1-a) | accepted (lands with manifest 271/R6.18) |
+| [ADR-0436](ADR-0436-r6.22-harness-admission.md) | Harness admission record, two-stage build, ST2 verify-only (AR-18) | R6.22 (ADMIT-CORE (a)+(b)) | accepted (lands with manifest 275/R6.22) |

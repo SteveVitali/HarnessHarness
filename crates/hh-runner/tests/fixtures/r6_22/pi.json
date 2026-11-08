@@ -1,0 +1,120 @@
+{
+  "schema": "hh-harness-admission/1",
+  "admission_timing": "outcome_blind",
+  "harness": {
+    "name": "pi",
+    "role": "comparator",
+    "harbor_agent": "pi",
+    "version": "0.52.3",
+    "version_source": "npm",
+    "freeze_at": "2026-11-08T00:00:00Z",
+    "legal": {
+      "posture": "open",
+      "license_spdx": "MIT",
+      "branding": "name_only"
+    }
+  },
+  "install": {
+    "recipe_ref": {
+      "derived_from": {
+        "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013",
+        "adapter": "pi",
+        "member": "install()",
+        "attribution": "Harbor install templates (Apache-2.0)"
+      },
+      "deviations": [
+        {
+          "what": "npm package pinned at 0.52.3 with a lockfile",
+          "why": "Harbor's <spec> defaults to latest; the npm lockfile is the lock (REQ-XD-081)"
+        },
+        {
+          "what": "leading-dash instruction hazard declared",
+          "why": "Pi passes the instruction positionally without --; a pre-check flags it (design/34 F13)"
+        }
+      ]
+    },
+    "bundle": {
+      "digest": "sha256:187947b2c8821902ecac2c3acbd02f86c9e023e08c202da9ebbcb3c9be14e11f",
+      "builder_base": "docker.io/library/debian@sha256:292901e63e322e7edb3686667cf4c956c3f90032ae86555ec79fd6302fa80110",
+      "resolved_manifest_ref": "sha256:f34b18f7cfb2ad494f6fb465c8d070e8793dc0ab7bdade276e08185922a36cee",
+      "build_log_ref": "sha256:a800f4aa7377531e7d3f97948e9886439b90de6c5cea14a232c86a7c3753846c",
+      "built_at": "pending:W1"
+    },
+    "system_deps": {
+      "set": ["curl", "git", "ca-certificates"],
+      "per_image_delta_ref": "sha256:16bc29f96009cb137eb49c6c513eb9e22ddb4af3428f974003f00ebc3ecb65a8"
+    },
+    "layers": {
+      "docker.io/alexgshaw/task-base-a@sha256:37bbbbed5fd87cbc8c1b2084b1c48b52170cfe0d9d0ac70f0ebe26ef3d835c9b": "hh-admit/pi-0.52.3@sha256:6f57ccb044133e63711bdfb6679279cce54d49b2e1b01467be278e5cf0634479"
+    },
+    "install_tree_paths": ["/opt/hh-harness/pi-0.52.3"],
+    "version_probe": ["/opt/hh-harness/pi-0.52.3/bin/pi", "--version"]
+  },
+  "runtime": {
+    "node": {"version": "22.19.0"}
+  },
+  "config": {
+    "renderer_id": "adpt.pi",
+    "renderer_version": "1",
+    "template_hash": "sha256:a7afe442bf999511196aff5f60f24b162301e0034287056a878cebe729dd026f",
+    "effort": {"mechanism": "--thinking", "value": "high"},
+    "limits_ref": "q-x29:harbor-in-agent-defaults",
+    "disable_switches": [
+      {"switch": "compat.supportsDeveloperRole=false", "purpose": "HF repair; evaluated in smoke"}
+    ],
+    "instruction_passing": "argv",
+    "model_selector": "glm-5.3-flash",
+    "surface": "openai.chat",
+    "base_url_suffix": "/v1",
+    "rendered_paths": ["/tmp/harbor-pi-agent/models.json"]
+  },
+  "egress": {
+    "expected_denied": [
+      {"host_or_pattern": "registry.npmjs.org", "purpose": "package index — build-time only; denied at run"}
+    ],
+    "must_reach": ["model_relay"]
+  },
+  "client": {
+    "model_timeout_s": "unknown",
+    "retry_policy": "unknown",
+    "streaming": true,
+    "tolerates": {"heartbeat": "unknown", "payment_refusal": "unknown", "rate_limit": "unknown"}
+  },
+  "completion": {
+    "detector": "process_exit",
+    "native_status_parser": "pi --mode json terminal event"
+  },
+  "artifacts": {
+    "native_paths": ["/logs/agent/pi/sessions", "/logs/agent/pi.txt"],
+    "atif": {"converter_at": "ff2a1ef48070a8df374669138e4d4db79b77f013"}
+  },
+  "gates": {
+    "AG1": {"result": "pass", "evidence_ref": "legal:spdx-MIT"},
+    "AG2": {"result": "pass", "evidence_ref": "adapter:models.json provider harbor-endpoint"},
+    "AG3": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG4": {"result": "pass", "evidence_ref": "install:npm-lockfile"},
+    "AG5": {"result": "pass", "evidence_ref": "egress:expected_denied+pending:W1-smoke"},
+    "AG6": {"result": "pass", "evidence_ref": "proxy:receipts-only+pending:W1-smoke"},
+    "AG7": {"result": "pass", "evidence_ref": "config:template_hash+effort-pin"},
+    "AG8": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG9": {"result": "pass", "evidence": {"harbor_adapter": "pi", "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013", "same_image": true}}
+  },
+  "posture": {
+    "placement": "in_environment",
+    "residuals": ["side_channel{model_route_reachable_from_agent_tools}"]
+  },
+  "attributes": {
+    "a1_wire_format": "openai.chat; 4-tool minimal design",
+    "a2_cached_share": "unmeasured",
+    "a3_trajectory": "session jsonl → trajectory.json",
+    "a4_install": "npm install -g --ignore-scripts + nvm node",
+    "a5_known_issues": "leading-dash instruction exits (declared hazard)",
+    "a6_priors": "HF board prior, labelled non-replication",
+    "a7_maintenance": "active"
+  },
+  "verification": {
+    "class": "fixture-verified",
+    "unverified_until": "W1",
+    "members": ["bundle.digest", "layers", "config.template_hash", "gates.AG3", "gates.AG5", "gates.AG6", "gates.AG8", "harness.version"]
+  }
+}

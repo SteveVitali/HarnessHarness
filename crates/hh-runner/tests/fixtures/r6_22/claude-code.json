@@ -1,0 +1,135 @@
+{
+  "schema": "hh-harness-admission/1",
+  "admission_timing": "outcome_blind",
+  "harness": {
+    "name": "claude-code",
+    "role": "comparator",
+    "harbor_agent": "claude-code",
+    "version": "2.1.50",
+    "version_source": "npm",
+    "freeze_at": "2026-11-08T00:00:00Z",
+    "legal": {
+      "posture": "proprietary",
+      "license_spdx": "none",
+      "terms_quote": "Use is subject to Anthropic's Commercial Terms of Service; the Claude Code binary must not be modified when run in products or hosted sandboxes",
+      "terms_source_ref": "research-27 F6 (S7 LICENSE.md; S8 legal-and-compliance; S9 Commercial Terms D.4)",
+      "operator_ack_ref": "Q-X26 (Appendix B, received 2026-11-06)",
+      "branding": "name_only",
+      "qx26": {
+        "unmodified_pinned_binary": true,
+        "no_claude_account": true,
+        "black_box_arm_only": true,
+        "name_without_logo": true,
+        "unsupported_statement_disclosed": true,
+        "disclosure": "Anthropic doesn't support routing Claude Code to non-Claude models through any gateway",
+        "binary_sha256": "sha256:bb62409a9f8ddda93fe07ff73eb9ec67d4515ad5c3894fe1d580539f2af9ea9b"
+      }
+    }
+  },
+  "install": {
+    "recipe_ref": {
+      "derived_from": {
+        "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013",
+        "adapter": "claude_code",
+        "member": "install()",
+        "attribution": "Harbor install templates (Apache-2.0)"
+      },
+      "deviations": [
+        {
+          "what": "npm package pinned at 2.1.50 with a lockfile; the bootstrap.sh path is unused",
+          "why": "Q-X26 unmodified pinned binary at an exact version (REQ-XD-081)"
+        }
+      ]
+    },
+    "bundle": {
+      "digest": "sha256:242ea0f73f054fa89676dd5c54978c6f81ac353741937681fc103bb9478d03af",
+      "builder_base": "docker.io/library/debian@sha256:311f930add713cc26a7bab2ab848904230a587103b41286360ec21623b8f523c",
+      "resolved_manifest_ref": "sha256:1f973736f0c1fe5ff7a5b0b05b7f96d541ab406a1b1199642d8e2cca537a3a02",
+      "build_log_ref": "sha256:672b268bbc546f89fd3c2da71656d073ec031c6a847221e4a4bc0e7ddbdd36db",
+      "built_at": "pending:W1"
+    },
+    "system_deps": {
+      "set": ["curl", "git", "ca-certificates", "ripgrep"],
+      "per_image_delta_ref": "sha256:827e4ac5f63d42156371d5ec94023c171c0a39e64a5e966f50ea7fc01374dffd"
+    },
+    "layers": {
+      "docker.io/alexgshaw/task-base-a@sha256:37bbbbed5fd87cbc8c1b2084b1c48b52170cfe0d9d0ac70f0ebe26ef3d835c9b": "hh-admit/claude-code-2.1.50@sha256:5386e86c9450fdebe68309b491d51e61d751c3add85fed469a8692745cccfb7e",
+      "docker.io/alexgshaw/task-base-b@sha256:b977da3c7aa32912c9718c37e6bc5830f89543921c9427bdaf3f6c8397210114": "hh-admit/claude-code-2.1.50@sha256:33fc332a4fbef10c366d720747a1236684bfb18ef8b6b40b280fb4f958d01f0c"
+    },
+    "install_tree_paths": ["/opt/hh-harness/claude-code-2.1.50"],
+    "version_probe": ["/opt/hh-harness/claude-code-2.1.50/bin/claude", "--version"]
+  },
+  "runtime": {
+    "node": {"version": "22.19.0"}
+  },
+  "config": {
+    "renderer_id": "adpt.claude_code",
+    "renderer_version": "1",
+    "template_hash": "sha256:4e3a2437587b1bf105bea7059404a368e6d24505fc7a9b3848674492bfb4b363",
+    "effort": {"mechanism": "--effort", "value": "high"},
+    "limits_ref": "q-x29:harbor-in-agent-defaults",
+    "disable_switches": [
+      {"switch": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1", "purpose": "auto-updates, telemetry, error reporting off"},
+      {"switch": "--disallowedTools WebSearch,WebFetch", "purpose": "web tools denied"},
+      {"switch": "ANTHROPIC_API_KEY=", "purpose": "no API key — the slot token is the only credential"},
+      {"switch": "CLAUDE_CODE_OAUTH_TOKEN=", "purpose": "no OAuth — no Claude account (Q-X26 term 2)"},
+      {"switch": "IS_SANDBOX=1", "purpose": "sandbox posture declared"}
+    ],
+    "instruction_passing": "stdin",
+    "model_selector": "glm-5.3-flash",
+    "surface": "anthropic.messages",
+    "base_url_suffix": "",
+    "rendered_paths": ["/logs/agent/sessions/.claude.json", "/opt/hh-harness/claude-code-2.1.50/.hh-env"]
+  },
+  "egress": {
+    "expected_denied": [
+      {"host_or_pattern": "api.anthropic.com", "purpose": "vendor model host — all Anthropic hosts denied and counted (REQ-XC-327)"},
+      {"host_or_pattern": "statsig.anthropic.com", "purpose": "telemetry"},
+      {"host_or_pattern": "sentry.io", "purpose": "error reporting"}
+    ],
+    "must_reach": ["model_relay"]
+  },
+  "client": {
+    "model_timeout_s": "unknown",
+    "retry_policy": "unknown",
+    "streaming": true,
+    "tolerates": {"heartbeat": "unknown", "payment_refusal": "unknown", "rate_limit": "unknown"}
+  },
+  "completion": {
+    "detector": "process_exit",
+    "native_status_parser": "stream-json terminal event"
+  },
+  "artifacts": {
+    "native_paths": ["/logs/agent/sessions", "/logs/agent/claude-code.txt"],
+    "atif": "none"
+  },
+  "gates": {
+    "AG1": {"result": "pass", "evidence_ref": "legal:qx26+operator_ack"},
+    "AG2": {"result": "pass", "evidence_ref": "adapter:ANTHROPIC_BASE_URL+AUTH_TOKEN"},
+    "AG3": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG4": {"result": "pass", "evidence_ref": "install:npm-lockfile+binary_sha256"},
+    "AG5": {"result": "pass", "evidence_ref": "egress:expected_denied+pending:W1-smoke"},
+    "AG6": {"result": "pass", "evidence_ref": "proxy:receipts-only+pending:W1-smoke"},
+    "AG7": {"result": "pass", "evidence_ref": "config:template_hash+effort-pin"},
+    "AG8": {"result": "pass", "evidence_ref": "pending:W1-smoke-SM-pos"},
+    "AG9": {"result": "pass", "evidence": {"harbor_adapter": "claude-code", "harbor_commit": "ff2a1ef48070a8df374669138e4d4db79b77f013", "same_image": true}}
+  },
+  "posture": {
+    "placement": "in_environment",
+    "residuals": ["side_channel{model_route_reachable_from_agent_tools}"]
+  },
+  "attributes": {
+    "a1_wire_format": "anthropic.messages; streaming",
+    "a2_cached_share": "presumed absent for planning (C1 F3)",
+    "a3_trajectory": "session jsonl",
+    "a4_install": "npm package pinned; unmodified binary",
+    "a5_known_issues": "count_tokens route refused by proxy — estimate fallback (§5.4)",
+    "a6_priors": "HF board prior, labelled non-replication",
+    "a7_maintenance": "vendor-maintained, closed"
+  },
+  "verification": {
+    "class": "fixture-verified",
+    "unverified_until": "W1",
+    "members": ["bundle.digest", "layers", "config.template_hash", "gates.AG3", "gates.AG5", "gates.AG6", "gates.AG8", "harness.version", "legal.qx26.binary_sha256"]
+  }
+}
