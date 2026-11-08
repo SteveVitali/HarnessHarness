@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.26
-lastCompleted:   R6.25
+nextTicket:      R6.27
+lastCompleted:   R6.26
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,7 +28,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.25
+chainTip:         codex/harnessharness-r6.26
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
