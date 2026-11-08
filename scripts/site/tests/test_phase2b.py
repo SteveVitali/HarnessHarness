@@ -127,8 +127,12 @@ def main():
         # ── AC-3: phase-1 grid ────────────────────────────────────
         g = texts.get("phase-1/tasks/index.html", "")
         p1 = json.loads(bodies["phase1.json"])["body"]
-        t3 = json.loads((ROOT / "docs/build/reports/"
-                         "2026-11-05-parity-tranche-3.json").read_text())
+        # ground truth = the packet the site consumed, resolved through
+        # its declared input (not a hardcoded path).
+        t3_rel = next(e["path"] for e in json.loads(
+            (SITE / "config" / "inputs.json").read_text())["inputs"]
+                      if e["id"] == "parity-t3")
+        t3 = json.loads((ROOT / t3_rel).read_text())
         if not g:
             fail("p1-grid", "grid absent")
         else:
