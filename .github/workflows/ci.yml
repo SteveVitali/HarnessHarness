@@ -259,6 +259,13 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-gce-backend.sh
 
+      # R6.23 (manifest 276): the offline §4.10 upload-kit battery — fake
+      # `hf` shim, fixture harvest + env file; every REQ-XH-102/103/104/107
+      # refusal and the upload/verify/remediate paths, no HF call or token.
+      - name: HF upload kit fake-shim battery (offline)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/check-hf-upload.sh
+
       # R6.14 (manifest 267): the offline settlement battery — fake-clock
       # + fixture reads, no Ollama call; builds fixtures, not committed
       # docs content, so it stays gated like the build legs.

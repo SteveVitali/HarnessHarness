@@ -11,6 +11,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use hharness_runner::archive_upload::{
+    download_argv, pre_upload_scan, remediation_records, supersede_index, tool_admission,
+    upload_argv, upload_receipt, validate_upload_receipt, verify_readback, ReadbackOutcome,
+    ScanOutcome, SlotToken, HF_TOKEN_ENV, HF_WRITE_TOKEN_MEMBER, UPLOAD_TOOL_VERSION,
+};
 use hharness_runner::carried::carried_rebuild_guard;
 use hharness_runner::carried::{
     artifact_upload_decision, check_slot_identity, identity_h_set, image_id_normalize, run_export,
@@ -21,8 +26,11 @@ use hharness_runner::carried::{
 use hharness_runner::disposition::{AdmissionReason, Disposition, WithheldReason};
 use hharness_runner::facts::{map_slot_facts, SlotFacts};
 use hharness_runner::json_ext::JsonExt;
-use hharness_runner::receipt_index::validate_index;
+use hharness_runner::receipt_index::{file_entry, validate_index};
 use hharness_runner::slot_record::ExperimentSlot;
+use hharness_secrets::mask::{MaskEntry, MaskSet};
+use hharness_secrets::redact::{detect, DetectorSet};
+use hharness_secrets::types::SecretFingerprint;
 use hharness_wire::json::Json;
 
 fn tmp(tag: &str) -> PathBuf {
@@ -622,4 +630,378 @@ fn ac2_load_over_iap_pinned_argv_and_image_id_verify() {
         run_load(&plan, &d.join("load2.log")).unwrap_err()
     });
     assert_eq!(bad.rule, "load.image_id_mismatch");
+}
+
+// ── AC-3 (AC-4.10-3) — upload receipt + tool admission + refusals ────────
+
+#[test]
+fn ac3_upload_receipt_admission_provided_and_codec() {
+    let adm = tool_admission();
+    assert_eq!(adm.get("name").and_then(Json::as_str), Some("hf"));
+    assert_eq!(
+        adm.get("version").and_then(Json::as_str),
+        Some(UPLOAD_TOOL_VERSION)
+    );
+    assert_eq!(
+        adm.get("admission").and_then(Json::as_str),
+        Some("ADR-0437")
+    );
+    // the argv verbs: upload/download only — login can never appear.
+    assert_eq!(
+        upload_argv("hh/receipts", "/h/r/f.bin", "w1/f.bin"),
+        vec![
+            "upload",
+            "hh/receipts",
+            "/h/r/f.bin",
+            "w1/f.bin",
+            "--repo-type",
+            "dataset"
+        ]
+    );
+    assert_eq!(
+        download_argv("hh/receipts", "w1/f.bin", "/tmp/rb"),
+        vec![
+            "download",
+            "hh/receipts",
+            "w1/f.bin",
+            "--repo-type",
+            "dataset",
+            "--local-dir",
+            "/tmp/rb"
+        ]
+    );
+    let files = vec![Json::obj([
+        ("path", Json::str("w1/f.bin")),
+        ("sha256", Json::str(&sha64('a'))),
+        ("bytes", Json::Int(3)),
+    ])];
+    let receipt = upload_receipt(
+        "upload",
+        "W1",
+        ("hh/receipts", "r1", "private"),
+        &files,
+        true,
+        &[],
+        None,
+    );
+    validate_upload_receipt(&receipt).unwrap();
+    // the provided block is yes|no only — the token value never appears.
+    assert_eq!(
+        receipt
+            .get("provided")
+            .and_then(|p| p.get(HF_WRITE_TOKEN_MEMBER))
+            .and_then(Json::as_str),
+        Some("yes")
+    );
+    // a non-private target refuses through the codec.
+    let mut bad = receipt.clone();
+    obj_mut(obj_mut(&mut bad).get_mut("dataset").unwrap())
+        .insert("visibility".into(), Json::str("public"));
+    // a `login` invocation has no verb — the kit emits upload/download only.
+    assert!(!upload_argv("r", "l", "p")
+        .iter()
+        .any(|a| a == "login" || a == "auth"));
+    let e = validate_upload_receipt(&bad).unwrap_err();
+    assert_eq!(e.rule, "dataset.not_private");
+    // a different tool / a missing provided block refuses.
+    let mut bad2 = receipt.clone();
+    obj_mut(obj_mut(&mut bad2).get_mut("tool").unwrap())
+        .insert("version".into(), Json::str("9.9.9"));
+    assert!(validate_upload_receipt(&bad2).is_err());
+    let mut bad3 = receipt.clone();
+    obj_mut(&mut bad3).remove("provided");
+    assert!(validate_upload_receipt(&bad3).is_err());
+    // a receipt is leak-clean against the operator mask set.
+    let live = live_detectors();
+    let text = receipt.to_canonical_string();
+    assert!(detect(&text, &live)
+        .iter()
+        .all(|h| h.detector == hharness_secrets::redact::DetectorKind::PlaceholderPassthrough));
+    // REQ-XH-102's owed predicate is rowed — DF-R6.23-1 (window rows
+    // R6.40/44/45/47): the kit produces `archive_verified` indexes the
+    // gates cite; the citation itself is the windows' gate readouts.
+}
+
+fn fp_of(v: &str) -> SecretFingerprint {
+    SecretFingerprint {
+        channel_id: "x".into(),
+        revision: 0,
+        digest: hharness_wire::sha256::sha256_hex(format!("sf\u{1f}{v}").as_bytes())[..32]
+            .to_string(),
+    }
+}
+
+fn mask_of(channel: &str, value: &str) -> MaskEntry {
+    MaskEntry {
+        channel_id: channel.into(),
+        revision: 0,
+        value: value.into(),
+        fingerprint: fp_of(value),
+        live: true,
+        placeholder: None,
+    }
+}
+
+/// The §4.10 live-credential mask set (fixture values; real values read
+/// at use from the operator env file — never committed).
+fn live_detectors() -> DetectorSet {
+    let mut ms = MaskSet::default();
+    ms.insert(mask_of("OLLAMA_API_KEY", "fix-ollama-live-secret-0000"));
+    ms.insert(mask_of("HF_WRITE_TOKEN", "hf_fixturewritetoken0000000000"));
+    ms.insert(mask_of("GCP_CREDENTIALS", "fix-gcp-cred-0000"));
+    DetectorSet::standard(ms)
+}
+
+// ── AC-4 (AC-4.10-4) — the three-tier pre-upload scan ────────────────────
+
+#[test]
+fn ac4_live_secret_refuses_and_stops() {
+    let live = live_detectors();
+    let text = "receipt body hf_fixturewritetoken0000000000 more";
+    match pre_upload_scan("raw_receipts", "w1/r.bin", text, &live, &[]) {
+        ScanOutcome::Refuse { reason, .. } => assert_eq!(reason, "live_credential"),
+        other => panic!("expected refuse, got {other:?}"),
+    }
+    // a registered-pattern hit (openai_key shape) also refuses.
+    let text2 = "sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    match pre_upload_scan("transcript", "w1/t.jsonl", text2, &live, &[]) {
+        ScanOutcome::Refuse { reason, .. } => assert_eq!(reason, "live_credential"),
+        other => panic!("expected refuse, got {other:?}"),
+    }
+}
+
+#[test]
+fn ac4_revoked_slot_token_stays_raw_tombstoned_derived_unrevoked_refuses() {
+    let live = live_detectors();
+    let tok = SlotToken {
+        value: "slot-token-fixture-9f8e".into(),
+        revoked_ref: Some("proxy-run:ev-42 (security.credential.revoked)".into()),
+    };
+    // revoked → stays in a raw role, recorded by fingerprint.
+    match pre_upload_scan(
+        "raw_receipts",
+        "w1/r.bin",
+        "x slot-token-fixture-9f8e y",
+        &live,
+        &[tok.clone()],
+    ) {
+        ScanOutcome::Clean { stays } => assert_eq!(stays.len(), 1),
+        other => panic!("expected clean, got {other:?}"),
+    }
+    // the same token in a derived role was not tombstoned → refuse.
+    match pre_upload_scan(
+        "transcript",
+        "w1/t.jsonl",
+        "x slot-token-fixture-9f8e y",
+        &live,
+        &[tok.clone()],
+    ) {
+        ScanOutcome::Refuse { reason, .. } => assert_eq!(reason, "tombstone_missing"),
+        other => panic!("expected refuse, got {other:?}"),
+    }
+    // an unrevoked token is a live hit.
+    let live_tok = SlotToken {
+        value: "slot-token-fixture-live".into(),
+        revoked_ref: None,
+    };
+    match pre_upload_scan(
+        "raw_receipts",
+        "w1/r.bin",
+        "x slot-token-fixture-live y",
+        &live,
+        &[live_tok],
+    ) {
+        ScanOutcome::Refuse { reason, .. } => assert_eq!(reason, "unrevoked_slot_token"),
+        other => panic!("expected refuse, got {other:?}"),
+    }
+    // a clean file passes with no stays.
+    match pre_upload_scan("raw_receipts", "w1/r.bin", "clean body", &live, &[tok]) {
+        ScanOutcome::Clean { stays } => assert!(stays.is_empty()),
+        other => panic!("expected clean, got {other:?}"),
+    }
+}
+
+// ── AC-5 (AC-4.10-5) — read-back + supersession ──────────────────────────
+
+fn fixture_index(sha: &str) -> Json {
+    Json::obj([
+        ("schema", Json::str("hh-receipt-index/1")),
+        (
+            "dataset",
+            Json::obj([
+                ("repo", Json::str("hh/receipts")),
+                ("revision", Json::str("r1")),
+                ("visibility", Json::str("private")),
+            ]),
+        ),
+        (
+            "attempts",
+            Json::Arr(vec![Json::obj([
+                ("slot_id", Json::str("s1")),
+                ("attempt", Json::Int(1)),
+                (
+                    "files",
+                    Json::Arr(vec![
+                        file_entry("raw_receipts", "w1/r.bin", sha.as_bytes()).unwrap()
+                    ]),
+                ),
+            ])]),
+        ),
+        (
+            "artifacts",
+            Json::Arr(vec![Json::obj([
+                ("role", Json::str("binary_set")),
+                ("name", Json::str("infrastructure")),
+                ("window", Json::str("W1")),
+                ("digest", Json::str(&format!("sha256:{}", sha64('9')))),
+                ("path", Json::str("artifacts/infra.tar")),
+                ("sha256", Json::str(&sha64('b'))),
+                ("bytes", Json::Int(4)),
+                ("upload", Json::str("archived")),
+            ])]),
+        ),
+        ("scans", Json::obj([])),
+    ])
+}
+
+#[test]
+fn ac5_readback_verified_mismatch_unavailable_and_supersession() {
+    let index = fixture_index("w1-file-bytes");
+    let file_sha = hharness_wire::sha256::sha256_hex(b"w1-file-bytes");
+    let mut rb = BTreeMap::new();
+    rb.insert("w1/r.bin".to_string(), Some(file_sha.clone()));
+    rb.insert("artifacts/infra.tar".to_string(), Some(sha64('b')));
+    assert_eq!(
+        verify_readback(&index, &rb),
+        ReadbackOutcome::ArchiveVerified
+    );
+    // a sha mismatch fails verification.
+    rb.insert("w1/r.bin".to_string(), Some(sha64('0')));
+    match verify_readback(&index, &rb) {
+        ReadbackOutcome::Mismatch { path } => assert_eq!(path, "w1/r.bin"),
+        other => panic!("expected mismatch, got {other:?}"),
+    }
+    // an unavailable read-back is inconclusive — never verified.
+    rb.insert("artifacts/infra.tar".to_string(), None);
+    rb.insert("w1/r.bin".to_string(), Some(file_sha));
+    match verify_readback(&index, &rb) {
+        ReadbackOutcome::ReadbackUnavailable { path } => {
+            assert_eq!(path, "artifacts/infra.tar")
+        }
+        other => panic!("expected inconclusive, got {other:?}"),
+    }
+    // supersession: a new revision record references the earlier one.
+    let mut new_idx = fixture_index("w1-file-bytes");
+    obj_mut(obj_mut(&mut new_idx).get_mut("dataset").unwrap())
+        .insert("revision".into(), Json::str("r2"));
+    supersede_index(&mut new_idx, "receipt-index/w1-r1.json").unwrap();
+    assert_eq!(
+        new_idx.get("supersedes").and_then(Json::as_arr).unwrap()[0]
+            .get("ref")
+            .and_then(Json::as_str),
+        Some("receipt-index/w1-r1.json")
+    );
+    validate_index(&new_idx).unwrap();
+}
+
+// ── AC-6 (AC-4.10-8) — ordered remediation, no secret bytes ──────────────
+
+#[test]
+fn ac6_remediation_order_and_no_secret_bytes() {
+    let recs = remediation_records(
+        true,
+        "hh/receipts",
+        "r7",
+        "operator purge of revision r7 (dataset history)",
+        "post-upload secret found in w2/r9.bin",
+        &["receipt-index/w2-r7.json".to_string()],
+    );
+    assert_eq!(recs.len(), 3);
+    assert_eq!(
+        recs[0].get("schema").and_then(Json::as_str),
+        Some("hh-human-act/1")
+    );
+    assert_eq!(
+        recs[0]
+            .get("provided")
+            .and_then(|p| p.get("credential_rotated"))
+            .and_then(Json::as_str),
+        Some("yes")
+    );
+    assert_eq!(
+        recs[1].get("schema").and_then(Json::as_str),
+        Some("hh-archive-purge/1")
+    );
+    assert_eq!(recs[1].get("revision").and_then(Json::as_str), Some("r7"));
+    assert_eq!(
+        recs[2]
+            .get("tombstone")
+            .and_then(|t| t.get("reason"))
+            .and_then(Json::as_str),
+        Some("post-upload secret found in w2/r9.bin")
+    );
+    // a seeded secret swept over all three records finds no bytes.
+    let live = live_detectors();
+    let mut ms = MaskSet::default();
+    ms.insert(mask_of("x", "the-seeded-secret-value-99"));
+    let mut seeded = DetectorSet::standard(ms);
+    seeded.patterns = live.patterns.clone();
+    for r in &recs {
+        let text = r.to_canonical_string();
+        assert!(
+            detect(&text, &seeded)
+                .iter()
+                .all(|h| h.detector
+                    == hharness_secrets::redact::DetectorKind::PlaceholderPassthrough),
+            "secret bytes in {text}"
+        );
+    }
+}
+
+// ── AC-7 — every record the tests produce sweeps clean (REQ-XH-023) ─────
+
+#[test]
+fn ac7_no_record_carries_credential_bytes() {
+    let live = live_detectors();
+    let files = vec![Json::obj([
+        ("path", Json::str("w1/f")),
+        ("sha256", Json::str(&sha64('a'))),
+        ("bytes", Json::Int(1)),
+    ])];
+    let recs = vec![
+        upload_receipt(
+            "upload",
+            "W1",
+            ("hh/r", "r1", "private"),
+            &files,
+            true,
+            &[],
+            None,
+        ),
+        upload_receipt(
+            "verify",
+            "W1",
+            ("hh/r", "r1", "private"),
+            &files,
+            false,
+            &[],
+            Some("inconclusive{readback_unavailable}"),
+        ),
+        remediation_records(false, "hh/r", "r1", "n", "r", &[])[0].clone(),
+        tool_admission(),
+    ];
+    for r in &recs {
+        assert!(detect(&r.to_canonical_string(), &live)
+            .iter()
+            .all(|h| h.detector == hharness_secrets::redact::DetectorKind::PlaceholderPassthrough));
+    }
+    // provided is only ever yes|no.
+    for r in &recs[..2] {
+        let p = r
+            .get("provided")
+            .and_then(|x| x.get(HF_WRITE_TOKEN_MEMBER))
+            .and_then(Json::as_str);
+        assert!(matches!(p, Some("yes") | Some("no")));
+    }
+    let _ = HF_TOKEN_ENV;
 }
