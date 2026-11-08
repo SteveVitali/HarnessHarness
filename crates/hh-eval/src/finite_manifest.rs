@@ -984,6 +984,34 @@ pub fn arm_marginal_interval(
     }
 }
 
+/// `arm_marginal_headline(cells, prior, seed_material)` — the per-arm
+/// marginal's *reported* 95% equal-tail credible interval at
+/// [`BASE_DRAWS`]: the first `BASE_DRAWS` draws of the same
+/// `cell_posterior_draws` stream [`arm_marginal_interval`] consumes,
+/// so the returned interval is bit-identical to the estimator's
+/// reported interval while the 16k–64k doubling instrumentation stays
+/// the estimator's own. Used by the offline `comparative_battery`
+/// apparatus so the ≥2,000-datasets/scenario execution stays inside
+/// the D2 numerical envelope (the `finite_manifest_headline`
+/// precedent); never a second implementation and never a report path.
+pub fn arm_marginal_headline(
+    cells: &[(u64, u64)],
+    prior: (u64, u64),
+    seed_material: &str,
+) -> Interval {
+    let mut rng = XorShift64::seeded(seed_material);
+    let draws = cell_posterior_draws(cells, prior, &mut rng, BASE_DRAWS);
+    let t_n = cells.len() as i128;
+    let thetas: Vec<i64> = draws
+        .iter()
+        .map(|d| round_div(d.iter().map(|&p| i128::from(p)).sum(), t_n))
+        .collect();
+    Interval {
+        lo: quantile(&thetas, TAIL_PPM).unwrap_or(0),
+        hi: quantile(&thetas, PPM - TAIL_PPM).unwrap_or(0),
+    }
+}
+
 /// The estimator's reported headline — identical validation, cells,
 /// observed contrast, analytic posterior mean and the declared
 /// [`BASE_DRAWS`] equal-tail **credible** interval as
