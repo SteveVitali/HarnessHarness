@@ -1,0 +1,306 @@
+{
+  "schema": "hh-comparative-results/1",
+  "fixture": true,
+  "fixture_label": "presentation fixture for the phase-2 site components — never a first-pass result (the seal, X-07)",
+  "tranche": {"id": "fp", "band": "A"},
+  "family": {
+    "id": "P2-FP",
+    "method": "holm",
+    "alpha_ppm": 50000,
+    "reference": "mini-swe-agent",
+    "members": [
+      {"member": "hermes-agent", "status": "computed", "raw_p_ppm": 170000, "adjusted_ppm": 340000, "rejected_at_alpha": false},
+      {"member": "pi", "status": "computed", "raw_p_ppm": 190000, "adjusted_ppm": 380000, "rejected_at_alpha": false},
+      {"member": "claude-code", "status": "computed", "raw_p_ppm": 210000, "adjusted_ppm": 420000, "rejected_at_alpha": false},
+      {"member": "opencode", "status": "computed", "raw_p_ppm": 8000, "adjusted_ppm": 12000, "rejected_at_alpha": true},
+      {"member": "openhands", "status": "unavailable", "raw_p_ppm": null, "adjusted_ppm": 1000000, "rejected_at_alpha": false}
+    ]
+  },
+  "exploratory_family": {
+    "id": "P2-FP-expl",
+    "method": "benjamini_hochberg",
+    "members": [
+      {"member": "hermes-agent|pi", "raw_p_ppm": 400000, "adjusted_ppm": 400000},
+      {"member": "hermes-agent|claude-code", "raw_p_ppm": 420000, "adjusted_ppm": 420000},
+      {"member": "pi|claude-code", "raw_p_ppm": 390000, "adjusted_ppm": 390000}
+    ]
+  },
+  "metric": "capability.task_success",
+  "populations": ["joint_task_pass_without_observed_veto", "raw", "errors_zero"],
+  "labels": {
+    "internal_record": "internal record — not outside-verified",
+    "finite_manifest_scope": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark",
+    "hosted_participant": "stochastic hosted participant glm-5.3-flash via Ollama — catalog identity reported, not fingerprinted",
+    "allowlisted_network": "allowlisted agent network",
+    "not_leaderboard_comparable": "fewer than 89 tasks and other departures — not leaderboard-comparable",
+    "hf_context": "HF board figures are context from a different serving setup"
+  },
+  "harnesses": {
+    "hermes-agent": {
+      "theta": {
+        "ppm": 640000, "lo_ppm": 570000, "hi_ppm": 710000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 570000, "hi_ppm": 710000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 450000, "hi_ppm": 750000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 650000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 600000, "bound_hi_ppm": 700000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {
+        "ppm": 60000, "lo_ppm": -20000, "hi_ppm": 140000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -20000, "hi_ppm": 140000},
+        "p_raw_ppm": 170000, "p_holm_ppm": 340000, "separated": false,
+        "label": "confirmatory family P2-FP; α = .05 Holm"
+      },
+      "leader_group": {
+        "member": true, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -40000, "hi_ppm": 200000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 110000, "any_ppm": 890000},
+      "flips": {
+        "rerun": {"ppm": 420000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 300000, "hi_ppm": 540000}},
+        "swap_vs": {"pi": {"ppm": 360000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 240000, "hi_ppm": 480000}}},
+        "harness_excess": {"pi": {"ppm": 40000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -20000, "hi_ppm": 100000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 210000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 180000, "hi_ppm": 250000},
+                      "tails": {"p50_micros": 190000, "p90_micros": 240000, "p95_micros": 250000, "max_micros": 300000}},
+        "per_solve": {"micros": 330000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 440000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 340000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 300000, "hi_ppm": 390000}},
+        "per_solve": {"micros": 540000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 420000, "hi_ppm": 720000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v0.9.4": 50}, "served": {"hh/hermes-agent@0.9.4": 50}},
+      "completion": {"planned": 50, "first": 49, "recovered": 1, "unresolved": 0},
+      "integrity": {"flagged": 2, "confirmed": 1, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 1000000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    },
+    "pi": {
+      "theta": {
+        "ppm": 620000, "lo_ppm": 550000, "hi_ppm": 700000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 550000, "hi_ppm": 700000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 430000, "hi_ppm": 740000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 630000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 580000, "bound_hi_ppm": 690000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {
+        "ppm": 40000, "lo_ppm": -40000, "hi_ppm": 120000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -40000, "hi_ppm": 120000},
+        "p_raw_ppm": 190000, "p_holm_ppm": 380000, "separated": false,
+        "label": "confirmatory family P2-FP; α = .05 Holm"
+      },
+      "leader_group": {
+        "member": true, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -60000, "hi_ppm": 180000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 120000, "any_ppm": 880000},
+      "flips": {
+        "rerun": {"ppm": 430000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 310000, "hi_ppm": 550000}},
+        "swap_vs": {"hermes-agent": {"ppm": 370000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 490000}}},
+        "harness_excess": {"hermes-agent": {"ppm": 45000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -15000, "hi_ppm": 105000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 300000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 260000, "hi_ppm": 350000},
+                      "tails": {"p50_micros": 290000, "p90_micros": 340000, "p95_micros": 355000, "max_micros": 410000}},
+        "per_solve": {"micros": 480000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 390000, "hi_ppm": 600000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 460000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 410000, "hi_ppm": 520000}},
+        "per_solve": {"micros": 740000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 610000, "hi_ppm": 900000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v1.4": 50}, "served": {"hh/pi@1.4": 50}},
+      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
+      "integrity": {"flagged": 0, "confirmed": 0, "cleared": 0, "detector": "answer-scan/1", "coverage_ppm": 1000000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    },
+    "claude-code": {
+      "theta": {
+        "ppm": 610000, "lo_ppm": 530000, "hi_ppm": 680000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 530000, "hi_ppm": 680000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 420000, "hi_ppm": 730000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 620000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 560000, "bound_hi_ppm": 670000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {
+        "ppm": 30000, "lo_ppm": -50000, "hi_ppm": 110000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -50000, "hi_ppm": 110000},
+        "p_raw_ppm": 210000, "p_holm_ppm": 420000, "separated": false,
+        "label": "confirmatory family P2-FP; α = .05 Holm"
+      },
+      "leader_group": {
+        "member": true, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -70000, "hi_ppm": 190000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 115000, "any_ppm": 870000},
+      "flips": {
+        "rerun": {"ppm": 440000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 320000, "hi_ppm": 560000}},
+        "swap_vs": {"pi": {"ppm": 380000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 260000, "hi_ppm": 500000}}},
+        "harness_excess": {"pi": {"ppm": 50000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -10000, "hi_ppm": 110000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 180000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 150000, "hi_ppm": 220000},
+                      "tails": {"p50_micros": 175000, "p90_micros": 215000, "p95_micros": 225000, "max_micros": 260000}},
+        "per_solve": {"micros": 300000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 240000, "hi_ppm": 380000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 290000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 250000, "hi_ppm": 340000}},
+        "per_solve": {"micros": 480000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 390000, "hi_ppm": 600000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v2.1.7": 50}, "served": {"hh/claude-code@2.1.7": 50}},
+      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
+      "integrity": {"flagged": 1, "confirmed": 0, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 1000000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    },
+    "mini-swe-agent": {
+      "theta": {
+        "ppm": 580000, "lo_ppm": 500000, "hi_ppm": 660000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 500000, "hi_ppm": 660000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 400000, "hi_ppm": 700000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 590000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 540000, "bound_hi_ppm": 650000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {"state": "not_applicable", "reason": "reference arm"},
+      "leader_group": {
+        "member": true, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -80000, "hi_ppm": 160000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 100000, "any_ppm": 850000},
+      "flips": {
+        "rerun": {"ppm": 410000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 290000, "hi_ppm": 530000}},
+        "swap_vs": {"claude-code": {"ppm": 350000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 230000, "hi_ppm": 470000}}},
+        "harness_excess": {"claude-code": {"ppm": 35000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -25000, "hi_ppm": 95000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 50000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 40000, "hi_ppm": 62000},
+                      "tails": {"p50_micros": 48000, "p90_micros": 60000, "p95_micros": 62000, "max_micros": 75000}},
+        "per_solve": {"micros": 90000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 70000, "hi_ppm": 115000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 110000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 95000, "hi_ppm": 128000}},
+        "per_solve": {"micros": 190000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 160000, "hi_ppm": 230000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v2.4.6": 50}, "served": {"hh/mini-swe-agent@2.4.6": 50}},
+      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
+      "integrity": {"flagged": 0, "confirmed": 0, "cleared": 0, "detector": "answer-scan/1", "coverage_ppm": 1000000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    },
+    "opencode": {
+      "theta": {
+        "ppm": 450000, "lo_ppm": 370000, "hi_ppm": 530000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 370000, "hi_ppm": 530000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 300000, "hi_ppm": 600000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 460000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 400000, "bound_hi_ppm": 510000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {
+        "ppm": -130000, "lo_ppm": -210000, "hi_ppm": -50000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "lo_ppm": -210000, "hi_ppm": -50000},
+        "p_raw_ppm": 8000, "p_holm_ppm": 12000, "separated": true,
+        "label": "confirmatory family P2-FP; α = .05 Holm"
+      },
+      "leader_group": {
+        "member": false, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -190000, "hi_ppm": -10000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 70000, "any_ppm": 790000},
+      "flips": {
+        "rerun": {"ppm": 460000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 340000, "hi_ppm": 580000}},
+        "swap_vs": {"openhands": {"ppm": 400000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 280000, "hi_ppm": 520000}}},
+        "harness_excess": {"openhands": {"ppm": 55000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -5000, "hi_ppm": 115000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 90000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 75000, "hi_ppm": 108000},
+                      "tails": {"p50_micros": 88000, "p90_micros": 105000, "p95_micros": 108000, "max_micros": 125000}},
+        "per_solve": {"micros": 200000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 160000, "hi_ppm": 250000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 160000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 140000, "hi_ppm": 185000}},
+        "per_solve": {"micros": 350000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 290000, "hi_ppm": 430000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v1.0": 50}, "served": {"hh/opencode@1.0.2": 50}},
+      "completion": {"planned": 50, "first": 50, "recovered": 0, "unresolved": 0},
+      "integrity": {"flagged": 3, "confirmed": 1, "cleared": 2, "detector": "answer-scan/1", "coverage_ppm": 1000000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    },
+    "openhands": {
+      "theta": {
+        "ppm": 430000, "lo_ppm": 380000, "hi_ppm": 480000,
+        "interval": {"kind": "fm_credible", "level_ppm": 950000, "draws": 8000, "lo_ppm": 380000, "hi_ppm": 480000},
+        "bounds": {"kind": "all_planned", "lo_ppm": 340000, "hi_ppm": 540000},
+        "label": "finite-manifest: these 10 TB 2.1 held-out tasks (band A), not the 89-task benchmark"
+      },
+      "secondary_populations": {
+        "raw": {"rate_ppm": 440000, "label": "secondary population"},
+        "errors_zero": {"bound_lo_ppm": 380000, "bound_hi_ppm": 490000, "label": "secondary population — errors=0 all-planned bound"}
+      },
+      "delta_vs_ref": {"state": "refused", "variant": "UnresolvedCell"},
+      "leader_group": {
+        "member": false, "leader_id": "hermes-agent",
+        "diff_interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": -220000, "hi_ppm": -20000},
+        "label": "exploratory; leader selected from the same data"
+      },
+      "pass_at": {"k": 5, "all_ppm": 65000, "any_ppm": 760000},
+      "flips": {
+        "rerun": {"ppm": 450000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 330000, "hi_ppm": 570000}},
+        "swap_vs": {"opencode": {"ppm": 390000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 270000, "hi_ppm": 510000}}},
+        "harness_excess": {"opencode": {"ppm": 60000, "interval": {"kind": "task_bootstrap", "level_ppm": 950000, "lo_ppm": 0, "hi_ppm": 120000}}}
+      },
+      "cost": {
+        "per_trial": {"micros": 260000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 230000, "hi_ppm": 295000},
+                      "tails": {"p50_micros": 255000, "p90_micros": 290000, "p95_micros": 298000, "max_micros": 340000}},
+        "per_solve": {"micros": 620000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 520000, "hi_ppm": 760000}},
+        "provenance": "model_spend_only",
+        "label": "descriptive; model spend only"
+      },
+      "cost_with_compute": {
+        "per_trial": {"micros": 410000, "interval": {"kind": "clustered_bootstrap", "level_ppm": 950000, "lo_ppm": 370000, "hi_ppm": 460000}},
+        "per_solve": {"micros": 960000, "interval": {"kind": "task_resampled_ratio", "level_ppm": 950000, "lo_ppm": 830000, "hi_ppm": 1150000}},
+        "provenance": "with_compute",
+        "label": "descriptive; with compute"
+      },
+      "counts": {"analysis_basis": "assignment", "intended": {"v0.8.1": 50}, "served": {"hh/openhands@0.8.1": 49}},
+      "completion": {"planned": 50, "first": 49, "recovered": 0, "unresolved": 1},
+      "integrity": {"flagged": 4, "confirmed": 2, "cleared": 1, "detector": "answer-scan/1", "coverage_ppm": 980000,
+                    "label": "integrity panel — the confirmed count is a minimum"}
+    }
+  }
+}

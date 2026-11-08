@@ -27,6 +27,13 @@ BOUNDS_END = "<!-- bounds:end -->"
 BOUND_ITEM_RE = re.compile(r"^\s*\d+\.\s+(.*\S)\s*$", re.M)
 MD_BOUNDS_FORMAT = "markdown-bounds"
 
+# The seal (X-07): these schemas render declared presentation fixtures
+# only — no real first-pass outcome reaches a page before its results
+# row (REQ-XH-121). An input of a gated schema is admitted only when
+# the inputs.json entry AND the packet document each carry
+# ``fixture: true``; anything else is refused at load (exit 2).
+FIXTURE_GATED_SCHEMAS = frozenset({"hh-comparative-results/1"})
+
 
 def sha256_bytes(b):
     return hashlib.sha256(b).hexdigest()
@@ -59,6 +66,14 @@ class Input(object):
                 raise Refusal(
                     "input %r schema mismatch: declared %r, packet "
                     "carries %r" % (self.id, self.schema, declared))
+        if self.schema in FIXTURE_GATED_SCHEMAS and (
+                entry.get("fixture") is not True
+                or self.doc.get("fixture") is not True):
+            raise Refusal(
+                "input %r: %s admits declared fixtures only — the "
+                "inputs.json entry and the packet must each carry "
+                "fixture:true (the seal, X-07)"
+                % (self.id, self.schema))
         if entry.get("page") is not None:
             self.page = entry["page"]
 

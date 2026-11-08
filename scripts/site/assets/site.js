@@ -20,3 +20,27 @@
   try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint); } catch (e) { /* older engine */ }
   paint();
 }());
+
+/* view toggles (R6.20) — chip groups switch pre-rendered variants by
+   toggling `hidden` only; every value was rendered by the generator and
+   nothing is computed here (REQ-XF-115). */
+(function () {
+  var groups = document.querySelectorAll('[data-toggle-group]');
+  if (!groups.length) { return; }
+  groups.forEach(function (g) {
+    var name = g.getAttribute('data-toggle-group');
+    var chips = g.querySelectorAll('.chip[data-toggle-value]');
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var v = chip.getAttribute('data-toggle-value');
+        chips.forEach(function (c) {
+          c.setAttribute('aria-pressed', c === chip ? 'true' : 'false');
+        });
+        var root = g.closest('[data-toggle-root]') || document;
+        root.querySelectorAll('[data-variant-of="' + name + '"]').forEach(function (el) {
+          el.hidden = el.getAttribute('data-variant') !== v;
+        });
+      });
+    });
+  });
+}());

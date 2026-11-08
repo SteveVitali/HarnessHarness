@@ -9,6 +9,7 @@
     {"id": "xcheck", "path": "docs/build/reports/2026-11-07-p1-surface-xcheck.json", "schema": "hh-surface-xcheck/1", "phase": "phase-1"},
     {"id": "estimators", "path": "docs/build/reports/2026-11-07-p1-estimators.json", "schema": "hh-p1-estimators/1", "phase": "phase-1"},
     {"id": "deviations", "path": "docs/build/reports/2026-11-07-s4-protocol-deviations.json", "schema": "hh-protocol-deviations/1", "phase": "phase-1"},
-    {"id": "record", "path": "docs/results/phase1-execution-surface-replay.md", "schema": "hh-p1-bounds-record/1", "phase": "phase-1", "format": "markdown-bounds"}
+    {"id": "record", "path": "docs/results/phase1-execution-surface-replay.md", "schema": "hh-p1-bounds-record/1", "phase": "phase-1", "format": "markdown-bounds"},
+    {"id": "p2-fp", "path": "scripts/site/fixtures/phase2-fp-results.json", "schema": "hh-comparative-results/1", "phase": "phase-2", "fixture": true}
   ]
 }
