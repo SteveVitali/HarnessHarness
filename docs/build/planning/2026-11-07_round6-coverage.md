@@ -140,7 +140,7 @@ The re-partition generator's own checks agreed: every edge backward-only, the HU
 | [R6.29](../../tickets/283_R6.29__fp-continuation-holds.md) | ticket | FP runner rules (REQ-XH-112/117/126) + FP holds (REQ-XH-123/124/127) | 8: XH-112, XH-117, XH-126, XD-040, XD-042, XH-123, XH-124, XH-127 |
 | [R6.30](../../tickets/284_R6.30__fp-seal-select.md) | ticket | FP seal (REQ-XH-121) + SELECT commit (D1-d part 1) | 4: XH-121, XD-010, XD-012, XD-014 |
 | [R6.31](../../tickets/287_R6.31__pub-p1-record.md) | ticket | PUB-P1 | 1: XF-136 |
-| [R6.32](../../tickets/290_R6.32__w1-run.md) | skeleton | W1{PROV … TEARDOWN} (REPROOF, HOST-SMOKE, CENSUS) | 2: XB-125, XH-116 |
+| [R6.32](../../tickets/290_R6.32__w1-run.md) | ticket | W1{PROV … TEARDOWN} (REPROOF, HOST-SMOKE, CENSUS) | 2: XB-125, XH-116 |
 | [R6.33](../../tickets/291_R6.33__fp-prereg.md) | ticket | FP-PREREG (D1-d part 2) | 4: XH-111, XH-113, XH-115, XD-115 |
 | [R6.34](../../tickets/292_R6.34__e2-adr-wire.md) | ticket | E2-T0 + E2-T1 | 2: XE-107, XE-108 |
 | [R6.35](../../tickets/293_R6.35__tmpl-surface.md) | ticket | E2-T3 + E2-T2 (a) | 4: XE-112, XE-113, XE-103, XE-104 |
