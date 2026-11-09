@@ -659,10 +659,7 @@ pub fn derive_commit(
     let mut smoke = BTreeMap::new();
     for (cell, c) in dev_draw.cells.iter() {
         // cell spellings are "<difficulty>" inside the band-A dev draw
-        let diff = cell
-            .rsplit([':', '-'])
-            .next()
-            .unwrap_or(cell);
+        let diff = cell.rsplit([':', '-']).next().unwrap_or(cell);
         let resolved: Vec<String> = c
             .drawn
             .iter()
@@ -687,10 +684,7 @@ pub fn derive_commit(
     let held_draw = draw(HELD_DRAW.0)?;
     let mut successors = BTreeMap::new();
     for (cell, c) in held_draw.cells.iter() {
-        let diff = cell
-            .rsplit([':', '-'])
-            .next()
-            .unwrap_or(cell);
+        let diff = cell.rsplit([':', '-']).next().unwrap_or(cell);
         let remaining = held
             .replacement_order
             .get(cell)
