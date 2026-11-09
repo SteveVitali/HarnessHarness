@@ -19,3 +19,7 @@ crates/hh-env/tests/fixtures/p1/2026-11-07-s4-protocol-deviations.json	{"analysi
 crates/hh-runner/tests/r6_17b.rs	        Json::str("docs/build/reports/live/2026-11-07-reproof.json"),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-eval/tests/r6_19.rs	        record_ref: "docs/build/readouts/GATE-G23.md".into(),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-eval/tests/r6_27.rs	        record_ref: "docs/build/readouts/GATE-G23.md".into(),	# string literal or comment in test/source; never opened as a checkout path
+crates/hh-eval/src/bin/fp_select.rs	const EXCLUSION_PATH: &str = "docs/build/reports/2026-11-08-fp-exclusion-record.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
+crates/hh-eval/src/bin/fp_select.rs	const SELECTION_PATH: &str = "docs/build/reports/2026-11-08-fp-selection.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
+crates/hh-eval/src/bin/fp_select.rs	const COMMIT_PATH: &str = "docs/build/reports/2026-11-08-fp-select-commit.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
+crates/hh-eval/src/bin/fp_select.rs	const COMPARATIVE_PATH: &str = "docs/build/reports/2026-11-08-fp-w1-comparative-quote.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
