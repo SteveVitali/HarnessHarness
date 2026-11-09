@@ -118,6 +118,15 @@ def link_failures(doc, doc_rel):
 ENTRIES = ["Run a useful task", "Inspect a recorded result", "Learn offline"]
 STATES = ["Available", "Not yet available", "Restricted", "Unsupported"]
 RECORD_REL = "docs/results/phase1-execution-surface-replay.md"
+# REQ-XF-136 + the §9.6 card register (REQ-XH-019): the README spine's
+# site link and the [results-site] card's Available state exist only
+# under a committed hh-site-publication/1 record (GATE-G22 / R6.31).
+SITE_URL = "https://stevevitali.github.io/HarnessHarness/"
+PUB_DIR_REL = "docs/results/publication"
+_pub_dir = os.path.join(root, PUB_DIR_REL)
+pub_records = sorted(f for f in os.listdir(_pub_dir)
+                     if f.endswith(".json")) if os.path.isdir(_pub_dir) \
+    else []
 # REQ-XA-119 — the thirteen honest-bounds statements (experiments
 # supplement §2.6), matched as exact substrings after whitespace
 # collapse inside the record's <!-- bounds --> block.
@@ -204,6 +213,16 @@ else:
             fail("entries", f"entry {e!r} does not name its readiness state first")
     if not re.search(r"(troubleshooting|report)", spine, re.I):
         fail("entries", "the spine block has no failure/report exit")
+    n = spine.count(SITE_URL)
+    if n != 1:
+        fail("entries", f"the spine links the results site {n} times "
+                        "(REQ-XF-136 — once, inside the unchanged "
+                        "three-entry structure)")
+    elif not pub_records:
+        fail("entries", "the spine links the results site but no "
+                        "hh-site-publication/1 record is committed "
+                        "(REQ-XF-136 — the link follows the first "
+                        "record)")
     ok("entries", "README spine: 3 entry choices, readiness first, failure exit")
 
 # ── spine_page: the same choices on the evidence page ─────────────────
@@ -273,6 +292,7 @@ REQUIRED = {
     "evidence-access": "Restricted",
     "contribute": "Available",
     "replay-record": "Available",
+    "results-site": "Available",
 }
 if ev:
     for key, want in REQUIRED.items():
@@ -387,6 +407,30 @@ if ev and "study" in cards:
     sect = [s for s in ev.split("### Card — ")[1:] if "[study]" in s.split("\n")[0]]
     if not sect or "phase1-execution-surface-replay.md" not in sect[0].split("\n### ")[0]:
         fail("record", "the study card does not link the record")
+# the [results-site] card carries the cap and its Available state
+# follows the first committed publication record (§9.6 register)
+if ev and "results-site" in cards:
+    sect = [s for s in ev.split("### Card — ")[1:]
+            if "[results-site]" in s.split("\n")[0]]
+    if not sect:
+        fail("record", "[results-site] card section absent")
+    else:
+        body = sect[0].split("\n### ")[0].split("\n## ")[0]
+        if "internal record; not outside-verified" not in \
+                cards["results-site"][1]:
+            fail("record", "[results-site] promoted beyond the cap "
+                           "'internal record; not outside-verified'")
+        if "results/publication/" not in body:
+            fail("record", "[results-site] does not link a "
+                           "publication record")
+        if SITE_URL not in body:
+            fail("record", "[results-site] does not name the site URL")
+if cards.get("results-site") and \
+        cards["results-site"][1].startswith("Available") and \
+        not pub_records:
+    fail("record", "[results-site] reads Available with no committed "
+                   "hh-site-publication/1 record — the transition "
+                   "follows the first record")
 
 # ── record-surface bans (RECORD_BANNED over record + evidence + spine) ──
 if ev:

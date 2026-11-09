@@ -28,8 +28,14 @@ seed() {  # $1 = dir — a minimal repo carrying the real checkout's positioning
   cp "$ROOT/docs/evidence-and-adoption-spec.md" "$d/docs/"
   cp "$ROOT/scripts/check-position.sh" "$d/scripts/"
   cp "$ROOT/scripts/claims-lexicon.json" "$d/scripts/"
-  mkdir -p "$d/docs/results"
+  mkdir -p "$d/docs/results" "$d/docs/results/publication"
   cp "$ROOT/docs/results/phase1-execution-surface-replay.md" "$d/docs/results/"
+  # the committed hh-site-publication/1 record(s) — the spine's site
+  # link and the [results-site] card's Available state are gated on
+  # them (REQ-XF-136 / §9.6 register)
+  for f in "$ROOT"/docs/results/publication/*.json; do
+    [ -e "$f" ] && cp "$f" "$d/docs/results/publication/"
+  done
   # placeholder files for every repo-relative link in docs/evidence.md
   # and the README spine block — the checker's link legs resolve
   # targets, not contents
@@ -269,6 +275,47 @@ D=$(seed mut-i)
 echo '
 proven' >> "$D/docs/results/phase1-execution-surface-replay.md"
 expect fail "(i) a BANNED entry appended to the record" "$D"
+
+# --- results-site mutations (j)-(l), each expected to fail ---------------------
+D=$(seed mut-j)
+rm "$D/docs/results/publication/"*.json
+expect fail "(j) site link + Available card without a publication record" "$D"
+
+D=$(seed mut-k)
+python3 - "$D/docs/evidence.md" <<'PY2'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+m = re.search(r"### Card — The results site \[results-site\].*?(?=\n### )",
+              t, re.S)
+t = t.replace(m.group(0), m.group(0).replace(
+    "- **State:** Available — internal record; not outside-verified",
+    "- **State:** Available — verified", 1))
+open(p, "w").write(t)
+PY2
+expect fail "(k) results-site promoted beyond the cap" "$D"
+
+D=$(seed mut-l)
+python3 - "$D/docs/evidence.md" <<'PY2'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+m = re.search(r"### Card — The results site \[results-site\].*?(?=\n### )",
+              t, re.S)
+t = t.replace(m.group(0), m.group(0).replace(
+    "results/publication/phase-1-2026-11-09.json",
+    "results/README.md", 1))
+open(p, "w").write(t)
+PY2
+expect fail "(l) results-site loses the record link" "$D"
+
+D=$(seed mut-m)
+python3 - "$D/README.md" <<'PY2'
+import sys
+p = sys.argv[1]; t = open(p).read()
+t = t.replace("](https://stevevitali.github.io/HarnessHarness/)",
+              "](docs/reference.md)", 1)
+open(p, "w").write(t)
+PY2
+expect fail "(m) spine loses the site link" "$D"
 
 # --- the shared lexicon (REQ-XF-134 / C-25) ---------------------------------
 D=$(seed no-lexicon)

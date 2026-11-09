@@ -15,4 +15,12 @@ here is outside-verified or `live-executed` (ADR-0363 owns that class).
 `publication/` holds `hh-site-publication/1` records — the only path a
 phase takes to the public profile (REQ-XF-128/129; schema and
 operator checklist in [publication/README.md](publication/README.md)).
-Until GATE-G22, no records exist and nothing is public.
+
+| Date | Phase | Publication record | Gate |
+|---|---|---|---|
+| 2026-11-09 | 1 | [phase-1-2026-11-09.json](publication/phase-1-2026-11-09.json) — the pinned phase-1 input set (`inputs_digest` `sha256:15f819883d372ebe…`) | [GATE-G22](../build/readouts/GATE-G22.md) PASSED |
+
+The [results site](https://stevevitali.github.io/HarnessHarness/)
+renders the pinned phase-1 pages — an internal record; not
+outside-verified. Deployment follows only the operator's merge of
+the record to `main` through `pages.yml`.

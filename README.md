@@ -36,7 +36,10 @@ Readiness first — each route names its current state before you invest:
   the offline example below produces a durable, inspectable run
   (fixture-verified); the
   [phase-1 execution-surface replay record](docs/results/phase1-execution-surface-replay.md)
-  is an internal record, not outside-verified;
+  is an internal record, not outside-verified; the
+  [results site](https://stevevitali.github.io/HarnessHarness/)
+  renders the same pinned record — internal record, not
+  outside-verified;
   [evidence and readiness](docs/evidence.md) explains what its
   receipt does and does not prove.
 - **Learn offline** — *available with scoped evidence*: four versioned
