@@ -273,6 +273,30 @@ behind it, its limits, and the access or exit route.
   runner, and the efficacy contrast is 0 by construction.
 - **Access:** read the record; corrections land as dated addenda.
 
+### Card — The results site [results-site]
+
+- **State:** Available — internal record; not outside-verified
+- **Scope:** the public results site at the recorded project URL —
+  the pinned phase-1 pages (`/phase-1/`, `/phase-1/tasks/`) and the
+  always-present pages (home, method, spend, limits, changelog,
+  data, about). Phases 2–4 render their designed absent states:
+  "not yet published — publication gate pending", no numbers.
+- **Evidence:** the committed
+  [`hh-site-publication/1` record](results/publication/phase-1-2026-11-09.json)
+  pins the phase-1 input set (`inputs_digest`
+  `sha256:15f819883d372ebe…`) and references the
+  [GATE-G22 readout](build/readouts/GATE-G22.md); `check-site.sh`
+  (every profile and `--head`) verifies the rendered claims and
+  provenance.
+- **Limits:** internal record; not outside-verified — public
+  visibility upgrades nothing (no capability or evidence label is
+  earned by the deploy). Deployment follows only the operator's
+  merge to `main` through `pages.yml`; the served site is read
+  back, never assumed.
+- **Access:** <https://stevevitali.github.io/HarnessHarness/> —
+  a phase without a publication record stays publication-gate
+  pending; the dataset stays private.
+
 ### Card — Optional packaged component [component]
 
 - **State:** Restricted — a conditional exercise, recorded unselected

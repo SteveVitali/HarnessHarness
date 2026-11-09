@@ -576,9 +576,11 @@ def changelog(inputs, generator_version):
     return {
         "entries": [],
         "generator_version": generator_version,
-        "note": "No hh-site-publication/1 records exist; changelog "
-                "entries derive from publication records and generator "
-                "versions (REQ-XF-140) and are empty by design today.",
+        "note": "Changelog entries derive from committed "
+                "hh-site-publication/1 records and generator versions "
+                "(REQ-XF-140); the rendered /changelog/ lists one entry "
+                "per record — none exists until the first publication "
+                "record lands.",
     }
 
 

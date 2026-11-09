@@ -1,0 +1,56 @@
+{
+  "schema": "hh-site-publication/1",
+  "phase": "phase-1",
+  "pages": [
+    "/phase-1/",
+    "/phase-1/tasks/"
+  ],
+  "inputs": [
+    {
+      "path": "docs/build/reports/2026-11-05-parity-tranche-3.json",
+      "sha256": "19789c799ab4365f749e4641575a6938d3db4c1b55e424b11b029bd88a6a0c45"
+    },
+    {
+      "path": "docs/build/reports/2026-11-06-s4-30slot-repairs.json",
+      "sha256": "4942496622b54d6cbf401fd503df409fab26fdd44c55bac90a9b9e092bc71bde"
+    },
+    {
+      "path": "docs/build/reports/2026-11-06-r5.59-study-report.json",
+      "sha256": "59565bdd4b7589997b61c82cc812271b214f8fcb03bf8829bf790e64a5f6b90b"
+    },
+    {
+      "path": "docs/build/reports/2026-11-07-r6.3-study-report.json",
+      "sha256": "65994d04ac09624e6942b447f908e5165246138fa86472c2bdaba49c839df431"
+    },
+    {
+      "path": "docs/build/reports/2026-11-07-p1-surface-xcheck.json",
+      "sha256": "fa68ed4b427d92cd6f4ffcfe0fc1367fe26e0ef6763584019834d8b2c454be7d"
+    },
+    {
+      "path": "docs/build/reports/2026-11-07-p1-estimators.json",
+      "sha256": "f91ebd5bbbe07ed416fb9a064a40f378db8b7d76f393a3d8080d5742cd0a6920"
+    },
+    {
+      "path": "docs/build/reports/2026-11-07-s4-protocol-deviations.json",
+      "sha256": "10bf9fe051d91d8a0a6811b2f98055f094f8ab625a02dc32a71abd8b10009812"
+    },
+    {
+      "path": "docs/results/phase1-execution-surface-replay.md",
+      "sha256": "77c46f90bfca11e7f535158688f157c82e7ad571571f1a71e7eafd4313d2877d"
+    }
+  ],
+  "inputs_digest": "sha256:15f819883d372ebe131d63f282d3ba9f89d952b2b6fb969db10ab2a3d0386874",
+  "gate_row": "286 GATE-G22 (286_GATE-G22__pub-p1.md)",
+  "readout": "docs/build/readouts/GATE-G22.md",
+  "labels": {
+    "evidence_class": "recorded execution",
+    "outside_verified": false
+  },
+  "dataset": {
+    "visibility": "private",
+    "revision": "",
+    "secret_scan_ref": "",
+    "contamination_scan_ref": ""
+  },
+  "recorded_at": "2026-11-09"
+}
