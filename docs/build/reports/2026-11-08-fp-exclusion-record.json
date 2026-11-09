@@ -1,0 +1,681 @@
+{
+  "denominator_rule": "every nominal task appears in every denominator (Q-X31); the two QEMU tasks are nominal runner_infeasible, not dropped",
+  "download_tasks": [
+    {
+      "covariate": "allowlist_extended",
+      "first_pass_disposition": "excluded_if_drawn_and_replaced",
+      "reason": "the instruction or verifier requires an external download; Q-X55 grants no agent-phase extension in the first pass \u2014 a drawn task is excluded and replaced from its cell's seeded order",
+      "task_id": "build-cython-ext"
+    },
+    {
+      "covariate": "allowlist_extended",
+      "first_pass_disposition": "excluded_if_drawn_and_replaced",
+      "reason": "the instruction or verifier requires an external download; Q-X55 grants no agent-phase extension in the first pass \u2014 a drawn task is excluded and replaced from its cell's seeded order",
+      "task_id": "build-pov-ray"
+    },
+    {
+      "covariate": "allowlist_extended",
+      "first_pass_disposition": "excluded_if_drawn_and_replaced",
+      "reason": "the instruction or verifier requires an external download; Q-X55 grants no agent-phase extension in the first pass \u2014 a drawn task is excluded and replaced from its cell's seeded order",
+      "task_id": "count-dataset-tokens"
+    },
+    {
+      "covariate": "allowlist_extended",
+      "first_pass_disposition": "excluded_if_drawn_and_replaced",
+      "reason": "the instruction or verifier requires an external download; Q-X55 grants no agent-phase extension in the first pass \u2014 a drawn task is excluded and replaced from its cell's seeded order",
+      "task_id": "hf-model-inference"
+    },
+    {
+      "covariate": "allowlist_extended",
+      "first_pass_disposition": "excluded_if_drawn_and_replaced",
+      "reason": "the instruction or verifier requires an external download; Q-X55 grants no agent-phase extension in the first pass \u2014 a drawn task is excluded and replaced from its cell's seeded order",
+      "task_id": "sam-cell-seg"
+    }
+  ],
+  "exclusions": [
+    {
+      "basis": "runner_infeasible",
+      "reason": "KVM/TCG and EOL-mirror risk \u2014 pre-registered outcome-blind disposition before the split (Q-X31; docs/research/25_tb21-harbor.md F11)",
+      "task_id": "qemu-alpine-ssh"
+    },
+    {
+      "basis": "runner_infeasible",
+      "reason": "KVM/TCG and EOL-mirror risk \u2014 pre-registered outcome-blind disposition before the split (Q-X31; docs/research/25_tb21-harbor.md F11)",
+      "task_id": "qemu-startup"
+    }
+  ],
+  "population": {
+    "name": "terminal-bench-2-1",
+    "nominal_tasks": 89,
+    "source": "docs/research/25_tb21-harbor.md Appendix A @ 12b75656"
+  },
+  "recorded_at": "2026-11-08T00:00:00Z",
+  "schema": "hh-fp-exclusion-record/1",
+  "tasks": [
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "adaptive-rejection-sampler"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "bn-fit-modify"
+    },
+    {
+      "agent_timeout_sec": 1200,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "break-filter-js-from-html"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "build-cython-ext"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "build-pmars"
+    },
+    {
+      "agent_timeout_sec": 12000,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "build-pov-ray"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "caffe-cifar-10"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "cancel-async-tasks"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "chess-best-move"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "circuit-fibsqrt"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "easy",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "cobol-modernization"
+    },
+    {
+      "agent_timeout_sec": 1200,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "code-from-image"
+    },
+    {
+      "agent_timeout_sec": 2400,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "compile-compcert"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "configure-git-webserver"
+    },
+    {
+      "agent_timeout_sec": 1200,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "constraints-scheduling"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "count-dataset-tokens"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "crack-7z-hash"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "custom-memory-heap-crash"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "db-wal-recovery"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "distribution-search"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "dna-assembly"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "dna-insert"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "extract-elf"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "extract-moves-from-video"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "feal-differential-cryptanalysis"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "feal-linear-cryptanalysis"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "filter-js-from-html"
+    },
+    {
+      "agent_timeout_sec": 1200,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "financial-document-processor"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "fix-code-vulnerability"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "easy",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "fix-git"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "fix-ocaml-gc"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "gcode-to-text"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "git-leak-recovery"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "git-multibranch"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "gpt2-codegolf"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "headless-terminal"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "hf-model-inference"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "install-windows-3.11"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "kv-store-grpc"
+    },
+    {
+      "agent_timeout_sec": 1200,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "large-scale-text-editing"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "largest-eigenval"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "llm-inference-batching-scheduler"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "log-summary-date-ranges"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "mailman"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "make-doom-for-mips"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "make-mips-interpreter"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "mcmc-sampling-stan"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "merge-diff-arc-agi-task"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "model-extraction-relu-logits"
+    },
+    {
+      "agent_timeout_sec": 600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "modernize-scientific-stack"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "mteb-leaderboard"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "mteb-retrieve"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "multi-source-data-merger"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "nginx-request-logging"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "openssl-selfsigned-cert"
+    },
+    {
+      "agent_timeout_sec": 750,
+      "difficulty": "easy",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "overfull-hbox"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "password-recovery"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "path-tracing"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "path-tracing-reverse"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "polyglot-c-py"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "polyglot-rust-c"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "portfolio-optimization"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "protein-assembly"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "easy",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "prove-plus-comm"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "pypi-server"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "pytorch-model-cli"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "pytorch-model-recovery"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "runner_infeasible",
+      "hf_saturated": false,
+      "reason": "KVM/TCG and EOL-mirror risk \u2014 pre-registered outcome-blind disposition before the split (Q-X31; docs/research/25_tb21-harbor.md F11)",
+      "task_id": "qemu-alpine-ssh"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "runner_infeasible",
+      "hf_saturated": false,
+      "reason": "KVM/TCG and EOL-mirror risk \u2014 pre-registered outcome-blind disposition before the split (Q-X31; docs/research/25_tb21-harbor.md F11)",
+      "task_id": "qemu-startup"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "query-optimize"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "raman-fitting"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "regex-chess"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "regex-log"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "reshard-c4-data"
+    },
+    {
+      "agent_timeout_sec": 1800,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "rstan-to-pystan"
+    },
+    {
+      "agent_timeout_sec": 7200,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "sam-cell-seg"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "sanitize-git-repo"
+    },
+    {
+      "agent_timeout_sec": 2400,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "schemelike-metacircular-eval"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "sparql-university"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "sqlite-db-truncate"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "sqlite-with-gcov"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "torch-pipeline-parallelism"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "torch-tensor-parallelism"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "train-fasttext"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "tune-mjcf"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "video-processing"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": true,
+      "task_id": "vulnerable-secret"
+    },
+    {
+      "agent_timeout_sec": 3600,
+      "difficulty": "medium",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "winning-avg-corewars"
+    },
+    {
+      "agent_timeout_sec": 900,
+      "difficulty": "hard",
+      "disposition": "eligible",
+      "hf_saturated": false,
+      "task_id": "write-compressor"
+    }
+  ]
+}
