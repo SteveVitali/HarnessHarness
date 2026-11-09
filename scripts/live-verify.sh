@@ -1559,8 +1559,18 @@ run_leg_archive_upload() {
 }
 
 run_leg_reproof() {
-  ASSERTIONS="the \$0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor \`harbor run -r 0 --no-force-build\` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 — until then every packet labels recorded execution"
-  RESULT="skipped(executes-in-W1-under-R6.32)"
+  ASSERTIONS="the \$0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor \`harbor run -r 0 --no-force-build\` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 — the driver lands hh-reproof-packet/1 + the append-only register on the provisioned VM"
+  local cmd="${HH_W1_PROVE_CMD:-}"
+  if [ -z "$cmd" ] || [ ! -x "$cmd" ]; then
+    RESULT="skipped(prove-driver-absent:HH_W1_PROVE_CMD)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-reproof.XXXXXX")"
+  if "$cmd" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:prove-driver-rc"
+  fi
 }
 
 # R6.26 (REQ-XH-027) — the W2/W4 live legs, registered so their
