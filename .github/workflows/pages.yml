@@ -36,7 +36,7 @@ jobs:
 
       # The public profile's own checker legs run before any deploy step.
       - name: Check the public profile
-        run: bash scripts/check-site.sh --profile public _site
+        run: bash scripts/check-site.sh --profile public "$(git rev-parse --show-toplevel)" _site
 
       # Nothing is public until a committed hh-site-publication/1 record
       # pins a phase's exact input set (REQ-XF-128/129). This gate runs
