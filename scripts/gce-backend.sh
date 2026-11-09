@@ -387,6 +387,12 @@ cmd_provision() {
   local dsecs; dsecs="$(python3 -c "print(int(float('$D_HOURS')*3600))")"
   local netargs=""
   [ "$EXT_IP" = "none" ] && netargs="--no-address"
+  # One --metadata-from-file argv, comma-separated KEY=FILE pairs: gcloud
+  # treats each occurrence as the complete file-backed map — a second
+  # occurrence replaces the first (R6.32: `startup-script=` alone on the
+  # first of two occurrences never landed on the instance; the guest
+  # reported "No startup scripts to run"). Documented form:
+  # --metadata-from-file=KEY=LOCAL_FILE_PATH,[KEY=LOCAL_FILE_PATH,…].
   gdo compute instances create "$INSTANCE" \
     --project "$PROJECT" --zone "$ZONE" \
     --machine-type "$MACHINE" \
@@ -398,8 +404,7 @@ cmd_provision() {
     --max-run-duration="${dsecs}s" \
     --instance-termination-action "$D_ACTION" \
     --metadata "hh_deadman_minutes=$DMIN" \
-    --metadata-from-file "startup-script=$STARTUP" \
-    --metadata-from-file "hh_packages=$TMPD/packages.txt" \
+    --metadata-from-file "startup-script=$STARTUP,hh_packages=$TMPD/packages.txt" \
     --labels "hh-phase=$(J labels.hh-phase),hh-window=$(J labels.hh-window),hh-ticket=$(J labels.hh-ticket),ttl=$(J labels.ttl)" \
     $netargs >/dev/null || refuse "instances_create_failed"
 
