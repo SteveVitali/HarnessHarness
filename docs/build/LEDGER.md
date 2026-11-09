@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.30
-lastCompleted:   R6.29
+nextTicket:      HUMAN-H12
+lastCompleted:   R6.30
 blockedOn: (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-r6.29
+chainTip:         codex/harnessharness-r6.30
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-desktop/swe-2-high/subagent
-updatedAt:        2026-11-08T22:30:02Z
+updatedAt:       2026-11-08T23:59:30Z
 ```
 
 ## OPEN FINDINGS
@@ -1313,3 +1313,4 @@ updatedAt:        2026-11-08T22:30:02Z
 - 2026-11-08 · **R6.28 done — L1 OBSERVATION-REPLAY + CORPUS/CENSUS + L1 RUNNER (manifest 282)** — `codex/harnessharness-r6.28` · base `origin/main` @`a494f381` (GATE-G23 tip). Codec: hh.model_proxy.recording/1 → `hh-gateway::recording` (CC1; hosting compat re-export; r6_12 13/13). K2: `l1_obs` verbatim mini.yaml template + golden-tested inverse (10k-char boundary, head/tail 5k, exception_info, tojson escapes; typed `observation_overrun`) + `ObsReplayExecutor` doubling ToolExecutor; `l1_drive` — SequenceReplay (lane transform → upstream-bound capture, strict/lenient matcher, typed refusals), RecordedResponseEndpoint loopback, HttpEndpoint, LiveExec, ToyMini + DivergencePlan. K3: `l1_corpus` — BM1–BM19 synthetic fixtures (committed byte-exact, provenance:synthetic), turn-1 census generator, hh-l1-corpus/1 coverage map + typed `coverage` refusal. K4: `l1_gate` — L1.0 s(S), L1.1 strict whole-trajectory, L1.2 gated ≤ s(S) (s+1 excluded, beyond reported); REQ-XD-104 levels over hh-l1-canon upstream-bound bytes (downstream diagnostic); hh-l1-diff/1 per gated divergence; hh-l1-conformance/1 (coverage, stable-prefix histogram, l1-pass id bound to H digest); pinned label + parity:none; parity_admission → InauthenticEvidence. Verify: r6_28 11/11 · r6_12 13/13 · build clean · fmt · clippy pre-existing-only (hh-context type_complexity recorded); rustdoc/scan/bm-validator owed to CI review (context-budget deviation, recorded). DF-R6.28-1 OPEN (real-O leg → W1/R6.32). chainTip → codex/harnessharness-r6.28 · nextTicket → R6.29 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 
 - 2026-11-08 · **R6.29 done — FP continuation rules + holds (manifest 283)** — `codex/harnessharness-r6.29` · base `origin/main` @`ebc957e`. `continuation.rs` — cost-only `hh-fp-continuation-input/1` (outcome members refuse typed); one projection `p̂=1.2×max(1.5×mean,P90)` + step-fit `root−consumed−Σorphans@hi−C×s`; round-boundary checkpoint drops V5→CC→Pi `withheld{budget}` (Q-X61 parameter), protected-pair breach → all withheld + typed claim refusals; `hh-fp-checkpoint/1` cost-only + p99; per-arm caps `planned×p̂` + expected-cost admission, `censored_lower_bound`, family retained unavailable (XH-117/XD-040/XC-211); wall `t̂`/`W_p`/`d_max` (billed else ceiling, unauthorized Wc → reservation) + pair-atomic `withheld{window_deadline}` (XH-126); §6.6 stops only (XD-042). `holds.rs` — Q-X62 trigger/both-partition G-L1 fail → hosted-only + `withheld{l1_not_passed}` P3-L2/P4-FP (XH-123); `hh-lane-probe/1` ≤$0.05 + `withheld{admission:native_lane_hold}` + `w4-lane-probe` leg (XH-124/XH-027); PP0 holds (a)/(b)/(c), verdict refuses (XH-127). **Verify:** r6_29 17/17 · r6_29b 7/7+1ign · suites green · fmt/clippy(0 new)/rustdoc/edges/live-evidence/live-verify-test OK · bm-validator 0 viol · guard PASS DISPATCH R6.29 pre. **Deviations:** ~3.8k vs ≤1700 recorded; PP1→W4 + probe-target readings recorded. DF-R6.23-1/28-1 OPEN. chainTip → codex/harnessharness-r6.29 · nextTicket → R6.30 · engineered ($0.00) · devin-cli/swe-2-high/subagent
+- 2026-11-08 · **R6.30 done — FP outcome seal + SELECT commit (manifest 284)** — `codex/harnessharness-r6.30` · base `origin/main` @`bca047f` (R6.29 merge). Stage 1 `80d8a5b6`: `fp_seal.rs` — `hh-fp-sealed-view/1` (cost fields only, outcome members → `withheld{sealed_until_results}` on all five consumers: gate readouts, W4 checkpoint, summaries, operator console, site internal profile) + `hh-fp-dev-projection/1` (verdict/reward/verifier removed); declared unsealed classes reproof/smoke/probe/pp0_ag_evidence; input-side stays `check_cost_only` (CC1); sealed-state site fixture `phase2-fp-sealed.json` renders through R6.5's generator (never a second site path); seal opens only at FP-RESULTS. Stage 2 `c3dae5e4`: `fp_select.rs` + `fp_select` emitter — `hh-fp-exclusion-record/1` (89 nominal; QEMU×2 `runner_infeasible`; 5 download tasks `excluded_if_drawn_and_replaced`+`allowlist_extended`), `task-selection/1` (band-A cells 3/25/9 + 1/7/3; held-out 1/7/2; dev 1/4/2; smoke 3 one-per-difficulty; build-cython-ext drawn→replaced by raman-fitting — REQ-XD-014 exercised), `hh-fp-select/1` (sha256 binding + `select_id`), fp-w{1,2,3,4,wc} decls + quotes Σ=19,793,630≤20M, C=4, W_p≤D−cut-off, W1 work items + export 5≤6 GiB, `comparative-quote/1` `pre-quote` $0-model row. Digests `pending{w1_observe_ingest}` (R6.17 idiom, never invented). Verify: runner r6_30 6/6 · eval r6_30 9/9 · check-fp-select 15 legs · test_fp_seal 5 · suites green · fmt/clippy(new 0; pre-existing recorded)/rustdoc/runner_sources/edges/check-site 15/living-docs/check-gce-backend 110 OK · guard PASS DISPATCH R6.30 pre+post. Deviations: readers-scan split (committed docs/ records verified by scripts/check-fp-select.sh); zero placeholders pending gate. DF-R6.23-1/28-1 OPEN. chainTip → codex/harnessharness-r6.30 · nextTicket → HUMAN-H12 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
