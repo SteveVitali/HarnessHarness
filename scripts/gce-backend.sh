@@ -85,7 +85,7 @@ leak_scan() {
   local envf="${HH_OPERATOR_ENV_FILE:-}"
   local margs=()
   [ -n "$envf" ] && [ -f "$envf" ] && margs+=(--mask-env "$envf")
-  if ! "$sb" scan "${margs[@]}" "$@" > "$TMPD/scan.out" 2> "$TMPD/scan.err"; then
+  if ! "$sb" scan ${margs[@]+"${margs[@]}"} "$@" > "$TMPD/scan.out" 2> "$TMPD/scan.err"; then
     fail "leak-scan hit — nothing written"
     sed 's/^/  /' "$TMPD/scan.err" >&2
     exit 5
@@ -279,7 +279,7 @@ inventory_all() { # → "label=value" lines over every billable class
   printf 'disks=%s\n'       "$(inventory_class disks disks list)"
   printf 'addresses=%s\n'   "$(inventory_class addresses addresses list)"
   printf 'snapshots=%s\n'   "$(inventory_class snapshots snapshots list)"
-  printf 'images=%s\n'      "$(inventory_class images images list)"
+  printf 'images=%s\n'      "$(inventory_class images images list --no-standard-images)"
   printf 'forwarding=%s\n'  "$(inventory_class forwarding forwarding-rules list)"
   printf 'routers=%s\n'     "$(inventory_class routers routers list)"
   printf 'firewalls=%s\n'   "$(inventory_class firewalls firewall-rules list)"
@@ -337,9 +337,16 @@ cmd_provision() {
       || refuse "project_create_failed"
   fi
   [ -n "${HH_BILLING_ACCOUNT:-}" ] || refuse "billing_account.unprovided"
-  gdo beta billing projects link "$PROJECT" \
-    --billing-account "$HH_BILLING_ACCOUNT" >/dev/null \
-    || refuse "billing_link_failed"
+  # An already-linked project satisfies the link act — a second
+  # association hits the billing account's project quota. The check
+  # reads billingEnabled only; the account id never enters a record.
+  local ben; ben="$(gdo billing projects describe "$PROJECT" \
+    --format='value(billingEnabled)' 2>/dev/null || true)"
+  if [ "$ben" != "True" ] && [ "$ben" != "true" ]; then
+    gdo beta billing projects link "$PROJECT" \
+      --billing-account "$HH_BILLING_ACCOUNT" >/dev/null \
+      || refuse "billing_link_failed"
+  fi
   gdo services enable compute.googleapis.com iap.googleapis.com \
     --project "$PROJECT" >/dev/null || refuse "services_enable_failed"
 
@@ -617,6 +624,31 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   HARV_DIR="$REPORTS/harvest/${PHASE}-${WINDOW}"
   mkdir -p "$HARV_DIR"
   local rroot="/var/lib/hh/runs/run-root-$WINDOW"
+  # Re-entry after a partial teardown: when no instance remains and a
+  # prior verified harvest already stands for this phase+window, the
+  # remote legs have no target — re-verify the standing manifest
+  # locally (REQ-XB-220) and the act is already satisfied.
+  local nin; nin="$(gdo compute instances list --project "$PROJECT" \
+    --format json | python3 -c \
+    'import json,sys;print(len(json.load(sys.stdin)))' 2>/dev/null || echo X)"
+  if [ "$nin" = "0" ] \
+     && [ -f "$HARV_DIR/MANIFEST.sha256" ] \
+     && [ -f "$HARV_DIR/run-root.tar.gz" ] \
+     && [ -f "$HARV_DIR/journald.log" ] \
+     && [ -f "$HARV_DIR/serial.log" ]; then
+    mkdir -p "$TMPD/verify"
+    tar xzf "$HARV_DIR/run-root.tar.gz" -C "$TMPD/verify" || return 1
+    if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
+          || return 1
+      else
+        (cd "$TMPD/verify" && shasum -a 256 -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
+          || return 1
+      fi
+    fi
+    return 0
+  fi
   # 2a: remote sha256 manifest + tar over the run root
   vm "mkdir -p '$rroot' && cd '$rroot' && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz" \
     > "$TMPD/remote.sha" || return 1

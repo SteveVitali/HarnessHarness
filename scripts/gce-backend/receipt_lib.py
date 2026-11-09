@@ -372,12 +372,24 @@ def cmd_describe(_argv=None):
     for ni in doc.get("networkInterfaces") or []:
         if ni.get("accessConfigs"):
             ext = "present"
+    def _utc(ts):
+        # GCE returns RFC3339 offsets ("-08:00"); receipts store UTC "Z".
+        if not isinstance(ts, str) or not ts:
+            return ts
+        try:
+            import datetime
+            return (datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    .astimezone(datetime.timezone.utc)
+                    .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+        except ValueError:
+            return ts
+
     print(json.dumps({
         "name": doc.get("name"),
         "id": int(doc["id"]) if doc.get("id") is not None else None,
         "status": doc.get("status"),
-        "creation_timestamp": doc.get("creationTimestamp"),
-        "last_stop_timestamp": doc.get("lastStopTimestamp"),
+        "creation_timestamp": _utc(doc.get("creationTimestamp")),
+        "last_stop_timestamp": _utc(doc.get("lastStopTimestamp")),
         "max_run_seconds": int(mrd) if mrd is not None else None,
         "service_accounts": doc.get("serviceAccounts") or [],
         "external_ipv4": ext,

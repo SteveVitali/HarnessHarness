@@ -1,0 +1,132 @@
+{
+ "authorization": {
+  "ceiling_micros": 5050420,
+  "gate": "PROV-W1",
+  "quote_id": "pq-3e4ad6c78a564b77",
+  "readout_path": "docs/build/readouts/GATE-G25.md",
+  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+ },
+ "commands": [
+  {
+   "argv_redacted": [
+    "auth",
+    "list",
+    "--format=value(account)"
+   ],
+   "ended_at": "2026-11-09T21:36:00Z",
+   "exit": 0,
+   "started_at": "2026-11-09T21:35:59Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "14stevevitali@gmail.com\n",
+   "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "ssh",
+    "hh-fp-w1",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--zone",
+    "us-central1-a",
+    "--tunnel-through-iap",
+    "--command",
+    "hh-runner drain --window 'w1' --inconclusive teardown"
+   ],
+   "ended_at": "2026-11-09T21:36:01Z",
+   "exit": 1,
+   "started_at": "2026-11-09T21:36:00Z",
+   "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w1' was not found\n\n",
+   "stdout_excerpt": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "instances",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-09T21:36:02Z",
+   "exit": 0,
+   "started_at": "2026-11-09T21:36:01Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "ssh",
+    "hh-fp-w1",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--zone",
+    "us-central1-a",
+    "--tunnel-through-iap",
+    "--command",
+    "cat /proc/uptime; df -BG --output=avail / | tail -1"
+   ],
+   "ended_at": "2026-11-09T21:36:03Z",
+   "exit": 1,
+   "started_at": "2026-11-09T21:36:02Z",
+   "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w1' was not found\n\n",
+   "stdout_excerpt": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ ],
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-w1.json",
+  "sha256": "c343ad1f04625a241ecef9219748de8f08bd0f7253205f2d2e375632801b1af1"
+ },
+ "harvest": {
+  "journald": {
+   "path": "docs/build/reports/compute/harvest/fp-w1/journald.log",
+   "sha256": "89b34afc11007bd5becba713d028844e0dd53f7b90a5ff43be06e46accc42eb4"
+  },
+  "manifest": {
+   "path": "docs/build/reports/compute/harvest/fp-w1/MANIFEST.sha256",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "run_root_tar": {
+   "path": "docs/build/reports/compute/harvest/fp-w1/run-root.tar.gz",
+   "sha256": "7a6dabb9eeff0148612c5379b85154cf0f0e6efaa3a8d43aec52aa3116e080a4"
+  },
+  "serial": {
+   "path": "docs/build/reports/compute/harvest/fp-w1/serial.log",
+   "sha256": "8f9f77758c82ff09fb37f09c7e0ccdc4f0d19aa64efb4390e4052e407b8cfac2"
+  },
+  "verified_locally": true
+ },
+ "kind": "harvest",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "no",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "8826169ec4d7f3c0ea0fc9ee1f0e6e87d06097db",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "81105f6be19331a06b3441341ac41b273484973f23c4980f7d6f5a73d52a944e"
+ },
+ "recorded_at": "2026-11-09T21:36:03Z",
+ "resources": {
+  "creation_timestamp": null,
+  "deletion_operation_end": null,
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": null,
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "ticket": "R6.30",
+ "verification": null,
+ "window": "w1"
+}
