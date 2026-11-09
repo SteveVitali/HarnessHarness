@@ -5,7 +5,7 @@
   "model_line": "none",
   "quote_id": "pq-3e4ad6c78a564b77",
   "readout_path": "docs/build/readouts/GATE-G25.md",
-  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+  "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
  },
  "boot_disk": {
   "size_gib": 300,
@@ -54,12 +54,12 @@
  "packages": {
   "compose_frontend": {
    "name": "podman-compose",
-   "version": "1.0.6-2"
+   "version": "1.0.3-3"
   },
-  "conmon": "2.1.6+ds1-1+deb12u1",
+  "conmon": "2.1.6+ds1-1",
   "crun": "1.8.1-1+deb12u1",
-  "netavark": "1.4.0-4",
-  "podman": "4.3.1+ds1-8+deb12u1"
+  "netavark": "1.4.0-3",
+  "podman": "4.3.1+ds1-8+deb12u1+b3"
  },
  "phase": "fp",
  "phase_close": false,
@@ -96,7 +96,7 @@
  },
  "runner": {
   "build": "source",
-  "commit": "8826169ec4d7f3c0ea0fc9ee1f0e6e87d06097db"
+  "commit": "0000000000000000000000000000000000000000"
  },
  "schema": "hh-compute-decl/1",
  "service_account": "none",

@@ -367,6 +367,24 @@ has '--instance-termination-action' 'argv: termination action'
 has 'startup-script' 'argv: startup script metadata'
 has 'tcp:22' 'argv: iap firewall allow'
 has '35.235.240.0/20' 'argv: iap source range'
+# R6.32a — the R6.32 drop reproduced: the instance's metadata carried
+# hh_deadman_minutes + hh_packages but not startup-script because the
+# recipe emitted two --metadata-from-file occurrences and gcloud treats
+# each occurrence as the complete file-backed map (the second replaced
+# the first). The repair emits exactly one --metadata-from-file argv
+# carrying both file-backed keys in the documented KEY=FILE,[…] form.
+CREATE_LN="$(grep -Fe 'instances] [create' "$LOG" | head -1)"
+N_MFF="$(printf '%s' "$CREATE_LN" | grep -oF '[--metadata-from-file]' | wc -l | tr -d ' ')"
+[ "$N_MFF" = "1" ] && ok "one --metadata-from-file occurrence on create" \
+  || bad "--metadata-from-file occurrences on create: $N_MFF"
+MFF_ARG="$(printf '%s' "$CREATE_LN" \
+  | sed -n 's/.*\[--metadata-from-file\] \[\([^]]*\)\].*/\1/p')"
+printf '%s\n' "$MFF_ARG" | tr ',' '\n' | grep -q '^startup-script=' \
+  && printf '%s\n' "$MFF_ARG" | tr ',' '\n' | grep -q '^hh_packages=' \
+  && ok "startup-script + hh_packages share the one --metadata-from-file" \
+  || bad "file-backed metadata keys split or missing: '$MFF_ARG'"
+has '[--metadata] [hh_deadman_minutes=735]' \
+  'argv: dead-man minutes under inline --metadata'
 PR="$REPORTS/$(date -u +%F)-p1-w1x-provision.json"
 [ -f "$PR" ] && ok "provision receipt written" || bad "no provision receipt"
 python3 -I scripts/gce-backend/validate_receipt.py "$PR" \
