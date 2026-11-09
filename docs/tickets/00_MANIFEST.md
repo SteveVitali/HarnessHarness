@@ -546,6 +546,9 @@ Source: [ratified experiments supplement](../experiments-spec.md) (canonical v0.
 | 289 | `289_GATE-G25__prov-w1.md` | Round 6 | gate | PROV-W1: compute quote, dead-man + restart, network posture (Q-X55), re-proof scope, export estimate, Q-X39b | STOP |
 | 290 | `290_R6.32__w1-run.md` | Round 6 | ticket | W1 window body: infrastructure-set + bundle + layer builds and export, observe/freeze/prove re-proof, census, smokes, R-replay, teardown, harvest manifest verified (W1’s… | — |
 | 290 note | | | | | fleshed 2026-11-09 — skeleton → ticket under GATE-G25 PASSED (operator verbatim "authorized, continue" 20:16Z; the gate readout's agent-draft sha256 e67778fa2c62 confirmed); contract rewritten with Run line, the verbatim_sha256-stamped declaration bounds (quote pq-3e4ad6c78a564b77, ceiling 5,050,420 µ$), the window acts as numbered ACs (AC anchors retained, rule O2); verbatim_sha256 a8428147… stamped into fp-w1.json |
+| 290a | `290a_R6.32a__w1-decl-repair.md` | Round 6 | ticket | W1 declaration repair — resolvable package pins + startup-script landing (DF-R6.32-1 stage 1) | — |
+| 290b | `290b_GATE-G33__prov-w1-rerun.md` | Round 6 | gate | PROV-W1 re-presented on the corrected declaration — W1 re-authorization (DF-R6.32-1 stage 2) | STOP |
+| 290c | `290c_R6.32b__w1-rerun.md` | Round 6 | skeleton | W1 window re-execution under the re-authorized declaration (DF-R6.32-1 discharge; fleshes after GATE-G33) | — |
 | 291 | `291_R6.33__fp-prereg.md` | Round 6 | ticket | Post-replacement list frozen; pre-registration packet hashed (V5 declaration, fallback trigger); W2 quote; FP-S readiness record (Q-X62 clock) | — |
 | 292 | `292_R6.34__e2-adr-wire.md` | Round 6 | ticket | E2-T0: Docs-only ADR bundle AR-21, AR-22, AR-23 and the AR-24 §5e.1 amendment text | — |
 | 293 | `293_R6.35__tmpl-surface.md` | Round 6 | ticket | E2-T3: `hh-tmpl/1` engine, strict undefined, whitespace control, ledgered uname probe | — |
