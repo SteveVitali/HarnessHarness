@@ -1,6 +1,6 @@
 {
   "attribution": {
-    "idle_seconds": 29542.0,
+    "idle_seconds": 742.0,
     "slot_wall_ms": 0,
     "utilization_ppm": 0
   },
@@ -15,14 +15,14 @@
   "estimate": {
     "free_tier_applied": false,
     "lines_micros": {
-      "disk": 337272,
+      "disk": 8472,
       "egress": 720000,
-      "instance": 2199567,
-      "ipv4": 41031,
+      "instance": 55247,
+      "ipv4": 1031,
       "nat": 0
     },
     "rounding": "ceil per line",
-    "total_micros": 3297870
+    "total_micros": 784750
   },
   "phase": "fp",
   "project_id": "hh-fp-a1b2c3",
@@ -80,11 +80,11 @@
   },
   "receipts": {
     "provision": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-09-fp-w1-provision.json",
-      "sha256": "e27caeecef2f57b09f056214e8385439b83cc11a49b77b260ea4c28a8e6c906f"
+      "path": "docs/build/reports/compute/2026-11-09-fp-w1-provision.json",
+      "sha256": "c21aa079f15ccf503d9decc70b139d95b082859369ba82ea9c7cd9865918597d"
     },
     "teardown": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-09-fp-w1-teardown.json"
+      "path": "docs/build/reports/compute/2026-11-09-fp-w1-teardown.json"
     }
   },
   "reconciliation": {
@@ -92,20 +92,20 @@
     "tolerance_micros": null,
     "verdict": "pending"
   },
-  "record_id": "cc-f07f947b6ec30ddd",
-  "recorded_at": "2026-11-09T21:36:20Z",
+  "record_id": "cc-89f489781c455d6d",
+  "recorded_at": "2026-11-09T21:56:40Z",
   "schema": "hh-compute-cost/1",
   "ticket": "R6.30",
   "usage": {
     "disk": {
-      "gib_seconds": 8862600.0,
+      "gib_seconds": 222600.0,
       "intervals": [
         {
-          "from": "2026-11-09T13:23:58.913-08:00",
+          "from": "2026-11-09T21:23:58.913Z",
           "to": "2026-11-09T21:36:20Z"
         }
       ],
-      "micros": 337272,
+      "micros": 8472,
       "size_gib": 300,
       "type": "pd-balanced"
     },
@@ -117,22 +117,22 @@
       "micros": 720000
     },
     "instance": {
-      "billable_seconds": 29542.0,
+      "billable_seconds": 742.0,
       "intervals": [
         {
-          "from": "2026-11-09T13:23:58.913-08:00",
+          "from": "2026-11-09T21:23:58.913Z",
           "state": "RUNNING",
           "to": "2026-11-09T21:36:20Z"
         }
       ],
       "machine_type": "e2-standard-8",
-      "micros": 2199567,
-      "seconds": 29542.0
+      "micros": 55247,
+      "seconds": 742.0
     },
     "ipv4": {
       "kind": "ephemeral",
-      "micros": 41031,
-      "seconds": 29542.0
+      "micros": 1031,
+      "seconds": 742.0
     },
     "nat": {
       "micros": 0,
