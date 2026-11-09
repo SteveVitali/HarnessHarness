@@ -16,9 +16,9 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.32
-lastCompleted:   GATE-G25
-blockedOn: (none)
+nextTicket:      R6.33
+lastCompleted:   R6.32
+blockedOn: DF-R6.32-1 (W1 window body — declaration pin correction needs a fresh gate)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -28,7 +28,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:         codex/harnessharness-gate-g25
+chainTip:        codex/harnessharness-r6.32
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
@@ -242,6 +242,7 @@ updatedAt:       2026-11-09T20:16Z
 |---|---|---|---|
 
 ## PHASE LOG
+- 2026-11-09 · **R6.32 — W1 window: PROV+TEARDOWN executed, body blocked on declaration package pins (manifest 290)** — `codex/harnessharness-r6.32` commits `8826169e`+`52b08002`. GATE-G25 authorization matched verbatim; VM `hh-fp-w1` (e2-standard-8) provisioned + torn down inside h_r=6h under nine-step receipt; `post_state` non-billable residue only; `compute-open.sh` empty. Typed outcome `Blocked{backend.package_pins_unavailable}` — the declaration's Debian pins (podman 4.3.1+ds1-8+deb12u1 etc.) are unresolvable on `debian-12-bookworm-v20261014`'s repos; the startup-script metadata key never landed (committed script executed in-guest instead). Contract's blocker rule observed: teardown + honest record, no window-body claim. Spend: est 3,297,870 µ$ ≤ 5,050,420 ceiling (`2026-11-09-fp-w1-cost.json`, billed pending). Driver `hh_w1` (freeze/task-images/binary-set/image-export/image-build/observe/o-run/h-run/prove/fault/census/probe-run/label-packet/index) committed + tested (r6_32 3/3) but never executed live — every would-be record keeps its honest label. Four machinery repairs (bash-3.2 empty array; billing re-link skip; images --no-standard-images; harvest re-entry) — check-gce-backend 110/110. DF-R6.28-1 stays OPEN. DF-R6.32-1 opened: W1 window body owes a pin-corrected declaration + fresh gate. chainTip → codex/harnessharness-r6.32 · nextTicket → R6.33 · live compute, est $3.30 · devin-cli/swe-2-high/subagent
 - 2026-11-09 · **GATE-G25 PASSED — PROV-W1: W1 compute window authorized, $0 model (manifest 289)** — operator verbatim "authorized, continue" (interactive, 2026-11-09T20:16Z). Quote pq-3e4ad6c78a564b77 ceiling 5,050,420 µ$ ($5.05), hard-cap terms all shown; Σ five windows 19,793,630 µ$ ≤ $20; export 5 GiB ≤ 6 GiB egress line (controller free 77 GiB); dead-man STOP 12 h, h_r 6 h, one ≤1 h harvest-only restart inside ceiling; no deliver-secret ($0 model). Q-X38/Q-X60 amounts ratified; Q-X39b recorded default (i) stands — `reproof` live-verify.sh leg registered → `live-executed` eligible. verbatim_sha256 a8428147… stamped into fp-w1.json (sha 2502b777…). Authorizes PROV-W1 only — no other spend. Readout PASSED. chainTip → codex/harnessharness-gate-g25 · nextTicket → R6.32 · records-only · devin-cli/swe-2-high/coordinator
 - 2026-11-09 · **HUMAN-H13 COMPLETE — GCP billing alert configured (manifest 288)** — operator delegated verbatim "you can configure the GCP stuff yourself. I approve the rest. Proceed" (interactive, 2026-11-09T18:12Z); the agent configured + API-verified the alert: $20 USD at 50/90/100% CURRENT_SPEND (the Q-X38 first-pass compute authorization; first alert at $10) on the billing account, account-wide scope (the per-phase project is provisioned fresh, REQ-XB-212), notification channel present → `recipients provided: yes`, billing account linked → `provided: yes`, controller gcloud auth → `provided: yes` — no account/project ids or tokens in any record (REQ-XB-219, X-05). Readout COMPLETE. Withhold lifted for the billing-alert precondition only; PROV-W1 + paid compute stay gated on GATE-G25. chainTip → codex/harnessharness-human-h13 · nextTicket → GATE-G25 · records-only · devin-cli/swe-2-high/coordinator
 - 2026-11-09 · **GATE-G22 PASSED — phase-1 publication approved (manifest 286)** — operator verbatim "approved, proceed" (interactive, 2026-11-09T15:52:54Z). Approved inputs_digest sha256:15f819883d372ebe131d63f282d3ba9f89d952b2b6fb969db10ab2a3d0386874 — the 8-input phase-1 set; labels recorded execution / outside_verified false; dataset private; pages ["/phase-1/", "/phase-1/tasks/"]; public build 110 pages tree sha256 09cab5a1b10ef5ed141307d46fe357134eb5149245608899cadb2fef2d10b180. Readout PASSED; draft record uncommitted in worktree — R6.31 commits it exactly + README link + [results-site] transition. No spend/dataset/transcript/other-phase authorization. chainTip → codex/harnessharness-gate-g22 · nextTicket → R6.31 · records-only · devin-cli/swe-2-high/coordinator
