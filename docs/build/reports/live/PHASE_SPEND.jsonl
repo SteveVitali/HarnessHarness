@@ -1,0 +1,1 @@
+{"authority":"gcp_billing","basis":"estimate","cost_usd":3.29787,"cumulative_usd":3.29787,"kind":"compute","leg":"compute-estimate","phase":"fp","record":"2026-11-09-fp-w1-cost.json","row_id":"sp-cb6a4d6d46a6164b","ticket":"R6.30","ts":"2026-11-09T21:36:20Z","type":"spend","window":"w1"}
