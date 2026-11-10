@@ -16,7 +16,7 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.32b
+nextTicket:      R6.33
 lastCompleted:   GATE-G33
 blockedOn: DF-R6.32-1 (W1 window body — repaired declaration awaits GATE-G33 re-presentation)
 pauseRequested:  false
