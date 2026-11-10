@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:26a5d76ad5ad22af62024a9d9ab6cfe13d24129229221b9023c4eb4abaa7393c";
+    "sha256:c303b34288e812a1effd73ea895669a9a9a0fa248848890bbbd57af84fe90100";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -1908,6 +1908,53 @@ impl EphemeralKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecArmDecl {
+    pub env: String,
+    pub surfaces: Vec<String>,
+}
+
+impl ExecArmDecl {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("env", Json::str(self.env.clone())));
+        pairs.push((
+            "surfaces",
+            Json::Arr(self.surfaces.iter().map(|x| Json::str(x.clone())).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ExecArmDecl, String> {
+        Ok(ExecArmDecl {
+            env: {
+                let f = v.get("env").ok_or_else(|| format!("missing '{}'", "env"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            surfaces: {
+                let f = v
+                    .get("surfaces")
+                    .ok_or_else(|| format!("missing '{}'", "surfaces"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ForkParams {
     pub session_id: String,
     pub at: ForkPoint,
@@ -3209,6 +3256,7 @@ pub struct OpenSessionParams {
     pub invocation: Option<InvocationRecord>,
     pub client: Option<ClientDecl>,
     pub contract_json: Option<Json>,
+    pub exec: Option<ExecArmDecl>,
 }
 
 impl OpenSessionParams {
@@ -3224,6 +3272,9 @@ impl OpenSessionParams {
         }
         if let Some(v) = &self.contract_json {
             pairs.push(("contract_json", v.clone()));
+        }
+        if let Some(v) = &self.exec {
+            pairs.push(("exec", v.to_json()));
         }
         Json::obj(pairs)
     }
@@ -3254,6 +3305,10 @@ impl OpenSessionParams {
             },
             contract_json: match v.get("contract_json") {
                 Some(f) => Some(f.clone()),
+                None => None,
+            },
+            exec: match v.get("exec") {
+                Some(f) => Some(ExecArmDecl::from_json(f).map_err(|e| e)?),
                 None => None,
             },
         })

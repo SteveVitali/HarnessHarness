@@ -719,6 +719,7 @@ impl EnvDriver {
                         retryable: false,
                     },
                     exit_status: None,
+                    submission_ref: None,
                     manifest_ref: String::new(),
                     completeness: crate::capture::Completeness::Unknown,
                     // The reconciliation path carries no admission — the

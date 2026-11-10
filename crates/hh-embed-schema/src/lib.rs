@@ -565,6 +565,10 @@ fn types_schema() -> Json {
         ]),
     );
     m.insert(
+        "ExecArmDecl".into(),
+        strct(&[("env", "string", true), ("surfaces", "[string]", true)]),
+    );
+    m.insert(
         "OpenSessionParams".into(),
         strct(&[
             ("spec", "OpenSpec", true),
@@ -572,6 +576,7 @@ fn types_schema() -> Json {
             ("invocation", "InvocationRecord", false),
             ("client", "ClientDecl", false),
             ("contract_json", "json", false),
+            ("exec", "ExecArmDecl", false),
         ]),
     );
     m.insert(

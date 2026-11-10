@@ -372,7 +372,7 @@ impl EmbedService {
             (d, a, f, "resumed".to_string())
         } else {
             let surfaces = driver_surfaces(ports.host_caps);
-            let d = self.arm_driver(
+            let (d, sp) = self.arm_driver(
                 &subject_run_id,
                 &lease,
                 &surfaces,
@@ -390,6 +390,9 @@ impl EmbedService {
                     remaining: BTreeMap::new(),
                     control_variant: REACT_MINIMAL_VARIANT.to_string(),
                     compute_variant: "static".to_string(),
+                    // R6.38 — the arm's resolved params persist for the
+                    // same resume parity the `new` path records.
+                    strategy_params: Some(hharness_control::wire::strategy_params_to_json(&sp)),
                 },
                 std::collections::VecDeque::new(),
                 "armed".to_string(),

@@ -76,21 +76,52 @@ fn pinned_ref_from_json(j: &Json) -> Option<PinnedRef> {
     })
 }
 
-fn stop_rule_str(p: StopRuleParam) -> &'static str {
+/// `stop_rule` to canonical JSON — the bare class spelling for
+/// `no_action`/`either`/marker-less `submit`, the AR-24 record form
+/// `{submit: {marker, line, require_returncode}}` for a declared marker.
+fn stop_rule_to_json(p: &StopRuleParam) -> Json {
     match p {
-        StopRuleParam::NoAction => "no_action",
-        StopRuleParam::Submit => "submit",
-        StopRuleParam::Either => "either",
+        StopRuleParam::NoAction => Json::str("no_action"),
+        StopRuleParam::Submit { marker: None } => Json::str("submit"),
+        StopRuleParam::Submit {
+            marker: Some(marker),
+        } => Json::obj([(
+            "submit",
+            Json::obj([
+                ("marker", Json::str(marker.marker.clone())),
+                ("line", Json::str(marker.line.as_str())),
+                ("require_returncode", Json::Int(marker.require_returncode)),
+            ]),
+        )]),
+        StopRuleParam::Either => Json::str("either"),
     }
 }
 
-fn stop_rule_parse(s: &str) -> Option<StopRuleParam> {
-    Some(match s {
-        "no_action" => StopRuleParam::NoAction,
-        "submit" => StopRuleParam::Submit,
-        "either" => StopRuleParam::Either,
-        _ => return None,
-    })
+/// Decode a `stop_rule` member — the bare string or the AR-24 record
+/// form `{"submit": {"marker", "line", "require_returncode"}}`. `None`
+/// on any unknown class, a malformed record member, or a `line`
+/// outside the closed `{first}` sum (never a coercion).
+fn stop_rule_from_json(j: &Json) -> Option<StopRuleParam> {
+    match j {
+        Json::Str(s) => Some(match s.as_str() {
+            "no_action" => StopRuleParam::NoAction,
+            "submit" => StopRuleParam::Submit { marker: None },
+            "either" => StopRuleParam::Either,
+            _ => return None,
+        }),
+        Json::Obj(m) => {
+            let rec = m.get("submit")?;
+            let marker = crate::strategy::SubmitMarker {
+                marker: req_str(rec, "marker")?.to_string(),
+                line: crate::strategy::SubmitLine::parse(req_str(rec, "line")?)?,
+                require_returncode: req_i64(rec, "require_returncode")?,
+            };
+            Some(StopRuleParam::Submit {
+                marker: Some(marker),
+            })
+        }
+        _ => None,
+    }
 }
 
 fn truncated_str(t: TruncatedResponse) -> &'static str {
@@ -150,7 +181,7 @@ fn act_mode_parse(s: &str) -> Option<ActMode> {
 
 fn params_to_json(p: &StrategyParams) -> Json {
     Json::obj([
-        ("stop_rule", Json::str(stop_rule_str(p.stop_rule))),
+        ("stop_rule", stop_rule_to_json(&p.stop_rule)),
         (
             "max_continue_nudges",
             Json::Int(p.max_continue_nudges as i64),
@@ -177,12 +208,16 @@ fn params_to_json(p: &StrategyParams) -> Json {
             "loop_guards",
             Json::Arr(p.loop_guards.iter().map(|g| Json::str(g.clone())).collect()),
         ),
+        (
+            "format_failure_scope",
+            Json::str(p.format_failure_scope.as_str()),
+        ),
     ])
 }
 
 fn params_from_json(j: &Json) -> Option<StrategyParams> {
     Some(StrategyParams {
-        stop_rule: stop_rule_parse(req_str(j, "stop_rule")?)?,
+        stop_rule: stop_rule_from_json(j.get("stop_rule")?)?,
         max_continue_nudges: req_i64(j, "max_continue_nudges")?.max(0) as u32,
         max_consecutive_format_errors: req_i64(j, "max_consecutive_format_errors")?.max(0) as u32,
         max_consecutive_errors: req_i64(j, "max_consecutive_errors")?.max(0) as u32,
@@ -197,7 +232,175 @@ fn params_from_json(j: &Json) -> Option<StrategyParams> {
                 .collect::<Option<Vec<String>>>()?,
             _ => return None,
         },
+        // Absent ⇒ the variant preset (pre-R6.38 parameter documents
+        // carry no member — `batch` is the only admitted scope).
+        format_failure_scope: match j.get("format_failure_scope") {
+            None | Some(Json::Null) => crate::strategy::FormatFailureScope::Batch,
+            Some(v) => crate::strategy::FormatFailureScope::parse(v.as_str()?)?,
+        },
     })
+}
+
+// ── slot-parameter overlay (REQ-XE-115; G11) ──────────────────────────
+
+/// The admitted `control_strategy` slot `params` members. Members in
+/// `STRATEGY_PARAM_MEMBERS` decode into `StrategyParams` through the
+/// same per-member codecs the context document uses; members in
+/// `SLOT_PASSTHROUGH_MEMBERS` are admitted declarations another arm
+/// consumes (`completion_surface` — the R6.36 surface arm's member,
+/// validated there) and never reach the strategy record. Any member
+/// outside both is an unknown declaration — the overlay refuses it
+/// typed, never a silent drop (closed world).
+const SLOT_PASSTHROUGH_MEMBERS: &[&str] = &["completion_surface"];
+
+/// `StrategyParamError` — the overlay's typed refusal (arm-time decode;
+/// the member name and the decode class are the record — never the
+/// rejected value bytes, which may be definition content).
+#[derive(Debug, Clone, PartialEq)]
+pub enum StrategyParamError {
+    /// `params` is not a JSON object (or not an object member-map).
+    NotAnObject,
+    /// A member outside the admitted set.
+    UnknownMember {
+        /// The member name.
+        member: String,
+    },
+    /// A declared member failed its kind/value decode (`stop_rule`'s
+    /// closed classes, the `line ∈ {first}` sum, `format_failure_scope`,
+    /// the enum spellings, integer kinds, `loop_guards[]` strings).
+    MalformedMember {
+        /// The member name.
+        member: String,
+        /// The decode class (`bad_stop_rule`, `bad_enum`,
+        /// `bad_integer`, `bad_list`, `unsupported_value`).
+        detail: String,
+    },
+}
+
+impl std::fmt::Display for StrategyParamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StrategyParamError::NotAnObject => write!(f, "strategy_params_not_object"),
+            StrategyParamError::UnknownMember { member } => {
+                write!(f, "unknown_strategy_param:{}", member)
+            }
+            StrategyParamError::MalformedMember { member, detail } => {
+                write!(f, "malformed_strategy_param:{}:{}", member, detail)
+            }
+        }
+    }
+}
+
+impl std::error::Error for StrategyParamError {}
+
+/// `strategy_params_overlay(base, params)` — decode a `control_strategy`
+/// slot's `params` map into `StrategyParams` (G11, REQ-XE-115): every
+/// present member decodes through the wire codec's per-member rules;
+/// an absent member keeps `base` (the variant preset); an unknown
+/// member is a typed [`StrategyParamError::UnknownMember`] refusal at
+/// arm, never a silent drop.
+pub fn strategy_params_overlay(
+    base: &StrategyParams,
+    params: &Json,
+) -> Result<StrategyParams, StrategyParamError> {
+    let Json::Obj(m) = params else {
+        return Err(StrategyParamError::NotAnObject);
+    };
+    const MEMBERS: &[&str] = &[
+        "stop_rule",
+        "max_continue_nudges",
+        "max_consecutive_format_errors",
+        "max_consecutive_errors",
+        "tool_batch_mode",
+        "on_truncated_response",
+        "plan_provenance",
+        "replan_on",
+        "loop_guards",
+        "format_failure_scope",
+    ];
+    let bad = |member: &str, detail: &str| StrategyParamError::MalformedMember {
+        member: member.to_string(),
+        detail: detail.to_string(),
+    };
+    let mut out = base.clone();
+    for (k, v) in m {
+        if SLOT_PASSTHROUGH_MEMBERS.contains(&k.as_str()) {
+            continue;
+        }
+        if !MEMBERS.contains(&k.as_str()) {
+            return Err(StrategyParamError::UnknownMember { member: k.clone() });
+        }
+        if matches!(v, Json::Null) {
+            continue; // `null` restates the preset — absent semantics.
+        }
+        match k.as_str() {
+            "stop_rule" => {
+                out.stop_rule = stop_rule_from_json(v).ok_or_else(|| bad(k, "bad_stop_rule"))?;
+            }
+            "max_continue_nudges" => {
+                out.max_continue_nudges =
+                    v.as_int().ok_or_else(|| bad(k, "bad_integer"))?.max(0) as u32;
+            }
+            "max_consecutive_format_errors" => {
+                out.max_consecutive_format_errors =
+                    v.as_int().ok_or_else(|| bad(k, "bad_integer"))?.max(0) as u32;
+            }
+            "max_consecutive_errors" => {
+                out.max_consecutive_errors =
+                    v.as_int().ok_or_else(|| bad(k, "bad_integer"))?.max(0) as u32;
+            }
+            "tool_batch_mode" => {
+                out.tool_batch_mode = act_mode_parse(v.as_str().ok_or_else(|| bad(k, "bad_enum"))?)
+                    .ok_or_else(|| bad(k, "bad_enum"))?;
+            }
+            "on_truncated_response" => {
+                out.on_truncated_response =
+                    truncated_parse(v.as_str().ok_or_else(|| bad(k, "bad_enum"))?)
+                        .ok_or_else(|| bad(k, "bad_enum"))?;
+            }
+            "plan_provenance" => {
+                out.plan_provenance =
+                    provenance_parse(v.as_str().ok_or_else(|| bad(k, "bad_enum"))?)
+                        .ok_or_else(|| bad(k, "bad_enum"))?;
+            }
+            "replan_on" => {
+                out.replan_on = replan_parse(v.as_str().ok_or_else(|| bad(k, "bad_enum"))?)
+                    .ok_or_else(|| bad(k, "bad_enum"))?;
+            }
+            "loop_guards" => {
+                out.loop_guards = match v {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|e| e.as_str().map(str::to_string))
+                        .collect::<Option<Vec<String>>>()
+                        .ok_or_else(|| bad(k, "bad_list"))?,
+                    _ => return Err(bad(k, "bad_list")),
+                };
+            }
+            "format_failure_scope" => {
+                out.format_failure_scope = crate::strategy::FormatFailureScope::parse(
+                    v.as_str().ok_or_else(|| bad(k, "bad_enum"))?,
+                )
+                .ok_or_else(|| bad(k, "unsupported_value"))?;
+            }
+            _ => unreachable!("member set checked above"),
+        }
+    }
+    Ok(out)
+}
+
+/// `strategy_params_to_json(p)` — the resolved parameter record (the
+/// arm record's persistence spelling; decodes via
+/// [`strategy_params_from_json`]).
+pub fn strategy_params_to_json(p: &StrategyParams) -> Json {
+    params_to_json(p)
+}
+
+/// `strategy_params_from_json(j)` — decode a persisted parameter
+/// record (`None` on any malformed member — the record is the arm's
+/// own, a decode failure is the honest error, never a re-preset).
+pub fn strategy_params_from_json(j: &Json) -> Option<StrategyParams> {
+    params_from_json(j)
 }
 
 // ── boundary ──────────────────────────────────────────────────────────
