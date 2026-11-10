@@ -171,6 +171,16 @@ pub struct DispatchInput<'a> {
     /// before `authorized` — an unattested or replayed claim is a typed
     /// refusal (CC3: remedy consumption is ledgered, never invisible).
     pub remedy_taken: Option<flow::Remedy>,
+    /// The armed surface's typed result renderer (R6.37; REQ-XE-109;
+    /// ADR-0440 D2) — the `ResultRenderSpec.renderer` the session's
+    /// compiled `ModelSurface` declares for this call's surface. `Some`
+    /// ⇒ the settled observation renders the model view from the raw
+    /// output, the rendered bytes land as a durable blob, and the
+    /// `context.observation.recorded` row carries their content address
+    /// (`model_view{ref, renderer}`) in the same fenced batch — durable
+    /// before the request that carries it. `None` ⇒ the pre-change
+    /// pipeline, byte-identical (the opt-in rule).
+    pub result_renderer: Option<&'a hharness_compiler::surface::ResultRenderer>,
 }
 
 /// `DispatchOutcome` — what `dispatch` settled to.
@@ -2827,6 +2837,23 @@ impl<'a> Dispatcher<'a> {
             tool_call_id: Some(input.chain.tool_call_id.clone()),
             ..Default::default()
         };
+        // R6.37 (REQ-XE-109; ADR-0440 D2; design 38 G18) — the armed
+        // surface's declared `ResultRenderSpec.renderer` renders the
+        // observation's model view *here*, inside the fenced batch: the
+        // record is the kernel's own observation facts (`output` = the
+        // masked raw output behind `raw_output_ref`, `returncode` = the
+        // terminal exit status, `exception_info` = the tool-error class
+        // spelling — absent-not-null each), the rendered bytes land as a
+        // durable blob, and the row below records their content address
+        // before any request can carry it (X-04). A spec the record
+        // cannot serve mints the honest `render_refused` member — never
+        // a silently-fabricated string (a post-`committed` refusal is
+        // lifecycle-illegal, so the refusal rides this row, the same
+        // channel `leaf_refused` owns).
+        let model_view = match input.result_renderer {
+            Some(renderer) => Some(self.render_model_view(renderer, &raw_output, &report)?),
+            None => None,
+        };
         // `context.observation.recorded{admission}` (§5d.5 observe's
         // second output; §5g.2 §3's payload extension) — the observation-
         // plane record of the admitted result. Emitted only for a
@@ -2835,7 +2862,10 @@ impl<'a> Dispatcher<'a> {
         // member — the row's own provenance stays kernel (the kernel's
         // record of the admission, never the content's claim). It precedes
         // `completed` in the batch — `completed` closes the `tool_call`
-        // scope this row's scope members name.
+        // scope this row's scope members name. R6.37's sibling leg: an
+        // armed renderer mints the same class for a contract-less
+        // capability — `admission`/`label` stay absent-not-null and
+        // `model_view` carries the durable rendering ref.
         let mut batch = vec![observed];
         let recorded_payload = if let Some(f) = &leaf_failure {
             Some(events::observation_refused_payload(
@@ -2844,18 +2874,20 @@ impl<'a> Dispatcher<'a> {
                 &obs.manifest_ref,
                 &obs.outcome,
                 f,
+                model_view.as_ref(),
+            ))
+        } else if admission.is_some() || model_view.is_some() {
+            Some(events::observation_recorded_payload(
+                &effect_id,
+                &input.capability_ref.semantic_id,
+                &obs.manifest_ref,
+                &obs.outcome,
+                admission.as_ref(),
+                &leaf_records,
+                model_view.as_ref(),
             ))
         } else {
-            admission.as_ref().map(|adm| {
-                events::observation_recorded_payload(
-                    &effect_id,
-                    &input.capability_ref.semantic_id,
-                    &obs.manifest_ref,
-                    &obs.outcome,
-                    adm,
-                    &leaf_records,
-                )
-            })
+            None
         };
         if let Some(payload) = recorded_payload {
             let mut recorded = self
@@ -3320,6 +3352,69 @@ impl<'a> Dispatcher<'a> {
             .append(&self.run_id, lease, vec![endorsed])
             .map_err(|e| format!("remedy_inapplicable:{e}"))?;
         Ok(end.to)
+    }
+
+    /// `render_model_view(renderer, raw_output, report)` — the R6.37
+    /// model-view render (REQ-XE-109; ADR-0440 D2): the pure
+    /// `hharness_compiler::result_render::render` applied to the
+    /// kernel's own observation record (`output` = the masked raw output
+    /// — byte-identical to the durable `raw_output_ref` blob by
+    /// construction; `returncode`/`exception_info` absent-not-null).
+    /// On success the rendered string lands as a `text/plain` durable
+    /// blob and the member is `{ref, renderer}`; a spec the record
+    /// cannot serve answers `{outcome: "render_refused", reason}` —
+    /// the typed reason carries member/class ids only, never output
+    /// bytes (secrets never in records).
+    fn render_model_view(
+        &mut self,
+        renderer: &hharness_compiler::surface::ResultRenderer,
+        raw_output: &str,
+        report: &TerminalReport,
+    ) -> Result<Json, EnvError> {
+        let mut record: BTreeMap<String, Json> = BTreeMap::new();
+        record.insert("output".to_string(), Json::str(raw_output.to_string()));
+        if let Some(rc) = report.exit_status {
+            record.insert("returncode".to_string(), Json::Int(rc));
+        }
+        if let TerminalStatus::ToolError { class } = &report.status {
+            record.insert(
+                "exception_info".to_string(),
+                Json::str(class.as_str().to_string()),
+            );
+        }
+        match hharness_compiler::result_render::render(renderer, &record) {
+            Ok(rendered) => {
+                let rref = self
+                    .store
+                    .put_blob(rendered.as_bytes(), "text/plain")
+                    .map_err(EnvError::Ledger)?
+                    .id();
+                Ok(Json::obj([
+                    ("ref", Json::str(rref)),
+                    ("renderer", Json::str(renderer.kind())),
+                ]))
+            }
+            Err(e) => {
+                let reason = match &e {
+                    hharness_compiler::result_render::ResultRenderError::MissingField { name } => {
+                        format!("missing_field:{name}")
+                    }
+                    hharness_compiler::result_render::ResultRenderError::NonStringField {
+                        name,
+                    } => format!("non_string_field:{name}"),
+                    hharness_compiler::result_render::ResultRenderError::Template {
+                        role, ..
+                    } => format!("template:{role}"),
+                    hharness_compiler::result_render::ResultRenderError::NoRendering { class } => {
+                        format!("no_rendering:{class}")
+                    }
+                };
+                Ok(Json::obj([
+                    ("outcome", Json::str("render_refused")),
+                    ("reason", Json::str(reason)),
+                ]))
+            }
+        }
     }
 
     /// The S1.21/S2.11 local-check fold: build the `TerminalCapture` and run

@@ -1784,6 +1784,25 @@ impl EmbedService {
                 run_id: run_id.clone(),
                 env_handle_id: gate_env_handle,
                 seed: hharness_wire::sha256::sha256_bytes(run_id.as_bytes()),
+                // R6.37 — the session's armed `ModelSurface` supplies the
+                // typed renderers; an unarmed session's map stays empty
+                // (the opt-in rule — byte-identical legacy rows).
+                result_renderers: model_surface
+                    .as_ref()
+                    .map(|armed| {
+                        armed
+                            .surface
+                            .tools
+                            .iter()
+                            .filter_map(|t| {
+                                t.result_render
+                                    .as_ref()
+                                    .and_then(|s| s.renderer.clone())
+                                    .map(|r| (t.binding.surface_id.clone(), r))
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             })
         };
         let gate: &mut dyn EffectGate = match dispatch_gate.as_mut() {

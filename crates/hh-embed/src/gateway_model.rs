@@ -1007,8 +1007,11 @@ pub struct GatewayModel {
     dialect: WireDialect,
     /// The HTTP transport (plain or TLS-terminated — the lane's `tls{}`
     /// declaration armed at construction; R4.5c). Auth material is
-    /// injected here and only here (R4.5d — ADR-0366 D4).
-    transport: hharness_gateway::http_transport::HttpModelTransport,
+    /// injected here and only here (R4.5d — ADR-0366 D4). A `Transport`
+    /// trait object — the production lane binds `HttpModelTransport`;
+    /// the offline fixture seam (`with_transport`) binds R6.12's
+    /// `RecordedTransport` for the live-model-over-replay batteries.
+    transport: Box<dyn Transport>,
     /// The credential port — the broker-backed bind for every family.
     /// `credential_ref: None` answers `provided: no` (the local lane's
     /// `AuthKind::None` contract); `env:NAME` resolves through the
@@ -1073,9 +1076,11 @@ impl GatewayModel {
         })?;
         let family = hharness_gateway::family_of(&dialect);
         let client_tls = lane.tls.client_tls()?;
-        let transport = hharness_gateway::http_transport::HttpModelTransport::with_tls(
-            dialect.clone(),
-            client_tls,
+        let transport: Box<dyn Transport> = Box::new(
+            hharness_gateway::http_transport::HttpModelTransport::with_tls(
+                dialect.clone(),
+                client_tls,
+            ),
         );
         let mut endpoints = EndpointAllowlist {
             policy_ref: dialect.endpoint_allowlist_ref.clone(),
@@ -1125,6 +1130,15 @@ impl GatewayModel {
     /// `tools[]` under the compiled-surface path.
     pub fn with_completion_arm(mut self, armed: bool) -> Self {
         self.completion_armed = armed;
+        self
+    }
+
+    /// `with_transport(t)` — swap the bound transport (the offline
+    /// fixture seam; R6.12's `RecordedTransport` serves a recorded
+    /// upstream sequence through the family's own decoders — the
+    /// production `HttpModelTransport` path is untouched).
+    pub fn with_transport(mut self, t: Box<dyn Transport>) -> Self {
+        self.transport = t;
         self
     }
 
@@ -1600,7 +1614,30 @@ impl GatewayModel {
                             ));
                         } else {
                             for o in obs {
-                                messages.push(self.tool_result_msg(wid, o));
+                                // R6.37 (REQ-XE-109; ADR-0440 D2) — a
+                                // row carrying `model_view.ref` re-serves
+                                // the *recorded* rendered bytes verbatim
+                                // (the durable blob's own string — never
+                                // re-rendered, never re-derived). An
+                                // unresolvable ref is `MalformedHistory`,
+                                // matching the `response_ref` rule.
+                                let content = match o
+                                    .get("model_view")
+                                    .and_then(|mv| mv.get("ref"))
+                                    .and_then(Json::as_str)
+                                {
+                                    Some(rref) => {
+                                        let bytes = blobs(rref).ok_or_else(|| {
+                                            ModelError::new(
+                                                ModelErrorClass::MalformedHistory,
+                                                format!("model_view: ref `{rref}` unresolved"),
+                                            )
+                                        })?;
+                                        Json::str(String::from_utf8_lossy(&bytes).into_owned())
+                                    }
+                                    None => o,
+                                };
+                                messages.push(self.tool_result_msg(wid, content));
                             }
                         }
                     }

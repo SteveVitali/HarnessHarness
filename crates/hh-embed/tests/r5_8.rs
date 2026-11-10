@@ -455,6 +455,7 @@ fn r58_gate_settles_armed_surface_through_real_dispatcher() {
         run_id: run.clone(),
         env_handle_id: Some(env),
         seed: [7u8; 32],
+        result_renderers: BTreeMap::new(),
     };
     let intent = Json::obj([
         ("surface_id", Json::str("exec.write")),
@@ -523,6 +524,7 @@ fn r58_gate_unarmed_surface_falls_through_to_embed() {
         run_id: "run-1".to_string(),
         env_handle_id: None,
         seed: [0u8; 32],
+        result_renderers: BTreeMap::new(),
     };
     let intent = Json::obj([("surface_id", Json::str("exec.write"))]);
     let mut store_scope = open("gate-fallback");
