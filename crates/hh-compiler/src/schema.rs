@@ -2042,7 +2042,7 @@ fn compiled_tool_from_json(
 }
 
 fn section_json(s: &crate::lower::CompiledSection) -> Json {
-    Json::obj([
+    let mut m: BTreeMap<String, Json> = [
         (
             "rule_ids",
             Json::Arr(s.rule_ids.iter().map(Json::str).collect()),
@@ -2054,7 +2054,19 @@ fn section_json(s: &crate::lower::CompiledSection) -> Json {
             Json::Arr(s.source_node_ids.iter().map(Json::str).collect()),
         ),
         ("text", s.text.clone().map_or(Json::Null, Json::str)),
-    ])
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    // CC8 — the declared members are absent-not-null when undeclared,
+    // so a definition that names neither renders byte-identically.
+    if let Some(r) = &s.role {
+        m.insert("role".into(), Json::str(r.clone()));
+    }
+    if let Some(g) = &s.grammar {
+        m.insert("grammar".into(), Json::str(g.clone()));
+    }
+    Json::Obj(m)
 }
 
 fn section_from_json(j: &Json, path: &str) -> Result<crate::lower::CompiledSection, CompileError> {
@@ -2076,6 +2088,8 @@ fn section_from_json(j: &Json, path: &str) -> Result<crate::lower::CompiledSecti
             _ => None,
         },
         rule_ids: str_vec("rule_ids"),
+        role: j.get("role").and_then(Json::as_str).map(str::to_string),
+        grammar: j.get("grammar").and_then(Json::as_str).map(str::to_string),
     })
 }
 

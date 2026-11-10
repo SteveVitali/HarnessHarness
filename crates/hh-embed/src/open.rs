@@ -66,6 +66,10 @@ struct CarriedRuntime {
     /// in-process takeover carries it; a durable resume re-reads the
     /// manifest's `model_lane` member.
     model_lane: Option<crate::gateway_model::ModelLane>,
+    /// The compiled `ModelSurface` (R6.35) — an in-process takeover
+    /// carries it; a durable resume re-derives it by the same pure
+    /// compile over the persisted sealed definition.
+    model_surface: Option<hharness_compiler::seal::ModelSurface>,
 }
 
 /// The resumed-leaf arm product — the driver, its `leaf.arm` record,
@@ -488,6 +492,107 @@ impl EmbedService {
         })
     }
 
+    /// `arm_model_surface(sealed, role_table, …)` — the arm-time compile
+    /// REQ-XE-103 fixes: the sealed definition + the bound profile
+    /// coordinates through `hharness_compiler::compile` (the same pure
+    /// path `lab.assembly.compile` runs — `targets: []` since the layout
+    /// render consumes no target artefact). `Lowered` ⇒ the surface;
+    /// `Deferred` or a compile failure is a typed refusal, never a
+    /// silent unarmed downgrade.
+    pub(crate) fn arm_model_surface(
+        &self,
+        sealed: &hharness_hir::document::SealedDefinition,
+        role_table: &hharness_gateway::router::ModelRoleTable,
+        compile_for_expired: bool,
+        intent_ref: Option<String>,
+    ) -> Result<hharness_compiler::seal::ModelSurface, EmbedError> {
+        let mut refs: Vec<String> = Vec::new();
+        if let Some(b) = role_table.roles.get("primary") {
+            refs.push(b.profile_ref.clone());
+        }
+        for (r, b) in &role_table.roles {
+            if r != "primary" && !refs.contains(&b.profile_ref) {
+                refs.push(b.profile_ref.clone());
+            }
+        }
+        if refs.is_empty() {
+            refs = crate::bundle_ops::pinned_profile_refs(&sealed.document);
+        }
+        let bundle = hharness_compiler::compile(
+            &hharness_compiler::CompileInputs {
+                sealed: sealed.clone(),
+                profile_refs: refs,
+                fallback_profile: None,
+                targets: vec![],
+                compile_for_expired,
+                intent_ref,
+            },
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.catalog,
+            &self.kernel_prov,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("model_surface compile: {e:?}"),
+        })?;
+        match bundle.model_surface {
+            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => Ok(s),
+            _ => Err(EmbedError::Refused {
+                reason: "model_surface_unlowered".to_string(),
+            }),
+        }
+    }
+
+    /// `resume_model_surface(manifest)` — durable-resume re-derivation:
+    /// the persisted `model_lane` declares the arm and the persisted
+    /// sealed definition + `pinned_profile_refs` recompile (the same
+    /// pure path — never a persisted copy).
+    pub(crate) fn resume_model_surface(
+        &self,
+        manifest: &hharness_ledger::manifest::RunManifest,
+    ) -> Result<Option<hharness_compiler::seal::ModelSurface>, EmbedError> {
+        let armed = crate::gateway_model::ModelLane::from_manifest(manifest)
+            .map(|l| l.model_surface)
+            .unwrap_or(false);
+        if !armed {
+            return Ok(None);
+        }
+        let def_ref = manifest
+            .harness_def_ref
+            .clone()
+            .ok_or(EmbedError::Refused {
+                reason: "model_surface_def_ref_missing".to_string(),
+            })?;
+        let bytes = self.artifact_bytes(&def_ref)?;
+        let (sealed, _) = hharness_compiler::accept_bytes(&bytes, &self.catalog, &self.kernel_prov)
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("model_surface accept: {e:?}"),
+            })?;
+        let bundle = hharness_compiler::compile(
+            &hharness_compiler::CompileInputs {
+                sealed: sealed.clone(),
+                profile_refs: crate::bundle_ops::pinned_profile_refs(&sealed.document),
+                fallback_profile: None,
+                targets: vec![],
+                compile_for_expired: false,
+                intent_ref: None,
+            },
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.catalog,
+            &self.kernel_prov,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("model_surface compile: {e:?}"),
+        })?;
+        match bundle.model_surface {
+            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => Ok(Some(s)),
+            _ => Err(EmbedError::Refused {
+                reason: "model_surface_unlowered".to_string(),
+            }),
+        }
+    }
+
     /// `open_session{kind:"new"}` — resolve → validate → seal →
     /// override desugar + I-1 → `open_run` → provision `local_host` →
     /// arm the driver.
@@ -780,6 +885,20 @@ impl EmbedService {
                 .extra
                 .insert("model_lane".to_string(), lane.to_json());
         }
+        // R6.35 (REQ-XE-103/104) — `model_port.model_surface = "compiled"`
+        // arms the session's compiled `ModelSurface` at open: the sealed
+        // definition + the realized bound profiles compile through the
+        // one `hharness_compiler::compile` path (no second renderer, CC1).
+        // The artifact is pure — resume re-derives it, never persists it.
+        let model_surface = match &model_lane {
+            Some(lane) if lane.model_surface => Some(self.arm_model_surface(
+                &sealed,
+                &role_table,
+                !expired_rows.is_empty(),
+                expired_rows.first().map(|(_, i)| i.clone()),
+            )?),
+            _ => None,
+        };
         // §5c.1 (R3.4; DF-S1.19-2) — `window_cap` is the primary
         // profile's declared `context_window`: the durable
         // `model_context_window` member carries the realized value
@@ -1123,6 +1242,7 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             model_lane,
+            model_surface,
             model_fail_plan,
             client: client.cloned(),
             contract_json: contract_json.cloned(),
@@ -1414,6 +1534,7 @@ impl EmbedService {
                     leaf_arm: std::mem::take(&mut s.leaf_arm),
                     model_fail_plan: std::mem::take(&mut s.model_fail_plan),
                     model_lane: s.model_lane.take(),
+                    model_surface: s.model_surface.take(),
                 });
             }
         };
@@ -1674,6 +1795,7 @@ impl EmbedService {
                     leaf_arm,
                     model_fail_plan,
                     model_lane: crate::gateway_model::ModelLane::from_manifest(&manifest),
+                    model_surface: self.resume_model_surface(&manifest)?,
                 }
             }
         };
@@ -1775,6 +1897,7 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             model_lane: rt.model_lane,
+            model_surface: rt.model_surface,
             model_fail_plan: rt.model_fail_plan,
             client: None,
             contract_json: None,
@@ -1870,6 +1993,7 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             model_lane: crate::gateway_model::ModelLane::from_manifest(&manifest),
+            model_surface: self.resume_model_surface(&manifest)?,
             model_fail_plan: Default::default(),
             client: client.cloned(),
             contract_json: contract_json.cloned(),
