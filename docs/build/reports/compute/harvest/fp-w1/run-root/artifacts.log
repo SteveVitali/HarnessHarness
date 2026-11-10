@@ -1,0 +1,198 @@
+{"set_digest":"sha256:254d590e1c66a8300bc2ff26c1d03fcf2104985e614a6b4815f561081639de0e"}
+binary-set ok
+{"digest":"sha256:57418e7cdcd4fe3a0c1e5db1af323d0552823fdc99d3ba69739e6008ebea8855"}
+bundle mini-swe-agent ok
+hh-w1: run_export: identity_member: identity "57418e7cdcd4fe3a0c1e5db1af323d0552823fdc99d3ba69739e6008ebea8855" is not a sha256:<64> — a RepoDigest is never the identity
+export mini-swe-agent FAIL
+{"digest":"sha256:94923cee838ae9dad9fd4edd9c8a68b9854890efdb634ac89d3c63e53c929610"}
+bundle pi ok
+hh-w1: run_export: identity_member: identity "94923cee838ae9dad9fd4edd9c8a68b9854890efdb634ac89d3c63e53c929610" is not a sha256:<64> — a RepoDigest is never the identity
+export pi FAIL
+{"digest":"sha256:a672fc5b516b35e2a24e8087c618f309c77d27b52031007490b328bc0544e76b"}
+bundle claude-code ok
+hh-w1: run_export: identity_member: identity "a672fc5b516b35e2a24e8087c618f309c77d27b52031007490b328bc0544e76b" is not a sha256:<64> — a RepoDigest is never the identity
+export claude-code FAIL
+{"digest":"sha256:23c0d8ef20917a3099882ac80b444268c1f512237e23c825f556063475aa8f8e"}
+hh-w1: run_export: identity_member: identity "23c0d8ef20917a3099882ac80b444268c1f512237e23c825f556063475aa8f8e" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/cobol-modernization FAIL
+{"digest":"sha256:27b7e7e583aaa145034374c6118855a361f2561a38f2789d48fe8c2bdfc010a4"}
+hh-w1: run_export: identity_member: identity "27b7e7e583aaa145034374c6118855a361f2561a38f2789d48fe8c2bdfc010a4" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/extract-elf FAIL
+{"digest":"sha256:44d1e07409eee90607c0b7dc922ad2187f9d16394637c5878d6fe9800d76bb2a"}
+hh-w1: run_export: identity_member: identity "44d1e07409eee90607c0b7dc922ad2187f9d16394637c5878d6fe9800d76bb2a" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/fix-code-vulnerability FAIL
+{"digest":"sha256:7171a8483fd1c29dbf89f5bc4876bc4e25d26686c18580f491edda730441317a"}
+hh-w1: run_export: identity_member: identity "7171a8483fd1c29dbf89f5bc4876bc4e25d26686c18580f491edda730441317a" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/fix-git FAIL
+{"digest":"sha256:0cc0c238692415aa86bcba1912dc60612e73480f4dcc107ebb88d30923a2bcce"}
+hh-w1: run_export: identity_member: identity "0cc0c238692415aa86bcba1912dc60612e73480f4dcc107ebb88d30923a2bcce" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/gcode-to-text FAIL
+{"digest":"sha256:69cf9091a377a9a916653b523ec22b558056dc8fcc262381f0d9c4fdfb31159f"}
+hh-w1: run_export: identity_member: identity "69cf9091a377a9a916653b523ec22b558056dc8fcc262381f0d9c4fdfb31159f" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/headless-terminal FAIL
+{"digest":"sha256:3e8104349262871317f6cb18cfc272ad0a0dcde38fb8a448caefd569c4154254"}
+hh-w1: run_export: identity_member: identity "3e8104349262871317f6cb18cfc272ad0a0dcde38fb8a448caefd569c4154254" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/largest-eigenval FAIL
+{"digest":"sha256:4f3529395e1ebb9518a6739baacd72463eec1fd15dc0923a090019a4234eee28"}
+hh-w1: run_export: identity_member: identity "4f3529395e1ebb9518a6739baacd72463eec1fd15dc0923a090019a4234eee28" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/modernize-scientific-stack FAIL
+{"digest":"sha256:7407784e27abd9258b3f89df52cc20fb9328c023aa34d8cbdaa8e61f081ec431"}
+hh-w1: run_export: identity_member: identity "7407784e27abd9258b3f89df52cc20fb9328c023aa34d8cbdaa8e61f081ec431" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/multi-source-data-merger FAIL
+{"digest":"sha256:2cefea8851191551af475301f0f27e2255437b0868bce625dedf122fb20a16ab"}
+hh-w1: run_export: identity_member: identity "2cefea8851191551af475301f0f27e2255437b0868bce625dedf122fb20a16ab" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/openssl-selfsigned-cert FAIL
+{"digest":"sha256:53826123a687876ed633ad2b458b26fbd8fefc581e54e41bdc7a86fe6e1e7b38"}
+hh-w1: run_export: identity_member: identity "53826123a687876ed633ad2b458b26fbd8fefc581e54e41bdc7a86fe6e1e7b38" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/overfull-hbox FAIL
+{"digest":"sha256:cde9c0d66ac4d0cb2aace4487fdcec513496a1122ae8373c375bc0cfa1674090"}
+hh-w1: run_export: identity_member: identity "cde9c0d66ac4d0cb2aace4487fdcec513496a1122ae8373c375bc0cfa1674090" is not a sha256:<64> — a RepoDigest is never the identity
+layer mini-swe-agent/password-recovery FAIL
+{"digest":"sha256:00be0d133a2a99632d05d9f915e61ee587dde7e734b1a85a8c1e03bbbb9017db"}
+{"image_id":"sha256:00be0d133a2a99632d05d9f915e61ee587dde7e734b1a85a8c1e03bbbb9017db"}
+layer mini-swe-agent/polyglot-rust-c ok
+{"digest":"sha256:8f492c275851e23064e66760e0c3991f9cf706893e553aab4509733a3c512b3d"}
+{"image_id":"sha256:8f492c275851e23064e66760e0c3991f9cf706893e553aab4509733a3c512b3d"}
+layer mini-swe-agent/raman-fitting ok
+{"digest":"sha256:44af562802ffdeb1cb4636b9657c6d9ad8f240dd5642b605a29192ac310d1870"}
+{"image_id":"sha256:44af562802ffdeb1cb4636b9657c6d9ad8f240dd5642b605a29192ac310d1870"}
+layer mini-swe-agent/regex-log ok
+{"digest":"sha256:5e15cabcf56b046ef3da9c47d434ec038f551d051ec8cd25f327312bf3be70f2"}
+{"image_id":"sha256:5e15cabcf56b046ef3da9c47d434ec038f551d051ec8cd25f327312bf3be70f2"}
+layer mini-swe-agent/sanitize-git-repo ok
+{"digest":"sha256:5a4c009e559842e4e23290a51751e0cc4bb43ce5f753175721500dc710b8d0a2"}
+{"image_id":"sha256:5a4c009e559842e4e23290a51751e0cc4bb43ce5f753175721500dc710b8d0a2"}
+layer mini-swe-agent/sqlite-with-gcov ok
+{"digest":"sha256:44af562802ffdeb1cb4636b9657c6d9ad8f240dd5642b605a29192ac310d1870"}
+{"image_id":"sha256:44af562802ffdeb1cb4636b9657c6d9ad8f240dd5642b605a29192ac310d1870"}
+layer mini-swe-agent/torch-pipeline-parallelism ok
+{"digest":"sha256:878d9a72601dfef4a06aa90c167fbde5c386d47c0da97d921c591bb19be05770"}
+{"image_id":"sha256:878d9a72601dfef4a06aa90c167fbde5c386d47c0da97d921c591bb19be05770"}
+layer mini-swe-agent/tune-mjcf ok
+{"digest":"sha256:31425b99561b618013d7d9906b4910df3f2cec5017647a32b0ec1c25961f9382"}
+{"image_id":"sha256:31425b99561b618013d7d9906b4910df3f2cec5017647a32b0ec1c25961f9382"}
+layer mini-swe-agent/write-compressor ok
+{"digest":"sha256:41cd96f7fbc06a2428f309e72395a247ac17faef81a0e388156bb60dcf7e113f"}
+{"image_id":"sha256:41cd96f7fbc06a2428f309e72395a247ac17faef81a0e388156bb60dcf7e113f"}
+layer pi/cobol-modernization ok
+{"digest":"sha256:dbbff39a676f483d5c07e08b2cebdf24c7216d6dd020364150e1ecb3471441a4"}
+{"image_id":"sha256:dbbff39a676f483d5c07e08b2cebdf24c7216d6dd020364150e1ecb3471441a4"}
+layer pi/extract-elf ok
+{"digest":"sha256:fb1d595a85eece873c014a611a7ff03b3c6b93f6017ee1130a78973dcd228d2e"}
+{"image_id":"sha256:fb1d595a85eece873c014a611a7ff03b3c6b93f6017ee1130a78973dcd228d2e"}
+layer pi/fix-code-vulnerability ok
+{"digest":"sha256:d254e6ff61c32eb979af72aeddd9d547f9e3aae8281b65583d2d758ddb978828"}
+{"image_id":"sha256:d254e6ff61c32eb979af72aeddd9d547f9e3aae8281b65583d2d758ddb978828"}
+layer pi/fix-git ok
+{"digest":"sha256:560906c0eb50aa14337d522410445aa38c3ba17b64604ca04367201b18a4a314"}
+{"image_id":"sha256:560906c0eb50aa14337d522410445aa38c3ba17b64604ca04367201b18a4a314"}
+layer pi/gcode-to-text ok
+{"digest":"sha256:26e534f8a788c9662d458954d2ee1e1e5e252dbeea1ec143d901c05d7887b2bb"}
+{"image_id":"sha256:26e534f8a788c9662d458954d2ee1e1e5e252dbeea1ec143d901c05d7887b2bb"}
+layer pi/headless-terminal ok
+{"digest":"sha256:15b79a392fdfdb9b3abbf77b640bee9b8ff892489d92a644e316c41b602ffad7"}
+{"image_id":"sha256:15b79a392fdfdb9b3abbf77b640bee9b8ff892489d92a644e316c41b602ffad7"}
+layer pi/largest-eigenval ok
+{"digest":"sha256:6982a11ceed0a5f9b8e25454edc72c37e35d9c33e4269537bc909b05f3eada5d"}
+{"image_id":"sha256:6982a11ceed0a5f9b8e25454edc72c37e35d9c33e4269537bc909b05f3eada5d"}
+layer pi/modernize-scientific-stack ok
+{"digest":"sha256:acd3dde39e1ed891221ef9ea2c30d27abe0591a59af9048eb9840eab1609f9c4"}
+{"image_id":"sha256:acd3dde39e1ed891221ef9ea2c30d27abe0591a59af9048eb9840eab1609f9c4"}
+layer pi/multi-source-data-merger ok
+{"digest":"sha256:54bd7aa26e5947fadaa5e1a3d34a9dd15dc0aa63cf2589d42533c89e7048e327"}
+{"image_id":"sha256:54bd7aa26e5947fadaa5e1a3d34a9dd15dc0aa63cf2589d42533c89e7048e327"}
+layer pi/openssl-selfsigned-cert ok
+{"digest":"sha256:532a0ec7424d149e67b27c0b2e00b5dea93b0fffb85c95c64f8760b4b1c8a124"}
+{"image_id":"sha256:532a0ec7424d149e67b27c0b2e00b5dea93b0fffb85c95c64f8760b4b1c8a124"}
+layer pi/overfull-hbox ok
+{"digest":"sha256:d47bb24ab2b36eba4cd88640cfd344fcefbd812b2e91c0217dd408a31b3ca6d1"}
+{"image_id":"sha256:d47bb24ab2b36eba4cd88640cfd344fcefbd812b2e91c0217dd408a31b3ca6d1"}
+layer pi/password-recovery ok
+{"digest":"sha256:dcf68509780b42f7c35dc56206794ec3c08487f530bebe88fddaa5e49784e738"}
+{"image_id":"sha256:dcf68509780b42f7c35dc56206794ec3c08487f530bebe88fddaa5e49784e738"}
+layer pi/polyglot-rust-c ok
+{"digest":"sha256:055aa038dd764558014a06b4377c281a6f99735193103dcc7ce05cd9abd3b323"}
+{"image_id":"sha256:055aa038dd764558014a06b4377c281a6f99735193103dcc7ce05cd9abd3b323"}
+layer pi/raman-fitting ok
+{"digest":"sha256:cd62f613c4e3b7ab9ef7fa576ada1399594ffa66b74a2efbc386c772f26c0717"}
+{"image_id":"sha256:cd62f613c4e3b7ab9ef7fa576ada1399594ffa66b74a2efbc386c772f26c0717"}
+layer pi/regex-log ok
+{"digest":"sha256:9fc1d97a436faaa7be170bf2b92f936a5fe85f28b4ff728f01bd5f090f29defd"}
+{"image_id":"sha256:9fc1d97a436faaa7be170bf2b92f936a5fe85f28b4ff728f01bd5f090f29defd"}
+layer pi/sanitize-git-repo ok
+{"digest":"sha256:f9cbdde0864215f2c5d73b1e72fc11f84b09ec57e430b011eaef5eb04267f200"}
+{"image_id":"sha256:f9cbdde0864215f2c5d73b1e72fc11f84b09ec57e430b011eaef5eb04267f200"}
+layer pi/sqlite-with-gcov ok
+{"digest":"sha256:cd62f613c4e3b7ab9ef7fa576ada1399594ffa66b74a2efbc386c772f26c0717"}
+{"image_id":"sha256:cd62f613c4e3b7ab9ef7fa576ada1399594ffa66b74a2efbc386c772f26c0717"}
+layer pi/torch-pipeline-parallelism ok
+{"digest":"sha256:a035bd41fca362c6f0c839f5a3127794f9a47928aa585dabce3ee3dc6be1dbd2"}
+{"image_id":"sha256:a035bd41fca362c6f0c839f5a3127794f9a47928aa585dabce3ee3dc6be1dbd2"}
+layer pi/tune-mjcf ok
+{"digest":"sha256:7fc638112101addc019433a1ab9d7d8c5f36808c2de5555a25730d6c96ad8cc7"}
+{"image_id":"sha256:7fc638112101addc019433a1ab9d7d8c5f36808c2de5555a25730d6c96ad8cc7"}
+layer pi/write-compressor ok
+{"digest":"sha256:e59a7f82cc417b9b2ca75c6c999fb2c67690a8fa96ce56b7242c0d21ab7f988e"}
+{"image_id":"sha256:e59a7f82cc417b9b2ca75c6c999fb2c67690a8fa96ce56b7242c0d21ab7f988e"}
+layer claude-code/cobol-modernization ok
+{"digest":"sha256:df77907ba5a45c4326f8c825bc61a667283d2a2a0758e74a28b4d58dfe617488"}
+{"image_id":"sha256:df77907ba5a45c4326f8c825bc61a667283d2a2a0758e74a28b4d58dfe617488"}
+layer claude-code/extract-elf ok
+{"digest":"sha256:b939800216c3fe4b806dfac1514f50bb1c785f2f461cc1e6cd5afb5dac9c049d"}
+{"image_id":"sha256:b939800216c3fe4b806dfac1514f50bb1c785f2f461cc1e6cd5afb5dac9c049d"}
+layer claude-code/fix-code-vulnerability ok
+{"digest":"sha256:2650a752c3a914f9a53853693d5a74fdcce8c0afef805891ba648c6131728ca0"}
+{"image_id":"sha256:2650a752c3a914f9a53853693d5a74fdcce8c0afef805891ba648c6131728ca0"}
+layer claude-code/fix-git ok
+{"digest":"sha256:c83bff9aa814c76f59a73df944391b8b4e118e8a1a7794fbb00ef8a7008095b1"}
+{"image_id":"sha256:c83bff9aa814c76f59a73df944391b8b4e118e8a1a7794fbb00ef8a7008095b1"}
+layer claude-code/gcode-to-text ok
+{"digest":"sha256:7f77dfca00cd34b277bce9c2d154875173e4bbd36c84f00ccf3abc1f7446e10e"}
+{"image_id":"sha256:7f77dfca00cd34b277bce9c2d154875173e4bbd36c84f00ccf3abc1f7446e10e"}
+layer claude-code/headless-terminal ok
+{"digest":"sha256:d3eebd44813191e2aec72ad66be6f629fb05f11f1a19422bc740ee448be986b9"}
+{"image_id":"sha256:d3eebd44813191e2aec72ad66be6f629fb05f11f1a19422bc740ee448be986b9"}
+layer claude-code/largest-eigenval ok
+{"digest":"sha256:2e57f7b9252dba25f5cf2c5f64aee3cdfb9f2e333f477b722304d3ba4524ca6b"}
+{"image_id":"sha256:2e57f7b9252dba25f5cf2c5f64aee3cdfb9f2e333f477b722304d3ba4524ca6b"}
+layer claude-code/modernize-scientific-stack ok
+{"digest":"sha256:66cf49b41b02f3207f3ec5ce89469c0de3863f0c28b8bb855166558d51309b31"}
+{"image_id":"sha256:66cf49b41b02f3207f3ec5ce89469c0de3863f0c28b8bb855166558d51309b31"}
+layer claude-code/multi-source-data-merger ok
+{"digest":"sha256:caca7f97d40efb51f089f0c84b8d3178490e190b1781cd7294858708cad3fe33"}
+{"image_id":"sha256:caca7f97d40efb51f089f0c84b8d3178490e190b1781cd7294858708cad3fe33"}
+layer claude-code/openssl-selfsigned-cert ok
+{"digest":"sha256:7745025809b937b076dcdb2c00de1fbe49c3bb940e8be1fb3921288e941d7594"}
+{"image_id":"sha256:7745025809b937b076dcdb2c00de1fbe49c3bb940e8be1fb3921288e941d7594"}
+layer claude-code/overfull-hbox ok
+{"digest":"sha256:5c99660be537b281a047ca1e63a1dd47dc2487797f2ef888e234b82f9a916b43"}
+{"image_id":"sha256:5c99660be537b281a047ca1e63a1dd47dc2487797f2ef888e234b82f9a916b43"}
+layer claude-code/password-recovery ok
+{"digest":"sha256:f5686cb110e338d278a7c55052de246a0ef5f108950780ac89cf2760d5a6c919"}
+{"image_id":"sha256:f5686cb110e338d278a7c55052de246a0ef5f108950780ac89cf2760d5a6c919"}
+layer claude-code/polyglot-rust-c ok
+{"digest":"sha256:7731186a781b9c3a9ecc3c65ce23705ff01d1b3cd3b2432c995f9939335cc0d4"}
+{"image_id":"sha256:7731186a781b9c3a9ecc3c65ce23705ff01d1b3cd3b2432c995f9939335cc0d4"}
+layer claude-code/raman-fitting ok
+{"digest":"sha256:9b8c26750a5c113cbe46d82888451845f452029af799991a1320eaf49e160363"}
+{"image_id":"sha256:9b8c26750a5c113cbe46d82888451845f452029af799991a1320eaf49e160363"}
+layer claude-code/regex-log ok
+{"digest":"sha256:46d65ec0dbb758d45770b3cb71b72ecc7aaa4873d3ee14593a31c3ca9001ef04"}
+{"image_id":"sha256:46d65ec0dbb758d45770b3cb71b72ecc7aaa4873d3ee14593a31c3ca9001ef04"}
+layer claude-code/sanitize-git-repo ok
+{"digest":"sha256:584fa50da7cc757a7d46f499a7d0cf7a78e2d0dd5f41cdf176f03a8aeff1553e"}
+{"image_id":"sha256:584fa50da7cc757a7d46f499a7d0cf7a78e2d0dd5f41cdf176f03a8aeff1553e"}
+layer claude-code/sqlite-with-gcov ok
+{"digest":"sha256:9b8c26750a5c113cbe46d82888451845f452029af799991a1320eaf49e160363"}
+{"image_id":"sha256:9b8c26750a5c113cbe46d82888451845f452029af799991a1320eaf49e160363"}
+layer claude-code/torch-pipeline-parallelism ok
+{"digest":"sha256:497ccfd5a218415b6de306339ff5ce48b87d9eb6a766fae5345f1e2e6a298b8f"}
+{"image_id":"sha256:497ccfd5a218415b6de306339ff5ce48b87d9eb6a766fae5345f1e2e6a298b8f"}
+layer claude-code/tune-mjcf ok
+{"digest":"sha256:81e5c0c61feec9eb6be5529e8363f3ab818c69cc702d432e6ca1a89d5c31b316"}
+{"image_id":"sha256:81e5c0c61feec9eb6be5529e8363f3ab818c69cc702d432e6ca1a89d5c31b316"}
+layer claude-code/write-compressor ok
+== artifacts 2026-11-10T01:48:54Z index — fold all export index-entry records
+index: ok
+index ok
+== artifacts 2026-11-10T01:48:55Z artifacts done

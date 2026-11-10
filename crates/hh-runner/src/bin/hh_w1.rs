@@ -415,6 +415,12 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
         .and_then(Json::as_str)
         .map(str::to_string)
         .ok_or_else(|| "inspect Id".to_string())?;
+    // podman's `.Id` is a bare 64-hex; the recorded identity is the
+    // `sha256:<64>` form (REQ-XC-330 — a RepoDigest is never it).
+    let id = format!(
+        "sha256:{}",
+        carried::image_id_normalize(&id).map_err(|e| format!("image_id: {e}"))?
+    );
     let plan = ExportPlan {
         shape: if arg(args, "--full").is_some() {
             ExportShape::PodmanSave
@@ -424,7 +430,11 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
         role: role.clone(),
         name: name.clone(),
         window,
-        image: Some(image),
+        // `podman save` resolves `name@<RepoDigest>` for pulled images
+        // and `sha256:<id>` for local builds — the resolved Id is the
+        // uniform digest-pinned ref (R6.32b: a tag or a `name@<id>`
+        // RepoDigest-shaped ref is not resolvable for local images).
+        image: Some(id.clone()),
         base_blobs: vec![],
         inputs: vec![],
         context_dir: String::new(),

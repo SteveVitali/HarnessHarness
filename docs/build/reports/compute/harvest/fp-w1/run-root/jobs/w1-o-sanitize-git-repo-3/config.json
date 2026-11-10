@@ -1,0 +1,17 @@
+{
+    "job_name": "w1-o-sanitize-git-repo-3",
+    "jobs_dir": "/var/lib/hh/runs/run-root-w1/jobs",
+    "n_attempts": 3,
+    "n_concurrent_trials": 3,
+    "environment": {
+        "type": "podman"
+    },
+    "datasets": [
+        {
+            "path": "/opt/w1/tasks",
+            "task_names": [
+                "sanitize-git-repo"
+            ]
+        }
+    ]
+}

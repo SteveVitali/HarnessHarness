@@ -599,7 +599,10 @@ fn ac8_stub_podman_pins_argv_and_captures_digest() {
     // cells run the layer by digest only — a tag ref refuses.
     assert!(check_cell_image_ref("hh-admit/mini:2.4.6").is_err());
     assert!(check_cell_image_ref("hh-admit/mini").is_err());
-    check_cell_image_ref(rec.get("digest").and_then(Json::as_str).unwrap()).unwrap_err(); // bare sha256 — no name
+    // a locally built image has no RepoDigest — bare `sha256:<id>` is the
+    // digest-pinned, podman-resolvable ref (admitted since R6.32b's
+    // image-export repair; still not a tag or a name).
+    check_cell_image_ref(rec.get("digest").and_then(Json::as_str).unwrap()).unwrap();
     check_cell_image_ref("hh-admit/mini-swe-agent-2.4.6@sha256:4538051c1b972bd7c7ca680818488a5e655a041150b228762d3eff661303ecb1").unwrap();
     // build-once: a second layer for the same task image refuses.
     assert!(build_once_guard(&mini(), TASK_A).is_err());

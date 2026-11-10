@@ -1,0 +1,28 @@
+== acts 2026-11-10T01:13:53Z 0 — allowlist freeze (Q-X55)
+{"digest":"sha256:b62762aeda7ad7cc3f97248b455d40545ff3849b83c1f5bfe75a36a5bcdba2ce"}
+== acts 2026-11-10T01:13:53Z 1 — observe pass (20 trials)
+observe cobol-modernization ok
+observe extract-elf ok
+observe fix-code-vulnerability ok
+observe fix-git ok
+observe gcode-to-text ok
+observe headless-terminal ok
+observe largest-eigenval ok
+observe modernize-scientific-stack ok
+observe multi-source-data-merger ok
+observe openssl-selfsigned-cert ok
+observe overfull-hbox ok
+observe password-recovery ok
+observe polyglot-rust-c ok
+observe raman-fitting ok
+observe regex-log ok
+observe sanitize-git-repo ok
+observe sqlite-with-gcov ok
+observe torch-pipeline-parallelism ok
+observe tune-mjcf ok
+observe write-compressor ok
+== acts 2026-11-10T01:16:29Z 3 — fault (REQ-XB-110) + probe (REQ-XA-127) + census
+fault ok
+probe ok
+census ok
+== acts 2026-11-10T01:16:54Z acts done

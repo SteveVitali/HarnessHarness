@@ -1,0 +1,1 @@
+{"denied_hosts":[],"expected":"oracle_failure{verifier_unavailable:bootstrap:egress_denied}","leg":"REQ-XB-110","observed":"oracle_failure{verifier_unavailable:reward_missing}","removed_host":"astral.sh","schema":"hh-fault-injection/1","task":"tune-mjcf"}

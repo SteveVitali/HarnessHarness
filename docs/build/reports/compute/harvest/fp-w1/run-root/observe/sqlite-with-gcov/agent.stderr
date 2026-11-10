@@ -1,0 +1,283 @@
+Warning: Input is not a terminal (fd=0).
+Error calculating cost for model openai/glm-5.3-flash: This model isn't mapped yet. model=openai/glm-5.3-flash, custom_llm_provider=openai. Add it here - https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json., perhaps it's not registered? You can ignore this issue from your config file with cost_tracking: 'ignore_errors' or globally with export MSWEA_COST_TRACKING='ignore_errors'. Alternatively check the 'Cost tracking' section in the documentation at https://klieret.short.gy/mini-local-models.  Still stuck? Please open a github issue at https://github.com/SWE-agent/mini-swe-agent/issues/new/choose!
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/utils.py:5934 in _get_model_info_helper                                  │
+│                                                                              │
+│    5931 │   │   │   │   │   key, _model_info = generalization                │
+│    5932 │   │   │                                                            │
+│    5933 │   │   │   if _model_info is None or key is None:                   │
+│ ❱  5934 │   │   │   │   raise ValueError(                                    │
+│    5935 │   │   │   │   │   "This model isn't mapped yet. Add it here -      │
+│         https://github.com/BerriAI/litellm/blob/main/model_prices_and_contex │
+│         t_window.json"                                                       │
+│    5936 │   │   │   │   )                                                    │
+│    5937 │   │   │   _input_cost_per_token: float | None =                    │
+│         _model_info.get("input_cost_per_token")                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ValueError: This model isn't mapped yet. Add it here - 
+https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.jso
+n
+
+During handling of the above exception, another exception occurred:
+
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/models/litellm_model.py:110 in _calculate_cost                      │
+│                                                                              │
+│   107 │                                                                      │
+│   108 │   def _calculate_cost(self, response) -> dict[str, float]:           │
+│   109 │   │   try:                                                           │
+│ ❱ 110 │   │   │   cost = litellm.cost_calculator.completion_cost(response,   │
+│       model=self.config.model_name)                                          │
+│   111 │   │   │   if cost <= 0.0:                                            │
+│   112 │   │   │   │   raise ValueError(f"Cost must be > 0.0, got {cost}")    │
+│   113 │   │   except Exception as e:                                         │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/cost_calculator.py:1862 in completion_cost                               │
+│                                                                              │
+│   1859 │   │   │   │   │   raise e                                           │
+│   1860 │   │   raise Exception(f"Unable to calculat cost for received        │
+│        potential model names - {potential_model_names}")                     │
+│   1861 │   except Exception as e:                                            │
+│ ❱ 1862 │   │   raise e                                                       │
+│   1863                                                                       │
+│   1864                                                                       │
+│   1865 def get_response_cost_from_hidden_params(                             │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/cost_calculator.py:1859 in completion_cost                               │
+│                                                                              │
+│   1856 │   │   │   │   │   "litellm.cost_calculator.py::completion_cost() -  │
+│        Error calculating cost for model=%s - %s", model, e                   │
+│   1857 │   │   │   │   )                                                     │
+│   1858 │   │   │   │   if idx == len(potential_model_names) - 1:             │
+│ ❱ 1859 │   │   │   │   │   raise e                                           │
+│   1860 │   │   raise Exception(f"Unable to calculat cost for received        │
+│        potential model names - {potential_model_names}")                     │
+│   1861 │   except Exception as e:                                            │
+│   1862 │   │   raise e                                                       │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/cost_calculator.py:1716 in completion_cost                               │
+│                                                                              │
+│   1713 │   │   │   │   (                                                     │
+│   1714 │   │   │   │   │   prompt_tokens_cost_usd_dollar,                    │
+│   1715 │   │   │   │   │   completion_tokens_cost_usd_dollar,                │
+│ ❱ 1716 │   │   │   │   ) = cost_per_token(                                   │
+│   1717 │   │   │   │   │   model=model,                                      │
+│   1718 │   │   │   │   │   prompt_tokens=prompt_tokens or 0,                 │
+│   1719 │   │   │   │   │   completion_tokens=completion_tokens or 0,         │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/cost_calculator.py:643 in cost_per_token                                 │
+│                                                                              │
+│    640 │   elif custom_llm_provider == "bedrock":                            │
+│    641 │   │   return bedrock_cost_per_token(model=model, usage=usage_block, │
+│        service_tier=service_tier)                                            │
+│    642 │   elif custom_llm_provider == "openai":                             │
+│ ❱  643 │   │   return openai_cost_per_token(                                 │
+│    644 │   │   │   model=model,                                              │
+│    645 │   │   │   usage=usage_block,                                        │
+│    646 │   │   │   service_tier=service_tier,                                │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/llms/openai/cost_calculation.py:41 in cost_per_token                     │
+│                                                                              │
+│    38 │   Returns:                                                           │
+│    39 │   │   Tuple[float, float] - prompt_cost_in_usd,                      │
+│       completion_cost_in_usd                                                 │
+│    40 │   """                                                                │
+│ ❱  41 │   return generic_cost_per_token(                                     │
+│    42 │   │   model=model,                                                   │
+│    43 │   │   usage=usage,                                                   │
+│    44 │   │   custom_llm_provider="openai",                                  │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/litellm_core_utils/llm_cost_calc/utils.py:1181 in generic_cost_per_token │
+│                                                                              │
+│   1178 │   # per-deployment override: those are registered under the         │
+│        deployment id and kept off                                            │
+│   1179 │   # the shared model-name key, so resolving from the name here      │
+│        reads the public rate.                                                │
+│   1180 │   resolved_model_info: Final = apply_provider_cache_read_default(   │
+│ ❱ 1181 │   │   get_model_info(model=model,                                   │
+│        custom_llm_provider=custom_llm_provider) if model_info is None else   │
+│        model_info,                                                           │
+│   1182 │   │   custom_llm_provider,                                          │
+│   1183 │   )                                                                 │
+│   1184                                                                       │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/utils.py:6277 in get_model_info                                          │
+│                                                                              │
+│    6274 │   # kept out of the cache key; explicit keys are resolved without  │
+│         the cache.                                                           │
+│    6275 │   if api_key is not None:                                          │
+│    6276 │   │   return _build_model_info(model, custom_llm_provider,         │
+│         api_base, api_key)                                                   │
+│ ❱  6277 │   return _cached_get_model_info(model, custom_llm_provider,        │
+│         api_base)                                                            │
+│    6278                                                                      │
+│    6279                                                                      │
+│    6280 get_model_info.cache_clear = _cached_get_model_info.cache_clear      │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/utils.py:6193 in _cached_get_model_info                                  │
+│                                                                              │
+│    6190 │   custom_llm_provider: str | None = None,                          │
+│    6191 │   api_base: str | None = None,                                     │
+│    6192 ) -> ModelInfo:                                                      │
+│ ❱  6193 │   return _build_model_info(model=model,                            │
+│         custom_llm_provider=custom_llm_provider, api_base=api_base)          │
+│    6194                                                                      │
+│    6195                                                                      │
+│    6196 def get_model_info(                                                  │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/utils.py:6168 in _build_model_info                                       │
+│                                                                              │
+│    6165 ) -> ModelInfo:                                                      │
+│    6166 │   supported_openai_params =                                        │
+│         litellm.get_supported_openai_params(model=model,                     │
+│         custom_llm_provider=custom_llm_provider)                             │
+│    6167 │                                                                    │
+│ ❱  6168 │   _model_info: Final = _get_model_info_helper(                     │
+│    6169 │   │   model=model,                                                 │
+│    6170 │   │   custom_llm_provider=custom_llm_provider,                     │
+│    6171 │   │   api_base=api_base,                                           │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/lite │
+│ llm/utils.py:6155 in _get_model_info_helper                                  │
+│                                                                              │
+│    6152 │   │   │   return returned_model_info                               │
+│    6153 │   except Exception as e:                                           │
+│    6154 │   │   verbose_logger.debug("Error getting model info: %s", e)      │
+│ ❱  6155 │   │   raise Exception(                                             │
+│    6156 │   │   │   f"This model isn't mapped yet. model={model},            │
+│         custom_llm_provider={custom_llm_provider}. Add it here -             │
+│         https://github.com/BerriAI/litellm/blob/main/model_prices_and_contex │
+│         t_window.json."                                                      │
+│    6157 │   │   )                                                            │
+│    6158                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Exception: This model isn't mapped yet. model=openai/glm-5.3-flash, 
+custom_llm_provider=openai. Add it here - 
+https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.jso
+n.
+
+The above exception was the direct cause of the following exception:
+
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/run/mini.py:102 in main                                             │
+│                                                                              │
+│    99 │   model = get_model(config=config.get("model", {}))                  │
+│   100 │   env = get_environment(config.get("environment", {}),               │
+│       default_type="local")                                                  │
+│   101 │   agent = get_agent(model, env, config.get("agent", {}),             │
+│       default_type="interactive")                                            │
+│ ❱ 102 │   agent.run(run_task)                                                │
+│   103 │   if (output_path := config.get("agent", {}).get("output_path")):    │
+│   104 │   │   console.print(f"Saved trajectory to [bold                      │
+│       green]'{output_path}'[/bold green]")                                   │
+│   105 │   return agent                                                       │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/agents/default.py:98 in run                                         │
+│                                                                              │
+│    95 │   │   )                                                              │
+│    96 │   │   while True:                                                    │
+│    97 │   │   │   try:                                                       │
+│ ❱  98 │   │   │   │   self.step()                                            │
+│    99 │   │   │   │   self.n_consecutive_format_errors = 0  # reset on any   │
+│       clean step                                                             │
+│   100 │   │   │   except FormatError as e:                                   │
+│   101 │   │   │   │   # The call was billed before parsing failed, so        │
+│       query() never got to charge it.                                        │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/agents/interactive.py:113 in step                                   │
+│                                                                              │
+│   110 │   │   # Override the step method to handle user interruption         │
+│   111 │   │   try:                                                           │
+│   112 │   │   │   console.print(Rule())                                      │
+│ ❱ 113 │   │   │   return super().step()                                      │
+│   114 │   │   except KeyboardInterrupt:                                      │
+│   115 │   │   │   interruption_message =                                     │
+│       self._prompt_and_handle_slash_commands(                                │
+│   116 │   │   │   │   "\n\n[bold yellow]Interrupted.[/bold yellow] "         │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/agents/default.py:128 in step                                       │
+│                                                                              │
+│   125 │                                                                      │
+│   126 │   def step(self) -> list[dict]:                                      │
+│   127 │   │   """Query the LM, execute actions."""                           │
+│ ❱ 128 │   │   return self.execute_actions(self.query())                      │
+│   129 │                                                                      │
+│   130 │   def query(self) -> dict:                                           │
+│   131 │   │   """Query the model and return model messages. Override to add  │
+│       hooks."""                                                              │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/agents/interactive.py:74 in query                                   │
+│                                                                              │
+│    71 │   │   │   │   │   return msg                                         │
+│    72 │   │   try:                                                           │
+│    73 │   │   │   with console.status("Waiting for the LM to respond..."):   │
+│ ❱  74 │   │   │   │   return super().query()                                 │
+│    75 │   │   except TimeExceeded:                                           │
+│    76 │   │   │   # A wall-clock limit can't be lifted by raising the        │
+│       step/cost limits                                                       │
+│    77 │   │   │   # (the next query re-checks the clock and raises again),   │
+│       so prompting                                                           │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/agents/default.py:149 in query                                      │
+│                                                                              │
+│   146 │   │   │   │   }                                                      │
+│   147 │   │   │   )                                                          │
+│   148 │   │   self.n_calls += 1                                              │
+│ ❱ 149 │   │   message = self.model.query(self.messages)                      │
+│   150 │   │   self.cost += message.get("extra", {}).get("cost", 0.0)         │
+│   151 │   │   self.add_messages(message)                                     │
+│   152 │   │   return message                                                 │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/models/litellm_model.py:85 in query                                 │
+│                                                                              │
+│    82 │   │   for attempt in retry(logger=logger,                            │
+│       abort_exceptions=self.abort_exceptions):                               │
+│    83 │   │   │   with attempt:                                              │
+│    84 │   │   │   │   response =                                             │
+│       self._query(self._prepare_messages_for_api(messages), **kwargs)        │
+│ ❱  85 │   │   cost_output = self._calculate_cost(response)                   │
+│    86 │   │   GLOBAL_MODEL_STATS.add(cost_output["cost"])                    │
+│    87 │   │   # Note: all model.query() implementations must persist the     │
+│       response and cost on FormatError.                                      │
+│    88 │   │   try:                                                           │
+│                                                                              │
+│ /root/.local/share/uv/tools/mini-swe-agent/lib/python3.12/site-packages/mini │
+│ sweagent/models/litellm_model.py:125 in _calculate_cost                      │
+│                                                                              │
+│   122 │   │   │   │   │   " Still stuck? Please open a github issue at       │
+│       https://github.com/SWE-agent/mini-swe-agent/issues/new/choose!"        │
+│   123 │   │   │   │   )                                                      │
+│   124 │   │   │   │   logger.critical(msg)                                   │
+│ ❱ 125 │   │   │   │   raise RuntimeError(msg) from e                         │
+│   126 │   │   return {"cost": cost}                                          │
+│   127 │                                                                      │
+│   128 │   def _parse_actions(self, response) -> list[dict]:                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+RuntimeError: Error calculating cost for model openai/glm-5.3-flash: This model 
+isn't mapped yet. model=openai/glm-5.3-flash, custom_llm_provider=openai. Add it
+here - 
+https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.jso
+n., perhaps it's not registered? You can ignore this issue from your config file
+with cost_tracking: 'ignore_errors' or globally with export 
+MSWEA_COST_TRACKING='ignore_errors'. Alternatively check the 'Cost tracking' 
+section in the documentation at https://klieret.short.gy/mini-local-models.  
+Still stuck? Please open a github issue at 
+https://github.com/SWE-agent/mini-swe-agent/issues/new/choose!

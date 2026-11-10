@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/w1/tasks/largest-eigenval",
+        "source": "tasks"
+    },
+    "trial_name": "largest-eigenval__LNErBf4",
+    "trials_dir": "/var/lib/hh/runs/run-root-w1/jobs/w1-o-largest-eigenval-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "c5749ef7-f49d-4732-9aaf-a4f24a4c2cca"
+}
