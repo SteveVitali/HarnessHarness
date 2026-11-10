@@ -16,7 +16,7 @@
 //!   the disclosure (REQ-XH-127(c)); an emptied medium dev cell has no
 //!   declared donor — `blocked{no_adjacent_donor}` (R6.29's recorded
 //!   reading in `holds.rs`, CC1 — the mapping is not duplicated).
-//! - [`FpPreregPacket`] — `hh-fp-prereg/1`: every §6.7 member applying
+//! - `FpPreregPacket` — `hh-fp-prereg/1`: every §6.7 member applying
 //!   to the first pass — the pin/split/seed/exclusion citations, the
 //!   allowlist freeze, the arms, effort `high` (Q-X22), ε = ±.20 with
 //!   the N = 50 P(`equivalent`) table (Q-X53), the declared schedule
