@@ -1,193 +1,229 @@
 {
-  "schema": "hh-legacy-diagnostic-baseline/1",
-  "purpose": "Exact reviewed historical diagnostics, not a blanket waiver or executable guard",
-  "baseline": {
-    "repo": "/Users/stevenvitali/MetaHarness-harnessharness",
-    "commit": "001490c14a6568972d16a663bb04c07a4255d30d",
-    "dirty": false,
-    "input_digest": "025a0c830cb543cbb107313487760180fbc2a9bbd6d47053cf644ec20f30247a",
-    "now": "2026-10-30T02:23:10Z"
+ "schema": "hh-legacy-diagnostic-baseline/1",
+ "purpose": "Exact reviewed historical diagnostics, not a blanket waiver or executable guard",
+ "baseline": {
+  "repo": "/Users/stevenvitali/MetaHarness-harnessharness",
+  "commit": "001490c14a6568972d16a663bb04c07a4255d30d",
+  "dirty": false,
+  "input_digest": "025a0c830cb543cbb107313487760180fbc2a9bbd6d47053cf644ec20f30247a",
+  "now": "2026-10-30T02:23:10Z"
+ },
+ "current": {
+  "repo": "/Users/stevenvitali/MetaHarness-harnessharness",
+  "commit": "001490c14a6568972d16a663bb04c07a4255d30d",
+  "dirty": true,
+  "input_digest": "b6448a3fd709f21b3e401f1a660c5706886f12fe07ae2bdc302a239b6b6a6852",
+  "now": "2026-10-30T03:08:44Z"
+ },
+ "legacy": [
+  {
+   "baseline": {
+    "check": "manifest",
+    "severity": "warning",
+    "file": "docs/tickets/00_MANIFEST.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "108 chain row(s) are not under a numbered '### Round <n>' banner (first: 001_S0.1__toolchain-codegen.md); new rows go under the current round's banner (BM-MANIFEST-01, V13)"
+   },
+   "current": {
+    "check": "manifest",
+    "severity": "warning",
+    "file": "docs/tickets/00_MANIFEST.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "108 chain row(s) are not under a numbered '### Round <n>' banner (first: 001_S0.1__toolchain-codegen.md); new rows go under the current round's banner (BM-MANIFEST-01, V13)"
+   }
   },
-  "current": {
-    "repo": "/Users/stevenvitali/MetaHarness-harnessharness",
-    "commit": "001490c14a6568972d16a663bb04c07a4255d30d",
-    "dirty": true,
-    "input_digest": "b6448a3fd709f21b3e401f1a660c5706886f12fe07ae2bdc302a239b6b6a6852",
-    "now": "2026-10-30T03:08:44Z"
+  {
+   "baseline": {
+    "check": "adr",
+    "severity": "warning",
+    "file": "spec/CANONICAL_SPEC.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "spec ADR appendix and docs/adr/ file set differ (BM-ADR-04)"
+   },
+   "current": {
+    "check": "adr",
+    "severity": "warning",
+    "file": "spec/CANONICAL_SPEC.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "spec ADR appendix and docs/adr/ file set differ (BM-ADR-04)"
+   }
   },
-  "legacy": [
-    {
-      "baseline": {
-        "check": "manifest",
-        "severity": "warning",
-        "file": "docs/tickets/00_MANIFEST.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "108 chain row(s) are not under a numbered '### Round <n>' banner (first: 001_S0.1__toolchain-codegen.md); new rows go under the current round's banner (BM-MANIFEST-01, V13)"
-      },
-      "current": {
-        "check": "manifest",
-        "severity": "warning",
-        "file": "docs/tickets/00_MANIFEST.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "108 chain row(s) are not under a numbered '### Round <n>' banner (first: 001_S0.1__toolchain-codegen.md); new rows go under the current round's banner (BM-MANIFEST-01, V13)"
-      }
-    },
-    {
-      "baseline": {
-        "check": "adr",
-        "severity": "warning",
-        "file": "spec/CANONICAL_SPEC.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "spec ADR appendix and docs/adr/ file set differ (BM-ADR-04)"
-      },
-      "current": {
-        "check": "adr",
-        "severity": "warning",
-        "file": "spec/CANONICAL_SPEC.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "spec ADR appendix and docs/adr/ file set differ (BM-ADR-04)"
-      }
-    },
-    {
-      "baseline": {
-        "check": "ledger",
-        "severity": "warning",
-        "file": "docs/build/LEDGER.md",
-        "obligation": "nextTicket",
-        "evidence": "GATE-G1",
-        "message": "LEDGER nextTicket 'DONE' is not the lowest chain row that has not landed ('GATE-G1'; superseded-by/deferred/unused gate-cell tokens and HUMAN rows skipped)"
-      },
-      "current": {
-        "check": "ledger",
-        "severity": "warning",
-        "file": "docs/build/LEDGER.md",
-        "obligation": "nextTicket",
-        "evidence": "GATE-G1",
-        "message": "LEDGER nextTicket 'GATE-G8' is not the lowest chain row that has not landed ('GATE-G1'; superseded-by/deferred/unused gate-cell tokens and HUMAN rows skipped)"
-      }
-    },
-    {
-      "baseline": {
-        "check": "ledger-budget",
-        "severity": "warning",
-        "file": "docs/build/LEDGER.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "LEDGER.md: 142 PHASE LOG entr(y/ies) in the current region exceed 2 KiB (BM-LEDGER-06; lines: 194 196 197 199 200)"
-      },
-      "current": {
-        "check": "ledger-budget",
-        "severity": "warning",
-        "file": "docs/build/LEDGER.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "LEDGER.md: 142 PHASE LOG entr(y/ies) in older regions exceed 2 KiB (legacy; lines: 200 202 203 205 206)"
-      }
-    },
-    {
-      "baseline": {
-        "check": "index",
-        "severity": "warning",
-        "file": "docs/build/BUILD_INDEX.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
-      },
-      "current": {
-        "check": "index",
-        "severity": "warning",
-        "file": "docs/build/BUILD_INDEX.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
-      }
-    },
-    {
-      "baseline": {
-        "check": "index",
-        "severity": "warning",
-        "file": "docs/build/BUILD_INDEX.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "BUILD_INDEX.md: 2 live-verification value(s) outside live-executed | staging | fixture-only | engineered | n-a | gate-pending (legacy: run) (BM-INDEX-01, BM-STATUS-01) (first: line 187 (fixture-verified:))"
-      },
-      "current": {
-        "check": "index",
-        "severity": "warning",
-        "file": "docs/build/BUILD_INDEX.md",
-        "obligation": "",
-        "evidence": "",
-        "message": "BUILD_INDEX.md: 2 live-verification value(s) outside live-executed | staging | fixture-only | engineered | n-a | gate-pending (legacy: run) (BM-INDEX-01, BM-STATUS-01) (first: line 187 (fixture-verified:))"
-      }
-    },
-    {
-      "baseline": {
-        "check": "readout",
-        "severity": "warning",
-        "file": "docs/build/readouts",
-        "obligation": "",
-        "evidence": "",
-        "message": "4 readout(s) predate the guard sentence (first: GATE-G1.md); readouts created after the guards marker must carry it (BM-INDEX-03)"
-      },
-      "current": {
-        "check": "readout",
-        "severity": "warning",
-        "file": "docs/build/readouts",
-        "obligation": "",
-        "evidence": "",
-        "message": "4 readout(s) predate the guard sentence (first: GATE-G1.md); readouts created after the guards marker must carry it (BM-INDEX-03)"
-      }
-    },
-    {
-      "baseline": {
-        "check": "harness",
-        "severity": "warning",
-        "file": "docs/build/runs",
-        "obligation": "",
-        "evidence": "",
-        "message": "82 run ledger(s) have no 'Harness:' header line (first: S0.1.md); new run ledgers must name harness/model/tier (BM-HARNESS-01)"
-      },
-      "current": {
-        "check": "harness",
-        "severity": "warning",
-        "file": "docs/build/runs",
-        "obligation": "",
-        "evidence": "",
-        "message": "82 run ledger(s) have no 'Harness:' header line (first: S0.1.md); new run ledgers must name harness/model/tier (BM-HARNESS-01)"
-      }
-    }
-  ],
-  "gate_g1_completion": {
-    "file": "docs/build/readouts/GATE-G1.md",
-    "heading": "2026-09-15 \u2014 Reading 2",
-    "disposition": "PASSED \u2014 accept ADR-0226",
-    "sha256": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
+  {
+   "baseline": {
+    "check": "ledger",
+    "severity": "warning",
+    "file": "docs/build/LEDGER.md",
+    "obligation": "nextTicket",
+    "evidence": "GATE-G1",
+    "message": "LEDGER nextTicket 'DONE' is not the lowest chain row that has not landed ('GATE-G1'; superseded-by/deferred/unused gate-cell tokens and HUMAN rows skipped)"
+   },
+   "current": {
+    "check": "ledger",
+    "severity": "warning",
+    "file": "docs/build/LEDGER.md",
+    "obligation": "nextTicket",
+    "evidence": "GATE-G1",
+    "message": "LEDGER nextTicket 'GATE-G8' is not the lowest chain row that has not landed ('GATE-G1'; superseded-by/deferred/unused gate-cell tokens and HUMAN rows skipped)"
+   }
   },
-  "policy": "Only the nextTicket pointer and moved historical-region line offsets changed as expected. New or unknown warnings/violations are not waived; active round must never dispatch legacy GATE-G1.",
-  "amendments": [
-    {
-      "id": "legacy-reqcov-46",
-      "date": "2026-11-07",
-      "recorded_by": "R6.1 (GUARD-X, REQ-XH-002 AC-3) \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
-      "kind": "bounded-family-classification",
-      "emission": "version-dependent \u2014 never required. The observed emission count depends on the stock validator version: the planning-time observation (LEDGER OPEN FINDING 2026-11-07, stock validator ~/agent-skills e981ec5 on main 185c16c7) reported 46 legacy `reqcov` warnings on manifest rows 083\u2013164f (round-1 tickets citing footnoted `R-2.x\u00b9` ids), while GATE-G20's readout item 6 recorded ZERO reqcov emissions at presentation and R6.1 re-verified 0 on this environment (0 violations / 8 warnings, all standing baseline classes). A vanished family member is therefore NOT a missing-historical-diagnostic; an emitted one within the recorded bound is explained; a 47th or out-of-family warning still fails unexplained-diagnostic.",
-      "provenance": {
-        "finding": "docs/build/LEDGER.md OPEN FINDINGS \u2014 2026-11-07 Round-6 insertion guard-environment note (owned by R6.1)",
-        "gate": "docs/build/readouts/GATE-G20.md item 6 \u2014 'the disclosed warnings list's sha256 is therefore n/a{empty_at_presentation}'",
-        "warning_list_sha256": "n/a{empty_at_presentation}",
-        "handoff": "docs/experiments-decomposition-prompt.md \u00a74 \u2014 'Pre-existing (not caused by this program): \u2026 46 `unexplained-diagnostic` legacy `reqcov` warnings absent from its reviewed baseline; record as an OPEN FINDING for the guard-extension row, never silently re-baselined.'",
-        "r61_observation": "2026-11-07 verbatim on this environment (main 35dbe0f1, AGENT_SKILLS_ROOT=$HOME/agent-skills e981ec5): `check-build-memory.sh .` \u2192 0 violations / 8 warnings, zero reqcov lines; a literal reproduction of the validator's reqcov leg (grep -oE 'R-2\\.[0-9]+\\.[0-9]+[a-z]?' per ticket vs spec ids) yields 0 candidate warnings; same result on the experiments worktree. Corroborating enumeration: 12 ticket files in manifest rows 083\u2013164f cite footnoted `R-2.x\u207f` ids (33 distinct ids)."
-      },
-      "family": {
-        "check": "reqcov",
-        "file_pattern": "^docs/tickets/(0(8[3-9]|9[0-9])|1[0-5][0-9]|16[0-4])[a-z]*_.+\\.md$",
-        "message_pattern": "^ticket \\S+ cites \\S+ which is not in the spec$",
-        "max_emitted": 46
-      }
-    }
-  ]
+  {
+   "baseline": {
+    "check": "ledger-budget",
+    "severity": "warning",
+    "file": "docs/build/LEDGER.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "LEDGER.md: 142 PHASE LOG entr(y/ies) in the current region exceed 2 KiB (BM-LEDGER-06; lines: 194 196 197 199 200)"
+   },
+   "current": {
+    "check": "ledger-budget",
+    "severity": "warning",
+    "file": "docs/build/LEDGER.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "LEDGER.md: 142 PHASE LOG entr(y/ies) in older regions exceed 2 KiB (legacy; lines: 200 202 203 205 206)"
+   }
+  },
+  {
+   "baseline": {
+    "check": "index",
+    "severity": "warning",
+    "file": "docs/build/BUILD_INDEX.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+   },
+   "current": {
+    "check": "index",
+    "severity": "warning",
+    "file": "docs/build/BUILD_INDEX.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+   }
+  },
+  {
+   "baseline": {
+    "check": "index",
+    "severity": "warning",
+    "file": "docs/build/BUILD_INDEX.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "BUILD_INDEX.md: 2 live-verification value(s) outside live-executed | staging | fixture-only | engineered | n-a | gate-pending (legacy: run) (BM-INDEX-01, BM-STATUS-01) (first: line 187 (fixture-verified:))"
+   },
+   "current": {
+    "check": "index",
+    "severity": "warning",
+    "file": "docs/build/BUILD_INDEX.md",
+    "obligation": "",
+    "evidence": "",
+    "message": "BUILD_INDEX.md: 2 live-verification value(s) outside live-executed | staging | fixture-only | engineered | n-a | gate-pending (legacy: run) (BM-INDEX-01, BM-STATUS-01) (first: line 187 (fixture-verified:))"
+   }
+  },
+  {
+   "baseline": {
+    "check": "readout",
+    "severity": "warning",
+    "file": "docs/build/readouts",
+    "obligation": "",
+    "evidence": "",
+    "message": "4 readout(s) predate the guard sentence (first: GATE-G1.md); readouts created after the guards marker must carry it (BM-INDEX-03)"
+   },
+   "current": {
+    "check": "readout",
+    "severity": "warning",
+    "file": "docs/build/readouts",
+    "obligation": "",
+    "evidence": "",
+    "message": "4 readout(s) predate the guard sentence (first: GATE-G1.md); readouts created after the guards marker must carry it (BM-INDEX-03)"
+   }
+  },
+  {
+   "baseline": {
+    "check": "harness",
+    "severity": "warning",
+    "file": "docs/build/runs",
+    "obligation": "",
+    "evidence": "",
+    "message": "82 run ledger(s) have no 'Harness:' header line (first: S0.1.md); new run ledgers must name harness/model/tier (BM-HARNESS-01)"
+   },
+   "current": {
+    "check": "harness",
+    "severity": "warning",
+    "file": "docs/build/runs",
+    "obligation": "",
+    "evidence": "",
+    "message": "82 run ledger(s) have no 'Harness:' header line (first: S0.1.md); new run ledgers must name harness/model/tier (BM-HARNESS-01)"
+   }
+  }
+ ],
+ "gate_g1_completion": {
+  "file": "docs/build/readouts/GATE-G1.md",
+  "heading": "2026-09-15 \u2014 Reading 2",
+  "disposition": "PASSED \u2014 accept ADR-0226",
+  "sha256": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
+ },
+ "policy": "Only the nextTicket pointer and moved historical-region line offsets changed as expected. New or unknown warnings/violations are not waived; active round must never dispatch legacy GATE-G1.",
+ "amendments": [
+  {
+   "id": "legacy-reqcov-46",
+   "date": "2026-11-07",
+   "recorded_by": "R6.1 (GUARD-X, REQ-XH-002 AC-3) \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "version-dependent \u2014 never required. The observed emission count depends on the stock validator version: the planning-time observation (LEDGER OPEN FINDING 2026-11-07, stock validator ~/agent-skills e981ec5 on main 185c16c7) reported 46 legacy `reqcov` warnings on manifest rows 083\u2013164f (round-1 tickets citing footnoted `R-2.x\u00b9` ids), while GATE-G20's readout item 6 recorded ZERO reqcov emissions at presentation and R6.1 re-verified 0 on this environment (0 violations / 8 warnings, all standing baseline classes). A vanished family member is therefore NOT a missing-historical-diagnostic; an emitted one within the recorded bound is explained; a 47th or out-of-family warning still fails unexplained-diagnostic.",
+   "provenance": {
+    "finding": "docs/build/LEDGER.md OPEN FINDINGS \u2014 2026-11-07 Round-6 insertion guard-environment note (owned by R6.1)",
+    "gate": "docs/build/readouts/GATE-G20.md item 6 \u2014 'the disclosed warnings list's sha256 is therefore n/a{empty_at_presentation}'",
+    "warning_list_sha256": "n/a{empty_at_presentation}",
+    "handoff": "docs/experiments-decomposition-prompt.md \u00a74 \u2014 'Pre-existing (not caused by this program): \u2026 46 `unexplained-diagnostic` legacy `reqcov` warnings absent from its reviewed baseline; record as an OPEN FINDING for the guard-extension row, never silently re-baselined.'",
+    "r61_observation": "2026-11-07 verbatim on this environment (main 35dbe0f1, AGENT_SKILLS_ROOT=$HOME/agent-skills e981ec5): `check-build-memory.sh .` \u2192 0 violations / 8 warnings, zero reqcov lines; a literal reproduction of the validator's reqcov leg (grep -oE 'R-2\\.[0-9]+\\.[0-9]+[a-z]?' per ticket vs spec ids) yields 0 candidate warnings; same result on the experiments worktree. Corroborating enumeration: 12 ticket files in manifest rows 083\u2013164f cite footnoted `R-2.x\u207f` ids (33 distinct ids)."
+   },
+   "family": {
+    "check": "reqcov",
+    "file_pattern": "^docs/tickets/(0(8[3-9]|9[0-9])|1[0-5][0-9]|16[0-4])[a-z]*_.+\\.md$",
+    "message_pattern": "^ticket \\S+ cites \\S+ which is not in the spec$",
+    "max_emitted": 46
+   }
+  },
+  {
+   "id": "w1-manifest-size-1",
+   "date": "2026-11-10",
+   "recorded_by": "coordinator R6.32b closeout \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic \u2014 the manifest's size is fixed by its 32,636 hashed members; a further size warning on this file is unexplained",
+   "provenance": {
+    "finding": "docs/build/runs/R6.32b.md correction notes \u2014 the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
+    "gate": "docs/build/readouts/GATE-G33.md \u2014 PROV-W1 re-presentation (the re-run this record layer belongs to)",
+    "handoff": "coordinator CI-closeout on R6.32b (#340) \u2014 the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-w1/MANIFEST\\.sha256$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 1
+   }
+  },
+  {
+   "id": "ledger-phase-log-legacy-budget-1",
+   "date": "2026-11-10",
+   "recorded_by": "coordinator R6.32b closeout \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic aggregate \u2014 one warning covering the 144 older-region PHASE LOG entries that predate the 2 KiB rule; each new oversized entry is a separate, unexplained warning",
+   "provenance": {
+    "finding": "docs/build/runs/R6.32b.md correction notes \u2014 the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
+    "gate": "docs/build/readouts/GATE-G33.md \u2014 PROV-W1 re-presentation (the re-run this record layer belongs to)",
+    "handoff": "coordinator CI-closeout on R6.32b (#340) \u2014 the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
+   },
+   "family": {
+    "check": "ledger-budget",
+    "file_pattern": "^docs/build/LEDGER\\.md$",
+    "message_pattern": "PHASE LOG entr\\S* in older regions exceed 2 KiB",
+    "max_emitted": 1
+   }
+  }
+ ]
 }
