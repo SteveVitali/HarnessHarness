@@ -181,6 +181,58 @@ pub struct DispatchInput<'a> {
     /// before the request that carries it. `None` ⇒ the pre-change
     /// pipeline, byte-identical (the opt-in rule).
     pub result_renderer: Option<&'a hharness_compiler::surface::ResultRenderer>,
+    /// The armed `stop_rule = submit{marker, line, require_returncode}`
+    /// declaration (R6.38; REQ-XE-116; AR-24) — `Some` ⇒ the dispatch
+    /// gate detects submission on the settled raw output: the marker
+    /// literal occupying the declared line and the settled `returncode`
+    /// equalling `require_returncode` records `submission_ref` on the
+    /// `observed` terminal (harness data, never a kernel constant —
+    /// the executor/environment is never consulted). `None` ⇒ dormant,
+    /// byte-identical rows.
+    pub submission_marker: Option<&'a SubmissionMarker>,
+}
+
+/// `SubmissionMarker` — the decoded `submit{marker, line,
+/// require_returncode}` record the dispatch gate's detection reads
+/// (§5e.1 amended; the strategy param projected through the armed
+/// session — `marker` is definition `Text`-leaf data, `authority =
+/// definition`, never a kernel constant).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmissionMarker {
+    /// The declared marker literal — must equal the occupied line.
+    pub marker: String,
+    /// `line ∈ {first}` — the line the marker must occupy (closed sum;
+    /// extension by dialect bump).
+    pub line: SubmitLine,
+    /// The integer the settled `returncode` must equal.
+    pub require_returncode: i64,
+}
+
+/// `line ∈ {first}` — the closed line-position sum (extension by
+/// dialect bump only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmitLine {
+    /// The first line of the settled raw output.
+    First,
+}
+
+/// `marker_detected(marker, raw_output, exit_status)` — the pure
+/// detection predicate the gate runs on the settled raw output:
+/// `line = first` ⇒ the output's first line equals the declared
+/// literal, and the settled `returncode` equals `require_returncode`.
+/// Empty output or an unset exit status never matches (never a
+/// fabricated hit).
+pub fn marker_detected(
+    marker: &SubmissionMarker,
+    raw_output: &str,
+    exit_status: Option<i64>,
+) -> bool {
+    match marker.line {
+        SubmitLine::First => {
+            raw_output.lines().next() == Some(marker.marker.as_str())
+                && exit_status == Some(marker.require_returncode)
+        }
+    }
 }
 
 /// `DispatchOutcome` — what `dispatch` settled to.
@@ -2380,6 +2432,7 @@ impl<'a> Dispatcher<'a> {
                             retryable: false,
                         },
                         exit_status: None,
+                        submission_ref: None,
                         manifest_ref: String::new(),
                         completeness: crate::capture::Completeness::Unknown,
                         admission: None,
@@ -2763,7 +2816,7 @@ impl<'a> Dispatcher<'a> {
             },
             None => status,
         };
-        let obs = Observation {
+        let mut obs = Observation {
             outcome,
             status,
             exit_status: report.exit_status,
@@ -2774,7 +2827,20 @@ impl<'a> Dispatcher<'a> {
             } else {
                 admission.clone()
             },
+            submission_ref: None,
         };
+        // R6.38 (REQ-XE-116; AR-24) — `stop_rule = submit{marker}`: the
+        // dispatch gate detects submission on the settled raw output
+        // (the masked `raw_output` behind `raw_output_ref` — never the
+        // model-view rendering, never an executor-reported hint). A
+        // match rides the `observed` terminal's `submission_ref` member
+        // (absent-not-null — an unarmed or non-matching dispatch stays
+        // byte-identical).
+        if let Some(m) = input.submission_marker {
+            if marker_detected(m, &raw_output, report.exit_status) {
+                obs.submission_ref = Some(format!("sub-{effect_id}"));
+            }
+        }
         // Compute the local-check + declared-postcondition verdicts *before*
         // minting `observed` — `postcondition_results[]` points at the
         // deterministic verdict ids (`verdict:<check>:<effect_id>`;

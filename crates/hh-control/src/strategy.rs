@@ -186,20 +186,107 @@ pub struct StrategyParams {
     /// owns the deterministic detectors; this list is the variant's own
     /// guard refs, `[]` for react/minimal).
     pub loop_guards: Vec<String>,
+    /// `format_failure_scope` (design 38 G9b — the definition-declared
+    /// format-failure scope): `batch` — the first malformed call fails
+    /// the whole response (mini semantics; the only scope at R6.38 — the
+    /// G-INTERPRET pipeline rejects a response on its first bad call).
+    pub format_failure_scope: FormatFailureScope,
 }
 
-/// `stop_rule ∈ {no_action, submit, either}` — `submit`: the marker on the
-/// first line of an effect's `observed` output with `returncode == 0`,
-/// detected by the **driver**, never the environment (ADR-0104).
+/// `format_failure_scope` — how a malformed call scopes the response's
+/// failure (design 38 G9b). `batch` is the only admitted member at
+/// R6.38: the strict pipeline already rejects the whole response on the
+/// first malformed call (`crate::output::validate`); a `call` scope
+/// spelling is a typed arm refusal, never a silent semantic change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormatFailureScope {
+    /// `batch` — the first malformed call fails the whole response.
+    Batch,
+}
+
+impl FormatFailureScope {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FormatFailureScope::Batch => "batch",
+        }
+    }
+
+    /// Parse a canonical spelling — `None` on any other value (a `call`
+    /// scope is not yet a member; the overlay decode names it in a
+    /// typed refusal rather than misreading it).
+    pub fn parse(s: &str) -> Option<FormatFailureScope> {
+        match s {
+            "batch" => Some(FormatFailureScope::Batch),
+            _ => None,
+        }
+    }
+}
+
+/// `stop_rule ∈ {no_action, submit{marker, line, require_returncode},
+/// either}` (§5e.1 as amended — AR-24, GATE-G24): `submit` — the
+/// submission marker detected by the dispatch gate on the settled raw
+/// output of the effect; the bare `submit` spelling stays the shorthand
+/// for the variant's declared marker (a definition that never declares
+/// the literal arms no detection — the marker is harness data, never a
+/// kernel constant).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopRuleParam {
     /// `no_action` — no submission marker; completion is a `stop{completed}`
     /// proposal only.
     NoAction,
-    /// `submit` — the marker-on-observed rule (react/minimal's value).
-    Submit,
+    /// `submit{marker, line, require_returncode}` — the marker rule
+    /// (`marker: None` is the bare `submit` shorthand — the variant's
+    /// declared marker, which a definition without the `Text` leaf
+    /// never names; detection stays dormant).
+    Submit {
+        /// The declared marker record, when the definition names it.
+        marker: Option<SubmitMarker>,
+    },
     /// `either` — either mechanism.
     Either,
+}
+
+/// `submit{marker, line, require_returncode}` — the declared submission
+/// marker record (§5e.1 amended): `marker` is the literal the first
+/// line of the settled raw output must equal, `require_returncode` the
+/// integer the settled `returncode` must equal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmitMarker {
+    /// The declared marker literal (a `Text` leaf, `authority =
+    /// definition` — harness data, never a kernel constant).
+    pub marker: String,
+    /// `line ∈ {first}` — the line the marker must occupy (closed sum;
+    /// extension by dialect bump).
+    pub line: SubmitLine,
+    /// The integer the settled `returncode` must equal.
+    pub require_returncode: i64,
+}
+
+/// `line ∈ {first}` — the closed line-position sum (extension by
+/// dialect bump only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubmitLine {
+    /// The marker must occupy the first line of the settled raw output.
+    First,
+}
+
+impl SubmitLine {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SubmitLine::First => "first",
+        }
+    }
+
+    /// Parse a canonical spelling — `None` on any other value (the sum
+    /// is closed; a new position is a dialect bump, never a guess).
+    pub fn parse(s: &str) -> Option<SubmitLine> {
+        match s {
+            "first" => Some(SubmitLine::First),
+            _ => None,
+        }
+    }
 }
 
 /// `on_truncated_response` — what a `max_output`/`truncated` response does
@@ -240,7 +327,7 @@ impl Default for StrategyParams {
     /// `loop_guards = []`.
     fn default() -> Self {
         StrategyParams {
-            stop_rule: StopRuleParam::Submit,
+            stop_rule: StopRuleParam::Submit { marker: None },
             max_continue_nudges: 0,
             max_consecutive_format_errors: 3,
             max_consecutive_errors: 3,
@@ -249,6 +336,7 @@ impl Default for StrategyParams {
             plan_provenance: PlanProvenance::Compiled,
             replan_on: ReplanOn::Never,
             loop_guards: vec![],
+            format_failure_scope: FormatFailureScope::Batch,
         }
     }
 }

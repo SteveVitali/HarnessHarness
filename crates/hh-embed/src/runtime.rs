@@ -512,6 +512,9 @@ pub struct DispatchGate {
     /// unarmed session's map is empty and every dispatch renders the
     /// pre-change path byte-identically (the opt-in rule).
     pub result_renderers: BTreeMap<String, hharness_compiler::surface::ResultRenderer>,
+    /// R6.38 (REQ-XE-116; AR-24) — the session's armed `stop_rule =
+    /// submit{marker}` declaration; `None` ⇒ dormant (byte-identical).
+    pub submission_marker: Option<hharness_env::dispatch::SubmissionMarker>,
 }
 
 impl DispatchGate {
@@ -587,6 +590,15 @@ impl DispatchGate {
                 return refused(&format!("exec_capability_unbound:{e:?}"));
             }
         }
+        // R6.38 — the monitor's live coordinates track this dispatch
+        // (a set `run_id` is the arm's own scope record — only fill a
+        // vacated one; the per-call scope is the turn's own identity
+        // chain).
+        if cap.monitor.run_id.is_empty() {
+            cap.monitor.run_id = self.run_id.clone();
+        }
+        cap.monitor.turn_id = turn.clone();
+        cap.monitor.effect_id = ef.to_string();
         let input = hharness_env::dispatch::DispatchInput {
             chain: hharness_env::events::ScopeChain {
                 turn_id: turn,
@@ -621,6 +633,7 @@ impl DispatchGate {
             // R6.37 — the armed surface's declared renderer joins by the
             // intent's surface id; absent ⇒ legacy path, byte-identical.
             result_renderer: self.result_renderers.get(surface),
+            submission_marker: self.submission_marker.as_ref(),
         };
         let mut disp = hharness_env::dispatch::Dispatcher::new(
             seam.store,
@@ -631,7 +644,11 @@ impl DispatchGate {
         );
         match disp.dispatch_adopted(ef, envs, cap.executor.as_mut(), None, &input, seam.lease) {
             Ok((out, dref)) => {
-                let (outcome, err) = match out {
+                let (outcome, err, sub) = match out {
+                    // R6.38 — the armed marker's detection ref rides the
+                    // settled observation (minted on the `observed`
+                    // terminal inside the fenced batch); the gate
+                    // forwards it verbatim — never re-derived here.
                     hharness_env::dispatch::DispatchOutcome::Observed(obs) => (
                         SettledOutcome::Observed {
                             outcome: match &obs.outcome {
@@ -648,6 +665,7 @@ impl DispatchGate {
                             },
                         },
                         None,
+                        obs.submission_ref.clone(),
                     ),
                     hharness_env::dispatch::DispatchOutcome::ObservedCached {
                         observation, ..
@@ -667,16 +685,17 @@ impl DispatchGate {
                             },
                         },
                         None,
+                        observation.submission_ref.clone(),
                     ),
                     hharness_env::dispatch::DispatchOutcome::Refused { reason } => {
-                        (SettledOutcome::Refused, Some(reason))
+                        (SettledOutcome::Refused, Some(reason), None)
                     }
                     hharness_env::dispatch::DispatchOutcome::Unknown { cause } => {
-                        (SettledOutcome::Unknown { cause }, None)
+                        (SettledOutcome::Unknown { cause }, None, None)
                     }
                     hharness_env::dispatch::DispatchOutcome::Suspended { .. }
                     | hharness_env::dispatch::DispatchOutcome::Paused { .. } => {
-                        (SettledOutcome::Pending, None)
+                        (SettledOutcome::Pending, None, None)
                     }
                     hharness_env::dispatch::DispatchOutcome::Duplicate {
                         prior_effect_id,
@@ -691,10 +710,14 @@ impl DispatchGate {
                                     .to_string(),
                             },
                             None,
+                            o.get("submission_ref")
+                                .and_then(Json::as_str)
+                                .map(str::to_string),
                         ),
                         None => (
                             SettledOutcome::Refused,
                             Some(format!("duplicate_of:{prior_effect_id}")),
+                            None,
                         ),
                     },
                 };
@@ -706,7 +729,7 @@ impl DispatchGate {
                 GateOutcome {
                     durable_effect_ref: keep_ref.then_some(dref),
                     outcome,
-                    submission_ref: None,
+                    submission_ref: sub,
                     error_class: err,
                     emitted: vec![],
                 }

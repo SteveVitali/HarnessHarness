@@ -1705,6 +1705,26 @@ impl EmbedService {
         let model_lane = self.session(sess_id)?.model_lane.clone();
         let model_surfaces = self.session(sess_id)?.leaf_arm.surfaces.clone();
         let model_surface = self.session(sess_id)?.model_surface.clone();
+        // R6.38 (REQ-XE-116; AR-24) — the session's armed `stop_rule =
+        // submit{marker}` from the resolved strategy params on
+        // `leaf.arm` (taken before the sink borrows self); `None` ⇒
+        // dormant detection.
+        let submission_marker = self
+            .session(sess_id)?
+            .leaf_arm
+            .strategy_params
+            .as_ref()
+            .and_then(hharness_control::wire::strategy_params_from_json)
+            .and_then(|p| match p.stop_rule {
+                hharness_control::strategy::StopRuleParam::Submit { marker: Some(m) } => {
+                    Some(hharness_env::dispatch::SubmissionMarker {
+                        marker: m.marker,
+                        line: hharness_env::dispatch::SubmitLine::First,
+                        require_returncode: m.require_returncode,
+                    })
+                }
+                _ => None,
+            });
         // R5.8 — armed exec surfaces (taken before the sink borrows self).
         let mut exec_caps = std::mem::take(&mut self.session_mut(sess_id)?.exec_caps);
         // R6.35 (REQ-XE-113) — the surface-armed session's `uname.*`
@@ -1803,6 +1823,7 @@ impl EmbedService {
                             .collect()
                     })
                     .unwrap_or_default(),
+                submission_marker,
             })
         };
         let gate: &mut dyn EffectGate = match dispatch_gate.as_mut() {

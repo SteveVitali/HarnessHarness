@@ -315,6 +315,12 @@ pub struct Observation {
     /// result's `L(r)` + kind are recorded here (never a class read from
     /// the payload).
     pub admission: Option<hharness_provenance::flow::Admission>,
+    /// The `stop_rule = submit{marker}` detection ref (R6.38; REQ-XE-116;
+    /// AR-24) — `Some` only when the armed submission marker matched the
+    /// settled raw output's first line and the settled `returncode`
+    /// equalled `require_returncode`; absent-not-null otherwise (the
+    /// same member the non-durable terminal path stamps).
+    pub submission_ref: Option<String>,
 }
 
 impl Observation {
@@ -357,6 +363,12 @@ impl Observation {
         if let Some(a) = &self.admission {
             pairs.push(("admission", Json::str(a.kind.as_str())));
         }
+        // R6.38 — absent-not-null: only a matched marker detection writes
+        // the member (the terminal row's `submission_ref` audit field,
+        // classes.rs — a replay re-serves it verbatim, ADR-0135 §2).
+        if let Some(s) = &self.submission_ref {
+            pairs.push(("submission_ref", Json::str(s.clone())));
+        }
         Json::obj(pairs)
     }
 
@@ -389,6 +401,10 @@ impl Observation {
             manifest_ref,
             completeness,
             admission: None,
+            submission_ref: j
+                .get("submission_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string),
         })
     }
 }

@@ -114,7 +114,7 @@ function qstr(s: string): string {
 export const CONTRACT_MAJOR = 1;
 
 /// The schema content address this client was generated against.
-export const EXPECTED_SCHEMA_HASH = "sha256:26a5d76ad5ad22af62024a9d9ab6cfe13d24129229221b9023c4eb4abaa7393c";
+export const EXPECTED_SCHEMA_HASH = "sha256:c303b34288e812a1effd73ea895669a9a9a0fa248848890bbbd57af84fe90100";
 
 export interface Accepted {
   turn_id: string,
@@ -1033,6 +1033,26 @@ export function ephemeralKindFromJson(v: Json): EphemeralKind {
   }
 }
 
+export interface ExecArmDecl {
+  env: string,
+  surfaces: string[],
+}
+
+export function execArmDeclToJson(v: ExecArmDecl): Json {
+  const o: JsonObj = {};
+  o["env"] = v.env;
+  o["surfaces"] = v.surfaces.map((x) => x);
+  return o;
+}
+
+export function execArmDeclFromJson(v: Json): ExecArmDecl {
+  const o = needObj(v);
+  return {
+    env: needStr(need(o, "env")),
+    surfaces: needArr(need(o, "surfaces")).map((x) => needStr(x)),
+  };
+}
+
 export interface ForkParams {
   session_id: string,
   at: ForkPoint,
@@ -1646,6 +1666,7 @@ export interface OpenSessionParams {
   invocation?: InvocationRecord,
   client?: ClientDecl,
   contract_json?: Json,
+  exec?: ExecArmDecl,
 }
 
 export function openSessionParamsToJson(v: OpenSessionParams): Json {
@@ -1655,6 +1676,7 @@ export function openSessionParamsToJson(v: OpenSessionParams): Json {
   if (v.invocation !== undefined) o["invocation"] = invocationRecordToJson(v.invocation);
   if (v.client !== undefined) o["client"] = clientDeclToJson(v.client);
   if (v.contract_json !== undefined) o["contract_json"] = v.contract_json;
+  if (v.exec !== undefined) o["exec"] = execArmDeclToJson(v.exec);
   return o;
 }
 
@@ -1666,6 +1688,7 @@ export function openSessionParamsFromJson(v: Json): OpenSessionParams {
     invocation: o["invocation"] === undefined ? undefined : invocationRecordFromJson(o["invocation"]),
     client: o["client"] === undefined ? undefined : clientDeclFromJson(o["client"]),
     contract_json: o["contract_json"] === undefined ? undefined : o["contract_json"],
+    exec: o["exec"] === undefined ? undefined : execArmDeclFromJson(o["exec"]),
   };
 }
 

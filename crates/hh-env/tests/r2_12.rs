@@ -461,6 +461,7 @@ fn input<'a>(
         flow: Default::default(),
         remedy_taken: None,
         result_renderer: None,
+        submission_marker: None,
     }
 }
 

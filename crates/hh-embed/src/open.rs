@@ -96,6 +96,12 @@ pub(crate) struct LeafArm {
     /// The bound `compute_policy` slot's variant spelling (§5e.4 — a
     /// resume re-arms the same scheduler; `static` when absent/unbound).
     pub compute_variant: String,
+    /// R6.38 (REQ-XE-115) — the resolved `StrategyParams` the arm decoded
+    /// from the `control_strategy` slot's `params` (`params_to_json`
+    /// spelling); a durable resume re-reads the persisted values rather
+    /// than re-deriving them (absent ⇒ pre-R6.38 record — the open-time
+    /// decode runs again over the sealed definition).
+    pub strategy_params: Option<Json>,
 }
 
 impl LeafArm {
@@ -125,6 +131,10 @@ impl LeafArm {
             ),
             ("control_variant", Json::str(self.control_variant.clone())),
             ("compute_variant", Json::str(self.compute_variant.clone())),
+            (
+                "strategy_params",
+                self.strategy_params.clone().unwrap_or(Json::Null),
+            ),
         ])
     }
 
@@ -161,6 +171,10 @@ impl LeafArm {
                 .and_then(Json::as_str)
                 .unwrap_or("static")
                 .to_string(),
+            strategy_params: j
+                .get("strategy_params")
+                .cloned()
+                .filter(|v| !matches!(v, Json::Null)),
         })
     }
 }
@@ -339,6 +353,7 @@ impl EmbedService {
                 p.client.as_ref(),
                 p.contract_json.as_ref(),
                 p.invocation.as_ref(),
+                p.exec.as_ref(),
             )?,
             OpenSpec::Resume {
                 run_id,
@@ -632,6 +647,7 @@ impl EmbedService {
         client: Option<&hharness_embed_schema::ClientDecl>,
         contract_json: Option<&Json>,
         invocation: Option<&InvocationRecord>,
+        exec: Option<&hharness_embed_schema::types::ExecArmDecl>,
     ) -> Result<Json, EmbedError> {
         // §7.1 D-2 notification-sink validation (ADR-0304 D1): the sink
         // is a kernel-side *delivery* declaration — Stage-1 admits only
@@ -1120,7 +1136,7 @@ impl EmbedService {
             .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string());
         let compute_variant =
             compute_slot_variant(&sealed.document).unwrap_or_else(|| "static".to_string());
-        let mut driver = self.arm_driver(
+        let (mut driver, strategy_params) = self.arm_driver(
             &run_id,
             &lease,
             &surfaces,
@@ -1253,6 +1269,12 @@ impl EmbedService {
                 control_variant: control_variant.clone(),
                 compute_variant: compute_slot_variant(&sealed.document)
                     .unwrap_or_else(|| "static".to_string()),
+                // R6.38 (REQ-XE-115) — the resolved params persist on
+                // `leaf.arm`; a resume re-reads them verbatim (parity
+                // with the arm-time decode, X-04).
+                strategy_params: Some(hharness_control::wire::strategy_params_to_json(
+                    &strategy_params,
+                )),
             },
             scan_seq: head.seq,
             next_invoke: None,
@@ -1270,6 +1292,17 @@ impl EmbedService {
         // Persist the resume-by-leaf pair (S2.3) — a resume right
         // after open restores the leaf exactly where `open` left it.
         self.persist_leaf(&session_id);
+
+        // R6.38 (REQ-XE-118; AR-25) — the optional `open_session.exec`
+        // member arms the definition's named `ToolCapability` surfaces
+        // over the session's environment handle. Arming runs the same
+        // `arm_exec_capabilities` path (the `executor::bind` check
+        // inside refuses an executor that cannot satisfy the
+        // capability's `execution_requirement`) — absent ⇒ no arming,
+        // byte-identical legacy behavior.
+        if let Some(decl) = exec {
+            self.arm_session_exec(&run_id, &session_id, decl, &sealed.document)?;
+        }
 
         // Permission asks declared on the supplies — durable pending +
         // ephemeral requested + the upcall when the channel is served.
@@ -2512,6 +2545,160 @@ impl EmbedService {
     /// `local_host` (`EnvironmentInput::connection_info{class, roots?}`);
     /// anything else is a typed refusal. `pub(crate)` — `env.open`
     /// (R2.4) runs the same path for a second environment.
+    /// `arm_session_exec` — R6.38 (REQ-XE-118; AR-25): the
+    /// `open_session.exec` member's arm — build `ExecCap`s for the
+    /// declared `ToolCapability` semantic_ids and land them through
+    /// `arm_exec_capabilities` (the existing `executor::bind` check —
+    /// an insufficient executor is a typed `Refused`, never a
+    /// downgrade; CC1 — no second binding implementation).
+    fn arm_session_exec(
+        &mut self,
+        run_id: &str,
+        sess_id: &str,
+        decl: &hharness_embed_schema::types::ExecArmDecl,
+        doc: &hharness_hir::document::HirDocument,
+    ) -> Result<(), EmbedError> {
+        use hharness_hir::kinds::ToolEffects;
+        use hharness_hir::records::{KindRecord, SurfaceRecord};
+        if decl.env != "session" {
+            return Err(EmbedError::SchemaViolation {
+                path: "spec.exec.env".to_string(),
+                code: format!("unsupported_env:{}", decl.env),
+            });
+        }
+        if decl.surfaces.is_empty() {
+            return Err(EmbedError::SchemaViolation {
+                path: "spec.exec.surfaces".to_string(),
+                code: "empty_surfaces".to_string(),
+            });
+        }
+        let env_handle_id = self
+            .session(sess_id)?
+            .env_handle_id
+            .clone()
+            .ok_or_else(|| EmbedError::Refused {
+                reason: "exec_env_unavailable".to_string(),
+            })?;
+        let env_class = self
+            .env_drivers
+            .get(run_id)
+            .and_then(|d| d.handle(&env_handle_id))
+            .map(|h| h.class)
+            .ok_or_else(|| EmbedError::Refused {
+                reason: "exec_env_unavailable".to_string(),
+            })?;
+        let proposer = doc
+            .nodes
+            .iter()
+            .find(|n| matches!(n.semantic, KindRecord::AgentProcess(_)))
+            .map(|n| n.semantic_id())
+            .ok_or_else(|| EmbedError::Refused {
+                reason: "exec_no_proposer".to_string(),
+            })?;
+        let mut caps = Vec::new();
+        for sid in &decl.surfaces {
+            let node = doc.node(sid).ok_or_else(|| EmbedError::Refused {
+                reason: format!("exec_surface_unknown:{sid}"),
+            })?;
+            let rec = match &node.semantic {
+                KindRecord::ToolCapability(r) => r.clone(),
+                _ => {
+                    return Err(EmbedError::Refused {
+                        reason: format!("exec_surface_not_capability:{sid}"),
+                    })
+                }
+            };
+            let tool_surface = match &node.surface {
+                Some(SurfaceRecord::Tool(t)) => t.clone(),
+                _ => {
+                    return Err(EmbedError::Refused {
+                        reason: format!("exec_surface_no_surface:{sid}"),
+                    })
+                }
+            };
+            let declared = match &rec.effects {
+                ToolEffects::Declared(set) => set
+                    .iter()
+                    .find(|e| matches!(e.domain, hharness_hir::kinds::EffectDomain::Exec))
+                    .cloned()
+                    .ok_or_else(|| EmbedError::Refused {
+                        reason: format!("exec_surface_no_exec_effect:{sid}"),
+                    })?,
+                _ => {
+                    return Err(EmbedError::Refused {
+                        reason: format!("exec_surface_no_exec_effect:{sid}"),
+                    })
+                }
+            };
+            let binding =
+                hharness_compiler::equiv::bind_surface(node, &tool_surface, &rec.input_schema);
+            let executor: Box<dyn hharness_env::executor::ToolExecutor> = match env_class {
+                hharness_env::record::EnvironmentClass::LocalHost => {
+                    Box::new(hharness_env::local::LocalExecutor::new(vec![]))
+                }
+                hharness_env::record::EnvironmentClass::LocalSandboxed
+                | hharness_env::record::EnvironmentClass::LocalContainer => Box::new(
+                    self.env_drivers
+                        .get_mut(run_id)
+                        .ok_or_else(|| EmbedError::Refused {
+                            reason: "exec_env_unavailable".to_string(),
+                        })?
+                        .take_executor(&env_handle_id, vec![])
+                        .map_err(|e| EmbedError::Refused {
+                            reason: format!("exec_env_take:{e:?}"),
+                        })?,
+                ),
+                _ => {
+                    return Err(EmbedError::Refused {
+                        reason: format!("exec_env_class:{env_class:?}"),
+                    })
+                }
+            };
+            let mut monitor = hharness_monitor::monitor::Monitor::new(
+                hharness_monitor::table::HandleTable::default(),
+                hharness_monitor::policy::default_table(
+                    &format!("pol-{run_id}"),
+                    hharness_monitor::policy::Mode::Attended,
+                ),
+            );
+            monitor.proposers.insert(
+                proposer.clone(),
+                hharness_provenance::Label::at(hharness_provenance::AuthorityClass::Principal),
+            );
+            monitor.capabilities.insert(
+                sid.clone(),
+                hharness_monitor::monitor::CapabilityEntry {
+                    record: rec.clone(),
+                    binding: binding.clone(),
+                },
+            );
+            monitor.run_id = run_id.to_string();
+            monitor.session = sess_id.to_string();
+            caps.push(crate::runtime::ExecCap {
+                surface_id: binding.surface_id.clone(),
+                binding,
+                scope_bindings: rec.scope_bindings.clone(),
+                capability: rec,
+                capability_ref: hharness_compiler::plan::PinnedRef {
+                    semantic_id: node.semantic_id(),
+                    version_id: node.version_id(),
+                },
+                declared,
+                proposer: proposer.clone(),
+                ladder: hharness_env::deadline::DeadlineLadder {
+                    run_deadline_ms: None,
+                    phase_deadline_ms: None,
+                    effect_deadline_ms: None,
+                    attempt_deadline_ms: None,
+                },
+                output_policy: hharness_env::capture::OutputPolicy::default(),
+                executor,
+                monitor,
+            });
+        }
+        self.arm_exec_capabilities(sess_id, caps)
+    }
+
     pub(crate) fn provision_environment(
         &mut self,
         run_id: &str,
@@ -2658,6 +2845,9 @@ impl EmbedService {
     /// Arm the session driver over the session's run — the bound
     /// `control_strategy` slot selects the variant (`strategy_for`; the
     /// canonical control loop under `KernelSink` + the writer lease).
+    /// Returns the driver plus the resolved `StrategyParams` (R6.38 —
+    /// the `control_strategy` slot's `params` overlay, persisted on
+    /// `leaf.arm` for resume parity).
     #[allow(clippy::too_many_arguments)] // the arming record is the §5f.2 arm tuple — the arity is the call's.
     pub(crate) fn arm_driver(
         &mut self,
@@ -2669,7 +2859,7 @@ impl EmbedService {
         control_variant: &str,
         compute_variant: &str,
         sealed: Option<&hharness_hir::document::SealedDefinition>,
-    ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
+    ) -> Result<(Driver<Box<dyn ControlStrategy>>, StrategyParams), EmbedError> {
         let doc = sealed.map(|s| &s.document);
         // §5e.4 — the bound `compute_policy` variant must resolve at arm
         // time (`policy_for` is the admission check; a `bandit`/
@@ -2722,6 +2912,18 @@ impl EmbedService {
             parameters.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
             parameters.max_continue_nudges = 1;
         }
+        // R6.38 (REQ-XE-115; G11) — the `control_strategy` slot's
+        // `params` decode into `StrategyParams` through the wire
+        // codec's overlay: present members decode, absent keep the
+        // variant preset, unknown members refuse typed at arm.
+        if let Some(doc) = doc {
+            if let Some(p) = crate::gateway_model::control_strategy_params(doc) {
+                parameters = hharness_control::wire::strategy_params_overlay(&parameters, &p)
+                    .map_err(|e| EmbedError::InvalidDefinition {
+                        diagnostics: vec![format!("control_strategy.params: {e}")],
+                    })?;
+            }
+        }
         // The boundary is the *armed variant's* own preset (S3.10 —
         // `plan_execute` assigns `plan`/`delegate` to the model; R3.3 —
         // the compiled-plan family's all-`code`-but-`escalate` preset
@@ -2753,7 +2955,7 @@ impl EmbedService {
                 .unwrap_or_else(|| "acct:unbudgeted".to_string()),
             budget_ref: manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
             envelope_ref: "env-1".to_string(),
-            parameters,
+            parameters: parameters.clone(),
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
             steering: steering_for(&self.registry, control_variant),
         };
@@ -2763,6 +2965,24 @@ impl EmbedService {
         let mut policy = EnvelopePolicy::stage1_default(
             &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
         );
+        // R6.38 (REQ-XE-117; G23) — the `model_port` slot's declared
+        // `retry{attempts, classes}` arms the envelope's transport-retry
+        // table: declared classes get the declared attempt bound (the
+        // recorded backoff stays the audited default — waits are
+        // ledgered, never compared); undeclared model-call classes are
+        // not retryable under a declared policy. Absent ⇒ the audited
+        // `insert_model_defaults` table, byte-identical.
+        if let Some(doc) = doc {
+            if let Some(p) = crate::gateway_model::model_port_slot_params(doc) {
+                if let Some(retry) = p.get("retry") {
+                    apply_transport_retry(&mut policy, retry).map_err(|e| {
+                        EmbedError::InvalidDefinition {
+                            diagnostics: vec![format!("model_port.retry: {e}")],
+                        }
+                    })?;
+                }
+            }
+        }
         let (mut budget_ceiling, mut remaining) = budget_dimensions(budget);
         if interactive {
             for dim in budget_ceiling.keys().chain(remaining.keys()) {
@@ -2790,7 +3010,7 @@ impl EmbedService {
             envs: None,
             env_handle: None,
         };
-        Driver::open(
+        let driver = Driver::open(
             strategy,
             &ctx,
             policy,
@@ -2830,7 +3050,8 @@ impl EmbedService {
         )
         .map_err(|e| EmbedError::Refused {
             reason: format!("driver_open: {e:?}"),
-        })
+        })?;
+        Ok((driver, parameters))
     }
 
     /// Arm the resumed leaf (S2.3; DF-S1.25-2) — the same `ctx`/`policy`/
@@ -2854,6 +3075,7 @@ impl EmbedService {
             .ok_or_else(|| EmbedError::Refused {
                 reason: "resume_arm_record_unavailable".to_string(),
             })?;
+        let mut arm = arm;
         // The resumed leaf re-arms the *variant's* preset + parameters +
         // plan surface (S3.10 — `plan_execute` resumes `model_emitted`);
         // the `TaskContract` re-projects from the persisted sealed
@@ -2866,11 +3088,38 @@ impl EmbedService {
             reason: format!("unknown_control_variant: {}", arm.control_variant),
         })?;
         let boundary = strategy.capabilities().boundary_preset.clone();
-        let mut parameters = StrategyParams::default();
-        if is_plan_execute {
-            parameters.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
-            parameters.max_continue_nudges = 1;
-        }
+        // R6.38 (REQ-XE-115) — the resume re-reads the persisted
+        // `leaf.arm.strategy_params` (the arm's resolved record); a
+        // pre-R6.38 record without the member re-derives through the
+        // same overlay over the persisted sealed definition.
+        let parameters = match arm
+            .strategy_params
+            .as_ref()
+            .and_then(hharness_control::wire::strategy_params_from_json)
+        {
+            Some(p) => p,
+            None => {
+                let mut p = StrategyParams::default();
+                if is_plan_execute {
+                    p.plan_provenance = hharness_control::strategy::PlanProvenance::ModelEmitted;
+                    p.max_continue_nudges = 1;
+                }
+                if let Some(s) = manifest
+                    .harness_def_ref
+                    .as_deref()
+                    .and_then(|r| self.persisted_definition(r).ok())
+                {
+                    if let Some(sp) = crate::gateway_model::control_strategy_params(&s.document) {
+                        p = hharness_control::wire::strategy_params_overlay(&p, &sp).map_err(
+                            |e| EmbedError::InvalidDefinition {
+                                diagnostics: vec![format!("control_strategy.params: {e}")],
+                            },
+                        )?;
+                    }
+                }
+                p
+            }
+        };
         let sealed = manifest
             .harness_def_ref
             .as_deref()
@@ -2900,7 +3149,7 @@ impl EmbedService {
                 .unwrap_or_else(|| "acct:unbudgeted".to_string()),
             budget_ref: manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
             envelope_ref: "env-1".to_string(),
-            parameters,
+            parameters: parameters.clone(),
             capabilities_available: arm.surfaces.iter().map(|s| s.surface_id.clone()).collect(),
             steering: steering_for(&self.registry, &arm.control_variant),
         };
@@ -2908,6 +3157,21 @@ impl EmbedService {
         let mut policy = EnvelopePolicy::stage1_default(
             &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
         );
+        // R6.38 (REQ-XE-117) — the persisted definition's `model_port`
+        // `retry{attempts, classes}` re-arms the envelope's transport
+        // retry table (the same decode `arm_driver` runs over the
+        // sealed doc — the definition is the durable record).
+        if let Some(s) = &sealed {
+            if let Some(p) = crate::gateway_model::model_port_slot_params(&s.document) {
+                if let Some(retry) = p.get("retry") {
+                    apply_transport_retry(&mut policy, retry).map_err(|e| {
+                        EmbedError::InvalidDefinition {
+                            diagnostics: vec![format!("model_port.retry: {e}")],
+                        }
+                    })?;
+                }
+            }
+        }
         if interactive {
             for dim in arm.budget_ceiling.keys().chain(arm.remaining.keys()) {
                 if hharness_ontology::dimensions::DimensionId::parse(dim).is_some() {
@@ -3053,6 +3317,10 @@ impl EmbedService {
                 model_fail_plan = arm.model_fail;
             }
         }
+        // R6.38 (REQ-XE-115) — the resolved params persist back onto the
+        // `leaf.arm` record (a persisted record round-trips verbatim; a
+        // pre-R6.38 record gains the member on the next checkpoint).
+        arm.strategy_params = Some(hharness_control::wire::strategy_params_to_json(&parameters));
         Ok((driver, arm, model_fail_plan))
     }
 
@@ -3667,6 +3935,69 @@ pub(crate) fn steering_for(
 /// The driver's surface table — the completion surface plus every
 /// declared host-executor surface (the model may call only what the
 /// definition supplied; the gate refuses anything else loudly).
+/// `apply_transport_retry(policy, retry)` — R6.38 (REQ-XE-117; G23):
+/// the `model_port` slot's declared `retry{attempts, classes}` member
+/// arms the envelope's transport-retry table. A declared retry record
+/// replaces the model-call entries (undeclared classes are not
+/// retryable under a declared policy — never a silent default); the
+/// kernel-fixed never-retryable set stays absent regardless of what
+/// the declaration names. The backoff ladder keeps the audited
+/// transient defaults — waits are ledgered (`control.retry.scheduled`),
+/// never compared across parity runs.
+fn apply_transport_retry(policy: &mut EnvelopePolicy, retry: &Json) -> Result<(), String> {
+    use hharness_control::policy::{Backoff, MaxAttempts, RetrySpec};
+    use hharness_control::vocab::{DeltaKind, ScopeKind};
+    let obj = match retry {
+        Json::Obj(m) => m,
+        _ => return Err("retry is not an object".to_string()),
+    };
+    let attempts = obj
+        .get("attempts")
+        .and_then(Json::as_int)
+        .ok_or_else(|| "retry.attempts missing".to_string())?;
+    if !(1..=10_000).contains(&attempts) {
+        return Err("retry.attempts outside 1..=10000".to_string());
+    }
+    let classes: Vec<String> = match obj.get("classes") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .map(|v| v.as_str().map(str::to_string))
+            .collect::<Option<Vec<String>>>()
+            .ok_or_else(|| "retry.classes not [string]".to_string())?,
+        _ => return Err("retry.classes missing".to_string()),
+    };
+    if classes.is_empty() {
+        return Err("retry.classes empty".to_string());
+    }
+    // A declared record is total over `model_call` — undeclared classes
+    // lose their spec (the `ToolAttempt` rows are untouched).
+    policy
+        .retry
+        .table
+        .retain(|(kind, _), _| *kind != ScopeKind::ModelCall);
+    let spec = RetrySpec {
+        max_attempts: MaxAttempts::Bounded(attempts as u32),
+        backoff: Backoff {
+            initial_ms: 250,
+            factor_ppm: 2 * 1_000_000,
+            max_ms: 5_000,
+            jitter_ppm: 200_000,
+        },
+        honour_retry_after: true,
+        attempt_delta_allowed: vec![DeltaKind::Transport],
+    };
+    for class in classes {
+        // The kernel-fixed never-retryable classes refuse silently —
+        // a declaration cannot resurrect them (NEVER_RETRYABLE is
+        // kernel-fixed, not definition-overridable).
+        if hharness_control::retry::NEVER_RETRYABLE.contains(&class.as_str()) {
+            continue;
+        }
+        policy.retry.set(ScopeKind::ModelCall, &class, spec.clone());
+    }
+    Ok(())
+}
+
 pub(crate) fn driver_surfaces(caps: &[HostCap]) -> Vec<SurfaceSpec> {
     let mut v = vec![submit_surface_spec()];
     for c in caps {

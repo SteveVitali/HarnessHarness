@@ -1092,6 +1092,57 @@ pub struct OpenSessionParams {
     /// adapter's `AgentCard`) rides here — data the kernel stores, never
     /// interprets.
     pub contract_json: Option<Json>,
+    /// `exec` — R6.38 (REQ-XE-118; AR-25): the optional exec-arm
+    /// declaration. When present, the `open` arms the definition's
+    /// named `ToolCapability` surfaces over the session's environment
+    /// handle through the existing `executor::bind` check — an
+    /// executor that cannot satisfy the capability's
+    /// `execution_requirement` is a typed `Refused`, never a
+    /// downgrade. Absent ⇒ no exec arming (byte-identical legacy
+    /// behavior).
+    pub exec: Option<ExecArmDecl>,
+}
+
+/// `ExecArmDecl` — the `open_session.exec` record: the environment
+/// handle spelling (`env` — `"session"` names the session's own
+/// environment; other spellings refuse) and the capability
+/// `semantic_id`s to arm (`surfaces`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecArmDecl {
+    /// The environment the exec capabilities bind over (`"session"`).
+    pub env: String,
+    /// The `ToolCapability` `semantic_id`s to arm.
+    pub surfaces: Vec<String>,
+}
+
+impl ExecArmDecl {
+    /// Canonical form.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("env", Json::str(self.env.clone())),
+            (
+                "surfaces",
+                Json::Arr(self.surfaces.iter().map(Json::str).collect()),
+            ),
+        ])
+    }
+    /// Strict decode — a malformed member is `SchemaViolation`, never a
+    /// coercion.
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let env = s.req_str("env")?;
+        let surfaces = s
+            .req_arr("surfaces")?
+            .iter()
+            .map(|e| e.as_str().map(str::to_string))
+            .collect::<Option<Vec<String>>>()
+            .ok_or_else(|| EmbedError::SchemaViolation {
+                path: format!("{path}.surfaces"),
+                code: "not_string_array".to_string(),
+            })?;
+        s.finish()?;
+        Ok(ExecArmDecl { env, surfaces })
+    }
 }
 
 impl OpenSessionParams {
@@ -1111,6 +1162,9 @@ impl OpenSessionParams {
         if let Some(c) = &self.contract_json {
             m.insert("contract_json".into(), c.clone());
         }
+        if let Some(e) = &self.exec {
+            m.insert("exec".into(), e.to_json());
+        }
         Json::Obj(m)
     }
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
@@ -1126,6 +1180,10 @@ impl OpenSessionParams {
             .map(|c| ClientDecl::from_json(c, "open_session/client"))
             .transpose()?;
         let contract_json = s.take("contract_json").cloned();
+        let exec = s
+            .take("exec")
+            .map(|e| ExecArmDecl::from_json(e, "open_session/exec"))
+            .transpose()?;
         s.finish()?;
         Ok(OpenSessionParams {
             spec,
@@ -1133,6 +1191,7 @@ impl OpenSessionParams {
             invocation,
             client,
             contract_json,
+            exec,
         })
     }
 }

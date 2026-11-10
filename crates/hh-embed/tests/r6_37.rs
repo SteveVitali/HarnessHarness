@@ -692,6 +692,7 @@ fn ac1_ac2_tool_message_is_the_durable_rendering() {
         env_handle_id: Some(env),
         seed: [7u8; 32],
         result_renderers: renderers_of(&surface),
+        submission_marker: None,
     };
     // The live model leg — mc.1's request is built by the armed port
     // and the recorded upstream answer decodes through the family's
@@ -885,6 +886,7 @@ fn ac3_kill_and_resume_reserves_the_recorded_bytes() {
         env_handle_id: Some(env),
         seed: [7u8; 32],
         result_renderers: renderers_of(&surface),
+        submission_marker: None,
     };
     let intent = Json::obj([
         ("surface_id", Json::str("exec.bash")),
@@ -1036,6 +1038,7 @@ fn ac4_unarmed_and_rendererless_stay_byte_identical() {
             } else {
                 BTreeMap::new()
             },
+            submission_marker: None,
         };
         let intent = Json::obj([
             ("surface_id", Json::str("exec.bash")),
