@@ -302,6 +302,11 @@ pub(crate) struct SessionState {
     /// the manifest's `model_lane` member re-read on resume/takeover;
     /// `None` ⇒ the scripted `EmbedModel` lane, byte-identical.
     pub model_lane: Option<crate::gateway_model::ModelLane>,
+    /// The session's compiled `ModelSurface` (R6.35; REQ-XE-103) — armed
+    /// at `open` when `model_port.model_surface = "compiled"`, re-derived
+    /// by the same pure compile on resume/takeover; `None` ⇒ the
+    /// pre-change render, byte-identical.
+    pub model_surface: Option<hharness_compiler::seal::ModelSurface>,
     /// The `router` slot's `model_fail` script remainder (R-2.7) — each
     /// `drive` hands it to `EmbedModel` and takes back what the calls did
     /// not consume (the plan is the session's, the port only borrows it).
@@ -1698,8 +1703,24 @@ impl EmbedService {
         // byte-identical (AC1).
         let model_lane = self.session(sess_id)?.model_lane.clone();
         let model_surfaces = self.session(sess_id)?.leaf_arm.surfaces.clone();
+        let model_surface = self.session(sess_id)?.model_surface.clone();
         // R5.8 — armed exec surfaces (taken before the sink borrows self).
-        let exec_caps = std::mem::take(&mut self.session_mut(sess_id)?.exec_caps);
+        let mut exec_caps = std::mem::take(&mut self.session_mut(sess_id)?.exec_caps);
+        // R6.35 (REQ-XE-113) — the surface-armed session's `uname.*`
+        // slots fill from the ledgered, read-only, setup-phase in-cell
+        // probe: rows land durable before the first request renders
+        // them (X-04). An unbacked probe leaves the slots unfilled —
+        // the render's typed refusal stands before any model call.
+        if let Some(surface) = &model_surface {
+            crate::runtime::probe_uname_slots(
+                &mut self.store,
+                &run_id,
+                &lease,
+                env_handle.as_deref(),
+                &mut exec_caps,
+                surface,
+            )?;
+        }
         let gate_env_handle = env_handle.clone();
         let mut sink = KernelSink {
             store: &mut self.store,
@@ -1716,12 +1737,20 @@ impl EmbedService {
             fail_plan,
         };
         let mut live = match &model_lane {
-            Some(lane) => Some(crate::gateway_model::GatewayModel::new(
-                lane.clone(),
-                completion,
-                invoke,
-                model_surfaces,
-            )?),
+            Some(lane) => {
+                let g = crate::gateway_model::GatewayModel::new(
+                    lane.clone(),
+                    completion,
+                    invoke,
+                    model_surfaces,
+                )?;
+                // R6.35 — `Some` ⇒ the compiled-surface path owns the
+                // render (the single renderer, never a fall-through).
+                Some(match &model_surface {
+                    Some(s) => g.with_surface(s.clone()),
+                    None => g,
+                })
+            }
             None => None,
         };
         let model: &mut dyn hharness_control::driver::ModelPort = match live.as_mut() {

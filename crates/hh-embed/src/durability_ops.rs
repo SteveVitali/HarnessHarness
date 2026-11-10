@@ -1168,6 +1168,7 @@ mod r2_3_tests {
                 next_completion: String::new(),
                 next_response_ref: String::new(),
                 model_lane: None,
+                model_surface: None,
                 model_fail_plan: Default::default(),
                 client: None,
                 contract_json: None,

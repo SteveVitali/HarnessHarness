@@ -637,6 +637,7 @@ fn r47e_live_judge_run() {
         stream_member: Default::default(),
         tool_choice: Default::default(),
         transcript_render: Default::default(),
+        model_surface: false,
     };
     let mut model = GatewayModel::new(
         beneficiary,

@@ -3022,3 +3022,156 @@ pub fn router_arm_from_params(
         model_fail,
     })
 }
+
+// ── R6.35 — the `hh-tmpl/1` uname probe (REQ-XE-113; AC-7.3-2) ─────────
+
+/// `UNAME_PROBE` — the `action.environment.probe.*` `probe` member the
+/// compiled-surface render reads its `uname.*`/uname-shaped fills from.
+pub const UNAME_PROBE: &str = "hh-tmpl.uname/1";
+
+/// `probe_uname_slots(store, run, lease, env_handle, exec_caps, surface)`
+/// — the ledgered, read-only, setup-phase in-cell probe (REQ-XE-113's
+/// probe leg — a `hh.exec` call through the armed executor seam ahead of
+/// R6.38's `open_session.exec`, per the ticket's permitted construction):
+/// when any section's declared `slots` name an uname-shaped fill
+/// (`uname.*` or mini's flat `system|release|version|machine`), the
+/// probe runs `uname -s; uname -r; uname -v; uname -m` *in the cell* —
+/// through the first armed executor, never a host `uname` or a store
+/// shortcut — and the `action.environment.probe.{started,completed}`
+/// rows land durable **before** the first request renders them. A
+/// completed row makes a re-drive idempotent; an unbacked probe (no
+/// armed exec surface, no environment handle) mints
+/// `completed{outcome:"refused"}` — the slot stays unfilled and the
+/// render's typed `template_slot_unfilled` refusal stands before any
+/// model call, never an empty string.
+pub fn probe_uname_slots(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    env_handle: Option<&str>,
+    exec_caps: &mut [ExecCap],
+    surface: &hharness_compiler::seal::ModelSurface,
+) -> Result<(), hharness_embed_schema::errors::EmbedError> {
+    let needed = surface.layout.iter().flat_map(|s| s.slots.iter()).any(|s| {
+        s.starts_with("uname.")
+            || matches!(s.as_str(), "system" | "release" | "version" | "machine")
+    });
+    if !needed {
+        return Ok(());
+    }
+    let done = store
+        .events(run_id)
+        .map(|evs| {
+            evs.iter().any(|e| {
+                e.class == "action.environment.probe.completed"
+                    && e.payload.get("probe").and_then(Json::as_str) == Some(UNAME_PROBE)
+            })
+        })
+        .unwrap_or(false);
+    if done {
+        return Ok(());
+    }
+    type Ee = hharness_embed_schema::errors::EmbedError;
+    let mint = |store: &mut Store, class: &str, payload: Json| -> Result<(), Ee> {
+        let ev = hharness_env::events::EventMinter::new(store, run_id)
+            .mint(class, payload)
+            .map_err(|e| Ee::Refused {
+                reason: format!("probe mint: {e:?}"),
+            })?;
+        store
+            .append(run_id, lease, vec![ev])
+            .map_err(|e| Ee::Refused {
+                reason: format!("probe append: {e:?}"),
+            })?;
+        Ok(())
+    };
+    mint(
+        store,
+        "action.environment.probe.started",
+        Json::obj([
+            ("probe", Json::str(UNAME_PROBE)),
+            ("read_only", Json::Bool(true)),
+            (
+                "command",
+                Json::str("uname -s; uname -r; uname -v; uname -m"),
+            ),
+        ]),
+    )?;
+    let (outcome, values, reason) = match (env_handle, exec_caps.first_mut()) {
+        (Some(handle), Some(cap)) => {
+            let token = format!("{run_id}.probe.uname");
+            let req = hharness_env::executor::ExecutionRequest {
+                execution_id: token.clone(),
+                effect_id: "probe.uname".to_string(),
+                attempt_no: 1,
+                capability_ref: (
+                    cap.capability_ref.semantic_id.clone(),
+                    cap.capability_ref.version_id.clone(),
+                ),
+                effect: cap.declared.clone(),
+                args: Json::obj([(
+                    "command",
+                    Json::str("uname -s; uname -r; uname -v; uname -m"),
+                )]),
+                env_handle_id: handle.to_string(),
+                attribution_token: token.clone(),
+                deadline_ms: cap.ladder.run_deadline_ms.or(Some(10_000)),
+                ladder: cap.ladder.clone(),
+                retain_bytes_cap: cap.output_policy.retain_bytes_cap,
+                idempotency_key: format!("{run_id}.probe.uname.1"),
+                commit_evidence: hharness_env::helper::CommitEvidence::ReadOnly,
+                request_state: None,
+            };
+            let mut out = String::new();
+            let out_ref = &mut out;
+            let tok = token.clone();
+            let mut sink = move |sig: hharness_env::executor::ExecutorSignal| {
+                if sig.token == tok {
+                    if let hharness_env::capture::CaptureKind::OutputChunk { stream, data } =
+                        sig.kind
+                    {
+                        if stream == "stdout" {
+                            out_ref.push_str(&data);
+                        }
+                    }
+                }
+            };
+            match cap.executor.execute(&req, &mut sink) {
+                Ok(report) => {
+                    let lines: Vec<&str> = out.lines().filter(|l| !l.is_empty()).collect();
+                    if report.status == hharness_env::executor::TerminalStatus::Ok
+                        && lines.len() >= 4
+                    {
+                        (
+                            "applied",
+                            Some(Json::obj([
+                                ("uname.system", Json::str(lines[0])),
+                                ("uname.release", Json::str(lines[1])),
+                                ("uname.version", Json::str(lines[2])),
+                                ("uname.machine", Json::str(lines[3])),
+                            ])),
+                            None,
+                        )
+                    } else {
+                        ("failed", None, Some("uname_output_unparseable"))
+                    }
+                }
+                Err(_) => ("failed", None, Some("executor_error")),
+            }
+        }
+        _ => ("refused", None, Some("probe_unbacked")),
+    };
+    let mut payload = Json::obj([
+        ("probe", Json::str(UNAME_PROBE)),
+        ("outcome", Json::str(outcome)),
+    ]);
+    if let Json::Obj(m) = &mut payload {
+        if let Some(v) = values {
+            m.insert("values".to_string(), v);
+        }
+        if let Some(r) = reason {
+            m.insert("reason".to_string(), Json::str(r));
+        }
+    }
+    mint(store, "action.environment.probe.completed", payload)
+}

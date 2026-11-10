@@ -145,6 +145,11 @@ pub struct ModelLane {
     /// `transcript_render{…}` — the declared replay choices (REQ-XE-108;
     /// G6/G7/G19/G20). All-absent ⇒ the legacy render, byte-identical.
     pub transcript_render: TranscriptRender,
+    /// `model_surface ∈ {compiled}` — R6.35 (REQ-XE-103/104): the
+    /// session arms the definition's compiled `ModelSurface` at open and
+    /// the request renders from it (one renderer; absent ⇒
+    /// byte-identical to the pre-change path).
+    pub model_surface: bool,
 }
 
 /// `transport` — the declared request transport (REQ-XE-107).
@@ -399,6 +404,9 @@ impl ModelLane {
         if !self.transcript_render.is_default() {
             m.insert("transcript_render".into(), self.transcript_render.to_json());
         }
+        if self.model_surface {
+            m.insert("model_surface".into(), Json::str("compiled"));
+        }
         Json::Obj(m)
     }
 
@@ -456,6 +464,7 @@ impl ModelLane {
                 Some(tr) => decode_transcript_render(tr).unwrap_or_default(),
                 None => TranscriptRender::default(),
             },
+            model_surface: j.get("model_surface").and_then(Json::as_str) == Some("compiled"),
         })
     }
 }
@@ -706,6 +715,31 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
             })
         }
     };
+    let model_surface = match params.get("model_surface") {
+        None | Some(Json::Null) => false,
+        Some(Json::Str(s)) if s == "compiled" => true,
+        Some(Json::Str(s)) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec![format!(
+                    "model_port.model_surface `{s}` — admitted: compiled"
+                )],
+            })
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.model_surface is not a string".to_string()],
+            })
+        }
+    };
+    if model_surface && hharness_gateway::family_of(&dialect) != Family::ChatCompletions {
+        return Err(EmbedError::InvalidDefinition {
+            diagnostics: vec![
+                "model_port.model_surface `compiled` is admitted under the chat-completions \
+                 family only at this stage"
+                    .to_string(),
+            ],
+        });
+    }
     let transcript_render = match params.get("transcript_render") {
         None | Some(Json::Null) => TranscriptRender::default(),
         Some(tr) => decode_transcript_render(tr)?,
@@ -738,6 +772,7 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
         stream_member,
         tool_choice,
         transcript_render,
+        model_surface,
     })
 }
 
@@ -909,6 +944,11 @@ pub struct GatewayModel {
     /// records it (the driver reads the blob; `one_shot` callers get it
     /// here). `None` on a failed/refused call.
     last_text: Option<String>,
+    /// The session's compiled `ModelSurface` (R6.35; REQ-XE-103) —
+    /// `Some` ⇒ the request renders layout sections + the shared
+    /// prior-turn fold through this one surface; `None` ⇒ byte-identical
+    /// to the pre-change path.
+    surface: Option<hharness_compiler::seal::ModelSurface>,
 }
 
 impl GatewayModel {
@@ -958,7 +998,26 @@ impl GatewayModel {
             terminal: BTreeMap::new(),
             model_io: Vec::new(),
             last_text: None,
+            surface: None,
         })
+    }
+
+    /// `with_surface(surface)` — arm the compiled-`ModelSurface` render
+    /// (REQ-XE-103): the port the session's `model_port.model_surface =
+    /// "compiled"` arm produces. The sections' declared `hh-tmpl/1`
+    /// texts fill at render time — `task` from the instruction and the
+    /// `uname.*` family from the ledgered in-cell probe rows
+    /// (REQ-XE-113); an unfilled slot is a typed plan refusal before
+    /// any wire send.
+    pub fn with_surface(mut self, surface: hharness_compiler::seal::ModelSurface) -> Self {
+        self.surface = Some(surface);
+        self
+    }
+
+    /// Whether the compiled-surface path owns this port's render
+    /// (the single-path pin — armed sessions never fall through).
+    pub fn surface_armed(&self) -> bool {
+        self.surface.is_some()
     }
 
     /// `text_msg(role, text)` — a family-rendered plain-text turn.
@@ -1018,6 +1077,82 @@ impl GatewayModel {
             Family::Messages => hharness_gateway::anthropic::tool_entry(name, desc, schema),
             Family::ChatCompletions => hharness_gateway::openai::tool_entry(name, desc, schema),
         }
+    }
+
+    /// `surface_head(surface, prefix)` — the compiled `ModelSurface`'s
+    /// layout preamble (REQ-XE-103/104): each section renders under its
+    /// declared provider role (`system` included) — an `hh-tmpl/1`
+    /// grammar section's `text` is the template source, filled at render
+    /// time from `{task: <instruction>}` and the durable
+    /// `action.environment.probe.completed` `values` (`uname.*` slots —
+    /// REQ-XE-113's ledgered fill). A declared but unfilled slot is a
+    /// typed `InvalidRequest{template_slot_unfilled}` — the plan fails
+    /// before any wire send, never an empty string. Sections are emitted
+    /// in profile-declared `order`; a section whose `slots` name
+    /// `transcript` marks the prior-turn fold's splice point (absent ⇒
+    /// the fold appends after the last section).
+    fn surface_head(
+        &self,
+        surface: &hharness_compiler::seal::ModelSurface,
+        prefix: &[EventEnvelope],
+    ) -> Result<Vec<Json>, ModelError> {
+        // The run-time fills — `task` is the instruction bytes; every
+        // other variable resolves from the latest completed probe row's
+        // `values` (`uname.*`, tried verbatim then under the `uname.`
+        // namespace the REQ-XE-113 spellings use).
+        let mut vars: BTreeMap<String, String> = BTreeMap::new();
+        let task = match &self.invoke {
+            Some((cap, args)) => format!(
+                "The caller directed: invoke `{cap}` with arguments {}",
+                args.to_canonical_string()
+            ),
+            None => self.instruction.clone(),
+        };
+        vars.insert("task".to_string(), task);
+        if let Some(row) = prefix
+            .iter()
+            .rev()
+            .find(|e| e.class == "action.environment.probe.completed")
+        {
+            if let Some(Json::Obj(vs)) = row.payload.get("values") {
+                for (k, v) in vs {
+                    if let Some(s) = v.as_str() {
+                        vars.insert(k.clone(), s.to_string());
+                        if let Some(short) = k.strip_prefix("uname.") {
+                            vars.entry(short.to_string())
+                                .or_insert_with(|| s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for section in &surface.layout {
+            if section.slots.iter().any(|s| s == "transcript") {
+                continue; // the prior-turn fold splices after the sections
+            }
+            let role = section.role.as_deref().unwrap_or("user");
+            let src = section.text.clone().unwrap_or_default();
+            let content = match section.grammar.as_deref() {
+                Some("hh-tmpl/1") => {
+                    let t = hharness_compiler::tmpl::compile_template(&src).map_err(|e| {
+                        ModelError::new(
+                            ModelErrorClass::InvalidRequest,
+                            format!("surface section `{}`: {e}", section.section_id),
+                        )
+                    })?;
+                    t.render(&vars).map_err(|e| {
+                        ModelError::new(
+                            ModelErrorClass::InvalidRequest,
+                            format!("template_slot_unfilled:{e}"),
+                        )
+                    })?
+                }
+                _ => src,
+            };
+            out.push(self.text_msg(role, &content));
+        }
+        Ok(out)
     }
 
     /// `request_body(messages, tools, params)` — the plan's `body`: the
@@ -1180,16 +1315,28 @@ impl GatewayModel {
         };
         let selected = selected_view(prefix)?;
         let mut messages = Vec::new();
-        if let Some((cap, args)) = &self.invoke {
-            messages.push(self.text_msg(
-                "user",
-                &format!(
-                    "The caller directed: invoke `{cap}` with arguments {}",
-                    args.to_canonical_string()
-                ),
-            ));
-        } else {
-            messages.push(self.text_msg("user", &self.instruction));
+        match &self.surface {
+            // R6.35 (REQ-XE-103/104) — the compiled `ModelSurface`
+            // renders the request preamble: layout sections under their
+            // declared provider roles, each `hh-tmpl/1` text filled at
+            // render time (`task` + the probe's `uname.*` values from
+            // the durable `action.environment.probe.completed` rows).
+            // The prior-turn fold below is the same code the unarmed
+            // path runs — one renderer, never a second builder.
+            Some(surface) => messages.extend(self.surface_head(surface, prefix)?),
+            None => {
+                if let Some((cap, args)) = &self.invoke {
+                    messages.push(self.text_msg(
+                        "user",
+                        &format!(
+                            "The caller directed: invoke `{cap}` with arguments {}",
+                            args.to_canonical_string()
+                        ),
+                    ));
+                } else {
+                    messages.push(self.text_msg("user", &self.instruction));
+                }
+            }
         }
         // Observation rows keyed by the kernel tool_call_id. An item the
         // durable selection omitted never joins — the `context_item_id`

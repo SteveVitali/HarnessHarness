@@ -132,6 +132,7 @@ impl AdapterLane {
             stream_member: crate::gateway_model::StreamMember::default(),
             tool_choice: crate::gateway_model::ToolChoiceDecl::default(),
             transcript_render: crate::gateway_model::TranscriptRender::default(),
+            model_surface: false,
         }
     }
 
@@ -744,6 +745,7 @@ mod tests {
             stream_member: crate::gateway_model::StreamMember::default(),
             tool_choice: crate::gateway_model::ToolChoiceDecl::default(),
             transcript_render: crate::gateway_model::TranscriptRender::default(),
+            model_surface: false,
         };
         let al = AdapterLane::from(&ml);
         assert_eq!(al.dialect_ref, ml.dialect_ref);
