@@ -351,7 +351,6 @@ use hharness_runner::l1_gate::{
     check_l1_conformance, check_l1_diff, compare_drives, conformance_record, refuse_parity_input,
     run_sequence, L1Sequence, L1_CONFORMANCE_SCHEMA, L1_DIFF_SCHEMA, L1_LABEL,
 };
-use hharness_runner::l1_obs::raws_from_recording;
 
 fn bm01_seq(obs_b: Option<Vec<RawObservation>>) -> L1Sequence {
     let rec = bm_fixtures()[0].recording.to_json();

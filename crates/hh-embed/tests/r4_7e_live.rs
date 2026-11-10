@@ -633,6 +633,10 @@ fn r47e_live_judge_run() {
         // would emit prose records the provider's own refusal instead.
         provider_params: BTreeMap::from([("tool_choice".to_string(), Json::str("required"))]),
         tls: Default::default(),
+        transport: Default::default(),
+        stream_member: Default::default(),
+        tool_choice: Default::default(),
+        transcript_render: Default::default(),
     };
     let mut model = GatewayModel::new(
         beneficiary,
