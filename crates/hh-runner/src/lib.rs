@@ -36,6 +36,7 @@ pub mod coordinator;
 pub mod diskwatch;
 pub mod disposition;
 pub mod facts;
+pub mod fp_prereg;
 pub mod fp_seal;
 pub mod harbor;
 pub mod holds;

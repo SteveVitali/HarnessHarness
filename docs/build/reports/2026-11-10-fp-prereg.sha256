@@ -1,0 +1,2 @@
+2e36bf81d3af55491af00608c63bedf3ed035e0193cc0ce4cd0f3b609e450201  docs/build/reports/2026-11-10-fp-prereg.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-10-fp-prereg.sha256 (run from the repo root — the packet is canonical Json::to_canonical_string output, CC1)

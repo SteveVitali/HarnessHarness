@@ -1,0 +1,22 @@
+# fp-prereg-inputs.txt — the inputs manifest for the `fp_prereg`
+# emitter (manifest 291/R6.33). The reader rule keeps every docs/
+# relpath at script level, never in crates/**: the emitter and its
+# r6_33 acceptance battery resolve each committed record through this
+# file (`HH_FP_INPUTS`, defaulting to <repo>/scripts/fp-prereg-inputs.txt).
+# Format: name=relpath, one per line; `#` comments and blank lines are
+# skipped. The packet and readiness citations emit exactly these
+# strings — one source for the read path and the cited path alike.
+selection=docs/build/reports/2026-11-08-fp-selection.json
+select_commit=docs/build/reports/2026-11-08-fp-select-commit.json
+exclusion=docs/build/reports/2026-11-08-fp-exclusion-record.json
+reproof_held=docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-packet.json
+reproof_held_register=docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-register.json
+reproof_dev=docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-packet.json
+reproof_dev_register=docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-register.json
+reproof_evidence=docs/build/reports/live/2026-11-10-reproof.json
+w1_manifest=docs/build/reports/compute/harvest/fp-w1/MANIFEST.sha256
+human_h14_readout=docs/build/readouts/HUMAN-H14.md
+packet=docs/build/reports/2026-11-10-fp-prereg.json
+packet_sha256=docs/build/reports/2026-11-10-fp-prereg.sha256
+w2_quote=docs/build/reports/2026-11-10-fp-w2-comparative-quote.json
+readiness=docs/build/reports/2026-11-10-fp-fps-readiness.json
