@@ -1356,12 +1356,12 @@ impl GatewayModel {
                         &format!("kernel_note: the prior model call failed ({class})"),
                     ));
                 }
-                "model.format_failure"
-                | "model.call.refused"
-                | "control.output.rejected"
-                | "action.tool.call.refused"
-                    if !tr.format_error_omit =>
-                {
+                // The kernel-note leg keeps the pre-R6.34 class set —
+                // `format_error_turn: omit` drops the offending
+                // assistant turn (via `refused_mcs`, which reads the
+                // wider refusal classes) but the default path renders
+                // notes for the same two classes it always has.
+                "model.format_failure" | "model.call.refused" if !tr.format_error_omit => {
                     let kind = e
                         .payload
                         .get("kind")
