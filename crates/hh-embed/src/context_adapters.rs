@@ -740,6 +740,10 @@ mod tests {
                 client_cert_file: None,
                 client_key_file: None,
             },
+            transport: crate::gateway_model::PortTransport::default(),
+            stream_member: crate::gateway_model::StreamMember::default(),
+            tool_choice: crate::gateway_model::ToolChoiceDecl::default(),
+            transcript_render: crate::gateway_model::TranscriptRender::default(),
         };
         let al = AdapterLane::from(&ml);
         assert_eq!(al.dialect_ref, ml.dialect_ref);
