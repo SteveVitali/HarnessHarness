@@ -5,6 +5,17 @@
 //! `env.close{detach}`; the worker then takes the writer back and
 //! re-attaches the same cell through `EnvDriver` for seal/teardown.
 //! Rungs recorded in `docs/build/reports/r6-39-c05-rung.md`.
+//!
+//! Platform scope: the custody leg's cell class is `local_sandboxed`
+//! (the `hh-helper --backend seatbelt` cell) on macOS — the only host
+//! with a seatbelt backend (`sandbox-exec(1)`; the tree admits no linux
+//! seatbelt-equivalent, and `local_container`/podman is a live-verify
+//! leg, not deterministic CI). The custody assertions —
+//! `env.open` → `env.close{detach}` → `env.attach` → writer handoff —
+//! are backend-agnostic, so off-macOS the leg runs `local_host`, the
+//! helper-less local class, and a separate leg asserts
+//! `env.open{local_sandboxed}` refuses *typed* there rather than
+//! silently downgrading.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -70,6 +81,17 @@ fn dir(tag: &str) -> PathBuf {
 fn ok(j: &Json) -> bool {
     j.get("result").is_some()
 }
+
+/// The custody leg's cell class. `local_sandboxed` resolves to
+/// `hh-helper --backend seatbelt`, which exists only on darwin
+/// (`crates/hh-helper/src/seatbelt.rs` — `is_available()` is
+/// `cfg!(target_os = "macos") && /usr/bin/sandbox-exec`). Off-macOS the
+/// leg runs `local_host` — no helper, the in-process executor — so the
+/// identical custody assertions stay deterministic on both platforms.
+#[cfg(target_os = "macos")]
+const CUSTODY_CLASS: &str = "local_sandboxed";
+#[cfg(not(target_os = "macos"))]
+const CUSTODY_CLASS: &str = "local_host";
 
 #[test]
 fn ac3_two_process_ownership_detach_reattach() {
@@ -154,7 +176,7 @@ fn ac3_two_process_ownership_detach_reattach() {
                             (
                                 "connection_info",
                                 Json::obj([
-                                    ("class", Json::str("local_sandboxed")),
+                                    ("class", Json::str(CUSTODY_CLASS)),
                                     (
                                         "workspace_roots",
                                         Json::Arr(vec![Json::str(ws.to_string_lossy())]),
@@ -196,6 +218,43 @@ fn ac3_two_process_ownership_detach_reattach() {
             "second writer must refuse while the kernel child holds the run"
         );
     }
+    // ── typed refusal, off-macOS: `local_sandboxed` names the seatbelt
+    // helper backend, which exists only on darwin. The class must
+    // refuse `EnvironmentUnavailable` — a silent downgrade to a weaker
+    // isolation would be the defect this leg guards. (The failed open
+    // mints `action.environment.failed` on a fresh handle; the session's
+    // bound handle is untouched.)
+    #[cfg(not(target_os = "macos"))]
+    {
+        let r = rpc.call(
+            "env.open",
+            Json::obj([
+                ("session_id", Json::str(&session_id)),
+                (
+                    "connection_info",
+                    Json::obj([
+                        ("class", Json::str("local_sandboxed")),
+                        (
+                            "workspace_roots",
+                            Json::Arr(vec![Json::str(ws.to_string_lossy())]),
+                        ),
+                    ]),
+                ),
+            ]),
+        );
+        let kind = r
+            .get("error")
+            .and_then(|e| e.get("data"))
+            .and_then(|d| d.get("kind"))
+            .and_then(Json::as_str)
+            .unwrap_or_default();
+        assert_eq!(
+            kind,
+            "EnvironmentUnavailable",
+            "env.open{{local_sandboxed}} must refuse typed off-macOS: {}",
+            r.to_canonical_string()
+        );
+    }
     // ── the cell under the child's custody ───────────────────────────
     let r = rpc.call(
         "env.open",
@@ -204,7 +263,7 @@ fn ac3_two_process_ownership_detach_reattach() {
             (
                 "connection_info",
                 Json::obj([
-                    ("class", Json::str("local_sandboxed")),
+                    ("class", Json::str(CUSTODY_CLASS)),
                     (
                         "workspace_roots",
                         Json::Arr(vec![Json::str(ws.to_string_lossy())]),
