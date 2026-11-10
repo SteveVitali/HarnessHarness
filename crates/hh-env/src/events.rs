@@ -662,21 +662,29 @@ pub fn observed_payload(
 
 /// `context.observation.recorded{kind: "tool_observation", effect_id,
 /// capability_ref, capture_manifest_ref, outcome, admission, label,
-/// leaves?}` — the observation-plane record of a `flow_contract`
-/// capability's admitted result (§5g.2 §3's payload extension; §5d.5
-/// observe's second output). `kind` discriminates the reminder rows
-/// (`budget_reminder`) the class also carries; `admission`/`label` are the
-/// recorded admission kind and the admitted `L(r)` — content-free (ids,
-/// enums, the label triple). R2.12 (DF-S2.7-1a): a `labels_leaves`
-/// contract's per-leaf records ride `leaves[{path, admission, label}]` —
-/// the leaf path is a schema position (structural, never value bytes).
+/// leaves?, model_view?}` — the observation-plane record of a
+/// `flow_contract` capability's admitted result (§5g.2 §3's payload
+/// extension; §5d.5 observe's second output). `kind` discriminates the
+/// reminder rows (`budget_reminder`) the class also carries;
+/// `admission`/`label` are the recorded admission kind and the admitted
+/// `L(r)` — content-free (ids, enums, the label triple). R2.12
+/// (DF-S2.7-1a): a `labels_leaves` contract's per-leaf records ride
+/// `leaves[{path, admission, label}]` — the leaf path is a schema
+/// position (structural, never value bytes). R6.37 (REQ-XE-109;
+/// ADR-0440 D2): `model_view` records the durable model-view rendering —
+/// `{ref, renderer}` on a served render, `{outcome: "render_refused",
+/// reason}` on a spec the record cannot serve; `None` ⇒ the member is
+/// absent (CC8). An armed renderer mints the row for a contract-less
+/// capability too — `admission`/`label` stay absent where `admit` never
+/// ran (the member is meaningful only there).
 pub fn observation_recorded_payload(
     effect_id: &str,
     capability_semantic_id: &str,
     manifest_ref: &str,
     outcome: &crate::observe::EffectOutcome,
-    admission: &hharness_provenance::flow::Admission,
+    admission: Option<&hharness_provenance::flow::Admission>,
     leaves: &[Json],
+    model_view: Option<&Json>,
 ) -> Json {
     let mut m = vec![
         ("kind", Json::str("tool_observation")),
@@ -687,16 +695,22 @@ pub fn observation_recorded_payload(
         ),
         ("capture_manifest_ref", Json::str(manifest_ref.to_string())),
         ("outcome", Json::str(outcome.as_str())),
-        ("admission", Json::str(admission.kind.as_str())),
-        (
-            "label",
-            hharness_provenance::flow::label_json_full(&admission.label),
-        ),
     ];
-    // Absent-not-null (CC8): a contract without `labels_leaves` mints the
-    // row identically to the pre-R2.12 shape.
+    // Absent-not-null (CC8): `admission`/`label`/`leaves`/`model_view`
+    // join only where they are meaningful — a contract-less or
+    // renderer-less mint is byte-identical to the pre-change shape.
+    if let Some(adm) = admission {
+        m.push(("admission", Json::str(adm.kind.as_str())));
+        m.push((
+            "label",
+            hharness_provenance::flow::label_json_full(&adm.label),
+        ));
+    }
     if !leaves.is_empty() {
         m.push(("leaves", Json::Arr(leaves.to_vec())));
+    }
+    if let Some(mv) = model_view {
+        m.push(("model_view", mv.clone()));
     }
     Json::Obj(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
@@ -713,9 +727,10 @@ pub fn observation_refused_payload(
     manifest_ref: &str,
     outcome: &crate::observe::EffectOutcome,
     failure: &crate::leaf_admission::LeafWalkFailure,
+    model_view: Option<&Json>,
 ) -> Json {
     let kind = failure.kind();
-    Json::obj([
+    let mut m = vec![
         ("kind", Json::str("tool_observation")),
         ("effect_id", Json::str(effect_id.to_string())),
         (
@@ -726,7 +741,13 @@ pub fn observation_refused_payload(
         ("outcome", Json::str(outcome.as_str())),
         ("admission", Json::str("leaf_refused")),
         ("leaf", Json::str(kind)),
-    ])
+    ];
+    // R6.37 — the armed renderer's `model_view` rides the refused row
+    // identically (absent-not-null; REQ-XE-109).
+    if let Some(mv) = model_view {
+        m.push(("model_view", mv.clone()));
+    }
+    Json::Obj(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 }
 
 /// `action.effect.unknown{attempt_no?, fencing_token, cause}` — outcome

@@ -392,6 +392,7 @@ fn dispatch_input<'a>(
         baseline_ref: None,
         flow: Default::default(),
         remedy_taken: None,
+        result_renderer: None,
     }
 }
 

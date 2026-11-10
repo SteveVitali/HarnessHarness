@@ -505,6 +505,13 @@ pub struct DispatchGate {
     pub env_handle_id: Option<String>,
     /// The dispatcher's token-minter seed (run-derived).
     pub seed: [u8; 32],
+    /// R6.37 (REQ-XE-109; ADR-0440 D2) — the session's armed
+    /// `ModelSurface.tools[].result_render.renderer`, keyed by
+    /// `binding.surface_id`. Populated at gate construction only when
+    /// the session armed `model_port.model_surface = "compiled"` — an
+    /// unarmed session's map is empty and every dispatch renders the
+    /// pre-change path byte-identically (the opt-in rule).
+    pub result_renderers: BTreeMap<String, hharness_compiler::surface::ResultRenderer>,
 }
 
 impl DispatchGate {
@@ -611,6 +618,9 @@ impl DispatchGate {
             baseline_ref: None,
             flow: hharness_monitor::monitor::FlowInputs::default(),
             remedy_taken: None,
+            // R6.37 — the armed surface's declared renderer joins by the
+            // intent's surface id; absent ⇒ legacy path, byte-identical.
+            result_renderer: self.result_renderers.get(surface),
         };
         let mut disp = hharness_env::dispatch::Dispatcher::new(
             seam.store,
