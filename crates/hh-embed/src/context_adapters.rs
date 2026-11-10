@@ -128,6 +128,10 @@ impl AdapterLane {
                 client_cert_file: self.client_cert_file.clone(),
                 client_key_file: self.client_key_file.clone(),
             },
+            transport: crate::gateway_model::PortTransport::default(),
+            stream_member: crate::gateway_model::StreamMember::default(),
+            tool_choice: crate::gateway_model::ToolChoiceDecl::default(),
+            transcript_render: crate::gateway_model::TranscriptRender::default(),
         }
     }
 
