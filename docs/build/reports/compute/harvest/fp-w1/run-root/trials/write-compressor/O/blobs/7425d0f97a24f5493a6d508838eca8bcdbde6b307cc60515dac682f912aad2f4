@@ -1,0 +1,41 @@
+{
+    "id": "c39d631d-67d3-4ff2-956b-677df7893779",
+    "started_at": "2026-11-10T01:17:59.570879",
+    "updated_at": "2026-11-10T01:18:02.168362",
+    "finished_at": "2026-11-10T01:18:02.168362",
+    "n_total_trials": 3,
+    "stats": {
+        "n_completed_trials": 3,
+        "n_errored_trials": 3,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oracle__tasks": {
+                "n_trials": 0,
+                "n_errors": 3,
+                "metrics": [
+                    {
+                        "mean": 0.0
+                    }
+                ],
+                "pass_at_k": {
+                    "2": 0.0
+                },
+                "reward_stats": {},
+                "exception_stats": {
+                    "RuntimeError": [
+                        "write-compressor__anUXfT6",
+                        "write-compressor__9tfZNrf",
+                        "write-compressor__gCndMsx"
+                    ]
+                }
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

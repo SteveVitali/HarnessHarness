@@ -1,0 +1,22 @@
+  3/3 Mean: 0.000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0:00:03 0:00:00
+tasks • oracle
+┏━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Trials ┃ Exceptions ┃  Mean ┃ Pass@2 ┃
+┡━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│      0 │          3 │ 0.000 │  0.000 │
+└────────┴────────────┴───────┴────────┘
+
+┏━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Exception    ┃ Count ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━┩
+│ RuntimeError │     3 │
+└──────────────┴───────┘
+
+Job Info
+Total runtime: 3s
+Results written to 
+/var/lib/hh/runs/run-root-w1/jobs/w1-o-regex-log-3/result.json
+Inspect results by running `harbor view /var/lib/hh/runs/run-root-w1/jobs`
+Share results by running `harbor upload 
+/var/lib/hh/runs/run-root-w1/jobs/w1-o-regex-log-3`
+

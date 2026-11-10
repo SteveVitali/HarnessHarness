@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/w1/tasks/regex-log",
+        "source": "tasks"
+    },
+    "trial_name": "regex-log__CrrRagi",
+    "trials_dir": "/var/lib/hh/runs/run-root-w1/jobs/w1-o-regex-log-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "4c103532-e774-456c-a7f7-2b9af54b85fa"
+}

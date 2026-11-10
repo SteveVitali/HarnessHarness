@@ -1,0 +1,1 @@
+{"agent_exit":1,"recording_sha256":"sha256:4688673c72384e1cb475eddf4293727da64f7ea52fa378a291514d33db9148e9","task":"torch-pipeline-parallelism","turns":1,"upstream_body_bytes_per_turn":[5277],"wall_ms":7406}

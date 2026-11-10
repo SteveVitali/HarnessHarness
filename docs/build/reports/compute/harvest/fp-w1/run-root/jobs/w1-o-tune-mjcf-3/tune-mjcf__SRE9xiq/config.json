@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/w1/tasks/tune-mjcf",
+        "source": "tasks"
+    },
+    "trial_name": "tune-mjcf__SRE9xiq",
+    "trials_dir": "/var/lib/hh/runs/run-root-w1/jobs/w1-o-tune-mjcf-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "cbe91b31-1ad7-4652-9e05-78c0794eba86"
+}

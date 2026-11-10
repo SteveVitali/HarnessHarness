@@ -1,0 +1,114 @@
+Failed to download logs to /var/lib/hh/runs/run-root-w1/jobs/w1-o-polyglot-rust-c-2/polyglot-rust-c__d7jdUMt/agent: Could not resolve container for compose service 'main' in project 'polyglot-rust-c__d7jdumt__env'.
+Traceback (most recent call last):
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 613, in run
+    await self._prepare()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 652, in _prepare
+    await self._setup_agent_environment()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 1856, in _setup_agent_environment
+    await self._start_agent_environment()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 1862, in _start_agent_environment
+    await asyncio.wait_for(
+  File "/root/.local/share/uv/python/cpython-3.12.16-linux-x86_64-gnu/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 1134, in start
+    await self._run_docker_compose_command(["up", *runtime.up_args])
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 808, in _run_docker_compose_command
+    raise RuntimeError(
+RuntimeError: Docker compose command failed for environment polyglot-rust-c. Command: podman-compose --in-pod=false --project-name polyglot-rust-c__d7jdumt__env -f /tmp/tmp2wjrv6qi/polyglot-rust-c__d7jdUMt__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpr34xgh1j/docker-compose-environment.json -f /tmp/tmp7r6cmomg/docker-compose-mounts.json up --detach. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [-f file] [-p PROJECT_NAME]
+                      [--podman-path PODMAN_PATH] [--podman-args args]
+                      [--podman-pull-args args] [--podman-push-args args]
+                      [--podman-build-args args] [--podman-inspect-args args]
+                      [--podman-run-args args] [--podman-start-args args]
+                      [--podman-stop-args args] [--podman-rm-args args]
+                      [--podman-volume-args args] [--no-ansi] [--no-cleanup]
+                      [--dry-run]
+                      {help,version,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs}
+                      ...
+podman-compose: error: unrecognized arguments: --in-pod=false
+. Stderr: None. 
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 831, in _download_role_logs
+    await self.agent_environment.download_dir(
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 1351, in download_dir
+    await self._platform.download_dir(source_dir, target_dir)
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 304, in download_dir
+    await self._download_via_engine_cp(f"{source_dir}/.", target_dir, service)
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 251, in _download_via_engine_cp
+    container = await self._resolve_service_container(service)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 230, in _resolve_service_container
+    raise RuntimeError(
+RuntimeError: Could not resolve container for compose service 'main' in project 'polyglot-rust-c__d7jdumt__env'.
+Failed to download logs to /var/lib/hh/runs/run-root-w1/jobs/w1-o-polyglot-rust-c-2/polyglot-rust-c__sAnr4YN/agent: Could not resolve container for compose service 'main' in project 'polyglot-rust-c__sanr4yn__env'.
+Traceback (most recent call last):
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 613, in run
+    await self._prepare()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 652, in _prepare
+    await self._setup_agent_environment()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 1856, in _setup_agent_environment
+    await self._start_agent_environment()
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 1862, in _start_agent_environment
+    await asyncio.wait_for(
+  File "/root/.local/share/uv/python/cpython-3.12.16-linux-x86_64-gnu/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 1134, in start
+    await self._run_docker_compose_command(["up", *runtime.up_args])
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 808, in _run_docker_compose_command
+    raise RuntimeError(
+RuntimeError: Docker compose command failed for environment polyglot-rust-c. Command: podman-compose --in-pod=false --project-name polyglot-rust-c__sanr4yn__env -f /tmp/tmp2x96i_gq/polyglot-rust-c__sAnr4YN__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpvaf4l8i0/docker-compose-environment.json -f /tmp/tmpoxzoeisx/docker-compose-mounts.json up --detach. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [-f file] [-p PROJECT_NAME]
+                      [--podman-path PODMAN_PATH] [--podman-args args]
+                      [--podman-pull-args args] [--podman-push-args args]
+                      [--podman-build-args args] [--podman-inspect-args args]
+                      [--podman-run-args args] [--podman-start-args args]
+                      [--podman-stop-args args] [--podman-rm-args args]
+                      [--podman-volume-args args] [--no-ansi] [--no-cleanup]
+                      [--dry-run]
+                      {help,version,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs}
+                      ...
+podman-compose: error: unrecognized arguments: --in-pod=false
+. Stderr: None. 
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/trial/trial.py", line 831, in _download_role_logs
+    await self.agent_environment.download_dir(
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker.py", line 1351, in download_dir
+    await self._platform.download_dir(source_dir, target_dir)
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 304, in download_dir
+    await self._download_via_engine_cp(f"{source_dir}/.", target_dir, service)
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 251, in _download_via_engine_cp
+    container = await self._resolve_service_container(service)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker_unix.py", line 230, in _resolve_service_container
+    raise RuntimeError(
+RuntimeError: Could not resolve container for compose service 'main' in project 'polyglot-rust-c__sanr4yn__env'.
+Docker compose down failed: Docker compose command failed for environment polyglot-rust-c. Command: podman-compose --in-pod=false --project-name polyglot-rust-c__d7jdumt__env -f /tmp/tmp2wjrv6qi/polyglot-rust-c__d7jdUMt__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpr34xgh1j/docker-compose-environment.json -f /tmp/tmp7r6cmomg/docker-compose-mounts.json down --rmi local --volumes --remove-orphans. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [-f file] [-p PROJECT_NAME]
+                      [--podman-path PODMAN_PATH] [--podman-args args]
+                      [--podman-pull-args args] [--podman-push-args args]
+                      [--podman-build-args args] [--podman-inspect-args args]
+                      [--podman-run-args args] [--podman-start-args args]
+                      [--podman-stop-args args] [--podman-rm-args args]
+                      [--podman-volume-args args] [--no-ansi] [--no-cleanup]
+                      [--dry-run]
+                      {help,version,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs}
+                      ...
+podman-compose: error: unrecognized arguments: --in-pod=false --rmi --remove-orphans
+. Stderr: None. 
+Docker compose down failed: Docker compose command failed for environment polyglot-rust-c. Command: podman-compose --in-pod=false --project-name polyglot-rust-c__sanr4yn__env -f /tmp/tmp2x96i_gq/polyglot-rust-c__sAnr4YN__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.12/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpvaf4l8i0/docker-compose-environment.json -f /tmp/tmpoxzoeisx/docker-compose-mounts.json down --rmi local --volumes --remove-orphans. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [-f file] [-p PROJECT_NAME]
+                      [--podman-path PODMAN_PATH] [--podman-args args]
+                      [--podman-pull-args args] [--podman-push-args args]
+                      [--podman-build-args args] [--podman-inspect-args args]
+                      [--podman-run-args args] [--podman-start-args args]
+                      [--podman-stop-args args] [--podman-rm-args args]
+                      [--podman-volume-args args] [--no-ansi] [--no-cleanup]
+                      [--dry-run]
+                      {help,version,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs}
+                      ...
+podman-compose: error: unrecognized arguments: --in-pod=false --rmi --remove-orphans
+. Stderr: None. 

@@ -1,0 +1,1 @@
+{"agent":"oracle","env":"podman","job_name":"w1-o-polyglot-rust-c-2","jobs_dir":"/var/lib/hh/runs/run-root-w1/jobs","max_retries":0,"n_attempts":2,"n_concurrent":2,"no_force_build":true,"pin":"ff2a1ef48070a8df374669138e4d4db79b77f013","schema":"hh-harbor-job-config/1","tasks":["polyglot-rust-c"],"tasks_dir":"/opt/w1/tasks"}
