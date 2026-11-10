@@ -129,6 +129,152 @@ pub struct ModelLane {
     /// The R4.5c TLS lane declaration (`tls{}` — file *names*, never
     /// PEM bodies; the manifest re-binds the same lane).
     pub tls: TlsLane,
+    /// `transport ∈ {stream, non_stream}` — R6.34 (REQ-XE-107, G5).
+    /// `non_stream` decodes through the existing `completion_frames`
+    /// decoder — no second decoder (CC1).
+    pub transport: PortTransport,
+    /// `stream_member ∈ {send, omit}` — the `stream` member's presence
+    /// on the wire (REQ-XE-107). `omit` is admissible only under
+    /// `non_stream` (a `stream` transport that never declares `stream`
+    /// is a self-contradictory declaration — refused at arm).
+    pub stream_member: StreamMember,
+    /// `tool_choice ∈ {auto, omit}` — whether `tool_choice` is sent
+    /// (REQ-XE-106 contributing, G4). `omit` is a declaration, not a
+    /// downgrade: the request carries no `tool_choice` member.
+    pub tool_choice: ToolChoiceDecl,
+    /// `transcript_render{…}` — the declared replay choices (REQ-XE-108;
+    /// G6/G7/G19/G20). All-absent ⇒ the legacy render, byte-identical.
+    pub transcript_render: TranscriptRender,
+}
+
+/// `transport` — the declared request transport (REQ-XE-107).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PortTransport {
+    /// Streaming (`text/event-stream`) — the pre-R6.34 default.
+    #[default]
+    Stream,
+    /// Non-streaming — the request asks `application/json`; the body
+    /// decodes through the family's `completion_frames` (the transport
+    /// already reads by content-type — the same decoder, CC1).
+    NonStream,
+}
+
+/// `stream_member` — the `stream` member's declared presence (G5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StreamMember {
+    /// Send `stream: <transport>` — the pre-R6.34 default.
+    #[default]
+    Send,
+    /// Omit the member entirely (O's recorded shape — whether LiteLLM
+    /// sends `stream` at all is unobserved, design 38 F7; the member's
+    /// value is fixed from O-recorded bytes).
+    Omit,
+}
+
+/// `tool_choice` — the declared `tool_choice` handling (G4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ToolChoiceDecl {
+    /// `tool_choice: "auto"` when tools are present — the pre-R6.34
+    /// render (the C2 proxy neutralizes it upstream either way, C-30).
+    #[default]
+    Auto,
+    /// Omit `tool_choice` from the request body.
+    Omit,
+}
+
+/// `transcript_render` — the model port's declared replay members
+/// (REQ-XE-108; §7.3 G6/G7/G19/G20). Every member is opt-in: a
+/// declaration carrying none renders byte-identically to the legacy
+/// path (AC-5's backward-compat golden). Admitted under the
+/// chat-completions family only at this stage — the member spellings
+/// are chat-completions-shaped; a Messages-family declaration is a
+/// typed `InvalidDefinition` refusal, never a silently different
+/// replay.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TranscriptRender {
+    /// `assistant_replay.content ∈ {drop, verbatim}` — `verbatim`
+    /// re-sends the recorded assistant text ("" when none was
+    /// recorded); `drop` (default) renders `content: null` (legacy).
+    pub replay_content: bool,
+    /// `assistant_replay.reasoning ∈ {drop, verbatim}` — `verbatim`
+    /// re-sends the recorded `reasoning_content` member (absent when
+    /// none was recorded — never a fabricated empty member).
+    pub replay_reasoning: bool,
+    /// `assistant_replay.extra_members[]` — provider message members
+    /// re-sent verbatim when the durable `message_extra` record
+    /// preserved them (a recorded-absent member stays absent — the
+    /// replay serves only what the blob carried).
+    pub extra_members: Vec<String>,
+    /// `text_only_turn ∈ {drop, replay}` — `replay` renders a completed
+    /// turn that carried no tool calls as its recorded assistant
+    /// message; `drop` (default) skips the turn (legacy).
+    pub text_only_replay: bool,
+    /// `format_error_turn ∈ {kernel_note, omit}` — `omit` drops the
+    /// format-error turn's `kernel_note` AND the offending completed
+    /// call's assistant turn (mini's bad-turn-omitted leg; the
+    /// error-text itself is the `error_format` renderer's —
+    /// ADR-0442/R6.35+); `kernel_note` (default) renders both (legacy).
+    pub format_error_omit: bool,
+    /// `id_normalisation ∈ {kernel, provider_verbatim}` —
+    /// `provider_verbatim` renders the provider's call id in both
+    /// `tool_calls[].id` and the result's `tool_call_id` (G19).
+    pub provider_ids: bool,
+    /// `tool_arguments ∈ {canonical, verbatim}` — `verbatim` replays the
+    /// argument bytes exactly as the provider sent them (G20), read
+    /// from the durable `hh.model_io/1` frames — never re-synthesized.
+    pub verbatim_args: bool,
+}
+
+impl TranscriptRender {
+    /// Whether any declared member needs the durable `hh.model_io/1`
+    /// blob to render a `model.call.completed` row. `false` ⇒ the
+    /// legacy render (byte-identical, no blob reads).
+    pub fn requires_blob(&self) -> bool {
+        self.replay_content
+            || self.replay_reasoning
+            || !self.extra_members.is_empty()
+            || self.provider_ids
+            || self.verbatim_args
+            || self.text_only_replay
+    }
+    /// `true` when every member holds its default (legacy) value —
+    /// the opt-in rule (AC-5).
+    pub fn is_default(&self) -> bool {
+        *self == TranscriptRender::default()
+    }
+    /// Canonical JSON — the manifest member (non-default members only).
+    fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        if self.replay_content || self.replay_reasoning || !self.extra_members.is_empty() {
+            let mut ar = BTreeMap::new();
+            if self.replay_content {
+                ar.insert("content".into(), Json::str("verbatim"));
+            }
+            if self.replay_reasoning {
+                ar.insert("reasoning".into(), Json::str("verbatim"));
+            }
+            if !self.extra_members.is_empty() {
+                ar.insert(
+                    "extra_members".into(),
+                    Json::Arr(self.extra_members.iter().map(Json::str).collect()),
+                );
+            }
+            m.insert("assistant_replay".into(), Json::Obj(ar));
+        }
+        if self.text_only_replay {
+            m.insert("text_only_turn".into(), Json::str("replay"));
+        }
+        if self.format_error_omit {
+            m.insert("format_error_turn".into(), Json::str("omit"));
+        }
+        if self.provider_ids {
+            m.insert("id_normalisation".into(), Json::str("provider_verbatim"));
+        }
+        if self.verbatim_args {
+            m.insert("tool_arguments".into(), Json::str("verbatim"));
+        }
+        Json::Obj(m)
+    }
 }
 
 /// `TlsLane` — the `model_port` slot's `tls{}` declaration: the
@@ -239,6 +385,20 @@ impl ModelLane {
                 Json::Obj(self.provider_params.clone()),
             );
         }
+        // R6.34 members serialize only when non-default — a lane that
+        // declares none persists byte-identically (the opt-in rule).
+        if self.transport == PortTransport::NonStream {
+            m.insert("transport".into(), Json::str("non_stream"));
+        }
+        if self.stream_member == StreamMember::Omit {
+            m.insert("stream_member".into(), Json::str("omit"));
+        }
+        if self.tool_choice == ToolChoiceDecl::Omit {
+            m.insert("tool_choice".into(), Json::str("omit"));
+        }
+        if !self.transcript_render.is_default() {
+            m.insert("transcript_render".into(), self.transcript_render.to_json());
+        }
         Json::Obj(m)
     }
 
@@ -279,6 +439,22 @@ impl ModelLane {
                         .map(str::to_string),
                 },
                 _ => TlsLane::default(),
+            },
+            transport: match j.get("transport").and_then(Json::as_str) {
+                Some("non_stream") => PortTransport::NonStream,
+                _ => PortTransport::Stream,
+            },
+            stream_member: match j.get("stream_member").and_then(Json::as_str) {
+                Some("omit") => StreamMember::Omit,
+                _ => StreamMember::Send,
+            },
+            tool_choice: match j.get("tool_choice").and_then(Json::as_str) {
+                Some("omit") => ToolChoiceDecl::Omit,
+                _ => ToolChoiceDecl::Auto,
+            },
+            transcript_render: match j.get("transcript_render") {
+                Some(tr) => decode_transcript_render(tr).unwrap_or_default(),
+                None => TranscriptRender::default(),
             },
         })
     }
@@ -466,6 +642,89 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
             });
         }
     }
+    // R6.34 — the opt-in wire-fidelity members (REQ-XE-106/107/108).
+    // Absent ⇒ defaults ⇒ the render is byte-identical to the legacy
+    // lane (AC-5). Unknown members/values refuse typed, never silently
+    // coerce.
+    let transport = match params.get("transport") {
+        None | Some(Json::Null) => PortTransport::Stream,
+        Some(Json::Str(s)) if s == "stream" => PortTransport::Stream,
+        Some(Json::Str(s)) if s == "non_stream" => PortTransport::NonStream,
+        Some(Json::Str(s)) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec![format!(
+                    "model_port.transport `{s}` — admitted: stream, non_stream"
+                )],
+            })
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.transport is not a string".to_string()],
+            })
+        }
+    };
+    let stream_member = match params.get("stream_member") {
+        None | Some(Json::Null) => StreamMember::Send,
+        Some(Json::Str(s)) if s == "send" => StreamMember::Send,
+        Some(Json::Str(s)) if s == "omit" => StreamMember::Omit,
+        Some(Json::Str(s)) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec![format!(
+                    "model_port.stream_member `{s}` — admitted: send, omit"
+                )],
+            })
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.stream_member is not a string".to_string()],
+            })
+        }
+    };
+    if transport == PortTransport::Stream && stream_member == StreamMember::Omit {
+        return Err(EmbedError::InvalidDefinition {
+            diagnostics: vec![
+                "model_port.stream_member `omit` under `transport: stream` — the declaration \
+                 contradicts itself (the wire would carry no `stream` member on a streaming lane)"
+                    .to_string(),
+            ],
+        });
+    }
+    let tool_choice = match params.get("tool_choice") {
+        None | Some(Json::Null) => ToolChoiceDecl::Auto,
+        Some(Json::Str(s)) if s == "auto" => ToolChoiceDecl::Auto,
+        Some(Json::Str(s)) if s == "omit" => ToolChoiceDecl::Omit,
+        Some(Json::Str(s)) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec![format!(
+                    "model_port.tool_choice `{s}` — admitted: auto, omit"
+                )],
+            })
+        }
+        Some(_) => {
+            return Err(EmbedError::InvalidDefinition {
+                diagnostics: vec!["model_port.tool_choice is not a string".to_string()],
+            })
+        }
+    };
+    let transcript_render = match params.get("transcript_render") {
+        None | Some(Json::Null) => TranscriptRender::default(),
+        Some(tr) => decode_transcript_render(tr)?,
+    };
+    // The `transcript_render` spellings are chat-completions-shaped at
+    // this stage (`reasoning_content`, `tool_calls[].id`,
+    // `tool_call_id`) — a Messages-family lane declaring them is a
+    // typed refusal, never a silently different replay (R6.34).
+    if !transcript_render.is_default()
+        && hharness_gateway::family_of(&dialect) != Family::ChatCompletions
+    {
+        return Err(EmbedError::InvalidDefinition {
+            diagnostics: vec![
+                "model_port.transcript_render is admitted under the chat-completions family \
+                 only at this stage"
+                    .to_string(),
+            ],
+        });
+    }
     Ok(ModelLane {
         dialect_ref,
         endpoint_ref,
@@ -475,7 +734,93 @@ pub fn decode_model_lane(params: &Json, profile_ref: &str) -> Result<ModelLane, 
         profile_ref: profile_ref.to_string(),
         provider_params,
         tls,
+        transport,
+        stream_member,
+        tool_choice,
+        transcript_render,
     })
+}
+
+/// `decode_transcript_render(j)` — the `transcript_render{…}` sub-object's
+/// strict decode: unknown members and undeclared values refuse typed.
+fn decode_transcript_render(j: &Json) -> Result<TranscriptRender, EmbedError> {
+    let bad = |d: &str| EmbedError::InvalidDefinition {
+        diagnostics: vec![format!("model_port.transcript_render: {d}")],
+    };
+    let Json::Obj(m) = j else {
+        return Err(bad("not an object"));
+    };
+    let mut tr = TranscriptRender::default();
+    let str_member = |o: &Json, key: &str, vals: &[&str]| -> Result<Option<String>, EmbedError> {
+        match o.get(key) {
+            None | Some(Json::Null) => Ok(None),
+            Some(Json::Str(s)) if vals.contains(&s.as_str()) => Ok(Some(s.clone())),
+            Some(Json::Str(s)) => Err(bad(&format!("{key} `{s}` — admitted: {}", vals.join(", ")))),
+            Some(_) => Err(bad(&format!("{key} is not a string"))),
+        }
+    };
+    for (k, v) in m {
+        match k.as_str() {
+            "assistant_replay" => {
+                let Json::Obj(ar) = v else {
+                    return Err(bad("assistant_replay is not an object"));
+                };
+                for (ak, _) in ar {
+                    match ak.as_str() {
+                        "content" => {
+                            tr.replay_content = str_member(v, ak, &["drop", "verbatim"])?.as_deref()
+                                == Some("verbatim")
+                        }
+                        "reasoning" => {
+                            tr.replay_reasoning = str_member(v, ak, &["drop", "verbatim"])?
+                                .as_deref()
+                                == Some("verbatim")
+                        }
+                        "extra_members" => match ar.get(ak) {
+                            Some(Json::Arr(xs)) => {
+                                for x in xs {
+                                    match x {
+                                        Json::Str(s) => tr.extra_members.push(s.clone()),
+                                        _ => return Err(bad("extra_members[] is not a string")),
+                                    }
+                                }
+                            }
+                            _ => return Err(bad("extra_members is not an array")),
+                        },
+                        other => {
+                            return Err(bad(&format!(
+                                "assistant_replay.{other} unknown — admitted: content, \
+                                 reasoning, extra_members"
+                            )))
+                        }
+                    }
+                }
+            }
+            "text_only_turn" => {
+                tr.text_only_replay =
+                    str_member(j, k, &["drop", "replay"])?.as_deref() == Some("replay")
+            }
+            "format_error_turn" => {
+                tr.format_error_omit =
+                    str_member(j, k, &["kernel_note", "omit"])?.as_deref() == Some("omit")
+            }
+            "id_normalisation" => {
+                tr.provider_ids = str_member(j, k, &["kernel", "provider_verbatim"])?.as_deref()
+                    == Some("provider_verbatim")
+            }
+            "tool_arguments" => {
+                tr.verbatim_args =
+                    str_member(j, k, &["canonical", "verbatim"])?.as_deref() == Some("verbatim")
+            }
+            other => {
+                return Err(bad(&format!(
+                    "{other} unknown — admitted: assistant_replay, text_only_turn, \
+                     format_error_turn, id_normalisation, tool_arguments"
+                )))
+            }
+        }
+    }
+    Ok(tr)
 }
 
 /// `model_port_slot_params(doc)` — the `native.slots["model_port"]`
@@ -687,22 +1032,96 @@ impl GatewayModel {
         tools: &[Json],
         params: &BTreeMap<String, Json>,
     ) -> Json {
-        match self.family {
+        let stream = self.lane.transport == PortTransport::Stream;
+        let mut body = match self.family {
             Family::Messages => hharness_gateway::anthropic::messages_request_body(
                 &self.lane.provider_model_id,
                 messages,
                 tools,
-                true,
+                stream,
                 params,
             ),
             Family::ChatCompletions => hharness_gateway::openai::chat_request_body(
                 &self.lane.provider_model_id,
                 messages,
                 tools,
-                true,
+                stream,
                 params,
             ),
+        };
+        // R6.34 — the declared member-presence choices (REQ-XE-107's
+        // `stream` member; REQ-XE-106's `tool_choice`): absent
+        // declarations leave the family's default bytes untouched.
+        if let Json::Obj(m) = &mut body {
+            if self.lane.stream_member == StreamMember::Omit {
+                m.remove("stream");
+            }
+            if self.lane.tool_choice == ToolChoiceDecl::Omit {
+                m.remove("tool_choice");
+            }
         }
+        body
+    }
+
+    /// `recorded_assistant(payload, blobs, leg)` — resolve a
+    /// `model.call.completed` row's `response_ref` through the blob seam
+    /// and fold the durable `hh.model_io/1` frames into the assistant
+    /// turn's verbatim record (REQ-XE-108; X-04 — replayed bytes come
+    /// from the blob, never re-synthesized). An absent/unparseable ref
+    /// or an unresolvable blob is `MalformedHistory` — a declared
+    /// fidelity the durable record cannot serve is refused, never
+    /// fabricated.
+    fn recorded_assistant(
+        &self,
+        payload: &Json,
+        blobs: &dyn Fn(&str) -> Option<Vec<u8>>,
+        leg: &str,
+    ) -> Result<RecordedAssistant, ModelError> {
+        let rref = payload
+            .get("response_ref")
+            .and_then(Json::as_str)
+            .unwrap_or_default();
+        let bytes = blobs(rref).ok_or_else(|| {
+            ModelError::new(
+                ModelErrorClass::MalformedHistory,
+                format!("transcript_render.{leg}: response_ref `{rref}` unresolved"),
+            )
+        })?;
+        let doc =
+            hharness_wire::json::parse_provider(&String::from_utf8_lossy(&bytes)).map_err(|e| {
+                ModelError::new(
+                    ModelErrorClass::MalformedHistory,
+                    format!("transcript_render.{leg}: blob not JSON ({e})"),
+                )
+            })?;
+        Ok(fold_assistant_frames(&doc))
+    }
+
+    /// `replay_assistant_msg(rec, calls)` — render one recorded
+    /// assistant turn under the declared `transcript_render` members
+    /// (chat-completions shape; Messages-family declarations refuse at
+    /// arm). `calls` is the already-rendered `(id, name, args)` triple.
+    fn replay_assistant_msg(
+        &self,
+        rec: &RecordedAssistant,
+        calls: &[(String, String, String)],
+    ) -> Json {
+        let tr = &self.lane.transcript_render;
+        let mut extra = BTreeMap::new();
+        if tr.replay_reasoning && !rec.reasoning.is_empty() {
+            extra.insert("reasoning_content".into(), Json::str(rec.reasoning.clone()));
+        }
+        for name in &tr.extra_members {
+            if let Some(v) = rec.extra.get(name) {
+                extra.insert(name.clone(), v.clone());
+            }
+        }
+        let content = if tr.replay_content {
+            Some(rec.text.as_str())
+        } else {
+            None
+        };
+        hharness_gateway::openai::assistant_msg(content, &extra, calls)
     }
 
     /// The transcript render — instruction + recorded rounds from the
@@ -720,7 +1139,45 @@ impl GatewayModel {
     fn transcript(
         &self,
         prefix: &[EventEnvelope],
+        blobs: &dyn Fn(&str) -> Option<Vec<u8>>,
     ) -> Result<(Vec<Json>, Option<String>), ModelError> {
+        let tr = &self.lane.transcript_render;
+        // The format-error set — `model_call_id`s whose completed turn
+        // was refused at interpretation (`format_error_turn: omit`
+        // drops both the kernel note and the offending assistant turn).
+        let refused_mcs: BTreeSet<String> = if tr.format_error_omit {
+            prefix
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e.class.as_str(),
+                        "model.format_failure"
+                            | "model.call.refused"
+                            | "control.output.rejected"
+                            | "action.tool.call.refused"
+                    )
+                })
+                .filter_map(|e| {
+                    e.scope
+                        .model_call_id
+                        .clone()
+                        .or_else(|| {
+                            e.payload
+                                .get("model_call_id")
+                                .and_then(Json::as_str)
+                                .map(str::to_string)
+                        })
+                        .or_else(|| {
+                            e.scope
+                                .tool_call_id
+                                .as_deref()
+                                .and_then(|t| t.rsplit_once(".tc").map(|(m, _)| m.to_string()))
+                        })
+                })
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
         let selected = selected_view(prefix)?;
         let mut messages = Vec::new();
         if let Some((cap, args)) = &self.invoke {
@@ -780,23 +1237,95 @@ impl GatewayModel {
                             .collect(),
                         _ => Vec::new(),
                     };
-                    if calls.is_empty() {
+                    // `format_error_turn: omit` — the refused call's
+                    // assistant turn is dropped with its note.
+                    let mc_id = p
+                        .get("model_call_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default();
+                    if tr.format_error_omit && refused_mcs.contains(mc_id) {
                         continue;
                     }
+                    if calls.is_empty() {
+                        // `text_only_turn: replay` renders the recorded
+                        // assistant message (blob-sourced bytes only).
+                        if tr.text_only_replay {
+                            let rec = self.recorded_assistant(p, blobs, "text_only_turn")?;
+                            messages.push(self.replay_assistant_msg(&rec, &[]));
+                        }
+                        continue;
+                    }
+                    // The declared replay: blob-sourced content/
+                    // reasoning/extra members, provider ids, verbatim
+                    // args — every member opt-in (REQ-XE-108).
+                    let rec = if tr.requires_blob() {
+                        Some(self.recorded_assistant(p, blobs, "assistant replay")?)
+                    } else {
+                        None
+                    };
                     // The wire call id is the family's render of the
                     // kernel id (Messages lowers to its `[a-zA-Z0-9_-]`
                     // alphabet); the result pairs on the *wire* id.
-                    let wire_calls: Vec<(String, String, String)> = calls
-                        .iter()
-                        .map(|(id, surface, args)| {
-                            (
-                                self.wire_call_id(id),
-                                hharness_gateway::openai::wire_name(surface),
-                                args.clone(),
-                            )
-                        })
-                        .collect();
-                    messages.push(self.assistant_tool_msg(&wire_calls));
+                    // Under the declared replay (`requires_blob`), ids
+                    // and argument bytes come from the recorded frames.
+                    let wire_calls: Vec<(String, String, String)> = match &rec {
+                        Some(rec) => {
+                            if rec.calls.len() != calls.len() {
+                                return Err(ModelError::new(
+                                    ModelErrorClass::MalformedHistory,
+                                    format!(
+                                        "transcript_render: recorded {} tool blocks vs {} row calls",
+                                        rec.calls.len(),
+                                        calls.len()
+                                    ),
+                                ));
+                            }
+                            calls
+                                .iter()
+                                .zip(&rec.calls)
+                                .map(|((id, surface, args), rc)| {
+                                    let wid = if tr.provider_ids {
+                                        rc.provider_id.clone().ok_or_else(|| {
+                                            ModelError::new(
+                                                ModelErrorClass::MalformedHistory,
+                                                "transcript_render: provider id unrecorded"
+                                                    .to_string(),
+                                            )
+                                        })?
+                                    } else {
+                                        self.wire_call_id(id)
+                                    };
+                                    Ok((
+                                        wid,
+                                        if tr.verbatim_args || tr.provider_ids {
+                                            rc.name.clone()
+                                        } else {
+                                            hharness_gateway::openai::wire_name(surface)
+                                        },
+                                        if tr.verbatim_args {
+                                            rc.args.clone()
+                                        } else {
+                                            args.clone()
+                                        },
+                                    ))
+                                })
+                                .collect::<Result<Vec<_>, ModelError>>()?
+                        }
+                        None => calls
+                            .iter()
+                            .map(|(id, surface, args)| {
+                                (
+                                    self.wire_call_id(id),
+                                    hharness_gateway::openai::wire_name(surface),
+                                    args.clone(),
+                                )
+                            })
+                            .collect(),
+                    };
+                    match &rec {
+                        Some(rec) => messages.push(self.replay_assistant_msg(rec, &wire_calls)),
+                        None => messages.push(self.assistant_tool_msg(&wire_calls)),
+                    }
                     for ((id, _, _), (wid, _, _)) in calls.iter().zip(&wire_calls) {
                         let obs = observations.remove(id).unwrap_or_default();
                         if obs.is_empty() {
@@ -827,11 +1356,17 @@ impl GatewayModel {
                         &format!("kernel_note: the prior model call failed ({class})"),
                     ));
                 }
-                "model.format_failure" | "model.call.refused" => {
+                // The kernel-note leg keeps the pre-R6.34 class set —
+                // `format_error_turn: omit` drops the offending
+                // assistant turn (via `refused_mcs`, which reads the
+                // wider refusal classes) but the default path renders
+                // notes for the same two classes it always has.
+                "model.format_failure" | "model.call.refused" if !tr.format_error_omit => {
                     let kind = e
                         .payload
                         .get("kind")
                         .or_else(|| e.payload.get("reason"))
+                        .or_else(|| e.payload.get("failure_class"))
                         .and_then(Json::as_str)
                         .unwrap_or("declined");
                     messages.push(self.text_msg(
@@ -905,8 +1440,9 @@ impl GatewayModel {
         &mut self,
         mc: &str,
         prefix: &[EventEnvelope],
+        blobs: &dyn Fn(&str) -> Option<Vec<u8>>,
     ) -> Result<PendingPlan, ModelError> {
-        let (messages, view_hash) = self.transcript(prefix)?;
+        let (messages, view_hash) = self.transcript(prefix, blobs)?;
         let (tools, wire_to_surface) = self.render_tools()?;
         let mut params = self.lane.provider_params.clone();
         // The family's own augmentations: chat-completions requests
@@ -914,7 +1450,10 @@ impl GatewayModel {
         // grammar expects); Messages usage rides `message_start`/
         // `message_delta` natively — `stream_options` is outside the
         // Messages `plan_schema` and never inserted.
-        if self.family == Family::ChatCompletions && !params.contains_key("stream_options") {
+        if self.lane.transport == PortTransport::Stream
+            && self.family == Family::ChatCompletions
+            && !params.contains_key("stream_options")
+        {
             params.insert(
                 "stream_options".into(),
                 Json::obj([("include_usage", Json::Bool(true))]),
@@ -929,7 +1468,7 @@ impl GatewayModel {
             body,
             provider_params: params,
             capabilities: Capabilities {
-                streaming: true,
+                streaming: self.lane.transport == PortTransport::Stream,
                 tool_use: !tools.is_empty(),
                 vision: None,
                 deferred: None,
@@ -1168,6 +1707,13 @@ impl GatewayModel {
         }
     }
 
+    /// The staged plan's `body` member for `mc` — the bytes the wire
+    /// will carry (the golden/assertion seam; `None` before
+    /// `requested_members` or after `call` consumed it).
+    pub fn pending_body(&self, mc: &str) -> Option<&Json> {
+        self.pending.get(mc).map(|p| &p.body)
+    }
+
     /// The wire→surface resolve (the call's own map).
     fn pending_wire_surface(&self, pending: &PendingPlan, wire: &str) -> Option<String> {
         pending.wire_to_surface.get(wire).cloned()
@@ -1296,6 +1842,120 @@ impl GatewayModel {
     }
 }
 
+/// `RecordedAssistant` — one assistant turn's verbatim record folded
+/// from the durable `hh.model_io/1` frames (R6.34; REQ-XE-108).
+struct RecordedAssistant {
+    /// Concatenated `text_delta` bytes.
+    text: String,
+    /// Concatenated `reasoning_delta`/`thinking_delta` bytes.
+    reasoning: String,
+    /// One entry per recorded tool block, in frame order:
+    /// `(provider_call_id, wire name, verbatim arguments)`.
+    calls: Vec<RecordedCall>,
+    /// `stream_end.data.message_extra` — provider message members the
+    /// translator preserved verbatim (the `extra_members` source).
+    extra: BTreeMap<String, Json>,
+}
+
+/// One recorded tool call's verbatim frame content.
+struct RecordedCall {
+    /// `content_block.id` — the provider's call id (G19).
+    provider_id: Option<String>,
+    /// `content_block.name` — the provider's wire spelling.
+    name: String,
+    /// Concatenated `input_json_delta`/`json_delta` bytes (G20).
+    args: String,
+}
+
+/// `fold_assistant_frames(doc)` — fold a `hh.model_io/1` document's
+/// `frames[]` into the assistant turn's verbatim record: `block_start`
+/// opens the call (`content_block{id?, name?}`), `block_delta`
+/// accumulates text/reasoning/argument bytes per index, and
+/// `stream_end.data.message_extra` carries the preserved message-level
+/// members. Frames are the translator's normalized vocabulary — the
+/// same data `grammar::decode_frame` reads (one decoder, CC1).
+fn fold_assistant_frames(doc: &Json) -> RecordedAssistant {
+    let mut rec = RecordedAssistant {
+        text: String::new(),
+        reasoning: String::new(),
+        calls: Vec::new(),
+        extra: BTreeMap::new(),
+    };
+    let mut open: BTreeMap<i64, usize> = BTreeMap::new();
+    let frames = match doc.get("frames") {
+        Some(Json::Arr(f)) => f,
+        _ => return rec,
+    };
+    for fr in frames {
+        let kind = fr.get("kind").and_then(Json::as_str).unwrap_or_default();
+        let data = fr.get("data").cloned().unwrap_or(Json::Null);
+        match kind {
+            "block_start" => {
+                let index = data.get("index").and_then(Json::as_int).unwrap_or(0);
+                let block = data.get("content_block").cloned().unwrap_or(Json::Null);
+                let btype = block.get("type").and_then(Json::as_str).unwrap_or_default();
+                if matches!(btype, "tool_call" | "tool_use") {
+                    rec.calls.push(RecordedCall {
+                        provider_id: block.get("id").and_then(Json::as_str).map(str::to_string),
+                        name: block
+                            .get("name")
+                            .and_then(Json::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        args: String::new(),
+                    });
+                    open.insert(index, rec.calls.len() - 1);
+                }
+            }
+            "block_delta" => {
+                let index = data.get("index").and_then(Json::as_int).unwrap_or(0);
+                let delta = data.get("delta").cloned().unwrap_or(Json::Null);
+                let dtype = delta
+                    .get("type")
+                    .and_then(Json::as_str)
+                    .unwrap_or("text_delta");
+                match dtype {
+                    "text_delta" => {
+                        if let Some(t) = delta.get("text").and_then(Json::as_str) {
+                            rec.text.push_str(t);
+                        }
+                    }
+                    "thinking_delta" | "reasoning_delta" => {
+                        if let Some(t) = delta
+                            .get("thinking")
+                            .or_else(|| delta.get("text"))
+                            .and_then(Json::as_str)
+                        {
+                            rec.reasoning.push_str(t);
+                        }
+                    }
+                    "input_json_delta" | "json_delta" => {
+                        if let (Some(&ci), Some(p)) = (
+                            open.get(&index),
+                            delta
+                                .get("partial_json")
+                                .or_else(|| delta.get("patch"))
+                                .and_then(Json::as_str),
+                        ) {
+                            rec.calls[ci].args.push_str(p);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            "stream_end" => {
+                if let Some(Json::Obj(extra)) = data.get("message_extra") {
+                    for (k, v) in extra {
+                        rec.extra.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    rec
+}
+
 /// `OneShot` — a caller-owned single call's answer (R4.7b): the decoded
 /// message text, the normalized usage record (the same shape the
 /// `model.call.completed` `usage` member carries), the provider's raw
@@ -1331,7 +1991,7 @@ impl GatewayModel {
     /// `Err` only when the plan can't even stage — a refused/failed wire
     /// leg answers inside `outcome` typed, never a fabricated text.
     pub fn one_shot(&mut self, mc: &str) -> OneShot {
-        let _ = self.requested_members(mc, &Json::Null, &[]);
+        let _ = self.requested_members(mc, &Json::Null, &[], &|_: &str| None);
         let outcome = self.call(mc, &Json::Null);
         let members = self.terminal_members(mc);
         let model_io = self.take_model_io();
@@ -1376,8 +2036,9 @@ impl ModelPort for GatewayModel {
         mc: &str,
         _request: &Json,
         prefix: &[EventEnvelope],
+        blobs: &dyn Fn(&str) -> Option<Vec<u8>>,
     ) -> Vec<(&'static str, Json)> {
-        match self.build_plan(mc, prefix) {
+        match self.build_plan(mc, prefix, blobs) {
             Ok(p) => {
                 let plan_hash = p.plan.content_id();
                 let estimate = codec::estimate_tokens(&self.dialect, &p.plan);

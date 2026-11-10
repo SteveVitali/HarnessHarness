@@ -56,11 +56,18 @@ pub trait ModelPort {
     /// lane's default `[]` keeps the row byte-identical.
     /// `prefix` is the durable ledger prefix the port's plan render reads
     /// (transcript reconstruction reads the same rows the next call sees).
+    /// `blobs` resolves an `idp/1` content id (`response_ref`) to blob
+    /// bytes through the sink's blob-read seam (R6.34; REQ-XE-108 — the
+    /// transcript render's replayed bytes come from the durable
+    /// `hh.model_io/1` blobs, never re-synthesized; a `None` answer is
+    /// the seam-less sink's honest answer, and the port refuses a
+    /// declared replay member it cannot serve rather than fabricating).
     fn requested_members(
         &mut self,
         _model_call_id: &str,
         _request: &Json,
         _prefix: &[EventEnvelope],
+        _blobs: &dyn Fn(&str) -> Option<Vec<u8>>,
     ) -> Vec<(&'static str, Json)> {
         Vec::new()
     }
@@ -425,6 +432,16 @@ pub trait LedgerSink {
     /// never run; the driver falls back to `dispatch` and the
     /// host/fixture port mode is preserved byte-identical.
     fn dispatch_seam(&mut self) -> Option<DispatchSeam<'_>> {
+        None
+    }
+    /// The blob-read seam (R6.34; REQ-XE-108): resolves an `idp/1`
+    /// content id to the blob's bytes through the run's store — the
+    /// model port's `transcript_render` replay reads the durable
+    /// `hh.model_io/1` records, never a second byte store (X-04).
+    /// `None` (the default — replay/arm sinks and recorders without a
+    /// live store) means a declared replay member cannot be served; the
+    /// port answers the typed plan refusal, never a fabrication.
+    fn blob_read(&self, _id: &str) -> Option<Vec<u8>> {
         None
     }
 }
@@ -2850,7 +2867,8 @@ impl<S: ControlStrategy> Driver<S> {
         // R4.5b — the port's own plan facts (`plan_hash`/`token_estimate`/
         // `endpoint_ref`/… for a live lane; `[]` for the scripted lane —
         // the row's byte shape is unchanged there).
-        for m in model.requested_members(&mc, request, sink.prefix()) {
+        let blob_read = |id: &str| sink.blob_read(id);
+        for m in model.requested_members(&mc, request, sink.prefix(), &blob_read) {
             requested_members.push(m);
         }
         self.append(

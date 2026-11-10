@@ -97,6 +97,48 @@ pub fn assistant_tool_call_msg(content: Option<&str>, calls: &[(String, String, 
     ])
 }
 
+/// `assistant_msg(content, extra, calls)` — the prior assistant turn under
+/// the lane's declared `transcript_render.assistant_replay` (R6.34;
+/// REQ-XE-108): `content` is the recorded text verbatim (`None` ⇒ `null`),
+/// `extra` carries the provider message members re-sent verbatim
+/// (`reasoning_content` plus the declared `extra_members`), `calls` the
+/// `(id, name, arguments)` triples — ids and argument bytes are whatever the
+/// declared `id_normalisation`/`tool_arguments` produced upstream (this
+/// renderer moves them, never re-derives). An empty `calls` omits the
+/// `tool_calls` member — the `text_only_turn` replay shape.
+pub fn assistant_msg(
+    content: Option<&str>,
+    extra: &std::collections::BTreeMap<String, Json>,
+    calls: &[(String, String, String)],
+) -> Json {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert(
+        "content".into(),
+        content.map(Json::str).unwrap_or(Json::Null),
+    );
+    for (k, v) in extra {
+        m.insert(k.clone(), v.clone());
+    }
+    m.insert("role".into(), Json::str("assistant"));
+    if !calls.is_empty() {
+        let tcs: Vec<Json> = calls
+            .iter()
+            .map(|(id, name, args)| {
+                let mut f = std::collections::BTreeMap::new();
+                f.insert("name".into(), Json::str(name.clone()));
+                f.insert("arguments".into(), Json::str(args.clone()));
+                Json::obj([
+                    ("id", Json::str(id.clone())),
+                    ("type", Json::str("function")),
+                    ("function", Json::Obj(f)),
+                ])
+            })
+            .collect();
+        m.insert("tool_calls".into(), Json::Arr(tcs));
+    }
+    Json::Obj(m)
+}
+
 /// `tool_result_msg(call_id, content)` — the observation the kernel recorded
 /// for one tool call, rendered `role:"tool"`. The family's `content` member
 /// is a *string* on the wire (OpenAI-compat endpoints 400 on an object) —
@@ -267,6 +309,16 @@ pub struct ChunkTranslator {
     served_model: Option<String>,
     /// `true` after [`Self::finish`] emitted `stream_end`.
     done: bool,
+    /// The allocated reasoning-block index (R6.34 — `reasoning_content`
+    /// deltas translate like the Messages family's thinking deltas, so
+    /// the durable `hh.model_io/1` blob carries them for replay).
+    reasoning_index: Option<u32>,
+    /// Message-level members outside the normalized set
+    /// (`role`/`content`/`tool_calls`/`reasoning_content`), preserved
+    /// verbatim — emitted on the terminal `stream_end.data.message_extra`
+    /// (the grammar ignores it; the blob keeps it for
+    /// `transcript_render.assistant_replay.extra_members`).
+    extra: std::collections::BTreeMap<String, Json>,
 }
 
 impl ChunkTranslator {
@@ -387,6 +439,36 @@ impl ChunkTranslator {
                         );
                     }
                 }
+                // Reasoning deltas — the chat-completions spelling
+                // `reasoning_content` translates into the shared
+                // `reasoning_delta` frame vocabulary (R6.34; the
+                // Messages family's `thinking_delta` rides the same
+                // leg), so the bytes stay durable for replay.
+                if let Some(text) = delta.get("reasoning_content").and_then(Json::as_str) {
+                    if !text.is_empty() {
+                        let idx = match self.reasoning_index {
+                            Some(i) => i,
+                            None => {
+                                let i = self.alloc();
+                                self.reasoning_index = Some(i);
+                                self.open_block(
+                                    i,
+                                    Json::obj([("type", Json::str("reasoning"))]),
+                                    &mut out,
+                                );
+                                i
+                            }
+                        };
+                        self.delta(
+                            idx,
+                            Json::obj([
+                                ("type", Json::str("reasoning_delta")),
+                                ("thinking", Json::str(text)),
+                            ]),
+                            &mut out,
+                        );
+                    }
+                }
                 // Tool-call deltas — `{index, id?, function:{name?, arguments?}}`.
                 if let Some(Json::Arr(tcs)) = delta.get("tool_calls") {
                     for tc in tcs {
@@ -433,6 +515,19 @@ impl ChunkTranslator {
                     // (grammar G4 refuses frames after `stream_end`).
                     self.pending_stop = Some(fr.to_string());
                 }
+                // Extra message-level members — preserved verbatim for
+                // the transcript render's `assistant_replay.extra_members`
+                // (R6.34; REQ-XE-108). Last-write-wins across chunks.
+                if let Json::Obj(dm) = &delta {
+                    for (k, v) in dm {
+                        if !matches!(
+                            k.as_str(),
+                            "role" | "content" | "tool_calls" | "reasoning_content"
+                        ) {
+                            self.extra.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
             }
         }
         Ok(out)
@@ -456,6 +551,9 @@ impl ChunkTranslator {
         }
         if let Some(u) = &self.usage {
             d.insert("usage".into(), u.clone());
+        }
+        if !self.extra.is_empty() {
+            d.insert("message_extra".into(), Json::Obj(self.extra.clone()));
         }
         out.push(WireFrame {
             kind: "stream_end".to_string(),
@@ -498,6 +596,21 @@ pub fn completion_frames(doc: &Json) -> Result<Vec<WireFrame>, ModelError> {
         let mut delta = std::collections::BTreeMap::new();
         if let Some(t) = msg.get("content") {
             delta.insert("content".into(), t.clone());
+        }
+        if let Some(r) = msg.get("reasoning_content") {
+            delta.insert("reasoning_content".into(), r.clone());
+        }
+        // Message members outside the normalized set → `message_extra`
+        // on the terminal frame (the replay surface's verbatim source).
+        if let Json::Obj(mm) = &msg {
+            for (k, v) in mm {
+                if !matches!(
+                    k.as_str(),
+                    "role" | "content" | "tool_calls" | "reasoning_content"
+                ) {
+                    tr.extra.insert(k.clone(), v.clone());
+                }
+            }
         }
         if let Some(Json::Arr(tcs)) = msg.get("tool_calls") {
             // chat.completion tool_calls are complete — render each as a

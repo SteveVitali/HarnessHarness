@@ -1,0 +1,1 @@
+{"body":{"messages":[{"content":"do the thing","role":"user"}],"model":"fixture-model"},"declaration":"transport=non_stream, stream_member=omit, tool_choice=omit","provenance":"hand_derived","schema":"hh-r6.34-request-golden/1"}

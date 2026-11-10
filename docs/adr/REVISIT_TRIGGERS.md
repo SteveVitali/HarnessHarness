@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_223 ADRs: 171 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_226 ADRs: 174 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -207,6 +207,9 @@ _223 ADRs: 171 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0437 | Re-open if (a) a second upload tool or a public dataset is admitted (the single-tool admission and `private`-only refusal must be re-cut); (b) `hf`'s argv surface changes such that `upload`/`download` or `HF_TOKEN` semantics diverge from the pinned version; (c) Q-X59 resolves against pre-authorized purge — the remediation order or its record shape may then tighten; or (d) a W-skeleton measures a load path that cannot carry base-blob re-pull by digest (RD-13's UNVERIFIED terms). |
 | ADR-0438 | Revisit when GATE-G23 returns its decision (this proposal is admitted, refused, or amended there), or when a later-pass tranche proposes a cross-tranche pooled estimand (its contrasts form their own family per F8). |
 | ADR-0439 | Revisit when GATE-G23 returns, when Q-X57 is answered (FP-6's pending ruling firms or revises member 2), or when a later pass supersedes the first-pass design (each member's scope is first-pass only). |
+| ADR-0440 | Reopen if (a) the compiled `ModelSurface` proves inexpressible for a governing REQ-XE-* row (the `UnexpressibleSurface` route — a profile or spec gap, not a renderer fork), (b) the `hh.model_io/1` frame vocabulary cannot durably carry a replay input a declared `transcript_render` member needs (an amendment candidate, never a second byte store), or (c) GATE-G24 refuses AR-24 and the stage-one E2 chain is re-planned. |
+| ADR-0441 | Reopen if (a) the E2-T8 detach/reattach spike fails and rung (2) cannot be verified — the rung-(3) amendment then goes to the operator before any binding-(a) work; (b) the AR-25 `open_session.exec` member needs shape changes at schema review (regeneration, never a patch); or (c) the helper's merged-stdio or in-cell-kill semantics prove unimplementable against the admitted cell backends, requiring a scoped amendment. |
+| ADR-0442 | Reopen if (a) a pinned O template requires a construct the subset cannot express and the extension changes the engine's refusal contract; (b) `python_jinja_tojson` goldens diverge from O's recorded bytes (the UNVERIFIED caveat resolves against admission); or (c) the crate home proves wrong at implementation (a second candidate is `hharness-context`, chosen only through a new record). |
 
 ## Fired-and-answered triggers (BL-48)
 

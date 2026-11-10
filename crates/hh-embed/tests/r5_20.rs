@@ -609,7 +609,7 @@ fn drive(
         vec![],
     )
     .unwrap();
-    let members = port.requested_members("mc.1", &Json::Null, prefix);
+    let members = port.requested_members("mc.1", &Json::Null, prefix, &|_: &str| None);
     let outcome = port.call("mc.1", &Json::Null);
     assert!(
         !matches!(
@@ -1173,7 +1173,12 @@ fn ac2_label_capability_and_mutated_bytes_fail() {
     let p = fake_provider(sse_ok("fixture-model"));
     let mut port =
         GatewayModel::new(lane(&p.endpoint), "do the thing".into(), None, vec![]).unwrap();
-    let ms_bad = port.requested_members("mc.1", &Json::Null, &prefix_of(&tampered.to_json()));
+    let ms_bad = port.requested_members(
+        "mc.1",
+        &Json::Null,
+        &prefix_of(&tampered.to_json()),
+        &|_: &str| None,
+    );
     assert!(
         member_of(&ms_bad, "plan_error").is_some(),
         "diverged label refused"
@@ -1192,7 +1197,12 @@ fn ac2_label_capability_and_mutated_bytes_fail() {
     let p2 = fake_provider(sse_ok("fixture-model"));
     let mut port2 =
         GatewayModel::new(lane(&p2.endpoint), "do the thing".into(), None, vec![]).unwrap();
-    let ms2 = port2.requested_members("mc.1", &Json::Null, &prefix_of(&unknown.to_json()));
+    let ms2 = port2.requested_members(
+        "mc.1",
+        &Json::Null,
+        &prefix_of(&unknown.to_json()),
+        &|_: &str| None,
+    );
     assert!(
         member_of(&ms2, "plan_error").is_some(),
         "unknown variant refused"

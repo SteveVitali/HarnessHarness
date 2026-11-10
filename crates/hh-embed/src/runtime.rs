@@ -171,6 +171,21 @@ impl LedgerSink for KernelSink<'_> {
             envs: self.envs.as_deref_mut(),
         })
     }
+    /// R6.34 (REQ-XE-108) — the blob-read seam the model port's
+    /// `transcript_render` replay consumes: `idp/1` id → the durable
+    /// `hh.model_io/1` blob's bytes through this run's store.
+    fn blob_read(&self, id: &str) -> Option<Vec<u8>> {
+        let pid = hharness_identity::idp::parse_id(id).ok()?;
+        self.store
+            .get_blob(&hharness_identity::idp::ContentAddress {
+                idp: "idp/1",
+                algorithm: "sha256",
+                digest: pid.digest_hex,
+                media_type: String::new(),
+                size: 0,
+            })
+            .ok()
+    }
 }
 
 /// The `hh.submit` completion capability's surface id — the one
