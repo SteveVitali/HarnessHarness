@@ -60,6 +60,7 @@ pub mod profile;
 pub mod profile_test;
 pub mod regex;
 pub mod relower;
+pub mod result_render;
 pub mod retrieval;
 pub mod schema;
 pub mod seal;

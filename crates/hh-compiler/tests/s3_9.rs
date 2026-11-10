@@ -282,6 +282,7 @@ fn ac_e2_7_all_surface_failures_distinguishable() {
     let spec = ErrorFormatSpec {
         renderings,
         distinguishability: Distinguishability::Unchecked,
+        classes: None,
     };
     assert_eq!(check_distinguishable(&spec), Distinguishability::Verified);
 
@@ -294,6 +295,7 @@ fn ac_e2_7_all_surface_failures_distinguishable() {
     let spec = ErrorFormatSpec {
         renderings: dup,
         distinguishability: Distinguishability::Unchecked,
+        classes: None,
     };
     assert_eq!(check_distinguishable(&spec), Distinguishability::Failed);
 }

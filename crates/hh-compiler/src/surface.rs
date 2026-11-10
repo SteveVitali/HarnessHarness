@@ -484,7 +484,8 @@ impl std::error::Error for RenderSpecParseError {}
 /// surface record written by `result_render` rules. E6 reads
 /// `validator_reads ⊆ retained_fields` for every Validator bound to the
 /// capability's results (the check itself is the C0/S3 row; the record lands
-/// here).
+/// here). `renderer` carries the R6.36 typed renderers (REQ-XE-110; AR-23)
+/// — absent-not-null: a spec declaring none is byte-identical (CC8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResultRenderSpec {
     /// The mode (`full | truncate | concise | offload` — C1 lands the last
@@ -496,6 +497,185 @@ pub struct ResultRenderSpec {
     pub declared_loss: Option<Vec<String>>,
     /// The fields bound validators read — E6's static inclusion set.
     pub validator_reads: Vec<String>,
+    /// The typed pure renderer (`json_head_tail@1` / `text_head_tail@1`) —
+    /// the sweep's typed-parameter constants (G8), never string edits.
+    pub renderer: Option<ResultRenderer>,
+}
+
+// ── the typed result renderers (ADR-0442 D2; REQ-XE-110; design 38 G8) ──
+
+/// `unit ∈ {chars, utf8_bytes}` — the head/tail measure. `chars` counts
+/// Unicode scalar values (mini's Python `str` length — design 38 Part 4);
+/// `utf8_bytes` counts UTF-8 encoded bytes (Terminus's `max_bytes`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum HeadTailUnit {
+    /// Unicode scalar values (Rust `chars` = Python code points for
+    /// non-surrogate text).
+    Chars,
+    /// UTF-8 bytes (`s.len()`).
+    Utf8Bytes,
+}
+
+impl HeadTailUnit {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HeadTailUnit::Chars => "chars",
+            HeadTailUnit::Utf8Bytes => "utf8_bytes",
+        }
+    }
+
+    /// Parse the closed sum; unknown spellings are refused.
+    pub fn parse(s: &str) -> Option<HeadTailUnit> {
+        match s {
+            "chars" => Some(HeadTailUnit::Chars),
+            "utf8_bytes" => Some(HeadTailUnit::Utf8Bytes),
+            _ => None,
+        }
+    }
+
+    /// `measure(s)` — the length in this unit.
+    pub fn measure(self, s: &str) -> u64 {
+        match self {
+            HeadTailUnit::Chars => s.chars().count() as u64,
+            HeadTailUnit::Utf8Bytes => s.len() as u64,
+        }
+    }
+
+    /// `head(s, n)` — the first `n` units. Under `utf8_bytes` a
+    /// mid-codepoint cut decodes lossily (Python's `errors="replace"`
+    /// — each malformed byte renders `U+FFFD`, never a panic and never
+    /// silent data loss past the boundary).
+    pub fn head(self, s: &str, n: u64) -> String {
+        match self {
+            HeadTailUnit::Chars => s.chars().take(n as usize).collect(),
+            HeadTailUnit::Utf8Bytes => {
+                let b = s.as_bytes();
+                String::from_utf8_lossy(&b[..(n as usize).min(b.len())]).into_owned()
+            }
+        }
+    }
+
+    /// `tail(s, n)` — the last `n` units (same lossy-boundary rule).
+    pub fn tail(self, s: &str, n: u64) -> String {
+        match self {
+            HeadTailUnit::Chars => {
+                let cs: Vec<char> = s.chars().collect();
+                cs.iter()
+                    .skip(cs.len().saturating_sub(n as usize))
+                    .collect()
+            }
+            HeadTailUnit::Utf8Bytes => {
+                let b = s.as_bytes();
+                String::from_utf8_lossy(&b[b.len().saturating_sub(n as usize)..]).into_owned()
+            }
+        }
+    }
+}
+
+/// `json_style` — the value serializer `json_head_tail@1` applies to
+/// non-numeric members (X-08: `python_jinja_tojson` is a declared
+/// spelling admitted for goldens that match O's recorded bytes;
+/// hand-derived goldens are `provenance: hand_derived`, never evidence).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultJsonStyle {
+    /// Python `json.dumps` under Jinja's `tojson` policy (`sort_keys`,
+    /// `ensure_ascii`, the htmlsafe `<>&'` escapes).
+    PythonJinjaTojson,
+    /// The workspace canonical JSON (`to_canonical_string`).
+    Canonical,
+}
+
+impl ResultJsonStyle {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ResultJsonStyle::PythonJinjaTojson => "python_jinja_tojson",
+            ResultJsonStyle::Canonical => "canonical",
+        }
+    }
+
+    /// Parse the closed sum; unknown spellings are refused.
+    pub fn parse(s: &str) -> Option<ResultJsonStyle> {
+        match s {
+            "python_jinja_tojson" => Some(ResultJsonStyle::PythonJinjaTojson),
+            "canonical" => Some(ResultJsonStyle::Canonical),
+            _ => None,
+        }
+    }
+}
+
+/// One `json_head_tail@1.fields[]` member — a result-record field the
+/// renderer emits, in declaration order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResultRenderField {
+    /// The result member's name.
+    pub name: String,
+    /// Optional — an absent input member omits the line entirely (never
+    /// `null`). Optional members render inline (`, "name": v`), required
+    /// members newline-separated (mini's template shape).
+    pub optional: bool,
+    /// The head/tail truncation subject — exactly one per renderer.
+    pub truncate: bool,
+    /// The `warning` literal the truncated expansion emits after
+    /// `elided_chars` (`None` ⇒ no warning member).
+    pub warning: Option<String>,
+}
+
+/// `ResultRenderer` — the typed pure renderers AR-23 admits (REQ-XE-110).
+/// `json_head_tail@1` renders a result record as a pretty JSON object
+/// (mini's observation shape — head/tail under `threshold`, member
+/// descriptions of the `elided_chars`/`warning` pair included);
+/// `text_head_tail@1` renders the output string through head+tail
+/// elision with a `marker` `hh-tmpl/1` `Text` leaf (Terminus's shape).
+/// Every constant is a typed parameter — the sweep varies members,
+/// never template strings.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResultRenderer {
+    /// `json_head_tail@1{threshold, head, tail, unit, fields, json_style}`.
+    JsonHeadTail {
+        /// `measure(output) >= threshold` truncates (mini's `<` test).
+        threshold: u64,
+        /// Head units kept.
+        head: u64,
+        /// Tail units kept.
+        tail: u64,
+        /// The measure.
+        unit: HeadTailUnit,
+        /// The emitted fields, in order; exactly one `truncate`.
+        fields: Vec<ResultRenderField>,
+        /// The member serializer.
+        json_style: ResultJsonStyle,
+    },
+    /// `text_head_tail@1{threshold, head, tail, unit, marker}`.
+    TextHeadTail {
+        /// `measure(output) >= threshold` elides.
+        threshold: u64,
+        /// Head units kept.
+        head: u64,
+        /// Tail units kept.
+        tail: u64,
+        /// The measure.
+        unit: HeadTailUnit,
+        /// The elision marker — a `hh-tmpl/1` `Text` leaf rendered with
+        /// `{threshold, head, tail, unit, omitted}` (the declared slot set).
+        marker: Text,
+    },
+}
+
+impl ResultRenderer {
+    /// The `kind` spelling the `result_renderer` member declares.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ResultRenderer::JsonHeadTail { .. } => "json_head_tail@1",
+            ResultRenderer::TextHeadTail { .. } => "text_head_tail@1",
+        }
+    }
+
+    /// The marker template's admitted slots (`text_head_tail@1`) —
+    /// the renderer fills every one at render time; a marker naming
+    /// any other variable is `UnexpressibleSurface` at compile.
+    pub const MARKER_SLOTS: [&'static str; 5] = ["threshold", "head", "tail", "unit", "omitted"];
 }
 
 /// The `check_render_admissible` refusals (§5d.2 E6; R2.8) — closed sum.
@@ -600,12 +780,126 @@ impl Distinguishability {
 /// rule's record. Renderings are `Text` leaves counted under `profile_prose`;
 /// E5 ranges over both failure sets (the `SurfaceFailure` spellings plus the
 /// capability `error_classes` — the map key domain is their union).
+/// `classes` carries the R6.36 typed format-failure renderings (REQ-XE-111;
+/// AR-23/G9) — absent-not-null (CC8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErrorFormatSpec {
     /// `failure-class spelling → Text` rendering (canonical order by key).
     pub renderings: BTreeMap<String, Text>,
     /// The E5 distinguishability verdict.
     pub distinguishability: Distinguishability,
+    /// The typed format-failure classes — model-facing `Text` renderings
+    /// for `model.format_failure` outcomes (the bad assistant turn is
+    /// omitted; the class's own leaf renders — G9).
+    pub classes: Option<FormatErrorClasses>,
+}
+
+/// `FormatFailureClass` — the typed format-failure classes (REQ-XE-111;
+/// design 38 G9): `no_tool_calls`, `args_unparseable{error}`,
+/// `unknown_tool{name}`, `missing_param{name}`,
+/// `output_truncated{finish_reason}`. The `{…}` members are the class's
+/// declared slot set — its `Text` leaf's `hh-tmpl/1` variables must be a
+/// subset at compile (strict undefined's compile half).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FormatFailureClass {
+    /// `no_tool_calls` — the response carried no tool calls.
+    NoToolCalls,
+    /// `args_unparseable{error}` — the call's argument bytes did not
+    /// parse; `{error}` carries the parse error text.
+    ArgsUnparseable,
+    /// `unknown_tool{name}` — the call named an unbound surface.
+    UnknownTool,
+    /// `missing_param{name}` — a required argument absent.
+    MissingParam,
+    /// `output_truncated{finish_reason}` — the response hit the output
+    /// limit before a call (`{finish_reason}` = `length`/`tool_calls`
+    /// family).
+    OutputTruncated,
+}
+
+impl FormatFailureClass {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FormatFailureClass::NoToolCalls => "no_tool_calls",
+            FormatFailureClass::ArgsUnparseable => "args_unparseable",
+            FormatFailureClass::UnknownTool => "unknown_tool",
+            FormatFailureClass::MissingParam => "missing_param",
+            FormatFailureClass::OutputTruncated => "output_truncated",
+        }
+    }
+
+    /// The declared slot set — the leaf's `hh-tmpl/1` variable bound.
+    pub fn slots(self) -> &'static [&'static str] {
+        match self {
+            FormatFailureClass::NoToolCalls => &[],
+            FormatFailureClass::ArgsUnparseable => &["error"],
+            FormatFailureClass::UnknownTool => &["name"],
+            FormatFailureClass::MissingParam => &["name"],
+            FormatFailureClass::OutputTruncated => &["finish_reason"],
+        }
+    }
+
+    /// Every member, in declaration order.
+    pub const ALL: [FormatFailureClass; 5] = [
+        FormatFailureClass::NoToolCalls,
+        FormatFailureClass::ArgsUnparseable,
+        FormatFailureClass::UnknownTool,
+        FormatFailureClass::MissingParam,
+        FormatFailureClass::OutputTruncated,
+    ];
+
+    /// Parse the closed sum; unknown spellings are refused.
+    pub fn parse(s: &str) -> Option<FormatFailureClass> {
+        FormatFailureClass::ALL
+            .iter()
+            .copied()
+            .find(|c| c.as_str() == s)
+    }
+}
+
+/// `format_failure_scope ∈ {per_call, batch}` — `batch` renders one
+/// failure for the whole response (mini's shape: the first malformed
+/// call raises the format error for the batch — REQ-XE-111's
+/// batch-scope declaration).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FormatFailureScope {
+    /// One rendering per malformed call.
+    #[default]
+    PerCall,
+    /// One rendering per response — the first malformed call's class.
+    Batch,
+}
+
+impl FormatFailureScope {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FormatFailureScope::PerCall => "per_call",
+            FormatFailureScope::Batch => "batch",
+        }
+    }
+
+    /// Parse the closed sum; unknown spellings are refused.
+    pub fn parse(s: &str) -> Option<FormatFailureScope> {
+        match s {
+            "per_call" => Some(FormatFailureScope::PerCall),
+            "batch" => Some(FormatFailureScope::Batch),
+            _ => None,
+        }
+    }
+}
+
+/// `FormatErrorClasses` — the `error_format` classes record (REQ-XE-111):
+/// `classes{class → Text}` renderings plus `format_failure_scope`.
+/// Each leaf's `hh-tmpl/1` variables are checked ⊆ the class's declared
+/// slots at compile.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormatErrorClasses {
+    /// `FormatFailureClass → Text` rendering (canonical order by class).
+    pub renderings: BTreeMap<FormatFailureClass, Text>,
+    /// The failure scope (`batch` ⇒ one render per response).
+    pub scope: FormatFailureScope,
 }
 
 /// The E5 static check (C0 half — AC-R-2.5.2-7's schema face): every
