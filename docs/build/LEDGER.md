@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.39
-lastCompleted:   R6.38
+nextTicket:      HUMAN-H14
+lastCompleted:   R6.39
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
