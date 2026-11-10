@@ -66,10 +66,10 @@ struct CarriedRuntime {
     /// in-process takeover carries it; a durable resume re-reads the
     /// manifest's `model_lane` member.
     model_lane: Option<crate::gateway_model::ModelLane>,
-    /// The compiled `ModelSurface` (R6.35) — an in-process takeover
-    /// carries it; a durable resume re-derives it by the same pure
-    /// compile over the persisted sealed definition.
-    model_surface: Option<hharness_compiler::seal::ModelSurface>,
+    /// The compiled `ModelSurface` + its `hh.submit` arm (R6.35/R6.36) —
+    /// an in-process takeover carries it; a durable resume re-derives it
+    /// by the same pure compile over the persisted sealed definition.
+    model_surface: Option<crate::gateway_model::ArmedSurface>,
 }
 
 /// The resumed-leaf arm product — the driver, its `leaf.arm` record,
@@ -498,14 +498,16 @@ impl EmbedService {
     /// path `lab.assembly.compile` runs — `targets: []` since the layout
     /// render consumes no target artefact). `Lowered` ⇒ the surface;
     /// `Deferred` or a compile failure is a typed refusal, never a
-    /// silent unarmed downgrade.
+    /// silent unarmed downgrade. R6.36 — the `hh.submit` `tools[]` arm
+    /// (REQ-XE-106) is read off the same sealed doc and rides the
+    /// returned [`ArmedSurface`].
     pub(crate) fn arm_model_surface(
         &self,
         sealed: &hharness_hir::document::SealedDefinition,
         role_table: &hharness_gateway::router::ModelRoleTable,
         compile_for_expired: bool,
         intent_ref: Option<String>,
-    ) -> Result<hharness_compiler::seal::ModelSurface, EmbedError> {
+    ) -> Result<crate::gateway_model::ArmedSurface, EmbedError> {
         let mut refs: Vec<String> = Vec::new();
         if let Some(b) = role_table.roles.get("primary") {
             refs.push(b.profile_ref.clone());
@@ -536,7 +538,14 @@ impl EmbedService {
             reason: format!("model_surface compile: {e:?}"),
         })?;
         match bundle.model_surface {
-            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => Ok(s),
+            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => {
+                Ok(crate::gateway_model::ArmedSurface {
+                    surface: s,
+                    completion_armed: crate::gateway_model::completion_surface_arm(
+                        &sealed.document,
+                    )?,
+                })
+            }
             _ => Err(EmbedError::Refused {
                 reason: "model_surface_unlowered".to_string(),
             }),
@@ -546,11 +555,12 @@ impl EmbedService {
     /// `resume_model_surface(manifest)` — durable-resume re-derivation:
     /// the persisted `model_lane` declares the arm and the persisted
     /// sealed definition + `pinned_profile_refs` recompile (the same
-    /// pure path — never a persisted copy).
+    /// pure path — never a persisted copy). The `hh.submit` arm re-reads
+    /// the same doc (`completion_surface_arm` — REQ-XE-106).
     pub(crate) fn resume_model_surface(
         &self,
         manifest: &hharness_ledger::manifest::RunManifest,
-    ) -> Result<Option<hharness_compiler::seal::ModelSurface>, EmbedError> {
+    ) -> Result<Option<crate::gateway_model::ArmedSurface>, EmbedError> {
         let armed = crate::gateway_model::ModelLane::from_manifest(manifest)
             .map(|l| l.model_surface)
             .unwrap_or(false);
@@ -586,7 +596,14 @@ impl EmbedService {
             reason: format!("model_surface compile: {e:?}"),
         })?;
         match bundle.model_surface {
-            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => Ok(Some(s)),
+            hharness_compiler::seal::ModelSurfaceState::Lowered(s) => {
+                Ok(Some(crate::gateway_model::ArmedSurface {
+                    surface: s,
+                    completion_armed: crate::gateway_model::completion_surface_arm(
+                        &sealed.document,
+                    )?,
+                }))
+            }
             _ => Err(EmbedError::Refused {
                 reason: "model_surface_unlowered".to_string(),
             }),
