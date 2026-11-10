@@ -28,7 +28,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-r6.33
+chainTip:        main
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
@@ -111,6 +111,7 @@ updatedAt:       2026-11-10T07:29Z
   reconcile re-sweeps lead tokens and machine-readable pending sets against the dated markers
   before reporting counts. Homed on **BL-41** (`accepted`, standing).
 
+- 2026-11-10 · **chainTip reset to `main` post-merge.** R6.33 merged as `03fd3cbf` and the ticket branch `codex/harnessharness-r6.33` was deleted; the tip no longer resolves, so `chainTip` is `main` (the R5.59/R6.1 convention at the 2026-11-07 note).
 - 2026-11-05 · **Retained guard terminal-state diagnostic (tooling gap, not a state defect).** With the 246-row manifest chain landed, `nextTicket: DONE` stands (precedent: R3.11/R4.18 round closes; the stock validator computes `want=DONE` cleanly — its 8-warning baseline unchanged). `check-supplement-guard.sh` on this terminal state reports route `HOLD — active round fully landed` but verdict FAIL on `[nextticket] nextTicket 'DONE' is not a chain row` — the tool's `check_routing` admits no DONE/terminal token and no fixture covers the completed-round state (recorded verbatim 2026-11-05, exit 1). Posture: the FAIL is a dispatch *refusal* — correct that nothing may dispatch on a DONE ledger; a future round's decompose-spec writes the new `nextTicket` before any dispatch. A guard semantic change belongs to the guard's owning admission, not a docs ticket — recorded, not patched.
 
 
