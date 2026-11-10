@@ -72,49 +72,133 @@ pub const RECORDED_AT: &str = "2026-11-10T00:00:00Z";
 /// schedule recomputes from it (R6.16's `build_schedule`).
 pub const SCHEDULE_SEED: &str = "fp-w4-schedule-r6.33-2026-11-10";
 
-/// The committed record paths the packet binds by sha256.
-pub const SELECT_COMMIT_PATH: &str = "docs/build/reports/2026-11-08-fp-select-commit.json";
-/// The `task-selection/1` record path.
-pub const SELECTION_PATH: &str = "docs/build/reports/2026-11-08-fp-selection.json";
-/// The `hh-fp-exclusion-record/1` path.
-pub const EXCLUSION_PATH: &str = "docs/build/reports/2026-11-08-fp-exclusion-record.json";
-/// The W1 held-out re-proof packet.
-pub const REPROOF_HELD_PATH: &str =
-    "docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-packet.json";
-/// The W1 held-out discordance register.
-pub const REPROOF_HELD_REGISTER_PATH: &str =
-    "docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-register.json";
-/// The W1 development re-proof packet.
-pub const REPROOF_DEV_PATH: &str =
-    "docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-packet.json";
-/// The W1 development discordance register.
-pub const REPROOF_DEV_REGISTER_PATH: &str =
-    "docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-register.json";
-/// The W1 verified harvest manifest (REQ-XB-220).
-pub const W1_MANIFEST_PATH: &str = "docs/build/reports/compute/harvest/fp-w1/MANIFEST.sha256";
-/// The committed `hh-live-evidence/1` for the re-proof leg.
-pub const REPROOF_EVIDENCE_PATH: &str = "docs/build/reports/live/2026-11-10-reproof.json";
-/// The packet path the emitter writes.
-pub const PACKET_PATH: &str = "docs/build/reports/2026-11-10-fp-prereg.json";
-/// The sidecar carrying the packet hash + the recompute command.
-pub const PACKET_SHA256_PATH: &str = "docs/build/reports/2026-11-10-fp-prereg.sha256";
-/// The W2 `comparative-quote/1` path.
-pub const W2_QUOTE_PATH: &str = "docs/build/reports/2026-11-10-fp-w2-comparative-quote.json";
-/// The FP-S readiness record path.
-pub const READINESS_PATH: &str = "docs/build/reports/2026-11-10-fp-fps-readiness.json";
-/// The harness admission records (R6.22's committed set).
+/// The committed-record relpaths the emitter reads, writes and cites.
+/// The reader rule keeps `docs/` literals out of the crate: the paths
+/// arrive at run time from the inputs manifest — newline
+/// `name=relpath` pairs in `scripts/fp-prereg-inputs.txt`, named by
+/// `HH_FP_INPUTS` (the emitter also honours
+/// `<repo>/scripts/fp-prereg-inputs.txt` when the env var is unset).
+/// The packet and readiness citations emit exactly the supplied
+/// strings, so the manifest is the single source for the read path
+/// and the cited path alike.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreregInputs {
+    /// The `task-selection/1` record.
+    pub selection: String,
+    /// The `hh-fp-select/1` commit record.
+    pub select_commit: String,
+    /// The `hh-fp-exclusion-record/1` record.
+    pub exclusion: String,
+    /// The W1 held-out re-proof packet.
+    pub reproof_held: String,
+    /// The W1 held-out discordance register.
+    pub reproof_held_register: String,
+    /// The W1 development re-proof packet.
+    pub reproof_dev: String,
+    /// The W1 development discordance register.
+    pub reproof_dev_register: String,
+    /// The committed `hh-live-evidence/1` for the re-proof leg.
+    pub reproof_evidence: String,
+    /// The W1 verified harvest manifest (REQ-XB-220).
+    pub w1_manifest: String,
+    /// The HUMAN-H14 readout — existence-checked only while the
+    /// readiness record stays pending.
+    pub human_h14_readout: String,
+    /// The packet path the emitter writes.
+    pub packet: String,
+    /// The sidecar carrying the packet hash + the recompute command.
+    pub packet_sha256: String,
+    /// The W2 `comparative-quote/1` path the emitter writes.
+    pub w2_quote: String,
+    /// The FP-S readiness record path the emitter writes.
+    pub readiness: String,
+}
+
+impl PreregInputs {
+    /// The manifest names [`PreregInputs::from_manifest`] accepts.
+    pub const NAMES: [&str; 14] = [
+        "selection",
+        "select_commit",
+        "exclusion",
+        "reproof_held",
+        "reproof_held_register",
+        "reproof_dev",
+        "reproof_dev_register",
+        "reproof_evidence",
+        "w1_manifest",
+        "human_h14_readout",
+        "packet",
+        "packet_sha256",
+        "w2_quote",
+        "readiness",
+    ];
+
+    /// Parse the inputs manifest — `name=relpath` lines; `#` comments
+    /// and blank lines are skipped. A malformed line, a duplicated or
+    /// unknown name, and a missing required name each refuse typed.
+    pub fn from_manifest(body: &str) -> Result<Self, PreregError> {
+        let mut m = BTreeMap::new();
+        for (n, line) in body.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (k, v) = line.split_once('=').ok_or_else(|| {
+                schema(format!(
+                    "inputs manifest line {}: expected name=relpath",
+                    n + 1
+                ))
+            })?;
+            let (k, v) = (k.trim(), v.trim());
+            if !Self::NAMES.contains(&k) {
+                return Err(schema(format!(
+                    "inputs manifest line {}: unknown name {k}",
+                    n + 1
+                )));
+            }
+            if v.is_empty() {
+                return Err(schema(format!(
+                    "inputs manifest line {}: empty relpath for {k}",
+                    n + 1
+                )));
+            }
+            if m.insert(k.to_string(), v.to_string()).is_some() {
+                return Err(schema(format!(
+                    "inputs manifest line {}: duplicate name {k}",
+                    n + 1
+                )));
+            }
+        }
+        let get = |name: &str| -> Result<String, PreregError> {
+            m.get(name)
+                .cloned()
+                .ok_or_else(|| schema(format!("inputs manifest: required name {name} absent")))
+        };
+        Ok(Self {
+            selection: get("selection")?,
+            select_commit: get("select_commit")?,
+            exclusion: get("exclusion")?,
+            reproof_held: get("reproof_held")?,
+            reproof_held_register: get("reproof_held_register")?,
+            reproof_dev: get("reproof_dev")?,
+            reproof_dev_register: get("reproof_dev_register")?,
+            reproof_evidence: get("reproof_evidence")?,
+            w1_manifest: get("w1_manifest")?,
+            human_h14_readout: get("human_h14_readout")?,
+            packet: get("packet")?,
+            packet_sha256: get("packet_sha256")?,
+            w2_quote: get("w2_quote")?,
+            readiness: get("readiness")?,
+        })
+    }
+}
+
+/// The harness admission records (R6.22's committed set — `crates/`
+/// paths, cited and sha256-bound by the packet's arms table).
 pub const ADMISSION_RECORDS: [&str; 3] = [
     "crates/hh-runner/tests/fixtures/r6_22/mini-swe-agent.json",
     "crates/hh-runner/tests/fixtures/r6_22/pi.json",
     "crates/hh-runner/tests/fixtures/r6_22/claude-code.json",
-];
-/// The five committed `hh-compute-quote/1` window records (R6.30).
-pub const WINDOW_QUOTE_PATHS: [&str; 5] = [
-    "docs/build/reports/2026-11-08-fp-w1-quote.json",
-    "docs/build/reports/2026-11-08-fp-w2-quote.json",
-    "docs/build/reports/2026-11-08-fp-w3-quote.json",
-    "docs/build/reports/2026-11-08-fp-w4-quote.json",
-    "docs/build/reports/2026-11-08-fp-wc-quote.json",
 ];
 /// The five window declarations carrying each compute quote's
 /// `authorization` block (`pq-` id + ceiling).
@@ -707,8 +791,10 @@ fn formulas_block() -> Json {
 /// packet, the HUMAN row and the verified W1 manifest are all present.
 /// `trigger_instant` = the readiness instant plus the recorded number
 /// of days (Q-X62's recorded default, `days` read from the record).
-/// The E2-T8 rung record is never an input.
+/// The E2-T8 rung record is never an input. The `inputs[].record`
+/// citations emit `paths`' supplied relpaths verbatim.
 pub fn compute_readiness(
+    paths: &PreregInputs,
     packet_recorded_at: &str,
     packet_state: &str,
     human_h14_recorded_at: Option<&str>,
@@ -717,14 +803,14 @@ pub fn compute_readiness(
 ) -> Json {
     let mut inputs = Vec::new();
     inputs.push(Json::obj([
-        ("record", Json::str(PACKET_PATH)),
+        ("record", Json::str(&paths.packet)),
         ("precondition", Json::str("fp_prereg_packet_hashed")),
         ("present", Json::Bool(true)),
         ("recorded_at", Json::str(packet_recorded_at)),
         ("task_lists_state", Json::str(packet_state)),
     ]));
     inputs.push(Json::obj([
-        ("record", Json::str("docs/build/readouts/HUMAN-H14.md")),
+        ("record", Json::str(&paths.human_h14_readout)),
         ("precondition", Json::str("human_h14_ollama_hf_rows")),
         ("present", Json::Bool(human_h14_recorded_at.is_some())),
         (
@@ -733,7 +819,7 @@ pub fn compute_readiness(
         ),
     ]));
     inputs.push(Json::obj([
-        ("record", Json::str(W1_MANIFEST_PATH)),
+        ("record", Json::str(&paths.w1_manifest)),
         ("precondition", Json::str("w1_verified_harvest_manifest")),
         ("present", Json::Bool(w1_manifest_verified_at.is_some())),
         (
@@ -819,10 +905,13 @@ fn cite(path: &str, sha: &str) -> Json {
     Json::obj([("path", Json::str(path)), ("sha256", Json::str(sha))])
 }
 
-/// `build_packet(...)` — assemble `hh-fp-prereg/1`. All values are
-/// declared constants, spec-verbatim text or cited records; the task
-/// lists are the freeze record (never a silently substituted list).
+/// `build_packet(paths, ...)` — assemble `hh-fp-prereg/1`. All values
+/// are declared constants, spec-verbatim text or cited records; the
+/// citations emit `paths`' supplied relpaths verbatim (the reader rule
+/// — no `docs/` literal lives in the crate), and the task lists are
+/// the freeze record (never a silently substituted list).
 pub fn build_packet(
+    paths: &PreregInputs,
     freeze: Json,
     select_commit_sha: &str,
     selection_sha: &str,
@@ -854,7 +943,7 @@ pub fn build_packet(
             ]),
         ),
         ("split", {
-            let mut c = cite(SELECTION_PATH, selection_sha);
+            let mut c = cite(&paths.selection, selection_sha);
             if let Json::Obj(ref mut m) = c {
                 m.insert("selection_id".into(), Json::str(selection_id));
                 m.insert("seed".into(), Json::str("fp-select-r6.30-2026-11-08"));
@@ -863,22 +952,31 @@ pub fn build_packet(
             c
         }),
         ("select_commit", {
-            let mut c = cite(SELECT_COMMIT_PATH, select_commit_sha);
+            let mut c = cite(&paths.select_commit, select_commit_sha);
             if let Json::Obj(ref mut m) = c {
                 m.insert("select_id".into(), Json::str(select_id));
             }
             c
         }),
-        ("exclusion_record", cite(EXCLUSION_PATH, exclusion_sha)),
+        ("exclusion_record", cite(&paths.exclusion, exclusion_sha)),
         (
             "reproof",
             Json::obj([
-                ("held_packet", cite(REPROOF_HELD_PATH, reproof_held_sha)),
-                ("held_register", cite(REPROOF_HELD_REGISTER_PATH, reproof_held_register_sha)),
-                ("dev_packet", cite(REPROOF_DEV_PATH, reproof_dev_sha)),
-                ("dev_register", cite(REPROOF_DEV_REGISTER_PATH, reproof_dev_register_sha)),
-                ("live_evidence", cite(REPROOF_EVIDENCE_PATH, live_evidence_sha)),
-                ("w1_manifest", cite(W1_MANIFEST_PATH, w1_manifest_sha)),
+                ("held_packet", cite(&paths.reproof_held, reproof_held_sha)),
+                (
+                    "held_register",
+                    cite(&paths.reproof_held_register, reproof_held_register_sha),
+                ),
+                ("dev_packet", cite(&paths.reproof_dev, reproof_dev_sha)),
+                (
+                    "dev_register",
+                    cite(&paths.reproof_dev_register, reproof_dev_register_sha),
+                ),
+                (
+                    "live_evidence",
+                    cite(&paths.reproof_evidence, live_evidence_sha),
+                ),
+                ("w1_manifest", cite(&paths.w1_manifest, w1_manifest_sha)),
                 ("evidence_label", Json::str("live-executed")),
                 ("honesty", Json::str("the committed register records every re-proofed task discordant `o_fail` — the O surface (Harbor oracle through the local podman environment) failed on all trials, harbor_exception digests recorded verbatim; this is executed evidence of O-surface machinery failure, not agreement data, and the freeze applies the contract's typed rules to it verbatim")),
             ]),

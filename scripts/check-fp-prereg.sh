@@ -23,19 +23,22 @@ leg() { # leg <name> <cmd...>
 leg "packet-hash" shasum -a 256 -c docs/build/reports/2026-11-10-fp-prereg.sha256
 
 # 2 — the emitter recomputes the whole record set byte-identically into
-#     a scratch tree (same committed inputs, no clock, no network).
+#     a scratch tree (same committed inputs, no clock, no network). The
+#     docs/ relpaths live in scripts/fp-prereg-inputs.txt (the reader
+#     rule — the crate reads them from the manifest, never literals).
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH" /tmp/fp-prereg-leg.$$.log' EXIT
+MANIFEST="$REPO/scripts/fp-prereg-inputs.txt"
+for name in \
+  selection select_commit exclusion \
+  reproof_held reproof_held_register \
+  reproof_dev reproof_dev_register \
+  reproof_evidence w1_manifest; do
+  rel="$(grep -E "^${name}=" "$MANIFEST" | cut -d= -f2-)"
+  mkdir -p "$SCRATCH/$(dirname "$rel")"
+  cp "$REPO/$rel" "$SCRATCH/$rel"
+done
 for rel in \
-  docs/build/reports/2026-11-08-fp-select-commit.json \
-  docs/build/reports/2026-11-08-fp-selection.json \
-  docs/build/reports/2026-11-08-fp-exclusion-record.json \
-  docs/build/reports/live/2026-11-10-reproof.json \
-  docs/build/reports/compute/harvest/fp-w1/MANIFEST.sha256 \
-  docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-packet.json \
-  docs/build/reports/compute/harvest/fp-w1/run-root/prove-held/reproof-register.json \
-  docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-packet.json \
-  docs/build/reports/compute/harvest/fp-w1/run-root/prove-dev/reproof-register.json \
   crates/hh-runner/tests/fixtures/r6_22/mini-swe-agent.json \
   crates/hh-runner/tests/fixtures/r6_22/pi.json \
   crates/hh-runner/tests/fixtures/r6_22/claude-code.json \
@@ -47,9 +50,11 @@ for rel in \
   mkdir -p "$SCRATCH/$(dirname "$rel")"
   cp "$REPO/$rel" "$SCRATCH/$rel"
 done
+mkdir -p "$SCRATCH/scripts"
+cp "$MANIFEST" "$SCRATCH/scripts/fp-prereg-inputs.txt"
 cargo build -p hharness-runner --bin fp_prereg -q
 BIN="$REPO/target/debug/fp_prereg"
-"$BIN" emit "$SCRATCH" >/dev/null
+HH_FP_INPUTS="$SCRATCH/scripts/fp-prereg-inputs.txt" "$BIN" emit "$SCRATCH" >/dev/null
 for out in \
   docs/build/reports/2026-11-10-fp-prereg.json \
   docs/build/reports/2026-11-10-fp-prereg.sha256 \

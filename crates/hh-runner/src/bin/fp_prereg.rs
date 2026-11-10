@@ -1,11 +1,15 @@
 //! `fp-prereg` — the R6.33 emitter (manifest 291). Reads the committed
-//! records (selection, select commit, exclusion record, W1 re-proof
-//! packets + registers, live evidence, harvest manifest, declarations)
-//! and emits the `hh-fp-prereg/1` packet, its sha256 sidecar, the W2
-//! `comparative-quote/1` and the `hh-fp-readiness/1` record under
-//! `docs/build/reports/`. Deterministic — same inputs, byte-identical
-//! outputs. No network, no clock (RECORDED_AT is the declared
-//! constant).
+//! records named by the inputs manifest (selection, select commit,
+//! exclusion record, W1 re-proof packets + registers, live evidence,
+//! harvest manifest, declarations) and emits the `hh-fp-prereg/1`
+//! packet, its sha256 sidecar, the W2 `comparative-quote/1` and the
+//! `hh-fp-readiness/1` record at the manifest's output relpaths. The
+//! reader rule keeps the committed docs/ relpaths at script level:
+//! `HH_FP_INPUTS` names the manifest (newline `name=relpath` pairs —
+//! `scripts/fp-prereg-inputs.txt`, which is also the default under
+//! the repo root when the env var is unset). Deterministic — same
+//! inputs, byte-identical outputs. No network, no clock (RECORDED_AT
+//! is the declared constant).
 //!
 //! ```text
 //! fp-prereg emit <repo-root>
@@ -37,12 +41,12 @@ fn write(repo: &Path, rel: &str, body: &str) {
     println!("fp-prereg: wrote {rel}");
 }
 
-fn emit(repo: &Path) {
-    let selection = load(repo, SELECTION_PATH);
-    let commit = load(repo, SELECT_COMMIT_PATH);
-    let exclusion = load(repo, EXCLUSION_PATH);
-    let held = load(repo, REPROOF_HELD_PATH);
-    let dev = load(repo, REPROOF_DEV_PATH);
+fn emit(repo: &Path, inputs: &PreregInputs) {
+    let selection = load(repo, &inputs.selection);
+    let commit = load(repo, &inputs.select_commit);
+    let exclusion = load(repo, &inputs.exclusion);
+    let held = load(repo, &inputs.reproof_held);
+    let dev = load(repo, &inputs.reproof_dev);
 
     let mut verdicts = reproof_verdicts(&held).unwrap_or_else(|e| panic!("held packet: {e}"));
     verdicts.extend(reproof_verdicts(&dev).unwrap_or_else(|e| panic!("dev packet: {e}")));
@@ -77,9 +81,10 @@ fn emit(repo: &Path) {
 
     let admission_shas = ADMISSION_RECORDS.map(|p| sha(repo, p));
     let packet = packet_with_v5(build_packet(
+        inputs,
         freeze.clone(),
-        &sha(repo, SELECT_COMMIT_PATH),
-        &sha(repo, SELECTION_PATH),
+        &sha(repo, &inputs.select_commit),
+        &sha(repo, &inputs.selection),
         selection
             .get("selection_id")
             .and_then(Json::as_str)
@@ -88,25 +93,26 @@ fn emit(repo: &Path) {
             .get("select_id")
             .and_then(Json::as_str)
             .unwrap_or_default(),
-        &sha(repo, EXCLUSION_PATH),
-        &sha(repo, REPROOF_HELD_PATH),
-        &sha(repo, REPROOF_HELD_REGISTER_PATH),
-        &sha(repo, REPROOF_DEV_PATH),
-        &sha(repo, REPROOF_DEV_REGISTER_PATH),
-        &sha(repo, REPROOF_EVIDENCE_PATH),
-        &sha(repo, W1_MANIFEST_PATH),
+        &sha(repo, &inputs.exclusion),
+        &sha(repo, &inputs.reproof_held),
+        &sha(repo, &inputs.reproof_held_register),
+        &sha(repo, &inputs.reproof_dev),
+        &sha(repo, &inputs.reproof_dev_register),
+        &sha(repo, &inputs.reproof_evidence),
+        &sha(repo, &inputs.w1_manifest),
         &freeze_digest,
         &admission_shas,
     ));
 
     let canonical = packet.to_canonical_string() + "\n";
     let packet_hash = packet_sha256(&packet);
-    write(repo, PACKET_PATH, &canonical);
+    write(repo, &inputs.packet, &canonical);
     write(
         repo,
-        PACKET_SHA256_PATH,
+        &inputs.packet_sha256,
         &format!(
-            "{packet_hash}  {PACKET_PATH}\n# recompute: shasum -a 256 -c {PACKET_SHA256_PATH} (run from the repo root — the packet is canonical Json::to_canonical_string output, CC1)\n"
+            "{packet_hash}  {}\n# recompute: shasum -a 256 -c {} (run from the repo root — the packet is canonical Json::to_canonical_string output, CC1)\n",
+            inputs.packet, inputs.packet_sha256
         ),
     );
 
@@ -148,7 +154,7 @@ fn emit(repo: &Path) {
     let quote = w2_quote(compute).unwrap_or_else(|e| panic!("w2 quote: {e}"));
     write(
         repo,
-        W2_QUOTE_PATH,
+        &inputs.w2_quote,
         &(quote.to_json().to_canonical_string() + "\n"),
     );
 
@@ -157,7 +163,7 @@ fn emit(repo: &Path) {
     // is verified (the R6.32b harvest verified all 32,636 members and
     // the receipts are committed).
     let h14: Option<String> = {
-        let p = repo.join("docs/build/readouts/HUMAN-H14.md");
+        let p = repo.join(&inputs.human_h14_readout);
         if p.exists() {
             panic!(
                 "HUMAN-H14 readout exists — re-derive the readiness instant per the record rules"
@@ -172,6 +178,7 @@ fn emit(repo: &Path) {
         .unwrap_or("unknown")
         .to_string();
     let readiness = compute_readiness(
+        inputs,
         RECORDED_AT,
         &task_lists_state,
         h14.as_deref(),
@@ -180,7 +187,7 @@ fn emit(repo: &Path) {
     );
     write(
         repo,
-        READINESS_PATH,
+        &inputs.readiness,
         &(readiness.to_canonical_string() + "\n"),
     );
 
@@ -188,11 +195,28 @@ fn emit(repo: &Path) {
     println!("fp-prereg: task_lists state {task_lists_state}");
 }
 
+/// The inputs manifest — `HH_FP_INPUTS` names it; otherwise the
+/// committed `<repo>/scripts/fp-prereg-inputs.txt`.
+fn load_inputs(repo: &Path) -> PreregInputs {
+    let manifest = std::env::var_os("HH_FP_INPUTS")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| repo.join("scripts").join("fp-prereg-inputs.txt"));
+    let body = std::fs::read_to_string(&manifest).unwrap_or_else(|e| {
+        panic!(
+            "read {}: {e} (HH_FP_INPUTS names the name=relpath inputs manifest)",
+            manifest.display()
+        )
+    });
+    PreregInputs::from_manifest(&body).unwrap_or_else(|e| panic!("{}: {e}", manifest.display()))
+}
+
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("emit") if args.len() == 3 => {
-            emit(&PathBuf::from(&args[2]));
+            let repo = PathBuf::from(&args[2]);
+            let inputs = load_inputs(&repo);
+            emit(&repo, &inputs);
             std::process::ExitCode::SUCCESS
         }
         _ => {

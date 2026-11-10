@@ -16,9 +16,9 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.33
-lastCompleted:   GATE-G33
-blockedOn: DF-R6.32-1 (W1 window body — repaired declaration awaits GATE-G33 re-presentation)
+nextTicket:      R6.34
+lastCompleted:   R6.33
+blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
 manifest:        docs/tickets/00_MANIFEST.md
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-r6.32a
+chainTip:        codex/harnessharness-r6.33
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
-harness:         devin-desktop/swe-2-high/subagent
-updatedAt:       2026-11-09T23:55Z
+harness:         devin-cli/swe-2-high/subagent
+updatedAt:       2026-11-10T07:29Z
 ```
 
 ## OPEN FINDINGS

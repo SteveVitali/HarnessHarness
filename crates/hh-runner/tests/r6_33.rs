@@ -22,6 +22,20 @@ fn repo(rel: &str) -> Json {
     .unwrap_or_else(|e| panic!("parse {rel}: {e}"))
 }
 
+/// The committed-record relpaths — the same inputs manifest the
+/// emitter resolves (`scripts/fp-prereg-inputs.txt`; the reader rule
+/// keeps the docs/ relpaths at script level, never in the crate).
+fn inputs() -> PreregInputs {
+    let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("scripts")
+        .join("fp-prereg-inputs.txt");
+    let body = std::fs::read_to_string(&manifest)
+        .unwrap_or_else(|e| panic!("read {}: {e}", manifest.display()));
+    PreregInputs::from_manifest(&body).expect("fp-prereg inputs manifest parses")
+}
+
 fn ptr<'a>(j: &'a Json, path: &str) -> Option<&'a Json> {
     let mut cur = j;
     for seg in path.trim_start_matches('/').split('/') {
@@ -35,7 +49,7 @@ fn ptr<'a>(j: &'a Json, path: &str) -> Option<&'a Json> {
 }
 
 fn committed_packet() -> Json {
-    repo(PACKET_PATH)
+    repo(&inputs().packet)
 }
 
 fn committed_inputs() -> (
@@ -44,11 +58,12 @@ fn committed_inputs() -> (
     BTreeMap<String, String>,
     BTreeMap<String, String>,
 ) {
-    let selection = repo(SELECTION_PATH);
-    let commit = repo(SELECT_COMMIT_PATH);
-    let mut verdicts = reproof_verdicts(&repo(REPROOF_HELD_PATH)).expect("held packet verdicts");
-    verdicts.extend(reproof_verdicts(&repo(REPROOF_DEV_PATH)).expect("dev packet verdicts"));
-    let downloads: BTreeMap<String, String> = repo(EXCLUSION_PATH)
+    let inputs = inputs();
+    let selection = repo(&inputs.selection);
+    let commit = repo(&inputs.select_commit);
+    let mut verdicts = reproof_verdicts(&repo(&inputs.reproof_held)).expect("held packet verdicts");
+    verdicts.extend(reproof_verdicts(&repo(&inputs.reproof_dev)).expect("dev packet verdicts"));
+    let downloads: BTreeMap<String, String> = repo(&inputs.exclusion)
         .get("download_tasks")
         .and_then(JsonExt::as_arr)
         .map(|a| {
@@ -393,7 +408,7 @@ fn ac6_hash_stable_and_cap_formula() {
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("..")
-            .join(PACKET_PATH),
+            .join(&inputs().packet),
     )
     .expect("packet file");
     let re = hharness_wire::json::parse(&file).expect("reparse");
@@ -434,7 +449,7 @@ fn ac6_hash_stable_and_cap_formula() {
 /// compute lines, Σ ceilings ≤ 20 000 000 µ$, no outcome members.
 #[test]
 fn ac7_w2_quote_shape() {
-    let q = repo(W2_QUOTE_PATH);
+    let q = repo(&inputs().w2_quote);
     assert_eq!(
         q.get("schema").and_then(Json::as_str),
         Some("comparative-quote/1")
@@ -496,7 +511,7 @@ fn ac7_w2_quote_shape() {
 /// readiness + the recorded days; the rung record is never an input.
 #[test]
 fn ac8_readiness_pending_and_ready() {
-    let committed = repo(READINESS_PATH);
+    let committed = repo(&inputs().readiness);
     assert_eq!(
         ptr(&committed, "/result/state").and_then(Json::as_str),
         Some("pending{HUMAN-H14 not run}")
@@ -507,6 +522,7 @@ fn ac8_readiness_pending_and_ready() {
     );
     // all preconditions present → ready + trigger = instant + days
     let ready = compute_readiness(
+        &inputs(),
         "2026-11-10T00:00:00Z",
         "blocked",
         Some("2026-11-11T00:00:00Z"),
@@ -539,15 +555,18 @@ fn ac8_readiness_pending_and_ready() {
 /// The re-proof packets decode their verdict maps (AC-2's input).
 #[test]
 fn reproof_verdicts_decode() {
-    let v = reproof_verdicts(&repo(REPROOF_HELD_PATH)).unwrap();
+    let inputs = inputs();
+    let v = reproof_verdicts(&repo(&inputs.reproof_held)).unwrap();
     assert_eq!(v.len(), 13);
     assert!(v
         .values()
         .all(|s| s.starts_with("exclude:runner_infeasible:oracle_fails_on_O{")));
-    let d = reproof_verdicts(&repo(REPROOF_DEV_PATH)).unwrap();
+    let d = reproof_verdicts(&repo(&inputs.reproof_dev)).unwrap();
     assert_eq!(d.len(), 7);
     assert_eq!(
-        repo(REPROOF_HELD_PATH).get("schema").and_then(Json::as_str),
+        repo(&inputs.reproof_held)
+            .get("schema")
+            .and_then(Json::as_str),
         Some(REPROOF_SCHEMA)
     );
 }
