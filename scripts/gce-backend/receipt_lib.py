@@ -66,11 +66,16 @@ def cmd_append(argv):
     jsonl, started, ended, rc, outp, errp = argv[2:8]
     args = argv[9:]
     try:
-        out_ex = open(outp, "r", encoding="utf-8", errors="replace").read(4097)[:4096]
+        # truncate on BYTES (the validator bounds len(excerpt.encode()))
+        out_ex = open(outp, "rb").read(4097)[:4096].decode(
+            "utf-8", errors="ignore"
+        )
     except OSError:
         out_ex = ""
     try:
-        err_ex = open(errp, "r", encoding="utf-8", errors="replace").read(4097)[:4096]
+        err_ex = open(errp, "rb").read(4097)[:4096].decode(
+            "utf-8", errors="ignore"
+        )
     except OSError:
         err_ex = ""
     rec = {

@@ -451,7 +451,15 @@ cmd_verify() {
   [ "$ping" = "OK" ] || unsupported "podman_ping:$ping"
   podver="$(vm 'podman version --format json' | \
     python3 -c 'import json,sys;print(json.load(sys.stdin)["Client"]["Version"])' 2>/dev/null || true)"
-  [ "$podver" = "$(J packages.podman)" ] || unsupported "podman_version:$podver"
+  # `podman version` reports the upstream semver (4.3.1); the declared
+  # pin is the dpkg version (4.3.1+ds1-8+deb12u1+b3). Accept when the
+  # pin's upstream component equals the reported version — the exact
+  # dpkg-pin check below remains the authoritative match (R6.32b:
+  # comparing the literal strings could never pass).
+  case "$(J packages.podman)" in
+    "$podver"|"$podver"+*) ;;
+    *) unsupported "podman_version:$podver" ;;
+  esac
   compose="$(vm 'podman compose version --format json 2>/dev/null || podman-compose --version' | head -1)"
   [ -n "$compose" ] || unsupported "compose_frontend"
   kernel="$(vm 'uname -r' | tr -d '[:space:]')"
@@ -548,7 +556,8 @@ cmd_prepull() {
   tmpd
   ensure_provided
   # REQ-XB-207: only the declaration's admitted images, by digest.
-  local pulls="$TMPD/pulls.json"; : > "$pulls"
+  # `[]` seed — an empty images[] still parses for the receipt patch.
+  local pulls="$TMPD/pulls.json"; printf '[]\n' > "$pulls"
   while IFS="$(printf '\t')" read -r task ref digest; do
     [ -n "$digest" ] || continue
     vm "podman pull '$ref@$digest'" >/dev/null \
