@@ -68,6 +68,14 @@ pub struct CompiledSection {
     pub text: Option<String>,
     /// The `ProfileRule` ids that shaped the section.
     pub rule_ids: Vec<String>,
+    /// The declared provider role (`prompt_layout.roles{section → role}` —
+    /// REQ-XE-104). `None` ⇒ no declared role (the renderer's default —
+    /// the member is absent, never null, on the wire).
+    pub role: Option<String>,
+    /// The section text's declared grammar (`hh-tmpl/1` when a placed
+    /// `Text` leaf declares it — the renderer parses `text` as that
+    /// grammar; REQ-XE-112). `None` ⇒ literal text.
+    pub grammar: Option<String>,
 }
 
 /// The compiled per-tool surface — §3.2.8 `ToolSurface{surface_name, hir_node_id,
@@ -734,6 +742,8 @@ fn lower_layout(
                     .join("\n"),
             ),
             rule_ids: Vec::new(),
+            role: None,
+            grammar: None,
         }]);
     };
     let order: Vec<String> = match params.get("order") {
@@ -761,12 +771,70 @@ fn lower_layout(
                     slots: Vec::new(),
                     text: None,
                     rule_ids: rule_ids(chain, ProfileRuleKind::PromptLayout),
+                    role: None,
+                    grammar: None,
                 },
             )
         })
         .collect();
+    // `roles{section → provider role}` — REQ-XE-104's declared provider
+    // roles (a closed set at this stage — the chat-completions shape).
+    let roles: BTreeMap<String, String> = match params.get("roles") {
+        Some(Json::Obj(m)) => m
+            .iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+            .collect(),
+        _ => BTreeMap::new(),
+    };
+    for (sec, role) in &roles {
+        if !sections.contains_key(sec) {
+            return Err(CompileError::UnexpressibleSurface {
+                entity: sec.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!("prompt_layout.roles names undeclared section `{sec}`"),
+            });
+        }
+        if !matches!(role.as_str(), "system" | "user" | "assistant" | "tool") {
+            return Err(CompileError::UnexpressibleSurface {
+                entity: sec.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!("prompt_layout.roles `{role}` is not a declared provider role"),
+            });
+        }
+        sections.get_mut(sec).expect("checked").role = Some(role.clone());
+    }
+    // `slots{section → [slot names]}` — declared run-time fills; a
+    // `hh-tmpl/1` leaf's variable set must be a subset (strict
+    // undefined's compile half — REQ-XE-112).
+    if let Some(Json::Obj(slots)) = params.get("slots") {
+        for (sec, v) in slots {
+            if let Some(s) = sections.get_mut(sec) {
+                if let Json::Arr(items) = v {
+                    s.slots = items
+                        .iter()
+                        .filter_map(|i| i.as_str().map(str::to_string))
+                        .collect();
+                }
+            }
+        }
+    }
+    // `section_templates{section → node}` — explicit `Text`-leaf
+    // placement (§5b.3 row 8; REQ-XE-104): the named node's text renders
+    // into the named section under its declared role; unplaced nodes
+    // still route by `role_map` over authority.
+    let section_templates: BTreeMap<String, String> = match params.get("section_templates") {
+        Some(Json::Obj(m)) => m
+            .iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+            .collect(),
+        _ => BTreeMap::new(),
+    };
+    let placed: std::collections::BTreeSet<String> = section_templates.values().cloned().collect();
     let mut texts: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (sid, authority, text) in &text_nodes {
+        if placed.contains(sid) {
+            continue;
+        }
         let section = role_map
             .get(authority)
             .cloned()
@@ -787,17 +855,102 @@ fn lower_layout(
             .push(sid.clone());
         texts.entry(section).or_default().push(text.clone());
     }
-    if let Some(Json::Obj(slots)) = params.get("slots") {
-        for (sec, v) in slots {
-            if let Some(s) = sections.get_mut(sec) {
-                if let Json::Arr(items) = v {
-                    s.slots = items
-                        .iter()
-                        .filter_map(|i| i.as_str().map(str::to_string))
-                        .collect();
+    // Resolve each explicit placement: the node must exist and bear
+    // text; the role-placement rule (§7.2 — `system` placement requires
+    // `definition` authority) gates the leaf; a `hh-tmpl/1` leaf
+    // compiles its template now (strict undefined's compile half).
+    for (sec, node_id) in &section_templates {
+        let role = sections.get(sec).map(|s| s.role.clone()).flatten();
+        if !sections.contains_key(sec) {
+            return Err(CompileError::UnexpressibleSurface {
+                entity: node_id.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!(
+                    "prompt_layout.section_templates places `{node_id}` into undeclared \
+                     section `{sec}`"
+                ),
+            });
+        }
+        let node = doc
+            .nodes
+            .iter()
+            .find(|n| n.semantic_id() == *node_id)
+            .ok_or_else(|| CompileError::UnexpressibleSurface {
+                entity: node_id.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!("prompt_layout.section_templates names no node `{node_id}`"),
+            })?;
+        let leaves: Vec<&Text> = node
+            .text_leaves()
+            .iter()
+            .filter(|t| t.content.is_some())
+            .copied()
+            .collect();
+        if leaves.is_empty() {
+            return Err(CompileError::UnexpressibleSurface {
+                entity: node_id.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!("section_templates node `{node_id}` carries no text leaf"),
+            });
+        }
+        if role.as_deref() == Some("system")
+            && node.provenance.authority < hharness_provenance::AuthorityClass::Definition
+        {
+            return Err(CompileError::UnexpressibleSurface {
+                entity: node_id.clone(),
+                profile: profile_coord.to_string(),
+                reason: format!(
+                    "node authority `{}` cannot place into the `system` role \
+                     (definition required)",
+                    node.provenance.authority.as_str()
+                ),
+            });
+        }
+        for leaf in &leaves {
+            if leaf.language.as_deref() == Some("hh-tmpl/1") {
+                let content = leaf.content.as_deref().unwrap_or_default();
+                let t = crate::tmpl::compile_template(content).map_err(|e| {
+                    CompileError::UnexpressibleSurface {
+                        entity: node_id.clone(),
+                        profile: profile_coord.to_string(),
+                        reason: format!("{e}"),
+                    }
+                })?;
+                let slots: std::collections::BTreeSet<String> = sections
+                    .get(sec)
+                    .map(|s| s.slots.iter().cloned().collect())
+                    .unwrap_or_default();
+                let missing: Vec<String> = t
+                    .variables()
+                    .iter()
+                    .filter(|v| !slots.contains(*v))
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
+                    return Err(CompileError::UnexpressibleSurface {
+                        entity: node_id.clone(),
+                        profile: profile_coord.to_string(),
+                        reason: format!(
+                            "template variables {missing:?} are not declared slots of \
+                             section `{sec}`"
+                        ),
+                    });
                 }
+                sections.get_mut(sec).expect("checked").grammar = Some("hh-tmpl/1".to_string());
             }
         }
+        sections
+            .get_mut(sec)
+            .expect("checked")
+            .source_node_ids
+            .push(node_id.clone());
+        texts.entry(sec.clone()).or_default().push(
+            leaves
+                .iter()
+                .map(|t| t.content.clone().unwrap_or_default())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
     }
     Ok(order
         .iter()

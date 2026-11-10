@@ -65,6 +65,7 @@ pub mod schema;
 pub mod seal;
 pub mod surface;
 pub mod target;
+pub mod tmpl;
 pub mod trace;
 
 pub use compiler::{accept, accept_bytes, compile, CompileInputs};
