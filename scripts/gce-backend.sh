@@ -634,6 +634,20 @@ PY
   vm "cat /proc/uptime; df -BG --output=avail / | tail -1" 2>/dev/null || true
 }
 
+# `harvest_extract` — extract the run-root tar for manifest verification.
+# bsdtar (macOS) consumes `._<file>` members as AppleDouble metadata and
+# never writes them, so a manifest that lists them fails `shasum -c` even
+# though every hashed member is present in the tar (R6.32b). Python's
+# tarfile writes them as regular files — the deterministic extraction.
+harvest_extract() { # $1 tar.gz  $2 out-dir
+  python3 - "$1" "$2" <<'PY'
+import sys, tarfile
+# fully_trusted: the tar was minted by the same machinery — verbatim
+# extraction incl. absolute symlinks inside harvested bundles.
+tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="fully_trusted")
+PY
+}
+
 harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   HARV_DIR="$REPORTS/harvest/${PHASE}-${WINDOW}"
   mkdir -p "$HARV_DIR"
@@ -651,7 +665,7 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
      && [ -f "$HARV_DIR/journald.log" ] \
      && [ -f "$HARV_DIR/serial.log" ]; then
     mkdir -p "$TMPD/verify"
-    tar xzf "$HARV_DIR/run-root.tar.gz" -C "$TMPD/verify" || return 1
+    harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
     if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
       if command -v sha256sum >/dev/null 2>&1; then
         (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
@@ -676,7 +690,7 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   # 2c: verify locally — extract and check every hashed member (an empty
   #     manifest means an empty run root — verified trivially)
   mkdir -p "$TMPD/verify"
-  tar xzf "$HARV_DIR/run-root.tar.gz" -C "$TMPD/verify" || return 1
+  harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
   if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
     if command -v sha256sum >/dev/null 2>&1; then
       (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \

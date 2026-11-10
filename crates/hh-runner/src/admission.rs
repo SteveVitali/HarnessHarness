@@ -108,7 +108,9 @@ fn sha_ref(s: &str) -> bool {
 pub fn image_ref_by_digest(s: &str) -> bool {
     match s.rsplit_once('@') {
         Some((name, d)) => !name.is_empty() && sha_ref(d) && !name.contains(':'),
-        None => false,
+        // a locally built image has no RepoDigest — `sha256:<64>` (the
+        // image ID) is the equally digest-pinned, podman-resolvable ref
+        None => sha_ref(s),
     }
 }
 /// A floating/`@latest`/`stable`/prerelease/wildcard/unlocked spelling
