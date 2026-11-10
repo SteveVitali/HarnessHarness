@@ -229,6 +229,7 @@ fn fs_capability() -> ToolCapabilityRecord {
 fn cap_for(sid: &str, class: EffectClass) -> ToolCapabilityRecord {
     let _ = sid;
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new(
             "perm marker",
             "test:owner",
@@ -377,6 +378,7 @@ fn input<'a>(
     declared: EffectClass,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: chain(),
         ordinal: 0,
         proposer: "test:agent".to_string(),

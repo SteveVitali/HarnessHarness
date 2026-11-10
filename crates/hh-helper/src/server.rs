@@ -23,7 +23,8 @@ use hharness_containment::policy::ContainmentPolicy;
 use hharness_wire::json::Json;
 
 use crate::exec::{
-    group_alive, kill_group, run_child, spawn_pgrp_leader, ExecState, Execution, Shared,
+    group_alive, kill_group, run_child, spawn_pgrp_leader, spawn_pgrp_leader_merged, ExecState,
+    Execution, Shared,
 };
 use crate::fstree;
 use crate::protocol::{verify_commit_proof, HelperRequest, HelperResponse, OnKernelLoss};
@@ -243,6 +244,7 @@ fn dispatch(
             commit_proof,
             idempotency_key,
             env_clear,
+            stdio,
         } => {
             let nonce = srv.shared.session_nonce.lock().unwrap().clone();
             if !verify_commit_proof(&nonce, &commit_proof, &effect_id, attempt_no) {
@@ -285,6 +287,7 @@ fn dispatch(
                 attribution_token,
                 idempotency_key,
                 env_clear,
+                stdio,
             )
         }
         HelperRequest::Read {
@@ -641,6 +644,7 @@ fn spawn_exec(
     attribution_token: String,
     idempotency_key: Option<String>,
     env_clear: bool,
+    stdio: Option<String>,
 ) -> (Option<HelperResponse>, bool) {
     // argv extraction — `command` runs through sh -c; `argv` is exec'd.
     let argv: Vec<String> = if let Some(s) = args.get("command").and_then(Json::as_str) {
@@ -688,7 +692,31 @@ fn spawn_exec(
             c
         }
         "container" => match srv.container.lock().unwrap().clone() {
-            Some(b) => b.exec_command(&argv, &cwd, &env),
+            Some(b) => {
+                // R6.39 (REQ-XE-119; G17 (b)/(d)) — the `stdio` member's
+                // presence arms the exec-defaults shape inside the cell:
+                // `cwd = "image_workdir"` omits `--workdir` (podman exec
+                // inherits the cell's configured WORKDIR — the image/
+                // cell-spec value, never a host path), and a declared
+                // `deadline_ms` wraps the in-cell argv in
+                // `setsid timeout --kill-after` so the deadline's kill
+                // reaches the whole in-container process tree (the
+                // host-side pgid kill's reach is UNVERIFIED — the in-cell
+                // ladder is the enforcement-of-record; the helper's own
+                // deadline watcher stays the backstop). An unarmed exec
+                // keeps the argv byte-identical.
+                let cell_cwd: Option<&str> = if cwd == "image_workdir" {
+                    None
+                } else {
+                    Some(cwd.as_str())
+                };
+                let armed_argv = if stdio.is_some() {
+                    crate::podman::wrap_kill(&argv, deadline_ms)
+                } else {
+                    argv.clone()
+                };
+                b.exec_command(&armed_argv, cell_cwd, &env)
+            }
             None => {
                 return (
                     Some(HelperResponse::err(
@@ -706,7 +734,21 @@ fn spawn_exec(
         }
     };
     if backend != "container" {
-        cmd.current_dir(&cwd);
+        // `cwd = "image_workdir"` on a non-container backend resolves to
+        // the session's first workspace root — the cell analogue of the
+        // image WORKDIR (there is no image off the container backend).
+        let cwd_resolved = if cwd == "image_workdir" {
+            srv.roots
+                .lock()
+                .unwrap()
+                .0
+                .first()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| ".".to_string())
+        } else {
+            cwd.clone()
+        };
+        cmd.current_dir(&cwd_resolved);
         // `env_clear` — the child inherits nothing of the helper's ambient
         // environment; the projected `env` pairs are its whole environment
         // (S2.2: the `subprocess_confined` placement contract, §8.4 V4).
@@ -723,7 +765,13 @@ fn spawn_exec(
         );
         cmd.env("HH_EXECUTION_ID", &execution_id);
     }
-    match spawn_pgrp_leader(&mut cmd) {
+    let merged = stdio.as_deref() == Some("merged");
+    let spawned = if merged {
+        spawn_pgrp_leader_merged(&mut cmd)
+    } else {
+        spawn_pgrp_leader(&mut cmd)
+    };
+    match spawned {
         Ok(child) => {
             let pgid = child.id();
             {
@@ -733,8 +781,29 @@ fn spawn_exec(
                 t.map.insert(execution_id.clone(), Arc::clone(&ex));
             }
             let sh = Arc::clone(&srv.shared);
+            let sh2 = Arc::clone(&srv.shared);
             let ex2 = Arc::clone(&ex);
-            std::thread::spawn(move || run_child(sh, ex2, child, pgid, backend));
+            let armed_deadline = stdio.is_some() && backend == "container" && deadline_ms.is_some();
+            std::thread::spawn(move || {
+                run_child(sh, ex2, child, pgid, backend);
+                // R6.39 — the in-cell `timeout` wrapper owns the kill on
+                // an armed exec: 124 (`timeout` fired) or 137
+                // (`--kill-after` KILL) under a declared deadline IS the
+                // deadline verdict — record `deadline_exceeded` when the
+                // watcher lost the race (the same class it records when
+                // it fires first; never a second class).
+                if armed_deadline {
+                    let mut e = ex.lock().unwrap();
+                    if e.failure.is_none() && matches!(e.exit_status, Some(124) | Some(137)) {
+                        e.failure = Some((
+                            "deadline_exceeded".into(),
+                            "deadline lapsed; in-cell timeout fired".to_string(),
+                        ));
+                        drop(e);
+                        sh2.notify.notify_all();
+                    }
+                }
+            });
             (
                 Some(HelperResponse::Ok(Json::obj([(
                     "execution_id",
@@ -991,7 +1060,7 @@ fn probe_boundary(srv: &Arc<HelperServer>, kind: &str) -> (Option<HelperResponse
             cc
         }
         "container" => match srv.container.lock().unwrap().clone() {
-            Some(b) => b.exec_command(&argv, "/work", &[]),
+            Some(b) => b.exec_command(&argv, Some("/work"), &[]),
             None => return (Some(HelperResponse::err("runtime", "no container")), false),
         },
         _ => {

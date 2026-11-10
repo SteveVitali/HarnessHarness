@@ -595,6 +595,7 @@ pub fn discovery_result_schema() -> Json {
 /// its provenance — never defaulted, CC2).
 pub fn discover_surfaces_capability(purpose: Text) -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose,
         input_schema: discovery_query_schema(),
         output_schema: Some(discovery_result_schema()),
@@ -653,6 +654,7 @@ mod tests {
 
     fn cap(effects: ToolEffects, scope: ScopeBindings) -> ToolCapabilityRecord {
         ToolCapabilityRecord {
+            exec_defaults: None,
             purpose: purpose(),
             input_schema: Json::obj([
                 ("type", Json::str("object")),

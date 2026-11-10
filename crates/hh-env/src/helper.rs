@@ -550,12 +550,48 @@ impl ToolExecutor for HelperExecutor {
             },
             CommitEvidence::ReadOnly => CommitProof::ReadOnly,
         };
-        let cwd = request
-            .args
-            .get("cwd")
-            .and_then(Json::as_str)
-            .unwrap_or(".")
-            .to_string();
+        // R6.39 (REQ-XE-119; AR-22) — the armed `exec_defaults` shape:
+        // declared `env` constants merge over the projected env (the
+        // capability's declaration wins a key collision — a declaration
+        // is total for the keys it names); `timeout_ms` floors the
+        // ladder's deadline; `cwd = image_workdir` sends the sentinel the
+        // helper resolves against the cell spec; `stdio` goes on the
+        // wire. `None` ⇒ every member stays byte-identical (opt-in).
+        let (cwd, env, deadline_ms, stdio) = match &request.exec_defaults {
+            Some(d) => {
+                let mut env = self.projected_env.clone();
+                for (k, v) in &d.env {
+                    env.retain(|(ek, _)| ek != k);
+                    env.push((k.clone(), v.clone()));
+                }
+                let cwd = match d.cwd {
+                    Some(crate::executor::ExecCwd::ImageWorkdir) => "image_workdir".to_string(),
+                    None => request
+                        .args
+                        .get("cwd")
+                        .and_then(Json::as_str)
+                        .unwrap_or(".")
+                        .to_string(),
+                };
+                (
+                    cwd,
+                    env,
+                    d.effective_deadline_ms(request.deadline_ms),
+                    Some(d.stdio.as_str().to_string()),
+                )
+            }
+            None => (
+                request
+                    .args
+                    .get("cwd")
+                    .and_then(Json::as_str)
+                    .unwrap_or(".")
+                    .to_string(),
+                self.projected_env.clone(),
+                request.deadline_ms,
+                None,
+            ),
+        };
         let reply = self.client.request(&HelperRequest::Exec {
             execution_id: request.execution_id.clone(),
             effect_id: request.effect_id.clone(),
@@ -563,8 +599,8 @@ impl ToolExecutor for HelperExecutor {
             capability_ref: request.capability_ref.clone(),
             args: request.args.clone(),
             cwd,
-            env: self.projected_env.clone(),
-            deadline_ms: request.deadline_ms,
+            env,
+            deadline_ms,
             retain_bytes_cap: request.retain_bytes_cap,
             attribution_token: request.attribution_token.clone(),
             commit_proof,
@@ -573,6 +609,7 @@ impl ToolExecutor for HelperExecutor {
             // `env_clear` is the variant host's placement contract (S2.2),
             // not the §5d.5 executor's.
             env_clear: false,
+            stdio,
         })?;
         // An executor-side dedup hit returns the recorded verdict — the
         // effect was *not* re-executed (R-2.5.5¹).

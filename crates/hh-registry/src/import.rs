@@ -229,6 +229,7 @@ pub(crate) fn lift_tool(server_ref: &str, wire: &Json, seq: u64) -> (ToolCapabil
     }
     (
         ToolCapabilityRecord {
+            exec_defaults: None,
             purpose,
             input_schema: wire
                 .get("inputSchema")

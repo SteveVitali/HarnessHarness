@@ -190,6 +190,12 @@ pub struct DispatchInput<'a> {
     /// the executor/environment is never consulted). `None` ⇒ dormant,
     /// byte-identical rows.
     pub submission_marker: Option<&'a SubmissionMarker>,
+    /// The capability's typed `exec_defaults` (R6.39; REQ-XE-119; AR-22)
+    /// — decoded by the caller at arm/input-build (a malformed member
+    /// refuses there, never mid-dispatch). `Some` ⇒ the `ExecutionRequest`
+    /// carries the declared timeout/stdio/cwd/env; `None` ⇒ the
+    /// pre-admission exec shape, byte-identical (the opt-in rule).
+    pub exec_defaults: Option<&'a crate::executor::ExecDefaults>,
 }
 
 /// `SubmissionMarker` — the decoded `submit{marker, line,
@@ -2329,6 +2335,7 @@ impl<'a> Dispatcher<'a> {
             idempotency_key: key.clone(),
             commit_evidence,
             request_state: request_state.cloned(),
+            exec_defaults: input.exec_defaults.cloned(),
         };
         let resolver = self.minter.resolver();
         let run_id = self.run_id.clone();
@@ -3439,14 +3446,38 @@ impl<'a> Dispatcher<'a> {
     ) -> Result<Json, EnvError> {
         let mut record: BTreeMap<String, Json> = BTreeMap::new();
         record.insert("output".to_string(), Json::str(raw_output.to_string()));
-        if let Some(rc) = report.exit_status {
-            record.insert("returncode".to_string(), Json::Int(rc));
-        }
-        if let TerminalStatus::ToolError { class } = &report.status {
+        let timed_out = matches!(
+            &report.status,
+            TerminalStatus::ToolError {
+                class: ErrorClass::Timeout
+            }
+        );
+        if timed_out {
+            // R6.39 (REQ-XE-119; G17 (e)) — `subprocess.TimeoutExpired`
+            // semantics: a timeout renders `returncode = -1` plus the
+            // declared exception text (the executor's verbatim failure
+            // detail when it reported one, else the declared class
+            // spelling) — never the killed process's 124/137/None.
+            record.insert("returncode".to_string(), Json::Int(-1));
             record.insert(
                 "exception_info".to_string(),
-                Json::str(class.as_str().to_string()),
+                Json::str(
+                    report
+                        .detail_ref
+                        .clone()
+                        .unwrap_or_else(|| "timeout".to_string()),
+                ),
             );
+        } else {
+            if let Some(rc) = report.exit_status {
+                record.insert("returncode".to_string(), Json::Int(rc));
+            }
+            if let TerminalStatus::ToolError { class } = &report.status {
+                record.insert(
+                    "exception_info".to_string(),
+                    Json::str(class.as_str().to_string()),
+                );
+            }
         }
         match hharness_compiler::result_render::render(renderer, &record) {
             Ok(rendered) => {

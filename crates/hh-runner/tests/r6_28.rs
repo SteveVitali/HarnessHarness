@@ -227,6 +227,7 @@ fn ac2_obs_replay_overrun_refuses_typed() {
 
 fn exec_request() -> hharness_env::executor::ExecutionRequest {
     hharness_env::executor::ExecutionRequest {
+        exec_defaults: None,
         execution_id: "x".into(),
         effect_id: "e".into(),
         attempt_no: 1,

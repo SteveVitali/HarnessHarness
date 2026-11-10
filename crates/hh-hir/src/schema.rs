@@ -1550,6 +1550,12 @@ pub(crate) fn semantic_record_json(rec: &KindRecord, semantic: bool) -> Json {
                     ),
                 ));
             }
+            // R6.39 (REQ-XE-119; AR-22) — `exec_defaults` is capability
+            // identity (the declared exec semantics differ ⇒ different
+            // semantic_id): it rides both projections verbatim.
+            if let Some(e) = &t.exec_defaults {
+                v.push(("exec_defaults", e.clone()));
+            }
             v
         }),
         KindRecord::Permission(p) => Json::obj({
@@ -1914,6 +1920,7 @@ pub(crate) fn semantic_record_from_json(
                         })
                     }
                 },
+                exec_defaults: j.get("exec_defaults").cloned(),
             })
         }
         EntityKind::Permission => {

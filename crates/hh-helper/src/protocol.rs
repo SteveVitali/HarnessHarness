@@ -172,6 +172,16 @@ pub enum HelperRequest {
         /// `subprocess_confined` contract is "cleared environment + declared
         /// env keys"; §8.4 §3 Placement row, V4). Default `false`.
         env_clear: bool,
+        /// `stdio` — the declared stdio shape (R6.39; REQ-XE-119; AR-22;
+        /// additive): `"separate"` (default — legacy two-pipe shape) or
+        /// `"merged"` (stderr dup'd onto the stdout pipe at spawn — one
+        /// ordered stream). The member's *presence* also arms the
+        /// exec-defaults semantics: on the container backend a declared
+        /// `deadline_ms` runs through the in-cell
+        /// `setsid timeout --kill-after` wrapper so the whole tree dies
+        /// inside the cell (G17 (d)); `cwd = "image_workdir"` resolves to
+        /// the cell's WORKDIR (G17 (b)).
+        stdio: Option<String>,
     },
     /// `read{execution_id, after_seq, max_bytes, wait_ms}` — long-poll the
     /// journal: buffered chunks after `after_seq`, `exited`, `exit_status`,
@@ -528,6 +538,7 @@ impl HelperRequest {
                 commit_proof,
                 idempotency_key,
                 env_clear,
+                stdio,
             } => Json::obj([
                 v,
                 ("op", Json::str("exec")),
@@ -570,6 +581,10 @@ impl HelperRequest {
                         .map_or(Json::Null, |k| Json::str(k.clone())),
                 ),
                 ("env_clear", Json::Bool(*env_clear)),
+                (
+                    "stdio",
+                    stdio.as_ref().map_or(Json::Null, |s| Json::str(s.clone())),
+                ),
             ]),
             HelperRequest::Read {
                 execution_id,
@@ -757,6 +772,7 @@ impl HelperRequest {
                     commit_proof: commit_proof_parse(j.get("commit_proof"))?,
                     idempotency_key: jstr_opt(j, "idempotency_key"),
                     env_clear: matches!(j.get("env_clear"), Some(Json::Bool(true))),
+                    stdio: jstr_opt(j, "stdio").filter(|s| !s.is_empty()),
                 })
             }
             "read" => Ok(HelperRequest::Read {
@@ -986,6 +1002,7 @@ mod tests {
     #[test]
     fn exec_roundtrip() {
         let r = HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-1".into(),
             effect_id: "eff-1".into(),
             attempt_no: 1,
@@ -1018,6 +1035,7 @@ mod tests {
         assert!(matches!(
             HelperRequest::from_json(&j2),
             Ok(HelperRequest::Exec {
+                stdio: None,
                 env_clear: false,
                 ..
             })

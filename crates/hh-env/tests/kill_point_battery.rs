@@ -465,6 +465,7 @@ impl ToolExecutor for BatteryExecutor {
 
 fn capability(tool: ProbeTool, sb: ScopeBindings) -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new(
             "battery tool",
             "test:owner",
@@ -643,6 +644,7 @@ fn input<'a>(
     tool: ProbeTool,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: hharness_env::events::ScopeChain {
             turn_id: "turn-1".to_string(),
             model_call_id: "mc-1".to_string(),

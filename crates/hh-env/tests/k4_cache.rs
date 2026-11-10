@@ -211,6 +211,7 @@ fn capability(domain: EffectDomain, a: EffectAttributes, cacheable: bool) -> Too
         contract.insert("cacheable".to_string(), Json::Bool(true));
     }
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -391,6 +392,7 @@ fn input<'a>(
     let mut context_label = Label::at(AuthorityClass::Principal);
     context_label.readers = readers;
     DispatchInput {
+        exec_defaults: None,
         chain: chain(tc),
         ordinal: 0,
         proposer: "test:agent".to_string(),

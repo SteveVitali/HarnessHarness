@@ -398,6 +398,39 @@ fn libc_setsid() -> i32 {
     unsafe { setsid() }
 }
 
+/// `spawn_pgrp_leader_merged(cmd)` — the `stdio = merged` spawn (R6.39;
+/// REQ-XE-119; G17 (a)): the child is still a process-group leader, but
+/// one pipe serves BOTH output fds — stderr is dup'd onto the stdout
+/// writer at spawn, so the journal sees one ordered stream (the
+/// `stderr=STDOUT` shape). `child.stdout` is the pipe's read end;
+/// `child.stderr` is `None` (the pumps tolerate it — only the present
+/// pipe spawns a pump thread).
+#[cfg(unix)]
+pub fn spawn_pgrp_leader_merged(cmd: &mut Command) -> std::io::Result<Child> {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc_setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // `dup2(1,2)` — stderr aliases the stdout pipe's fd: one
+            // ordered stream (the ordering is the writer's — bytes land
+            // in write order on the single fd).
+            extern "C" {
+                fn dup2(oldfd: i32, newfd: i32) -> i32;
+            }
+            if dup2(1, 2) == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+}
+
 /// The pump — read `stream` to EOF, appending journal chunks (bounded to
 /// 64 KiB segments so `read` callers see timely progress).
 pub fn pump<R: Read>(

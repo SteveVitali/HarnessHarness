@@ -60,6 +60,7 @@ fn attrs(mutability: Mutability, world: World) -> EffectAttributes {
 /// `error_classes` declared, native source, `kernel_internal` executor).
 fn cap_record(seq: u64, effects: ToolEffects, scope: ScopeBindings) -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: text("a test capability", seq),
         input_schema: Json::obj([(
             "properties",

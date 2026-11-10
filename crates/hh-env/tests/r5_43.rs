@@ -199,6 +199,7 @@ fn compensable_attrs() -> EffectAttributes {
 
 fn capability() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -324,6 +325,7 @@ fn input<'a>(
     args: Json,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: ScopeChain {
             turn_id: "turn-1".to_string(),
             model_call_id: "mc-1".to_string(),
