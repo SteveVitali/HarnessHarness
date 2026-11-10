@@ -149,7 +149,7 @@ The re-partition generator's own checks agreed: every edge backward-only, the HU
 | [R6.38](../../tickets/297_R6.38__strategy-exec.md) | ticket | E2-T5 + E2-T6 (a) | 4: XE-115, XE-116, XE-117, XE-118 |
 | [R6.39](../../tickets/298_R6.39__exec-defaults-topology.md) | ticket | E2-T6 (b) + E2-T8 (a; rung record) | 2: XE-119, XE-120 |
 | [GATE-G26](../../tickets/300_GATE-G26__fp-s.md) | gate | GATE FP-S | 2: XH-007, XH-013 |
-| [R6.40](../../tickets/301_R6.40__w2-run.md) | skeleton | W2{UPLOAD-W1, PROV, LOAD, PS0, PP0, CORPUS, TEARDOWN, UPLOAD-W2, SETTLE-W2} (absorbs ARCHIVE-UPLOAD-W1 and ARCHIVE-UPLOAD-W2 + SETTLE-W2) | 2: XD-041, XH-010 |
+| [R6.40](../../tickets/301_R6.40__w2-run.md) | ticket | W2{UPLOAD-W1, PROV, LOAD, PS0, PP0, CORPUS, TEARDOWN, UPLOAD-W2, SETTLE-W2} (absorbs ARCHIVE-UPLOAD-W1 and ARCHIVE-UPLOAD-W2 + SETTLE-W2) | 2: XD-041, XH-010 |
 | [R6.41](../../tickets/302_R6.41__compaction-participant.md) | ticket | E2-T7 + E2-T8 (b) | 4: XE-122, XE-121, XE-126, XD-102 |
 | [R6.42](../../tickets/303_R6.42__partition-mini-hir.md) | ticket | FP-RECORD-PARTITION + E2-T9 | 8: XH-011, XH-114, XD-106, XE-101, XE-102, XE-114, XE-123, XD-123 |
 | [R6.43](../../tickets/304_R6.43__sweep-d3fp.md) | ticket | E2-T10 + D3-FP (D3-a + D3-c, first-pass scope) | 5: XE-124, XE-125, XD-201, XD-202, XD-220 |
