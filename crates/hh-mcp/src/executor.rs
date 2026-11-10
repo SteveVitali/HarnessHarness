@@ -321,6 +321,7 @@ mod tests {
 
     fn request(request_state: Option<Json>) -> ExecutionRequest {
         ExecutionRequest {
+            exec_defaults: None,
             execution_id: "x-1".to_string(),
             effect_id: "eff-1".to_string(),
             attempt_no: 1,

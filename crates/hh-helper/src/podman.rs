@@ -254,13 +254,23 @@ impl PodmanBackend {
 
     /// `exec` — run `argv` inside the container, streaming to the caller's
     /// pipes (the caller sets stdio; this only builds the command).
-    pub fn exec_command(&self, argv: &[String], cwd: &str, env: &[(String, String)]) -> Command {
+    /// `cwd = None` omits `--workdir` (R6.39: `cwd = image_workdir` —
+    /// `podman exec` then inherits the container's configured WORKDIR,
+    /// the cell-spec/image value, never a host-substituted path).
+    pub fn exec_command(
+        &self,
+        argv: &[String],
+        cwd: Option<&str>,
+        env: &[(String, String)],
+    ) -> Command {
         let mut c = Command::new(podman_bin());
         c.arg("exec");
         for (k, v) in env {
             c.arg("-e").arg(format!("{k}={v}"));
         }
-        c.arg("--workdir").arg(cwd);
+        if let Some(w) = cwd {
+            c.arg("--workdir").arg(w);
+        }
         c.arg(&self.container);
         c.args(argv);
         c
@@ -465,6 +475,41 @@ impl PodmanBackend {
     }
 }
 
+/// `wrap_kill(argv, deadline_ms)` — the in-cell process-tree kill
+/// wrapper (R6.39; REQ-XE-119; AR-22; G17 (d)): `setsid` makes
+/// `timeout` a session leader inside the cell, `timeout` runs the
+/// command in a fresh process group and TERMs the whole group at the
+/// deadline, then `--kill-after` SIGKILLs what survives — the entire
+/// in-container tree dies without depending on the host-side pgid's
+/// reach (UNVERIFIED across `podman exec`; ADR-0441 rejected the
+/// host-side kill for exactly that reason). Returns `argv` unchanged
+/// when no deadline is declared — an undated exec has nothing for the
+/// wrapper to enforce.
+pub fn wrap_kill(argv: &[String], deadline_ms: Option<u64>) -> Vec<String> {
+    let Some(ms) = deadline_ms else {
+        return argv.to_vec();
+    };
+    let dur = |v: u64| -> String {
+        if v % 1000 == 0 {
+            format!("{}", v / 1000)
+        } else {
+            format!(
+                "{}.{}",
+                v / 1000,
+                format!("{:03}", v % 1000).trim_end_matches('0')
+            )
+        }
+    };
+    let mut out = vec![
+        "setsid".to_string(),
+        "timeout".to_string(),
+        format!("--kill-after={}", dur(crate::exec::TERM_GRACE_MS)),
+        dur(ms),
+    ];
+    out.extend(argv.iter().cloned());
+    out
+}
+
 /// `/work` aliasing — a copy whose cell-side path lands under the
 /// agent-writable mount refuses (`/work` itself or `/work/…`); the phase
 /// boundary is never laundered through the mount.
@@ -525,7 +570,11 @@ mod tests {
         let mut c = Command::new("true");
         let _ = &mut c;
         // The argv shape is exercised through exec_command.
-        let cmd = b.exec_command(&["/bin/echo".into()], "/work", &[("A".into(), "1".into())]);
+        let cmd = b.exec_command(
+            &["/bin/echo".into()],
+            Some("/work"),
+            &[("A".into(), "1".into())],
+        );
         let s = format!("{:?}", cmd);
         assert!(s.contains("exec"));
         assert!(s.contains("hh-env-e1"));

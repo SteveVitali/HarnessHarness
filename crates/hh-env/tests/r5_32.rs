@@ -203,6 +203,7 @@ fn declared_class() -> EffectClass {
 
 fn capability() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("ops marker", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -328,6 +329,7 @@ fn input<'a>(
     ws: &std::path::Path,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: hharness_env::events::ScopeChain {
             turn_id: "turn-1".to_string(),
             model_call_id: "mc-1".to_string(),

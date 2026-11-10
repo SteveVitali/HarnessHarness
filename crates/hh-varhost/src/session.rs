@@ -291,6 +291,7 @@ pub fn spawn(spec: &SpawnSpec) -> Result<(VariantSession, LoweredRequests), Host
     let execution_id = format!("{}-exec", spec.session_id);
     let reply = client
         .request(&HelperRequest::Exec {
+            stdio: None,
             execution_id: execution_id.clone(),
             effect_id: format!("{}-spawn", spec.session_id),
             attempt_no: 1,

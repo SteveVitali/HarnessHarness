@@ -395,6 +395,13 @@ pub struct ToolCapabilityRecord {
     /// declared projection grammar is part of the capability's identity (a
     /// widened projection widens what a lease covers).
     pub action_patterns: Vec<ActionPatternRecord>,
+    /// `exec_defaults{timeout_ms, stdio, cwd, env}` — the exec-semantics
+    /// declaration (R6.39; REQ-XE-119; AR-22/ADR-0441 D2; G17), present only
+    /// when the capability declares it (opt-in — absent ⇒ the exec path is
+    /// byte-identical to the pre-admission form). §5b-owned shape like its
+    /// siblings; the typed decode lives in `hh-env::executor::ExecDefaults`
+    /// (the consumer's one home — unknown members refuse there).
+    pub exec_defaults: Option<Json>,
 }
 
 /// `ActionPattern` — the capability-declared canonical-parameter projection a

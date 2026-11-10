@@ -186,6 +186,7 @@ fn tool_node(id: &str, effects: ToolEffects, seq: u64) -> Node {
         node(
             EntityKind::ToolCapability,
             KindRecord::ToolCapability(ToolCapabilityRecord {
+                exec_defaults: None,
                 purpose: Text::new("a corpus tool", "corpus:owner", prov(seq)),
                 input_schema: Json::Null,
                 output_schema: None,

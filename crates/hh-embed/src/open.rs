@@ -2674,6 +2674,17 @@ impl EmbedService {
             );
             monitor.run_id = run_id.to_string();
             monitor.session = sess_id.to_string();
+            // R6.39 (REQ-XE-119; AR-22) — the capability's `exec_defaults`
+            // member decodes at arm: a malformed declaration is a typed
+            // arm refusal (`Refused`), never a mid-dispatch failure.
+            let exec_defaults = match &rec.exec_defaults {
+                None => None,
+                Some(j) => Some(hharness_env::executor::ExecDefaults::from_json(j).map_err(
+                    |e| EmbedError::Refused {
+                        reason: format!("exec_defaults:{e:?}"),
+                    },
+                )?),
+            };
             caps.push(crate::runtime::ExecCap {
                 surface_id: binding.surface_id.clone(),
                 binding,
@@ -2694,6 +2705,7 @@ impl EmbedService {
                 output_policy: hharness_env::capture::OutputPolicy::default(),
                 executor,
                 monitor,
+                exec_defaults,
             });
         }
         self.arm_exec_capabilities(sess_id, caps)
@@ -4097,7 +4109,15 @@ pub(crate) fn environment_spec(
         .get("class")
         .and_then(Json::as_str)
         .unwrap_or("local_host");
-    if class != "local_host" && class != "local" {
+    // R6.39 (REQ-XE-120; AR-22; the E2-T8 spike) — `env.open{connection_info}`
+    // admits the contained local classes the HH-native participant
+    // provisions its cell through, reusing R6.9's cell-spec and the AR-05
+    // egress `ext` members verbatim (CC1 — one provisioning path, never a
+    // second). `image` is required for `local_container` (an OCI ref —
+    // digest-pinned goes through the R6.9 `task_image_ref` admission);
+    // `local_sandboxed` carries the workspace-root image convention.
+    let contained = class == "local_sandboxed" || class == "local_container";
+    if class != "local_host" && class != "local" && !contained {
         return Err(EmbedError::EnvironmentUnavailable {
             reason: format!("environment class {class} is not served at Stage 2"),
         });
@@ -4116,12 +4136,47 @@ pub(crate) fn environment_spec(
             .collect::<Vec<_>>(),
         _ => vec![ws.clone()],
     };
+    // R6.39 — the contained classes' record/image/ext admission (the
+    // spike's cell provisioning reuses this one path — `env.open` is the
+    // only provisioning surface the kernel child drives).
+    let (env_class, image) = if contained {
+        let c = if class == "local_container" {
+            EnvironmentClass::LocalContainer
+        } else {
+            EnvironmentClass::LocalSandboxed
+        };
+        // `image` is required for the container class (the cell's OCI
+        // root); the sandboxed cell has no image — it shares the
+        // local_host workspace convention.
+        let image = if c == EnvironmentClass::LocalContainer {
+            let img = info.get("image").and_then(Json::as_str).ok_or_else(|| {
+                EmbedError::EnvironmentUnavailable {
+                    reason: format!("connection_info.image required for {class}"),
+                }
+            })?;
+            match hharness_env::cell_spec::task_image_ref(img, "linux/amd64") {
+                Ok(pair) => pair.0,
+                Err(_) => ImageRef::Tag(img.to_string()),
+            }
+        } else {
+            ImageRef::ContentAddress(hharness_identity::address(
+                format!("hh-embed/local_sandboxed:{ws}").as_bytes(),
+                "application/vnd.hh.env",
+            ))
+        };
+        (c, image)
+    } else {
+        (
+            EnvironmentClass::LocalHost,
+            ImageRef::ContentAddress(hharness_identity::address(
+                format!("hh-embed/local_host:{ws}").as_bytes(),
+                "application/vnd.hh.env",
+            )),
+        )
+    };
     let mut record = EnvironmentRecord {
-        class: EnvironmentClass::LocalHost,
-        image: ImageRef::ContentAddress(hharness_identity::address(
-            format!("hh-embed/local_host:{ws}").as_bytes(),
-            "application/vnd.hh.env",
-        )),
+        class: env_class,
+        image,
         build_context: None,
         platform: std::env::consts::ARCH.to_string() + "-" + std::env::consts::OS,
         provisioning: ProvisioningRecipe::default(),
@@ -4129,10 +4184,21 @@ pub(crate) fn environment_spec(
         limits: ResourceLimits::default(),
         nondeterminism: vec![],
         unpinned: BTreeSet::new(),
-        ext: BTreeMap::new(),
+        ext: match info.get("ext") {
+            Some(Json::Obj(o)) => o.clone(),
+            _ => BTreeMap::new(),
+        },
         image_attestation: None,
         canary_channels: vec![],
     };
+    // The cell spec rides `connection_info.cell_spec` verbatim into
+    // `ext["cell_spec"]` — the R6.9 decode (`CellSpec::from_record`)
+    // validates it at provision, never a second spelling.
+    if let Some(cs) = info.get("cell_spec") {
+        record
+            .ext
+            .insert(hharness_env::cell_spec::SPEC_FIELD.to_string(), cs.clone());
+    }
     let roots = Roots {
         workspace_roots: roots_json.clone(),
         writable_roots: roots_json,

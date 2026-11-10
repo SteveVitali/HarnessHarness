@@ -201,6 +201,7 @@ fn leaf_capability(output_schema: Option<Json>, labels_leaves: bool) -> ToolCapa
         m.insert("labels_leaves".to_string(), Json::Bool(labels_leaves));
     }
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -252,6 +253,7 @@ fn leaf_capability(output_schema: Option<Json>, labels_leaves: bool) -> ToolCapa
 /// scaffold's shape, unchanged).
 fn write_capability() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -422,6 +424,7 @@ fn input<'a>(
     declared: EffectClass,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: chain(tc),
         ordinal: 0,
         proposer: "test:agent".to_string(),

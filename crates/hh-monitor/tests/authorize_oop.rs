@@ -63,6 +63,7 @@ fn tool_node(id: &str, args: &[&str], effects: Vec<EffectClass>, seq: u64) -> No
     let mut n = Node::new(
         hharness_hir::kinds::EntityKind::ToolCapability,
         KindRecord::ToolCapability(ToolCapabilityRecord {
+            exec_defaults: None,
             purpose: Text::new("a test tool", "test:owner", prov(seq)),
             input_schema: Json::obj([(
                 "properties",

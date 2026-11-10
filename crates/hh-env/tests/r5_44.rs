@@ -292,6 +292,7 @@ fn perm_class() -> EffectClass {
 fn cap_for(sid: &str, class: EffectClass) -> ToolCapabilityRecord {
     let _ = sid;
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("ops marker", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -424,6 +425,7 @@ fn input<'a>(
     declared: EffectClass,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: chain(),
         ordinal: 0,
         proposer: "test:agent".to_string(),
@@ -2611,6 +2613,7 @@ fn probe_reconnect_exercise() -> Result<bool, String> {
     // Land a journal record the probe can resolve.
     client
         .request(&hharness_helper::protocol::HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-r44".into(),
             effect_id: "e-r44".into(),
             attempt_no: 0,

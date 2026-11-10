@@ -143,6 +143,7 @@ fn tool_node_scoped(
     let mut n = node(
         hharness_hir::kinds::EntityKind::ToolCapability,
         KindRecord::ToolCapability(ToolCapabilityRecord {
+            exec_defaults: None,
             purpose: Text::new("a test tool", "test:owner", prov(seq)),
             input_schema: Json::obj([(
                 "properties",

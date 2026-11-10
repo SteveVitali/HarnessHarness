@@ -240,6 +240,7 @@ fn reversible_attrs() -> EffectAttributes {
 
 fn exec_cap_record() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new(
             "run a command",
             "test:owner",
@@ -359,6 +360,7 @@ fn allow_monitor(cap: &ToolCapabilityRecord) -> Monitor {
 
 fn exec_cap(exec: Box<dyn ToolExecutor>) -> ExecCap {
     ExecCap {
+        exec_defaults: None,
         surface_id: "exec.bash".to_string(),
         binding: bash_binding(),
         scope_bindings: ScopeBindings::Unknown,

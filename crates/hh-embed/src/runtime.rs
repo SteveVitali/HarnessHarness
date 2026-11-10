@@ -482,6 +482,10 @@ pub struct ExecCap {
     pub executor: Box<dyn hharness_env::executor::ToolExecutor>,
     /// The Π monitor the dispatcher's `authorize` stage evaluates.
     pub monitor: hharness_monitor::monitor::Monitor,
+    /// The capability's typed `exec_defaults` (R6.39; REQ-XE-119) —
+    /// decoded at arm (a malformed member is a typed arm refusal);
+    /// `None` ⇒ the pre-admission exec shape, byte-identical.
+    pub exec_defaults: Option<hharness_env::executor::ExecDefaults>,
 }
 
 /// `DispatchGate` — the R5.8 embed-injected bridge (PADR-R5-2): surfaces
@@ -634,6 +638,7 @@ impl DispatchGate {
             // intent's surface id; absent ⇒ legacy path, byte-identical.
             result_renderer: self.result_renderers.get(surface),
             submission_marker: self.submission_marker.as_ref(),
+            exec_defaults: cap.exec_defaults.as_ref(),
         };
         let mut disp = hharness_env::dispatch::Dispatcher::new(
             seam.store,
@@ -3134,6 +3139,7 @@ pub fn probe_uname_slots(
         (Some(handle), Some(cap)) => {
             let token = format!("{run_id}.probe.uname");
             let req = hharness_env::executor::ExecutionRequest {
+                exec_defaults: None,
                 execution_id: token.clone(),
                 effect_id: "probe.uname".to_string(),
                 attempt_no: 1,

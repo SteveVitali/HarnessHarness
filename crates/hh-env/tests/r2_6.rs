@@ -193,6 +193,7 @@ fn capability(
     sb: ScopeBindings,
 ) -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -350,6 +351,7 @@ fn dispatch_input<'a>(
     attempt_deadline_ms: Option<u64>,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: ScopeChain {
             turn_id: "turn-1".to_string(),
             model_call_id: "mc-1".to_string(),
@@ -426,6 +428,7 @@ fn r2_6_local_executor_kills_the_hanging_tool() {
         }
     };
     let req = ExecutionRequest {
+        exec_defaults: None,
         execution_id: "x-1".into(),
         effect_id: "e-1".into(),
         attempt_no: 1,

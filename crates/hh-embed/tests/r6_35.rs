@@ -304,6 +304,7 @@ impl ToolExecutor for UnameExec {
 
 fn exec_cap(exec: Box<dyn ToolExecutor>) -> ExecCap {
     ExecCap {
+        exec_defaults: None,
         surface_id: "exec.probe".to_string(),
         binding: hharness_compiler::equiv::SurfaceBinding {
             surface_name: "exec.probe".to_string(),
@@ -332,6 +333,7 @@ fn exec_cap(exec: Box<dyn ToolExecutor>) -> ExecCap {
         },
         scope_bindings: ScopeBindings::Unknown,
         capability: ToolCapabilityRecord {
+            exec_defaults: None,
             purpose: Text::new("t", "test:owner", ProvenanceRecord::kernel("t", 0)),
             input_schema: Json::obj([]),
             output_schema: None,

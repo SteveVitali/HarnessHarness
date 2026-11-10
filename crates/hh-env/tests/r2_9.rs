@@ -794,6 +794,7 @@ fn reversible_attrs() -> EffectAttributes {
 
 fn egress_capability() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -924,6 +925,7 @@ fn egress_input<'a>(
     env: &str,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: chain(),
         ordinal: 0,
         proposer: "test:agent".to_string(),

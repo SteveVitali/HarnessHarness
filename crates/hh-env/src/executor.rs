@@ -453,6 +453,151 @@ impl ExecutionRequirement {
     }
 }
 
+/// `ExecStdio` — the declared stdio shape (AR-22/ADR-0441 D2; G17 (a)):
+/// `separate` is the legacy two-pipe shape (the closed default — an
+/// `exec_defaults` that does not name `stdio` keeps it); `merged` dups
+/// stderr onto the stdout pipe at spawn so the journal is one ordered
+/// stream (mini's `stderr=STDOUT` semantics).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecStdio {
+    /// Two pipes — the pre-R6.39 shape.
+    Separate,
+    /// One ordered stream (stderr dup'd onto stdout at spawn).
+    Merged,
+}
+
+impl ExecStdio {
+    /// The canonical spelling (`None` ⇒ `separate`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExecStdio::Separate => "separate",
+            ExecStdio::Merged => "merged",
+        }
+    }
+}
+
+/// `ExecCwd` — the declared working-directory source (G17 (b)):
+/// `image_workdir` resolves the cell's WORKDIR under the CELL-SPEC
+/// contract (R6.9; AR-06) — the closed spelling; extension is a dialect
+/// bump, never a silent path member.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecCwd {
+    /// The image WORKDIR the cell declares (sentinel on the wire).
+    ImageWorkdir,
+}
+
+/// `ExecDefaults` — the typed decode of a capability's `exec_defaults`
+/// member (REQ-XE-119; AR-22): `{timeout_ms, stdio, cwd, env}` — all
+/// optional inside the record (an empty record is a legal no-op
+/// declaration). Strict: an unknown member or an unspelled value refuses
+/// — a declared-but-unreadable spec is never silently dropped.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ExecDefaults {
+    /// The declared exec timeout (ms) — the helper-enforced budget for
+    /// this exec; the effective deadline is `min(ladder, timeout_ms)`.
+    pub timeout_ms: Option<u64>,
+    /// `stdio ∈ {separate, merged}` — default `separate` (legacy shape).
+    pub stdio: ExecStdio,
+    /// `cwd` — `image_workdir` is the only admitted spelling; `None`
+    /// keeps the caller's cwd (legacy).
+    pub cwd: Option<ExecCwd>,
+    /// `env{key: value}` — declared constants merged into the exec
+    /// request's env (the capability's constants win a key collision —
+    /// a declaration is total for the keys it names).
+    pub env: Vec<(String, String)>,
+}
+
+impl ExecDefaults {
+    /// `true` when nothing is declared — the wire/exec shape stays
+    /// byte-identical to the unarmed path.
+    pub fn is_empty(&self) -> bool {
+        self == &ExecDefaults::default()
+    }
+}
+
+impl Default for ExecStdio {
+    fn default() -> Self {
+        ExecStdio::Separate
+    }
+}
+
+impl ExecDefaults {
+    /// `from_json(j)` — the strict member decode. Members ⊆
+    /// `{timeout_ms, stdio, cwd, env}`; `timeout_ms` a non-negative int;
+    /// `stdio ∈ {"separate","merged"}`; `cwd ∈ {"image_workdir"}`; `env`
+    /// an object of string→string pairs (BTreeMap order — canonical).
+    pub fn from_json(j: &Json) -> Result<ExecDefaults, EnvError> {
+        let refuse = |detail: &str| EnvError::Unsupported {
+            capability: "exec_defaults",
+            detail: detail.to_string(),
+        };
+        let Json::Obj(m) = j else {
+            return Err(refuse("exec_defaults must be an object"));
+        };
+        for k in m.keys() {
+            if !["timeout_ms", "stdio", "cwd", "env"].contains(&k.as_str()) {
+                return Err(refuse(&format!("exec_defaults: unknown member {k}")));
+            }
+        }
+        let timeout_ms = match m.get("timeout_ms") {
+            None | Some(Json::Null) => None,
+            Some(Json::Int(n)) if *n >= 0 => Some(*n as u64),
+            Some(_) => {
+                return Err(refuse(
+                    "exec_defaults.timeout_ms must be a non-negative int",
+                ))
+            }
+        };
+        let stdio = match m.get("stdio").and_then(Json::as_str) {
+            None => ExecStdio::Separate,
+            Some("separate") => ExecStdio::Separate,
+            Some("merged") => ExecStdio::Merged,
+            Some(other) => {
+                return Err(refuse(&format!("exec_defaults.stdio: unknown {other}")));
+            }
+        };
+        let cwd = match m.get("cwd").and_then(Json::as_str) {
+            None => None,
+            Some("image_workdir") => Some(ExecCwd::ImageWorkdir),
+            Some(other) => {
+                return Err(refuse(&format!("exec_defaults.cwd: unknown {other}")));
+            }
+        };
+        let env = match m.get("env") {
+            None | Some(Json::Null) => Vec::new(),
+            Some(Json::Obj(e)) => {
+                let mut out = Vec::with_capacity(e.len());
+                for (k, v) in e {
+                    let Some(s) = v.as_str() else {
+                        return Err(refuse("exec_defaults.env values must be strings"));
+                    };
+                    out.push((k.clone(), s.to_string()));
+                }
+                out
+            }
+            Some(_) => return Err(refuse("exec_defaults.env must be an object")),
+        };
+        Ok(ExecDefaults {
+            timeout_ms,
+            stdio,
+            cwd,
+            env,
+        })
+    }
+
+    /// The effective helper deadline — `min(ladder_ms, timeout_ms)`;
+    /// a capability can only *lower* its timeout under the ladder, never
+    /// extend it.
+    pub fn effective_deadline_ms(&self, ladder_ms: Option<u64>) -> Option<u64> {
+        match (ladder_ms, self.timeout_ms) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }
+    }
+}
+
 /// `ExecutionRequest` — what the kernel hands the executor at `execute`
 /// (§5d.5 §2 request row). The executor sees the canonical args + the
 /// capability + the token it must echo — never the proposal or the decision.
@@ -495,6 +640,10 @@ pub struct ExecutionRequest {
     /// kernel stores and forwards it; it never parses, validates, or lets
     /// it decide anything (I7 — an opaque payload is never authority).
     pub request_state: Option<Json>,
+    /// The capability's typed `exec_defaults` (R6.39; REQ-XE-119) —
+    /// `Some` ⇒ the declared timeout/stdio/cwd/env semantics apply;
+    /// `None` ⇒ the pre-admission exec shape, byte-identical (opt-in).
+    pub exec_defaults: Option<ExecDefaults>,
 }
 
 /// `TerminalReport` — the executor's terminal report (the `terminal` capture
@@ -918,6 +1067,7 @@ mod tests {
     /// A V-E1-clean capability with the given `execution_requirement`.
     fn cap_record(exec_req: Json) -> ToolCapabilityRecord {
         ToolCapabilityRecord {
+            exec_defaults: None,
             purpose: Text::new("a test capability", "test", text_prov(1)),
             input_schema: Json::obj([(
                 "properties",

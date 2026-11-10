@@ -209,6 +209,7 @@ fn compensable_attrs() -> EffectAttributes {
 
 fn capability(domain: EffectDomain, a: EffectAttributes) -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -399,6 +400,7 @@ fn input<'a>(
     declared: EffectClass,
 ) -> DispatchInput<'a> {
     DispatchInput {
+        exec_defaults: None,
         chain: chain(tc),
         ordinal: 0,
         proposer: "test:agent".to_string(),
@@ -613,6 +615,7 @@ fn ac_s2_exec_without_commit_is_refused() {
     // Forged proof — never committed.
     let err = client
         .request(&hharness_helper::protocol::HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-x".into(),
             effect_id: "e-x".into(),
             attempt_no: 1,
@@ -662,6 +665,7 @@ fn ac_s2_token_echo_is_verbatim() {
         .unwrap();
     let r = client
         .request(&hharness_helper::protocol::HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-tok".into(),
             effect_id: "e-tok".into(),
             attempt_no: 1,
@@ -748,6 +752,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
     let marker = sock_dir.join("dedup-marker");
     let cmd = format!("echo run >> {}", marker.display());
     let mk_exec = |exec_id: &str| hharness_helper::protocol::HelperRequest::Exec {
+        stdio: None,
         execution_id: exec_id.into(),
         effect_id: "e-dedup".into(),
         attempt_no: 1,
@@ -1118,6 +1123,7 @@ fn ac_s2_detached_child_is_detected() {
         .unwrap();
     client
         .request(&hharness_helper::protocol::HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-det".into(),
             effect_id: "e-det".into(),
             attempt_no: 1,
@@ -1338,6 +1344,7 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
     // Tier-0 exec still runs on the same binary.
     client
         .request(&hharness_helper::protocol::HelperRequest::Exec {
+            stdio: None,
             execution_id: "exec-r0".into(),
             effect_id: "e-r0".into(),
             attempt_no: 1,

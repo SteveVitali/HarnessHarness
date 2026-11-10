@@ -285,6 +285,7 @@ pub fn tool_node(id: &str, seq: u64) -> Node {
         node(
             EntityKind::ToolCapability,
             KindRecord::ToolCapability(ToolCapabilityRecord {
+                exec_defaults: None,
                 purpose: text("a test tool", seq),
                 input_schema: Json::Null,
                 output_schema: None,

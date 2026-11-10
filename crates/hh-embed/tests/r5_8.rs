@@ -206,6 +206,7 @@ fn reversible_attrs() -> EffectAttributes {
 
 fn write_cap() -> ToolCapabilityRecord {
     ToolCapabilityRecord {
+        exec_defaults: None,
         purpose: Text::new("test tool", "test:owner", ProvenanceRecord::kernel("t", 0)),
         input_schema: Json::obj([(
             "properties",
@@ -384,6 +385,7 @@ impl ToolExecutor for CountingExec {
 
 fn exec_cap(exec: Box<dyn ToolExecutor>) -> ExecCap {
     ExecCap {
+        exec_defaults: None,
         surface_id: "exec.write".to_string(),
         binding: write_binding(),
         scope_bindings: ScopeBindings::Bindings(Json::Arr(vec![Json::obj([

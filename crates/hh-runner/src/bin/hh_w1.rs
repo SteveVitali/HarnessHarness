@@ -852,7 +852,9 @@ impl CellOps for DriveCell<'_> {
             };
             let _ = std::fs::write(dst, layer.to_canonical_string());
         }
-        let mut cmd = self.backend.exec_command(&spec.argv, &spec.cwd, &self.env);
+        let mut cmd = self
+            .backend
+            .exec_command(&spec.argv, Some(&spec.cwd), &self.env);
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::null())
             .stdin(Stdio::null());

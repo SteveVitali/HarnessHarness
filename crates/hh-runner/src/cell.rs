@@ -132,7 +132,7 @@ impl CellOps for PodmanCell<'_> {
     }
     fn exec(&mut self, spec: &CellExec) -> Result<CellOutcome, CellError> {
         use std::io::Read;
-        let mut cmd = self.backend.exec_command(&spec.argv, &spec.cwd, &[]);
+        let mut cmd = self.backend.exec_command(&spec.argv, Some(&spec.cwd), &[]);
         cmd.stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .stdin(std::process::Stdio::null());
