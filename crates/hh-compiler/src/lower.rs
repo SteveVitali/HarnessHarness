@@ -357,6 +357,8 @@ pub fn lower_profile(
             rule_params(chain, ProfileRuleKind::ResultRender)
                 .or(Some(&ts.result_renderer))
                 .filter(|j| !matches!(j, Json::Null)),
+            &profile_coord,
+            kernel,
         )?;
 
         // Every produced binding (the primary + the `split` expansion) is its
@@ -649,6 +651,10 @@ fn surface_input_schema(
 
 /// Compile the effective `ErrorFormatSpec` — `{renderings: {class → text}}`; each
 /// rendering becomes a `Text` leaf owned by the profile coordinate (T-LCD-02).
+/// R6.36 (REQ-XE-111): `classes{class → text}` compiles the typed
+/// format-failure renderings — each leaf's `hh-tmpl/1` variables must be
+/// a subset of the class's declared slots (strict undefined's compile
+/// half); `format_failure_scope` declares the per-call/batch render.
 fn compile_error_spec(
     params: Option<&Json>,
     profile_coord: &str,
@@ -668,17 +674,104 @@ fn compile_error_spec(
             .collect(),
         _ => BTreeMap::new(),
     };
+    // `classes{class → text}` — the REQ-XE-111 typed format-failure set.
+    let classes = match j.get("classes") {
+        None | Some(Json::Null) => None,
+        Some(Json::Obj(m)) => {
+            let mut renderings = BTreeMap::new();
+            for (k, v) in m {
+                let class = crate::surface::FormatFailureClass::parse(k).ok_or_else(|| {
+                    CompileError::InvalidModelProfile {
+                        detail: format!(
+                            "error_format.classes key `{k}` is not a format-failure class \
+                             (no_tool_calls, args_unparseable, unknown_tool, missing_param, \
+                             output_truncated)"
+                        ),
+                    }
+                })?;
+                let s = v
+                    .as_str()
+                    .ok_or_else(|| CompileError::InvalidModelProfile {
+                        detail: format!("error_format.classes.{k} is not a string"),
+                    })?;
+                let t = crate::tmpl::compile_template(s).map_err(|e| {
+                    CompileError::UnexpressibleSurface {
+                        entity: k.clone(),
+                        profile: profile_coord.to_string(),
+                        reason: format!("error_format.classes.{k}: {e}"),
+                    }
+                })?;
+                let missing: Vec<String> = t
+                    .variables()
+                    .iter()
+                    .filter(|v| !class.slots().contains(&v.as_str()))
+                    .cloned()
+                    .collect();
+                if !missing.is_empty() {
+                    return Err(CompileError::UnexpressibleSurface {
+                        entity: k.clone(),
+                        profile: profile_coord.to_string(),
+                        reason: format!(
+                            "error_format.classes.{k} variables {missing:?} exceed the \
+                             class's declared slots {:?}",
+                            class.slots()
+                        ),
+                    });
+                }
+                renderings.insert(
+                    class,
+                    Text::new(s.to_string(), profile_coord.to_string(), kernel.clone()),
+                );
+            }
+            Some(renderings)
+        }
+        Some(_) => {
+            return Err(CompileError::InvalidModelProfile {
+                detail: "error_format.classes is not an object".to_string(),
+            })
+        }
+    };
+    let classes = match (classes, j.get("format_failure_scope")) {
+        (None, _) => None,
+        (Some(renderings), scope) => {
+            let scope = match scope {
+                None | Some(Json::Null) => crate::surface::FormatFailureScope::PerCall,
+                Some(Json::Str(s)) => {
+                    crate::surface::FormatFailureScope::parse(s).ok_or_else(|| {
+                        CompileError::InvalidModelProfile {
+                            detail: format!(
+                                "error_format.format_failure_scope `{s}` — admitted: \
+                                 per_call, batch"
+                            ),
+                        }
+                    })?
+                }
+                Some(_) => {
+                    return Err(CompileError::InvalidModelProfile {
+                        detail: "error_format.format_failure_scope is not a string".to_string(),
+                    })
+                }
+            };
+            Some(crate::surface::FormatErrorClasses { renderings, scope })
+        }
+    };
     let mut spec = ErrorFormatSpec {
         renderings,
         distinguishability: crate::surface::Distinguishability::Unchecked,
+        classes,
     };
     spec.distinguishability = crate::surface::check_distinguishable(&spec);
     Ok(Some(spec))
 }
 
 /// Compile the effective `ResultRenderSpec` — `{mode, retained_fields?,
-/// validator_reads?}`.
-fn compile_result_spec(params: Option<&Json>) -> Result<Option<ResultRenderSpec>, CompileError> {
+/// validator_reads?}` plus the R6.36 typed renderers (`kind:
+/// json_head_tail@1 | text_head_tail@1`, REQ-XE-110).
+fn compile_result_spec(
+    params: Option<&Json>,
+    profile_coord: &str,
+    kernel: &ProvenanceRecord,
+) -> Result<Option<ResultRenderSpec>, CompileError> {
     let Some(j) = params else { return Ok(None) };
     // The profile params carry the mode flat (`mode: "truncate"` with the
     // member siblings beside it) — `RenderMode::parse` is the one grammar
@@ -700,7 +793,169 @@ fn compile_result_spec(params: Option<&Json>) -> Result<Option<ResultRenderSpec>
         mode,
         declared_loss: j.get("retained_fields").map(|_| str_vec("retained_fields")),
         validator_reads: str_vec("validator_reads"),
+        renderer: compile_typed_renderer(j, profile_coord, kernel)?,
     }))
+}
+
+/// `compile_typed_renderer(j)` — the `result_renderer.kind` member
+/// (REQ-XE-110): `json_head_tail@1{threshold, head, tail, unit, fields,
+/// json_style}` or `text_head_tail@1{threshold, head, tail, unit,
+/// marker}` — typed-parameter constants, never string edits. Absent ⇒
+/// `None` (absent-not-null, CC8); malformed members refuse typed.
+fn compile_typed_renderer(
+    j: &Json,
+    profile_coord: &str,
+    kernel: &ProvenanceRecord,
+) -> Result<Option<crate::surface::ResultRenderer>, CompileError> {
+    let Some(kind) = j.get("kind").and_then(Json::as_str) else {
+        return Ok(None);
+    };
+    let bad = |d: String| CompileError::InvalidModelProfile { detail: d };
+    let u64_member = |k: &str| -> Result<u64, CompileError> {
+        j.get(k)
+            .and_then(Json::as_int)
+            .map(|i| i.max(0) as u64)
+            .ok_or_else(|| bad(format!("result_renderer.{kind}: `{k}` must be an integer")))
+    };
+    let head_tail =
+        |j: &Json| -> Result<(u64, u64, u64, crate::surface::HeadTailUnit), CompileError> {
+            let unit = j
+                .get("unit")
+                .and_then(Json::as_str)
+                .and_then(crate::surface::HeadTailUnit::parse)
+                .ok_or_else(|| {
+                    bad(format!(
+                        "result_renderer.{kind}: `unit` ∈ {{chars, utf8_bytes}} required"
+                    ))
+                })?;
+            Ok((
+                u64_member("threshold")?,
+                u64_member("head")?,
+                u64_member("tail")?,
+                unit,
+            ))
+        };
+    match kind {
+        "json_head_tail@1" => {
+            let (threshold, head, tail, unit) = head_tail(j)?;
+            let fields = match j.get("fields") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .map(|f| {
+                        if let Some(name) = f.as_str() {
+                            // `"name"` required, `"name?"` optional.
+                            let optional = name.ends_with('?');
+                            Ok(crate::surface::ResultRenderField {
+                                name: name.trim_end_matches('?').to_string(),
+                                optional,
+                                truncate: false,
+                                warning: None,
+                            })
+                        } else if let Json::Obj(m) = f {
+                            let name = m
+                                .get("name")
+                                .and_then(Json::as_str)
+                                .ok_or_else(|| {
+                                    bad(format!(
+                                        "result_renderer.{kind}: fields[] member needs `name`"
+                                    ))
+                                })?
+                                .to_string();
+                            let warning =
+                                m.get("warning").and_then(Json::as_str).map(str::to_string);
+                            Ok(crate::surface::ResultRenderField {
+                                name,
+                                optional: matches!(m.get("optional"), Some(Json::Bool(true))),
+                                truncate: matches!(m.get("truncate"), Some(Json::Bool(true))),
+                                warning,
+                            })
+                        } else {
+                            Err(bad(format!(
+                                "result_renderer.{kind}: fields[] member is not a \
+                                 string or object"
+                            )))
+                        }
+                    })
+                    .collect::<Result<Vec<_>, CompileError>>()?,
+                _ => {
+                    return Err(bad(format!(
+                        "result_renderer.{kind}: `fields` array required"
+                    )))
+                }
+            };
+            let truncates = fields.iter().filter(|f| f.truncate).count();
+            if truncates != 1 {
+                return Err(bad(format!(
+                    "result_renderer.{kind}: exactly one `fields[]` member carries \
+                     `truncate: true`; got {truncates}"
+                )));
+            }
+            let json_style = j
+                .get("json_style")
+                .and_then(Json::as_str)
+                .and_then(crate::surface::ResultJsonStyle::parse)
+                .ok_or_else(|| {
+                    bad(format!(
+                        "result_renderer.{kind}: `json_style` ∈ {{python_jinja_tojson, \
+                         canonical}} required"
+                    ))
+                })?;
+            Ok(Some(crate::surface::ResultRenderer::JsonHeadTail {
+                threshold,
+                head,
+                tail,
+                unit,
+                fields,
+                json_style,
+            }))
+        }
+        "text_head_tail@1" => {
+            let (threshold, head, tail, unit) = head_tail(j)?;
+            let marker = j
+                .get("marker")
+                .and_then(Json::as_str)
+                .ok_or_else(|| bad(format!("result_renderer.{kind}: `marker` string required")))?;
+            let t = crate::tmpl::compile_template(marker).map_err(|e| {
+                CompileError::UnexpressibleSurface {
+                    entity: kind.to_string(),
+                    profile: profile_coord.to_string(),
+                    reason: format!("result_renderer.{kind}.marker: {e}"),
+                }
+            })?;
+            let missing: Vec<String> = t
+                .variables()
+                .iter()
+                .filter(|v| !crate::surface::ResultRenderer::MARKER_SLOTS.contains(&v.as_str()))
+                .cloned()
+                .collect();
+            if !missing.is_empty() {
+                return Err(CompileError::UnexpressibleSurface {
+                    entity: kind.to_string(),
+                    profile: profile_coord.to_string(),
+                    reason: format!(
+                        "result_renderer.{kind}.marker variables {missing:?} exceed the \
+                         renderer's slots {:?}",
+                        crate::surface::ResultRenderer::MARKER_SLOTS
+                    ),
+                });
+            }
+            Ok(Some(crate::surface::ResultRenderer::TextHeadTail {
+                threshold,
+                head,
+                tail,
+                unit,
+                marker: Text::new(
+                    marker.to_string(),
+                    profile_coord.to_string(),
+                    kernel.clone(),
+                ),
+            }))
+        }
+        other => Err(bad(format!(
+            "result_renderer.kind `{other}` — admitted: json_head_tail@1, \
+             text_head_tail@1"
+        ))),
+    }
 }
 
 /// The prompt layout — `prompt_layout` rule's declared `order` + `role_map`, else the

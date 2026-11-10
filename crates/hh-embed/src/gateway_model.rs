@@ -878,6 +878,104 @@ pub fn model_port_slot_params(doc: &hharness_hir::document::HirDocument) -> Opti
     None
 }
 
+/// `control_strategy_params(doc)` — the `native.slots["control_strategy"]`
+/// binding's params (same read discipline as `model_port_slot_params`).
+pub fn control_strategy_params(doc: &hharness_hir::document::HirDocument) -> Option<Json> {
+    use hharness_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                match np.slots.get("control_strategy") {
+                    Some(SlotBindings::One(b)) => return Some(Json::Obj(b.params.clone())),
+                    Some(SlotBindings::Many(v)) => {
+                        return v.first().map(|b| Json::Obj(b.params.clone()))
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
+/// `completion_surface_arm(doc)` — the REQ-XE-106 (G4) declaration read
+/// for the compiled-surface path: `hh.submit` renders in `tools[]` only
+/// when the definition declares `completion_surface = "hh.submit"` or
+/// its `stop_rule` requires a claim surface — `no_action`/`either`,
+/// since `submit` is the marker rule (REQ-XE-116's family), which needs
+/// no call surface. An absent declaration derives from `stop_rule`;
+/// an absent `stop_rule` is the variant preset (`submit` — the only
+/// value today's armed `StrategyParams` produce). Unknown members/
+/// spellings refuse typed, never silently coerce.
+pub fn completion_surface_arm(
+    doc: &hharness_hir::document::HirDocument,
+) -> Result<bool, EmbedError> {
+    let bad = |d: String| EmbedError::InvalidDefinition {
+        diagnostics: vec![d],
+    };
+    let Some(Json::Obj(params)) = control_strategy_params(doc) else {
+        // An unbound slot carries no params — the Stage-1 default
+        // variant's preset (`stop_rule = submit`) needs no surface.
+        return Ok(false);
+    };
+    match params.get("completion_surface") {
+        None | Some(Json::Null) => {}
+        Some(Json::Str(s)) if s == "none" => return Ok(false),
+        Some(Json::Str(s)) if s == "hh.submit" => return Ok(true),
+        Some(Json::Str(s)) => {
+            return Err(bad(format!(
+                "control_strategy.completion_surface `{s}` — admitted: none, hh.submit"
+            )))
+        }
+        Some(_) => {
+            return Err(bad(
+                "control_strategy.completion_surface is not a string".to_string()
+            ))
+        }
+    }
+    match params.get("stop_rule") {
+        None | Some(Json::Null) => Ok(false),
+        Some(Json::Str(s)) => match s.as_str() {
+            "submit" => Ok(false),
+            "no_action" | "either" => Ok(true),
+            other => Err(bad(format!(
+                "control_strategy.stop_rule `{other}` — admitted: submit, no_action, either"
+            ))),
+        },
+        // The amended object form `stop_rule = {submit: {marker, …}}`
+        // (REQ-XE-116's family) — read the class head only; the member
+        // body's decode is the control ticket's own scope.
+        Some(Json::Obj(m)) => {
+            if m.contains_key("submit") {
+                Ok(false)
+            } else if m.contains_key("no_action") || m.contains_key("either") {
+                Ok(true)
+            } else {
+                Err(bad(
+                    "control_strategy.stop_rule object names no admitted class".to_string(),
+                ))
+            }
+        }
+        Some(_) => Err(bad(
+            "control_strategy.stop_rule is not a string or object".to_string()
+        )),
+    }
+}
+
+/// `ArmedSurface` — the session's compiled `ModelSurface` plus the
+/// definition-derived render decision that rides it (R6.36; REQ-XE-106):
+/// `completion_armed` is the `hh.submit` `tools[]` arm, computed at arm
+/// and re-derived by the same read on resume (the artifact is never
+/// persisted — like the surface itself, CC1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArmedSurface {
+    /// The compiled `ModelSurface`.
+    pub surface: hharness_compiler::seal::ModelSurface,
+    /// `hh.submit` renders in `tools[]` — armed only when the definition
+    /// declares it or its `stop_rule` requires a claim surface.
+    pub completion_armed: bool,
+}
+
 // ── the port ─────────────────────────────────────────────────────────────────
 
 /// One staged plan — built at `requested_members`, consumed by `call`.
@@ -949,6 +1047,12 @@ pub struct GatewayModel {
     /// prior-turn fold through this one surface; `None` ⇒ byte-identical
     /// to the pre-change path.
     surface: Option<hharness_compiler::seal::ModelSurface>,
+    /// The `hh.submit` `tools[]` arm (R6.36; REQ-XE-106) — meaningful
+    /// only under the armed path: `true` ⇒ the completion surface's
+    /// entry follows the compiled `tools[]` (the definition declared it
+    /// or its `stop_rule` requires a claim surface). `false` ⇒ no
+    /// `hh_submit` member — the marker-rule shape.
+    completion_armed: bool,
 }
 
 impl GatewayModel {
@@ -999,6 +1103,7 @@ impl GatewayModel {
             model_io: Vec::new(),
             last_text: None,
             surface: None,
+            completion_armed: false,
         })
     }
 
@@ -1011,6 +1116,15 @@ impl GatewayModel {
     /// any wire send.
     pub fn with_surface(mut self, surface: hharness_compiler::seal::ModelSurface) -> Self {
         self.surface = Some(surface);
+        self
+    }
+
+    /// `with_completion_arm(armed)` — the REQ-XE-106 completion-surface
+    /// decision the session computed from the definition
+    /// (`completion_surface_arm`): `true` ⇒ `hh.submit` renders in
+    /// `tools[]` under the compiled-surface path.
+    pub fn with_completion_arm(mut self, armed: bool) -> Self {
+        self.completion_armed = armed;
         self
     }
 
@@ -1535,6 +1649,46 @@ impl GatewayModel {
     fn render_tools(&self) -> Result<(Vec<Json>, BTreeMap<String, String>), ModelError> {
         let mut tools = Vec::new();
         let mut map = BTreeMap::new();
+        if let Some(surface) = &self.surface {
+            // R6.36 (REQ-XE-105/106) — the compiled `ModelSurface.tools`
+            // render: each entry carries the compiled `description` and
+            // the compiled `schema` (the capability `input_schema`
+            // projection) verbatim — member descriptions included, no
+            // `ParamSpec` re-derivation. `hh.submit` follows only when
+            // the definition's `completion_surface`/`stop_rule` armed
+            // it at open (the same entry the legacy path renders).
+            for t in &surface.tools {
+                let wire = hharness_gateway::openai::wire_name(&t.binding.surface_name);
+                if map.contains_key(&wire) {
+                    return Err(ModelError::new(
+                        ModelErrorClass::InvalidRequest,
+                        format!("wire-name collision on `{wire}`"),
+                    ));
+                }
+                map.insert(wire.clone(), t.binding.surface_id.clone());
+                tools.push(self.tool_entry(&wire, &t.description, t.schema.clone()));
+            }
+            if self.completion_armed {
+                let wire = hharness_gateway::openai::wire_name(crate::runtime::SUBMIT_SURFACE);
+                if map.contains_key(&wire) {
+                    return Err(ModelError::new(
+                        ModelErrorClass::InvalidRequest,
+                        format!("wire-name collision on `{wire}`"),
+                    ));
+                }
+                map.insert(wire.clone(), crate::runtime::SUBMIT_SURFACE.to_string());
+                tools.push(self.tool_entry(
+                    &wire,
+                    &format!("{}/1", crate::runtime::SUBMIT_SURFACE),
+                    Json::obj([
+                        ("type", Json::str("object")),
+                        ("properties", Json::obj([])),
+                        ("required", Json::Arr(vec![])),
+                    ]),
+                ));
+            }
+            return Ok((tools, map));
+        }
         for s in &self.surfaces {
             let wire = hharness_gateway::openai::wire_name(&s.surface_id);
             if map.contains_key(&wire) {

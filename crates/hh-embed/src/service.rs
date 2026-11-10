@@ -302,11 +302,12 @@ pub(crate) struct SessionState {
     /// the manifest's `model_lane` member re-read on resume/takeover;
     /// `None` ⇒ the scripted `EmbedModel` lane, byte-identical.
     pub model_lane: Option<crate::gateway_model::ModelLane>,
-    /// The session's compiled `ModelSurface` (R6.35; REQ-XE-103) — armed
+    /// The session's compiled `ModelSurface` + `hh.submit` arm (R6.35's
+    /// REQ-XE-103 arm + R6.36's REQ-XE-106 completion decision) — armed
     /// at `open` when `model_port.model_surface = "compiled"`, re-derived
     /// by the same pure compile on resume/takeover; `None` ⇒ the
     /// pre-change render, byte-identical.
-    pub model_surface: Option<hharness_compiler::seal::ModelSurface>,
+    pub model_surface: Option<crate::gateway_model::ArmedSurface>,
     /// The `router` slot's `model_fail` script remainder (R-2.7) — each
     /// `drive` hands it to `EmbedModel` and takes back what the calls did
     /// not consume (the plan is the session's, the port only borrows it).
@@ -1711,14 +1712,14 @@ impl EmbedService {
         // probe: rows land durable before the first request renders
         // them (X-04). An unbacked probe leaves the slots unfilled —
         // the render's typed refusal stands before any model call.
-        if let Some(surface) = &model_surface {
+        if let Some(armed) = &model_surface {
             crate::runtime::probe_uname_slots(
                 &mut self.store,
                 &run_id,
                 &lease,
                 env_handle.as_deref(),
                 &mut exec_caps,
-                surface,
+                &armed.surface,
             )?;
         }
         let gate_env_handle = env_handle.clone();
@@ -1746,8 +1747,11 @@ impl EmbedService {
                 )?;
                 // R6.35 — `Some` ⇒ the compiled-surface path owns the
                 // render (the single renderer, never a fall-through).
+                // R6.36 — the `hh.submit` arm rides it (REQ-XE-106).
                 Some(match &model_surface {
-                    Some(s) => g.with_surface(s.clone()),
+                    Some(s) => g
+                        .with_surface(s.surface.clone())
+                        .with_completion_arm(s.completion_armed),
                     None => g,
                 })
             }

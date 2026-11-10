@@ -1913,7 +1913,7 @@ fn evidence_from_json(j: &Json, path: &str) -> Result<EquivalenceEvidence, Compi
 }
 
 fn error_spec_json(s: &crate::surface::ErrorFormatSpec) -> Json {
-    Json::obj([
+    let mut pairs = vec![
         (
             "distinguishability",
             Json::str(s.distinguishability.as_str()),
@@ -1927,7 +1927,26 @@ fn error_spec_json(s: &crate::surface::ErrorFormatSpec) -> Json {
                     .collect(),
             ),
         ),
-    ])
+    ];
+    // REQ-XE-111 — the typed classes record (absent-not-null, CC8).
+    if let Some(c) = &s.classes {
+        pairs.push((
+            "classes",
+            Json::obj([
+                (
+                    "renderings",
+                    Json::Obj(
+                        c.renderings
+                            .iter()
+                            .map(|(k, t)| (k.as_str().to_string(), t.to_json()))
+                            .collect(),
+                    ),
+                ),
+                ("format_failure_scope", Json::str(c.scope.as_str())),
+            ]),
+        ));
+    }
+    Json::obj(pairs)
 }
 
 fn error_spec_from_json(
@@ -1945,6 +1964,34 @@ fn error_spec_from_json(
             .collect::<Result<BTreeMap<_, _>, _>>()?,
         _ => return Err(schema_err(path, "renderings must be an object")),
     };
+    let classes = match j.get("classes") {
+        None | Some(Json::Null) => None,
+        Some(cj) => {
+            let cpath = format!("{path}.classes");
+            let renderings = match req(cj, "renderings", &cpath)? {
+                Json::Obj(m) => m
+                    .iter()
+                    .map(|(k, v)| {
+                        let class = crate::surface::FormatFailureClass::parse(k)
+                            .ok_or_else(|| schema_err(&cpath, format!("bad class `{k}`")))?;
+                        hharness_hir::leaves::Text::from_json(v, &format!("{cpath}.renderings.{k}"))
+                            .map(|t| (class, t))
+                            .map_err(|e| {
+                                schema_err(&format!("{cpath}.renderings.{k}"), format!("{e}"))
+                            })
+                    })
+                    .collect::<Result<BTreeMap<_, _>, _>>()?,
+                _ => return Err(schema_err(&cpath, "renderings must be an object")),
+            };
+            let scope = crate::surface::FormatFailureScope::parse(&str_at(
+                cj,
+                "format_failure_scope",
+                &cpath,
+            )?)
+            .ok_or_else(|| schema_err(&cpath, "format_failure_scope: bad value"))?;
+            Some(crate::surface::FormatErrorClasses { renderings, scope })
+        }
+    };
     Ok(crate::surface::ErrorFormatSpec {
         renderings,
         distinguishability: crate::surface::Distinguishability::parse(&str_at(
@@ -1953,11 +2000,12 @@ fn error_spec_from_json(
             path,
         )?)
         .ok_or_else(|| schema_err(path, "distinguishability: bad value"))?,
+        classes,
     })
 }
 
 fn result_spec_json(s: &crate::surface::ResultRenderSpec) -> Json {
-    Json::obj([
+    let mut pairs = vec![
         (
             "declared_loss",
             match &s.declared_loss {
@@ -1970,7 +2018,69 @@ fn result_spec_json(s: &crate::surface::ResultRenderSpec) -> Json {
             "validator_reads",
             Json::Arr(s.validator_reads.iter().map(Json::str).collect()),
         ),
-    ])
+    ];
+    // REQ-XE-110 — the typed renderer member (absent-not-null, CC8).
+    if let Some(r) = &s.renderer {
+        pairs.push(("renderer", typed_renderer_json(r)));
+    }
+    Json::obj(pairs)
+}
+
+fn typed_renderer_json(r: &crate::surface::ResultRenderer) -> Json {
+    use crate::surface::ResultRenderer;
+    match r {
+        ResultRenderer::JsonHeadTail {
+            threshold,
+            head,
+            tail,
+            unit,
+            fields,
+            json_style,
+        } => Json::obj([
+            ("kind", Json::str(r.kind())),
+            ("threshold", Json::Int(*threshold as i64)),
+            ("head", Json::Int(*head as i64)),
+            ("tail", Json::Int(*tail as i64)),
+            ("unit", Json::str(unit.as_str())),
+            (
+                "fields",
+                Json::Arr(
+                    fields
+                        .iter()
+                        .map(|f| {
+                            let mut m = BTreeMap::new();
+                            m.insert("name".into(), Json::str(f.name.clone()));
+                            if f.optional {
+                                m.insert("optional".into(), Json::Bool(true));
+                            }
+                            if f.truncate {
+                                m.insert("truncate".into(), Json::Bool(true));
+                            }
+                            if let Some(w) = &f.warning {
+                                m.insert("warning".into(), Json::str(w.clone()));
+                            }
+                            Json::Obj(m)
+                        })
+                        .collect(),
+                ),
+            ),
+            ("json_style", Json::str(json_style.as_str())),
+        ]),
+        ResultRenderer::TextHeadTail {
+            threshold,
+            head,
+            tail,
+            unit,
+            marker,
+        } => Json::obj([
+            ("kind", Json::str(r.kind())),
+            ("threshold", Json::Int(*threshold as i64)),
+            ("head", Json::Int(*head as i64)),
+            ("tail", Json::Int(*tail as i64)),
+            ("unit", Json::str(unit.as_str())),
+            ("marker", marker.to_json()),
+        ]),
+    }
 }
 
 fn result_spec_from_json(
@@ -1997,7 +2107,68 @@ fn result_spec_from_json(
             _ => None,
         },
         validator_reads: str_vec("validator_reads"),
+        renderer: match j.get("renderer") {
+            Some(rj) => Some(typed_renderer_from_json(rj, &format!("{path}.renderer"))?),
+            None => None,
+        },
     })
+}
+
+fn typed_renderer_from_json(
+    j: &Json,
+    path: &str,
+) -> Result<crate::surface::ResultRenderer, CompileError> {
+    use crate::surface::ResultRenderer;
+    let bad = |d: &str| schema_err(path, d.to_string());
+    let u64_member = |k: &str| -> Result<u64, CompileError> {
+        j.get(k)
+            .and_then(Json::as_int)
+            .map(|i| i.max(0) as u64)
+            .ok_or_else(|| bad(&format!("{k} must be an integer")))
+    };
+    let unit = crate::surface::HeadTailUnit::parse(&str_at(j, "unit", path)?)
+        .ok_or_else(|| bad("unit: bad value"))?;
+    match str_at(j, "kind", path)?.as_str() {
+        "json_head_tail@1" => {
+            let fields = match req(j, "fields", path)? {
+                Json::Arr(items) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| {
+                        let fp = format!("{path}.fields[{i}]");
+                        Ok(crate::surface::ResultRenderField {
+                            name: str_at(f, "name", &fp)?,
+                            optional: matches!(f.get("optional"), Some(Json::Bool(true))),
+                            truncate: matches!(f.get("truncate"), Some(Json::Bool(true))),
+                            warning: f.get("warning").and_then(Json::as_str).map(str::to_string),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, CompileError>>()?,
+                _ => return Err(bad("fields must be an array")),
+            };
+            Ok(ResultRenderer::JsonHeadTail {
+                threshold: u64_member("threshold")?,
+                head: u64_member("head")?,
+                tail: u64_member("tail")?,
+                unit,
+                fields,
+                json_style: crate::surface::ResultJsonStyle::parse(&str_at(j, "json_style", path)?)
+                    .ok_or_else(|| bad("json_style: bad value"))?,
+            })
+        }
+        "text_head_tail@1" => Ok(ResultRenderer::TextHeadTail {
+            threshold: u64_member("threshold")?,
+            head: u64_member("head")?,
+            tail: u64_member("tail")?,
+            unit,
+            marker: hharness_hir::leaves::Text::from_json(
+                req(j, "marker", path)?,
+                &format!("{path}.marker"),
+            )
+            .map_err(|e| schema_err(&format!("{path}.marker"), format!("{e}")))?,
+        }),
+        other => Err(bad(&format!("renderer.kind `{other}` unknown"))),
+    }
 }
 
 fn compiled_tool_json(t: &crate::lower::CompiledToolSurface) -> Json {
