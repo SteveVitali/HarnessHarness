@@ -1548,14 +1548,48 @@ run_leg_admission_build() {
   RESULT="skipped(executes-in-W1-under-R6.32)"
 }
 
+# `carried-artifacts` — the REQ-XC-330 carried-set acts (build/export/
+# load/verify): registered by R6.23, executed per window by
+# R6.32/R6.44/R6.47. W3 wiring (R6.44): HH_CARRIED_DRIVER names the
+# window's carried driver — it composes the committed surfaces (the
+# `ArchiveTar` export shape, the §5.2 IAP scp load, `sha256sum -c`
+# member verification, `hh-carried-load/1` folding) and emits the
+# window's load/build evidence; its rc is the leg's disposition.
 run_leg_carried_artifacts() {
-  ASSERTIONS="the REQ-XC-330 carried artifacts (binary-set build, podman save export, IAP scp load, image-id verify): registered by R6.23, executed in W1/W3/W4 under R6.32/R6.44/R6.47 — until then every packet labels recorded execution"
-  RESULT="skipped(executes-in-W1-W4-under-R6.32-44-47)"
+  ASSERTIONS="the REQ-XC-330 carried artifacts (binary-set build, podman save export, IAP scp load, image-id verify): registered by R6.23, executed in W1/W3/W4 under R6.32/R6.44/R6.47 — W3 wires the committed load/build surfaces through HH_CARRIED_DRIVER"
+  local drv="${HH_CARRIED_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(carried-driver-absent:HH_CARRIED_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-carried.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:carried-driver-rc"
+  fi
 }
 
+# `archive-upload` — the §4.10 per-window archive upload: registered by
+# R6.23, executed per window by R6.40/R6.44/R6.45/R6.47. W3 wiring
+# (R6.44): HH_ARCHIVE_UPLOAD_DRIVER names the window's upload driver —
+# it composes the committed hf-upload.sh path (manifest re-verify →
+# REQ-XH-103 scan → index → upload → REQ-XH-104 read-back) and writes
+# the leg's outcome word (`archive_verified` / typed refusal) on its
+# last stdout line; its rc is the leg's disposition.
 run_leg_archive_upload() {
-  ASSERTIONS="the §4.10 per-window archive upload (hf upload to the private dataset, read-back archive_verified): registered by R6.23, executed per window by R6.40/44/45/47 — until then every packet labels recorded execution"
-  RESULT="skipped(executes-per-window-under-R6.40-47)"
+  ASSERTIONS="the §4.10 per-window archive upload (hf upload to the private dataset, read-back archive_verified): registered by R6.23, executed per window by R6.40/44/45/47 — W3 wires the committed hf-upload.sh path through HH_ARCHIVE_UPLOAD_DRIVER"
+  local drv="${HH_ARCHIVE_UPLOAD_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(archive-upload-driver-absent:HH_ARCHIVE_UPLOAD_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-upload.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:archive-upload-driver-rc"
+  fi
 }
 
 run_leg_reproof() {

@@ -1,0 +1,151 @@
+{
+ "artifacts": [
+  {
+   "bytes": 38881280,
+   "image_id": "sha256:c451ed97d0206821bedd6e2255e5f6bba4736646d7170601b4085492e711a8b9",
+   "name": "h",
+   "path": null,
+   "role": "binary_set",
+   "sha256": "8c81e9e6b57903feb1c07b0c311eca2ee924ea90bb67dfa8c1b94cb69dcd3035",
+   "upload": "digest_only",
+   "window": "w3"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "w3-window",
+   "files": [
+    {
+     "bytes": 848,
+     "path": "w3/Containerfile.hset",
+     "role": "window_record",
+     "sha256": "cdef614c38dc70a63da3635122acaf695727b9b73501252c153efca39d248cd6"
+    },
+    {
+     "bytes": 1271,
+     "path": "w3/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "f8b26246cd35c367ba726229e2dbd1d5f913e2ab76b7fde566f3013fed3bd5cb"
+    },
+    {
+     "bytes": 5360,
+     "path": "w3/hset-build.log",
+     "role": "window_record",
+     "sha256": "bb6c1b0938e4778cbc408d2454fb5903fd80fd723018e7e05dd69f54be1b7571"
+    },
+    {
+     "bytes": 446,
+     "path": "w3/artifacts/binary-set-h/binary-set.json",
+     "role": "window_record",
+     "sha256": "a42c0ba4e0e4af53df6690754c1d30688f94b79cf41c718ef4d602d8c62ecf6a"
+    },
+    {
+     "bytes": 330,
+     "path": "w3/artifacts/binary-set-h/carried-export.json",
+     "role": "window_record",
+     "sha256": "9b54083ef06a89ff03d8152882460eb0a19c2aae445a1cfd70ce53e9c4db1d59"
+    },
+    {
+     "bytes": 340,
+     "path": "w3/artifacts/binary-set-h/index-entry.json",
+     "role": "window_record",
+     "sha256": "7a19643cfff0e94ee6066747533a6a5d6349440fdb900c089ce583ff2126811c"
+    },
+    {
+     "bytes": 231,
+     "path": "w3/artifacts/binary-set-h/ctx/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "14596b6bb2d1583c46a533125cbb0664f9398e22d4cc428f9a04063378396b3f"
+    },
+    {
+     "bytes": 1535,
+     "path": "w3/2026-11-11-corpus-w3.json",
+     "role": "window_record",
+     "sha256": "242cd84a3d4c04409f9f809d226b4359c72814fb81ced0849ba29cec21aecb94"
+    },
+    {
+     "bytes": 17855,
+     "path": "w3/2026-11-11-fp-w3-provision.json",
+     "role": "window_record",
+     "sha256": "00356a8c515c75f9352954096207c0e8c65ec85a0b9f796e9fd4f1a6500f7529"
+    },
+    {
+     "bytes": 2503,
+     "path": "w3/2026-11-11-fp-w3-prepull.json",
+     "role": "window_record",
+     "sha256": "d49a9621156153f016bad72c958a0184c316a9205861fbeec87e0e81a35175fa"
+    },
+    {
+     "bytes": 21696,
+     "path": "w3/2026-11-11-fp-w3-harvest.json",
+     "role": "window_record",
+     "sha256": "41ec07e8f2bf69ac37c91df83131a20899b77f69752abc4dbc258f7d95421ce5"
+    },
+    {
+     "bytes": 49981,
+     "path": "w3/2026-11-11-fp-w3-teardown.json",
+     "role": "window_record",
+     "sha256": "0ecec2a6f172f0ada5268a087b3bf9c77a4ea2afbf70a1af7a78e1712e6c58db"
+    },
+    {
+     "bytes": 3727,
+     "path": "w3/2026-11-11-fp-w3-cost.json",
+     "role": "window_record",
+     "sha256": "d9558a77db31ced50a36f8c320363da38427172089e2214b24cbf11a72039a76"
+    },
+    {
+     "bytes": 1121,
+     "path": "w3/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "146a8a846bed419273043d54cdb898625e25f78bcafb5eaf6a55fed945769786"
+    },
+    {
+     "bytes": 21,
+     "path": "w3/usage.txt",
+     "role": "window_record",
+     "sha256": "18a48cd8dafed7bb11fd25c42a6658237a5cc130e2302b328a8705e35363734d"
+    },
+    {
+     "bytes": 5712,
+     "path": "w3/hir/mswea-2.4.6.hir.json",
+     "role": "window_record",
+     "sha256": "6df6c6e3bb39a8f7a4de49be99dc89f371be9a70da5e5680d2409281cf6fb9a2"
+    },
+    {
+     "bytes": 7857,
+     "path": "w3/hir/mswea-2.4.6.sealed.json",
+     "role": "window_record",
+     "sha256": "98934508b393c6e9d4a2175714f09842abfdbed74e078ba52152c5d8ff3cdb63"
+    },
+    {
+     "bytes": 518,
+     "path": "w3/hir/NOTE.json",
+     "role": "window_record",
+     "sha256": "41f01067b0394b72206bfa045722dfa7f307856a4e734018a88197fddaecdc34"
+    }
+   ]
+  }
+ ],
+ "cites": {
+  "deferral_share": "DF-R6.23-1 (R6.44 window citation of the standing index revision)",
+  "prior_window_index": {
+   "path": "docs/build/reports/archive/2026-11-11-fp-w2-receipt-index.json",
+   "revision": "7667c207cbdec4cd196d591e359cf79f668c6869",
+   "verification": "archive_verified",
+   "window": "w2"
+  }
+ },
+ "dataset": {
+  "repo": "SteveVitali/harnessharness-archive",
+  "revision": "d7af5bad4d4976b8b4eae3cd00a2ebd64c0289b1",
+  "visibility": "private"
+ },
+ "scans": {
+  "contamination_scan_ref": null,
+  "credential_sweep": "h-set.tar refused (live_credential) \u2192 digest_only",
+  "secret_scan_ref": "hf-upload.sh REQ-XH-103 env-mask sweep per member"
+ },
+ "schema": "hh-receipt-index/1",
+ "verification": "archive_verified",
+ "verify_receipt": "docs/build/reports/archive/2026-11-11-fp-w3-verify.json"
+}

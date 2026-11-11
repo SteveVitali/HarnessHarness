@@ -1,0 +1,12 @@
+{
+ "base_blobs": [],
+ "bytes": 38881280,
+ "elapsed_ms": 55,
+ "name": "h",
+ "out_path": "/var/lib/hh/runs/run-root-w3/artifacts/binary-set-h/h-set.tar",
+ "role": "binary_set",
+ "schema": "hh-carried-export/1",
+ "sha256": "8c81e9e6b57903feb1c07b0c311eca2ee924ea90bb67dfa8c1b94cb69dcd3035",
+ "shape": "archive_tar",
+ "window": "w3"
+}

@@ -1,0 +1,107 @@
+STEP 1/12: FROM docker.io/library/rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55
+Trying to pull docker.io/library/rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55...
+Getting image source signatures
+Copying blob sha256:5b2cfb71264fc5d467d6d3245474095c6366c6bd3b43f32bd29503dcd9540a72
+Copying blob sha256:c150dd3f5fc91eabd1818cc30298a4a956782621583cadfd369c4d327584008e
+Copying blob sha256:de73ef470b7b271fede6f98a4c8376971bd059ce04ebc13b9f86e34e534b89ae
+Copying blob sha256:c2c3414b1d6b49c54c305584faac46aad75c67644cf4f8495e8145206d28e416
+Copying blob sha256:b267853a2602be02c651d45a79ece242837985d07267fe166ad1109a4b3baa39
+Copying config sha256:1c3316753323aa5edd4c2be762323794f4aa9f4335635dc4c7964ee99cb986d2
+Writing manifest to image destination
+Storing signatures
+STEP 2/12: ARG HH_WORKSPACE_COMMIT=3228ecf4730123edff7376f1bac62d963e9de6c8
+--> 4e8eeaf5046
+STEP 3/12: COPY workspace/ /src/
+--> 94a1b2d3102
+STEP 4/12: WORKDIR /src
+--> 89453b59fda
+STEP 5/12: RUN git checkout 3228ecf4730123edff7376f1bac62d963e9de6c8
+HEAD is now at 3228ecf4 R6.44 W3 — decl pin repair (R6.32a precedent), leg wiring (carried-artifacts+archive-upload), window-authored mini HIR doc sealed
+--> 2e8b01a850d
+STEP 6/12: RUN cargo build --release --locked -p hharness-kernel
+info: syncing channel updates for 1.94-x86_64-unknown-linux-gnu
+info: latest update on 2026-03-26 for version 1.94.1 (e408947bf 2026-03-25)
+info: downloading 5 components
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded rustls-pki-types v1.15.1
+  Downloaded once_cell v1.21.4
+  Downloaded getrandom v0.2.17
+  Downloaded cfg-if v1.0.5
+  Downloaded subtle v2.6.1
+  Downloaded untrusted v0.9.0
+  Downloaded find-msvc-tools v0.1.14
+  Downloaded shlex v2.0.1
+  Downloaded zeroize v1.9.1
+  Downloaded rustls-webpki v0.103.16
+  Downloaded cc v1.8.0
+  Downloaded webpki-roots v1.0.10
+  Downloaded rustls v0.23.46
+  Downloaded libc v0.2.189
+  Downloaded ring v0.17.14
+   Compiling hharness-wire v0.1.0 (/src/crates/hh-wire)
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.5
+   Compiling untrusted v0.9.0
+   Compiling zeroize v1.9.1
+   Compiling rustls v0.23.46
+   Compiling subtle v2.6.1
+   Compiling once_cell v1.21.4
+   Compiling cc v1.8.0
+   Compiling rustls-pki-types v1.15.1
+   Compiling webpki-roots v1.0.10
+   Compiling hharness-provenance v0.1.0 (/src/crates/hh-provenance)
+   Compiling getrandom v0.2.17
+   Compiling ring v0.17.14
+   Compiling hharness-identity v0.1.0 (/src/crates/hh-identity)
+   Compiling hharness-ontology v0.1.0 (/src/crates/hh-ontology)
+   Compiling hharness-embed-schema v0.1.0 (/src/crates/hh-embed-schema)
+   Compiling hharness-hir v0.1.0 (/src/crates/hh-hir)
+   Compiling hharness-ledger v0.1.0 (/src/crates/hh-ledger)
+   Compiling hharness-plugin v0.1.0 (/src/crates/hh-plugin)
+   Compiling hharness-verification v0.1.0 (/src/crates/hh-verification)
+   Compiling hharness-budget v0.1.0 (/src/crates/hh-budget)
+   Compiling hharness-registry v0.1.0 (/src/crates/hh-registry)
+   Compiling hharness-telemetry v0.1.0 (/src/crates/hh-telemetry)
+   Compiling hharness-assembly v0.1.0 (/src/crates/hh-assembly)
+   Compiling rustls-webpki v0.103.16
+   Compiling hharness-context v0.1.0 (/src/crates/hh-context)
+   Compiling hharness-compiler v0.1.0 (/src/crates/hh-compiler)
+   Compiling hharness-monitor v0.1.0 (/src/crates/hh-monitor)
+   Compiling hharness-lab v0.1.0 (/src/crates/hh-lab)
+   Compiling hharness-containment v0.1.0 (/src/crates/hh-containment)
+   Compiling hharness-eval v0.1.0 (/src/crates/hh-eval)
+   Compiling hharness-secrets v0.1.0 (/src/crates/hh-secrets)
+   Compiling hharness-tls v0.1.0 (/src/crates/hh-tls)
+   Compiling hharness-bundle v0.1.0 (/src/crates/hh-bundle)
+   Compiling hharness-experiment v0.1.0 (/src/crates/hh-experiment)
+   Compiling hharness-helper v0.1.0 (/src/crates/hh-helper)
+   Compiling hharness-env v0.1.0 (/src/crates/hh-env)
+   Compiling hharness-results v0.1.0 (/src/crates/hh-results)
+   Compiling hharness-gateway v0.1.0 (/src/crates/hh-gateway)
+   Compiling hharness-control v0.1.0 (/src/crates/hh-control)
+   Compiling hharness-mcp v0.1.0 (/src/crates/hh-mcp)
+   Compiling hharness-analysis v0.1.0 (/src/crates/hh-analysis)
+   Compiling hharness-evolution v0.1.0 (/src/crates/hh-evolution)
+   Compiling hharness-debt v0.1.0 (/src/crates/hh-debt)
+   Compiling hharness-fleet v0.1.0 (/src/crates/hh-fleet)
+   Compiling hharness-embed v0.1.0 (/src/crates/hh-embed)
+   Compiling hharness-kernel v0.1.0 (/src/crates/hh-kernel)
+    Finished `release` profile [optimized] target(s) in 2m 18s
+--> f8ee02b6416
+STEP 7/12: RUN mkdir -p artifacts && cp 'docs/build/reports/hir/mswea-2.4.6.sealed.json' 'artifacts/hir' && tar -cf 'artifacts/compiled' -C 'docs/build/reports/hir' 'compiled'
+--> 635227c0368
+STEP 8/12: RUN mkdir -p /opt/hh-set-h
+--> 12c220a313f
+STEP 9/12: RUN cp -r 'target/release/hh-kernel' '/opt/hh-set-h/hh_kernel'
+--> e0f1986d4ee
+STEP 10/12: RUN cp -r 'artifacts/hir' '/opt/hh-set-h/hir'
+--> c0330b78906
+STEP 11/12: RUN cp -r 'artifacts/compiled' '/opt/hh-set-h/compiled_artifacts'
+--> ad588068652
+STEP 12/12: RUN cd /opt/hh-set-h && sha256sum hh_kernel hir compiled_artifacts > MANIFEST.sha256
+COMMIT
+--> 4c914749c38
+4c914749c38b7f1c9cb8744a6fb4af7792f20f3e708e72b13145658e3d177b07
