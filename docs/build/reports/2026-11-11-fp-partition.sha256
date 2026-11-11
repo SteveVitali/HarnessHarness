@@ -1,0 +1,2 @@
+f7ddbc1f99e513a8aea8ec23c11d1bb7be98e6743a2573552e713e76eff7b66e  docs/build/reports/2026-11-11-fp-partition.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-11-fp-partition.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

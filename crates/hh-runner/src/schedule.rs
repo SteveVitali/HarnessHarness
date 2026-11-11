@@ -393,7 +393,7 @@ pub struct PackingUnit {
     pub block: u32,
 }
 
-fn seeded_key(seed: &str, parts: &[&str]) -> String {
+pub(crate) fn seeded_key(seed: &str, parts: &[&str]) -> String {
     sha256_hex(format!("{seed}|{}", parts.join("|")).as_bytes())
 }
 
