@@ -17,7 +17,7 @@
 //! - [`build_partition`] draws the partition from the committed
 //!   `hh-fp-prereg/1` packet's `task_lists.draws[fp_dev7]` — the
 //!   successor task list. The draw is seeded (`sha256` of
-//!   `seed|fp_dev7|<cell>|<slot>`, [`crate::schedule::seeded_key`]'s
+//!   `seed|fp_dev7|<cell>|<slot>`, `crate::schedule::seeded_key`'s
 //!   idiom — one home) and recomputes byte-identically from the
 //!   committed seed.
 //! - The freeze state is recorded, never hidden: `task_lists.state =
