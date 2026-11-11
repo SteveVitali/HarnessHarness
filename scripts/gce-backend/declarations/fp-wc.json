@@ -54,12 +54,12 @@
  "packages": {
   "compose_frontend": {
    "name": "podman-compose",
-   "version": "1.0.6-2"
+   "version": "1.0.3-3"
   },
-  "conmon": "2.1.6+ds1-1+deb12u1",
+  "conmon": "2.1.6+ds1-1",
   "crun": "1.8.1-1+deb12u1",
-  "netavark": "1.4.0-4",
-  "podman": "4.3.1+ds1-8+deb12u1"
+  "netavark": "1.4.0-3",
+  "podman": "4.3.1+ds1-8+deb12u1+b3"
  },
  "phase": "fp",
  "phase_close": false,
@@ -87,7 +87,7 @@
  },
  "runner": {
   "build": "source",
-  "commit": "0000000000000000000000000000000000000000"
+  "commit": "913c800b16f34f5b153fedbabad4c7713dba97b4"
  },
  "schema": "hh-compute-decl/1",
  "service_account": "none",
