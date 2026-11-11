@@ -242,6 +242,8 @@ fn drive_packet(
         window: None,
         podman_bin: None,
         supervision: None,
+        l1_gate: None,
+        native_participants: BTreeMap::new(),
     }
 }
 

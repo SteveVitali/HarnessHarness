@@ -286,6 +286,8 @@ fn drive_packet(
         window,
         podman_bin,
         supervision: None,
+        l1_gate: None,
+        native_participants: std::collections::BTreeMap::new(),
     }
 }
 

@@ -25,6 +25,7 @@ use hharness_ontology::lab::SplitLabel;
 use hharness_provenance::ProvenanceRecord;
 use hharness_wire::json::Json;
 
+use crate::continuation::FpArm;
 use crate::disposition::InfraCause;
 use crate::packet::{DrivePacket, SlotPacket, SlotRecipe};
 use crate::slot_record::RunnerIdentity;
@@ -468,7 +469,25 @@ pub fn slot_packet(
                 "participant_ref".to_string(),
                 Json::str(format!("fixture:{arm_id}")),
             );
-            m.insert("kind".to_string(), Json::str("oracle"));
+            // R6.41 (REQ-XE-126/REQ-XE-121; E2-T8 (b)) — a declared
+            // HH-native arm stamps `kind: native`, the `topology` the
+            // rung-conditional gate checked, and the REQ-XE-126 `hir`
+            // identity set verbatim; every other arm stays the fixture
+            // `oracle` kind (absent-not-null — byte-identical records).
+            match packet
+                .native_participants
+                .get(arm_id)
+                .filter(|_| FpArm::parse(arm_id).is_some_and(|a| a.native_lane()))
+            {
+                Some(decl) => {
+                    m.insert("kind".to_string(), Json::str(crate::native::NATIVE_KIND));
+                    m.insert("topology".to_string(), decl.topology.to_json());
+                    m.insert("hir".to_string(), decl.hir.clone());
+                }
+                None => {
+                    m.insert("kind".to_string(), Json::str("oracle"));
+                }
+            }
             m
         },
         cell: {
@@ -1032,6 +1051,53 @@ pub fn drive_window(
                     unresolved.extend(u2);
                     closed.extend(newly);
                     break;
+                }
+                // R6.41 (REQ-XD-102; contributes REQ-XH-114/REQ-XD-220)
+                // — the L1-conformance schedule gate: a packing unit
+                // carrying a native-lane member (a paid L2 pair's H
+                // side, or the HH-native arm itself) admits only when
+                // the declared `hh-l1-conformance/1` pass id matches the
+                // arm's exact H version (`participant.hir` →
+                // `{version: definition_version_id, digest:
+                // kernel_binary_sha256}` — any H change invalidates the
+                // match) **and** its declared topology passes the
+                // recorded C-05 rung (rung 3 without an admitted AR-04
+                // amendment refuses the same way — X-01). The pair is
+                // atomic: the whole unit is `withheld{l1_not_passed}`,
+                // never split.
+                let l1_blocked: Vec<String> = members
+                    .iter()
+                    .filter(|id| {
+                        fact(id)
+                            .and_then(|f| FpArm::parse(&f.arm_id))
+                            .is_some_and(|a| a.native_lane())
+                    })
+                    .filter(|id| {
+                        let arm = fact(id).map(|f| f.arm_id.clone()).unwrap_or_default();
+                        let decl = packet.native_participants.get(&arm);
+                        match (packet.l1_gate.as_ref(), decl) {
+                            (Some(g), Some(d)) => {
+                                d.topology.check().is_err()
+                                    || !crate::native::l1_gate_match(g, &d.hir)
+                            }
+                            _ => true,
+                        }
+                    })
+                    .cloned()
+                    .collect();
+                if !l1_blocked.is_empty() {
+                    for id in members {
+                        withheld.push(Json::obj([
+                            ("run_plan_id", Json::str(id)),
+                            (
+                                "disposition",
+                                Json::str(crate::native::l1_not_passed_disposition().as_str()),
+                            ),
+                            ("unit", Json::Int(*ui as i64)),
+                        ]));
+                        closed.insert(id.clone());
+                    }
+                    continue;
                 }
                 // One packing step — claim every member, then launch.
                 let step: Result<Vec<(String, LaunchOutcome)>, RunnerError> =

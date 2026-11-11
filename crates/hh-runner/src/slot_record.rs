@@ -612,6 +612,12 @@ impl ExperimentSlot {
             model: cm.get("model").map(CostRef::from_json).transpose()?,
             compute: cm.get("compute").map(CostRef::from_json).transpose()?,
         };
+        // `participant.hir` (REQ-XE-126; R6.41) — every HH-native slot
+        // record carries the sealed-definition identity set; `kind:
+        // native` requires it, and a present `hir` is strictly
+        // member-checked (the one member table, `crate::native::check_hir`).
+        let pm = obj(j, "participant")?;
+        crate::native::check_participant(&Json::Obj(pm.clone())).map_err(|e| err(e))?;
         let tm = obj(j, "trajectory")?;
         // `native_log` (R6.25/REQ-XC-317 — the hashed `/logs/agent`
         // copy-out) and `atif_absent` (REQ-XC-318 — the reported

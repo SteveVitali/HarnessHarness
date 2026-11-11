@@ -1192,6 +1192,15 @@ pub struct KernelContext {
     /// the port unbound and the op's `unresolved{…}`/`MissingBody` row
     /// stands — never a fabricated vector or summary.
     pub adapter_lane: Option<crate::context_adapters::AdapterLane>,
+    /// R6.41 (G16a; REQ-XE-122) — the sealed `compaction_strategy` slot's
+    /// resolved variant ladder, in the binding's declared order (the
+    /// C1 `compact_family` instances `KernelCompaction` places ahead of
+    /// `evict_oldest`). `Rc` so the per-drive port clones the arm cheaply
+    /// — one instance per arm, re-derived from the sealed slot at every
+    /// arm (open and resume alike), never from a durable guess. Empty =
+    /// the slot is unbound: `evict_oldest` alone, byte-identical to the
+    /// pre-slot behavior (absent-not-null).
+    pub compaction_variants: Vec<std::rc::Rc<dyn hharness_context::compact::CompactionStrategy>>,
 }
 
 impl Default for KernelContext {
@@ -1230,7 +1239,23 @@ impl KernelContext {
             content_refs: std::collections::BTreeMap::new(),
             consolidation_watermarks: std::collections::BTreeMap::new(),
             adapter_lane: None,
+            compaction_variants: Vec::new(),
         })
+    }
+
+    /// Arm one `compaction_strategy` slot binding — the sealed variant
+    /// ref + params resolve through [`compaction_strategy_for`] (the
+    /// only mapping; G16a/REQ-XE-122). An unresolvable ref or malformed
+    /// params is the arm's typed refusal — never a silent `evict_oldest`
+    /// substitution.
+    pub fn arm_compaction(
+        &mut self,
+        variant_ref: &str,
+        params: &BTreeMap<String, Json>,
+    ) -> Result<(), String> {
+        let strategy = compaction_strategy_for(variant_ref, params)?;
+        self.compaction_variants.push(std::rc::Rc::from(strategy));
+        Ok(())
     }
 
     /// Rebind the policy — the resumed arm's declared variant re-
@@ -2161,6 +2186,177 @@ impl MemoryPort for KernelMemory {
     }
 }
 
+/// `compaction_strategy_for(variant_ref, params)` — the sealed
+/// `compaction_strategy` slot's runtime binding (R6.41, G16a;
+/// REQ-XE-122): the **only** mapping from a declared variant ref to a
+/// first-party C1 `CompactionStrategy` instance (CC1 — the same
+/// discipline `policy_for_variant` holds for `context_policy`), its
+/// params decoded strictly. A ref the table does not name, a wrong-typed
+/// member, or an unknown member is the arm's typed refusal — never a
+/// silent `evict_oldest` substitution or a guessed parameter.
+///
+/// Param homes (strict member sets; an unknown member refuses — the
+/// declaration is total for what it names):
+/// - `hh/summarize-rolling@1` — `keep_recent_tokens`,
+///   `reserve_tokens`, `summarizer_profile`, `instructions_ref`,
+///   `incremental`, `split_turn`, `retain_principal_tokens`,
+///   `max_summary_tokens`, `input_reduction` (verbatim —
+///   [`hharness_context::compact::InputReduction`] carries no JSON codec
+///   today, so a declared member refuses typed rather than silently
+///   dropping).
+/// - `hh/offload-then-summarize@1` — `summarizer_profile`,
+///   `max_summary_tokens`, `input_reduction` (same verbatim rule).
+/// - `hh/structured-checkpoint@1` — `schema_ref`, `section_order`,
+///   `projection_ref` (all required — a checkpoint without its
+///   extractor coordinate is not a checkpoint).
+/// - `hh/fresh-window-with-notes@1` — `reminder_rule`,
+///   `note_capability`, `history_capability`, `fallback_buffer_tokens`
+///   (all required — the variant's capability names are the
+///   declaration).
+/// - `hh/world-state-refresh@1` — no params (any member refuses).
+/// - `hh/provider-compaction@1` — `capability_ref` (required — the
+///   profile-declared gateway capability the variant delegates
+///   through).
+/// - `hh/model-owned@1` — refuses typed: `β(compact) = model` is a
+///   model-owned proposal channel, not a slot-bound code variant
+///   (ADR-0076 d7 — the ladder never arms it as a code rung).
+pub fn compaction_strategy_for(
+    variant_ref: &str,
+    params: &BTreeMap<String, Json>,
+) -> Result<Box<dyn hharness_context::compact::CompactionStrategy>, String> {
+    use hharness_context::compact_family as cf;
+    let bad = |d: String| format!("compaction_strategy: {d}");
+    // Strict member check — a misspelt member is a decode error, never
+    // a silently ignored declaration.
+    let no_unknown = |allowed: &[&str]| -> Result<(), String> {
+        for k in params.keys() {
+            if !allowed.contains(&k.as_str()) {
+                return Err(bad(format!("{variant_ref}: unknown member {k}")));
+            }
+        }
+        Ok(())
+    };
+    let u = |k: &str| -> Option<u64> {
+        params
+            .get(k)
+            .and_then(Json::as_int)
+            .map(|v| v.max(0) as u64)
+    };
+    let b = |k: &str| match params.get(k) {
+        Some(Json::Bool(b)) => Some(*b),
+        _ => None,
+    };
+    let s = |k: &str| params.get(k).and_then(Json::as_str).map(str::to_string);
+    let need = |k: &str| -> Result<String, String> {
+        s(k).ok_or_else(|| bad(format!("{variant_ref}.{k} required")))
+    };
+    // `input_reduction` is declared-but-untransported (the typed record
+    // has no JSON codec in this stage) — refuse rather than drop.
+    let no_reduction = || -> Result<(), String> {
+        if params.contains_key("input_reduction") {
+            return Err(bad(format!(
+                "{variant_ref}.input_reduction has no wire codec at this stage — declare it in a profile, never drop it"
+            )));
+        }
+        Ok(())
+    };
+    match variant_ref {
+        cf::SUMMARIZE_ROLLING_REF => {
+            no_unknown(&[
+                "keep_recent_tokens",
+                "reserve_tokens",
+                "summarizer_profile",
+                "instructions_ref",
+                "incremental",
+                "split_turn",
+                "retain_principal_tokens",
+                "max_summary_tokens",
+                "input_reduction",
+            ])?;
+            no_reduction()?;
+            Ok(Box::new(cf::SummarizeRolling {
+                keep_recent_tokens: u("keep_recent_tokens").unwrap_or(0),
+                reserve_tokens: u("reserve_tokens").unwrap_or(0),
+                summarizer_profile: s("summarizer_profile")
+                    .unwrap_or_else(|| "compaction".to_string()),
+                instructions_ref: s("instructions_ref"),
+                incremental: b("incremental").unwrap_or(false),
+                split_turn: b("split_turn").unwrap_or(false),
+                retain_principal_tokens: u("retain_principal_tokens").unwrap_or(0),
+                max_summary_tokens: u("max_summary_tokens"),
+                input_reduction: None,
+            }))
+        }
+        cf::OFFLOAD_THEN_SUMMARIZE_REF => {
+            no_unknown(&[
+                "summarizer_profile",
+                "max_summary_tokens",
+                "input_reduction",
+            ])?;
+            no_reduction()?;
+            Ok(Box::new(cf::OffloadThenSummarize {
+                summarizer_profile: s("summarizer_profile")
+                    .unwrap_or_else(|| "compaction".to_string()),
+                max_summary_tokens: u("max_summary_tokens"),
+                input_reduction: None,
+            }))
+        }
+        cf::STRUCTURED_CHECKPOINT_REF => {
+            no_unknown(&["schema_ref", "section_order", "projection_ref"])?;
+            let section_order = match params.get("section_order") {
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(|v: &Json| v.as_str().map(str::to_string))
+                    .collect::<Option<Vec<String>>>()
+                    .ok_or_else(|| {
+                        bad(format!("{variant_ref}.section_order must be a string array"))
+                    })?,
+                _ => {
+                    return Err(bad(format!(
+                        "{variant_ref}.section_order must be a string array"
+                    )))
+                }
+            };
+            Ok(Box::new(cf::StructuredCheckpoint {
+                schema_ref: need("schema_ref")?,
+                section_order,
+                projection_ref: need("projection_ref")?,
+            }))
+        }
+        cf::FRESH_WINDOW_WITH_NOTES_REF => {
+            no_unknown(&[
+                "reminder_rule",
+                "note_capability",
+                "history_capability",
+                "fallback_buffer_tokens",
+            ])?;
+            Ok(Box::new(cf::FreshWindowWithNotes {
+                reminder_rule: need("reminder_rule")?,
+                note_capability: need("note_capability")?,
+                history_capability: need("history_capability")?,
+                fallback_buffer_tokens: u("fallback_buffer_tokens")
+                    .ok_or_else(|| bad(format!("{variant_ref}.fallback_buffer_tokens required")))?,
+            }))
+        }
+        cf::WORLD_STATE_REFRESH_REF => {
+            no_unknown(&[])?;
+            Ok(Box::new(cf::WorldStateRefresh))
+        }
+        cf::PROVIDER_COMPACTION_REF => {
+            no_unknown(&["capability_ref"])?;
+            Ok(Box::new(cf::ProviderCompactionVariant {
+                capability_ref: need("capability_ref")?,
+            }))
+        }
+        cf::MODEL_OWNED_REF => Err(bad(format!(
+            "{variant_ref} is the model-owned boundary (β(compact) = model) — a proposal channel, never a slot-bound code variant"
+        ))),
+        other => Err(bad(format!(
+            "variant {other:?} names no first-party binding                  (declared: hh/summarize-rolling@1 | hh/offload-then-summarize@1 |                 hh/structured-checkpoint@1 | hh/fresh-window-with-notes@1 |                 hh/world-state-refresh@1 | hh/provider-compaction@1)"
+        ))),
+    }
+}
+
 /// `KernelCompaction` — the kernel's `CompactionPort` (DF-S2.8-1): the
 /// real `hharness_context::compact` ladder over the last assembled plan, with
 /// `evict_oldest` as the always-present rung (the in-process kernel
@@ -2168,21 +2364,26 @@ impl MemoryPort for KernelMemory {
 /// The emitted `context.compaction.{started,completed}` rows return to
 /// the driver through `CompactionDone.emitted` — the port computes, the
 /// fenced writer lands (CC3).
+///
+/// R6.41 (G16a; REQ-XE-122) — `variants` is populated from the shared
+/// fold's `compaction_variants` (the sealed `compaction_strategy` slot's
+/// armed ladder): an unarmed fold yields `evict_oldest` alone,
+/// byte-identical to the pre-slot behavior.
 pub struct KernelCompaction {
     /// The shared context/memory fold (the plan stash is its input).
     pub ctx: Rc<RefCell<KernelContext>>,
     /// Extra strategy rungs ahead of `evict_oldest` (the declared variant
     /// ladder — empty at C0).
-    pub variants: Vec<Box<dyn hharness_context::compact::CompactionStrategy>>,
+    pub variants: Vec<Rc<dyn hharness_context::compact::CompactionStrategy>>,
 }
 
 impl KernelCompaction {
-    /// Wire the port over the shared fold.
+    /// Wire the port over the shared fold — the armed compaction ladder
+    /// rides the fold's `compaction_variants` (cloned `Rc`s; the fold is
+    /// the one home, CC1).
     pub fn new(ctx: Rc<RefCell<KernelContext>>) -> Self {
-        KernelCompaction {
-            ctx,
-            variants: Vec::new(),
-        }
+        let variants = ctx.borrow().compaction_variants.clone();
+        KernelCompaction { ctx, variants }
     }
 }
 

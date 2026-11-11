@@ -564,6 +564,84 @@ impl EmbedService {
                 "gateway_http",
                 BTreeMap::new(),
             ),
+            // R6.41 (G16a; REQ-XE-122) — the `compaction_strategy` slot's
+            // first-party C1 family (`hh-context::compact_family`'s own
+            // refs, the `@1` part of the registered name). The runtime
+            // half is `compaction_strategy_for`'s one mapping; the
+            // kernel's `evict_oldest` floor stays the packaged variant
+            // (`plugins/hh-compact-evict-oldest`) and needs no seed —
+            // the slot binds none of these for absent-not-null.
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "summarize-rolling@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(false)),
+                    (
+                        "op_kinds".to_string(),
+                        Json::Arr(vec![Json::str("evict"), Json::str("summarize")]),
+                    ),
+                ]),
+            ),
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "offload-then-summarize@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(false)),
+                    (
+                        "op_kinds".to_string(),
+                        Json::Arr(vec![
+                            Json::str("evict"),
+                            Json::str("offload"),
+                            Json::str("summarize"),
+                        ]),
+                    ),
+                ]),
+            ),
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "structured-checkpoint@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(true)),
+                    (
+                        "op_kinds".to_string(),
+                        Json::Arr(vec![Json::str("evict"), Json::str("restructure")]),
+                    ),
+                ]),
+            ),
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "fresh-window-with-notes@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(false)),
+                    (
+                        "op_kinds".to_string(),
+                        Json::Arr(vec![
+                            Json::str("evict"),
+                            Json::str("offload"),
+                            Json::str("summarize"),
+                        ]),
+                    ),
+                ]),
+            ),
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "world-state-refresh@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(true)),
+                    ("op_kinds".to_string(), Json::Arr(vec![Json::str("evict")])),
+                ]),
+            ),
+            (
+                hharness_registry::suites::compaction_strategy_class(),
+                "provider-compaction@1",
+                BTreeMap::from([
+                    ("deterministic".to_string(), Json::Bool(false)),
+                    (
+                        "op_kinds".to_string(),
+                        Json::Arr(vec![Json::str("evict"), Json::str("provider_compact")]),
+                    ),
+                ]),
+            ),
         ] {
             let class_rec = RegistryRecord::Class(class);
             let class_vid = hharness_registry::identity::version_id(&class_rec);
