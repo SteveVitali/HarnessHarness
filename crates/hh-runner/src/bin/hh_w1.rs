@@ -1100,7 +1100,22 @@ fn h_run_once(
             .spawn()
             .map_err(|e| format!("mediator spawn: {e}"))?;
         guard = Some(MediatorGuard { child: med });
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        // The socket file must exist before `podman create`: a `-v`
+        // mount whose source is absent is silently created as a
+        // *directory*, and the relay's upstream connect then fails on
+        // every request (the Wc 0/R signature). Wait for the real
+        // socket — a mediator that never binds fails the slot as a
+        // machinery error, never as a phantom zero-request run.
+        let sock_deadline = Instant::now() + std::time::Duration::from_secs(10);
+        while !egress_sock.exists() {
+            if Instant::now() > sock_deadline {
+                return Err(format!(
+                    "mediator egress socket {} never bound",
+                    egress_sock.display()
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
         mounts = vec![
             SocketMount {
                 name: "model".to_string(),
@@ -1122,6 +1137,20 @@ fn h_run_once(
             .map_err(|e| e.to_string())?
             .into_iter()
             .collect::<Vec<(String, String)>>();
+        // The projection binds the declared `EGRESS_RELAY_PORT` (3128);
+        // the relay binds `cfg.egress_port` — when the drive config
+        // names a different port the proxy env must point at the port
+        // the relay actually bound, or every egress connect is refused
+        // before it ever reaches the mediator (the Wc dev-leg 3130/8090
+        // cells). Same pair the projection mints, one authoritative port.
+        for (k, v) in &mut env {
+            if matches!(
+                k.as_str(),
+                "http_proxy" | "https_proxy" | "HTTP_PROXY" | "HTTPS_PROXY"
+            ) {
+                *v = format!("http://127.0.0.1:{}", cfg.egress_port);
+            }
+        }
     }
     let backend = PodmanBackend {
         container: container.clone(),

@@ -1,0 +1,42 @@
+{
+ "schema": "hh-wc-repair/1",
+ "window": "wc2-offline-repair",
+ "scope_decision": "docs/build/LEDGER.md GATE-G28b (2026-11-11T19:23:10Z) — second repair window authorized beyond the declared at-most-once Wc; this record is the offline repair act, not the Wc2 re-proof",
+ "diagnosis": {
+  "class": "mediated_egress_scope_mint",
+  "surface": "H-allow (committed run_cell cell machinery, `allowlist_mediated` profile)",
+  "root_cause": "crates/hh-env/src/bin/hh_egress_mediator.rs — two scope-grammar violations in the binary's wire path, upstream of `decide_egress`: (1) `serve_conn` minted every request's `security.egress.requested` under `scope{turn_id: \"mediator\", tool_call_id: \"med-<env>\"}` with no `model_call_id` — the ledger's chain rule (`tool_call_id ⇒ model_call_id`, store.rs) refuses it as `SchemaViolation`; (2) even with an empty chain, `mint_effect`'s `scope.effect_id` names a scope never opened in the mediator's standalone run — `ScopeNotOpen{effect_id}` (the slot's phase effect lives in the runner's run). Every appended row failed, `gate` errored, the connection got a bare `500`, and `security.egress.requested`/`decided` never landed: the mediator ran (lease + run-open events recorded) but mediated **zero** requests — the recorded Wc signature (H-allow 0/R, `denied_hosts: []`, agents exited{0}/exited{100} on apt, `verifier_unavailable:reward_missing`). Reproduced verbatim on the unfixed binary: `500 Ledger{append security.egress.requested: SchemaViolation{...tool_call_id without model_call_id}}`. The in-process batteries never hit it — their fixture chains are well-formed and their scopes pre-opened.",
+  "defect_2_resolver_pin_drop": "the same binary built a `StaticResolver` from the declared `--resolve` pins, then `resolver_clone` discarded it and always returned `SystemResolver` — the declared fixture seam never applied.",
+  "defect_3_port_projection": "crates/hh-runner/src/bin/hh_w1.rs — the cell env projection hardcodes `EGRESS_RELAY_PORT=3128` into `http(s)_proxy` while the relay binds `cfg.egress_port`; the Wc dev-leg cells bound 3130/8090 (journald), so their proxy env pointed at a dead port — connects refused before the relay, indistinguishable in the row set. Plus a blind 400 ms wait before `podman create` — a late or failed mediator bind would mount a podman-auto-created *directory* in place of the socket."
+ },
+ "repair": {
+  "scope": "machinery only — the mediator binary's wire path and the hh-w1 drive config; the drawn tasks, surfaces O/H-pub/H-allow, the R/R admit rule and the committed replacement orders are untouched; no new record kind or schema",
+  "act_1": "hh_egress_mediator.rs — `serve_conn` mints requests under an empty chain (`EMPTY_CHAIN`): no fabricated turn/tool_call ids. The slot's declared `--effect-id` is opened in the mediator's own run with the registered `opens_scope: effect` event (`action.effect.intended`) at startup, so `mint_effect`'s `scope.effect_id` names an opened scope — `security.egress.requested`/`decided`/`tunnel.closed` all append. `req.tool_call_id`/`effect_id` still ride the payloads verbatim.",
+  "act_2": "hh_egress_mediator.rs — `resolver_clone` (always `SystemResolver`) replaced by per-connection `make_resolver` honoring the declared `--resolve` pins (`StaticResolver`).",
+  "act_3": "hh_w1.rs — the exec env's four `*_proxy` members are re-pinned to `http://127.0.0.1:{cfg.egress_port}` (the port the relay actually bound); and `podman create` now waits ≤10 s for the egress socket file to exist — a mediator that never binds fails the slot as a machinery error, never a phantom 0/R."
+ },
+ "new_version": {
+  "runner": {
+   "binary": "hh-w1",
+   "built_from": "source — cargo build --release --locked --bin hh_w1 -p hharness-runner (macOS dev host, debug-verified separately)",
+   "sha256": "sha256:f9b6ad0538c77fe714965fee2057e7e1e2b7d6c29daddae33676d8dccdd479f9",
+   "carries": "the scope-mint repair + resolver-pin repair + egress-port/socket-wait repairs",
+   "mediator_binary": "hh-egress-mediator (same commit — the REQ-XC-330 carried set rebuild must include it)"
+  },
+  "prior_runner": {
+   "commit": "ad2321c87edd0895d480d9fc885d8ddec0cd5b87",
+   "sha256": "sha256:2bfb5151d0c32fd2df946852caeae4a86f5d6f35cd2631798122e1d5cf2c495d"
+  }
+ },
+ "test_evidence": {
+  "regression": "crates/hh-env/tests/r6_45.rs — drives the real `hh-egress-mediator` binary over its real unix socket: absolute-form `GET http://fixture.test:<port>` to an allow-listed host pinned `--resolve fixture.test=127.0.0.1` → forwarded `HTTP/1.1 200` from a loopback fixture + `security.egress.requested`/`decided{allow}` durable; `CONNECT denied.test:443` → `403` + `decided{deny}`. Fails on the unfixed binary (every request `500`, zero rows).",
+  "commands": [
+   "cargo test -p hharness-env — all batteries pass (incl. r6_45 1/1)",
+   "cargo test -p hharness-runner --test r6_9 — 11/11",
+   "cargo fmt --all --check — clean",
+   "cargo build --release --locked --bin hh_w1 -p hharness-runner — clean"
+  ],
+  "live_pending": "a live podman/VM leg (in-cell relay → mounted socket → mediator) is not available on the repair host — recorded pending; the Wc2 re-proof is the live verification act under the GATE-G28b window, not claimed here"
+ },
+ "tasks_untouched": true
+}
