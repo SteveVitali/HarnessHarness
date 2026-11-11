@@ -1,0 +1,40 @@
+{
+ "assertions": [
+  "the L1 RECORD corpus (original mini-swe-agent through the HH cell+proxy, 7 development tasks x 4 = 28 trajectories, the G-L1 hh-l1-conformance/1 input) then L1.0/L1.1/L1.2 on the built H over the gate-A partition \u2014 subject slots admit only against a frozen development list"
+ ],
+ "cost_pricing": {
+  "retrieved": "2026-10-21",
+  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+  "table": "docs/build/reports/live/pricing.json"
+ },
+ "cost_usd": 0.0,
+ "endpoint_host": null,
+ "git_head": "3047b13e133009496816a35831d08a18efba1757",
+ "harness": "unknown",
+ "leg": "corpus",
+ "model_reported": null,
+ "predicate": {
+  "prereg_path": "docs/build/reports/2026-11-10-fp-prereg.json",
+  "prereg_sha256": "2e36bf81d3af55491af00608c63bedf3ed035e0193cc0ce4cd0f3b609e450201",
+  "read": "once, before the leg \u2014 REQ-XH-116/127",
+  "task_lists_state": "blocked"
+ },
+ "provided": {
+  "HH_CORPUS_BASE_URL": "no",
+  "HH_CORPUS_SLOT_TOKEN": "no",
+  "HH_PP_EVIDENCE_DIR": "no",
+  "HH_PS_STAGE_RECORD": "no",
+  "OLLAMA_API_KEY": "no"
+ },
+ "provider": "hh-model-proxy",
+ "recorded_at": "2026-11-11T10:17:27Z",
+ "request_ids": [],
+ "response_headers": {},
+ "result": "withheld{un_reproofed_successor:task_lists_state=blocked}",
+ "schema": "hh-live-evidence/1",
+ "spend_cumulative_usd": 0.0,
+ "ticket": "R6.44",
+ "token_usage": null,
+ "transcript_path": null,
+ "transcript_sha256": null
+}

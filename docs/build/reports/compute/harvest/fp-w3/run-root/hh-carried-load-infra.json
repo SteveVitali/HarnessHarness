@@ -1,0 +1,32 @@
+{
+ "elapsed_ms": 9591,
+ "expected_set_digest": "sha256:254d590e1c66a8300bc2ff26c1d03fcf2104985e614a6b4815f561081639de0e",
+ "image_id": null,
+ "kind": "archive",
+ "members": {
+  "egress_mediator": "b91888222a1a68b3dee34c8141dd05e7828edc8d50e698d9c2188d5a6c98cd76",
+  "helper": "42a644fc0e971cb2656eb511ee860529bf08fcbda6fc4a32c30435f5ed784223",
+  "model_proxy": "56525e02325cec85290c0bb35611b41829fe0360190f87afcba0fb437826eca2",
+  "relay": "b647d66d373f125769f49964816e880b49bf7c52c99a597101596c3bd9861c0b",
+  "runner": "d3f81fb66665ca96ea2971b5a6b8a2f4a26d976891c655a67ab5359a48521c66"
+ },
+ "name": "infrastructure",
+ "schema": "hh-carried-load/1",
+ "scp_argv": [
+  "compute",
+  "scp",
+  "--tunnel-through-iap",
+  "--project",
+  "hh-fp-a1b2c3",
+  "--zone",
+  "us-central1-a",
+  "/Users/stevenvitali/hh-retained/fp-w1-upload-stage/w1/artifacts/infrastructure-set.tar",
+  "hh-fp-w3:/var/lib/hh/w3/carried/infrastructure-set.tar"
+ ],
+ "set_digest": "sha256:254d590e1c66a8300bc2ff26c1d03fcf2104985e614a6b4815f561081639de0e",
+ "verified": true,
+ "vm_commands": [
+  "mkdir -p '/var/lib/hh/w3/carried/infra' && tar -xf '/var/lib/hh/w3/carried/infrastructure-set.tar' -C '/var/lib/hh/w3/carried/infra'",
+  "cd '/var/lib/hh/w3/carried/infra' && sha256sum -c MANIFEST.sha256"
+ ]
+}

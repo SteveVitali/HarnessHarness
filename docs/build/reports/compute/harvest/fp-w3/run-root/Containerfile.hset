@@ -1,0 +1,14 @@
+# hh-binary-set/1 — REQ-XC-330 carried set build (R6.23; AR-20/ADR-0437)
+# set: h
+FROM docker.io/library/rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55
+ARG HH_WORKSPACE_COMMIT=3228ecf4730123edff7376f1bac62d963e9de6c8
+COPY workspace/ /src/
+WORKDIR /src
+RUN git checkout 3228ecf4730123edff7376f1bac62d963e9de6c8
+RUN cargo build --release --locked -p hharness-kernel
+RUN mkdir -p artifacts && cp 'docs/build/reports/hir/mswea-2.4.6.sealed.json' 'artifacts/hir' && tar -cf 'artifacts/compiled' -C 'docs/build/reports/hir' 'compiled'
+RUN mkdir -p /opt/hh-set-h
+RUN cp -r 'target/release/hh-kernel' '/opt/hh-set-h/hh_kernel'
+RUN cp -r 'artifacts/hir' '/opt/hh-set-h/hir'
+RUN cp -r 'artifacts/compiled' '/opt/hh-set-h/compiled_artifacts'
+RUN cd /opt/hh-set-h && sha256sum hh_kernel hir compiled_artifacts > MANIFEST.sha256
