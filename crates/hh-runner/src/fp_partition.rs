@@ -342,7 +342,7 @@ fn partition_content(name: &str, members: &[Json]) -> Json {
 }
 
 /// `partition_digest(name, members)` — `sha256:` over the canonical
-/// bytes of [`partition_content`]. The corpus's partition input is
+/// bytes of `partition_content`. The corpus's partition input is
 /// frozen by digest (REQ-XD-106).
 pub fn partition_digest(name: &str, members: &[Json]) -> String {
     format!(
