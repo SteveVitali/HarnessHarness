@@ -153,7 +153,7 @@ The re-partition generator's own checks agreed: every edge backward-only, the HU
 | [R6.41](../../tickets/302_R6.41__compaction-participant.md) | ticket | E2-T7 + E2-T8 (b) | 4: XE-122, XE-121, XE-126, XD-102 |
 | [R6.42](../../tickets/303_R6.42__partition-mini-hir.md) | ticket | FP-RECORD-PARTITION + E2-T9 | 8: XH-011, XH-114, XD-106, XE-101, XE-102, XE-114, XE-123, XD-123 |
 | [R6.43](../../tickets/304_R6.43__sweep-d3fp.md) | ticket | E2-T10 + D3-FP (D3-a + D3-c, first-pass scope) | 5: XE-124, XE-125, XD-201, XD-202, XD-220 |
-| [R6.44](../../tickets/306_R6.44__w3-run.md) | skeleton | W3{PROV, LOAD, H-SET BUILD+EXPORT, L1 run, TEARDOWN, UPLOAD-W3} (K5, E2-T11; absorbs ARCHIVE-UPLOAD-W3) | 5: XE-006, XE-007, XE-008, XE-009, XD-107 |
+| [R6.44](../../tickets/306_R6.44__w3-run.md) | ticket | W3{PROV, LOAD, H-SET BUILD+EXPORT, L1 run, TEARDOWN, UPLOAD-W3} (K5, E2-T11; absorbs ARCHIVE-UPLOAD-W3) | 5: XE-006, XE-007, XE-008, XE-009, XD-107 |
 | [R6.46](../../tickets/310_R6.46__fp-quote-e-l2.md) | ticket | FP-E quote (D1-f first-pass form) + K7 | 11: XD-043, XD-044, XD-062, XD-101, XD-110, XD-112, XD-113, XD-114, XD-116, XD-117, XD-118 |
 | [R6.48](../../tickets/314_R6.48__fp-results.md) | ticket | FP-RESULTS (a; D1-g first-pass form) + FP-RESULTS (b; K9) | 5: XD-005, XD-090, XD-224, XD-119, XD-120 |
 | [HUMAN-H16](../../tickets/315_HUMAN-H16__flagged-review.md) | human | HUMAN flagged-pass review | 1: XD-071 |

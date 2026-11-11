@@ -12,8 +12,17 @@ all-features = true
 
 [advisories]
 version = 2
-# No `ignore` entries: a RustSec finding is fixed or recorded with its
-# reason, never silenced by default.
+# RustSec findings are fixed or recorded with their reason, never
+# silenced by default.
+# 2026-11-11: RUSTSEC-2026-0486 (`xattr` — functions mark unwritten bytes
+# initialized on a zero-length buffer) is recorded, not silenced. `xattr`
+# is a transitive dep resolved only on the Linux-target graph (not in the
+# committed Cargo.lock, not pullable via `cargo update -p xattr`); the
+# workspace never calls the `setxattr`/`listxattr` family — extended
+# attributes aren't a reachable call path through any archive/tooling
+# usage the workspace drives. Revisit if a dep begins invoking xattr
+# semantics or the vulnerable buffer path.
+ignore = ["RUSTSEC-2026-0486"]
 unmaintained = "all"
 unsound = "all"
 yanked = "deny"
