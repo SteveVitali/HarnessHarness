@@ -18,6 +18,12 @@ usage:
     --listen 127.0.0.1:PORT --model M --lane-file lane.json \
     --authorization-file auth.json --pricing pricing.json \
     --slot-id w2-ps0 --slice-micros 50000 --out stage.json
+
+  attach mode (the window session already owns the proxy's control
+  channel — HH_PS_BASE_URL/HH_PS_SLOT_TOKEN provision the leg):
+  w2-ps0-driver.py --attach --listen 127.0.0.1:PORT \
+    --slot-token T --store-root DIR --run-id ID --model M \
+    --pricing pricing.json --slot-id w2-ps0 --out stage.json
 """
 import argparse, json, os, subprocess, sys, time, urllib.request, uuid
 
@@ -114,17 +120,21 @@ def read_events(store_root, run_id):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--proxy-bin", required=True)
+    ap.add_argument("--proxy-bin")
     ap.add_argument("--store-root", required=True)
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--listen", required=True)
     ap.add_argument("--model", required=True)
-    ap.add_argument("--lane-file", required=True)
-    ap.add_argument("--authorization-file", required=True)
+    ap.add_argument("--lane-file")
+    ap.add_argument("--authorization-file")
     ap.add_argument("--pricing", required=True)
     ap.add_argument("--slot-id", default="w2-ps0")
     ap.add_argument("--slice-micros", type=int, default=50000)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--attach", action="store_true",
+                    help="the session owns the proxy ctl channel — "
+                         "call + fold only, via --listen/--slot-token")
+    ap.add_argument("--slot-token")
     a = ap.parse_args()
 
     calls = plan(a.model)
@@ -134,23 +144,34 @@ def main():
         print(json.dumps({"refused": f"plan_bound:{worst}>50000"}))
         sys.exit(2)
 
-    env = dict(os.environ)
-    proc = subprocess.Popen([a.proxy_bin], stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, env=env)
-    lane = json.load(open(a.lane_file))
-    auth = json.load(open(a.authorization_file))
-    rep = ctl(proc, {"op": "configure", "store_root": a.store_root,
-                     "run_id": a.run_id, "listen": a.listen,
-                     "lane": lane, "credential_env": "OLLAMA_API_KEY",
-                     "authorization": auth, "mode": "live"})
-    if "error" in rep:
-        eprint("configure failed:", rep); sys.exit(2)
-    listen = rep.get("ok", {}).get("listen") or a.listen
-    rep = ctl(proc, {"op": "register_slot", "slot_id": a.slot_id,
-                     "slice_micros": a.slice_micros})
-    if "error" in rep:
-        eprint("register_slot failed:", rep); sys.exit(2)
-    token = (rep.get("ok") or {}).get("slot_token") or rep.get("ok", {}).get("token")
+    if a.attach:
+        token = a.slot_token or os.environ.get("HH_PS_SLOT_TOKEN")
+        if not token:
+            eprint("--attach requires --slot-token or HH_PS_SLOT_TOKEN env")
+            sys.exit(2)
+        listen = a.listen
+        proc = None
+    else:
+        if not (a.proxy_bin and a.lane_file and a.authorization_file):
+            eprint("spawn mode requires --proxy-bin/--lane-file/"
+                   "--authorization-file"); sys.exit(2)
+        env = dict(os.environ)
+        proc = subprocess.Popen([a.proxy_bin], stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, env=env)
+        lane = json.load(open(a.lane_file))
+        auth = json.load(open(a.authorization_file))
+        rep = ctl(proc, {"op": "configure", "store_root": a.store_root,
+                         "run_id": a.run_id, "listen": a.listen,
+                         "lane": lane, "credential_env": "OLLAMA_API_KEY",
+                         "authorization": auth, "mode": "live"})
+        if "error" in rep:
+            eprint("configure failed:", rep); sys.exit(2)
+        listen = rep.get("ok", {}).get("listen") or a.listen
+        rep = ctl(proc, {"op": "register_slot", "slot_id": a.slot_id,
+                         "slice_micros": a.slice_micros})
+        if "error" in rep:
+            eprint("register_slot failed:", rep); sys.exit(2)
+        token = (rep.get("ok") or {}).get("slot_token") or rep.get("ok", {}).get("token")
     token_ref = f"slot:{a.slot_id}"
 
     def http_call(call):
@@ -172,9 +193,10 @@ def main():
     for c in calls:
         statuses.append(http_call(c))
     time.sleep(1.0)  # receipts land durable before the fold
-    ctl(proc, {"op": "revoke_slot", "slot_id": a.slot_id})
-    try: ctl(proc, {"op": "stop"})
-    except SystemExit: pass
+    if proc is not None:
+        ctl(proc, {"op": "revoke_slot", "slot_id": a.slot_id})
+        try: ctl(proc, {"op": "stop"})
+        except SystemExit: pass
 
     evs = read_events(a.store_root, a.run_id)
     call_evs = [e for e in evs

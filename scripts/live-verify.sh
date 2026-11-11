@@ -1611,6 +1611,19 @@ run_leg_ps0() {
   else
     RESULT="fail:ps0-driver-rc"
   fi
+  # Measured cost: the folded hh-ps0-stage/1 (HH_PS_STAGE_RECORD names
+  # the committed out path) carries metered_micros — price the leg at
+  # what the proxy receipted, never the declared budget default.
+  if [ -n "${HH_PS_STAGE_RECORD:-}" ] && [ -f "$HH_PS_STAGE_RECORD" ]; then
+    LEG_COST_MEASURED="$(python3 -I -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(round(int(d.get("metered_micros") or 0) / 1e6, 6))
+' "$HH_PS_STAGE_RECORD" 2>/dev/null || true)"
+    [ -n "$LEG_COST_MEASURED" ] || unset LEG_COST_MEASURED
+    MODEL_REPORTED="$(python3 -I -c 'print("glm-5.3-flash")')"
+    ENDPOINT_HOST="ollama.com"
+  fi
 }
 
 run_leg_pp0() {

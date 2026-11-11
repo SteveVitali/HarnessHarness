@@ -6453,7 +6453,7 @@
  ],
  "dataset": {
   "repo": "SteveVitali/harnessharness-archive",
-  "revision": null,
+  "revision": "0db789c65fdcfc76c43872498ab0196e8fa64842",
   "visibility": "private"
  },
  "scans": {
@@ -6465,5 +6465,12 @@
   {
    "ref": "docs/build/reports/compute/harvest/fp-w1/run-root/hh-receipt-index.json"
   }
- ]
+ ],
+ "verification": {
+  "members_verified": 704,
+  "method": "read-back of every indexed member + sha256 compare (scripts/hf-upload.sh verify; REQ-XH-104)",
+  "receipt_ref": "docs/build/reports/archive/2026-11-11-fp-w1-verify.json",
+  "status": "archive_verified",
+  "verified_at": "2026-11-11T00:59:00Z"
+ }
 }
