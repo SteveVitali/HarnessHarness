@@ -482,6 +482,10 @@ pub struct DrivePacket {
     /// `hir{…}` (REQ-XE-126's sealed-definition identity set, stamped
     /// into the slot record's `participant` member).
     pub native_participants: BTreeMap<String, crate::native::NativeParticipantDecl>,
+    /// `sweep{…}` — the phase-4 sweep declaration (R6.43; REQ-XD-220's
+    /// gate for the V5 arm + REQ-XE-124's sealed-level naming).
+    /// Absent ⇒ every V5-arm member is withheld `l1_not_passed`.
+    pub sweep: Option<crate::sweep::SweepDecl>,
 }
 
 impl DrivePacket {
@@ -611,6 +615,13 @@ impl DrivePacket {
                 })
                 .transpose()?
                 .unwrap_or_default(),
+            sweep: m
+                .get("sweep")
+                .map(|s| {
+                    crate::sweep::SweepDecl::from_json(s)
+                        .map_err(|e| PacketError { detail: e.detail })
+                })
+                .transpose()?,
         })
     }
 }

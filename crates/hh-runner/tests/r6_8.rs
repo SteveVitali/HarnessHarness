@@ -244,6 +244,7 @@ fn drive_packet(
         supervision: None,
         l1_gate: None,
         native_participants: BTreeMap::new(),
+        sweep: None,
     }
 }
 

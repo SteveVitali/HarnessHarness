@@ -1075,10 +1075,25 @@ pub fn drive_window(
                     .filter(|id| {
                         let arm = fact(id).map(|f| f.arm_id.clone()).unwrap_or_default();
                         let decl = packet.native_participants.get(&arm);
+                        // R6.43 (REQ-XD-220/REQ-XE-124) — the V5 arm's
+                        // slot names the sealed *level* document; the
+                        // pass id must bind the exact baseline H swept
+                        // (a level doc would diverge L1.1 by
+                        // construction — the sweep decl carries the
+                        // baseline identity). Any other arm matches
+                        // its own declared `hir` identity.
+                        let v5 = FpArm::parse(arm.as_str()) == Some(FpArm::V5);
                         match (packet.l1_gate.as_ref(), decl) {
                             (Some(g), Some(d)) => {
                                 d.topology.check().is_err()
-                                    || !crate::native::l1_gate_match(g, &d.hir)
+                                    || if v5 {
+                                        match &packet.sweep {
+                                            Some(s) => !crate::sweep::sweep_arm_ok(s, g, &d.hir),
+                                            None => true,
+                                        }
+                                    } else {
+                                        !crate::native::l1_gate_match(g, &d.hir)
+                                    }
                             }
                             _ => true,
                         }

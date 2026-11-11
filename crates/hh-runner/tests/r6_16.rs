@@ -288,6 +288,7 @@ fn drive_packet(
         supervision: None,
         l1_gate: None,
         native_participants: std::collections::BTreeMap::new(),
+        sweep: None,
     }
 }
 

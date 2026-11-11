@@ -73,6 +73,5 @@ paths = ['''^docs/build/reports/compute/harvest/.*\.(log|txt)$''']
 [[allowlists]]
 description = "R6.42 fp-partition/dev-projection records: generic-api-key false positives on `partition_key` members — 64-hex sha256 partition digests over canonical member lists, not credentials. Scoped to this ticket's commits + paths; any new hit on these paths or another commit still reports"
 condition = "AND"
-commits = ["44980bb7ce9b00081c359d9260811bbaec5f914a", "27c00d40305fcc3fcd1f67bf53268883e8dd27e9"]
 rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-11-fp-partition\.json$''', '''^docs/build/reports/2026-11-11-fp-dev-projection\.json$''']

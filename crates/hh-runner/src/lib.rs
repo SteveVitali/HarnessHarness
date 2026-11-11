@@ -58,5 +58,6 @@ pub mod slot_costs;
 pub mod slot_record;
 pub mod smoke;
 pub mod supervision;
+pub mod sweep;
 pub mod verdict;
 pub mod worker;
