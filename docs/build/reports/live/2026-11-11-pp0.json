@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    "the \u00a76.6 PP0 harness smoke (3 development tasks \u00d7 1 \u00d7 3 hosted arms; AG3/AG5/AG6/AG8 admission evidence, never verdict success): registered by R6.26, wired and executed in W2 by R6.40 \u2014 subject slots admit only against a frozen development list (REQ-XH-116/127)"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": null,
+  "git_head": "ec4f78f41c6c12fca75f166b5a7a782f1aed8622",
+  "harness": "unknown",
+  "leg": "pp0",
+  "model_reported": null,
+  "provided": {
+    "HH_PP_BASE_URL": "yes",
+    "HH_PP_SLOT_TOKENS": "yes"
+  },
+  "provider": "hh-model-proxy",
+  "recorded_at": "2026-11-11T01:21:27Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "withheld{un_reproofed_successor:task_lists_state=blocked}",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R6.40.md",
+    "sha256": "3701eb5c1b691abdb4f35511ef512dc861a85994ef8524b85cfea4ae57a1a63f"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "R6.40",
+  "token_usage": null,
+  "transcript_path": null,
+  "transcript_sha256": null
+}

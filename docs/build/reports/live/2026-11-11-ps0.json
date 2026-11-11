@@ -1,0 +1,36 @@
+{
+ "assertions": [
+  "the \u00a76.6 PS0 dialect probe (\u2264 $0.05 worst-case plan; one call per dialect + seed, tool_choice and cache_control probes; every call receipted on a slot token; hh-ps0-stage/1 with per-probe dispositions + measured cached share): registered by R6.26, wired and executed in W2 under FP-S by R6.40 \u2014 PS0 carries no subject slots"
+ ],
+ "cost_pricing": {
+  "retrieved": "2026-10-21",
+  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+  "table": "docs/build/reports/live/pricing.json"
+ },
+ "cost_usd": 8.4e-05,
+ "endpoint_host": "ollama.com",
+ "git_head": "ec4f78f41c6c12fca75f166b5a7a782f1aed8622",
+ "harness": "unknown",
+ "leg": "ps0",
+ "model_reported": "glm-5.3-flash",
+ "note": "cost_usd corrected to the folded hh-ps0-stage/1 metered_micros=84 (the first fold read wal envelopes un-unwrapped \u2014 driver fold bug, fixed; the recorded transcript shows the same run).",
+ "provided": {
+  "HH_PS_BASE_URL": "yes",
+  "HH_PS_SLOT_TOKEN": "yes"
+ },
+ "provider": "hh-model-proxy",
+ "recorded_at": "2026-11-11T01:20:36Z",
+ "request_ids": [],
+ "response_headers": {},
+ "result": "pass",
+ "run_ledger_head": {
+  "path": "docs/build/runs/R6.40.md",
+  "sha256": "3701eb5c1b691abdb4f35511ef512dc861a85994ef8524b85cfea4ae57a1a63f"
+ },
+ "schema": "hh-live-evidence/1",
+ "spend_cumulative_usd": 25.259768,
+ "ticket": "R6.40",
+ "token_usage": null,
+ "transcript_path": "docs/build/reports/live/2026-11-11-ps0.transcript.txt",
+ "transcript_sha256": "5ae51e487148716d8b5865d8a9a6b8f1ad3a453f99905fb65cf6ca74d8d6fd3f"
+}

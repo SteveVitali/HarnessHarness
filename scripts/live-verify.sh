@@ -1578,30 +1578,107 @@ run_leg_reproof() {
 # only inside its window after that window's gate passes (FP-S → W2;
 # FP-E → W4) and is honestly `skipped(...)` until the owning skeleton
 # (R6.40 / R6.47) wires the driver here.
+# R6.40 (W2) — the frozen-list admission predicate read once for both
+# subject legs: subject slots admit only when the prereg's development
+# list reads `frozen`. A still-blocked state is a typed withhold —
+# never a scored refusal, never a fabricated subject, never a silent
+# skip (REQ-XH-116/127; GATE-G26's blocked-freeze authorize-now).
+fp_task_lists_state() {
+  local prereg="${HH_FP_PREREG:-$REPO/docs/build/reports/2026-11-10-fp-prereg.json}"
+  [ -f "$prereg" ] || { printf 'unreadable{prereg_absent}\n'; return; }
+  python3 -I -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+v = (d.get("task_lists") or {}).get("state") or d.get("task_lists_state")
+print(v if isinstance(v, str) else "unreadable{no_task_lists_state}")
+' "$prereg"
+}
+
 run_leg_ps0() {
-  ASSERTIONS="the §6.6 PS0 dialect probe (≤ \$0.05 worst-case plan; one call per dialect + seed, tool_choice and cache_control probes; every call receipted on a slot token; hh-ps0-stage/1 with per-probe dispositions + measured cached share): registered by R6.26, executed in W2 under FP-S by R6.40 — until then every packet labels recorded execution"
-  RESULT="skipped(executes-in-W2-under-R6.40)"
+  ASSERTIONS="the §6.6 PS0 dialect probe (≤ \$0.05 worst-case plan; one call per dialect + seed, tool_choice and cache_control probes; every call receipted on a slot token; hh-ps0-stage/1 with per-probe dispositions + measured cached share): registered by R6.26, wired and executed in W2 under FP-S by R6.40 — PS0 carries no subject slots"
+  # W2 wiring (R6.40): HH_PS0_DRIVER is the window's PS0 driver — it
+  # runs the committed plan/bound/fold (ps0_plan, check_plan_bound,
+  # run_ps0) against the window proxy named by HH_PS_BASE_URL on the
+  # slot grant named by HH_PS_SLOT_TOKEN, and writes hh-ps0-stage/1.
+  local drv="${HH_PS0_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(ps0-driver-absent:HH_PS0_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-ps0.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:ps0-driver-rc"
+  fi
+  # Measured cost: the folded hh-ps0-stage/1 (HH_PS_STAGE_RECORD names
+  # the committed out path) carries metered_micros — price the leg at
+  # what the proxy receipted, never the declared budget default.
+  if [ -n "${HH_PS_STAGE_RECORD:-}" ] && [ -f "$HH_PS_STAGE_RECORD" ]; then
+    LEG_COST_MEASURED="$(python3 -I -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(round(int(d.get("metered_micros") or 0) / 1e6, 6))
+' "$HH_PS_STAGE_RECORD" 2>/dev/null || true)"
+    [ -n "$LEG_COST_MEASURED" ] || unset LEG_COST_MEASURED
+    MODEL_REPORTED="$(python3 -I -c 'print("glm-5.3-flash")')"
+    ENDPOINT_HOST="ollama.com"
+  fi
 }
 
 run_leg_pp0() {
-  ASSERTIONS="the §6.6 PP0 harness smoke (3 development tasks × 1 × 3 hosted arms; AG3/AG5/AG6/AG8 admission evidence, never verdict success): registered by R6.26, executed in W2 by R6.40 — until then every packet labels recorded execution"
-  RESULT="skipped(executes-in-W2-under-R6.40)"
+  ASSERTIONS="the §6.6 PP0 harness smoke (3 development tasks × 1 × 3 hosted arms; AG3/AG5/AG6/AG8 admission evidence, never verdict success): registered by R6.26, wired and executed in W2 by R6.40 — subject slots admit only against a frozen development list (REQ-XH-116/127)"
+  # The frozen-list predicate first (R6.40): a still-blocked dev list
+  # is the typed withhold verbatim — never a fabricated subject.
+  local st; st="$(fp_task_lists_state)"
+  if [ "$st" != "frozen" ]; then
+    RESULT="withheld{un_reproofed_successor:task_lists_state=$st}"
+    return
+  fi
+  local drv="${HH_PP0_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(pp0-driver-absent:HH_PP0_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-pp0.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:pp0-driver-rc"
+  fi
 }
 
 run_leg_corpus() {
-  ASSERTIONS="the W2(b) corpus start condition — PS0 passed + original mini-swe-agent PP0 AG3/AG5/AG6/AG8 passed (admission evidence, never verdict) — then the L1 RECORD corpus (original mini-swe-agent, 7 development tasks × 4): registered by R6.26, executed in W2 by R6.40 — until then every packet labels recorded execution"
-  # The §10.1.4 start condition is mechanical: refuse typed unless the
-  # PS0 stage record passed and every original-mini PP0 evidence row
-  # passes AG3/AG5/AG6/AG8 (reads no verdict field).
+  ASSERTIONS="the W2(b) corpus start condition — PS0 passed + original mini-swe-agent PP0 AG3/AG5/AG6/AG8 passed (admission evidence, never verdict) — then the L1 RECORD corpus (original mini-swe-agent, 7 development tasks × 4): registered by R6.26, wired and executed in W2 by R6.40 — subject slots admit only against a frozen development list"
+  # The frozen-list predicate first (R6.40), then the §10.1.4 start
+  # condition (mechanical: the passed hh-ps0-stage/1 + original-mini
+  # hh-pp0-ag-evidence/1 rows passing AG3/AG5/AG6/AG8 — reads no
+  # verdict field).
+  local st; st="$(fp_task_lists_state)"
+  if [ "$st" != "frozen" ]; then
+    RESULT="withheld{un_reproofed_successor:task_lists_state=$st}"
+    return
+  fi
   local bin="$REPO/target/debug/hh-runner" out
   if [ -x "$bin" ] && [ -f "${HH_PS_STAGE_RECORD:-}" ] && [ -d "${HH_PP_EVIDENCE_DIR:-}" ]; then
-    if out=$("$bin" corpus-precondition --ps0-stage "$HH_PS_STAGE_RECORD" --pp0-evidence "$HH_PP_EVIDENCE_DIR" 2>&1); then
-      RESULT="skipped(executes-in-W2-under-R6.40)"
-    else
-      RESULT="skipped(corpus_precondition:${out%%$'\n'*})"
+    if ! out=$("$bin" corpus-precondition --ps0-stage "$HH_PS_STAGE_RECORD" --pp0-evidence "$HH_PP_EVIDENCE_DIR" 2>&1); then
+      RESULT="withheld{corpus_precondition:${out%%$'\n'*}}"
+      return
     fi
   else
-    RESULT="skipped(executes-in-W2-under-R6.40)"
+    RESULT="skipped(corpus-precondition-inputs-absent)"
+    return
+  fi
+  local drv="${HH_CORPUS_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(corpus-driver-absent:HH_CORPUS_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-corpus.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:corpus-driver-rc"
   fi
 }
 

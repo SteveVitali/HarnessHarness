@@ -1,0 +1,95 @@
+{
+ "cached_share": {
+  "anthropic.messages": "unmeasured",
+  "openai.chat": "unmeasured"
+ },
+ "disposition": "pass",
+ "evidence_label": "recorded_execution",
+ "gate": "FP-S",
+ "metered_micros": 84,
+ "plan": {
+  "calls": 7,
+  "cap_micros": 50000,
+  "worst_case_micros": 604.0
+ },
+ "probes": [
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "dialect",
+   "probe_id": "ps0-dialect-openai.chat",
+   "receipt_ref": "sha256:56aefecbc84d0a2987b443084b93abddd7a672a324dc072ecbba217d54c6ee18",
+   "route": "/v1/chat/completions",
+   "surface": "openai.chat",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "dialect",
+   "probe_id": "ps0-dialect-anthropic.messages",
+   "receipt_ref": "sha256:aacddcff597c854c71f1e16c601fdbd105529cf80045fd7e9c866683066de815",
+   "route": "/v1/messages",
+   "surface": "anthropic.messages",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "seed",
+   "probe_id": "ps0-seed-openai.chat",
+   "receipt_ref": "sha256:2d24458050c41cf95e3e460d5b4f6a4905149f4f351498bb62c0e878bb33a6fb",
+   "route": "/v1/chat/completions",
+   "surface": "openai.chat",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "tool_choice",
+   "probe_id": "ps0-tool-choice-openai.chat",
+   "receipt_ref": "sha256:10f86478369690d5af73036364985c846ed7747675a85878fc4c87665c7d6c13",
+   "route": "/v1/chat/completions",
+   "surface": "openai.chat",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "tool_choice",
+   "probe_id": "ps0-tool-choice-anthropic.messages",
+   "receipt_ref": "sha256:c8c08a2988cb0588139db85c940e85d777e5f0b8ec27034018bd7f98ec2b1899",
+   "route": "/v1/messages",
+   "surface": "anthropic.messages",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "cache_control",
+   "probe_id": "ps0-cache-control-prime",
+   "receipt_ref": "sha256:9818196c0b503f5a353bb2d396e9f6e2a483a4370c5a6180a0db3f74be4d6f4e",
+   "route": "/v1/messages",
+   "surface": "anthropic.messages",
+   "usage": null
+  },
+  {
+   "cost_micros": 0,
+   "disposition": "pass",
+   "kind": "cache_control",
+   "probe_id": "ps0-cache-control-read",
+   "receipt_ref": "sha256:96eaf700341bece3458582d60e210432414c5a22d8408accc83f6ecd341379ec",
+   "route": "/v1/messages",
+   "surface": "anthropic.messages",
+   "usage": null
+  }
+ ],
+ "recorded_at": "2026-11-11T01:21:04Z",
+ "schema": "hh-ps0-stage/1",
+ "slot": {
+  "slice_micros": 50000,
+  "token_ref": "slot:w2-ps0"
+ },
+ "stage": "PS0",
+ "window": "W2"
+}

@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket:      R6.40
-lastCompleted:   GATE-G26
+nextTicket:      R6.41
+lastCompleted:   R6.40
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -113,6 +113,7 @@ updatedAt:       2026-11-10T23:12Z
 
 - 2026-11-10 · **chainTip reset to `main` post-merge.** R6.34 merged as `826ba50d` and the ticket branch `codex/harnessharness-r6.34` was deleted; the tip no longer resolves, so `chainTip` is `main` (the R5.59/R6.1 convention at the 2026-11-07 note).
 - 2026-11-10 · **chainTip reset to `main` post-merge.** R6.33 merged as `03fd3cbf` and the ticket branch `codex/harnessharness-r6.33` was deleted; the tip no longer resolves, so `chainTip` is `main` (the R5.59/R6.1 convention at the 2026-11-07 note).
+- 2026-11-11 · **R6.40 — paid W2 window executed under GATE-G26.** UPLOAD-W1 archive_verified (704/704, rev 0db789c6); PROV-W2 (auth match, runner.commit 8826169e, pins repaired per R6.32a precedent); LOAD infra set verified (11.4 s); PS0 pass (7 probes, 84 µ$); PP0+CORPUS withheld{un_reproofed_successor} verbatim (frozen list blocked); TEARDOWN nine-step clean; UPLOAD-W2 archive_verified (19 members, rev 7667c207); SETTLE-W2 pending (clock-honest). nextTicket → R6.41. | run docs/build/runs/R6.40.md |
 - 2026-11-05 · **Retained guard terminal-state diagnostic (tooling gap, not a state defect).** With the 246-row manifest chain landed, `nextTicket: DONE` stands (precedent: R3.11/R4.18 round closes; the stock validator computes `want=DONE` cleanly — its 8-warning baseline unchanged). `check-supplement-guard.sh` on this terminal state reports route `HOLD — active round fully landed` but verdict FAIL on `[nextticket] nextTicket 'DONE' is not a chain row` — the tool's `check_routing` admits no DONE/terminal token and no fixture covers the completed-round state (recorded verbatim 2026-11-05, exit 1). Posture: the FAIL is a dispatch *refusal* — correct that nothing may dispatch on a DONE ledger; a future round's decompose-spec writes the new `nextTicket` before any dispatch. A guard semantic change belongs to the guard's owning admission, not a docs ticket — recorded, not patched.
 
 
