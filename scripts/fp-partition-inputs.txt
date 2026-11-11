@@ -1,0 +1,16 @@
+# fp-partition-inputs.txt — the inputs manifest for the `fp_partition`
+# emitter (manifest 303/R6.42 Stage 1). The reader rule keeps every
+# docs/ relpath at script level, never in crates/**: the emitter and
+# its r6_42 acceptance battery resolve each committed record through
+# this file (`HH_FP_PARTITION_INPUTS`, defaulting to
+# <repo>/scripts/fp-partition-inputs.txt).
+# Format: name=relpath, one per line; `#` comments and blank lines are
+# skipped. The record citations emit exactly these strings — one
+# source for the read path and the cited path alike.
+packet=docs/build/reports/2026-11-10-fp-prereg.json
+select_commit=docs/build/reports/2026-11-08-fp-select-commit.json
+exclusion=docs/build/reports/2026-11-08-fp-exclusion-record.json
+partition=docs/build/reports/2026-11-11-fp-partition.json
+partition_sha256=docs/build/reports/2026-11-11-fp-partition.sha256
+dev_projection=docs/build/reports/2026-11-11-fp-dev-projection.json
+dev_projection_sha256=docs/build/reports/2026-11-11-fp-dev-projection.sha256

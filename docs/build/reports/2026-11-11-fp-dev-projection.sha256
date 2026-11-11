@@ -1,0 +1,2 @@
+0704271287b41fab4486501a8a48a8d076a8e88ec5e094781b8b826f8036d593  docs/build/reports/2026-11-11-fp-dev-projection.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-11-fp-dev-projection.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
