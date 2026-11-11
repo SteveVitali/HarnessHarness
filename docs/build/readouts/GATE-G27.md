@@ -1,5 +1,5 @@
 # GATE-G27 — PROV-W3: authorize the W3 L1 window or record why it does not run · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -85,3 +85,16 @@ withheld); a hold/refusal stops the W3 window until the frozen list exists.
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+Operator decision (verbatim, received 2026-11-11T08:00:03Z, channel: interactive): "you're authorized to proceed"
+Disposition: PASSED — run; basis: "items 1–6 met and authorized verbatim; R6.44 fleshes for the W3 body"
+Recorded verbatim: W3 $0 model (model_line: none, replay/deterministic for the L1 identity); compute
+pq-c0890eab0910fbc0, ceiling 2,408,510 µ$, formula 314,140x6.5 + 300x137x6 + 0.12x1; H-set frozen
+record named (hh-kernel participant + mini-swe-agent HIR + artifacts + V5 level, digest frozen at G-L1);
+restart <=1h, h_r 6h, no deliver-secret; W2 closed (index archive_verified 7667c207…, proxy ledger
+harvested+verified); frozen-list predicate carried verbatim (corpus leg withholds verbatim until the
+O-surface repair + Wc re-proof produce a frozen list).
+verbatim_sha256 = sha256_text("you're authorized to proceed") = be8c1ebbe3768df899ca6a3ee796da1cbf49f429207e59e4866f63e8226843c6 — stamped fp-w3.json.
+GATE DECISIONS row: 2026-11-11T08:00:03Z | GATE-G27
+Operator confirmation of agent-drafted text (verbatim, 2026-11-11T08:00:03Z): "you're authorized to proceed" — covers
+sha256:7f2502c40d0f5c59. Signed by: the operator. Recorded by Devin (SWE-2 High, coordinator), which
+does not sign.
