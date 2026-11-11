@@ -1,0 +1,127 @@
+{
+ "schema": "hh-task-lists-outcome/1",
+ "window": "wc",
+ "ticket": "R6.45",
+ "gate": "GATE-G28",
+ "recorded_at": "2026-11-11T17:51:33Z",
+ "task_lists_state": "blocked",
+ "verbatim_prereg_state": {
+  "task_lists_state": "blocked"
+ },
+ "coverage": "0/14 members carry a covering re-proofed verdict (admit) \u2014 frozen condition unmet; state stays blocked verbatim",
+ "members": [
+  {
+   "cell": "easy",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:oracle_fails_on_O{unclassified}"
+  },
+  {
+   "cell": "hard",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "repair:machinery"
+  },
+  {
+   "cell": "hard",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "repair:machinery"
+  },
+  {
+   "cell": "medium",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "repair:machinery"
+  },
+  {
+   "cell": "medium",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "repair:machinery"
+  },
+  {
+   "cell": "easy",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "repair:machinery"
+  },
+  {
+   "cell": "hard",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "hard",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "medium",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  }
+ ],
+ "withheld": [
+  "withheld{un_reproofed_successor} \u2014 the 8 allowlist_gap + 1 oracle_fails_on_O exclusions consume their slots; the committed orders name further successors that could not be re-proofed inside this window",
+  "withheld{no_adjacent_donor} \u2014 the medium development cell keeps its no-declared-donor posture verbatim",
+  "downstream experiment claims (PP0 legs beyond the executed re-proof, the L1 corpus legs) remain withheld{un_reproofed_successor}"
+ ],
+ "verdict_detail": {
+  "prove-plus-comm": "exclude:runner_infeasible:oracle_fails_on_O{unclassified}",
+  "make-doom-for-mips": "repair:machinery",
+  "torch-tensor-parallelism": "repair:machinery",
+  "vulnerable-secret": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "pypi-server": "repair:machinery",
+  "git-leak-recovery": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "polyglot-c-py": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "db-wal-recovery": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "sqlite-db-truncate": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "query-optimize": "repair:machinery",
+  "pytorch-model-cli": "repair:machinery",
+  "cancel-async-tasks": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "build-pmars": "exclude:runner_infeasible:allowlist_gap{unknown}",
+  "pytorch-model-recovery": "exclude:runner_infeasible:allowlist_gap{unknown}"
+ },
+ "evidence": {
+  "prove_held": "docs/build/reports/compute/harvest/fp-wc/run-root/prove-held/reproof-packet.json",
+  "prove_dev": "docs/build/reports/compute/harvest/fp-wc/run-root/prove-dev/reproof-packet.json",
+  "registers": "same dirs \u2014 reproof-register.json (live-executed label)",
+  "live_evidence": "docs/build/reports/live/2026-11-11-reproof.json",
+  "repair_record": "docs/build/reports/compute/harvest/fp-wc/run-root/wc-repair-record.json"
+ },
+ "notes": "the O-surface defect was repaired (real trials on all members) and the cp_in staging defect repaired (H-pub cells produce real trials: R/R on 9/14); the third machinery signal in the mediated H-allow leg (uniform 0/R, empty denied_hosts, covered hosts allowlisted) is diagnosed in wc-repair-record.json \u2014 recorded verbatim as the register's allowlist_gap{unknown}/repair:machinery verdicts; a further repair+re-proof cycle needs a new gate"
+}
