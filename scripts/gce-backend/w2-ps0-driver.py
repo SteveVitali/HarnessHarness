@@ -114,8 +114,16 @@ def read_events(store_root, run_id):
         for line in open(wal, errors="replace"):
             line = line.strip()
             if not line: continue
-            try: evs.append(json.loads(line))
-            except Exception: pass
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            # the wal carries envelope rows {k:'e', v:<event>} and
+            # checkpoint rows {k:'c', n:<count>} — the fold wants the
+            # events themselves
+            if isinstance(rec, dict) and rec.get("k") == "e":
+                rec = rec.get("v") or {}
+            evs.append(rec)
     return evs
 
 def main():
@@ -135,6 +143,13 @@ def main():
                     help="the session owns the proxy ctl channel — "
                          "call + fold only, via --listen/--slot-token")
     ap.add_argument("--slot-token")
+    ap.add_argument("--fold-only", action="store_true",
+                    help="issue no calls — fold the run's durable "
+                         "events into hh-ps0-stage/1 (a prior run's "
+                         "receipted calls)")
+    ap.add_argument("--statuses-file",
+                    help="fold-only: JSON array of the prior run's "
+                         "HTTP statuses (its calls' recorded outcomes)")
     a = ap.parse_args()
 
     calls = plan(a.model)
@@ -190,9 +205,17 @@ def main():
             return -1
 
     statuses = []
-    for c in calls:
-        statuses.append(http_call(c))
-    time.sleep(1.0)  # receipts land durable before the fold
+    if a.fold_only:
+        # a prior run already issued + receipted the plan's calls —
+        # the fold reads the durable events; the recorded statuses come
+        # from --statuses-file (written by that run), never re-issued.
+        if not a.statuses_file:
+            eprint("--fold-only requires --statuses-file"); sys.exit(2)
+        statuses = json.load(open(a.statuses_file))
+    else:
+        for c in calls:
+            statuses.append(http_call(c))
+        time.sleep(1.0)  # receipts land durable before the fold
     if proc is not None:
         ctl(proc, {"op": "revoke_slot", "slot_id": a.slot_id})
         try: ctl(proc, {"op": "stop"})

@@ -89,3 +89,7 @@
 {"ts":"2026-10-23T08:30:01Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
 {"ts":"2026-10-23T08:31:17Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
 {"ts":"2026-11-10T01:33:57Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-10-reproof.json"}
+{"ts":"2026-11-11T01:18:19Z","ticket":"R6.40","leg":"ps0","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-ps0.json"}
+{"ts":"2026-11-11T01:20:36Z","ticket":"R6.40","leg":"ps0","cost_usd":0.0,"cumulative_usd":25.259768,"record":"2026-11-11-ps0.json"}
+{"ts":"2026-11-11T01:21:27Z","ticket":"R6.40","leg":"pp0","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-pp0.json"}
+{"ts":"2026-11-11T01:21:28Z","ticket":"R6.40","leg":"corpus","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-corpus.json"}
