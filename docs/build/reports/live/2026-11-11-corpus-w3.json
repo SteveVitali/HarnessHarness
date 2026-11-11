@@ -32,7 +32,7 @@
  "response_headers": {},
  "result": "withheld{un_reproofed_successor:task_lists_state=blocked}",
  "schema": "hh-live-evidence/1",
- "spend_cumulative_usd": 0.0,
+ "spend_cumulative_usd": 25.259768,
  "ticket": "R6.44",
  "token_usage": null,
  "transcript_path": null,
