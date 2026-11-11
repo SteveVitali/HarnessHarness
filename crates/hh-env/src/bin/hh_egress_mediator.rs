@@ -151,6 +151,33 @@ fn reply(stream: &mut impl std::io::Write, status: u16, body: &[u8]) {
     let _ = http::write_response(stream, status, &[], body);
 }
 
+/// The mediator's request scope: no turn/model_call/tool_call ids —
+/// the standalone run opens only the slot's phase effect scope.
+static EMPTY_CHAIN: ScopeChain = ScopeChain {
+    turn_id: String::new(),
+    model_call_id: String::new(),
+    tool_call_id: String::new(),
+};
+
+/// Whether `effect_id` is already an opened effect scope in `run_id`
+/// (an `action.effect.intended` row carrying it; the mediator never
+/// emits the terminal classes that would close it).
+fn effect_scope_open(store: &Store, run_id: &str, effect_id: &str) -> bool {
+    store
+        .events(run_id)
+        .map(|evs| {
+            evs.iter().any(|e| {
+                e.class == "action.effect.intended"
+                    && e.scope.effect_id.as_deref() == Some(effect_id)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    hharness_wire::sha256::sha256_hex(bytes)
+}
+
 fn load_policy(path: &PathBuf) -> Result<ContainmentPolicy, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("policy read: {e}"))?;
     let text = String::from_utf8_lossy(&bytes).to_string();
@@ -202,6 +229,43 @@ fn main() {
         eprintln!("hh-egress-mediator: bind {}: {e}", c.socket.display());
         exit(2)
     });
+
+    // The scope grammar (hh-ledger store `check_scopes`): every scope id
+    // on an appended event must name an *opened* scope — and the chain
+    // requires `tool_call ⇒ model_call ⇒ turn`. The mediator's own run
+    // holds no turn/model_call/tool_call scopes: its egress rows carry
+    // only the slot's phase effect scope — which the declared
+    // `--effect-id` names and this run must therefore open with the
+    // registered `opens_scope: effect` event (`action.effect.intended`)
+    // before the first `security.egress.requested` can append. Without
+    // the opener every append refused `ScopeNotOpen{effect_id}` (and a
+    // fabricated turn/tool_call refused `ScopeNotOpen`/`SchemaViolation`)
+    // — the Wc defect: 500s for every request, zero egress rows.
+    if !effect_scope_open(&store, &run_id, &c.effect_id) {
+        let minter = hharness_env::events::EventMinter::new(&store, &run_id);
+        let risk = hharness_ontology::risk::RiskClass::UNKNOWN;
+        let ev = minter
+            .mint_effect(
+                "action.effect.intended",
+                hharness_env::events::intended_payload(
+                    &risk,
+                    Some(&risk),
+                    "hh-egress-mediator/1",
+                    &format!("sha256:{}", sha256(c.effect_id.as_bytes())),
+                    0,
+                ),
+                &c.effect_id,
+                &EMPTY_CHAIN,
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("hh-egress-mediator: mint effect scope: {e}");
+                exit(3)
+            });
+        store.append(&run_id, &lease, vec![ev]).unwrap_or_else(|e| {
+            eprintln!("hh-egress-mediator: open effect scope: {e}");
+            exit(3)
+        });
+    }
     println!("ready socket={} run={run_id}", c.socket.display());
     use std::io::Write as _;
     let _ = std::io::stdout().flush();
@@ -210,16 +274,6 @@ fn main() {
     let mut minter = TokenMinter::new(c.seed);
     let token = minter.mint(&c.effect_id, 1, &c.env_handle);
     let resolver_tokens = minter.resolver();
-
-    let resolver: Box<dyn hharness_env::egress::EgressResolver> = if c.resolve.is_empty() {
-        Box::new(SystemResolver)
-    } else {
-        let mut map = std::collections::BTreeMap::new();
-        for (h, ip) in &c.resolve {
-            map.insert(h.clone(), vec![*ip]);
-        }
-        Box::new(StaticResolver { map })
-    };
 
     for conn in listener.incoming() {
         let Ok(stream) = conn else { continue };
@@ -241,7 +295,7 @@ fn main() {
             cache: ApprovalCache::default(),
             budget_id: None,
             participant_ref: c.participant.clone(),
-            resolver: Box::new(resolver_clone(&resolver)),
+            resolver: make_resolver(&c),
             transport: Box::new(LocalHttpTransport::default()),
             inspect_hooks: std::collections::BTreeMap::new(),
         };
@@ -249,13 +303,20 @@ fn main() {
     }
 }
 
-// `EgressResolver` isn't Clone — rebuild the table per connection (the
-// StaticResolver map is a public member; SystemResolver is stateless).
-fn resolver_clone(
-    r: &Box<dyn hharness_env::egress::EgressResolver>,
-) -> impl hharness_env::egress::EgressResolver {
-    let _ = r;
-    SystemResolver
+// `EgressResolver` isn't Clone — rebuild the resolver per connection so
+// the declared `--resolve` pins actually apply (previously the
+// StaticResolver table was built once and then discarded: the per-
+// connection clone always fell back to `SystemResolver`, silently
+// ignoring every pin).
+fn make_resolver(c: &Cfg) -> Box<dyn hharness_env::egress::EgressResolver> {
+    if c.resolve.is_empty() {
+        return Box::new(SystemResolver);
+    }
+    let mut map = std::collections::BTreeMap::new();
+    for (h, ip) in &c.resolve {
+        map.insert(h.clone(), vec![*ip]);
+    }
+    Box::new(StaticResolver { map })
 }
 
 fn serve_conn(
@@ -275,11 +336,13 @@ fn serve_conn(
         reply(&mut stream, 400, b"bad proxy request");
         return;
     };
-    let chain = ScopeChain {
-        turn_id: "mediator".to_string(),
-        model_call_id: String::new(),
-        tool_call_id: req.tool_call_id.clone(),
-    };
+    // The minted scope carries no turn/model_call/tool_call ids — the
+    // mediator's run opens no such scopes and the grammar refuses an
+    // unopened id (`ScopeNotOpen`) as well as a `tool_call` without its
+    // `model_call` parent (`SchemaViolation`). `req.tool_call_id` still
+    // rides the `security.egress.requested` payload member; the row's
+    // only scope is the slot's phase effect (opened at startup).
+    let chain = EMPTY_CHAIN.clone();
     let started = med.store.now_ms();
     match med.gate(&req, &chain) {
         Ok(GateOutcome::Terminal(outcome)) => match outcome {
