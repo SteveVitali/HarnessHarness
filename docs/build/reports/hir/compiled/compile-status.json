@@ -1,0 +1,1 @@
+{"compile":{"detail":"inputs: profile_refs missing","diagnostics":[],"error":"InvalidModelProfile"},"document":"mswea-2.4.6.sealed.json","note":"hh-compile requires the seeded variant/profile store (the REQ-XE-124 chain inputs); the typed refusal is recorded verbatim — never fabricated","participant":"mini-swe-agent-2.4.6","schema":"hh-compile-status/1"}
