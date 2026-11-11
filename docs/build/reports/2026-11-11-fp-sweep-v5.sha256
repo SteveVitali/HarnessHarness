@@ -1,0 +1,2 @@
+ac592607611879a7923fa06b2e44e50fda88b1dcf63956c480040d480a757f62  docs/build/reports/2026-11-11-fp-sweep-v5.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-11-fp-sweep-v5.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

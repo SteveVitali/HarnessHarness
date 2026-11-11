@@ -550,6 +550,7 @@ mod drive {
                     hir: super::hir(),
                 },
             )]),
+            sweep: None,
         }
     }
 

@@ -1,0 +1,8 @@
+# fp-sweep-inputs.txt — the inputs manifest for the `fp_sweep`
+# emitter (manifest 304/R6.43). The reader rule keeps every docs/
+# relpath at script level, never in crates/**. Format: name=relpath.
+packet=docs/build/reports/2026-11-10-fp-prereg.json
+sweep_registry=docs/build/reports/2026-11-11-fp-sweep-registry.json
+sweep_registry_sha256=docs/build/reports/2026-11-11-fp-sweep-registry.sha256
+v5_level=docs/build/reports/2026-11-11-fp-sweep-v5.json
+v5_level_sha256=docs/build/reports/2026-11-11-fp-sweep-v5.sha256

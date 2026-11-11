@@ -626,6 +626,11 @@ pub struct ToyMini {
     /// Consecutive format errors tolerated before
     /// `repeated_format_error` (mini's 3).
     pub max_format_errors: u32,
+    /// The declared `transcript_render.assistant_replay.reasoning`
+    /// knob (R6.43's V5 fixture): `false` drops `reasoning_content`
+    /// from replayed assistant messages — the declared wire effect of
+    /// the `rsn-drop` level. `true` is the baseline replay.
+    pub replay_reasoning: bool,
 }
 
 impl ToyMini {
@@ -641,6 +646,7 @@ impl ToyMini {
             exec,
             divergence: DivergencePlan::default(),
             max_format_errors: 3,
+            replay_reasoning: true,
         }
     }
 
@@ -786,8 +792,16 @@ impl ToyMini {
             d.termination = "exception{response_shape}".to_string();
             return StepOutcome::Done;
         };
+        // The declared reasoning-replay knob (V5 `rsn-drop`): drop the
+        // assistant message's `reasoning_content` before replay.
+        let mut msg = msg.clone();
+        if !self.replay_reasoning {
+            if let Json::Obj(m) = &mut msg {
+                m.remove("reasoning_content");
+            }
+        }
         messages.push(msg.clone());
-        let actions = parse_actions(msg, &finish_reason);
+        let actions = parse_actions(&msg, &finish_reason);
         d.parsed_actions
             .push(actions.as_ref().map(|a| a.clone()).unwrap_or_default());
         match actions {
