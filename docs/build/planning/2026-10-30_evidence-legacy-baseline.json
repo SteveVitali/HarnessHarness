@@ -224,6 +224,24 @@
     "message_pattern": "PHASE LOG entr\\S* in older regions exceed 2 KiB",
     "max_emitted": 1
    }
+  },
+  {
+   "id": "wc-journald-size-1",
+   "date": "2026-11-11",
+   "recorded_by": "R6.45 subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic \u2014 the Wc window's journald capture is fixed by its full-window activity (PROV + the two-attempt re-proof + harvest); a further size warning on this file is unexplained",
+   "provenance": {
+    "finding": "docs/build/runs/R6.45.md \u2014 the Wc harvest's journald.log (8.5 MB) is the VM's real serial/journal capture across the two-attempt re-proof window; evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28.md \u2014 PROV-Wc (the window this record layer belongs to)",
+    "handoff": "R6.45 \u2014 the run-root.tar.gz is NOT committed (the archive path carries the tar per the \u00a74.10/W3 precedent; git keeps the curated run-root records)"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-wc/journald\\.log$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 1
+   }
   }
  ]
 }

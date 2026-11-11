@@ -353,17 +353,27 @@ impl PodmanBackend {
     }
 
     /// `cp_in(host_src, container_dst)` — `podman cp` host → cell. The
-    /// kernel-side copy-in for `/tests`/`/solution`: bytes transit the
+    /// kernel-side copy-in for `/tests/`/`/solution`: bytes transit the
     /// host↔container edge, never the `/work` mount the agent writes.
     /// A `container_dst` under `/work` refuses before argv — aliasing the
     /// agent-writable mount would launder the phase boundary.
+    ///
+    /// podman 4.3 copies a directory *itself* into an existing dst
+    /// (`/dst/<basename>`), not its contents — the R6.45/Wc W1′ repair:
+    /// normalize dir sources to the `src/.` contents-copy form (verified
+    /// live on the declared image). File sources pass through verbatim.
     pub fn cp_in(&self, host_src: &str, container_dst: &str) -> Result<(), BackendError> {
         refuse_work_alias(container_dst)?;
+        let src = if std::path::Path::new(host_src).is_dir() {
+            format!("{}/.", host_src.trim_end_matches('/'))
+        } else {
+            host_src.to_string()
+        };
         run(
             "cp",
             &[
                 "cp".to_string(),
-                host_src.to_string(),
+                src,
                 format!("{}:{container_dst}", self.container),
             ],
         )?;

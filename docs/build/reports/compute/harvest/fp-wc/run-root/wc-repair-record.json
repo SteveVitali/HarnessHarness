@@ -1,0 +1,46 @@
+{
+ "schema": "hh-wc-repair/1",
+ "window": "wc",
+ "ticket": "R6.45",
+ "gate": "GATE-G28",
+ "trigger": "W1'",
+ "diagnosis": {
+  "class": "harbor_exception",
+  "defect_1_compose_frontend": "harbor's podman env invokes `podman-compose --in-pod=false --project-name <job>__env -f <resources> -f docker-compose-prebuilt.yaml -f <environment> -f <mounts> up --detach` (and `down --rmi local --volumes --remove-orphans`); Debian's podman-compose 1.0.3-3 rejects `--in-pod` (upstream added it in 1.0.6; upstream 1.0.6 parses it but its `down` still lacks `--rmi`). W1 register: 20/20 tasks o_fail, exception sha256 digests verbatim (e.g. sha256:1c6a77a6\u2026).",
+  "defect_2_cp_in_staging": "after defect 1's repair, prove attempt-1 exposed the second machinery defect in the H-surface cell drives: PodmanBackend::cp_in ran `podman cp <dir> <ctr>:/solution` \u2014 podman 4.3.1 copies the directory itself into an existing dst (verified live: lands /solution/solution/solve.sh), so the staged oracle never reached the committed argv path \u2014 every H-pub/H-allow run recorded agent_end_cause exited{127} + verifier_unavailable:reward_missing. The same defect is present in W1's retained cell-reports (masked there by the O-surface failure classifying the rows o_fail).",
+  "surface": "O (pinned Harbor `harbor run -a oracle -e podman`, harbor ff2a1ef48070a8df374669138e4d4db79b77f013) + H-pub/H-allow (committed run_cell cell machinery)",
+  "finding": "machinery-path defects \u2014 not the drawn tasks (image_digest_equal held, denied_hosts empty)"
+ },
+ "repair": {
+  "scope": "machinery only \u2014 the VM's compose-frontend wiring + the committed cp_in copy-in semantics; the drawn tasks, surfaces O/H-pub/H-allow, the R/R admit rule and the committed within-cell/adjacent-cell replacement orders are untouched",
+  "act_1": "uv tool install podman-compose==1.5.0 (PyPI \u2014 freeze-allowed host egress) linked at /usr/local/bin/podman-compose, ahead of the dpkg 1.0.3-3 at /usr/bin; verified: in-guest smoke `podman-compose --in-pod=false -f a.yml x4 up --detach` + `down --rmi local --volumes --remove-orphans` rc 0",
+  "act_2": "PodmanBackend::cp_in normalizes dir sources to the `src/.` contents-copy form (crates/hh-helper/src/podman.rs \u2014 the documented intent; podman 4.3.1's nested-dir copy is verified live); hh-w1 rebuilt carrying the repair; verified live: `podman cp src/. ctr:/solution` lands /solution/solve.sh"
+ },
+ "vm_wiring": [
+  "podman.socket SocketGroup=hh restart + usermod -aG hh (the recorded R6.32b anomaly \u2014 the drop-in never took effect while the socket was active)",
+  "unqualified-search-registries docker.io appended to /etc/containers/registries.conf (absent on the declared image \u2014 W1's VM carried it; recorded VM wiring)"
+ ],
+ "new_version": {
+  "gate": "GATE-G28",
+  "runner": {
+   "binary": "hh-w1",
+   "built_from": "source \u2014 cargo build --release --locked --bin hh_w1 -p hharness-runner inside rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55",
+   "commit": "ad2321c87edd0895d480d9fc885d8ddec0cd5b87",
+   "sha256": "sha256:2bfb5151d0c32fd2df946852caeae4a86f5d6f35cd2631798122e1d5cf2c495d",
+   "carries": "the cp_in repair (commit ad2321c8)"
+  },
+  "compose_frontend": {
+   "before": "podman-compose 1.0.3-3 (dpkg, declared pin)",
+   "after": "podman-compose 1.5.0 (upstream, PyPI)"
+  },
+  "prior_runner": {
+   "commit": "913c800b16f34f5b153fedbabad4c7713dba97b4",
+   "sha256": "sha256:09ba4e7a61f8793b6ee345442c3d3593df993a3c8f815feb5141786f6fd82333"
+  }
+ },
+ "carried_artifacts": "no member of the W1-carried sets was rebuilt \u2014 the infra set loaded verbatim (set_digest sha256:254d590e\u2026); the in-window hh-w1 runner build is the new runner version recorded above, REQ-XC-330's gate record satisfied by GATE-G28",
+ "attempt1": "prove-held-attempt1/ prove-dev-attempt1/ trials-attempt1/ jobs-attempt1/ retained verbatim \u2014 11 repair:machinery + 3 exclude:oracle_fails_on_O{unclassified} rows before defect 2's repair",
+ "tasks_untouched": true,
+ "attempt2": "prove re-run on the repaired runner (ad2321c8): O R/R landed real trials on all 14 members (harbor_exception null, real digests); H-pub R/R on 9/14. H-allow stayed 0/R on every member with denied_hosts empty \u2014 majority agent exited{0} but verifier_unavailable:reward_missing, two exited{100} (apt-get). The frozen allowlist DOES cover the needed hosts (deb.debian.org, pypi.org, files.pythonhosted.org in both agent and verify lists) and the mediator ran (lease+events) \u2014 the uniform zero-denial failure pattern is a third machinery defect in the mediated egress leg (DNS/mediation path upstream of any per-host decision), not per-task allowlist gaps; the committed classifier's allowlist_gap{unknown} typing stands as the recorded verdict. The leg needs a further repair+re-proof cycle outside this window.",
+ "outcome_verdicts": "held: 5 repair:machinery + 4 allowlist_gap + 1 oracle_fails_on_O; dev: 1 repair:machinery + 3 allowlist_gap \u2014 no covering reproofed verdict \u2192 task_lists stays blocked"
+}
