@@ -4,12 +4,16 @@ WARNING:
 To increase the performance of the tunnel, consider installing NumPy. For instructions,
 please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
 
-{"admitted":0,"evidence_label":"recorded_execution","register_rows":10,"tasks":10}
-== wc-prove dev(4) R=2 ==
-WARNING: 
+WARNING: [0] Failed to send all data from [stdin].
+client_loop: send disconnect: Broken pipe
 
-To increase the performance of the tunnel, consider installing NumPy. For instructions,
-please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+Recommendation: To check for possible causes of SSH connectivity issues and get
+recommendations, rerun the ssh command with the --troubleshoot option.
 
-{"admitted":0,"evidence_label":"recorded_execution","register_rows":4,"tasks":4}
-== wc-prove done ==
+gcloud compute ssh hh-fp-wc --project=hh-fp-a1b2c3 --zone=us-central1-a --troubleshoot
+
+Or, to investigate an IAP tunneling issue:
+
+gcloud compute ssh hh-fp-wc --project=hh-fp-a1b2c3 --zone=us-central1-a --troubleshoot --tunnel-through-iap
+
+ERROR: (gcloud.compute.ssh) [/usr/bin/ssh] exited with return code [255].

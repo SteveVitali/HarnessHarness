@@ -9,16 +9,16 @@
   },
   "cost_usd": 0.0,
   "endpoint_host": null,
-  "git_head": "fde9ec574c662d79e9739ff56ad37b61acef5a98",
+  "git_head": "ad2321c87edd0895d480d9fc885d8ddec0cd5b87",
   "harness": "unknown",
   "leg": "reproof",
   "model_reported": null,
   "provided": {},
   "provider": "pinned-harbor",
-  "recorded_at": "2026-11-11T15:48:44Z",
+  "recorded_at": "2026-11-11T16:53:03Z",
   "request_ids": [],
   "response_headers": {},
-  "result": "pass",
+  "result": "fail:prove-driver-rc",
   "run_ledger_head": {
     "path": "docs/build/runs/R6.32.md",
     "sha256": "9132052b990b4bffd41eefff13fd5affb5e8f19ae994b8ae60e746f964f389ea"
@@ -28,5 +28,5 @@
   "ticket": "R6.32",
   "token_usage": null,
   "transcript_path": "docs/build/reports/live/2026-11-11-reproof.transcript.txt",
-  "transcript_sha256": "2644694033bcc4054c18ead9c37ffeb8e1dbc2e10534f3dea61b6bb537af9005"
+  "transcript_sha256": "09a405655e199640e63f28ad9a2d596ac93738ff7446564bf8d37b4f526eefb7"
 }
