@@ -471,6 +471,17 @@ pub struct DrivePacket {
     /// The program-wide Harbor pin — stamped into every slot packet the
     /// drive mints (`identity.harbor.pin`; R6.17/REQ-XH-014).
     pub harbor: Option<String>,
+    /// `l1_gate{…}` — the recorded `hh-l1-conformance/1` gate facts the
+    /// schedule checks before it admits a paid L2 pair or an HH-native
+    /// arm member (REQ-XD-102; contributes REQ-XH-114/REQ-XD-220).
+    /// Absent ⇒ every native-lane member is withheld `l1_not_passed`.
+    pub l1_gate: Option<crate::native::L1GateDecl>,
+    /// `native_participants{arm_id → {topology, hir}}` — the declared
+    /// HH-native participant records: `topology{rung,
+    /// ar04_amendment_ref?}` (the C-05 rung-conditional gate; X-01) and
+    /// `hir{…}` (REQ-XE-126's sealed-definition identity set, stamped
+    /// into the slot record's `participant` member).
+    pub native_participants: BTreeMap<String, crate::native::NativeParticipantDecl>,
 }
 
 impl DrivePacket {
@@ -579,6 +590,27 @@ impl DrivePacket {
                         .ok_or_else(|| err("harbor must be a string"))?,
                 ),
             },
+            l1_gate: m
+                .get("l1_gate")
+                .map(|g| {
+                    crate::native::L1GateDecl::from_json(g)
+                        .map_err(|e| PacketError { detail: e.detail })
+                })
+                .transpose()?,
+            native_participants: m
+                .get("native_participants")
+                .and_then(Json::as_obj)
+                .map(|nm| {
+                    nm.iter()
+                        .map(|(arm, decl)| {
+                            crate::native::NativeParticipantDecl::from_json(decl)
+                                .map(|d| (arm.clone(), d))
+                                .map_err(|e| PacketError { detail: e.detail })
+                        })
+                        .collect::<Result<BTreeMap<_, _>, _>>()
+                })
+                .transpose()?
+                .unwrap_or_default(),
         })
     }
 }

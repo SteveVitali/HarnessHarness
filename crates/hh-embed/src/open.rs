@@ -1202,6 +1202,19 @@ impl EmbedService {
             .map_err(|e| EmbedError::Refused {
             reason: format!("context_policy: {e}"),
         })?;
+        // R6.41 (G16a; REQ-XE-122) — the sealed `compaction_strategy`
+        // slot arms the fold's variant ladder in declared order
+        // (`compaction_strategy_for` — the only mapping; a ref the table
+        // doesn't name is `Refused`, never a silent `evict_oldest`
+        // substitution). An unbound slot arms nothing: `evict_oldest`
+        // alone, byte-identical.
+        for (variant_ref, params) in compaction_slot(&sealed.document) {
+            mem_ctx
+                .arm_compaction(&variant_ref, &params)
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("compaction_strategy: {e}"),
+                })?;
+        }
         // R4.7b — the armed `model_port` lane rides the fold so
         // `Similarity` retrieval and the model-calling compaction
         // surfaces bind the lane-backed adapters (BL-31).
@@ -1892,6 +1905,16 @@ impl EmbedService {
                     .map_err(|e| EmbedError::Refused {
                         reason: format!("context_policy: {e}"),
                     })?;
+                // R6.41 (G16a; REQ-XE-122) — the resumed arm re-arms the
+                // sealed `compaction_strategy` ladder from the same
+                // sealed slot (the arm re-derives, never guesses from a
+                // durable row; an unbound slot stays empty).
+                for (variant_ref, params) in compaction_slot(&sealed.document) {
+                    c.arm_compaction(&variant_ref, &params)
+                        .map_err(|e| EmbedError::Refused {
+                            reason: format!("compaction_strategy: {e}"),
+                        })?;
+                }
             }
             // R4.7b — the resume re-binds the *recorded* lane the same
             // way `model_lane` does, so the context adapters arm over
@@ -3607,6 +3630,35 @@ fn context_policy_slot(doc: &hharness_hir::document::HirDocument) -> Option<Stri
         }
     }
     None
+}
+
+/// The sealed `compaction_strategy` slot's bound variant ladder —
+/// `(variant_ref, params)` pairs in the binding's declared order
+/// (OrderedMany; R6.41, G16a/REQ-XE-122). Read off the root
+/// `NativeProcess.slots` like the sibling slot helpers; an empty vec ⇒
+/// the slot is unbound and the fold's compaction ladder is
+/// `evict_oldest` alone — byte-identical to the pre-slot behavior
+/// (absent-not-null).
+fn compaction_slot(
+    doc: &hharness_hir::document::HirDocument,
+) -> Vec<(String, BTreeMap<String, Json>)> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                let arms: Vec<&hharness_hir::records::SlotBinding> =
+                    match np.slots.get("compaction_strategy") {
+                        Some(SlotBindings::One(b)) => vec![b],
+                        Some(SlotBindings::Many(v)) => v.iter().collect(),
+                        _ => Vec::new(),
+                    };
+                return arms
+                    .into_iter()
+                    .map(|b| (b.variant.variant_id.clone(), b.params.clone()))
+                    .collect();
+            }
+        }
+    }
+    Vec::new()
 }
 
 /// `consolidation_rules_for` — project the sealed definition's
