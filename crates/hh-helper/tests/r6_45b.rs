@@ -52,7 +52,7 @@ fn podman_exec_stub(dir: &Path) -> (PathBuf, PathBuf) {
          \t\tesac\n\
          \tdone\n\
          \tshift\n\
-         \tenv $envs \"$@\"\n\
+         \texec env $envs \"$@\"\n\
          \texit $?\n\
          fi\n\
          exit 0\n",
