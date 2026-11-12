@@ -87,7 +87,7 @@
         "--zone",
         "us-central1-a",
         "hh-fp-wc3:/tmp/hh-harvest.tar.gz",
-        "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc3/run-root.tar.gz"
+        "docs/build/reports/compute/harvest/fp-wc3/run-root.tar.gz"
       ],
       "ended_at": "2026-11-12T11:06:12Z",
       "exit": 0,
@@ -106,7 +106,7 @@
         "--zone",
         "us-central1-a",
         "hh-fp-wc3:/tmp/hh-manifest.sha256",
-        "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc3/MANIFEST.sha256"
+        "docs/build/reports/compute/harvest/fp-wc3/MANIFEST.sha256"
       ],
       "ended_at": "2026-11-12T11:06:14Z",
       "exit": 0,
@@ -505,7 +505,7 @@
     }
   ],
   "cost_record": {
-    "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-12-fp-wc3-cost.json",
+    "path": "docs/build/reports/compute/2026-11-12-fp-wc3-cost.json",
     "sha256": "63dc7cbc091773d475773ba64a76a65b10ff897d223f7d00a028ae8c54988fd8"
   },
   "declaration": {
