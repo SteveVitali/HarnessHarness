@@ -1,0 +1,43 @@
+{
+ "schema": "hh-wc-repair/1",
+ "window": "wc3-offline-repair",
+ "scope_decision": "docs/build/tools/check-supplement-guard.sh route HOLD — gate GATE-G29 pending / fp-wc3 declaration scripts/gce-backend/declarations/fp-wc3.json (PROV-Wc3, GATE-G28c readout) — this record is the offline repair act for the O-surface's fourth machinery defect, not the Wc3 re-proof",
+ "diagnosis": {
+  "class": "cell_terminate_pkill_absent",
+  "deferral": "DF-R6.45b-2 (docs/build/pr/R6.45b.md — a further scoped repair needs its own gate)",
+  "surface": "H-pub (committed run_cell cell machinery — the agent-deadline-lapse / cell-teardown leg)",
+  "root_cause": "crates/hh-helper/src/podman.rs — `PodmanBackend::terminate_group` ran `podman exec <ctr> pkill -TERM -f <pat>` then `pkill -KILL -f <pat>` inside the cell. `pkill` ships with procps, which is absent on the podman guest's minimal task-env image — the exec failed rc 127 (`pkill: not found`), the cell could not terminate its agent subprocess, and the slot recorded a verbatim `cell-terminate` machinery exception (`verifier_unavailable`-class). Wc2's re-proof (PR #367, 8e425dd5) observed it on 3 H-pub cells; the real trials otherwise landed (O R/R 9/10, H-pub R/R 6/9). A second latent failure stood next to it: `pkill` exits 1 on no-match, so an agent that already exited between lapse and terminate recorded the no-match rc as a machinery error too.",
+  "why_not_podman_top": "`podman top <ctr> hpid` reports *guest-VM* PIDs — a host-side `kill` cannot reach them across podman-machine/remote, and `podman kill` would stop the whole cell whose verify legs still run. The kill must execute inside the cell."
+ },
+ "repair": {
+  "scope": "machinery only — `PodmanBackend::terminate_group` in crates/hh-helper/src/podman.rs; the drawn tasks, surfaces O/H-pub/H-allow, the R/R admit rule and the committed replacement orders are untouched; no new record kind or schema; the CellOps signature is unchanged",
+  "act": "`pkill` replaced by an in-cell `/proc` cmdline walk: `podman exec -e HH_KILL_PAT=<pat> -e HH_KILL_SIG=<TERM|KILL> <ctr> sh -c <walk>` — for every `/proc/[0-9]*/cmdline`, `grep -q -E -e \"$HH_KILL_PAT\"` matches the ERE against the raw cmdline bytes (the same string `pkill -f` saw) and the POSIX `kill -s` builtin signals the pid. Only `sh`, `grep`, `/proc`, and the `kill` builtin are required — all present on the minimal Debian base layers (procps is not). The pattern rides env, not argv: the walker's own cmdline never contains the pattern value (no self-match, no argv quoting). `$$` is excluded for good measure. The TERM pass stays best-effort and the KILL pass's exec result stays authoritative (an unreachable cell is still a typed machinery error); an empty pattern refuses before argv, and a no-match pass is success — the goal, no surviving match, is met.",
+  "callers": "crates/hh-runner/src/cell.rs `PodmanCell::terminate_group` (run_cell ST3 lapse + exec deadline lapse) and crates/hh-runner/src/bin/hh_w1.rs — both forward unchanged to the repaired backend method"
+ },
+ "new_version": {
+  "runner": {
+   "binary": "hh-w1",
+   "artifact": "target/release/hh_w1",
+   "built_from": "source — cargo build --release --locked --bin hh_w1 -p hharness-runner (macOS dev host; the helper crate is linked in-process)",
+   "sha256": "sha256:c8184fedc184324337395df16347b64932e527f669203f41113e07355099695d",
+   "carries": "the cell-terminate /proc-walk repair",
+   "helper_binary": "hh-helper (same crate, same commit) sha256:ed4e132a3b3f1877e78adc291dc76b31bbde79522ca9b58d14450911e2fb6405"
+  },
+  "prior_runner": {
+   "commit": "8e425dd5",
+   "sha256": "sha256:f9b6ad0538c77fe714965fee2057e7e1e2b7d6c29daddae33676d8dccdd479f9"
+  }
+ },
+ "test_evidence": {
+  "regression": "crates/hh-helper/tests/r6_45b.rs — `terminate_group_walks_proc_and_never_needs_pkill`: a `podman` stub executes the exec'd argv locally (env pairs applied, container token dropped), a uniquely-marked `sleep` symlink is spawned, and the real walk terminates it wherever `/proc` exists (the podman-guest shape); on a `/proc`-less host the no-op direction is asserted instead. The recorded argv carries `sh -c` + `HH_KILL_PAT`/`HH_KILL_SIG` and no `pkill` token; an empty pattern refuses before argv. crates/hh-helper/tests/r6_9.rs verbatim-argv assertions updated to the new mechanism. Fails on the unfixed code (the argv contained `pkill` and no /proc walk ran).",
+  "commands": [
+   "cargo test -p hharness-helper — all suites pass (r6_45b 1/1, r6_9 5/5)",
+   "cargo test -p hharness-runner --test r6_9 --test r6_25 — 14+11 pass (2 ignored live legs)",
+   "cargo clippy -p hharness-helper --all-targets — no new warnings (pre-existing only)",
+   "cargo fmt --all --check — clean",
+   "cargo build --release --locked --bin hh_w1 -p hharness-runner --bin hh-helper -p hharness-helper — clean"
+  ],
+  "live_pending": "a live podman/VM leg (in-cell walk against a real task-env image) is not available on the repair host — recorded pending; the Wc3 re-proof under the GATE-G28c window is the live verification act, not claimed here"
+ },
+ "tasks_untouched": true
+}
