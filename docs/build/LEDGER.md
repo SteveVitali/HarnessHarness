@@ -17,7 +17,7 @@
 ```
 projectStatus: IN_PROGRESS
 nextTicket: R6.45d
-lastCompleted:   R6.45c
+lastCompleted:   GATE-G28d
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
