@@ -390,7 +390,7 @@
     }
   ],
   "cost_record": {
-    "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-12-fp-wc2-cost.json",
+    "path": "docs/build/reports/compute/2026-11-12-fp-wc2-cost.json",
     "sha256": "4ad4584b4e585932bc353514f13950c6ffebb50875e229db2d184867f2f9080c"
   },
   "declaration": {
