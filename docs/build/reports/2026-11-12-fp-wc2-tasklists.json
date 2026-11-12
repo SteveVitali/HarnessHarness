@@ -1,0 +1,125 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the held leg ran to the dead-man STOP (28/30 surfaces across all 10 held members; the dev leg never launched) and no hh-reproof-packet/1 or register landed. State stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}",
+ "gate": "GATE-G28b",
+ "mediated_egress_repair_verdict": "REPAIRED \u2014 the third defect's live verification: the rebuilt hh-egress-mediator now lands security.egress.requested + security.egress.decided rows in every cell's mediator-store (zero rows in Wc \u2014 the scope-mint violation is fixed; per-connection --resolve pins apply; the relay-port projection and socket wait hold). Decisions are policy-verbatim: allow for freeze-covered hosts, deny{not_allowed,default_unmatched} for uncovered hosts (e.g. archive.ubuntu.com/security.ubuntu.com in prove-plus-comm r0) \u2014 real per-host allowlist_gap signals, no longer the uniform zero-decision machinery signature",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable; H-allow: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: 0/R exc:sha256:9b697b38bfd1b9913217a4fa030640c2c386ff23f8348c8e1db428624c90d2c1; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(1): ; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: R/R; H-allow: 0/R"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "O: R/R; H-pub: inconclusive{backend_terminated}; H-allow: inconclusive{backend_terminated}"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc2_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched"
+  }
+ ],
+ "recorded_at": "2026-11-12T01:05:00Z",
+ "residual_findings": [
+  "H-allow members still return no reward \u2014 agent exits then verifier_unavailable:reward_missing, but now for per-host allowlist_gap reasons (denied hosts logged verbatim in mediator decided rows), a machinery-repaired discordance replaced by honest per-task allowlist gaps",
+  "H-pub cell-terminate machinery exceptions on 3 members (pkill absent in the task env image's PATH \u2014 podman exec terminate fails rc 127): recorded verbatim as harbor_exception machinery rows, a further scoped machinery signal for a later gate \u2014 never excluded",
+  "O re-proved R/R on 9/10 held members with real harbor digests; torch-tensor-parallelism carried a verbatim harbor_exception digest sha256:9b697b38\u2026"
+ ],
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists_state": "blocked",
+ "ticket": "R6.45b",
+ "verbatim_prereg_state": {
+  "task_lists_state": "blocked"
+ },
+ "verdict_detail": {
+  "build-pmars": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched",
+  "cancel-async-tasks": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched",
+  "db-wal-recovery": "O: R/R; H-pub: R/R; H-allow: 0/R",
+  "git-leak-recovery": "O: R/R; H-pub: R/R; H-allow: 0/R",
+  "make-doom-for-mips": "O: R/R; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable; H-allow: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable",
+  "polyglot-c-py": "O: R/R; H-pub: R/R; H-allow: 0/R",
+  "prove-plus-comm": "O: R/R; H-pub: R/R; H-allow: 0/R",
+  "pypi-server": "O: R/R; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(127): Error: crun: executable; H-allow: 0/R",
+  "pytorch-model-cli": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched",
+  "pytorch-model-recovery": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's surfaces ran; the dev leg never launched",
+  "query-optimize": "O: R/R; H-pub: inconclusive{backend_terminated}; H-allow: inconclusive{backend_terminated}",
+  "sqlite-db-truncate": "O: R/R; H-pub: R/R; H-allow: 0/R",
+  "torch-tensor-parallelism": "O: 0/R exc:sha256:9b697b38bfd1b9913217a4fa030640c2c386ff23f8348c8e1db428624c90d2c1; H-pub: 0/R exc:machinery:run_cell: cell:terminate: podman:exec: status=Some(1): ; H-allow: 0/R",
+  "vulnerable-secret": "O: R/R; H-pub: R/R; H-allow: 0/R"
+ },
+ "window": "wc2",
+ "withheld": [
+  "withheld{un_reproofed_successor} \u2014 all 14 members; no covering verdicts",
+  "withheld{no_adjacent_donor} \u2014 the 3 dev slots with no member stand verbatim",
+  "downstream experiment claims (PP0, the L1 corpus, experiment arms) remain withheld \u2014 GATE-G29's G-L1 corpus input stays owed"
+ ]
+}

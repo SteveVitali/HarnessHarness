@@ -306,7 +306,7 @@ fn buffered_release_is_verbatim_and_deadline_maps_timeout() {
 
 #[test]
 fn buffered_heartbeat_heartbeats_then_buffered_bytes() {
-    // REQ-XC-110/F9 — a 400 ms upstream stall emits `: hh-proxy`
+    // REQ-XC-110/F9 — a 1500 ms upstream stall emits `: hh-proxy`
     // comments ahead of the buffered SSE bytes; nothing else reaches
     // the client before the terminal row is durable.
     let sse = "data: {\"id\":\"x\",\"choices\":[]}\n\ndata: [DONE]\n\n";
@@ -317,7 +317,7 @@ fn buffered_heartbeat_heartbeats_then_buffered_bytes() {
                 vec![],
                 "text/event-stream".into(),
                 sse.to_string(),
-                400,
+                1500,
             )
         } else {
             chat_ok()

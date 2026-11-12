@@ -59,7 +59,10 @@ ROUND6 = 6
 REQ_ID = re.compile(r"^REQ-[A-H]-\d+$")
 REQX_ID = re.compile(r"^REQ-X[A-H]-\d+$")
 AC_HOOK = re.compile(r"^AC-\d+(\.\d+)*-\d+$")   # widened from AC-\d+-\d+ (R6.1)
-CHAIN_ID = re.compile(r"^(GATE|HUMAN)-[A-Z0-9]+$|^[A-Z]+\d*(\.\d+[a-z0-9]*)?$")
+CHAIN_ID = re.compile(r"^(GATE|HUMAN)-[A-Z0-9]+[a-z0-9]*$|^[A-Z]+\d*(\.\d+[a-z0-9]*)?$")
+# CHAIN_ID widened 2026-11-11 (R6.45b): run-time inserted gates/humans carry
+# lowercase-suffixed ids (GATE-G28b — the GATE-G28b scope-decision's manifest
+# row lands under the same grammar class as the R6.1 AC_HOOK widening).
 LAYER = re.compile(r"^[DERP](/[DERP])*$")
 CHAIN_KINDS = {"ticket", "gate", "human", "skeleton", "capstone", "reconcile", "docs"}
 TAIL_KINDS = ["capstone", "capstone", "capstone", "gate",

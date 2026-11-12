@@ -1,0 +1,32 @@
+{
+ "carried_artifacts": "the W1 infrastructure set loaded verbatim (set_digest sha256:254d590e\u2026, 5 members, elapsed 11,546 ms); the in-window hh-w1 + hh-egress-mediator build is the new runner version recorded above \u2014 GATE-G28b's authorization covers it",
+ "gate": "GATE-G28b",
+ "in_window_machinery_steps": [
+  "upstream podman-compose 1.5.0 (PyPI) linked ahead of the declared 1.0.3-3 \u2014 the recorded Wc carry-over; smoke up+down rc 0",
+  "usermod -aG hh + podman.socket restart \u2014 the recorded SocketGroup anomaly recurred and was repaired at verify time",
+  "unqualified-search-registries docker.io appended to /etc/containers/registries.conf \u2014 recorded VM wiring"
+ ],
+ "mediator": {
+  "binary": "hh-egress-mediator",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh-egress-mediator -p hharness-env, same image/commit",
+  "carries": "the scope-mint + resolver-pin repairs \u2014 the REQ-XC-330 carried-set rebuild includes it per wc2-repair-record.json",
+  "sha256": "sha256:5a05315003cd8ae846b16330f5d75e0bc008611bceb09992e6e8e5799f0feab8"
+ },
+ "prior_runner": {
+  "commit": "ad2321c87edd0895d480d9fc885d8ddec0cd5b87",
+  "sha256": "sha256:2bfb5151d0c32fd2df946852caeae4a86f5d6f35cd2631798122e1d5cf2c495d"
+ },
+ "re_proof": "held leg ran to the dead-man STOP (28/30 surfaces; all 10 held members touched, 9 fully surfaced; query-optimize O-only at stop). No reproof-packet/register landed \u2014 the leg never completed; the dev leg never launched. Live evidence: docs/build/reports/live/2026-11-11-reproof-wc2.json (fail:prove-driver-rc \u2014 the driver's poll deadline; the detached in-guest prove ran to the dead-man). Per-member machinery evidence is harvested under run-root/trials/ and summarized in the task-lists outcome record",
+ "runner": {
+  "binary": "hh-w1",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh_w1 -p hharness-runner inside rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55 in-window",
+  "carries": "the mediated-egress repair lineage (merge 5b8e8f28 \u2192 stamped runner.commit a1ec7495); repair-host build sha256:f9b6ad05\u2026 per wc2-repair-record.json",
+  "commit": "a1ec7495aa9b92b1647c86a9c308df7a59987410",
+  "sha256": "sha256:36b03c205250144581fa703421b635bb0b5abcb7ab19e7942fade30f9f04bf42"
+ },
+ "schema": "hh-wc-repair/1",
+ "scope_decision": "docs/build/LEDGER.md GATE-G28b scope-decision (2026-11-11T19:23:10Z) + PASSED\u2014run disposition (2026-11-11T21:00:36Z); readout docs/build/readouts/GATE-G28b.md",
+ "tasks_untouched": true,
+ "ticket": "R6.45b",
+ "window": "wc2"
+}
