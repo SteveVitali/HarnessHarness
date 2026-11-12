@@ -230,8 +230,14 @@ fn cell_verbs_carry_verbatim_argv_and_refuse_work_alias() {
     assert!(text.contains("rm -f /logs/verifier/reward.*"), "{text}");
     assert!(text.contains("test -e /tests"), "{text}");
     assert!(text.contains("ls -1A /"), "{text}");
-    assert!(text.contains("pkill -TERM -f agent"), "{text}");
-    assert!(text.contains("pkill -KILL -f agent"), "{text}");
+    // DF-R6.45b-2 — the terminate verb is an in-cell `/proc` cmdline
+    // walk under `sh` (no `pkill` — absent on minimal task-env images);
+    // the pattern/signal ride `HH_KILL_PAT`/`HH_KILL_SIG` env.
+    assert!(text.contains("HH_KILL_PAT=agent"), "{text}");
+    assert!(text.contains("HH_KILL_SIG=TERM"), "{text}");
+    assert!(text.contains("HH_KILL_SIG=KILL"), "{text}");
+    assert!(text.contains("sh -c for p in /proc/"), "{text}");
+    assert!(!text.contains("pkill"), "{text}");
     assert!(!text.contains("cp /host/tests hh-env-c1:/work"), "{text}");
     std::env::remove_var("HH_PODMAN_BIN");
     std::env::remove_var("HH_PODMAN_LOG");

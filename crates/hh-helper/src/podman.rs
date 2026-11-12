@@ -454,33 +454,63 @@ impl PodmanBackend {
     }
 
     /// `terminate_group(pattern)` — the agent-deadline-lapse leg
-    /// (REQ-XB-119): TERM the agent's process group inside the cell,
-    /// then KILL what survives. `pkill -f` addresses the group by the
-    /// participant's command line — the helper records the argv it
-    /// actually ran, never a claimed signal.
+    /// (REQ-XB-119): TERM the agent's processes inside the cell, then
+    /// KILL what survives. The matcher is an in-cell `/proc` cmdline
+    /// walk under `sh` — `pkill` is absent on the minimal task-env
+    /// images (DF-R6.45b-2: the Wc2 H-pub `cell-terminate` machinery
+    /// exceptions were verbatim `pkill: not found` rc-127), while
+    /// `sh`, `grep`, and the `kill` builtin are in every base layer
+    /// the lifecycle already depends on (`rm_glob` runs `sh -c`;
+    /// podman always mounts `/proc`). The pattern and signal ride
+    /// `HH_KILL_PAT`/`HH_KILL_SIG` through `podman exec -e` — the
+    /// walker's own argv never carries the pattern value, so it
+    /// cannot match itself (`$$` is excluded for good measure); the
+    /// env spelling also keeps the pattern out of argv quoting.
+    /// `grep -E` preserves `pkill -f`'s ERE-over-cmdline semantics.
+    /// An empty pattern refuses before argv — it would match every
+    /// in-cell process. A no-match pass is success (the goal — no
+    /// surviving match — is met), not the `pkill` no-match rc-1 the
+    /// verbatim stderr would record as a machinery exception.
     pub fn terminate_group(&self, pattern: &str) -> Result<(), BackendError> {
-        let _ = run(
-            "exec",
-            &[
-                "exec".to_string(),
-                self.container.clone(),
-                "pkill".to_string(),
-                "-TERM".to_string(),
-                "-f".to_string(),
-                pattern.to_string(),
-            ],
-        );
-        run(
-            "exec",
-            &[
-                "exec".to_string(),
-                self.container.clone(),
-                "pkill".to_string(),
-                "-KILL".to_string(),
-                "-f".to_string(),
-                pattern.to_string(),
-            ],
-        )?;
+        if pattern.is_empty() {
+            return Err(BackendError {
+                op: "exec",
+                stderr: "empty terminate pattern would match every in-cell process".into(),
+                status: None,
+            });
+        }
+        // One walk per signal: `/proc/[0-9]*/cmdline` is NUL-joined, so
+        // `grep -q` matches the ERE against the raw cmdline bytes —
+        // the same string `pkill -f` saw. `kill -s` is the POSIX
+        // builtin spelling (dash/busybox — no procps needed).
+        const WALK: &str = "for p in /proc/[0-9]*; do \
+            i=${p#/proc/}; \
+            if [ \"$i\" != \"$$\" ] \
+            && grep -q -E -e \"$HH_KILL_PAT\" \"$p/cmdline\" 2>/dev/null; \
+            then kill -s \"$HH_KILL_SIG\" \"$i\" 2>/dev/null; fi; \
+            done";
+        for sig in ["TERM", "KILL"] {
+            let r = run(
+                "exec",
+                &[
+                    "exec".to_string(),
+                    "-e".to_string(),
+                    format!("HH_KILL_PAT={pattern}"),
+                    "-e".to_string(),
+                    format!("HH_KILL_SIG={sig}"),
+                    self.container.clone(),
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    WALK.to_string(),
+                ],
+            );
+            // The TERM pass is best-effort (as it was under `pkill`);
+            // the KILL pass's `podman exec` result is authoritative —
+            // an unreachable cell is still a typed machinery error.
+            if sig == "KILL" {
+                r?;
+            }
+        }
         Ok(())
     }
 }
