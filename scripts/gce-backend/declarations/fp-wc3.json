@@ -1,0 +1,97 @@
+{
+ "authorization": {
+  "ceiling_micros": 2251440,
+  "gate": "PROV-Wc3",
+  "model_line": "none",
+  "quote_id": "pq-55417e3bc7a1f673",
+  "readout_path": "docs/build/readouts/GATE-G28c.md",
+  "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+ },
+ "boot_disk": {
+  "size_gib": 300,
+  "type": "pd-balanced"
+ },
+ "concurrency": {
+  "memory_gib_available": 26,
+  "memory_per_trial_gib": 6,
+  "model_in_flight_limit": 4,
+  "model_wait_fraction": 0.5,
+  "vcpu_budget": 8
+ },
+ "dead_man": {
+  "action": "STOP",
+  "in_guest_timer_minutes": 315,
+  "max_run_duration_hours": 5
+ },
+ "disk_floor_gib": 20,
+ "h_r_hours": 6,
+ "image": {
+  "name": "debian-12-bookworm-v20261014",
+  "project": "debian-cloud"
+ },
+ "images": [],
+ "labels": {
+  "hh-phase": "fp",
+  "hh-ticket": "r6-45c",
+  "hh-window": "wc3",
+  "ttl": "window"
+ },
+ "last_model_call_utc": null,
+ "machine_type": "e2-standard-8",
+ "mode": "full",
+ "model_line": "none",
+ "network": {
+  "external_ipv4": "ephemeral",
+  "ingress": [
+   {
+    "port": 22,
+    "proto": "tcp",
+    "source": "35.235.240.0/20"
+   }
+  ],
+  "nat": false
+ },
+ "packages": {
+  "compose_frontend": {
+   "name": "podman-compose",
+   "version": "1.0.3-3"
+  },
+  "conmon": "2.1.6+ds1-1",
+  "crun": "1.8.1-1+deb12u1",
+  "netavark": "1.4.0-3",
+  "podman": "4.3.1+ds1-8+deb12u1+b3"
+ },
+ "phase": "fp",
+ "phase_close": false,
+ "project_id": "hh-fp-a1b2c3",
+ "provisioning_model": "STANDARD",
+ "proxy_on_vm": true,
+ "quote_inputs": {
+  "admission_cutoff_hours": 0.65,
+  "egress_gib_estimate": 1,
+  "load_hours": 0.25,
+  "overhead_hours": 0.5,
+  "per_trial_bound_seconds": 2100,
+  "per_trial_planning_seconds": 600,
+  "retry_trials": 0,
+  "surfaces": 1,
+  "trials": 38
+ },
+ "rate_table": {
+  "path": "docs/build/reports/live/pricing.json",
+  "sha256": "045e0b8612e901505b9dbd66cbb460286ba763f8b6a169bef7721eb6251033e2"
+ },
+ "region": "us-central1",
+ "restart": {
+  "preauthorized_hours": 1
+ },
+ "runner": {
+  "build": "source",
+  "commit": "0000000000000000000000000000000000000000"
+ },
+ "schema": "hh-compute-decl/1",
+ "service_account": "none",
+ "ticket": "R6.45c",
+ "window": "wc3",
+ "zone": "us-central1-a"
+}
