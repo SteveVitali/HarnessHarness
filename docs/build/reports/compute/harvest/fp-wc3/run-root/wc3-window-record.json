@@ -1,0 +1,46 @@
+{
+ "schema": "hh-wc-repair/1",
+ "window": "wc3",
+ "ticket": "R6.45c",
+ "gate": "GATE-G28c",
+ "scope_decision": "docs/build/LEDGER.md GATE-G28c scope-decision (2026-11-12T03:30Z) + PASSED\u2014run disposition (2026-11-12T04:49:05Z); readout docs/build/readouts/GATE-G28c.md",
+ "runner": {
+  "binary": "hh-w1",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh_w1 -p hharness-runner inside rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55 in-window",
+  "commit": "1b5471c1cd2e8c31bc49adcf1e6469c85509ce5e",
+  "sha256": "sha256:669039f83d718ad12e14d646edfb547c6842bfc295bb5570c98a7458f3ae2fe4",
+  "carries": "BOTH repairs \u2014 the mediated-egress repair lineage (merge 5b8e8f28; repair-host build sha256:f9b6ad05\u2026 per wc2-repair-record.json) AND the cell-terminate pkill repair lineage (merge bb60a46f; repair-host build sha256:c8184fed\u2026 + helper sha256:ed4e132a\u2026 per wc3-repair-record.json). Wc2 in-window build sha256:36b03c20\u2026 cited."
+ },
+ "mediator": {
+  "binary": "hh-egress-mediator",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh-egress-mediator -p hharness-env, same image/commit",
+  "sha256": "sha256:885df32d62387dd1e72d8bbae50ce08c460d36e1fe3702bb582f69e8d352a988",
+  "carries": "the scope-mint + resolver-pin repairs \u2014 Wc2 in-window sha256:5a053150\u2026 cited"
+ },
+ "helper": {
+  "binary": "hh-helper",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh-helper -p hharness-helper, same image/commit",
+  "sha256": "sha256:7fb122f5576927a126e205455d181dc8409f6aee0fdc9da6039f4f4b9db4f450",
+  "carries": "the terminate_group /proc-cmdline-walk repair \u2014 repair-host build sha256:ed4e132a\u2026 per wc3-repair-record.json"
+ },
+ "prior_runner": {
+  "commit": "a1ec7495aa9b92b1647c86a9c308df7a59987410",
+  "sha256": "sha256:36b03c205250144581fa703421b635bb0b5abcb7ab19e7942fade30f9f04bf42"
+ },
+ "carried_artifacts": "the W1 infrastructure set loaded verbatim (set_digest sha256:254d590e\u2026, 5 members, elapsed 9,480 ms); the in-window hh-w1 + hh-egress-mediator + hh-helper build is the new runner version recorded above \u2014 GATE-G28c's authorization covers it",
+ "in_window_machinery_steps": [
+  "upstream podman-compose 1.5.0 (PyPI) linked ahead of the declared 1.0.3-3 \u2014 the recorded Wc/Wc2 carry-over; smoke up+down rc 0",
+  "usermod -aG hh + podman.socket restart \u2014 the recorded SocketGroup anomaly recurred and was repaired at verify time (660:root:hh)",
+  "unqualified-search-registries docker.io appended to /etc/containers/registries.conf \u2014 recorded VM wiring",
+  "corpus terminal-bench-2-1 @12b75656 + harbor @ff2a1ef4 pins; freeze regenerated \u2014 digest sha256:b62762aeda\u2026 matches the W1/Wc2 record byte-for-byte; 14 task env images pulled by task.toml docker_image refs; images.json pinned by digest"
+ ],
+ "re_proof": {
+  "outcome": "o_fail(dead-man) \u2014 D=5h dead-man STOP fired 2026-11-12T10:45:45Z (instance created 05:45:45Z); the held leg reached 28/30 surfaces; no reproof-packet.json emitted for held or dev; dev leg never launched; instance + in-guest run-root deleted by the dead-man \u2014 no harvest possible",
+  "held": "10 members R=3 launched ~06:05Z detached (in-guest pid 15928); surfaces completed 28/30 (progression 4@06:09Z\u21925@06:56Z\u219213@07:46Z\u219214@08:32Z\u219215@09:47Z\u219222@09:52Z\u219227@09:57Z\u219228@10:12Z; stalled on query-optimize surfaces ~10:12Z\u2192dead-man); reproof-packet absent at cutoff",
+  "dev": "never launched \u2014 sequential driver still waiting on held when the dead-man fired",
+  "verdicts": "none emitted \u2014 no task carried a reproofed verdict at cutoff",
+  "monitor": "local IAP-ssh poll every 300s \u2014 last successful read [10:43:13Z] S=28 PHELD=- PDEV=-; instance unreachable after ~10:45:45Z; gcloud describe at 10:45:34Z+: instance not found",
+  "evidence_label": "dead-man \u2014 NOT live-executed-complete; scoped machinery/deadline failure recorded verbatim per the Wc3 contract (never fabricate a pass)"
+ },
+ "tasks_untouched": true
+}

@@ -1,0 +1,124 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the held leg ran to the D=5h dead-man STOP (28/30 surfaces across the 10 held members; the dev leg never launched) and no hh-reproof-packet/1 or register landed. State stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}",
+ "gate": "GATE-G28c",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc3_verdict": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched"
+  }
+ ],
+ "recorded_at": "2026-11-12T11:05:00Z",
+ "residual_findings": [
+  "the pkill-free cell-terminate repair held \u2014 no ~900s terminate stalls recurred in the 28 completed surfaces; the window's cost was wall-clock duration of slow members, not machinery hangs",
+  "the driver poll deadline was set 5h past intent (epoch computed in local TZ despite the Z suffix \u2014 15:30:45Z instead of 10:30:45Z); the poll was terminated by the operator at the dead-man, rc non-zero, recorded verbatim \u2014 the transcript is the durable evidence",
+  "monitor progression (IAP-ssh, every 300s): 4@06:09Z\u21925@06:56Z\u219213@07:46Z\u219214@08:32Z\u219215@09:47Z\u219222@09:52Z\u219227@09:57Z\u219228@10:12Z\u219228@10:43Z; instance unreachable ~10:45:45Z; gcloud describe: not found"
+ ],
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists_state": "blocked",
+ "ticket": "R6.45c",
+ "verbatim_prereg_state": {
+  "task_lists_state": "blocked"
+ },
+ "verdict_detail": {
+  "build-pmars": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched",
+  "cancel-async-tasks": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched",
+  "db-wal-recovery": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "git-leak-recovery": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "make-doom-for-mips": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "polyglot-c-py": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "prove-plus-comm": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "pypi-server": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "pytorch-model-cli": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched",
+  "pytorch-model-recovery": "inconclusive{backend_terminated} \u2014 the dead-man stopped the held leg before this member's leg launched; the dev leg never launched",
+  "query-optimize": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "sqlite-db-truncate": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "torch-tensor-parallelism": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance",
+  "vulnerable-secret": "inconclusive{backend_terminated} \u2014 the D=5h dead-man STOP fired at 28/30 held surfaces; no hh-reproof-packet/1 or register landed; per-member surface outcomes were lost with the instance"
+ },
+ "window": "wc3",
+ "withheld": [
+  "withheld{un_reproofed_successor} \u2014 all 14 members; no covering verdicts",
+  "withheld{no_adjacent_donor} \u2014 the 3 dev slots with no member stand verbatim",
+  "downstream experiment claims (PP0, the L1 corpus, experiment arms) remain withheld \u2014 GATE-G29's G-L1 corpus input stays owed"
+ ]
+}

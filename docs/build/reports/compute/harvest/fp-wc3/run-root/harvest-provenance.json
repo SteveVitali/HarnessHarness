@@ -1,0 +1,21 @@
+{
+ "schema": "hh-harvest-provenance/1",
+ "window": "wc3",
+ "ticket": "R6.45c",
+ "recorded_at": "2026-11-12T11:10:00Z",
+ "provenance": "the in-guest run-root /var/lib/hh/runs/run-root-wc3 was destroyed by the D=5h dead-man STOP at 2026-11-12T10:45:45Z (instance hh-fp-wc3 deleted; gcloud describe \u2192 not found). This bundle carries the retained evidence pulled over IAP-ssh during the live window plus the locally-authored window receipt \u2014 it is NOT a post-dead-man harvest of the in-guest run-root",
+ "retained_during_window": {
+  "hh-carried-load-infra.json": "pulled from the in-guest run-root at ~00:51Z after LOAD verified (set_digest sha256:254d590e\u2026, 9,480 ms)"
+ },
+ "locally_authored": {
+  "wc3-window-record.json": "the window receipt whose re_proof field records o_fail(dead-man) at 28/30 held surfaces verbatim \u2014 drafted at ~/hh-retained/wc3/evidence/ during the window, finalized post-cutoff"
+ },
+ "lost_with_instance": [
+  "28/30 surface-outcome.json files under run-root-wc3/trials (counted by the 300s IAP-ssh monitor; contents never pulled)",
+  "per-member cell-report.json in-flight records (e.g. pypi-server r1)",
+  "prove-held.log + any partial reproof-register state",
+  "journald/serial for the window's last hours"
+ ],
+ "monitor_transcript": "/tmp/wc3-status.log \u2014 300s polls 05:50Z\u219210:43Z; last good read S=28 PHELD=- PDEV=-",
+ "driver_transcript": "docs/build/reports/live/2026-11-12-reproof-wc3.transcript.txt \u2014 held:RUN through 10:45:03Z then empty reads until operator-terminated at 10:58Z"
+}

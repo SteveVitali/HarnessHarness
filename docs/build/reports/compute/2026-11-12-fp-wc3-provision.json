@@ -1,0 +1,250 @@
+{
+  "authorization": {
+    "ceiling_micros": 2251440,
+    "gate": "PROV-Wc3",
+    "quote_id": "pq-55417e3bc7a1f673",
+    "readout_path": "docs/build/readouts/GATE-G28c.md",
+    "verbatim_sha256": "c32505f3b30171694daadca187adbbb953107f447d6709be42292dc7824e0f3d"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-12T05:45:36Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:35Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "projects",
+        "describe",
+        "hh-fp-a1b2c3"
+      ],
+      "ended_at": "2026-11-12T05:45:36Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:36Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "createTime: '2026-11-09T21:21:53.431Z'\nlifecycleState: ACTIVE\nname: hh-fp-a1b2c3\nprojectId: hh-fp-a1b2c3\nprojectNumber: '290612983212'\n",
+      "stdout_sha256": "8e7cd1a116793f91582b6b20bf381bd63cc8f3b035d9272bf954bba0b7e17aab"
+    },
+    {
+      "argv_redacted": [
+        "billing",
+        "projects",
+        "describe",
+        "hh-fp-a1b2c3",
+        "--format=value(billingEnabled)"
+      ],
+      "ended_at": "2026-11-12T05:45:37Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:36Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "True\n",
+      "stdout_sha256": "a9ac0c3ac83c40e1b4c3416066d63d324ee9f8c144641dfeed72d140b6557245"
+    },
+    {
+      "argv_redacted": [
+        "services",
+        "enable",
+        "compute.googleapis.com",
+        "iap.googleapis.com",
+        "--project",
+        "hh-fp-a1b2c3"
+      ],
+      "ended_at": "2026-11-12T05:45:41Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:37Z",
+      "stderr_excerpt": "Operation \"operations/acat.p2-290612983212-08b66b1b-3513-483a-a6c4-e07d1c9e5322\" finished successfully.\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "networks",
+        "describe",
+        "hh-net",
+        "--project",
+        "hh-fp-a1b2c3"
+      ],
+      "ended_at": "2026-11-12T05:45:42Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:41Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "autoCreateSubnetworks: true\ncreationTimestamp: '2026-11-09T13:23:04.191-08:00'\nid: '2247815581709338455'\nkind: compute#network\nname: hh-net\nnetworkFirewallPolicyEnforcementOrder: AFTER_CLASSIC_FIREWALL\nroutingConfig:\n  bgpBestPathSelectionMode: LEGACY\n  routingMode: REGIONAL\nselfLink: https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\nselfLinkWithId: https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/2247815581709338455\nsubnetworks:\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/africa-south1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-southeast3/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-south1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/australia-southeast1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west12/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west10/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-west4/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west3/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/southamerica-east1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west6/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-northeast1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-central2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-north1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/australia-southeast2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-west1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/southamerica-west1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-west3/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-east2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west4/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/me-west1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-central1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-south2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/northamerica-northeast2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-southeast1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-east4/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-northeast3/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-south1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-east1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-southwest1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/asia-southeast2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west8/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-north2/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/us-east1/subnetworks/hh-net\n- https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/regions/europe-west9/subnetworks/hh-net",
+      "stdout_sha256": "3c375af69619d719625562920fd869c655a03bc21eff9775258967ab78abdcf0"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "firewall-rules",
+        "describe",
+        "hh-iap-ssh",
+        "--project",
+        "hh-fp-a1b2c3"
+      ],
+      "ended_at": "2026-11-12T05:45:43Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:42Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "allowed:\n- IPProtocol: tcp\n  ports:\n  - '22'\ncreationTimestamp: '2026-11-09T13:23:49.245-08:00'\ndescription: ''\ndirection: INGRESS\ndisabled: false\nid: '2261950971915503370'\nkind: compute#firewall\nlogConfig:\n  enable: false\nname: hh-iap-ssh\nnetwork: https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\npriority: 1000\nselfLink: https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\nsourceRanges:\n- 35.235.240.0/20\n",
+      "stdout_sha256": "74f267b1454cd807f9a57314116b30a7d78ec8d21e3ff202a30d57def4ba6a30"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "describe",
+        "hh-fp-wc3",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-12T05:45:43Z",
+      "exit": 1,
+      "started_at": "2026-11-12T05:45:43Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.instances.describe) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-wc3' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "create",
+        "hh-fp-wc3",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--machine-type",
+        "e2-standard-8",
+        "--provisioning-model",
+        "STANDARD",
+        "--image-project",
+        "debian-cloud",
+        "--image",
+        "debian-12-bookworm-v20261014",
+        "--boot-disk-type",
+        "pd-balanced",
+        "--boot-disk-size",
+        "300GB",
+        "--no-service-account",
+        "--no-scopes",
+        "--shielded-secure-boot",
+        "--max-run-duration=18000s",
+        "--instance-termination-action",
+        "STOP",
+        "--metadata",
+        "hh_deadman_minutes=315",
+        "--metadata-from-file",
+        "startup-script=scripts/gce-backend/startup.sh,hh_packages=/var/folders/0r/9hmb0nh57nv2tqxgh71hd92m0000gn/T//hh-gce.CtZdVz/packages.txt",
+        "--labels",
+        "hh-phase=fp,hh-window=wc3,hh-ticket=r6-45c,ttl=window"
+      ],
+      "ended_at": "2026-11-12T05:46:13Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:45:44Z",
+      "stderr_excerpt": "Created [https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-wc3].\nWARNING: Some requests generated warnings:\n - Disk size: '300 GB' is larger than image size: '10 GB'. You might need to resize the root repartition manually if the operating system does not support automatic resizing. See https://cloud.google.com/compute/docs/disks/add-persistent-disk#resize_pd for details.\n - The resource 'projects/debian-cloud/global/images/debian-12-bookworm-v20261014' is deprecated. A suggested replacement is 'projects/debian-cloud/global/images/debian-12-bookworm-v20261023'.\n\n",
+      "stdout_excerpt": "NAME       ZONE           MACHINE_TYPE   PREEMPTIBLE  INTERNAL_IP  EXTERNAL_IP    STATUS\nhh-fp-wc3  us-central1-a  e2-standard-8               10.128.0.8   136.112.159.3  RUNNING\n",
+      "stdout_sha256": "16e8472700e9f51608fccfe338c3af72d631dba21ab5d8e8646ae79f4cc28708"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "describe",
+        "hh-fp-wc3",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-12T05:46:14Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:46:13Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "{\n  \"canIpForward\": false,\n  \"cpuPlatform\": \"AMD Rome\",\n  \"creationTimestamp\": \"2026-11-11T21:45:45.822-08:00\",\n  \"deletionProtection\": false,\n  \"disks\": [\n    {\n      \"architecture\": \"X86_64\",\n      \"autoDelete\": true,\n      \"boot\": true,\n      \"deviceName\": \"persistent-disk-0\",\n      \"diskSizeGb\": \"300\",\n      \"guestOsFeatures\": [\n        {\n          \"type\": \"UEFI_COMPATIBLE\"\n        },\n        {\n          \"type\": \"VIRTIO_SCSI_MULTIQUEUE\"\n        },\n        {\n          \"type\": \"GVNIC\"\n        },\n        {\n          \"type\": \"SEV_CAPABLE\"\n        },\n        {\n          \"type\": \"SEV_LIVE_MIGRATABLE_V2\"\n        },\n        {\n          \"type\": \"SUSPEND_SAFE_FPR\"\n        }\n      ],\n      \"index\": 0,\n      \"interface\": \"SCSI\",\n      \"kind\": \"compute#attachedDisk\",\n      \"licenses\": [\n        \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/licenses/debian-12-bookworm\"\n      ],\n      \"mode\": \"READ_WRITE\",\n      \"source\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/disks/hh-fp-wc3\",\n      \"type\": \"PERSISTENT\"\n    }\n  ],\n  \"fingerprint\": \"ygToU1Vd1Vo=\",\n  \"id\": \"749031699468840038\",\n  \"kind\": \"compute#instance\",\n  \"labelFingerprint\": \"iu-V5R0YTxw=\",\n  \"labels\": {\n    \"hh-phase\": \"fp\",\n    \"hh-ticket\": \"r6-45c\",\n    \"hh-window\": \"wc3\",\n    \"ttl\": \"window\"\n  },\n  \"lastStartTimestamp\": \"2026-11-11T21:46:12.752-08:00\",\n  \"machineType\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/machineTypes/e2-standard-8\",\n  \"metadata\": {\n    \"fingerprint\": \"2qBQGZlgn3k=\",\n    \"items\": [\n      {\n        \"key\": \"hh_deadman_minutes\",\n        \"value\": \"315\"\n      },\n      {\n        \"key\": \"hh_packages\",\n        \"value\": \"podman=4.3.1+ds1-8+deb12u1+b3 crun=1.8.1-1+deb12u1 conmon=2.1.6+ds1-1 netavark=1.4.0-3 podman-compose=1.0.3-3\\n\"\n      },\n      {\n        \"key\": \"startup-script\",\n        \"value\": \"#!/usr/bin/env bash\\n# startup.sh \u2014 in-guest bootstrap for a hh compute window VM\\n# (manifest 266/R6.13; spec \u00a73.9; ADR-0431/AR-15; REQ-XB-204/209/220).\\n#\\n# Passed to `instances create` as `--metadata-from-file startup-script=`.\\n# NO SECRETS: this file is recorded by sha256 in every provision receipt and\\n# leak-swept before use. The only inputs are instance metadata keys set by\\n# gce-backend.sh: `hh_packages` (name=version pins) and\\n# `hh_deadman_minutes` (D + 15 \u2014 REQ-XB-209's in-guest timer).\\nset -euo pipefail\\nset +x # belt: tracing never exposes metadata contents\\n\\nMETA=\\\"http://metadata.google.internal/computeMetadata/v1/instance/attributes\\\"\\nmh() { curl -fs -H \\\"Metadata-Flavor: Google\\\" \\\"$META/$1\\\"; }\\n\\nDEADMAN_MIN=\\\"$(mh hh_deadman_minutes)\\\"   # minutes until in-guest poweroff\\nPACKAGES=\\\"$(mh hh_packages)\\\"            # whitespace-sep name=version pins\\n\\n# \u2500\u2500 REQ-XB-220: disable unattended upgrades for the window \u2014 the package\\n# set must not move mid-run (a podman restart kills in-flight cells).\\nsystemctl disable --now unattended-upgrades.service 2>/dev/null || true\\nsystemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\\nsystemctl mask apt-daily.service apt-daily-upgrade.service 2>/dev/null || true\\n\\n# \u2500\u2500 pinned package set (podman, crun, conmon, netavark, compose frontend)\\nexport DEBIAN_FRONTEND=noninteractive\\napt-get update -y\\napt-get install -y --allow-downgrades $PACKAGES\\nmkdir -p /var/log/hh\\ndpkg-query -W -f='${Package}=${Version}\\\\n' \\\\\\n  | sort > /var/log/hh/dpkg-pins.txt\\n\\n# \u2500\u2500 rootful podman socket, group-restricted (never TCP-bound, never\\n# forwarded \u2014 REQ-XB-205). The `hh` group owns the local socket.\\ngroupadd -f hh\\nmkdir -p /etc/systemd/system/podman.socket.d\\ncat > /etc/systemd/system/podman.socket.d/10-hh.conf <<'UNIT'\\n[Socket]\\nSocketMode=0660\\nSocketGroup=hh\\nUNIT\\nsystemctl daemon-reload\\nsystemctl enable --now podman.socket\\n\\n# \u2500\u2500 REQ-XB-209: in-guest dead-man timer at D + 15 min \u2014 the second physical\\n# layer. Runs even if every controller session is lost.\\nshutdown -h \\\"+${DEADMAN_MIN}\\\" || \\\\\\n  ( sleep \\\"$((DEADMAN_MIN * 60))\\\" && systemctl poweroff ) ",
+      "stdout_sha256": "daa9ee6bcc88f63b545c20bc05d8981e033906e8d9e334551124d22f957f4847"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "firewall-rules",
+        "list",
+        "--filter",
+        "network:hh-net",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-12T05:46:15Z",
+      "exit": 0,
+      "started_at": "2026-11-12T05:46:14Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:23:49.245-08:00\",\n    \"description\": \"\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"2261950971915503370\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"hh-iap-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\",\n    \"priority\": 1000,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\",\n    \"sourceRanges\": [\n      \"35.235.240.0/20\"\n    ]\n  }\n]\n",
+      "stdout_sha256": "df204115ad5667536af4795847b420aaf2e56430b714683176479a2a847e27f8"
+    }
+  ],
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-wc3.json",
+    "sha256": "f46103e2da97bce415d9aa0b37f3cb8515e7dd73391965dec3f25f864eda9847"
+  },
+  "kind": "provision",
+  "phase": "fp",
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "d93d190342cafa37133ca0a0846c2c39e496a17e",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
+  },
+  "recorded_at": "2026-11-12T05:46:15Z",
+  "resources": {
+    "creation_timestamp": "2026-11-12T05:45:45.822Z",
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "present",
+    "instance_id": 749031699468840038,
+    "instance_name": "hh-fp-wc3",
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "ticket": "R6.45c",
+  "verification": {
+    "firewall_rules": [
+      {
+        "allowed": [
+          {
+            "IPProtocol": "tcp",
+            "ports": [
+              "22"
+            ]
+          }
+        ],
+        "name": "hh-iap-ssh",
+        "sourceRanges": [
+          "35.235.240.0/20"
+        ]
+      }
+    ]
+  },
+  "window": "wc3"
+}
