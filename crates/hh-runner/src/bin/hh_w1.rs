@@ -912,46 +912,23 @@ impl Drop for MediatorGuard {
     }
 }
 
-fn collect_denied(store_root: &Path, run_id: &str) -> Vec<String> {
-    let mut hosts = BTreeSet::new();
+/// `collect_denied` — read the mediator run's durable rows and fold
+/// the verify-phase denies into the denied-host set (the row fold is
+/// [`verdict::denied_hosts`]; `verify_version_id` is the verify
+/// layer's policy `version_id` — only denies decided under it are
+/// verifier-bootstrap evidence).
+fn collect_denied(store_root: &Path, run_id: &str, verify_version_id: Option<&str>) -> Vec<String> {
     if let Ok(store) = hharness_ledger::store::Store::open(store_root) {
         if store.has_run(run_id) {
             if let Ok(events) = store.events(run_id) {
-                for e in events {
-                    if e.class != "security.egress.decided" {
-                        continue;
-                    }
-                    let flat = e.payload.to_canonical_string();
-                    if !flat.contains("\"deny\"") {
-                        continue;
-                    }
-                    collect_hosts(&e.payload, &mut hosts);
-                }
+                return verdict::denied_hosts(
+                    events.iter().map(|e| (e.class.as_str(), &e.payload)),
+                    verify_version_id,
+                );
             }
         }
     }
-    hosts.into_iter().collect()
-}
-
-fn collect_hosts(j: &Json, out: &mut BTreeSet<String>) {
-    match j {
-        Json::Obj(m) => {
-            for (k, v) in m {
-                if k == "host" {
-                    if let Some(h) = v.as_str() {
-                        out.insert(h.to_string());
-                    }
-                }
-                collect_hosts(v, out);
-            }
-        }
-        Json::Arr(a) => {
-            for v in a {
-                collect_hosts(v, out);
-            }
-        }
-        _ => {}
-    }
+    vec![]
 }
 
 fn h_run_once(
@@ -979,6 +956,7 @@ fn h_run_once(
     let mut policy_dst = None;
     let mut agent_policy = None;
     let mut verify_policy = None;
+    let mut verify_version_id: Option<String> = None;
     let mut guard: Option<MediatorGuard> = None;
     let mut store_root = PathBuf::new();
     let run_id = format!("w1-{}", container);
@@ -1053,6 +1031,13 @@ fn h_run_once(
         };
         agent_policy = Some(layer("agent")?);
         verify_policy = Some(layer("verify")?);
+        // The verify layer's `version_id` — the `policy_version_id`
+        // the mediator stamps on each row it decides under that layer.
+        verify_version_id = verify_policy
+            .as_ref()
+            .and_then(|p| p.get("version_id"))
+            .and_then(Json::as_str)
+            .map(str::to_string);
         let policy_file = slot.join("policy.json");
         std::fs::write(
             &policy_file,
@@ -1198,7 +1183,7 @@ fn h_run_once(
         .unwrap_or_default();
     let timed_out = report.verify.as_ref().map(|v| v.timed_out).unwrap_or(false);
     let denied = if mediated {
-        collect_denied(&store_root, &run_id)
+        collect_denied(&store_root, &run_id, verify_version_id.as_deref())
     } else {
         vec![]
     };

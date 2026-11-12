@@ -334,6 +334,23 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         if !cell.present(TESTS_DIR)? {
             stage_in(cell, &plan.host_staging.join("tests"), TESTS_DIR)?;
         }
+        // The reward sink is lifecycle-owned like `/tests`: a verifier
+        // whose bootstrap dies before anything creates the dir (on the
+        // allowlist_mediated profile a denied apt/uv bootstrap never
+        // reaches the pytest leg whose ctrf plugin creates
+        // `/logs/verifier`) must still land its trailing `reward.*`
+        // write — otherwise a verifier that ran to completion records
+        // `reward_missing` for a reward it produced (the Wc2/Wc3
+        // H-allow signature).
+        cell.exec(&CellExec {
+            argv: vec![
+                "mkdir".to_string(),
+                "-p".to_string(),
+                VERIFIER_DIR.to_string(),
+            ],
+            cwd: CELL_ROOT.to_string(),
+            deadline_ms: None,
+        })?;
         let out = cell.exec(&CellExec {
             argv: plan.verifier_argv.clone(),
             cwd: plan.workdir.clone(),

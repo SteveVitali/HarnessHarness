@@ -1,0 +1,43 @@
+{
+ "schema": "hh-wc-repair/1",
+ "window": "wc4-offline-repair",
+ "scope_decision": "docs/build/LEDGER.md GATE-G28d scope-decision (2026-11-12T15:45Z — the D = 6 h re-proof + the verifier `reward_missing` machinery fix, W1′′′′) — fp-wc4 declaration `scripts/gce-backend/declarations/fp-wc4.json` (PROV-Wc4, quote pq-78f1e79eeb33f575, ceiling 2,565,580 µ$) landed on `codex/harnessharness-wc4-machinery` `cc543d64` — this record is the offline repair act for the O-surface's fifth machinery defect, not the Wc4 re-proof",
+ "diagnosis": {
+  "class": "verifier_reward_sink_uncreated + denied_hosts_member_mismatch",
+  "surface": "H-allow (committed run_cell cell machinery — the ST5 verify leg — and the hh-w1 deny-evidence fold)",
+  "root_cause": "two coupled machinery defects, verified against the Wc3 harvest (fp-wc3/run-root.tar.gz, e.g. trials/torch-tensor-parallelism/H-allow/r0): (1) crates/hh-runner/src/cell.rs `run_cell` ST5 never ensured `/logs/verifier` exists in the cell. The staged verifier (`bash /tests/test.sh`) ends with `echo 0|1 > /logs/verifier/reward.txt` — the dir is created only by the pytest ctrf plugin on the happy path. On `allowlist_mediated` cells the verifier's apt bootstrap is denied under the frozen allowlist (mediator WAL: `security.egress.decided{deny, not_allowed, default_unmatched}` for archive.ubuntu.com / security.ubuntu.com — the frozen fp-w1-q-x55 list carries Debian-family apt hosts; the task images are Ubuntu noble — declared data, untouched), pytest never runs, the dir never exists, the `reward.txt` write fails, and every verify attempt's copy-out finds nothing — `exited{0}` → `verifier_unavailable:reward_missing` on all H-allow cells (Wc2 + Wc3 verbatim). (2) crates/hh-runner/src/bin/hh_w1.rs `collect_denied`/`collect_hosts` hunted a bare `host` member the decided payload never carries (`host_norm`/`host_raw` are the committed members — crates/hh-env/src/bin/hh_egress_mediator.rs via egress.rs `egress_decided_payload`): every live deny folded to `denied_hosts: []` (the recorded mis-signature) and produced zero `MediatorRow`s — the §3.4 classifier's `bootstrap:egress_denied` leg could never fire even had a reward landed. The same fold also could not attribute phase: any deny in the run counted as verify-phase evidence."
+ },
+ "repair": {
+  "scope": "machinery only — `run_cell`'s ST5 leg in crates/hh-runner/src/cell.rs, the deny-evidence fold moved into crates/hh-runner/src/verdict.rs (`denied_hosts`), and the hh-w1 call site in crates/hh-runner/src/bin/hh_w1.rs; the drawn tasks, surfaces O/H-pub/H-allow, the R/R admit rule, the frozen allowlist and the committed replacement orders are untouched; no new record kind or schema; the CellOps signature is unchanged",
+  "act_1": "cell.rs — the ST5 leg runs `mkdir -p /logs/verifier` in-cell before the verifier exec (the reward sink is lifecycle-owned like `/tests`; stage_in already mkdirs its destination). A verifier whose bootstrap dies before the pytest leg still lands its trailing `reward.*` write — `exited{0}` now yields a produced reward (`0` under a denied bootstrap) instead of `reward_missing`.",
+  "act_2": "verdict.rs — `denied_hosts(events, verify_version_id)` folds `security.egress.decided` rows: `decision == \"deny\"` matched as a member (not a substring), hosts collected from `host_norm`/`host_raw` (bare `host` retained), and verify-phase attribution by `policy_version_id == <verify layer's version_id>` — an agent-layer deny is not verifier-bootstrap evidence. hh_w1.rs extracts `version_id` from the sealed verify layer and calls the fold; `denied_hosts` now records the real verify-phase denies and the `MediatorRow`s drive `bootstrap:egress_denied`."
+ },
+ "new_version": {
+  "runner": {
+   "binary": "hh-w1",
+   "artifact": "target/release/hh_w1",
+   "built_from": "source — cargo build --release --locked --bin hh_w1 -p hharness-runner (macOS dev host; the helper crate is linked in-process)",
+   "sha256": "sha256:b1ba7ffdcb16c0aed453649db0f4ace19919738a09fb171c3c01316bc2ce6984",
+   "carries": "the verifier reward-sink repair + the deny-evidence fold repair (over the merged mediated-egress `5b8e8f28` and cell-terminate `bb60a46f` lineages — all three repairs)",
+   "mediator_binary": "hh-egress-mediator (same crate, same commit) sha256:ec8d4408561b40ac7ed5a2e57db1c5c677205a6687be6535f6ceedb7a56b9a02",
+   "helper_binary": "hh-helper (same crate, same commit) sha256:ed4e132a3b3f1877e78adc291dc76b31bbde79522ca9b58d14450911e2fb6405 — byte-identical to wc3's recorded helper (the repair touched no helper code)"
+  },
+  "prior_runner": {
+   "commit": "bb60a46f",
+   "sha256": "sha256:c8184fedc184324337395df16347b64932e527f669203f41113e07355099695d",
+   "in_window_wc3": "sha256:669039f83d718ad12e14d646edfb547c6842bfc295bb5570c98a7458f3ae2fe4 (wc3-window-record.json)"
+  }
+ },
+ "test_evidence": {
+  "regression": "crates/hh-runner/tests/r6_45d.rs — `completed_cell_produces_a_findable_reward`: a fixture cell models the recorded H-allow verifier (denied bootstrap → `reward.txt` writable only if `/logs/verifier` exists); `run_cell` now logs `mkdir -p /logs/verifier` before the verify exec, `reward.txt` is produced and copied out, one verify attempt decides, and `classify` lands `bootstrap:egress_denied` on the verify-phase rows (decided-0 `infra_suspected` without them) — fails on the unfixed drive (no mkdir, `reward_missing`). `denied_hosts_reads_the_real_members_and_attributes_verify` + `the_recorded_signature_resolves_to_bootstrap_egress_denied`: the verbatim Wc3 decided-payload member set (`host_norm`/`host_raw`/`policy_version_id`) folds to the real denied hosts under the verify layer's `version_id`; agent-layer versions and non-deny/non-decided rows are excluded — a `host`-only walk records `[]` (the recorded defect).",
+  "commands": [
+   "cargo test -p hharness-runner — all batteries pass (r6_45d 3/3; r6_9 11/11 incl. the §3.4 truth table; r6_8 8/8; 2 ignored live legs)",
+   "cargo test -p hharness-runner --test r6_45d on the stashed pre-fix cell.rs — completed_cell_produces_a_findable_reward fails (fails-without)",
+   "cargo clippy -p hharness-runner --all-targets — no new warnings (pre-existing only)",
+   "cargo fmt --all --check — clean",
+   "cargo build --release --locked --bin hh_w1 -p hharness-runner --bin hh-egress-mediator -p hharness-env --bin hh-helper -p hharness-helper — clean"
+  ],
+  "live_pending": "a live podman/VM leg (mediated cell → denied verify bootstrap → reward.txt lands + decided rows) is not available on the repair host — recorded pending; the Wc4 re-proof under the GATE-G28d window is the live verification act, not claimed here"
+ },
+ "tasks_untouched": true
+}
