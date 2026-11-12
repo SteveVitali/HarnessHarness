@@ -1,32 +1,32 @@
 {
-  "assertions": [
-    "the $0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor `harbor run -r 0 --no-force-build` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 \u2014 the driver lands hh-reproof-packet/1 + the append-only register on the provisioned VM"
-  ],
-  "cost_pricing": {
-    "retrieved": "2026-10-21",
-    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
-    "table": "docs/build/reports/live/pricing.json"
-  },
-  "cost_usd": 0.0,
-  "endpoint_host": null,
-  "git_head": "06a393905918b92565dc6d4e0425e3605b5c83b8",
-  "harness": "unknown",
-  "leg": "reproof",
-  "model_reported": null,
-  "provided": {},
-  "provider": "pinned-harbor",
-  "recorded_at": "2026-11-11T23:50:49Z",
-  "request_ids": [],
-  "response_headers": {},
-  "result": "fail:prove-driver-rc",
-  "run_ledger_head": {
-    "path": "docs/build/runs/R6.32.md",
-    "sha256": "9132052b990b4bffd41eefff13fd5affb5e8f19ae994b8ae60e746f964f389ea"
-  },
-  "schema": "hh-live-evidence/1",
-  "spend_cumulative_usd": 25.259768,
-  "ticket": "R6.32",
-  "token_usage": null,
-  "transcript_path": "docs/build/reports/live/2026-11-11-reproof.transcript.txt",
-  "transcript_sha256": "53ec01b8b527f5349f3b7cf6b2dc4199ac5fbd52b97ed1a69bcab1fec29c998a"
+ "assertions": [
+  "the $0 oracle re-proof (O, H-pub, H-allow at R per task; the pinned Harbor `harbor run -r 0 --no-force-build` + the frozen allowlist): registered by R6.17, executed in W1 by R6.32 \u2014 the driver lands hh-reproof-packet/1 + the append-only register on the provisioned VM"
+ ],
+ "cost_pricing": {
+  "retrieved": "2026-10-21",
+  "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+  "table": "docs/build/reports/live/pricing.json"
+ },
+ "cost_usd": 0.0,
+ "endpoint_host": null,
+ "git_head": "06a393905918b92565dc6d4e0425e3605b5c83b8",
+ "harness": "unknown",
+ "leg": "reproof",
+ "model_reported": null,
+ "provided": {},
+ "provider": "pinned-harbor",
+ "recorded_at": "2026-11-11T23:50:49Z",
+ "request_ids": [],
+ "response_headers": {},
+ "result": "fail:prove-driver-rc",
+ "run_ledger_head": {
+  "path": "docs/build/runs/R6.32.md",
+  "sha256": "9132052b990b4bffd41eefff13fd5affb5e8f19ae994b8ae60e746f964f389ea"
+ },
+ "schema": "hh-live-evidence/1",
+ "spend_cumulative_usd": 25.259768,
+ "ticket": "R6.32",
+ "token_usage": null,
+ "transcript_path": "docs/build/reports/live/2026-11-11-reproof-wc2.transcript.txt",
+ "transcript_sha256": "53ec01b8b527f5349f3b7cf6b2dc4199ac5fbd52b97ed1a69bcab1fec29c998a"
 }
