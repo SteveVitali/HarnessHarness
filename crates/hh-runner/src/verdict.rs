@@ -7,7 +7,7 @@
 //! the `terminal-bench-core==0.1.1` pin (the committed ANSI-strip and
 //! PytestParser-equivalent repairs, REQ-XA-127).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use hharness_wire::json::Json;
 
@@ -151,6 +151,64 @@ pub struct MediatorRow {
     pub phase: String,
     /// `allow | deny | error` — the recorded decision.
     pub decision: String,
+}
+
+/// `denied_hosts(events, verify_version_id)` — the denied hosts a
+/// mediated slot's durable `security.egress.decided` rows record,
+/// folded in ledger order (the Wc4 repair of the `denied_hosts: []`
+/// signature): the decided payload carries `host_norm`/`host_raw`,
+/// never a bare `host` — a `host`-only walk recorded an empty set
+/// over live denies and left the §3.4 classifier no verify-phase
+/// rows. `verify_version_id` is the verify layer's policy
+/// `version_id` (the row's `policy_version_id` member names the layer
+/// that decided it): a row decided under it is a verify-phase
+/// decision — an agent-layer deny is not verifier-bootstrap evidence.
+/// `events` yields `(class, payload)` pairs; non-decided rows,
+/// non-deny decisions and other-layer decisions are skipped.
+pub fn denied_hosts<'a, I>(events: I, verify_version_id: Option<&str>) -> Vec<String>
+where
+    I: IntoIterator<Item = (&'a str, &'a Json)>,
+{
+    let mut hosts = BTreeSet::new();
+    for (class, payload) in events {
+        if class != "security.egress.decided" {
+            continue;
+        }
+        if payload.get("decision").and_then(Json::as_str) != Some("deny") {
+            continue;
+        }
+        if let Some(vid) = verify_version_id {
+            if payload.get("policy_version_id").and_then(Json::as_str) != Some(vid) {
+                continue;
+            }
+        }
+        collect_host_names(payload, &mut hosts);
+    }
+    hosts.into_iter().collect()
+}
+
+/// The host-name members a decided/requested row records —
+/// `host_norm`/`host_raw` in the committed wire shape, `host` kept
+/// for any producer that spells it that way.
+fn collect_host_names(j: &Json, out: &mut BTreeSet<String>) {
+    match j {
+        Json::Obj(m) => {
+            for (k, v) in m {
+                if matches!(k.as_str(), "host" | "host_norm" | "host_raw") {
+                    if let Some(h) = v.as_str() {
+                        out.insert(h.to_string());
+                    }
+                }
+                collect_host_names(v, out);
+            }
+        }
+        Json::Arr(a) => {
+            for v in a {
+                collect_host_names(v, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The bootstrap signatures (§3.4/F7 — apt `E:` lines, `Temporary
