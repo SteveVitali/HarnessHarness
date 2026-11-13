@@ -1,0 +1,128 @@
+{
+ "authorization": {
+  "ceiling_micros": 2565580,
+  "gate": "PROV-Wc5",
+  "quote_id": "pq-4183fe9dc342aa10",
+  "readout_path": "docs/build/readouts/GATE-G28e.md",
+  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+ },
+ "cost_record": {
+  "path": "docs/build/reports/compute/2026-11-13-fp-wc5-cost.json",
+  "sha256": "c897c8ad86972f6d1d5fa33610afd8c02bceb1e15f062649a26dff27b698e9ac"
+ },
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-wc5.json",
+  "sha256": "34831a7113bbf3f1a83f1773f4d404e7ecc082bb3b62dcde0e4f35bdf05731e7"
+ },
+ "h_r": {
+  "declared_hours": 6,
+  "elapsed_hours": 0.18,
+  "exceeded": false,
+  "requires_dated_df_row": false
+ },
+ "kind": "teardown",
+ "lifecycle": {
+  "creation_timestamp": "2026-11-13T06:42:42Z",
+  "deletion_operation_end": "2026-11-13T12:52:00Z",
+  "last_stop_timestamp": "2026-11-13T12:42:42Z"
+ },
+ "phase": "fp",
+ "post_state": {
+  "addresses": 0,
+  "disks": 0,
+  "firewalls": 5,
+  "forwarding": 0,
+  "images": 0,
+  "instances": 0,
+  "nats": 0,
+  "routers": 0,
+  "snapshots": 0
+ },
+ "provided": {
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "d9c30bd7938c077a7d3032fc0527aa958424a176",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
+ },
+ "recorded_at": "2026-11-13T13:00:00Z",
+ "resources": {
+  "creation_timestamp": "2026-11-13T06:42:42Z",
+  "deletion_operation_end": "2026-11-13T12:52:00Z",
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": "hh-fp-wc5",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "settlement": {
+  "last_model_call_utc_hour": "n/a{no_model_calls}"
+ },
+ "steps": [
+  {
+   "at": "2026-11-13T12:42:42Z",
+   "n": 1,
+   "name": "stop_admissions",
+   "result": "\"dead_man_stop{instance_termination_action}\" \u2014 the GCP max_run_duration 6h STOP fired; the in-guest prove was killed mid-surface (query-optimize H-allow in flight \u2014 inconclusive{backend_terminated})"
+  },
+  {
+   "at": "2026-11-13T12:44:06Z",
+   "n": 2,
+   "name": "harvest_restart",
+   "result": "\"declared \u22641h harvest-only restart\" \u2014 instance restarted inside the declared restart allowance to harvest the in-guest run"
+  },
+  {
+   "at": "2026-11-13T12:48:00Z",
+   "n": 3,
+   "name": "harvest",
+   "result": "\"verified\" \u2014 run-root.tar.gz pulled verbatim over IAP + MANIFEST.sha256 (1136 members)"
+  },
+  {
+   "at": "2026-11-13T12:50:00Z",
+   "n": 4,
+   "name": "serial_usage",
+   "result": "serial.log + journald.log + usage.txt captured"
+  },
+  {
+   "at": "2026-11-13T12:50:00Z",
+   "n": 5,
+   "name": "inventory",
+   "result": "pre-delete inventory"
+  },
+  {
+   "at": "2026-11-13T12:52:00Z",
+   "n": 6,
+   "name": "delete",
+   "result": "instance hh-fp-wc5 DELETED (~12:52Z) \u2014 inside the \u22641h restart bound"
+  },
+  {
+   "at": "2026-11-13T12:53:00Z",
+   "n": 7,
+   "name": "reinventory",
+   "result": "instances list empty \u2014 zero residual compute"
+  },
+  {
+   "at": "2026-11-13T12:53:00Z",
+   "n": 8,
+   "name": "compute_open_empty",
+   "result": "verified via teardown receipt write \u2014 compute-open.sh closes once this receipt lands"
+  }
+ ],
+ "window": "wc5",
+ "ticket": "R6.45e",
+ "verification": {
+  "manifest": {
+   "members": 1138,
+   "bad": 0
+  },
+  "compute_open": "empty",
+  "note": "dead-man STOP at 29/30; declared <=1h harvest restart exercised"
+ },
+ "commands": []
+}

@@ -1,0 +1,46 @@
+{
+ "freeze": {
+  "carried_verbatim_from": "docs/build/reports/2026-11-13-fp-egress-allowlist-freeze-epoch-2.json",
+  "consumed_via": "cfg.freeze_file=/opt/wc5/freeze.json",
+  "digest": "sha256:86def07e2e8402c3aa0d2332d97abaed2b5d189c9ba3c1562afc1daf10712f98",
+  "epoch": 2
+ },
+ "in_window_machinery_steps": "recorded carry-overs only \u2014 upstream podman-compose 1.5.0 on PATH (smoke up+down rc 0); usermod -aG hh + podman.socket anomaly repaired (recurred); unqualified-search-registries docker.io appended (the setup's grep -q matched the commented example \u2014 appended for real before pulls); corpus terminal-bench-2-1 @12b75656; harbor @ff2a1ef4; EPOCH-2 freeze landed verbatim at /opt/wc5/freeze.json (sha256:86def07e\u2026); 14 task env images pulled by declared task.toml docker_image refs (alexgshaw/<t>:20251031/:20260430); images.json 14 digest-pinned members",
+ "live_evidence_ref": "docs/build/reports/live/2026-11-13-reproof-wc5.json",
+ "re_proof": {
+  "deadline_driver_epoch_utc": 1794572820,
+  "driver": "~/hh-retained/wc5/bin/wc5-prove.sh over IAP-ssh detached",
+  "outcome": "dead_man_cutoff \u2014 the re-proof ran ~07:15Z\u2192~12:42Z under epoch-2; the GCP max_run_duration 6h STOP fired at ~12:42:42Z with the held leg at 29/30 surfaces (query-optimize H-allow in flight \u2014 inconclusive{backend_terminated}); the dev leg never started; NO reproof-packet.json landed; the live-verify leg records fail:prove-driver-rc (driver poll deadline 12:27Z UTC-minted)",
+  "surfaces": {
+   "dev": {
+    "incomplete": [
+     "never started"
+    ],
+    "landed": 0,
+    "total": 8
+   },
+   "held": {
+    "incomplete": [
+     "query-optimize:H-allow"
+    ],
+    "landed": 29,
+    "total": 30
+   }
+  },
+  "widened_allowlist_live_evidence": "every completed H-allow cell produced a REAL reward digest + ZERO denied hosts (no allowlist_gap rows \u2014 the epoch-2 declared-data fix verified live per-cell)"
+ },
+ "recorded_at": "2026-11-13T13:00:00Z",
+ "runner": {
+  "build": "source",
+  "commit": "d9c30bd7938c077a7d3032fc0527aa958424a176",
+  "in_window_digests": {
+   "hh-egress-mediator": "885df32d62387dd1e72d8bbae50ce08c460d36e1fe3702bb582f69e8d352a988",
+   "hh-helper": "7fb122f5576927a126e205455d181dc8409f6aee0fdc9da6039f4f4b9db4f450",
+   "hh-w1": "f7b4d146c086380e7b80e77ddde668ce395b6cef56fa3cb8c027568b2f2848d7"
+  },
+  "note": "byte-identical to Wc4 \u2014 the epoch-2 allowlist amendment (merge 28617cb0) touched declared data (the freeze record), not runner/mediator/helper code"
+ },
+ "schema": "hh-wc-repair/1",
+ "ticket": "R6.45e",
+ "window": "wc5"
+}

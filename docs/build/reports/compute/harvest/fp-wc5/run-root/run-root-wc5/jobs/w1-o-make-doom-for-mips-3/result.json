@@ -1,0 +1,43 @@
+{
+    "id": "a8c73ebc-e49e-4b75-976e-525da342ec34",
+    "started_at": "2026-11-13T07:16:25.237628",
+    "updated_at": "2026-11-13T07:18:38.199146",
+    "finished_at": "2026-11-13T07:18:38.199146",
+    "n_total_trials": 3,
+    "stats": {
+        "n_completed_trials": 3,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oracle__tasks": {
+                "n_trials": 3,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 1.0
+                    }
+                ],
+                "pass_at_k": {
+                    "2": 1.0
+                },
+                "reward_stats": {
+                    "reward": {
+                        "1.0": [
+                            "make-doom-for-mips__c2b4UqE",
+                            "make-doom-for-mips__d7BomV8",
+                            "make-doom-for-mips__HPasumz"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

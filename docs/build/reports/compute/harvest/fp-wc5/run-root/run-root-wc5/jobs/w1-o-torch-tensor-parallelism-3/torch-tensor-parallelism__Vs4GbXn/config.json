@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc5/tb21/tasks/torch-tensor-parallelism",
+        "source": "tasks"
+    },
+    "trial_name": "torch-tensor-parallelism__Vs4GbXn",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc5/jobs/w1-o-torch-tensor-parallelism-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "5672bb88-4546-4605-9f42-1d90ae97617f"
+}

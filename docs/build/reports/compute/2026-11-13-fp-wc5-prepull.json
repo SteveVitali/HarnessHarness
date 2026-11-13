@@ -1,0 +1,84 @@
+{
+ "authorization": {
+  "ceiling_micros": 2565580,
+  "gate": "PROV-Wc5",
+  "quote_id": "pq-4183fe9dc342aa10",
+  "readout_path": "docs/build/readouts/GATE-G28e.md",
+  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+ },
+ "commands": [
+  {
+   "argv_redacted": [
+    "auth",
+    "list",
+    "--format=value(account)"
+   ],
+   "ended_at": "2026-11-13T06:46:34Z",
+   "exit": 0,
+   "started_at": "2026-11-13T06:46:34Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "14stevevitali@gmail.com\n",
+   "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "ssh",
+    "hh-fp-wc5",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--zone",
+    "us-central1-a",
+    "--tunnel-through-iap",
+    "--command",
+    "df -B1 --output=avail /var | tail -1"
+   ],
+   "ended_at": "2026-11-13T06:46:36Z",
+   "exit": 0,
+   "started_at": "2026-11-13T06:46:34Z",
+   "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+   "stdout_excerpt": "301546446848\n",
+   "stdout_sha256": "54117c49e20b10eece84cc7bb037ea90d9ae5a3f9583f89c8ebfa52ac861fd4c"
+  }
+ ],
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-wc5.json",
+  "sha256": "34831a7113bbf3f1a83f1773f4d404e7ecc082bb3b62dcde0e4f35bdf05731e7"
+ },
+ "kind": "prepull",
+ "phase": "fp",
+ "prepull": {
+  "diskwatch": {
+   "below_floor": false,
+   "floor_gib": 20,
+   "free_gib": 280.8
+  },
+  "images": []
+ },
+ "provided": {
+  "OLLAMA_API_KEY": "no",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "d9c30bd7938c077a7d3032fc0527aa958424a176",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
+ },
+ "recorded_at": "2026-11-13T06:46:36Z",
+ "resources": {
+  "creation_timestamp": null,
+  "deletion_operation_end": null,
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": null,
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "ticket": "R6.45e",
+ "verification": null,
+ "window": "wc5"
+}

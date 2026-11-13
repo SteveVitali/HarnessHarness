@@ -1,0 +1,64 @@
+{
+ "authorization": {
+  "ceiling_micros": 2565580,
+  "gate": "PROV-Wc5",
+  "quote_id": "pq-4183fe9dc342aa10",
+  "readout_path": "docs/build/readouts/GATE-G28e.md",
+  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+ },
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-wc5.json",
+  "sha256": "34831a7113bbf3f1a83f1773f4d404e7ecc082bb3b62dcde0e4f35bdf05731e7"
+ },
+ "harvest": {
+  "journald": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/journald.log",
+   "sha256": "0d7125a939b920e27ea3f680b0a0570c4d130e3ffcf40fe210fd79f6c1cf62c8"
+  },
+  "manifest": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/MANIFEST.sha256",
+   "sha256": "f6455fc6ce46b72d4e62eacecabf8950236e34834a21362120ceb853b3486268"
+  },
+  "run_root_tar": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/run-root-wc5.tar.gz",
+   "sha256": "ced0c73ff83ae4e873f6790e0b9b9cf131b70eeb13772b41e386e59fd14c4867"
+  },
+  "serial": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/serial.log",
+   "sha256": "73b4b10e242eb4692405c18cf1b2d7c16832e2e15421cacbbe0302d3698293dc"
+  },
+  "usage": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/usage.txt",
+   "sha256": "818404888af77e1880f0e5991c755475810f0ed0bc10421c93a6a4886d7da3b5"
+  }
+ },
+ "kind": "harvest",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "recorded_at": "2026-11-13T12:50:00Z",
+ "schema": "hh-compute-receipt/1",
+ "window": "wc5",
+ "ticket": "R6.45e",
+ "commands": [],
+ "recipe": {
+  "path": "scripts/gce-backend.sh",
+  "git_head": "d9c30bd7938c077a7d3032fc0527aa958424a176",
+  "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
+ },
+ "resources": {
+  "creation_timestamp": null,
+  "deletion_operation_end": null,
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": "hh-fp-wc5",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "verification": null
+}

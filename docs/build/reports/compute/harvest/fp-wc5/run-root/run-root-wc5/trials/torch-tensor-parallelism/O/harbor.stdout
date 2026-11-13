@@ -1,0 +1,28 @@
+  3/3 Mean: 0.667 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0:15:19 0:00:00
+tasks • oracle
+┏━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Trials ┃ Exceptions ┃  Mean ┃ Pass@2 ┃
+┡━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│      2 │          1 │ 0.667 │  1.000 │
+└────────┴────────────┴───────┴────────┘
+
+┏━━━━━━━━┳━━━━━━━┓
+┃ Reward ┃ Count ┃
+┡━━━━━━━━╇━━━━━━━┩
+│ 1.0    │     2 │
+└────────┴───────┘
+
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ Exception            ┃ Count ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ VerifierTimeoutError │     1 │
+└──────────────────────┴───────┘
+
+Job Info
+Total runtime: 15m 19s
+Results written to 
+/var/lib/hh/runs/run-root-wc5/jobs/w1-o-torch-tensor-parallelism-3/result.json
+Inspect results by running `harbor view /var/lib/hh/runs/run-root-wc5/jobs`
+Share results by running `harbor upload 
+/var/lib/hh/runs/run-root-wc5/jobs/w1-o-torch-tensor-parallelism-3`
+

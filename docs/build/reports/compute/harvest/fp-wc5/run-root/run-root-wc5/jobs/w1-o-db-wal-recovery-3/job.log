@@ -1,0 +1,123 @@
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__3o2expt__env -f /tmp/tmpryblgjao/db-wal-recovery__3o2Expt__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpcau6x1ht/docker-compose-environment.json -f /tmp/tmp9cmszzi2/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__eu7z6j2__env -f /tmp/tmplcv1krv3/db-wal-recovery__EU7Z6j2__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpkaody7vx/docker-compose-environment.json -f /tmp/tmptwmvaa4n/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__utm4kvs__env -f /tmp/tmpzmuifqsi/db-wal-recovery__UTm4kVS__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp775w1esm/docker-compose-environment.json -f /tmp/tmpi4y53hat/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__3o2expt__env -f /tmp/tmpryblgjao/db-wal-recovery__3o2Expt__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpcau6x1ht/docker-compose-environment.json -f /tmp/tmp9cmszzi2/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc5/jobs/w1-o-db-wal-recovery-3/db-wal-recovery__3o2Expt/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__utm4kvs__env -f /tmp/tmpzmuifqsi/db-wal-recovery__UTm4kVS__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp775w1esm/docker-compose-environment.json -f /tmp/tmpi4y53hat/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc5/jobs/w1-o-db-wal-recovery-3/db-wal-recovery__UTm4kVS/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__eu7z6j2__env -f /tmp/tmplcv1krv3/db-wal-recovery__EU7Z6j2__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpkaody7vx/docker-compose-environment.json -f /tmp/tmptwmvaa4n/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc5/jobs/w1-o-db-wal-recovery-3/db-wal-recovery__EU7Z6j2/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+Collecting main service artifacts
+Collecting main service artifacts
+Collecting main service artifacts
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__3o2expt__env -f /tmp/tmpryblgjao/db-wal-recovery__3o2Expt__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpcau6x1ht/docker-compose-environment.json -f /tmp/tmp9cmszzi2/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__utm4kvs__env -f /tmp/tmpzmuifqsi/db-wal-recovery__UTm4kVS__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp775w1esm/docker-compose-environment.json -f /tmp/tmpi4y53hat/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment db-wal-recovery. Command: podman-compose --in-pod=false --project-name db-wal-recovery__eu7z6j2__env -f /tmp/tmplcv1krv3/db-wal-recovery__EU7Z6j2__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpkaody7vx/docker-compose-environment.json -f /tmp/tmptwmvaa4n/docker-compose-mounts.json cp /opt/wc5/tb21/tasks/db-wal-recovery/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 

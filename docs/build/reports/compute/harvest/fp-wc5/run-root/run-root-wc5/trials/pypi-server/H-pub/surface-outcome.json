@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"ctrf":"sha256:c11f5de2467d9adad70802393e3681ea5e391f276b91b0f9a2f86ab28aaba652","image":"alexgshaw/pypi-server@sha256:d18bb30f47c7dcaa3acdbc31ac7413c98eadca2ea16540bbd380f2f063b95276","reward":"sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},"harbor_exception":null,"rewards":[true,true,true],"wall_ms":2745673}

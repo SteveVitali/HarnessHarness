@@ -1,0 +1,10 @@
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+0.41 0.25 0.09 1/234 1656
+102.75 794.70
+MemTotal:       32875740 kB
+MemFree:        31956528 kB
+MemAvailable:   32149788 kB

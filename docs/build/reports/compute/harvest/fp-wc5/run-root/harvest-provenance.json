@@ -1,0 +1,17 @@
+{
+ "files": "run-root-wc5.tar.gz is the sha256-manifest-covered payload; MANIFEST.sha256 lists every member; journald.log + serial.log + usage.txt carried per the fp-wc3/wc4 pattern",
+ "locally_authored": {
+  "2026-11-13-fp-wc5-tasklists.json": "the hh-task-lists-outcome/1 frozen-list outcome \u2014 task_lists.state stays blocked verbatim (0/14 covering reproofed verdicts; the re-proof's dead-man cutoff: held leg 29/30 surfaces landed, query-optimize H-allow inconclusive{backend_terminated}, dev leg never started \u2014 no packet)",
+  "wc5-window-record.json": "the window receipt (hh-wc-repair/1) \u2014 runner/mediator/helper in-window digests at stamped d9c30bd7 (byte-identical to Wc4; the allowlist amendment touched declared data only) + the re_proof outcome record (dead-man cutoff; widened allowlist verified live per-cell \u2014 real reward + zero denied hosts on every completed H-allow cell)"
+ },
+ "outcome_summary": "dead_man_cutoff \u2014 the held leg landed 29/30 surfaces before the 6h bound; every completed H-allow cell verified the epoch-2 widened allowlist live (real reward + zero denied hosts); the list stays blocked verbatim",
+ "provenance": "the in-guest run-root /var/lib/hh/runs/run-root-wc5 was pulled verbatim over IAP-ssh AFTER the dead-man STOP via the declared \u22641h harvest-only restart (instance TERMINATED at ~12:42:42Z, restarted ~12:44:06Z, harvested ~12:48Z, DELETED ~12:52Z inside the restart bound). run-root.tar.gz carries trials/ + jobs/ + prove-held/ + the window records; MANIFEST.sha256 verified locally",
+ "recorded_at": "2026-11-13T13:00:00Z",
+ "retained_during_window": {
+  "hh-carried-load-infra.json": "the LOAD act's record (set_digest sha256:254d590e\u2026, 7,829 ms, verified) \u2014 landed under run-root/ at load time",
+  "prove-held/": "the held leg's in-flight state (r0/r1/r2 repetition dirs) \u2014 no reproof-packet.json landed; the leg was killed mid-surface"
+ },
+ "schema": "hh-harvest-provenance/1",
+ "ticket": "R6.45e",
+ "window": "wc5"
+}
