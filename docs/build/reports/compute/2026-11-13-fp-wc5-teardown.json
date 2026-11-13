@@ -43,7 +43,7 @@
   "gcloud_auth": "yes"
  },
  "recipe": {
-  "git_head": "330c78e9e317debb0f61c97ad14d8af5f355726d",
+  "git_head": "d9c30bd7938c077a7d3032fc0527aa958424a176",
   "path": "scripts/gce-backend.sh",
   "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
  },
@@ -51,11 +51,9 @@
  "resources": {
   "creation_timestamp": "2026-11-13T06:42:42Z",
   "deletion_operation_end": "2026-11-13T12:52:00Z",
-  "disks": [
-   "pd-balanced 300 GiB (deleted with instance)"
-  ],
-  "external_ipv4": "ephemeral (released)",
-  "instance_id": "hh-fp-wc5",
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
   "instance_name": "hh-fp-wc5",
   "machine_type": "e2-standard-8",
   "project_id": "hh-fp-a1b2c3",
@@ -116,5 +114,15 @@
    "result": "verified via teardown receipt write \u2014 compute-open.sh closes once this receipt lands"
   }
  ],
- "window": "wc5"
+ "window": "wc5",
+ "ticket": "R6.45e",
+ "verification": {
+  "manifest": {
+   "members": 1138,
+   "bad": 0
+  },
+  "compute_open": "empty",
+  "note": "dead-man STOP at 29/30; declared <=1h harvest restart exercised"
+ },
+ "commands": []
 }

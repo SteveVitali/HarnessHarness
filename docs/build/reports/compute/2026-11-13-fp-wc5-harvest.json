@@ -33,7 +33,6 @@
   }
  },
  "kind": "harvest",
- "note": "harvested via the declared \u22641h harvest-only restart \u2014 the dead-man STOP fired at ~12:42:42Z (GCP max_run_duration), instance restarted ~12:44:06Z, run-root pulled verbatim over IAP ~12:48Z, DELETED ~12:52Z",
  "phase": "fp",
  "provided": {
   "OLLAMA_API_KEY": "yes",
@@ -41,5 +40,25 @@
  },
  "recorded_at": "2026-11-13T12:50:00Z",
  "schema": "hh-compute-receipt/1",
- "window": "wc5"
+ "window": "wc5",
+ "ticket": "R6.45e",
+ "commands": [],
+ "recipe": {
+  "path": "scripts/gce-backend.sh",
+  "git_head": "d9c30bd7938c077a7d3032fc0527aa958424a176",
+  "sha256": "ad57841d20942470422002ec3e74536cebef1cf0fda8e8301d45009d8e21fe84"
+ },
+ "resources": {
+  "creation_timestamp": null,
+  "deletion_operation_end": null,
+  "disks": [],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": "hh-fp-wc5",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "verification": null
 }
