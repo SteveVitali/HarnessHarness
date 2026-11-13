@@ -61,8 +61,7 @@ fn http_fixture() -> (u16, thread::JoinHandle<()>) {
             let Ok(mut s) = conn else { break };
             let mut buf = [0u8; 4096];
             let _ = s.read(&mut buf);
-            let _ =
-                s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nok!\n");
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nok!\n");
         }
     });
     (port, h)
