@@ -17,7 +17,7 @@
   },
   "manifest": {
    "path": "docs/build/reports/compute/harvest/fp-wc5/MANIFEST.sha256",
-   "sha256": "ad72ab8f6f84940b3ff831287d8ac3c780cd804e8a50aa4ef4764a053ddaa6e7"
+   "sha256": "f6455fc6ce46b72d4e62eacecabf8950236e34834a21362120ceb853b3486268"
   },
   "run_root_tar": {
    "path": "docs/build/reports/compute/harvest/fp-wc5/run-root-wc5.tar.gz",
