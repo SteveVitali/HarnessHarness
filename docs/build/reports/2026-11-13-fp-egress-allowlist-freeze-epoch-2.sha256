@@ -1,0 +1,2 @@
+4c954e7ce09a5daff78dba7999d9f43567748c9813f76bb3873af26f0a69272c  docs/build/reports/2026-11-13-fp-egress-allowlist-freeze-epoch-2.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-13-fp-egress-allowlist-freeze-epoch-2.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
