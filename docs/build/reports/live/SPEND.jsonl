@@ -98,3 +98,4 @@
 {"ts":"2026-11-11T16:53:03Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-reproof.json"}
 {"ts":"2026-11-11T23:50:49Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-reproof-wc2.json"}
 {"ts":"2026-11-12T10:58:49Z","ticket":"R6.45c","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-12-reproof-wc3.json"}
+{"cost_usd": 0, "cumulative_usd": 25.259768, "leg": "reproof", "record": "2026-11-12-reproof-wc4.json", "ticket": "R6.32", "ts": "2026-11-12T23:22:13Z"}

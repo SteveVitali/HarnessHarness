@@ -242,6 +242,24 @@
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 1
    }
+  },
+  {
+   "id": "wc4-runroot-size-1",
+   "date": "2026-11-12",
+   "recorded_by": "R6.45d subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic \u2014 the Wc4 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers \u2014 the first complete window harvest); a further size warning on this file is unexplained",
+   "provenance": {
+    "finding": "docs/build/runs/R6.45d.md \u2014 the Wc4 harvest's run-root.tar.gz (20.2 MB) carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (Wc3's tar was 1.7 MB because its window died mid-leg at 28/30 truncated surfaces); evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28d.md \u2014 PROV-Wc4 (the window this record layer belongs to)",
+    "handoff": "R6.45d \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc3 precedent"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-wc4/run-root\\.tar\\.gz$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 1
+   }
   }
  ]
 }

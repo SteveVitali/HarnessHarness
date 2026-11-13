@@ -1,0 +1,45 @@
+{
+ "carried_artifacts": "the W1 infrastructure set loaded verbatim (set_digest sha256:254d590e\u2026, 5 members, elapsed 10,998 ms); the in-window hh-w1 + hh-egress-mediator + hh-helper build is the new runner version recorded above \u2014 GATE-G28d's authorization covers it",
+ "gate": "GATE-G28d",
+ "helper": {
+  "binary": "hh-helper",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh-helper -p hharness-helper, same image/commit",
+  "carries": "the terminate_group /proc-cmdline-walk repair \u2014 byte-identical to the Wc3 in-window build (the verifier repair touched no helper code)",
+  "sha256": "sha256:7fb122f5576927a126e205455d181dc8409f6aee0fdc9da6039f4f4b9db4f450"
+ },
+ "in_window_machinery_steps": [
+  "upstream podman-compose 1.5.0 (PyPI) linked ahead of the declared 1.0.3-3 \u2014 the recorded Wc/Wc2/Wc3 carry-over; smoke up+down rc 0",
+  "usermod -aG hh + podman.socket restart \u2014 the recorded SocketGroup anomaly recurred and was repaired at verify time (660 root root \u2192 660 root hh)",
+  "unqualified-search-registries docker.io present in /etc/containers/registries.conf \u2014 recorded VM wiring",
+  "corpus terminal-bench-2-1 @12b75656 + harbor @ff2a1ef4 pins; freeze.json landed \u2014 digest sha256:b62762aeda\u2026 matches the W1/Wc2/Wc3 record byte-for-byte; 14 task env images pulled by task.toml docker_image refs (alexgshaw/<task>:20251031 / :20260430 \u2014 the :latest tag is absent upstream; the declared refs are the recorded pull basis); images.json pinned by digest"
+ ],
+ "mediator": {
+  "binary": "hh-egress-mediator",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh-egress-mediator -p hharness-env, same image/commit",
+  "carries": "the scope-mint + resolver-pin repairs \u2014 byte-identical to the Wc3 in-window build (the verifier repair touched no mediator code)",
+  "sha256": "sha256:885df32d62387dd1e72d8bbae50ce08c460d36e1fe3702bb582f69e8d352a988"
+ },
+ "prior_runner": {
+  "commit": "1b5471c1cd2e8c31bc49adcf1e6469c85509ce5e",
+  "sha256": "sha256:669039f83d718ad12e14d646edfb547c6842bfc295bb5570c98a7458f3ae2fe4"
+ },
+ "re_proof": {
+  "evidence_label": "live-executed \u2014 the registered reproof leg passed with cited hh-live-evidence/1 record; the packets carry their own recorded_execution label verbatim",
+  "monitor": "the driver's poll-deadline epoch minted in UTC (2026-11-13T00:03:50Z, ~15 min inside the 00:18:50Z dead-man) \u2014 the Wc3 local-TZ anomaly did not recur; live-verify transcript + record docs/build/reports/live/2026-11-12-reproof-wc4.{json,transcript.txt} \u2014 leg result pass",
+  "outcome": "completed \u2014 the re-proof ran to completion at D=6h on the thrice-repaired runner: all 38 surfaces across the 14 needs:wc_reproof members (held 10@R=3 ~4.6h incl. the two recorded ~1h+ slow-member stretches \u2014 pypi-server H-allow and query-optimize \u2014 that hit Wc3's 5h dead-man at 28/30; dev 4@R=2 followed); held hh-reproof-packet/1 + register landed ~22:34Z, dev ~23:21Z; the driver polled through D with its deadline minted in UTC (the Wc3 anomaly repaired in the driver invocation \u2014 epoch 1794528230 = 2026-11-13T00:03:50Z)",
+  "repairs_verified_live": "ALL THREE \u2014 no scope-mint/egress signature (mediated-egress, Wc2+Wc3 verified); zero cell-terminate machinery exceptions (pkill-free, Wc3 verified); the verifier reward_missing defect repaired \u2014 H-allow cells produced rewards (H-allow.reward digests in the register) and denied_hosts carried the real denied hosts (archive.ubuntu.com/security.ubuntu.com) \u2192 the \u00a73.4 classifier landed bootstrap:egress_denied \u2192 allowlist_gap typed exclusions (REQ-XB-125 declared-data exclusion, never machinery)",
+  "verdicts": "non-covering \u2014 held: 9 exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com|unknown} + query-optimize repair:machinery; dev: 4 exclude:runner_infeasible:allowlist_gap{unknown}; 0/14 covering reproofed verdicts \u2192 task_lists.state stays blocked verbatim"
+ },
+ "runner": {
+  "binary": "hh-w1",
+  "built_from": "source \u2014 cargo build --release --locked --bin hh_w1 -p hharness-runner inside rust@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55 in-window",
+  "carries": "ALL THREE repairs \u2014 the mediated-egress repair lineage (merge 5b8e8f28; repair-host sha256:f9b6ad05\u2026 per wc2-repair-record.json), the cell-terminate pkill repair lineage (merge bb60a46f; repair-host sha256:c8184fed\u2026 + helper sha256:ed4e132a\u2026 per wc3-repair-record.json), AND the verifier reward_missing repair lineage (merge fe87c637; repair-host hh-w1 sha256:b1ba7ffdc\u2026 per wc4-repair-record.json). Wc3 in-window build sha256:669039f8\u2026 cited.",
+  "commit": "b1d7243ac83ef1b763d58b6a230d7c7e107ee0cf",
+  "sha256": "sha256:f7b4d146c086380e7b80e77ddde668ce395b6cef56fa3cb8c027568b2f2848d7"
+ },
+ "schema": "hh-wc-repair/1",
+ "scope_decision": "docs/build/LEDGER.md GATE-G28d scope-decision (2026-11-12T15:45Z) + PASSED\u2014run disposition (2026-11-12T17:09:25Z); readout docs/build/readouts/GATE-G28d.md",
+ "tasks_untouched": true,
+ "ticket": "R6.45d",
+ "window": "wc4"
+}

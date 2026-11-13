@@ -1,0 +1,99 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the re-proof ran to COMPLETION at D=6h on the thrice-repaired runner (all 38 surfaces across the 14 needs:wc_reproof members; both hh-reproof-packet/1 + hh-reproof-register/1 landed \u2014 held ~22:34Z, dev ~23:21Z). The typed verdicts are non-covering: 13 exclude:runner_infeasible:allowlist_gap{\u2026} + 1 repair:machinery (query-optimize). State stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}",
+ "gate": "GATE-G28d",
+ "members": [
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "repair:machinery \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the re-proof ran to completion at D=6h (the thrice-repaired runner); the typed verdict is non-covering"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the dev leg ran to completion at D=6h after the held packet landed; the typed verdict is non-covering"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the dev leg ran to completion at D=6h after the held packet landed; the typed verdict is non-covering"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the dev leg ran to completion at D=6h after the held packet landed; the typed verdict is non-covering"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc4_verdict": "exclude:runner_infeasible:allowlist_gap{unknown} \u2014 the dev leg ran to completion at D=6h after the held packet landed; the typed verdict is non-covering"
+  }
+ ],
+ "recorded_at": "2026-11-12T23:30:00Z",
+ "residual_findings": "the re-proof machinery is fully repaired \u2014 zero cell-terminate machinery exceptions, no scope-mint/egress signature, rewards landed instead of reward_missing, and the leg completed inside D=6h (DF-R6.45b-1's pace question answered: ~4.6h bounds both legs at R=3/R=2); the covering-verdict deficit is now a declared-data allowlist property (the committed fp-w1-q-x55 freeze carries Debian-family hosts; the task env images are Ubuntu noble \u2014 the verifier apt bootstrap is legitimately denied), plus one repair:machinery discordance on query-optimize (append-only register, repaired never excluded \u2014 a further repair is a later gate's scope)",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists_state": "blocked",
+ "ticket": "R6.45d",
+ "verbatim_prereg_state": "blocked \u2014 task_lists.state read verbatim after the Wc4 re-proof (2026-11-10-fp-prereg.json sha256 2e36bf81\u2026 carried forward; the record PP0, the L1 corpus and every downstream experiment slot admit against)",
+ "verdict_detail": "held 10@R=3: 9 exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com|unknown} + query-optimize repair:machinery; dev 4@R=2: 4 exclude:runner_infeasible:allowlist_gap{unknown}. The verifier repair verified live: H-allow cells produced rewards (H-allow.reward digests in the register) and denied_hosts carried the real denied hosts (archive.ubuntu.com/security.ubuntu.com) \u2014 the Wc3 reward_missing signature did not recur; the \u00a73.4 classifier landed bootstrap:egress_denied \u2192 allowlist_gap per REQ-XB-125's admit/exclude rule (a declared-data exclusion, never a machinery exclusion)",
+ "window": "wc4",
+ "withheld": "every slot outcome member stays withheld{sealed_until_results} \u2014 no outcome field read, recorded or acted on (REQ-XH-121); the packet/register are machinery evidence only"
+}

@@ -50,17 +50,19 @@ impl Drop for MediatorProc {
     }
 }
 
-/// A one-shot HTTP fixture: replies `200` with a fixed body to the
-/// first connection, then exits.
+/// A loop-accept HTTP fixture: replies `200` with a fixed body to every
+/// connection until the test ends — a raced early connection must not
+/// consume the fixture and reset the real forward.
 fn http_fixture() -> (u16, thread::JoinHandle<()>) {
     let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
     let port = l.local_addr().unwrap().port();
     let h = thread::spawn(move || {
-        let (mut s, _) = l.accept().unwrap();
-        let mut buf = [0u8; 4096];
-        let _ = s.read(&mut buf);
-        s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nok!\n")
-            .unwrap();
+        for conn in l.incoming() {
+            let Ok(mut s) = conn else { break };
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nok!\n");
+        }
     });
     (port, h)
 }
@@ -196,5 +198,5 @@ fn wc_mediator_socket_path_records_requests_and_decides() {
         "the unlisted host must decide deny: {flat:?}"
     );
 
-    fixture.join().unwrap();
+    drop(fixture); // detached — the loop-accept thread dies at test exit.
 }

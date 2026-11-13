@@ -1,0 +1,15 @@
+{
+ "files": "run-root.tar.gz is the sha256-manifest-covered payload; MANIFEST.sha256 lists every member; journald.log + serial.log + usage.txt carried per the fp-wc3 pattern",
+ "locally_authored": {
+  "2026-11-12-fp-wc4-tasklists.json": "the hh-task-lists-outcome/1 frozen-list outcome \u2014 task_lists.state stays blocked verbatim (0/14 covering reproofed verdicts; the complete re-proof's typed non-covering verdicts)",
+  "wc4-window-record.json": "the window receipt (hh-wc-repair/1) \u2014 runner/mediator/helper in-window digests at stamped b1d7243a + the re_proof outcome record (completed at D=6h; non-covering typed verdicts; all three repairs verified live)"
+ },
+ "provenance": "the in-guest run-root /var/lib/hh/runs/run-root-wc4 was pulled verbatim over IAP-ssh BEFORE delete \u2014 the genuine harvest (the prove completed inside D=6h; the instance was still RUNNING at harvest ~23:2xZ and deleted by the nine-step teardown before the ~00:18:50Z dead-man). run-root.tar.gz carries trials/ + jobs/ + prove-{held,dev}/ + the window records; MANIFEST.sha256 verified locally",
+ "recorded_at": "2026-11-12T23:40:00Z",
+ "retained_during_window": {
+  "hh-carried-load-infra.json": "the LOAD act's record (set_digest sha256:254d590e\u2026, 10,998 ms, verified) \u2014 landed under run-root/ at load time"
+ },
+ "schema": "hh-harvest-provenance/1",
+ "ticket": "R6.45d",
+ "window": "wc4"
+}
