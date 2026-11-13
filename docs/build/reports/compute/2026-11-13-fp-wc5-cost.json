@@ -1,0 +1,77 @@
+{
+ "attribution": {
+  "idle_seconds": 21600.0,
+  "slot_wall_ms": 0,
+  "utilization_ppm": 0
+ },
+ "billed": {
+  "amount_micros": null,
+  "read_at": null,
+  "reason": null,
+  "record": null,
+  "source": "Cloud Billing report, project filter, read by operator",
+  "status": "pending"
+ },
+ "estimate": {
+  "free_tier_applied": false,
+  "lines_micros": {
+   "disk": 211723,
+   "egress": 120000,
+   "instance": 1648446,
+   "ipv4": 25757,
+   "nat": 0
+  },
+  "rounding": "ceil per line",
+  "total_micros": 2005926
+ },
+ "phase": "fp",
+ "project_id": "hh-fp-a1b2c3",
+ "provided": {
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "provider": "gce",
+ "quote": {
+  "ceiling_micros": 2565580,
+  "dead_man_h": 6,
+  "id": "pq-4183fe9dc342aa10"
+ },
+ "rate_table": {
+  "path": "docs/build/reports/live/pricing.json",
+  "rows": [
+   {
+    "price_micros": 268040,
+    "retrieved": "2026-11-07",
+    "sku": "e2-standard-8",
+    "source": "https://cloud.google.com/compute/vm-instance-pricing#e2_standard_machine_types",
+    "unit": "hour"
+   },
+   {
+    "price_micros": 120000,
+    "retrieved": "2026-11-07",
+    "sku": "egress",
+    "source": "https://cloud.google.com/vpc/network-pricing#egress",
+    "unit": "gib"
+   },
+   {
+    "price_micros": 29317,
+    "retrieved": "2026-11-07",
+    "sku": "pd-balanced-gib-month",
+    "source": "https://cloud.google.com/compute/disks-image-pricing#disk",
+    "unit": "gib-month"
+   },
+   {
+    "price_micros": 3500,
+    "retrieved": "2026-11-07",
+    "sku": "ipv4-hour",
+    "source": "https://cloud.google.com/vpc/network-pricing#ip-address",
+    "unit": "hour"
+   }
+  ]
+ },
+ "recorded_at": "2026-11-13T13:00:00Z",
+ "schema": "hh-compute-cost/1",
+ "ticket": "R6.45e",
+ "window": "wc5",
+ "window_hours": 6.15
+}

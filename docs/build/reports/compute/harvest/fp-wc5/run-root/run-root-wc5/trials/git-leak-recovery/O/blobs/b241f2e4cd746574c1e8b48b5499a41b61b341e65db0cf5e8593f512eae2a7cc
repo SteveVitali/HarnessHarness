@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc5/tb21/tasks/git-leak-recovery",
+        "source": "tasks"
+    },
+    "trial_name": "git-leak-recovery__AxXfKB7",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc5/jobs/w1-o-git-leak-recovery-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "fb0817b7-c962-4f0f-86c9-33e93e65aa4e"
+}

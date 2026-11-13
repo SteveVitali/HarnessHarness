@@ -1,0 +1,1432 @@
+[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Google PersistentDisk " from PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)
+BdsDxe: starting Boot0001 "UEFI Google PersistentDisk " from PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)
+
+UEFI: Attempting to start image.
+Description: UEFI Google PersistentDisk 
+FilePath: PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)
+OptionNumber: 1.
+
+[0m[30m[47mWelcome to GRUB!
+
+[0m[37m[40m[0m[30m[40m[2J[01;01H[0m[37m[40m[H[J[1;1H[H[J[1;1H[0m[30m[40m[2J[01;01H[0m[37m[40m    Booting `Debian GNU/Linux'Booting `Debian GNU/Linux'
+
+
+
+Loading Linux 6.1.0-53-cloud-amd64 ...Loading Linux 6.1.0-53-cloud-amd64 ...
+
+Loading initial ramdisk ...Loading initial ramdisk ...
+
+EFI stub: UEFI Secure Boot is enabled.
+[    0.000000] Linux version 6.1.0-53-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.187-1 (2026-09-07)
+[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off
+[    0.000000] [Firmware Bug]: TSC doesn't count with P0 frequency!
+[    0.000000] BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x00000000be313fff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000be314000-0x00000000be31efff] ACPI data
+[    0.000000] BIOS-e820: [mem 0x00000000be31f000-0x00000000bf8ecfff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved
+[    0.000000] BIOS-e820: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data
+[    0.000000] BIOS-e820: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS
+[    0.000000] BIOS-e820: [mem 0x00000000bfbff000-0x00000000bffdffff] usable
+[    0.000000] BIOS-e820: [mem 0x00000000bffe0000-0x00000000bfffffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000083fffffff] usable
+[    0.000000] printk: bootconsole [earlyser0] enabled
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] efi: EFI v2.70 by EDK II
+[    0.000000] efi: TPMFinalLog=0xbfbf7000 ACPI=0xbfb7e000 ACPI 2.0=0xbfb7e014 SMBIOS=0xbf9ca000 MEMATTR=0xbe32f018 MOKvar=0xbf9bf000 RNG=0xbfb73018 TPMEventLog=0xbe314018 
+[    0.000000] random: crng init done
+[    0.000000] Kernel is locked down from EFI Secure Boot; see man kernel_lockdown.7
+[    0.000000] secureboot: Secure boot enabled
+[    0.000000] SMBIOS 2.4 present.
+[    0.000000] DMI: Google Google Compute Engine/Google Compute Engine, BIOS Google 11/06/2026
+[    0.000000] Hypervisor detected: KVM
+[    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[    0.000004] kvm-clock: using sched offset of 9976537696 cycles
+[    0.000797] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[    0.003635] tsc: Detected 2249.998 MHz processor
+[    0.004326] last_pfn = 0x840000 max_arch_pfn = 0x400000000
+[    0.006152] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+Memory KASLR using RDRAND RDTSC...
+[    0.008495] last_pfn = 0xbffe0 max_arch_pfn = 0x400000000
+[    0.009382] Using GB pages for direct mapping
+[    0.010521] RAMDISK: [mem 0x3bdb4000-0x3cc83fff]
+[    0.011347] ACPI: Early table checksum verification disabled
+[    0.012493] ACPI: RSDP 0x00000000BFB7E014 000024 (v02 Google)
+[    0.013429] ACPI: XSDT 0x00000000BFB7D0E8 00005C (v01 Google GOOGFACP 00000001      01000013)
+[    0.015025] ACPI: FACP 0x00000000BFB78000 0000F4 (v02 Google GOOGFACP 00000001 GOOG 00000001)
+[    0.017815] ACPI: DSDT 0x00000000BFB79000 001A93 (v01 Google GOOGDSDT 00000001 GOOG 00000001)
+[    0.019192] ACPI: FACS 0x00000000BFBF2000 000040
+[    0.020149] ACPI: SSDT 0x00000000BFB7C000 000316 (v02 GOOGLE Tpm2Tabl 00001000 INTL 20250807)
+[    0.021882] ACPI: TPM2 0x00000000BFB7B000 000034 (v04 GOOGLE          00000001 GOOG 00000001)
+[    0.023762] ACPI: SRAT 0x00000000BFB77000 000128 (v03 Google GOOGSRAT 00000001 GOOG 00000001)
+[    0.025031] ACPI: APIC 0x00000000BFB76000 0000A6 (v05 Google GOOGAPIC 00000001 GOOG 00000001)
+[    0.026618] ACPI: SSDT 0x00000000BFB75000 000BC6 (v01 Google GOOGSSDT 00000001 GOOG 00000001)
+[    0.028661] ACPI: WAET 0x00000000BFB74000 000028 (v01 Google GOOGWAET 00000001 GOOG 00000001)
+[    0.030502] ACPI: Reserving FACP table memory at [mem 0xbfb78000-0xbfb780f3]
+[    0.031673] ACPI: Reserving DSDT table memory at [mem 0xbfb79000-0xbfb7aa92]
+[    0.033171] ACPI: Reserving FACS table memory at [mem 0xbfbf2000-0xbfbf203f]
+[    0.034779] ACPI: Reserving SSDT table memory at [mem 0xbfb7c000-0xbfb7c315]
+[    0.036246] ACPI: Reserving TPM2 table memory at [mem 0xbfb7b000-0xbfb7b033]
+[    0.037350] ACPI: Reserving SRAT table memory at [mem 0xbfb77000-0xbfb77127]
+[    0.038614] ACPI: Reserving APIC table memory at [mem 0xbfb76000-0xbfb760a5]
+[    0.039629] ACPI: Reserving SSDT table memory at [mem 0xbfb75000-0xbfb75bc5]
+[    0.040815] ACPI: Reserving WAET table memory at [mem 0xbfb74000-0xbfb74027]
+[    0.042586] SRAT: PXM 0 -> APIC 0x00 -> Node 0
+[    0.043610] SRAT: PXM 0 -> APIC 0x01 -> Node 0
+[    0.044680] SRAT: PXM 0 -> APIC 0x02 -> Node 0
+[    0.045805] SRAT: PXM 0 -> APIC 0x03 -> Node 0
+[    0.046902] SRAT: PXM 0 -> APIC 0x04 -> Node 0
+[    0.047660] SRAT: PXM 0 -> APIC 0x05 -> Node 0
+[    0.048571] SRAT: PXM 0 -> APIC 0x06 -> Node 0
+[    0.049169] SRAT: PXM 0 -> APIC 0x07 -> Node 0
+[    0.050024] ACPI: SRAT: Node 0 PXM 0 [mem 0x00000000-0x0009ffff]
+[    0.051205] ACPI: SRAT: Node 0 PXM 0 [mem 0x00100000-0xbfffffff]
+[    0.052735] ACPI: SRAT: Node 0 PXM 0 [mem 0x100000000-0x83fffffff]
+[    0.053728] NUMA: Node 0 [mem 0x00000000-0x0009ffff] + [mem 0x00100000-0xbfffffff] -> [mem 0x00000000-0xbfffffff]
+[    0.055836] NUMA: Node 0 [mem 0x00000000-0xbfffffff] + [mem 0x100000000-0x83fffffff] -> [mem 0x00000000-0x83fffffff]
+[    0.057884] NODE_DATA(0) allocated [mem 0x83ffd5000-0x83fffffff]
+[    0.060107] Zone ranges:
+[    0.060526]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.061418]   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+[    0.062628]   Normal   [mem 0x0000000100000000-0x000000083fffffff]
+[    0.063440]   Device   empty
+[    0.063955] Movable zone start for each node
+[    0.064761] Early memory node ranges
+[    0.065405]   node   0: [mem 0x0000000000001000-0x000000000009ffff]
+[    0.066712]   node   0: [mem 0x0000000000100000-0x00000000be313fff]
+[    0.067991]   node   0: [mem 0x00000000be31f000-0x00000000bf8ecfff]
+[    0.069021]   node   0: [mem 0x00000000bfbff000-0x00000000bffdffff]
+[    0.070207]   node   0: [mem 0x0000000100000000-0x000000083fffffff]
+[    0.071210] Initmem setup node 0 [mem 0x0000000000001000-0x000000083fffffff]
+[    0.072481] On node 0, zone DMA: 1 pages in unavailable ranges
+[    0.072517] On node 0, zone DMA: 96 pages in unavailable ranges
+[    0.083097] On node 0, zone DMA32: 11 pages in unavailable ranges
+[    0.084465] On node 0, zone DMA32: 786 pages in unavailable ranges
+[    0.086031] On node 0, zone Normal: 32 pages in unavailable ranges
+[    0.087625] ACPI: PM-Timer IO Port: 0xb008
+[    0.089118] ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+[    0.090119] IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+[    0.091327] ACPI: INT_SRC_OVR (bus 0 bus_irq 5 global_irq 5 high level)
+[    0.092213] ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+[    0.093802] ACPI: INT_SRC_OVR (bus 0 bus_irq 10 global_irq 10 high level)
+[    0.095285] ACPI: INT_SRC_OVR (bus 0 bus_irq 11 global_irq 11 high level)
+[    0.096531] ACPI: Using ACPI (MADT) for SMP configuration information
+[    0.097838] smpboot: Allowing 8 CPUs, 0 hotplug CPUs
+[    0.098629] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.099727] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+[    0.100704] PM: hibernation: Registered nosave memory: [mem 0xbe314000-0xbe31efff]
+[    0.101723] PM: hibernation: Registered nosave memory: [mem 0xbf8ed000-0xbfbfefff]
+[    0.102789] PM: hibernation: Registered nosave memory: [mem 0xbffe0000-0xffffffff]
+[    0.103865] [mem 0xc0000000-0xffffffff] available for PCI devices
+[    0.104720] Booting paravirtualized kernel on KVM
+[    0.105650] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+[    0.111413] setup_percpu: NR_CPUS:8192 nr_cpumask_bits:8 nr_cpu_ids:8 nr_node_ids:1
+[    0.113611] percpu: Embedded 61 pages/cpu s212992 r8192 d28672 u262144
+[    0.115050] kvm-guest: PV spinlocks enabled
+[    0.115878] PV qspinlock hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.117148] Fallback order for Node 0: 0 
+[    0.117153] Built 1 zonelists, mobility grouping on.  Total pages: 8254445
+[    0.119319] Policy zone: Normal
+[    0.120021] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off
+[    0.123414] DMAR: IOMMU disabled
+[    0.127638] Dentry cache hash table entries: 4194304 (order: 13, 33554432 bytes, linear)
+[    0.130472] Inode-cache hash table entries: 2097152 (order: 12, 16777216 bytes, linear)
+[    0.131721] mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+[    0.133423] software IO TLB: area num 8.
+[    0.155504] Memory: 3151608K/33550728K available (14343K kernel code, 2327K rwdata, 8336K rodata, 2604K init, 5448K bss, 738660K reserved, 0K cma-reserved)
+[    0.159292] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=8, Nodes=1
+Poking KASLR using RDRAND RDTSC...
+[    0.161059] ftrace: allocating 37644 entries in 148 pages
+[    0.171547] ftrace: allocated 148 pages with 3 groups
+[    0.174866] Dynamic Preempt: voluntary
+[    0.175915] rcu: Preemptible hierarchical RCU implementation.
+[    0.177610] rcu: 	RCU restricting CPUs from NR_CPUS=8192 to nr_cpu_ids=8.
+[    0.179848] 	Trampoline variant of Tasks RCU enabled.
+[    0.181146] 	Rude variant of Tasks RCU enabled.
+[    0.182519] 	Tracing variant of Tasks RCU enabled.
+[    0.183724] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.186037] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=8
+[    0.192289] NR_IRQS: 524544, nr_irqs: 488, preallocated irqs: 16
+[    0.194061] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.195601] Console: colour dummy device 80x25
+[    0.196729] printk: console [tty0] enabled
+[    0.198077] printk: console [ttyS0] enabled
+[    0.198077] printk: console [ttyS0] enabled
+[    0.199730] printk: bootconsole [earlyser0] disabled
+[    0.199730] printk: bootconsole [earlyser0] disabled
+[    0.202145] ACPI: Core revision 20220331
+[    0.202971] APIC: Switch to symmetric I/O mode setup
+[    0.204444] x2apic enabled
+[    0.210736] Switched APIC routing to physical x2apic.
+[    0.217090] ..TIMER: vector=0x30 apic1=0 pin1=0 apic2=-1 pin2=-1
+[    0.218873] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x206eb2111f5, max_idle_ns: 440795222471 ns
+[    0.221453] Calibrating delay loop (skipped) preset value.. 4499.99 BogoMIPS (lpj=8999992)
+[    0.225544] x86/cpu: User Mode Instruction Prevention (UMIP) activated
+[    0.226903] Last level iTLB entries: 4KB 1024, 2MB 1024, 4MB 512
+[    0.229463] Last level dTLB entries: 4KB 2048, 2MB 2048, 4MB 1024, 1GB 0
+[    0.231412] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    0.233467] Spectre V2 : Mitigation: Retpolines
+[    0.234387] Spectre V2 : Spectre v2 / SpectreRSB: Filling RSB on context switch and VMEXIT
+[    0.235632] Spectre V2 : Enabling Speculation Barrier for firmware calls
+[    0.236681] active return thunk: retbleed_return_thunk
+[    0.237451] RETBleed: Mitigation: untrained return thunk
+[    0.238392] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    0.239963] Spectre V2 : Selecting STIBP always-on mode to complement retbleed mitigation
+[    0.241452] Spectre V2 : User space: Mitigation: STIBP always-on protection
+[    0.242994] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+[    0.244864] active return thunk: srso_return_thunk
+[    0.245456] Speculative Return Stack Overflow: Mitigation: safe RET
+[    0.246642] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+[    0.248193] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+[    0.249452] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+[    0.250817] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+[    0.251988] x86/fpu: Enabled xstate features 0x7, context size is 832 bytes, using 'compacted' format.
+[    0.272077] Freeing SMP alternatives memory: 36K
+[    0.272889] pid_max: default: 32768 minimum: 301
+[    0.285384] LSM: Security Framework initializing
+[    0.285484] landlock: Up and running.
+[    0.286367] Yama: disabled by default; enable with sysctl kernel.yama.*
+[    0.287574] AppArmor: AppArmor initialized
+[    0.289454] TOMOYO Linux initialized
+[    0.290245] LSM support for eBPF active
+[    0.291273] Mount-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.293520] Mountpoint-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.403920] smpboot: CPU0: AMD EPYC 7B12 (family: 0x17, model: 0x31, stepping: 0x0)
+[    0.405447] cblist_init_generic: Setting adjustable number of callback queues.
+[    0.405447] cblist_init_generic: Setting shift to 3 and lim to 1.
+[    0.405447] cblist_init_generic: Setting adjustable number of callback queues.
+[    0.405454] cblist_init_generic: Setting shift to 3 and lim to 1.
+[    0.407253] cblist_init_generic: Setting adjustable number of callback queues.
+[    0.409454] cblist_init_generic: Setting shift to 3 and lim to 1.
+[    0.410744] Performance Events: PMU not available due to virtualization, using software events only.
+[    0.417479] signal: max sigframe size: 1776
+[    0.418160] rcu: Hierarchical SRCU implementation.
+[    0.419062] rcu: 	Max phase no-delay instances is 1000.
+[    0.421563] NMI watchdog: Perf NMI watchdog permanently disabled
+[    0.422848] smp: Bringing up secondary CPUs ...
+[    0.423692] x86: Booting SMP configuration:
+[    0.424412] .... node  #0, CPUs:      #1 #2 #3 #4
+[    0.425929] Spectre V2 : Update user space SMT mitigation: STIBP always-on
+[    0.427912]  #5 #6 #7
+[    0.429868] smp: Brought up 1 node, 8 CPUs
+[    0.430916] smpboot: Max logical packages: 1
+[    0.431879] smpboot: Total of 8 processors activated (35999.96 BogoMIPS)
+[    0.462549] node 0 deferred pages initialised in 28ms
+[    0.462811] devtmpfs: initialized
+[    0.465525] x86/mm: Memory block size: 128MB
+[    0.470438] ACPI: PM: Registering ACPI NVS region [mem 0xbfb7f000-0xbfbfefff] (524288 bytes)
+[    0.471211] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.473537] futex hash table entries: 2048 (order: 5, 131072 bytes, linear)
+[    0.475765] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.478233] DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+[    0.479885] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    0.481905] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    0.483490] audit: initializing netlink subsys (disabled)
+[    0.485459] audit: type=2000 audit(1794573854.449:1): state=initialized audit_enabled=0 res=1
+[    0.485571] thermal_sys: Registered thermal governor 'fair_share'
+[    0.487669] thermal_sys: Registered thermal governor 'bang_bang'
+[    0.489248] thermal_sys: Registered thermal governor 'step_wise'
+[    0.489464] thermal_sys: Registered thermal governor 'user_space'
+[    0.490438] thermal_sys: Registered thermal governor 'power_allocator'
+[    0.491746] cpuidle: using governor ladder
+[    0.494296] cpuidle: using governor menu
+[    0.498376] efi: Freeing EFI boot services memory: 39884K
+[    0.499662] acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+[    0.501132] PCI: Using configuration type 1 for base access
+[    0.501459] PCI: Using configuration type 1 for extended access
+[    0.506465] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+[    0.508250] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+[    0.509455] HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+[    0.510894] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.511937] HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+[    0.513716] ACPI: Added _OSI(Module Device)
+[    0.514517] ACPI: Added _OSI(Processor Device)
+[    0.515376] ACPI: Added _OSI(Processor Aggregator Device)
+[    0.519067] ACPI: 3 ACPI AML tables successfully acquired and loaded
+[    0.522321] ACPI: Interpreter enabled
+[    0.523106] ACPI: PM: (supports S0 S3 S4 S5)
+[    0.524492] ACPI: Using IOAPIC for interrupt routing
+[    0.525490] PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+[    0.527625] PCI: Ignoring E820 reservations for host bridge windows
+[    0.529708] ACPI: Enabled 16 GPEs in block 00 to 0F
+[    0.534437] ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+[    0.536064] acpi PNP0A03:00: _OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI HPX-Type3]
+[    0.538522] PCI host bridge to bus 0000:00
+[    0.539564] pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+[    0.541464] pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+[    0.542663] pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+[    0.544408] pci_bus 0000:00: root bus resource [mem 0xc0000000-0xfebfefff window]
+[    0.545456] pci_bus 0000:00: root bus resource [bus 00-ff]
+[    0.547009] pci 0000:00:00.0: [8086:1237] type 00 class 0x060000
+[    0.548821] pci 0000:00:01.0: [8086:7110] type 00 class 0x060100
+[    0.550820] pci 0000:00:01.3: [8086:7113] type 00 class 0x068000
+[    0.589519] pci 0000:00:01.3: quirk: [io  0xb000-0xb03f] claimed by PIIX4 ACPI
+[    0.591359] pci 0000:00:03.0: [1af4:1004] type 00 class 0x000000
+[    0.597453] pci 0000:00:03.0: BAR 0 [io  0xc040-0xc07f]
+[    0.604766] pci 0000:00:03.0: BAR 1 [mem 0xc0001000-0xc000107f]
+[    0.633875] pci 0000:00:04.0: [1af4:1000] type 00 class 0x020000
+[    0.641460] pci 0000:00:04.0: BAR 0 [io  0xc000-0xc03f]
+[    0.649455] pci 0000:00:04.0: BAR 1 [mem 0xc0000000-0xc00001ff]
+[    0.685823] pci 0000:00:05.0: [1af4:1002] type 00 class 0x00ff00
+[    0.697453] pci 0000:00:05.0: BAR 0 [io  0xc0a0-0xc0bf]
+[    0.733763] pci 0000:00:06.0: [1af4:1005] type 00 class 0x00ff00
+[    0.744386] pci 0000:00:06.0: BAR 0 [io  0xc080-0xc09f]
+[    0.749456] pci 0000:00:06.0: BAR 1 [mem 0xc0002000-0xc000203f]
+[    0.785734] ACPI: PCI: Interrupt link LNKA configured for IRQ 10
+[    0.789591] ACPI: PCI: Interrupt link LNKB configured for IRQ 10
+[    0.793556] ACPI: PCI: Interrupt link LNKC configured for IRQ 11
+[    0.797612] ACPI: PCI: Interrupt link LNKD configured for IRQ 11
+[    0.805238] ACPI: PCI: Interrupt link LNKS configured for IRQ 9
+[    0.806562] iommu: Default domain type: Translated 
+[    0.806562] iommu: DMA domain TLB invalidation policy: lazy mode 
+[    0.809557] pps_core: LinuxPPS API ver. 1 registered
+[    0.810266] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.813470] PTP clock support registered
+[    0.814330] Registered efivars operations
+[    0.814814] NetLabel: Initializing
+[    0.815429] NetLabel:  domain hash size = 128
+[    0.817456] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+[    0.818345] NetLabel:  unlabeled traffic allowed by default
+[    0.819177] PCI: Using ACPI for IRQ routing
+[    0.819974] vgaarb: loaded
+[    0.819974] clocksource: Switched to clocksource kvm-clock
+[    0.834294] VFS: Disk quotas dquot_6.6.0
+[    0.836073] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.838284] AppArmor: AppArmor Filesystem Enabled
+[    0.839128] pnp: PnP ACPI init
+[    0.840733] pnp: PnP ACPI: found 7 devices
+[    0.848778] clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+[    0.850517] NET: Registered PF_INET protocol family
+[    0.851783] IP idents hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+[    0.855951] tcp_listen_portaddr_hash hash table entries: 16384 (order: 6, 262144 bytes, linear)
+[    0.857979] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.860003] TCP established hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+[    0.862420] TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+[    0.863857] TCP: Hash tables configured (established 262144 bind 65536)
+[    0.865650] MPTCP token hash table entries: 32768 (order: 8, 786432 bytes, linear)
+[    0.867039] UDP hash table entries: 16384 (order: 7, 524288 bytes, linear)
+[    0.868553] UDP-Lite hash table entries: 16384 (order: 7, 524288 bytes, linear)
+[    0.869844] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.870810] NET: Registered PF_XDP protocol family
+[    0.871725] pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+[    0.873732] pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]
+[    0.875582] pci_bus 0000:00: resource 6 [mem 0x000a0000-0x000bffff window]
+[    0.876619] pci_bus 0000:00: resource 7 [mem 0xc0000000-0xfebfefff window]
+[    0.877678] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+[    0.878718] PCI: CLS 0 bytes, default 64
+[    0.879699] PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+[    0.879843] Trying to unpack rootfs image as initramfs...
+[    0.880955] software IO TLB: mapped [mem 0x00000000b7eff000-0x00000000bbeff000] (64MB)
+[    0.884874] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x206eb2111f5, max_idle_ns: 440795222471 ns
+[    0.887639] clocksource: Switched to clocksource tsc
+[    0.889350] Initialise system trusted keyrings
+[    0.890400] Key type blacklist registered
+[    0.891264] workingset: timestamp_bits=36 max_order=23 bucket_order=0
+[    0.895116] integrity: Platform Keyring initialized
+[    0.895905] integrity: Machine keyring initialized
+[    0.896630] Key type asymmetric registered
+[    0.897412] Asymmetric key parser 'x509' registered
+[    1.001952] Freeing initrd memory: 15168K
+[    1.009275] alg: self-tests for CTR-KDF (hmac(sha256)) passed
+[    1.010291] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 249)
+[    1.011555] io scheduler mq-deadline registered
+[    1.015010] Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled
+[    1.016595] 00:03: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+[    1.018312] 00:04: ttyS1 at I/O 0x2f8 (irq = 3, base_baud = 115200) is a 16550A
+[    1.019850] 00:05: ttyS2 at I/O 0x3e8 (irq = 6, base_baud = 115200) is a 16550A
+[    1.022004] 00:06: ttyS3 at I/O 0x2e8 (irq = 7, base_baud = 115200) is a 16550A
+[    1.033041] tpm_tis MSFT0101:00: 2.0 TPM (device-id 0x9009, rev-id 0)
+[    1.044016] i8042: PNP: PS/2 Controller [PNP0303:KBD,PNP0f13:MOU] at 0x60,0x64 irq 1,12
+[    1.045607] i8042: Warning: Keylock active
+[    1.048767] serio: i8042 KBD port at 0x60,0x64 irq 1
+[    1.050669] serio: i8042 AUX port at 0x60,0x64 irq 12
+[    1.051941] rtc_cmos 00:00: RTC can wake from S4
+[    1.053708] rtc_cmos 00:00: registered as rtc0
+[    1.054624] rtc_cmos 00:00: setting system clock to 2026-11-13T12:44:15 UTC (1794573855)
+[    1.056159] rtc_cmos 00:00: alarms up to one day, 114 bytes nvram
+[    1.057560] ledtrig-cpu: registered to indicate activity on CPUs
+[    1.070461] NET: Registered PF_INET6 protocol family
+[    1.078977] Segment Routing with IPv6
+[    1.080446] In-situ OAM (IOAM) with IPv6
+[    1.081287] mip6: Mobile IPv6
+[    1.081781] NET: Registered PF_PACKET protocol family
+[    1.082885] IPI shorthand broadcast: enabled
+[    1.084139] sched_clock: Marking stable (1072898913, 9906554)->(1090287355, -7481888)
+[    1.086298] registered taskstats version 1
+[    1.087118] Loading compiled-in X.509 certificates
+[    1.103810] Loaded X.509 cert 'Build time autogenerated kernel key: bcb001df0a5788ae2a2c82160a28e77c232471ff'
+[    1.106189] Key type .fscrypt registered
+[    1.106894] Key type fscrypt-provisioning registered
+[    1.114065] Key type encrypted registered
+[    1.114898] AppArmor: AppArmor sha1 policy hashing enabled
+[    1.116810] integrity: Loading X.509 certificate: UEFI:db
+[    1.118739] integrity: Loaded X.509 cert 'Microsoft Corporation UEFI CA 2011: 13adbf4309bd82709c8cd54f316ed522988a1bd4'
+[    1.120835] integrity: Loading X.509 certificate: UEFI:db
+[    1.121697] integrity: Loaded X.509 cert 'Microsoft Windows Production PCA 2011: a92902398e16c49778cd90f99e4f9ae17c55af53'
+[    1.123526] integrity: Loading X.509 certificate: UEFI:db
+[    1.124314] integrity: Loaded X.509 cert 'Microsoft Corporation: Windows UEFI CA 2023: aefc5fbbbe055d8f8daa585473499417ab5a5272'
+[    1.125984] integrity: Loading X.509 certificate: UEFI:db
+[    1.126756] integrity: Loaded X.509 cert 'Microsoft UEFI CA 2023: 81aa6b3244c935bce0d6628af39827421e32497d'
+[    1.130937] integrity: Loading X.509 certificate: UEFI:MokListRT (MOKvar table)
+[    1.132727] integrity: Loaded X.509 cert 'Debian Secure Boot CA: 6ccece7e4c6c0d1f6149f3dd27dfcc5cbb419ea1'
+[    1.134694] ima: Allocated hash algorithm: sha256
+[    1.143500] ima: Can not allocate sha384 (reason: -2)
+[    1.177296] evm: Initialising EVM extended attributes:
+[    1.177326] audit: type=1807 audit(1794573855.615:2): action=measure func=KEXEC_KERNEL_CHECK res=1
+[    1.178726] evm: security.selinux
+[    1.180335] audit: type=1807 audit(1794573855.615:3): action=measure func=MODULE_CHECK res=1
+[    1.180818] evm: security.SMACK64 (disabled)
+[    1.183254] evm: security.SMACK64EXEC (disabled)
+[    1.183894] evm: security.SMACK64TRANSMUTE (disabled)
+[    1.184589] evm: security.SMACK64MMAP (disabled)
+[    1.185289] evm: security.apparmor
+[    1.185804] evm: security.ima
+[    1.186508] evm: security.capability
+[    1.187064] evm: HMAC attrs: 0x1
+[    1.254547] input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input0
+[    1.259737] Lockdown: swapper/0: hibernation is restricted; see man kernel_lockdown.7
+[    1.264055] Freeing unused decrypted memory: 2036K
+[    1.265585] Freeing unused kernel image (initmem) memory: 2604K
+[    1.266449] Write protecting the kernel read-only data: 26624k
+[    1.268214] Freeing unused kernel image (text/rodata gap) memory: 2040K
+[    1.269727] Freeing unused kernel image (rodata/data gap) memory: 1904K
+[    1.273055] x86/mm: Checked W+X mappings: passed, no W+X pages found.
+[    1.274308] Run /init as init process
+Loading, please wait...
+Starting systemd-udevd version 252.39-1~deb12u2
+[    1.400875] ACPI: \_SB_.LNKC: Enabled at IRQ 11
+[    1.401681] virtio-pci 0000:00:03.0: virtio_pci: leaving for legacy driver
+[    1.412899] ACPI: \_SB_.LNKD: Enabled at IRQ 10
+[    1.413773] virtio-pci 0000:00:04.0: virtio_pci: leaving for legacy driver
+[    1.426688] ACPI: \_SB_.LNKA: Enabled at IRQ 10
+[    1.427563] virtio-pci 0000:00:05.0: virtio_pci: leaving for legacy driver
+[    1.438042] ACPI: \_SB_.LNKB: Enabled at IRQ 11
+[    1.438798] virtio-pci 0000:00:06.0: virtio_pci: leaving for legacy driver
+[    1.628691] SCSI subsystem initialized
+[    1.948869] virtio_net virtio1 ens4: renamed from eth0
+[    1.991316] scsi host0: Virtio SCSI HBA
+[    1.992491] blk-mq: reduced tag depth to 10240
+[    2.028067] scsi 0:0:1:0: Direct-Access     Google   PersistentDisk   1    PQ: 0 ANSI: 6
+[    2.055451] sd 0:0:1:0: [sda] 629145600 512-byte logical blocks: (322 GB/300 GiB)
+[    2.057005] sd 0:0:1:0: [sda] 4096-byte physical blocks
+[    2.057798] sd 0:0:1:0: [sda] Write Protect is off
+[    2.058968] sd 0:0:1:0: [sda] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    2.067833]  sda: sda1 sda14 sda15
+[    2.069249] sd 0:0:1:0: [sda] Attached SCSI disk
+Begin: Loading essential drivers ... done.
+Begin: Running /scripts/init-premount ... done.
+Begin: Mounting root file system ... Begin: Running /scripts/lo[    2.137631] gce-disk-expand: Resizing partition on 
+cal-top ... done.
+Begin: Running /scripts/local-premount ... [    2.214313]  sda: sda1 sda14 sda15
+[    2.214683] gce-disk-expand: Disk /dev/sda1 doesn't need resizing.
+done.
+Begin: Will now check root file system ... fsck from util-linux 2.38.1
+[/sbin/fsck.ext4 (1) -- /dev/sda1] fsck.ext4 -a -C0 /dev/sda1 
+/dev/sda1: clean, 264504/19652608 files, 3930635/78610176 blocks
+done.
+[    2.370246] EXT4-fs (sda1): mounted filesystem with ordered data mode. Quota mode: none.
+done.
+Begin: Running /scripts/local-bottom ... done.
+Begin: Running /scripts/init-bottom ... done.
+[    2.411656] Not activating Mandatory Access Control as /sbin/tomoyo-init does not exist.
+[    2.661706] systemd[1]: Inserted module 'autofs4'
+[    2.949530] systemd[1]: systemd 252.39-1~deb12u2 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[    2.954896] systemd[1]: Detected virtualization google.
+[    2.955710] systemd[1]: Detected architecture x86-64.
+
+Welcome to [1mDebian GNU/Linux 12 (bookworm)[0m!
+
+[    2.972641] systemd[1]: Hostname set to <hh-fp-wc5>.
+[    3.314012] systemd[1]: Queued start job for default target graphical.target.
+[    3.352244] systemd[1]: Created slice system-getty.slice - Slice /system/getty.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-getty.slice[0m - Slice /system/getty.
+[    3.366875] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-modpr…lice[0m - Slice /system/modprobe.
+[    3.382811] systemd[1]: Created slice system-serial\x2dgetty.slice - Slice /system/serial-getty.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-seria…[0m - Slice /system/serial-getty.
+[    3.398814] systemd[1]: Created slice system-systemd\x2dgrowfs.slice - Slice /system/systemd-growfs.
+[[0;32m  OK  [0m] Created slice [0;1;39msystem-syste…0m - Slice /system/systemd-growfs.
+[    3.414623] systemd[1]: Created slice user.slice - User and Session Slice.
+[[0;32m  OK  [0m] Created slice [0;1;39muser.slice[0m - User and Session Slice.
+[    3.426252] systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-ask-passwo…quests to Console Directory Watch.
+[    3.442233] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-ask-passwo… Requests to Wall Directory Watch.
+[    3.458362] systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[[0;32m  OK  [0m] Set up automount [0;1;39mproc-sys-…rmats File System Automount Point.
+[    3.474197] systemd[1]: Expecting device dev-disk-by\x2dpartuuid-4ec16f4d\x2d5ea6\x2d4a92\x2d95cc\x2d39bd7a56af80.device - /dev/disk/by-partuuid/4ec16f4d-5ea6-4a92-95cc-39bd7a56af80...
+         Expecting device [0;1;39mdev-disk-…f4d-5ea6-4a92-95cc-39bd7a56af80...
+[    3.490121] systemd[1]: Expecting device dev-ttyS0.device - /dev/ttyS0...
+         Expecting device [0;1;39mdev-ttyS0.device[0m - /dev/ttyS0...
+[    3.502120] systemd[1]: Reached target cryptsetup.target - Local Encrypted Volumes.
+[[0;32m  OK  [0m] Reached target [0;1;39mcryptsetup.…get[0m - Local Encrypted Volumes.
+[    3.514114] systemd[1]: Reached target integritysetup.target - Local Integrity Protected Volumes.
+[[0;32m  OK  [0m] Reached target [0;1;39mintegrityse…Local Integrity Protected Volumes.
+[    3.526165] systemd[1]: Reached target paths.target - Path Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mpaths.target[0m - Path Units.
+[    3.538124] systemd[1]: Reached target remote-fs.target - Remote File Systems.
+[[0;32m  OK  [0m] Reached target [0;1;39mremote-fs.target[0m - Remote File Systems.
+[    3.550128] systemd[1]: Reached target slices.target - Slice Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mslices.target[0m - Slice Units.
+[    3.562089] systemd[1]: Reached target swap.target - Swaps.
+[[0;32m  OK  [0m] Reached target [0;1;39mswap.target[0m - Swaps.
+[    3.574179] systemd[1]: Reached target veritysetup.target - Local Verity Protected Volumes.
+[[0;32m  OK  [0m] Reached target [0;1;39mveritysetup… - Local Verity Protected Volumes.
+[    3.590389] systemd[1]: Listening on syslog.socket - Syslog Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msyslog.socket[0m - Syslog Socket.
+[    3.602335] systemd[1]: Listening on systemd-fsckd.socket - fsck to fsckd communication Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-fsckd…sck to fsckd communication Socket.
+[    3.614292] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-initc… initctl Compatibility Named Pipe.
+[    3.626733] systemd[1]: Listening on systemd-journald-audit.socket - Journal Audit Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-journ…socket[0m - Journal Audit Socket.
+[    3.638334] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-journ…t[0m - Journal Socket (/dev/log).
+[    3.650437] systemd[1]: Listening on systemd-journald.socket - Journal Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-journald.socket[0m - Journal Socket.
+[    3.662419] systemd[1]: Listening on systemd-networkd.socket - Network Service Netlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-netwo… - Network Service Netlink Socket.
+[    3.678438] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-udevd….socket[0m - udev Control Socket.
+[    3.690324] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39msystemd-udevd…l.socket[0m - udev Kernel Socket.
+[    3.718256] systemd[1]: Mounting dev-hugepages.mount - Huge Pages File System...
+         Mounting [0;1;39mdev-hugepages.mount[0m - Huge Pages File System...
+[    3.731442] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+         Mounting [0;1;39mdev-mqueue.mount…POSIX Message Queue File System...
+[    3.747525] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+         Mounting [0;1;39msys-kernel-debug.…[0m - Kernel Debug File System...
+[    3.763519] systemd[1]: Mounting sys-kernel-tracing.mount - Kernel Trace File System...
+         Mounting [0;1;39msys-kernel-tracin…[0m - Kernel Trace File System...
+[    3.779894] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+         Starting [0;1;39mkmod-static-nodes…ate List of Static Device Nodes...
+[    3.795571] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+         Starting [0;1;39mmodprobe@configfs…m - Load Kernel Module configfs...
+[    3.811819] systemd[1]: Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+         Starting [0;1;39mmodprobe@dm_mod.s…[0m - Load Kernel Module dm_mod...
+[    3.827485] systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+         Starting [0;1;39mmodprobe@drm.service[0m - Load Kernel Module drm...
+[    3.835864] device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+[    3.838119] device-mapper: uevent: version 1.0.3
+[    3.839092] device-mapper: ioctl: 4.47.0-ioctl (2022-07-28) initialised: dm-devel@redhat.com
+[    3.843718] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+         Starting [0;1;39mmodprobe@efi_psto…- Load Kernel Module efi_pstore...
+[    3.856776] pstore: Using crash dump compression: deflate
+[    3.859526] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+         Starting [0;1;39mmodprobe@fuse.ser…e[0m - Load Kernel Module fuse...
+[    3.869509] pstore: Registered efi as persistent store backend
+[    3.875614] systemd[1]: Starting modprobe@loop.service - Load Kernel Module loop...
+         Starting [0;1;39mmodprobe@loop.ser…e[0m - Load Kernel Module loop...
+[    3.879701] systemd[1]: netplan-ovs-cleanup.service - OpenVSwitch configuration for cleanup was skipped because of an unmet condition check (ConditionFileIsExecutable=/usr/bin/ovs-vsctl).
+[    3.883403] systemd[1]: systemd-fsck-root.service - File System Check on Root Device was skipped because of an unmet condition check (ConditionPathExists=!/run/initramfs/fsck-root).
+[    3.887612] fuse: init (API version 7.38)
+[    3.890022] systemd[1]: Starting systemd-journald.service - Journal Service...
+         Starting [0;1;39msystemd-journald.service[0m - Journa[    3.892441] loop: module loaded
+l Service...
+[    3.905351] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+         Starting [0;1;39msystemd-modules-l…rvice[0m - Load Kernel Modules...
+[    3.919581] systemd[1]: Starting systemd-network-generator.service - Generate network units from Kernel command line...
+         Starting [0;1;39msystemd-network-g… units from Kernel command line...
+[    3.939683] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+         Starting [0;1;39msystemd-remount-f…nt Root and Kernel File Systems...
+[    3.951820] EXT4-fs (sda1): re-mounted. Quota mode: none.
+[    3.955567] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+         Starting [0;1;39msystemd-udev-trig…[0m - Coldplug All udev Devices...
+[    3.976144] systemd[1]: Started systemd-journald.service - Journal Service.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-journald.service[0m - Journal Service.
+[[0;32m  OK  [0m] Mounted [0;1;39mdev-hugepages.mount[0m - Huge Pages File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mdev-mqueue.mount[…- POSIX Message Queue File System.
+[[0;32m  OK  [0m] Mounted [0;1;39msys-kernel-debug.m…nt[0m - Kernel Debug File System.
+[[0;32m  OK  [0m] Mounted [0;1;39msys-kernel-tracing…nt[0m - Kernel Trace File System.
+[[0;32m  OK  [0m] Finished [0;1;39mkmod-static-nodes…reate List of Static Device Nodes.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@configfs…[0m - Load Kernel Module configfs.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@dm_mod.s…e[0m - Load Kernel Module dm_mod.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@drm.service[0m - Load Kernel Module drm.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@efi_psto…m - Load Kernel Module efi_pstore.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@fuse.service[0m - Load Kernel Module fuse.
+[[0;32m  OK  [0m] Finished [0;1;39mmodprobe@loop.service[0m - Load Kernel Module loop.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-modules-l…service[0m - Load Kernel Modules.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-network-g…rk units from Kernel command line.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-remount-f…ount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-udev-trig…e[0m - Coldplug All udev Devices.
+[[0;32m  OK  [0m] Reached target [0;1;39mnetwork-pre…get[0m - Preparation for Network.
+         Mounting [0;1;39msys-fs-fuse-conne…[0m - FUSE Control File System...
+         Mounting [0;1;39msys-kernel-config…ernel Configuration File System...
+         Starting [0;1;39msystemd-journal-f…h Journal to Persistent Storage...
+[    4.235711] systemd-journald[281]: Received client request to flush runtime journal.
+         Starting [0;1;39msystemd-random-se…ice[0m - Load/Save Random Seed...
+         Starting [0;1;39msystemd-growfs@-.…ice[0m - Grow File System on /...
+         Starting [0;1;39msystemd-sysctl.se…ce[0m - Apply Kernel Variables...
+[    4.279591] EXT4-fs (sda1): resizing filesystem from 78610176 to 78610176 blocks
+         Starting [0;1;39msystemd-sysusers.…rvice[0m - Create System Users...
+[[0;32m  OK  [0m] Mounted [0;1;39msys-fs-fuse-connec…nt[0m - FUSE Control File System.
+[[0;32m  OK  [0m] Mounted [0;1;39msys-kernel-config.… Kernel Configuration File System.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-random-se…rvice[0m - Load/Save Random Seed.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-sysctl.service[0m - Apply Kernel Variables.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-sysusers.service[0m - Create System Users.
+         Starting [0;1;39msystemd-tmpfiles-…ate Static Device Nodes in /dev...
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-growfs@-.…rvice[0m - Grow File System on /.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-tmpfiles-…reate Static Device Nodes in /dev.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-journal-f…ush Journal to Persistent Storage.
+[[0;32m  OK  [0m] Reached target [0;1;39mlocal-fs-pr…reparation for Local File Systems.
+         Starting [0;1;39msystemd-udevd.ser…ger for Device Events and Files...
+[[0;32m  OK  [0m] Started [0;1;39msystemd-udevd.serv…nager for Device Events and Files.
+[[0;32m  OK  [0m] Found device [0;1;39mdev-ttyS0.device[0m - /dev/ttyS0.
+[    4.581671] input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input3
+[    4.587787] sd 0:0:1:0: Attached scsi generic sg0 type 0
+[    4.587870] cryptd: max_cpu_qlen set to 1000
+[    4.836753] Free page reporting enabled
+[    4.875225] ACPI: button: Power Button [PWRF]
+         Starting [0;1;39msystemd-networkd.…ice[0m - Network Configuration...
+[    4.891451] AVX2 version of gcm_enc/dec engaged.
+[    4.892675] AES CTR mode by8 optimization enabled
+[    4.895070] input: Sleep Button as /devices/LNXSYSTM:00/LNXSLPBN:00/input/input4
+[    4.897858] ACPI: button: Sleep Button [SLPF]
+[[0;32m  OK  [0m] Found device [0;1;39mdev-disk-by\x…80.device[0m - PersistentDisk 15.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-networkd.service[0m - Network Configuration.
+         Mounting [0;1;39mboot-efi.mount[0m - /boot/efi...
+         Starting [0;1;39msystemd-networkd-…it for Network to be Configured...
+[[0;32m  OK  [0m] Mounted [0;1;39mboot-efi.mount[0m - /boot/efi.
+[[0;32m  OK  [0m] Reached target [0;1;39mlocal-fs.target[0m - Local File Systems.
+         Starting [0;1;39mapparmor.service[0m - Load AppArmor profiles...
+         Starting [0;1;39msystemd-binfmt.se…et Up Additional Binary Formats...
+         Starting [0;1;39msystemd-tmpfiles-…te System Files and Directories...
+         Mounting [0;1;39mproc-sys-fs-binfm…utable File Formats File System...
+[[0;32m  OK  [0m] Mounted [0;1;39mproc-sys-fs-binfmt…ecutable File Formats File System.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-binfmt.se… Set Up Additional Binary Formats.
+[    5.195627] audit: type=1400 audit(1794573859.635:4): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/sbin/haveged" pid=454 comm="apparmor_parser"
+[    5.198211] audit: type=1400 audit(1794573859.635:5): apparmor="STATUS" operation="profile_load" profile="unconfined" name="lsb_release" pid=449 comm="apparmor_parser"
+[    5.200900] audit: type=1400 audit(1794573859.635:6): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe" pid=450 comm="apparmor_parser"
+[    5.203135] audit: type=1400 audit(1794573859.635:7): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe//kmod" pid=450 comm="apparmor_parser"
+[    5.205440] audit: type=1400 audit(1794573859.635:8): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/bin/man" pid=452 comm="apparmor_parser"
+[    5.208057] audit: type=1400 audit(1794573859.635:9): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_filter" pid=452 comm="apparmor_parser"
+[    5.210157] audit: type=1400 audit(1794573859.635:10): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_groff" pid=452 comm="apparmor_parser"
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-tmpfiles-…eate System Files and Directories.
+[[0;32m  OK  [0m] Finished [0;1;39mapparmor.service[0m - Load AppArmor profiles.
+[[0;32m  OK  [0m] Started [0;1;39mhaveged.service[0…mon based on the HAVEGE algorithm.
+         Starting [0;1;39msystemd-resolved.…e[0m - Network Name Resolution...
+         Starting [0;1;39msystemd-timesyncd… - Network Time Synchronization...
+         Starting [0;1;39msystemd-update-ut…rd System Boot/Shutdown in UTMP...
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-update-ut…cord System Boot/Shutdown in UTMP.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-timesyncd.…0m - Network Time Synchronization.
+[    5.364921] systemd-journald[281]: Time jumped backwards, rotating.
+[[0;32m  OK  [0m] Reached target [0;1;39mtime-set.target[0m - System Time Set.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-resolved.s…ice[0m - Network Name Resolution.
+[[0;32m  OK  [0m] Reached target [0;1;39mnetwork.target[0m - Network.
+[[0;32m  OK  [0m] Reached target [0;1;39mnss-lookup.…m - Host and Network Name Lookups.
+[[0;32m  OK  [0m] Reached target [0;1;39msysinit.target[0m - System Initialization.
+[[0;32m  OK  [0m] Started [0;1;39mdpkg-db-backup.tim… Daily dpkg database backup timer.
+[[0;32m  OK  [0m] Started [0;1;39me2scrub_all.timer…etadata Check for All Filesystems.
+[[0;32m  OK  [0m] Started [0;1;39mexim4-base.timer[0m - Daily exim4-base housekeeping.
+[[0;32m  OK  [0m] Started [0;1;39mfstrim.timer[0m - Discard unused blocks once a week.
+[[0;32m  OK  [0m] Started [0;1;39mgoogle-oslogin-cac…mer[0m - NSS cache refresh timer.
+[[0;32m  OK  [0m] Started [0;1;39mlogrotate.timer[0m - Daily rotation of log files.
+[[0;32m  OK  [0m] Started [0;1;39mman-db.timer[0m - Daily man-db regeneration.
+[[0;32m  OK  [0m] Started [0;1;39mpodman-auto-update…er[0m - Podman auto-update timer.
+[[0;32m  OK  [0m] Started [0;1;39msystemd-tmpfiles-c… Cleanup of Temporary Directories.
+[[0;32m  OK  [0m] Reached target [0;1;39mtimers.target[0m - Timer Units.
+[[0;32m  OK  [0m] Listening on [0;1;39mdbus.socket[…- D-Bus System Message Bus Socket.
+         Starting [0;1;39mpodman.socket[0m - Podman API Socket...
+[[0;32m  OK  [0m] Listening on [0;1;39muuidd.socket…m - UUID daemon activation socket.
+         Starting [0;1;39mgoogle-disk-expan…esize root filesystem if needed...
+[[0;32m  OK  [0m] Listening on [0;1;39mpodman.socket[0m - Podman API Socket.
+[[0;32m  OK  [0m] Reached target [0;1;39msockets.target[0m - Socket Units.
+[[0;32m  OK  [0m] Finished [0;1;39mgoogle-disk-expan… Resize root filesystem if needed.
+[[0;32m  OK  [0m] Reached target [0;1;39mbasic.target[0m - Basic System.
+[[0;32m  OK  [0m] Started [0;1;39mcron.service[0m -…kground program processing daemon.
+         Starting [0;1;39mdbus.service[0m - D-Bus System Message Bus...
+         Starting [0;1;39me2scrub_reap.serv…e ext4 Metadata Check Snapshots...
+         Starting [0;1;39mnetworkd-dispatch…her daemon for systemd-networkd...
+         Starting [0;1;39mpodman.service[0m - Podman API Service...
+         Starting [0;1;39mrsyslog.service[0m - System Logging Service...
+         Starting [0;1;39msystemd-logind.se…ice[0m - User Login Management...
+         Starting [0;1;39msystemd-user-sess…vice[0m - Permit User Sessions...
+2026-11-13T12:44:19.875536+00:00 hh-fp-wc5 systemd[1]: Mounted dev-hugepages.mount - Huge Pages File System.
+[[0;32m  OK  [0m] Started [0;1;39mdbus.service[0m - D-Bus System Message Bus.
+[[0;32m  OK  [0m] Started [0;1;39mrsyslog.service[0m - System Logging Service.
+[[0;32m  OK  [0m] Finished [0;1;39me2scrub_reap.serv…ine ext4 Metadata Check Snapshots.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-user-sess…ervice[0m - Permit User Sessions.
+[[0;32m  OK  [0m] Started [0;1;39mpodman.service[0m - Podman API Service.
+2026-11-13T12:44:19.875675+00:00 hh-fp-wc5 systemd[1]: Mounted dev-mqueue.mount - POSIX Message Queue File System.
+2026-11-13T12:44:19.875689+00:00 hh-fp-wc5 systemd[1]: Mounted sys-kernel-debug.mount - Kernel Debug File System.
+2026-11-13T12:44:19.875694+00:00 hh-fp-wc5 systemd[1]: Mounted sys-kernel-tracing.mount - Kernel Trace File System.
+2026-11-13T12:44:19.875698+00:00 hh-fp-wc5 systemd[1]: Finished kmod-static-nodes.service - Create List of Static Device Nodes.
+2026-11-13T12:44:19.875702+00:00 hh-fp-wc5 systemd[1]: modprobe@configfs.service: Deactivated successfully.
+2026-11-13T12:44:19.875705+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@configfs.service - Load Kernel Module configfs.
+2026-11-13T12:44:19.875709+00:00 hh-fp-wc5 systemd[1]: modprobe@dm_mod.service: Deactivated successfully.
+2026-11-13T12:44:19.875716+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@dm_mod.service - Load Kernel Module dm_mod.
+2026-11-13T12:44:19.875719+00:00 hh-fp-wc5 systemd[1]: modprobe@drm.service: Deactivated successfully.
+2026-11-13T12:44:19.875723+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@drm.service - Load Kernel Module drm.
+2026-11-13T12:44:19.875726+00:00 hh-fp-wc5 systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+2026-11-13T12:44:19.875729+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+2026-11-13T12:44:19.875597+00:00 hh-fp-wc5 kernel: [    0.000000] Linux version 6.1.0-53-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.187-1 (2026-09-07)
+2026-11-13T12:44:19.875733+00:00 hh-fp-wc5 systemd[1]: modprobe@fuse.service: Deactivated successfully.
+2026-11-13T12:44:19.875739+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@fuse.service - Load Kernel Module fuse.
+2026-11-13T12:44:19.875742+00:00 hh-fp-wc5 systemd[1]: modprobe@loop.service: Deactivated successfully.
+2026-11-13T12:44:19.875743+00:00 hh-fp-wc5 kernel: [    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off
+2026-11-13T12:44:19.875746+00:00 hh-fp-wc5 kernel: [    0.000000] [Firmware Bug]: TSC doesn't count with P0 frequency!
+2026-11-13T12:44:19.875747+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-provided physical RAM map:
+2026-11-13T12:44:19.875747+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable
+2026-11-13T12:44:19.875746+00:00 hh-fp-wc5 systemd[1]: Finished modprobe@loop.service - Load Kernel Module loop.
+2026-11-13T12:44:19.875748+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x0000000000100000-0x00000000be313fff] usable
+2026-11-13T12:44:19.875751+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000be314000-0x00000000be31efff] ACPI data
+2026-11-13T12:44:19.875751+00:00 hh-fp-wc5 systemd[1]: Finished systemd-modules-load.service - Load Kernel Modules.
+2026-11-13T12:44:19.875754+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000be31f000-0x00000000bf8ecfff] usable
+2026-11-13T12:44:19.875756+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved
+2026-11-13T12:44:19.875756+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data
+2026-11-13T12:44:19.875757+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS
+2026-11-13T12:44:19.875755+00:00 hh-fp-wc5 systemd[1]: Finished systemd-network-generator.service - Generate network units from Kernel command line.
+2026-11-13T12:44:19.875759+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000bfbff000-0x00000000bffdffff] usable
+2026-11-13T12:44:19.875760+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x00000000bffe0000-0x00000000bfffffff] reserved
+2026-11-13T12:44:19.875763+00:00 hh-fp-wc5 kernel: [    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000083fffffff] usable
+2026-11-13T12:44:19.875764+00:00 hh-fp-wc5 kernel: [    0.000000] printk: bootconsole [earlyser0] enabled
+2026-11-13T12:44:19.875761+00:00 hh-fp-wc5 systemd[1]: Finished systemd-remount-fs.service - Remount Root and Kernel File Systems.
+2026-11-13T12:44:19.875765+00:00 hh-fp-wc5 kernel: [    0.000000] NX (Execute Disable) protection: active
+2026-11-13T12:44:19.875767+00:00 hh-fp-wc5 kernel: [    0.000000] efi: EFI v2.70 by EDK II
+2026-11-13T12:44:19.875768+00:00 hh-fp-wc5 kernel: [    0.000000] efi: TPMFinalLog=0xbfbf7000 ACPI=0xbfb7e000 ACPI 2.0=0xbfb7e014 SMBIOS=0xbf9ca000 MEMATTR=0xbe32f018 MOKvar=0xbf9bf000 RNG=0xbfb73018 TPMEventLog=0xbe314018 
+2026-11-13T12:44:19.875768+00:00 hh-fp-wc5 kernel: [    0.000000] random: crng init done
+2026-11-13T12:44:19.875768+00:00 hh-fp-wc5 systemd[1]: Finished systemd-udev-trigger.service - Coldplug All udev Devices.
+2026-11-13T12:44:19.875772+00:00 hh-fp-wc5 kernel: [    0.000000] Kernel is locked down from EFI Secure Boot; see man kernel_lockdown.7
+2026-11-13T12:44:19.875772+00:00 hh-fp-wc5 systemd[1]: Reached target network-pre.target - Preparation for Network.
+2026-11-13T12:44:19.875773+00:00 hh-fp-wc5 kernel: [    0.000000] secureboot: Secure boot enabled
+2026-11-13T12:44:19.875776+00:00 hh-fp-wc5 kernel: [    0.000000] SMBIOS 2.4 present.
+2026-11-13T12:44:19.875776+00:00 hh-fp-wc5 kernel: [    0.000000] DMI: Google Google Compute Engine/Google Compute Engine, BIOS Google 11/06/2026
+2026-11-13T12:44:19.875777+00:00 hh-fp-wc5 kernel: [    0.000000] Hypervisor detected: KVM
+2026-11-13T12:44:19.875778+00:00 hh-fp-wc5 kernel: [    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+2026-11-13T12:44:19.875776+00:00 hh-fp-wc5 systemd[1]: Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+2026-11-13T12:44:19.875778+00:00 hh-fp-wc5 kernel: [    0.000004] kvm-clock: using sched offset of 9976537696 cycles
+2026-11-13T12:44:19.875782+00:00 hh-fp-wc5 kernel: [    0.000797] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+2026-11-13T12:44:19.875781+00:00 hh-fp-wc5 systemd[1]: Mounting sys-kernel-config.mount - Kernel Configuration File System...
+2026-11-13T12:44:19.875783+00:00 hh-fp-wc5 kernel: [    0.003635] tsc: Detected 2249.998 MHz processor
+2026-11-13T12:44:19.875784+00:00 hh-fp-wc5 kernel: [    0.004316] e820: update [mem 0x00000000-0x00000fff] usable ==> reserved
+2026-11-13T12:44:19.875785+00:00 hh-fp-wc5 kernel: [    0.004320] e820: remove [mem 0x000a0000-0x000fffff] usable
+2026-11-13T12:44:19.875785+00:00 hh-fp-wc5 kernel: [    0.004326] last_pfn = 0x840000 max_arch_pfn = 0x400000000
+2026-11-13T12:44:19.875786+00:00 hh-fp-wc5 kernel: [    0.006152] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+2026-11-13T12:44:19.875785+00:00 hh-fp-wc5 systemd[1]: systemd-firstboot.service - First Boot Wizard was skipped because of an unmet condition check (ConditionFirstBoot=yes).
+2026-11-13T12:44:19.875789+00:00 hh-fp-wc5 kernel: [    0.008495] last_pfn = 0xbffe0 max_arch_pfn = 0x400000000
+2026-11-13T12:44:19.875790+00:00 hh-fp-wc5 kernel: [    0.009382] Using GB pages for direct mapping
+2026-11-13T12:44:19.875791+00:00 hh-fp-wc5 kernel: [    0.010521] RAMDISK: [mem 0x3bdb4000-0x3cc83fff]
+2026-11-13T12:44:19.875791+00:00 hh-fp-wc5 kernel: [    0.011347] ACPI: Early table checksum verification disabled
+2026-11-13T12:44:19.875792+00:00 hh-fp-wc5 kernel: [    0.012493] ACPI: RSDP 0x00000000BFB7E014 000024 (v02 Google)
+2026-11-13T12:44:19.875793+00:00 hh-fp-wc5 kernel: [    0.013429] ACPI: XSDT 0x00000000BFB7D0E8 00005C (v01 Google GOOGFACP 00000001      01000013)
+2026-11-13T12:44:19.875790+00:00 hh-fp-wc5 systemd[1]: Starting systemd-journal-flush.service - Flush Journal to Persistent Storage...
+2026-11-13T12:44:19.875795+00:00 hh-fp-wc5 kernel: [    0.015025] ACPI: FACP 0x00000000BFB78000 0000F4 (v02 Google GOOGFACP 00000001 GOOG 00000001)
+2026-11-13T12:44:19.875797+00:00 hh-fp-wc5 kernel: [    0.017815] ACPI: DSDT 0x00000000BFB79000 001A93 (v01 Google GOOGDSDT 00000001 GOOG 00000[[0;32m  OK  [0m] Started [0;1;39mgetty@tty1.service[0m - Getty on tty1.
+001)
+2026-11-13T12:44:19.875797+00:00 hh-fp-wc5 kernel: [    0.019192] ACPI: FACS 0x00000000BFBF2000 000040
+2026-11-13T12:44:19.875797+00:00 hh-fp-wc5 kernel: [    0.020149] ACPI: SSDT 0x00000000BFB7C000 000316 (v02 GOOGLE Tpm2Tabl 00001000 INTL 20250807)
+2026-11-13T12:44:19.875796+00:00 hh-fp-wc5 systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival was skipped because of an unmet condition check (ConditionDirectoryNotEmpty=/sys/fs/pstore).
+2026-11-13T12:44:19.875798+00:00 hh-fp-wc5 kernel: [    0.021882] ACPI: TPM2 0x00000000BFB7B000 000034 (v04 GOOGLE          00000001 GOOG 00000001)
+2026-11-13T12:44:19.875799+00:00 hh-fp-wc5 kernel: [    0.023762] ACPI: SRAT 0x00000000BFB77000 000128 (v03 Google GOOGSRAT 00000001 GOOG 00000001)
+2026-11-13T12:44:19.875800+00:00 hh-fp-wc5 kernel: [    0.025031] ACPI: APIC 0x00000000BFB76000 0000A6 (v05 Google GOOGAPIC 00000001 GOOG 00000001)
+2026-11-13T12:44:19.875800+00:00 hh-fp-wc5 systemd[1]: Starting systemd-random-seed.service - Load/Save Random Seed...
+2026-11-13T12:44:19.875803+00:00 hh-fp-wc5 kernel: [    0.026618] ACPI: SSDT 0x00000000BFB75000 000BC6 (v01 Google GOOGSSDT 00000001 GOOG 00000001)
+2026-11-13T12:44:19.875804+00:00 hh-fp-wc5 kernel: [    0.028661] ACPI: WAET 0x00000000BFB74000 000028 (v01 Google GOOGWAET 00000001 GOOG 00000001)
+2026-11-13T12:44:19.875804+00:00 hh-fp-wc5 kernel: [    0.030502] ACPI: Reserving FACP table memory at [mem 0xbfb78000-0xbfb780f3]
+2026-11-13T12:44:19.875804+00:00 hh-fp-wc5 kernel: [    0.031673] ACPI: Reserving DSDT table memory at [mem 0xbfb79000-0xbfb7aa92]
+2026-11-13T12:44:19.875805+00:00 hh-fp-wc5 kernel: [    0.033171] ACPI: Reserving FACS table memory at [mem 0xbfbf2000-0xbfbf203f]
+2026-11-13T12:44:19.875805+00:00 hh-fp-wc5 kernel: [    0.034779] ACPI: Reserving SSDT table memory at [mem 0xbfb7c000-0xbfb7c315]
+2026-11-13T12:44:19.875805+00:00 hh-fp-wc5 systemd[1]: systemd-repart.service - Repartition Root Disk was skipped because no trigger condition checks were met.
+2026-11-13T12:44:19.875807+00:00 hh-fp-wc5 kernel: [    0.036246] ACPI: Reserving TPM2 table memory at [mem 0xbfb7b000-0xbfb7b033]
+2026-11-13T12:44:19.875808+00:00 hh-fp-wc5 kernel: [    0.037350] ACPI: Reserving SRAT table memory at [mem 0xbfb77000-0xbfb77127]
+2026-11-13T12:44:19.875808+00:00 hh-fp-wc5 kernel: [    0.038614] ACPI: Reserving APIC table memory at [mem 0xbfb76000-0xbfb760a5]
+2026-11-13T12:44:19.875809+00:00 hh-fp-wc5 kernel: [    0.039629] ACPI: Reserving SSDT table memory at [mem 0xbfb75000-0xbfb75bc5]
+2026-11-13T12:44:19.875809+00:00 hh-fp-wc5 kernel: [    0.040815] ACPI: Reserving WAET table memory at [mem 0xbfb74000-0xbfb74027]
+2026-11-13T12:44:19.875809+00:00 hh-fp-wc5 kernel: [    0.042586] SRAT: PXM 0 -> APIC 0x00 -> Node 0
+2026-11-13T12:44:19.875810+00:00 hh-fp-wc5 kernel: [    0.043610] SRAT: PXM 0 -> APIC 0x01 -> Node 0
+2026-11-13T12:44:19.875809+00:00 hh-fp-wc5 systemd[1]: Starting systemd-growfs@-.service - Grow File System on /...
+2026-11-13T12:44:19.875812+00:00 hh-fp-wc5 kernel: [    0.044680] SRAT: PXM 0 -> APIC 0x02 -> Node 0
+2026-11-13T12:44:19.875813+00:00 hh-fp-wc5 kernel: [    0.045805] SRAT: PXM 0 -> APIC 0x03 -> Node 0
+2026-11-13T12:44:19.875813+00:00 hh-fp-wc5 kernel: [    0.046902] SRAT: PXM 0 -> APIC 0x04 -> Node 0
+2026-11-13T12:44:19.875814+00:00 hh-fp-wc5 kernel: [    0.047660] SRAT: PXM 0 -> APIC 0x05 -> Node 0
+2026-11-13T12:44:19.875814+00:00 hh-fp-wc5 kernel: [    0.048571] SRAT: PXM 0 -> APIC 0x06 -> Node 0
+2026-11-13T12:44:19.875814+00:00 hh-fp-wc5 kernel: [    0.049169] SRAT: PXM 0 -> APIC 0x07 -> Node 0
+2026-11-13T12:44:19.875814+00:00 hh-fp-wc5 systemd[1]: Starting systemd-sysctl.service - Apply Kernel Variables...
+2026-11-13T12:44:19.875816+00:00 hh-fp-wc5 kernel: [    0.050024] ACPI: SRAT: Node 0 PXM 0 [mem 0x00000000-0x0009ffff]
+2026-11-13T12:44:19.875817+00:00 hh-fp-wc5 kernel: [    0.051205] ACPI: SRAT: Node 0 PXM 0 [mem 0x00100000-0xbfffffff]
+2026-11-13T12:44:19.875818+00:00 hh-fp-wc5 kernel: [    0.052735] ACPI: SRAT: Node 0 PXM 0 [mem 0x100000000-0x83fffffff]
+2026-11-13T12:44:19.875818+00:00 hh-fp-wc5 kernel: [    0.053728] NUMA: Node 0 [mem 0x00000000-0x0009ffff] + [mem 0x00100000-0xbfffffff] -> [mem 0x00000000-0xbfffffff]
+2026-11-13T12:44:19.875818+00:00 hh-fp-wc5 kernel: [    0.055836] NUMA: Node 0 [mem 0x00000000-0xbfffffff] + [mem 0x100000000-0x83fffffff] -> [mem 0x00000000-0x83fffffff]
+2026-11-13T12:44:19.875819+00:00 hh-fp-wc5 kernel: [    0.057884] NODE_DATA(0) allocated [mem 0x83ffd5000-0x83fffffff]
+2026-11-13T12:44:19.875821+00:00 hh-fp-wc5 kernel: [    0.060107] Zone ranges:
+2026-11-13T12:44:19.875822+00:00 hh-fp-wc5 kernel: [    0.060526]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+2026-11-13T12:44:19.875832+00:00 hh-fp-wc5 kernel: [    0.061418]   DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+2026-11-13T12:44:19.875832+00:00 hh-fp-wc5 kernel: [    0.062628]   Normal   [mem 0x0000000100000000-0x000000083fffffff]
+2026-11-13T12:44:19.875832+00:00 hh-fp-wc5 kernel: [    0.063440]   Device   empty
+2026-11-13T12:44:19.875833+00:00 hh-fp-wc5 kernel: [    0.063955] Movable zone start for each node
+2026-11-13T12:44:19.875835+00:00 hh-fp-wc5 kernel: [    0.064761] Early memory node ranges
+2026-11-13T12:44:19.875836+00:00 hh-fp-wc5 kernel: [    0.065405]   node   0: [mem 0x0000000000001000-0x000000000009ffff]
+2026-11-13T12:44:19.875836+00:00 hh-fp-wc5 kernel: [    0.066712]   node   0: [mem 0x0000000000100000-0x00000000be313fff]
+2026-11-13T12:44:19.875836+00:00 hh-fp-wc5 kernel: [    0.067991]   node   0: [mem 0x00000000be31f000-0x00000000bf8ecfff]
+2026-11-13T12:44:19.875837+00:00 hh-fp-wc5 kernel: [    0.069021]   node   0: [mem 0x00000000bfbff000-0x00000000bffdffff]
+2026-11-13T12:44:19.875837+00:00 hh-fp-wc5 kernel: [    0.070207]   node   0: [mem 0x0000000100000000-0x000000083fffffff]
+2026-11-13T12:44:19.875837+00:00 hh-fp-wc5 kernel: [    0.071210] Initmem setup node 0 [mem 0x0000000000001000-0x000000083fffffff]
+2026-11-13T12:44:19.875818+00:00 hh-fp-wc5 systemd[1]: Starting systemd-sysusers.service - Create System Users...
+2026-11-13T12:44:19.875840+00:00 hh-fp-wc5 kernel: [    0.072481] On node 0, zone DMA: 1 pages in unavailable ranges
+2026-11-13T12:44:19.875841+00:00 hh-fp-wc5 kernel: [    0.072517] On node 0, zone DMA: 96 pages in unavailable ranges
+2026-11-13T12:44:19.875841+00:00 hh-fp-wc5 kernel: [    0.083097] On node 0, zone DMA32: 11 pages in unavailable ranges
+2026-11-13T12:44:19.875841+00:00 hh-fp-wc5 kernel: [    0.084465] On node 0, zone DMA32: 786 pages in unavailable ranges
+2026-11-13T12:44:19.875842+00:00 hh-fp-wc5 kernel: [    0.086031] On node 0, zone Normal: 32 pages in unavailable ranges
+2026-11-13T12:44:19.875842+00:00 hh-fp-wc5 kernel: [    0.087625] ACPI: PM-Timer IO Port: 0xb008
+2026-11-13T12:44:19.875842+00:00 hh-fp-wc5 systemd[1]: Mounted sys-fs-fuse-connections.mount - FUSE Control File System.
+2026-11-13T12:44:19.875847+00:00 hh-fp-wc5 kernel: [    0.089118] ACPI: LAPIC_NMI (acpi_id[0xff] dfl dfl lint[0x1])
+2026-11-13T12:44:19.875848+00:00 hh-fp-wc5 kernel: [    0.090119] IOAPIC[0]: apic_id 0, version 17, address 0xfec00000, GSI 0-23
+2026-11-13T12:44:19.875846+00:00 hh-fp-wc5 systemd[1]: Mounted sys-kernel-config.mount - Kernel Configuration File System.
+2026-11-13T12:44:19.875848+00:00 hh-fp-wc5 kernel: [    0.091327] ACPI: INT_SRC_OVR (bus 0 bus_irq 5 global_irq 5 high level)
+2026-11-13T12:44:19.875850+00:00 hh-fp-wc5 kernel: [    0.092213] ACPI: INT_SRC_OVR (bus 0 bus_irq 9 global_irq 9 high level)
+2026-11-13T12:44:19.875850+00:00 hh-fp-wc5 kernel: [    0.093802] ACPI: INT_SRC_OVR (bus 0 bus_irq 10 global_irq 10 high level)
+2026-11-13T12:44:19.875850+00:00 hh-fp-wc5 kernel: [    0.095285] ACPI: INT_SRC_OVR (bus 0 bus_irq 11 global_irq 11 high level)
+2026-11-13T12:44:19.875851+00:00 hh-fp-wc5 kernel: [    0.096531] ACPI: Using ACPI (MADT) for SMP configuration information
+2026-11-13T12:44:19.875851+00:00 hh-fp-wc5 systemd[1]: Finished systemd-random-seed.service - Load/Save Random Seed.
+2026-11-13T12:44:19.875853+00:00 hh-fp-wc5 kernel: [    0.097838] smpboot: Allowing 8 CPUs, 0 hotplug CPUs
+2026-11-13T12:44:19.875854+00:00 hh-fp-wc5 kernel: [    0.09862[[0;32m  OK  [0m] Started [0;1;39mserial-getty@ttyS0…rvice[0m - Serial Getty on ttyS0.
+9] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+2026-11-13T12:44:19.875855+00:00 hh-fp-wc5 kernel: [    0.099727] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+2026-11-13T12:44:19.875855+00:00 hh-fp-wc5 kernel: [    0.100704] PM: hibernation: Registered nosave memory: [mem 0xbe314000-0xbe31efff]
+2026-11-13T12:44:19.875855+00:00 hh-fp-wc5 kernel: [    0.101723] PM: hibernation: Registered nosave memory: [mem 0xbf8ed000-0xbfbfefff]
+2026-11-13T12:44:19.875856+00:00 hh-fp-wc5 kernel: [    0.102789] PM: hibernation: Registered nosave memory: [mem 0xbffe0000-0xffffffff]
+2026-11-13T12:44:19.875855+00:00 hh-fp-wc5 systemd[1]: Finished systemd-sysctl.service - Apply Kernel Variables.
+2026-11-13T12:44:19.875858+00:00 hh-fp-wc5 kernel: [    0.103865] [mem 0xc0000000-0xffffffff] available for PCI devices
+2026-11-13T12:44:19.875859+00:00 hh-fp-wc5 kernel: [    0.104720] Booting paravirtualized kernel on KVM
+2026-11-13T12:44:19.875860+00:00 hh-fp-wc5 systemd[1]: Finished systemd-sysusers.service - Create System Users.
+2026-11-13T12:44:19.875864+00:00 hh-fp-wc5 systemd[1]: first-boot-complete.target - First Boot Complete was skipped because of an unmet condition check (ConditionFirstBoot=yes).
+2026-11-13T12:44:19.875870+00:00 hh-fp-wc5 systemd[1]: Starting systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev...
+2026-11-13T12:44:19.875873+00:00 hh-fp-wc5 systemd-growfs[294]: Successfully resized "/" to 299.8G bytes (512 bytes lost due to blocksize).
+2026-11-13T12:44:19.875877+00:00 hh-fp-wc5 systemd[1]: Finished systemd-growfs@-.service - Grow File System on /.
+2026-11-13T12:44:19.875880+00:00 hh-fp-wc5 systemd[1]: Finished systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev.
+2026-11-13T12:44:19.875884+00:00 hh-fp-wc5 systemd[1]: Finished systemd-journal-flush.service - Flush Journal to Persistent Storage.
+2026-11-13T12:44:19.875888+00:00 hh-fp-wc5 systemd[1]: Reached target local-fs-pre.target - Preparation for Local File Systems.
+2026-11-13T12:44:19.875893+00:00 hh-fp-wc5 systemd[1]: Starting systemd-udevd.service - Rule-based Manager for Device Events and Files...
+2026-11-13T12:44:19.875896+00:00 hh-fp-wc5 systemd-udevd[303]: Using default interface naming scheme 'v252'.
+2026-11-13T12:44:19.875900+00:00 hh-fp-wc5 systemd[1]: Started systemd-udevd.service - Rule-based Manager for Device Events and Files.
+2026-11-13T12:44:19.875904+00:00 hh-fp-wc5 systemd[1]: Found device dev-ttyS0.device - /dev/ttyS0.
+2026-11-13T12:44:19.875940+00:00 hh-fp-wc5 systemd[1]: Starting systemd-networkd.service - Network Configuration...
+2026-11-13T12:44:19.875955+00:00 hh-fp-wc5 systemd[1]: Found device dev-disk-by\x2dpartuuid-4ec16f4d\x2d5ea6\x2d4a92\x2d95cc\x2d39bd7a56af80.device - PersistentDisk 15.
+2026-11-13T12:44:19.875961+00:00 hh-fp-wc5 systemd-networkd[342]: lo: Link UP
+2026-11-13T12:44:19.875966+00:00 hh-fp-wc5 systemd-networkd[342]: lo: Gained carrier
+2026-11-13T12:44:19.875971+00:00 hh-fp-wc5 systemd-networkd[342]: Enumeration completed
+2026-11-13T12:44:19.875977+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: Configuring with /run/systemd/network/10-netplan-all-en.network.
+2026-11-13T12:44:19.876015+00:00 hh-fp-wc5 kernel: [    0.105650] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+2026-11-13T12:44:19.876017+00:00 hh-fp-wc5 kernel: [    0.111413] setup_percpu: NR_CPUS:8192 nr_cpumask_bits:8 nr_cpu_ids:8 nr_node_ids:1
+2026-11-13T12:44:19.876017+00:00 hh-fp-wc5 kernel: [    0.113611] percpu: Embedded 61 pages/cpu s212992 r8192 d28672 u262144
+2026-11-13T12:44:19.876018+00:00 hh-fp-wc5 kernel: [    0.115001] pcpu-alloc: s212992 r8192 d28672 u262144 alloc=1*2097152
+2026-11-13T12:44:19.876022+00:00 hh-fp-wc5 kernel: [    0.115007] pcpu-alloc: [0] 0 1 2 3 4 5 6 7 
+2026-11-13T12:44:19.876022+00:00 hh-fp-wc5 kernel: [    0.115050] kvm-guest: PV spinlocks enabled
+2026-11-13T12:44:19.876023+00:00 hh-fp-wc5 kernel: [    0.115878] PV qspinlock hash table entries: 256 (order: 0, 4096 bytes, linear)
+2026-11-13T12:44:19.876023+00:00 hh-fp-wc5 kernel: [    0.117148] Fallback order for Node 0: 0 
+2026-11-13T12:44:19.876024+00:00 hh-fp-wc5 kernel: [    0.117153] Built 1 zonelists, mobility grouping on.  Total pages: 8254445
+2026-11-13T12:44:19.876024+00:00 hh-fp-wc5 kernel: [    0.119319] Policy zone: Normal
+2026-11-13T12:44:19.876025+00:00 hh-fp-wc5 kernel: [    0.120021] Kernel command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off
+2026-11-13T12:44:19.876028+00:00 hh-fp-wc5 kernel: [    0.123414] DMAR: IOMMU disabled
+2026-11-13T12:44:19.876028+00:00 hh-fp-wc5 kernel: [    0.127638] Dentry cache hash table entries: 4194304 (order: 13, 33554432 bytes, linear)
+2026-11-13T12:44:19.876029+00:00 hh-fp-wc5 kernel: [    0.130472] Inode-cache hash table entries: 2097152 (order: 12, 16777216 bytes, linear)
+2026-11-13T12:44:19.876029+00:00 hh-fp-wc5 kernel: [    0.131721] mem auto-init: stack:all(zero), heap alloc:on, heap free:off
+2026-11-13T12:44:19.876029+00:00 hh-fp-wc5 kernel: [    0.133423] software IO TLB: area num 8.
+2026-11-13T12:44:19.876030+00:00 hh-fp-wc5 kernel: [    0.155504] Memory: 3151608K/33550728K available (14343K kernel code, 2327K rwdata, 8336K rodata, 2604K init, 5448K bss, 738660K reserved, 0K cma-reserved)
+2026-11-13T12:44:19.876032+00:00 hh-fp-wc5 kernel: [    0.159292] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=8, Nodes=1
+2026-11-13T12:44:19.876032+00:00 hh-fp-wc5 kernel: [    0.161059] ftrace: allocating 37644 entries in 148 pages
+2026-11-13T12:44:19.876033+00:00 hh-fp-wc5 kernel: [    0.171547] ftrace: allocated 148 pages with 3 groups
+2026-11-13T12:44:19.876033+00:00 hh-fp-wc5 kernel: [    0.174866] Dynamic Preempt: voluntary
+2026-11-13T12:44:19.876033+00:00 hh-fp-wc5 kernel: [    0.175915] rcu: Preemptible hierarchical RCU implementation.
+2026-11-13T12:44:19.876034+00:00 hh-fp-wc5 kernel: [    0.177610] rcu: 	RCU restricting CPUs from NR_CPUS=8192 to nr_cpu_ids=8.
+2026-11-13T12:44:19.876036+00:00 hh-fp-wc5 kernel: [    0.179848] 	Trampoline variant of Tasks RCU enabled.
+2026-11-13T12:44:19.876036+00:00 hh-fp-wc5 kernel: [    0.181146] 	Rude variant of Tasks RCU enabled.
+2026-11-13T12:44:19.876036+00:00 hh-fp-wc5 kernel: [    0.182519] 	Tracing variant of Tasks RCU enabled.
+2026-11-13T12:44:19.876037+00:00 hh-fp-wc5 kernel: [    0.183724] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+2026-11-13T12:44:19.876037+00:00 hh-fp-wc5 kernel: [    0.186037] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=8
+2026-11-13T12:44:19.876037+00:00 hh-fp-wc5 kernel: [    0.192289] NR_IRQS: 524544, nr_irqs: 488, preallocated irqs: 16
+2026-11-13T12:44:19.876039+00:00 hh-fp-wc5 kernel: [    0.194061] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+2026-11-13T12:44:19.876040+00:00 hh-fp-wc5 kernel: [    0.195601] Console: colour dummy device 80x25
+2026-11-13T12:44:19.876040+00:00 hh-fp-wc5 kernel: [    0.196729] printk: console [tty0] enabled
+2026-11-13T12:44:19.876040+00:00 hh-fp-wc5 kernel: [    0.198077] printk: console [ttyS0] enabled
+2026-11-13T12:44:19.876041+00:00 hh-fp-wc5 kernel: [    0.199730] printk: bootconsole [earlyser0] disabled
+2026-11-13T12:44:19.876041+00:00 hh-fp-wc5 kernel: [    0.202145] ACPI: Core revision 20220331
+2026-11-13T12:44:19.876041+00:00 hh-fp-wc5 kernel: [    0.202971] APIC: Switch to symmetric I/O mode setup
+2026-11-13T12:44:19.876043+00:00 hh-fp-wc5 kernel: [    0.204444] x2apic enabled
+2026-11-13T12:44:19.876044+00:00 hh-fp-wc5 kernel: [    0.210736] Switched APIC routing to physical x2apic.
+2026-11-13T12:44:19.876044+00:00 hh-fp-wc5 kernel: [    0.217090] ..TIMER: vector=0x30 apic1=0 pin1=0 apic2=-1 pin2=-1
+2026-11-13T12:44:19.876044+00:00 hh-fp-wc5 kernel: [    0.218873] clocksource: tsc-early: mask: 0xffffffffffffffff max_cycles: 0x206eb2111f5, max_idle_ns: 440795222471 ns
+2026-11-13T12:44:19.876045+00:00 hh-fp-wc5 kernel: [    0.221453] Calibrating delay loop (skipped) preset value.. 4499.99 Bogo[[0;32m  OK  [0m] Reached target [0;1;39mgetty.target[0m - Login Prompts.
+MIPS (lpj=8999992)
+2026-11-13T12:44:19.876045+00:00 hh-fp-wc5 kernel: [    0.225544] x86/cpu: User Mode Instruction Prevention (UMIP) activated
+2026-11-13T12:44:19.876047+00:00 hh-fp-wc5 kernel: [    0.226903] Last level iTLB entries: 4KB 1024, 2MB 1024, 4MB 512
+2026-11-13T12:44:19.876047+00:00 hh-fp-wc5 kernel: [    0.229463] Last level dTLB entries: 4KB 2048, 2MB 2048, 4MB 1024, 1GB 0
+2026-11-13T12:44:19.876048+00:00 hh-fp-wc5 kernel: [    0.231412] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+2026-11-13T12:44:19.876048+00:00 hh-fp-wc5 kernel: [    0.233467] Spectre V2 : Mitigation: Retpolines
+2026-11-13T12:44:19.876048+00:00 hh-fp-wc5 kernel: [    0.234387] Spectre V2 : Spectre v2 / SpectreRSB: Filling RSB on context switch and VMEXIT
+2026-11-13T12:44:19.876049+00:00 hh-fp-wc5 kernel: [    0.235632] Spectre V2 : Enabling Speculation Barrier for firmware calls
+2026-11-13T12:44:19.876051+00:00 hh-fp-wc5 kernel: [    0.236681] active return thunk: retbleed_return_thunk
+2026-11-13T12:44:19.876051+00:00 hh-fp-wc5 kernel: [    0.237451] RETBleed: Mitigation: untrained return thunk
+2026-11-13T12:44:19.876051+00:00 hh-fp-wc5 kernel: [    0.238392] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+2026-11-13T12:44:19.876052+00:00 hh-fp-wc5 kernel: [    0.239963] Spectre V2 : Selecting STIBP always-on mode to complement retbleed mitigation
+2026-11-13T12:44:19.876052+00:00 hh-fp-wc5 kernel: [    0.241452] Spectre V2 : User space: Mitigation: STIBP always-on protection
+2026-11-13T12:44:19.876053+00:00 hh-fp-wc5 kernel: [    0.242994] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl
+2026-11-13T12:44:19.876053+00:00 hh-fp-wc5 kernel: [    0.244864] active return thunk: srso_return_thunk
+2026-11-13T12:44:19.876055+00:00 hh-fp-wc5 kernel: [    0.245456] Speculative Return Stack Overflow: Mitigation: safe RET
+2026-11-13T12:44:19.876055+00:00 hh-fp-wc5 kernel: [    0.246642] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+2026-11-13T12:44:19.876056+00:00 hh-fp-wc5 kernel: [    0.248193] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+2026-11-13T12:44:19.876056+00:00 hh-fp-wc5 kernel: [    0.249452] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+2026-11-13T12:44:19.876056+00:00 hh-fp-wc5 kernel: [    0.250817] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+2026-11-13T12:44:19.876057+00:00 hh-fp-wc5 kernel: [    0.251988] x86/fpu: Enabled xstate features 0x7, context size is 832 bytes, using 'compacted' format.
+2026-11-13T12:44:19.876059+00:00 hh-fp-wc5 kernel: [    0.272077] Freeing SMP alternatives memory: 36K
+2026-11-13T12:44:19.876059+00:00 hh-fp-wc5 kernel: [    0.272889] pid_max: default: 32768 minimum: 301
+2026-11-13T12:44:19.876059+00:00 hh-fp-wc5 kernel: [    0.285384] LSM: Security Framework initializing
+2026-11-13T12:44:19.876060+00:00 hh-fp-wc5 kernel: [    0.285484] landlock: Up and running.
+2026-11-13T12:44:19.876060+00:00 hh-fp-wc5 kernel: [    0.286367] Yama: disabled by default; enable with sysctl kernel.yama.*
+2026-11-13T12:44:19.876060+00:00 hh-fp-wc5 kernel: [    0.287574] AppArmor: AppArmor initialized
+2026-11-13T12:44:19.876063+00:00 hh-fp-wc5 kernel: [    0.289454] TOMOYO Linux initialized
+2026-11-13T12:44:19.876063+00:00 hh-fp-wc5 kernel: [    0.290245] LSM support for eBPF active
+2026-11-13T12:44:19.876063+00:00 hh-fp-wc5 kernel: [    0.291273] Mount-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+2026-11-13T12:44:19.876063+00:00 hh-fp-wc5 kernel: [    0.293520] Mountpoint-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+2026-11-13T12:44:19.876064+00:00 hh-fp-wc5 kernel: [    0.403920] smpboot: CPU0: AMD EPYC 7B12 (family: 0x17, model: 0x31, stepping: 0x0)
+2026-11-13T12:44:19.876064+00:00 hh-fp-wc5 kernel: [    0.405447] cblist_init_generic: Setting adjustable number of callback queues.
+2026-11-13T12:44:19.876064+00:00 hh-fp-wc5 kernel: [    0.405447] cblist_init_generic: Setting shift to 3 and lim to 1.
+2026-11-13T12:44:19.876072+00:00 hh-fp-wc5 kernel: [    0.405447] cblist_init_generic: Setting adjustable number of callback queues.
+2026-11-13T12:44:19.876073+00:00 hh-fp-wc5 kernel: [    0.405454] cblist_init_generic: Setting shift to 3 and lim to 1.
+2026-11-13T12:44:19.876073+00:00 hh-fp-wc5 kernel: [    0.407253] cblist_init_generic: Setting adjustable number of callback queues.
+2026-11-13T12:44:19.876073+00:00 hh-fp-wc5 kernel: [    0.409454] cblist_init_generic: Setting shift to 3 and lim to 1.
+2026-11-13T12:44:19.876074+00:00 hh-fp-wc5 kernel: [    0.410744] Performance Events: PMU not available due to virtualization, using software events only.
+2026-11-13T12:44:19.876074+00:00 hh-fp-wc5 kernel: [    0.417479] signal: max sigframe size: 1776
+2026-11-13T12:44:19.876080+00:00 hh-fp-wc5 kernel: [    0.418160] rcu: Hierarchical SRCU implementation.
+2026-11-13T12:44:19.876081+00:00 hh-fp-wc5 kernel: [    0.419062] rcu: 	Max phase no-delay instances is 1000.
+2026-11-13T12:44:19.876081+00:00 hh-fp-wc5 kernel: [    0.421563] NMI watchdog: Perf NMI watchdog permanently disabled
+2026-11-13T12:44:19.876081+00:00 hh-fp-wc5 kernel: [    0.422848] smp: Bringing up secondary CPUs ...
+2026-11-13T12:44:19.876082+00:00 hh-fp-wc5 kernel: [    0.423692] x86: Booting SMP configuration:
+2026-11-13T12:44:19.876082+00:00 hh-fp-wc5 kernel: [    0.424412] .... node  #0, CPUs:      #1 #2 #3 #4
+2026-11-13T12:44:19.876085+00:00 hh-fp-wc5 kernel: [    0.425929] Spectre V2 : Update user space SMT mitigation: STIBP always-on
+2026-11-13T12:44:19.876085+00:00 hh-fp-wc5 kernel: [    0.427912]  #5 #6 #7
+2026-11-13T12:44:19.876086+00:00 hh-fp-wc5 kernel: [    0.429868] smp: Brought up 1 node, 8 CPUs
+2026-11-13T12:44:19.876086+00:00 hh-fp-wc5 kernel: [    0.430916] smpboot: Max logical packages: 1
+2026-11-13T12:44:19.876086+00:00 hh-fp-wc5 kernel: [    0.431879] smpboot: Total of 8 processors activated (35999.96 BogoMIPS)
+2026-11-13T12:44:19.876087+00:00 hh-fp-wc5 kernel: [    0.462549] node 0 deferred pages initialised in 28ms
+2026-11-13T12:44:19.876087+00:00 hh-fp-wc5 kernel: [    0.462811] devtmpfs: initialized
+2026-11-13T12:44:19.876090+00:00 hh-fp-wc5 kernel: [    0.465525] x86/mm: Memory block size: 128MB
+2026-11-13T12:44:19.876090+00:00 hh-fp-wc5 kernel: [    0.470438] ACPI: PM: Registering ACPI NVS region [mem 0xbfb7f000-0xbfbfefff] (524288 bytes)
+2026-11-13T12:44:19.876090+00:00 hh-fp-wc5 kernel: [    0.471211] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+2026-11-13T12:44:19.876091+00:00 hh-fp-wc5 kernel: [    0.473537] futex hash table entries: 2048 (order: 5, 131072 bytes, linear)
+2026-11-13T12:44:19.876091+00:00 hh-fp-wc5 kernel: [    0.475765] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+2026-11-13T12:44:19.876092+00:00 hh-fp-wc5 kernel: [    0.478233] DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+[[0;32m  OK  [0m] Started [0;1;39mnetworkd-dispatche…tcher daemon for systemd-networkd.
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-networkd-…Wait for Network to be Configured.
+2026-11-13T12:44:19.876101+00:00 hh-fp-wc5 kernel: [    0.479885] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+2026-11-13T12:44:19.876102+00:00 hh-fp-wc5 kernel: [    0.481905] DMA: preallocated 4096 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+2026-11-13T12:44:19.876103+00:00 hh-fp-wc5 kernel: [    0.483490] audit: initializing netlink subsys (disabled)
+2026-11-13T12:44:19.876103+00:00 hh-fp-wc5 kernel: [    0.485459] audit: type=2000 audit(1794573854.449:1): state=initialized audit_enabled=0 res=1
+2026-11-13T12:44:19.876103+00:00 hh-fp-wc5 kernel: [    0.485571] thermal_sys: Registered thermal governor 'fair_share'
+2026-11-13T12:44:19.876104+00:00 hh-fp-wc5 kernel: [    0.487669] thermal_sys: Registered thermal governor 'bang_bang'
+2026-11-13T12:44:19.876110+00:00 hh-fp-wc5 kernel: [    0.489248] thermal_sys: Registered thermal governor 'step_wise'
+2026-11-13T12:44:19.876110+00:00 hh-fp-wc5 kernel: [    0.489464] thermal_sys: Registered thermal governor 'user_space'
+2026-11-13T12:44:19.876111+00:00 hh-fp-wc5 kernel: [    0.490438] thermal_sys: Registered thermal governor 'power_allocator'
+2026-11-13T12:44:19.876111+00:00 hh-fp-wc5 kernel: [    0.491746] cpuidle: using governor ladder
+2026-11-13T12:44:19.876111+00:00 hh-fp-wc5 kernel: [    0.494296] cpuidle: using governor menu
+2026-11-13T12:44:19.875982+00:00 hh-fp-wc5 systemd[1]: Started systemd-networkd.service - Network Configuration.
+2026-11-13T12:44:19.876127+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: Link UP
+2026-11-13T12:44:19.876133+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: Gained carrier
+2026-11-13T12:44:19.876136+00:00 hh-fp-wc5 systemd[1]: Mounting boot-efi.mount - /boot/efi...
+2026-11-13T12:44:19.876140+00:00 hh-fp-wc5 systemd[1]: Starting systemd-networkd-wait-online.service - Wait for Network to be Configured...
+2026-11-13T12:44:19.876144+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: DHCPv4 address 10.128.0.10/32, gateway 10.128.0.1 acquired from 169.254.169.254
+2026-11-13T12:44:19.876147+00:00 hh-fp-wc5 systemd[1]: Mounted boot-efi.mount - /boot/efi.
+2026-11-13T12:44:19.876153+00:00 hh-fp-wc5 systemd[1]: Reached target local-fs.target - Local File Systems.
+2026-11-13T12:44:19.876157+00:00 hh-fp-wc5 systemd[1]: Starting apparmor.service - Load AppArmor profiles...
+2026-11-13T12:44:19.876161+00:00 hh-fp-wc5 systemd[1]: Starting systemd-binfmt.service - Set Up Additional Binary Formats...
+2026-11-13T12:44:19.876164+00:00 hh-fp-wc5 apparmor.systemd[437]: Restarting AppArmor
+2026-11-13T12:44:19.876168+00:00 hh-fp-wc5 apparmor.systemd[437]: Reloading AppArmor profiles
+2026-11-13T12:44:19.876178+00:00 hh-fp-wc5 systemd[1]: systemd-machine-id-commit.service - Commit a transient machine-id on disk was skipped because of an unmet condition check (ConditionPathIsMountPoint=/etc/machine-id).
+2026-11-13T12:44:19.876185+00:00 hh-fp-wc5 systemd[1]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...
+2026-11-13T12:44:19.876188+00:00 hh-fp-wc5 systemd[1]: proc-sys-fs-binfmt_misc.automount: Got automount request for /proc/sys/fs/binfmt_misc, triggered by 440 (systemd-binfmt)
+2026-11-13T12:44:19.876192+00:00 hh-fp-wc5 systemd[1]: Mounting proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System...
+2026-11-13T12:44:19.876196+00:00 hh-fp-wc5 systemd[1]: Mounted proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System.
+2026-11-13T12:44:19.876200+00:00 hh-fp-wc5 systemd[1]: Finished systemd-binfmt.service - Set Up Additional Binary Formats.
+2026-11-13T12:44:19.876204+00:00 hh-fp-wc5 systemd[1]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.
+2026-11-13T12:44:19.876210+00:00 hh-fp-wc5 systemd[1]: Finished apparmor.service - Load AppArmor profiles.
+2026-11-13T12:44:19.876213+00:00 hh-fp-wc5 kernel: [    0.498376] efi: Freeing EFI boot services memory: 39884K
+2026-11-13T12:44:19.876214+00:00 hh-fp-wc5 kernel: [    0.499662] acpiphp: ACPI Hot Plug PCI Controller Driver version: 0.5
+2026-11-13T12:44:19.876213+00:00 hh-fp-wc5 systemd[1]: Started haveged.service - Entropy Daemon based on the HAVEGE algorithm.
+2026-11-13T12:44:19.876218+00:00 hh-fp-wc5 systemd[1]: Starting systemd-resolved.service - Network Name Resolution...
+2026-11-13T12:44:19.876220+00:00 hh-fp-wc5 kernel: [    0.501132] PCI: Using configuration type 1 for base access
+2026-11-13T12:44:19.876221+00:00 hh-fp-wc5 kernel: [    0.501459] PCI: Using configuration type 1 for extended access
+2026-11-13T12:44:19.876221+00:00 hh-fp-wc5 kernel: [    0.506465] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+2026-11-13T12:44:19.876221+00:00 hh-fp-wc5 kernel: [    0.508250] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+2026-11-13T12:44:19.876222+00:00 hh-fp-wc5 kernel: [    0.509455] HugeTLB: 16380 KiB vmemmap can be freed for a 1.00 GiB page
+2026-11-13T12:44:19.876222+00:00 hh-fp-wc5 kernel: [    0.510894] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+2026-11-13T12:44:19.876221+00:00 hh-fp-wc5 haveged[455]: haveged: command socket is listening at fd 3
+2026-11-13T12:44:19.876225+00:00 hh-fp-wc5 systemd[1]: Starting systemd-timesyncd.service - Network Time Synchronization...
+2026-11-13T12:44:19.876226+00:00 hh-fp-wc5 kernel: [    0.511937] HugeTLB: 28 KiB vmemmap can be freed for a 2.00 MiB page
+2026-11-13T12:44:19.876227+00:00 hh-fp-wc5 kernel: [    0.513716] ACPI: Added _OSI(Module Device)
+2026-11-13T12:44:19.876227+00:00 hh-fp-wc5 kernel: [    0.514517] ACPI: Added _OSI(Processor Device)
+2026-11-13T12:44:19.876228+00:00 hh-fp-wc5 kernel: [    0.515376] ACPI: Added _OSI(Processor Aggregator Device)
+2026-11-13T12:44:19.876228+00:00 hh-fp-wc5 kernel: [    0.519067] ACPI: 3 ACPI AML tables successfully acquired and loaded
+2026-11-13T12:44:19.876228+00:00 hh-fp-wc5 kernel: [    0.522321] ACPI: Interpreter enabled
+2026-11-13T12:44:19.876243+00:00 hh-fp-wc5 kernel: [    0.523106] ACPI: PM: (supports S0 S3 S4 S5)
+2026-11-13T12:44:19.876243+00:00 hh-fp-wc5 kernel: [    0.524492] ACPI: Using IOAPIC for interrupt routing
+2026-11-13T12:44:19.876243+00:00 hh-fp-wc5 kernel: [    0.525490] PCI: Using host bridge windows from ACPI; if necessary, use "pci=nocrs" and report a bug
+2026-11-13T12:44:19.876244+00:00 hh-fp-wc5 kernel: [    0.527625] PCI: Ignoring E820 reservations for host bridge windows
+2026-11-13T12:44:19.876244+00:00 hh-fp-wc5 kernel: [    0.529708] ACPI: Enabled 16 GPEs in block 00 to 0F
+2026-11-13T12:44:19.876245+00:00 hh-fp-wc5 kernel: [    0.534437] ACPI: PCI Root Bridge [PCI0] (domain 0000 [bus 00-ff])
+2026-11-13T12:44:19.876228+00:00 hh-fp-wc5 systemd[1]: Starting systemd-update-utmp.service - Record System Boot/Shutdown in UTMP...
+2026-11-13T12:44:19.876245+00:00 hh-fp-wc5 kernel: [    0.536064] acpi PNP0A03:00: _OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI HPX-Type3]
+2026-11-13T12:44:19.876253+00:00 hh-fp-wc5 kernel: [    0.538522] PCI host bridge to bus 0000:00
+2026-11-13T12:44:19.876253+00:00 hh-fp-wc5 kernel: [    0.539564] pci_bus 0000:00: root bus resource [io  0x0000-0x0cf7 window]
+2026-11-13T12:44:19.876252+00:00 hh-fp-wc5 systemd[1]: Finished systemd-update-utmp.service - Record System Boot/Shutdown in UTMP.
+2026-11-13T12:44:19.876254+00:00 hh-fp-wc5 kernel: [    0.541464] pci_bus 0000:00: root bus resource [io  0x0d00-0xffff window]
+2026-11-13T12:44:19.876256+00:00 hh-fp-wc5 kernel: [    0.542663] pci_bus 0000:00: root bus resource [mem 0x000a0000-0x000bffff window]
+2026-11-13T12:44:19.876256+00:00 hh-fp-wc5 kernel: [    0.544408] pci_bus 0000:00: root bus resource [mem 0xc0000000-0xfebfefff window]
+2026-11-13T12:44:19.876257+00:00 hh-fp-wc5 kernel: [    0.545456] pci_bus 0000:00: root bus resource [bus 00-ff]
+2026-11-13T12:44:19.876257+00:00 hh-fp-wc5 systemd-resolved[457]: Positive Trust Anchors:
+2026-11-13T12:44:19.876261+00:00 hh-fp-wc5 kernel: [    0.547009] pci 0000:00:00.0: [8086:1237] type 00 class 0x060000
+2026-11-13T12:44:19.876262+00:00 hh-fp-wc5 kernel: [    0.548821] pci 0000:00:01.0: [8086:7110] type 00 class 0x060100
+2026-11-13T12:44:19.876262+00:00 hh-fp-wc5 kernel: [    0.550820] pci 0000:0[[0;32m  OK  [0m] Started [0;1;39msystemd-logind.service[0m - User Login Management.
+0:01.3: [8086:7113] type 00 class 0x068000
+2026-11-13T12:44:19.876262+00:00 hh-fp-wc5 kernel: [    0.589519] pci 0000:00:01.3: quirk: [io  0xb000-0xb03f] claimed by PIIX4 ACPI
+2026-11-13T12:44:19.876263+00:00 hh-fp-wc5 kernel: [    0.591359] pci 0000:00:03.0: [1af4:1004] type 00 class 0x000000
+2026-11-13T12:44:19.876261+00:00 hh-fp-wc5 systemd-resolved[457]: . IN DS 20326 8 2 e06d44b80b8f1d39a95c0b0d7c65d08458e880409bbc683457104237c7f8ec8d
+2026-11-13T12:44:19.876264+00:00 hh-fp-wc5 kernel: [    0.597453] pci 0000:00:03.0: BAR 0 [io  0xc040-0xc07f]
+2026-11-13T12:44:19.876274+00:00 hh-fp-wc5 systemd-resolved[457]: . IN DS 38696 8 2 683d2d0acb8c9b712a1948b27f741219298d0a450d612c483af444a4c0fb2b16
+2026-11-13T12:44:19.876277+00:00 hh-fp-wc5 kernel: [    0.604766] pci 0000:00:03.0: BAR 1 [mem 0xc0001000-0xc000107f]
+2026-11-13T12:44:19.876278+00:00 hh-fp-wc5 kernel: [    0.633875] pci 0000:00:04.0: [1af4:1000] type 00 class 0x020000
+2026-11-13T12:44:19.876279+00:00 hh-fp-wc5 kernel: [    0.641460] pci 0000:00:04.0: BAR 0 [io  0xc000-0xc03f]
+2026-11-13T12:44:19.876279+00:00 hh-fp-wc5 kernel: [    0.649455] pci 0000:00:04.0: BAR 1 [mem 0xc0000000-0xc00001ff]
+2026-11-13T12:44:19.876279+00:00 hh-fp-wc5 kernel: [    0.685823] pci 0000:00:05.0: [1af4:1002] type 00 class 0x00ff00
+2026-11-13T12:44:19.876280+00:00 hh-fp-wc5 kernel: [    0.697453] pci 0000:00:05.0: BAR 0 [io  0xc0a0-0xc0bf]
+2026-11-13T12:44:19.876280+00:00 hh-fp-wc5 kernel: [    0.733763] pci 0000:00:06.0: [1af4:1005] type 00 class 0x00ff00
+2026-11-13T12:44:19.876278+00:00 hh-fp-wc5 systemd-resolved[457]: Negative trust anchors: home.arpa 10.in-addr.arpa 16.172.in-addr.arpa 17.172.in-addr.arpa 18.172.in-addr.arpa 19.172.in-addr.arpa 20.172.in-addr.arpa 21.172.in-addr.arpa 22.172.in-addr.arpa 23.172.in-addr.arpa 24.172.in-addr.arpa 25.172.in-addr.arpa 26.172.in-addr.arpa 27.172.in-addr.arpa 28.172.in-addr.arpa 29.172.in-addr.arpa 30.172.in-addr.arpa 31.172.in-addr.arpa 170.0.0.192.in-addr.arpa 171.0.0.192.in-addr.arpa 168.192.in-addr.arpa d.f.ip6.arpa ipv4only.arpa corp home internal intranet lan local private test
+2026-11-13T12:44:19.876287+00:00 hh-fp-wc5 kernel: [    0.744386] pci 0000:00:06.0: BAR 0 [io  0xc080-0xc09f]
+2026-11-13T12:44:19.876287+00:00 hh-fp-wc5 kernel: [    0.749456] pci 0000:00:06.0: BAR 1 [mem 0xc0002000-0xc000203f]
+2026-11-13T12:44:19.876286+00:00 hh-fp-wc5 systemd[1]: Started systemd-timesyncd.service - Network Time Synchronization.
+2026-11-13T12:44:19.876304+00:00 hh-fp-wc5 haveged[455]: haveged: ver: 1.9.14; arch: x86; vend: ; build: (gcc 12.2.0 ITV); collect: 128K
+2026-11-13T12:44:19.876308+00:00 hh-fp-wc5 haveged[455]: haveged: cpu: (VC); data: 32K (V); inst: 32K (V); idx: 24/40; sz: 32010/53875
+2026-11-13T12:44:19.876311+00:00 hh-fp-wc5 haveged[455]: haveged: tot tests(BA8): A:1/1 B:1/1 continuous tests(B):  last entropy estimate 8.00317
+2026-11-13T12:44:19.876317+00:00 hh-fp-wc5 haveged[455]: haveged: fills: 0, generated: 0
+2026-11-13T12:44:19.876324+00:00 hh-fp-wc5 systemd[1]: Reached target time-set.target - System Time Set.
+2026-11-13T12:44:19.876327+00:00 hh-fp-wc5 systemd-resolved[457]: Using system hostname 'hh-fp-wc5'.
+2026-11-13T12:44:19.876288+00:00 hh-fp-wc5 kernel: [    0.785734] ACPI: PCI: Interrupt link LNKA configured for IRQ 10
+2026-11-13T12:44:19.876332+00:00 hh-fp-wc5 kernel: [    0.789591] ACPI: PCI: Interrupt link LNKB configured for IRQ 10
+2026-11-13T12:44:19.876331+00:00 hh-fp-wc5 systemd[1]: Started systemd-resolved.service - Network Name Resolution.
+2026-11-13T12:44:19.876333+00:00 hh-fp-wc5 kernel: [    0.793556] ACPI: PCI: Interrupt link LNKC configured for IRQ 11
+2026-11-13T12:44:19.876334+00:00 hh-fp-wc5 kernel: [    0.797612] ACPI: PCI: Interrupt link LNKD configured for IRQ 11
+2026-11-13T12:44:19.876335+00:00 hh-fp-wc5 systemd[1]: Reached target network.target - Network.
+2026-11-13T12:44:19.876339+00:00 hh-fp-wc5 kernel: [    0.805238] ACPI: PCI: Interrupt link LNKS configured for IRQ 9
+2026-11-13T12:44:19.876340+00:00 hh-fp-wc5 kernel: [    0.806562] iommu: Default domain type: Translated 
+2026-11-13T12:44:19.876341+00:00 hh-fp-wc5 kernel: [    0.806562] iommu: DMA domain TLB invalidation policy: lazy mode 
+2026-11-13T12:44:19.876341+00:00 hh-fp-wc5 kernel: [    0.809557] pps_core: LinuxPPS API ver. 1 registered
+2026-11-13T12:44:19.876341+00:00 hh-fp-wc5 kernel: [    0.810266] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+2026-11-13T12:44:19.876342+00:00 hh-fp-wc5 kernel: [    0.813470] PTP clock support registered
+2026-11-13T12:44:19.876341+00:00 hh-fp-wc5 systemd[1]: Reached target nss-lookup.target - Host and Network Name Lookups.
+2026-11-13T12:44:19.876345+00:00 hh-fp-wc5 systemd[1]: Reached target sysinit.target - System Initialization.
+2026-11-13T12:44:19.876346+00:00 hh-fp-wc5 kernel: [    0.814330] Registered efivars operations
+2026-11-13T12:44:19.876347+00:00 hh-fp-wc5 kernel: [    0.814814] NetLabel: Initializing
+2026-11-13T12:44:19.876348+00:00 hh-fp-wc5 kernel: [    0.815429] NetLabel:  domain hash size = 128
+2026-11-13T12:44:19.876348+00:00 hh-fp-wc5 kernel: [    0.817456] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+2026-11-13T12:44:19.876349+00:00 hh-fp-wc5 kernel: [    0.818345] NetLabel:  unlabeled traffic allowed by default
+2026-11-13T12:44:19.876349+00:00 hh-fp-wc5 kernel: [    0.819177] PCI: Using ACPI for IRQ routing
+2026-11-13T12:44:19.876349+00:00 hh-fp-wc5 kernel: [    0.819792] PCI: pci_cache_line_size set to 64 bytes
+2026-11-13T12:44:19.876349+00:00 hh-fp-wc5 systemd[1]: Started dpkg-db-backup.timer - Daily dpkg database backup timer.
+2026-11-13T12:44:19.876354+00:00 hh-fp-wc5 kernel: [    0.819915] e820: reserve RAM buffer [mem 0xbe314000-0xbfffffff]
+2026-11-13T12:44:19.876355+00:00 hh-fp-wc5 kernel: [    0.819918] e820: reserve RAM buffer [mem 0xbf8ed000-0xbfffffff]
+2026-11-13T12:44:19.876355+00:00 hh-fp-wc5 kernel: [    0.819920] e820: reserve RAM buffer [mem 0xbffe0000-0xbfffffff]
+2026-11-13T12:44:19.876353+00:00 hh-fp-wc5 systemd[1]: Started e2scrub_all.timer - Periodic ext4 Online Metadata Check for All Filesystems.
+2026-11-13T12:44:19.876355+00:00 hh-fp-wc5 kernel: [    0.819974] vgaarb: loaded
+2026-11-13T12:44:19.876357+00:00 hh-fp-wc5 kernel: [    0.819974] clocksource: Switched to clocksource kvm-clock
+2026-11-13T12:44:19.876357+00:00 hh-fp-wc5 kernel: [    0.834294] VFS: Disk quotas dquot_6.6.0
+2026-11-13T12:44:19.876359+00:00 hh-fp-wc5 systemd[1]: Started exim4-base.timer - Daily exim4-base housekeeping.
+2026-11-13T12:44:19.876365+00:00 hh-fp-wc5 kernel: [    0.836073] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+2026-11-13T12:44:19.876366+00:00 hh-fp-wc5 kernel: [    0.838284] AppArmor: AppArmor Filesystem Enabled
+2026-11-13T12:44:19.876366+00:00 hh-fp-wc5 kernel: [    0.839128] pnp: PnP ACPI init
+2026-11-13T12:44:19.876367+00:00 hh-fp-wc5 kernel: [    0.840733] pnp: PnP ACPI: found 7 devices
+2026-11-13T12:44:19.876363+00:00 hh-fp-wc5 systemd[1]: Started fstrim.timer - Discard unused blocks once a week.
+2026-11-13T12:44:19.876367+00:00 hh-fp-wc5 kernel: [    0.848778] clocksource: acpi_pm: mask: 0xffffff max_cycles: 0xffffff, max_idle_ns: 2085701024 ns
+2026-11-13T12:44:19.876368+00:00 hh-fp-wc5 kernel: [    0.850517] NET: Registered PF_INET protocol family
+2026-11-13T12:44:19.876369+00:00 hh-fp-wc5 systemd[1]: Started google-oslogin-cache.timer - NSS cache refresh timer.
+2026-11-13T12:44:19.876372+00:00 hh-fp-wc5 kernel: [    0.851783] IP idents hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+2026-11-13T12:44:19.876378+00:00 hh-fp-wc5 kernel: [    0.855951] tcp_listen_portaddr_hash hash table entries: 16384 (order: 6, 262144 bytes, linear)
+2026-11-13T12:44:19.876378+00:00 hh-fp-wc5 kernel: [    0.857979] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+2026-11-13T12:44:19.876378+00:00 hh-fp-wc5 kernel: [    0.860003] TCP established hash table entries: 262144 (order: 9, 2097152 bytes, linear)
+2026-11-13T12:44:19.876379+00:00 hh-fp-wc5 kernel: [    0.862420] TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+2026-11-13T12:44:19.876379+00:00 hh-fp-wc5 kernel: [    0.863857][[0;32m  OK  [0m] Reached target [0;1;39mnetwork-online.target[0m - Network is Online.
+ TCP: Hash tables configured (established 262144 bind 65536)
+2026-11-13T12:44:19.876379+00:00 hh-fp-wc5 kernel: [    0.865650] MPTCP token hash table entries: 32768 (order: 8, 786432 bytes, linear)
+2026-11-13T12:44:19.876378+00:00 hh-fp-wc5 systemd[1]: Started logrotate.timer - Daily rotation of log files.
+2026-11-13T12:44:19.876382+00:00 hh-fp-wc5 systemd[1]: Started man-db.timer - Daily man-db regeneration.
+2026-11-13T12:44:19.876384+00:00 hh-fp-wc5 kernel: [    0.867039] UDP hash table entries: 16384 (order: 7, 524288 bytes, linear)
+2026-11-13T12:44:19.876385+00:00 hh-fp-wc5 kernel: [    0.868553] UDP-Lite hash table entries: 16384 (order: 7, 524288 bytes, linear)
+2026-11-13T12:44:19.876385+00:00 hh-fp-wc5 kernel: [    0.869844] NET: Registered PF_UNIX/PF_LOCAL protocol family
+2026-11-13T12:44:19.876385+00:00 hh-fp-wc5 kernel: [    0.870810] NET: Registered PF_XDP protocol family
+2026-11-13T12:44:19.876386+00:00 hh-fp-wc5 kernel: [    0.871725] pci_bus 0000:00: resource 4 [io  0x0000-0x0cf7 window]
+2026-11-13T12:44:19.876386+00:00 hh-fp-wc5 kernel: [    0.873732] pci_bus 0000:00: resource 5 [io  0x0d00-0xffff window]
+2026-11-13T12:44:19.876386+00:00 hh-fp-wc5 systemd[1]: Started podman-auto-update.timer - Podman auto-update timer.
+2026-11-13T12:44:19.876390+00:00 hh-fp-wc5 kernel: [    0.875582] pci_bus 0000:00: resource 6 [mem 0x000a0000-0x000bffff window]
+2026-11-13T12:44:19.876391+00:00 hh-fp-wc5 kernel: [    0.876619] pci_bus 0000:00: resource 7 [mem 0xc0000000-0xfebfefff window]
+2026-11-13T12:44:19.876391+00:00 hh-fp-wc5 kernel: [    0.877678] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+2026-11-13T12:44:19.876392+00:00 hh-fp-wc5 kernel: [    0.878718] PCI: CLS 0 bytes, default 64
+2026-11-13T12:44:19.876392+00:00 hh-fp-wc5 kernel: [    0.879699] PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+2026-11-13T12:44:19.876391+00:00 hh-fp-wc5 systemd[1]: Started systemd-tmpfiles-clean.timer - Daily Cleanup of Temporary Directories.
+2026-11-13T12:44:19.876401+00:00 hh-fp-wc5 systemd[1]: Reached target timers.target - Timer Units.
+2026-11-13T12:44:19.876393+00:00 hh-fp-wc5 kernel: [    0.879843] Trying to unpack rootfs image as initramfs...
+2026-11-13T12:44:19.876407+00:00 hh-fp-wc5 kernel: [    0.880955] software IO TLB: mapped [mem 0x00000000b7eff000-0x00000000bbeff000] (64MB)
+2026-11-13T12:44:19.876405+00:00 hh-fp-wc5 systemd[1]: Listening on dbus.socket - D-Bus System Message Bus Socket.
+2026-11-13T12:44:19.876411+00:00 hh-fp-wc5 systemd[1]: Starting podman.socket - Podman API Socket...
+2026-11-13T12:44:19.876413+00:00 hh-fp-wc5 kernel: [    0.884874] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x206eb2111f5, max_idle_ns: 440795222471 ns
+2026-11-13T12:44:19.876414+00:00 hh-fp-wc5 kernel: [    0.887639] clocksource: Switched to clocksource tsc
+2026-11-13T12:44:19.876414+00:00 hh-fp-wc5 kernel: [    0.889350] Initialise system trusted keyrings
+2026-11-13T12:44:19.876414+00:00 hh-fp-wc5 kernel: [    0.890400] Key type blacklist registered
+2026-11-13T12:44:19.876415+00:00 hh-fp-wc5 kernel: [    0.891264] workingset: timestamp_bits=36 max_order=23 bucket_order=0
+2026-11-13T12:44:19.876415+00:00 hh-fp-wc5 kernel: [    0.895116] integrity: Platform Keyring initialized
+2026-11-13T12:44:19.876415+00:00 hh-fp-wc5 systemd[1]: Listening on uuidd.socket - UUID daemon activation socket.
+2026-11-13T12:44:19.876419+00:00 hh-fp-wc5 kernel: [    0.895905] integrity: Machine keyring initialized
+2026-11-13T12:44:19.876421+00:00 hh-fp-wc5 kernel: [    0.896630] Key type asymmetric registered
+2026-11-13T12:44:19.876419+00:00 hh-fp-wc5 systemd[1]: Starting google-disk-expand.service - Resize root filesystem if needed...
+2026-11-13T12:44:19.876431+00:00 hh-fp-wc5 systemd[1]: systemd-pcrphase-sysinit.service - TPM2 PCR Barrier (Initialization) was skipped because of an unmet condition check (ConditionPathExists=/sys/firmware/efi/efivars/StubPcrKernelImage-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f).
+2026-11-13T12:44:19.876421+00:00 hh-fp-wc5 kernel: [    0.897412] Asymmetric key parser 'x509' registered
+2026-11-13T12:44:19.876437+00:00 hh-fp-wc5 kernel: [    1.001952] Freeing initrd memory: 15168K
+2026-11-13T12:44:19.876437+00:00 hh-fp-wc5 kernel: [    1.009275] alg: self-tests for CTR-KDF (hmac(sha256)) passed
+2026-11-13T12:44:19.876438+00:00 hh-fp-wc5 kernel: [    1.010291] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 249)
+2026-11-13T12:44:19.876435+00:00 hh-fp-wc5 systemd[1]: Listening on podman.socket - Podman API Socket.
+2026-11-13T12:44:19.876443+00:00 hh-fp-wc5 kernel: [    1.011555] io scheduler mq-deadline registered
+2026-11-13T12:44:19.876441+00:00 hh-fp-wc5 systemd[1]: Reached target sockets.target - Socket Units.
+2026-11-13T12:44:19.876445+00:00 hh-fp-wc5 kernel: [    1.015010] Serial: 8250/16550 driver, 4 ports, IRQ sharing enabled
+2026-11-13T12:44:19.876447+00:00 hh-fp-wc5 kernel: [    1.016595] 00:03: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+2026-11-13T12:44:19.876447+00:00 hh-fp-wc5 kernel: [    1.018312] 00:04: ttyS1 at I/O 0x2f8 (irq = 3, base_baud = 115200) is a 16550A
+2026-11-13T12:44:19.876447+00:00 hh-fp-wc5 kernel: [    1.019850] 00:05: ttyS2 at I/O 0x3e8 (irq = 6, base_baud = 115200) is a 16550A
+2026-11-13T12:44:19.876448+00:00 hh-fp-wc5 kernel: [    1.022004] 00:06: ttyS3 at I/O 0x2e8 (irq = 7, base_baud = 115200) is a 16550A
+2026-11-13T12:44:19.876448+00:00 hh-fp-wc5 kernel: [    1.033041] tpm_tis MSFT0101:00: 2.0 TPM (device-id 0x9009, rev-id 0)
+2026-11-13T12:44:19.876448+00:00 hh-fp-wc5 google_disk_expand[464]: Checking if filesystem on /dev/sda1 needs resizing
+2026-11-13T12:44:19.876453+00:00 hh-fp-wc5 kernel: [    1.044016] i8042: PNP: PS/2 Controller [PNP0303:KBD,PNP0f13:MOU] at 0x60,0x64 irq 1,12
+2026-11-13T12:44:19.876454+00:00 hh-fp-wc5 kernel: [    1.045607] i8042: Warning: Keylock active
+2026-11-13T12:44:19.876452+00:00 hh-fp-wc5 google_disk_expand[467]: resize2fs 1.47.0 (5-Feb-2023)
+2026-11-13T12:44:19.876454+00:00 hh-fp-wc5 kernel: [    1.048767] serio: i8042 KBD port at 0x60,0x64 irq 1
+2026-11-13T12:44:19.876456+00:00 hh-fp-wc5 kernel: [    1.050669] serio: i8042 AUX port at 0x60,0x64 irq 12
+2026-11-13T12:44:19.876456+00:00 hh-fp-wc5 kernel: [    1.051941] rtc_cmos 00:00: RTC can wake from S4
+2026-11-13T12:44:19.876456+00:00 hh-fp-wc5 kernel: [    1.053708] rtc_cmos 00:00: registered as rtc0
+2026-11-13T12:44:19.876457+00:00 hh-fp-wc5 google_disk_expand[467]: The filesystem is already 78610176 (4k) blocks long.  Nothing to do!
+2026-11-13T12:44:19.876463+00:00 hh-fp-wc5 google_disk_expand[464]: Done.
+2026-11-13T12:44:19.876467+00:00 hh-fp-wc5 systemd[1]: google-disk-expand.service: Deactivated successfully.
+2026-11-13T12:44:19.876470+00:00 hh-fp-wc5 systemd[1]: Finished google-disk-expand.service - Resize root filesystem if needed.
+2026-11-13T12:44:19.876476+00:00 hh-fp-wc5 systemd[1]: Reached target basic.target - Basic System.
+2026-11-13T12:44:19.876480+00:00 hh-fp-wc5 systemd[1]: Started cron.service - Regular background program processing daemon.
+2026-11-13T12:44:19.876493+00:00 hh-fp-wc5 systemd[1]: Starting dbus.service - D-Bus System Message Bus...
+2026-11-13T12:44:19.876497+00:00 hh-fp-wc5 systemd[1]: Starting e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots...
+2026-11-13T12:44:19.876503+00:00 hh-fp-wc5 systemd[1]: getty-static.service - getty on tty2-tty6 if dbus and logind are not available was skipped because of an unmet condition check (ConditionPathExists=!/usr/bin/dbus-daemon).
+2026-11-13T12:44:19.876507+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Activating systemd to hand-off: service name='org.freedesktop.hostname1' unit='dbus-org.freedesktop.hostname1.service' requested by ':1.1' (uid=998 pid=342 comm="/lib/systemd/systemd-networkd")
+2026-11-13T12:44:19.876511+00:00 hh-fp-wc5 systemd[1]: Starting networkd-dispatcher.service - Dispatcher daemon for systemd-networkd...
+2026-11-13T12:44:19.876514+00:00 hh-fp-wc5 systemd[1]: nvmefc-boot-connections.service - Auto-connect to subsystems on FC-NVME devices found during boot was skipped because of an unmet condition check (ConditionPathExists=/sys/class/fc/fc_udev_device/nvme_disc         Starting [0;1;39mexim4.service[0m… LSB: exim Mail Transport Agent...
+overy).
+2026-11-13T12:44:19.876518+00:00 hh-fp-wc5 systemd[1]: Starting podman.service - Podman API Service...
+2026-11-13T12:44:19.876524+00:00 hh-fp-wc5 systemd[1]: Starting rsyslog.service - System Logging Service...
+2026-11-13T12:44:19.876527+00:00 hh-fp-wc5 systemd[1]: Starting systemd-logind.service - User Login Management...
+2026-11-13T12:44:19.876531+00:00 hh-fp-wc5 systemd[1]: systemd-pcrphase.service - TPM2 PCR Barrier (User) was skipped because of an unmet condition check (ConditionPathExists=/sys/firmware/efi/efivars/StubPcrKernelImage-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f).
+2026-11-13T12:44:19.876534+00:00 hh-fp-wc5 systemd[1]: Starting systemd-user-sessions.service - Permit User Sessions...
+2026-11-13T12:44:19.876550+00:00 hh-fp-wc5 kernel: [    1.054624] rtc_cmos 00:00: setting system clock to 2026-11-13T12:44:15 UTC (1794573855)
+2026-11-13T12:44:19.876551+00:00 hh-fp-wc5 kernel: [    1.056159] rtc_cmos 00:00: alarms up to one day, 114 bytes nvram
+2026-11-13T12:44:19.876551+00:00 hh-fp-wc5 kernel: [    1.057560] ledtrig-cpu: registered to indicate activity on CPUs
+2026-11-13T12:44:19.876552+00:00 hh-fp-wc5 kernel: [    1.070461] NET: Registered PF_INET6 protocol family
+2026-11-13T12:44:19.876552+00:00 hh-fp-wc5 kernel: [    1.078977] Segment Routing with IPv6
+2026-11-13T12:44:19.876553+00:00 hh-fp-wc5 kernel: [    1.080446] In-situ OAM (IOAM) with IPv6
+2026-11-13T12:44:19.876557+00:00 hh-fp-wc5 kernel: [    1.081287] mip6: Mobile IPv6
+2026-11-13T12:44:19.876557+00:00 hh-fp-wc5 kernel: [    1.081781] NET: Registered PF_PACKET protocol family
+2026-11-13T12:44:19.876557+00:00 hh-fp-wc5 kernel: [    1.082885] IPI shorthand broadcast: enabled
+2026-11-13T12:44:19.876558+00:00 hh-fp-wc5 kernel: [    1.084139] sched_clock: Marking stable (1072898913, 9906554)->(1090287355, -7481888)
+2026-11-13T12:44:19.876558+00:00 hh-fp-wc5 kernel: [    1.086298] registered taskstats version 1
+2026-11-13T12:44:19.876558+00:00 hh-fp-wc5 kernel: [    1.087118] Loading compiled-in X.509 certificates
+2026-11-13T12:44:19.876559+00:00 hh-fp-wc5 kernel: [    1.103810] Loaded X.509 cert 'Build time autogenerated kernel key: bcb001df0a5788ae2a2c82160a28e77c232471ff'
+2026-11-13T12:44:19.876563+00:00 hh-fp-wc5 kernel: [    1.106189] Key type .fscrypt registered
+2026-11-13T12:44:19.876563+00:00 hh-fp-wc5 kernel: [    1.106894] Key type fscrypt-provisioning registered
+2026-11-13T12:44:19.876564+00:00 hh-fp-wc5 kernel: [    1.114065] Key type encrypted registered
+2026-11-13T12:44:19.876564+00:00 hh-fp-wc5 kernel: [    1.114898] AppArmor: AppArmor sha1 policy hashing enabled
+2026-11-13T12:44:19.876564+00:00 hh-fp-wc5 kernel: [    1.116810] integrity: Loading X.509 certificate: UEFI:db
+2026-11-13T12:44:19.876565+00:00 hh-fp-wc5 kernel: [    1.118739] integrity: Loaded X.509 cert 'Microsoft Corporation UEFI CA 2011: 13adbf4309bd82709c8cd54f316ed522988a1bd4'
+2026-11-13T12:44:19.876569+00:00 hh-fp-wc5 kernel: [    1.120835] integrity: Loading X.509 certificate: UEFI:db
+2026-11-13T12:44:19.876569+00:00 hh-fp-wc5 kernel: [    1.121697] integrity: Loaded X.509 cert 'Microsoft Windows Production PCA 2011: a92902398e16c49778cd90f99e4f9ae17c55af53'
+2026-11-13T12:44:19.876570+00:00 hh-fp-wc5 kernel: [    1.123526] integrity: Loading X.509 certificate: UEFI:db
+2026-11-13T12:44:19.876570+00:00 hh-fp-wc5 kernel: [    1.124314] integrity: Loaded X.509 cert 'Microsoft Corporation: Windows UEFI CA 2023: aefc5fbbbe055d8f8daa585473499417ab5a5272'
+2026-11-13T12:44:19.876570+00:00 hh-fp-wc5 kernel: [    1.125984] integrity: Loading X.509 certificate: UEFI:db
+2026-11-13T12:44:19.876571+00:00 hh-fp-wc5 kernel: [    1.126756] integrity: Loaded X.509 cert 'Microsoft UEFI CA 2023: 81aa6b3244c935bce0d6628af39827421e32497d'
+2026-11-13T12:44:19.876582+00:00 hh-fp-wc5 kernel: [    1.130937] integrity: Loading X.509 certificate: UEFI:MokListRT (MOKvar table)
+2026-11-13T12:44:19.876583+00:00 hh-fp-wc5 kernel: [    1.132727] integrity: Loaded X.509 cert 'Debian Secure Boot CA: 6ccece7e4c6c0d1f6149f3dd27dfcc5cbb419ea1'
+2026-11-13T12:44:19.876583+00:00 hh-fp-wc5 kernel: [    1.134694] ima: Allocated hash algorithm: sha256
+2026-11-13T12:44:19.876583+00:00 hh-fp-wc5 kernel: [    1.143500] ima: Can not allocate sha384 (reason: -2)
+2026-11-13T12:44:19.876584+00:00 hh-fp-wc5 kernel: [    1.177296] evm: Initialising EVM extended attributes:
+2026-11-13T12:44:19.876584+00:00 hh-fp-wc5 kernel: [    1.177326] audit: type=1807 audit(1794573855.615:2): action=measure func=KEXEC_KERNEL_CHECK res=1
+2026-11-13T12:44:19.876589+00:00 hh-fp-wc5 kernel: [    1.178726] evm: security.selinux
+2026-11-13T12:44:19.876589+00:00 hh-fp-wc5 kernel: [    1.180335] audit: type=1807 audit(1794573855.615:3): action=measure func=MODULE_CHECK res=1
+2026-11-13T12:44:19.876589+00:00 hh-fp-wc5 kernel: [    1.180818] evm: security.SMACK64 (disabled)
+2026-11-13T12:44:19.876590+00:00 hh-fp-wc5 kernel: [    1.183254] evm: security.SMACK64EXEC (disabled)
+2026-11-13T12:44:19.876590+00:00 hh-fp-wc5 kernel: [    1.183894] evm: security.SMACK64TRANSMUTE (disabled)
+2026-11-13T12:44:19.876590+00:00 hh-fp-wc5 kernel: [    1.184589] evm: security.SMACK64MMAP (disabled)
+2026-11-13T12:44:19.876594+00:00 hh-fp-wc5 kernel: [    1.185289] evm: security.apparmor
+2026-11-13T12:44:19.876595+00:00 hh-fp-wc5 kernel: [    1.185804] evm: security.ima
+2026-11-13T12:44:19.876595+00:00 hh-fp-wc5 kernel: [    1.186508] evm: security.capability
+2026-11-13T12:44:19.876595+00:00 hh-fp-wc5 kernel: [    1.187064] evm: HMAC attrs: 0x1
+2026-11-13T12:44:19.876596+00:00 hh-fp-wc5 kernel: [    1.254547] input: AT Translated Set 2 keyboard as /devices/platform/i8042/serio0/input/input0
+2026-11-13T12:44:19.876596+00:00 hh-fp-wc5 kernel: [    1.259737] Lockdown: swapper/0: hibernation is restricted; see man kernel_lockdown.7
+2026-11-13T12:44:19.876603+00:00 hh-fp-wc5 kernel: [    1.264055] Freeing unused decrypted memory: 2036K
+2026-11-13T12:44:19.876606+00:00 hh-fp-wc5 kernel: [    1.265585] Freeing unused kernel image (initmem) memory: 2604K
+2026-11-13T12:44:19.876606+00:00 hh-fp-wc5 kernel: [    1.266449] Write protecting the kernel read-only data: 26624k
+         Starting [0;1;39mgoogle-guest-agen…gine Guest Agent Plugin Manager...
+2026-11-13T12:44:19.876606+00:00 hh-fp-wc5 kernel: [    1.268214] Freeing unused kernel image (text/rodata gap) memory: 2040K
+2026-11-13T12:44:19.876607+00:00 hh-fp-wc5 kernel: [    1.269727] Freeing unused kernel image (rodata/data gap) memory: 1904K
+2026-11-13T12:44:19.876607+00:00 hh-fp-wc5 kernel: [    1.273055] x86/mm: Checked W+X mappings: passed, no W+X pages found.
+2026-11-13T12:44:19.876607+00:00 hh-fp-wc5 kernel: [    1.274308] Run /init as init process
+2026-11-13T12:44:19.876612+00:00 hh-fp-wc5 kernel: [    1.274854]   with arguments:
+2026-11-13T12:44:19.876612+00:00 hh-fp-wc5 kernel: [    1.274856]     /init
+2026-11-13T12:44:19.876612+00:00 hh-fp-wc5 kernel: [    1.274858]   with environment:
+2026-11-13T12:44:19.876613+00:00 hh-fp-wc5 kernel: [    1.274859]     HOME=/
+2026-11-13T12:44:19.876613+00:00 hh-fp-wc5 kernel: [    1.274861]     TERM=linux
+2026-11-13T12:44:19.876613+00:00 hh-fp-wc5 kernel: [    1.400875] ACPI: \_SB_.LNKC: Enabled at IRQ 11
+2026-11-13T12:44:19.876618+00:00 hh-fp-wc5 kernel: [    1.401681] virtio-pci 0000:00:03.0: virtio_pci: leaving for legacy driver
+2026-11-13T12:44:19.876618+00:00 hh-fp-wc5 kernel: [    1.412899] ACPI: \_SB_.LNKD: Enabled at IRQ 10
+2026-11-13T12:44:19.876618+00:00 hh-fp-wc5 kernel: [    1.413773] virtio-pci 0000:00:04.0: virtio_pci: leaving for legacy driver
+2026-11-13T12:44:19.876619+00:00 hh-fp-wc5 kernel: [    1.426688] ACPI: \_SB_.LNKA: Enabled at IRQ 10
+2026-11-13T12:44:19.876619+00:00 hh-fp-wc5 kernel: [    1.427563] virtio-pci 0000:00:05.0: virtio_pci: leaving for legacy driver
+2026-11-13T12:44:19.876619+00:00 hh-fp-wc5 kernel: [    1.438042] ACPI: \_SB_.LNKB: Enabled at IRQ 11
+2026-11-13T12:44:19.876620+00:00 hh-fp-wc5 kernel: [    1.438798] virtio-pci 0000:00:06.0: virtio_pci: leaving for legacy driver
+2026-11-13T12:44:19.876624+00:00 hh-fp-wc5 kernel: [    1.628691] SCSI subsystem initialized
+2026-11-13T12:44:19.876625+00:00 hh-fp-wc5 kernel: [    1.948869] virtio_net virtio1 ens4: renamed from eth0
+2026-11-13T12:44:19.876625+00:00 hh-fp-wc5 kernel: [    1.991316] scsi host0: Virtio SCSI HBA
+2026-11-13T12:44:19.876625+00:00 hh-fp-wc5 kernel: [    1.992491] blk-mq: reduced tag depth to 10240
+2026-11-13T12:44:19.876626+00:00 hh-fp-wc5 kernel: [    2.028067] scsi 0:0:1:0: Direct-Access     Google   PersistentDisk   1    PQ: 0 ANSI: 6
+2026-11-13T12:44:19.876626+00:00 hh-fp-wc5 kernel: [    2.055451] sd 0:0:1:0: [sda] 629145600 512-byte logical blocks: (322 GB/300 GiB)
+2026-11-13T12:44:19.876634+00:00 hh-fp-wc5 kernel: [    2.057005] sd 0:0:1:0: [sda] 4096-byte physical blocks
+2026-11-13T12:44:19.876634+00:00 hh-fp-wc5 kernel: [    2.057798] sd 0:0:1:0: [sda] Write Protect is off
+2026-11-13T12:44:19.876635+00:00 hh-fp-wc5 kernel: [    2.058826] sd 0:0:1:0: [sda] Mode Sense: 1f 00 10 08
+2026-11-13T12:44:19.876635+00:00 hh-fp-wc5 kernel: [    2.058968] sd 0:0:1:0: [sda] Write cache: enabled, read cache: enabled, supports DPO and FUA
+2026-11-13T12:44:19.876635+00:00 hh-fp-wc5 kernel: [    2.067833]  sda: sda1 sda14 sda15
+2026-11-13T12:44:19.876636+00:00 hh-fp-wc5 kernel: [    2.069249] sd 0:0:1:0: [sda] Attached SCSI disk
+2026-11-13T12:44:19.876640+00:00 hh-fp-wc5 kernel: [    2.214313]  sda: sda1 sda14 sda15
+2026-11-13T12:44:19.876641+00:00 hh-fp-wc5 kernel: [    2.370246] EXT4-fs (sda1): mounted filesystem with ordered data mode. Quota mode: none.
+2026-11-13T12:44:19.876641+00:00 hh-fp-wc5 kernel: [    2.411656] Not activating Mandatory Access Control as /sbin/tomoyo-init does not exist.
+2026-11-13T12:44:19.876689+00:00 hh-fp-wc5 kernel: [    3.835864] device-mapper: core: CONFIG_IMA_DISABLE_HTABLE is disabled. Duplicate IMA measurements will not be recorded in the IMA log.
+2026-11-13T12:44:19.876689+00:00 hh-fp-wc5 kernel: [    3.838119] device-mapper: uevent: version 1.0.3
+2026-11-13T12:44:19.876689+00:00 hh-fp-wc5 kernel: [    3.839092] device-mapper: ioctl: 4.47.0-ioctl (2022-07-28) initialised: dm-devel@redhat.com
+2026-11-13T12:44:19.876690+00:00 hh-fp-wc5 kernel: [    3.856776] pstore: Using crash dump compression: deflate
+2026-11-13T12:44:19.876694+00:00 hh-fp-wc5 kernel: [    3.869509] pstore: Registered efi as persistent store backend
+2026-11-13T12:44:19.876695+00:00 hh-fp-wc5 kernel: [    3.887612] fuse: init (API version 7.38)
+2026-11-13T12:44:19.876695+00:00 hh-fp-wc5 kernel: [    3.892441] loop: module loaded
+2026-11-13T12:44:19.876696+00:00 hh-fp-wc5 kernel: [    3.951820] EXT4-fs (sda1): re-mounted. Quota mode: none.
+2026-11-13T12:44:19.876696+00:00 hh-fp-wc5 kernel: [    4.279591] EXT4-fs (sda1): resizing filesystem from 78610176 to 78610176 blocks
+2026-11-13T12:44:19.876697+00:00 hh-fp-wc5 kernel: [    4.581671] input: Power Button as /devices/LNXSYSTM:00/LNXPWRBN:00/input/input3
+2026-11-13T12:44:19.876701+00:00 hh-fp-wc5 kernel: [    4.587787] sd 0:0:1:0: Attached scsi generic sg0 type 0
+2026-11-13T12:44:19.876701+00:00 hh-fp-wc5 kernel: [    4.587870] cryptd: max_cpu_qlen set to 1000
+2026-11-13T12:44:19.876702+00:00 hh-fp-wc5 kernel: [    4.836753] Free page reporting enabled
+2026-11-13T12:44:19.876702+00:00 hh-fp-wc5 kernel: [    4.875225] ACPI: button: Power Button [PWRF]
+2026-11-13T12:44:19.876702+00:00 hh-fp-wc5 kernel: [    4.891451] AVX2 version of gcm_enc/dec engaged.
+2026-11-13T12:44:19.876703+00:00 hh-fp-wc5 kernel: [    4.892675] AES CTR mode by8 optimization enabled
+2026-11-13T12:44:19.876707+00:00 hh-fp-wc5 kernel: [    4.895070] input: Sleep Button as /devices/LNXSYSTM:00/LNXSLPBN:00/input/input4
+2026-11-13T12:44:19.876707+00:00 hh-fp-wc5 kernel: [    4.897858] ACPI: button: Sleep Button [SLPF]
+2026-11-13T12:44:19.876708+00:00 hh-fp-wc5 kernel: [    5.195627] audit: type=1400 audit(1794573859.635:4): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/sbin/haveged" pid=454 comm="apparmor_parser"
+2026-11-13T12:44:19.876708+00:00 hh-fp-wc5 kernel: [    5.198211] audit: type=1400 audit(1794573859.635:5): apparmor="STATUS" operation="profile_load" profile="unconfined" name="lsb_release" pid=449 comm="apparmor_parser"
+2026-11-13T12:44:19.876709+00:00 hh-fp-wc5 kernel: [    5.200900] audit: type=1400 audit(1794573859.635:6): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe" pid=450 comm="apparmor_parser"
+2026-11-13T12:44:19.876709+00:00 hh-fp-wc5 kernel: [    5.203135] audit: type=1400 audit(1794573859.635:7): apparmor="STATUS" operation="profile_load" profile="unconfined" name="nvidia_modprobe//kmod" pid=450 comm="apparmor_parser"
+2026-11-13T12:44:19.876713+00:00 hh-fp-wc5 kernel: [    5.205440] audit: type=1400 audit(1794573859.635:8): apparmor="STATUS" operation="profile_load" profile="unconfined" name="/usr/bin/man" pid=452 comm="apparmor_parser"
+2026-11-13T12:44:19.876714+00:00 hh-fp-wc5 kernel: [    5.208057] audit: type=1400 audit(1794573859.635:9): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_filter" pid=452 comm="apparmor_parser"
+2026-11-13T12:44:19.876714+00:00 hh-fp-wc5 kernel: [    5.210157] audit: type=1400 audit(1794573859.635:10): apparmor="STATUS" operation="profile_load" profile="unconfined" name="man_groff" pid=452 comm="apparmor_parser"
+2026-11-13T12:44:19.885001+00:00 hh-fp-wc5 systemd[1]: Started dbus.service - D-Bus System Message Bus.
+2026-11-13T12:44:19.888168+00:00 hh-fp-wc5 systemd[1]: Started rsyslog.service - System Logging Service.
+2026-11-13T12:44:19.888903+00:00 hh-fp-wc5 systemd[1]: e2scrub_reap.service: Deactivated successfully.
+2026-11-13T12:44:19.889351+00:00 hh-fp-wc5 systemd[1]: Finished e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots.
+2026-11-13T12:44:19.890386+00:00 hh-fp-wc5 systemd[1]: Finished systemd-user-sessions.service - Permit User Sessions.
+2026-11-13T12:44:19.890651+00:00 hh-fp-wc5 systemd[1]: Started podman.service - Podman API Service.
+2026-11-13T12:44:19.891724+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Successfully activated service 'org.freedesktop.systemd1'
+2026-11-13T12:44:19.893177+00:00 hh-fp-wc5 systemd[1]: Started getty@tty1.service - Getty on tty1.
+2026-11-13T12:44:20.064738+00:00 hh-fp-wc5 systemd[1]: Started serial-getty@ttyS0.service - Serial Getty on ttyS0.
+2026-11-13T12:44:20.         Starting [0;1;39mgoogle-guest-comp…ute Engine Guest Compat Manager...
+085173+00:00 hh-fp-wc5 networkd-dispatcher[472]: No valid path found for iwconfig
+2026-11-13T12:44:20.085251+00:00 hh-fp-wc5 networkd-dispatcher[472]: No valid path found for iw
+2026-11-13T12:44:20.151150+00:00 hh-fp-wc5 podman[474]: time="2026-11-13T12:44:20Z" level=info msg="/usr/bin/podman filtering at log level info"
+2026-11-13T12:44:20.209749+00:00 hh-fp-wc5 podman[474]: time="2026-11-13T12:44:20Z" level=info msg="[graphdriver] using prior storage driver: overlay"
+2026-11-13T12:44:20.216959+00:00 hh-fp-wc5 networkd-dispatcher[494]:   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-13T12:44:20.217262+00:00 hh-fp-wc5 networkd-dispatcher[494]:                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-13T12:44:20.221908+00:00 hh-fp-wc5 networkd-dispatcher[494]: #015  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0#015100  4169  100  4169    0     0   768k      0 --:--:-- --:--:-- --:--:--  814k
+2026-11-13T12:44:20.245767+00:00 hh-fp-wc5 podman[474]: time="2026-11-13T12:44:20Z" level=info msg="Setting parallel job count to 25"
+2026-11-13T12:44:20.245828+00:00 hh-fp-wc5 podman[474]: time="2026-11-13T12:44:20Z" level=info msg="Using systemd socket activation to determine API endpoint"
+2026-11-13T12:44:20.246817+00:00 hh-fp-wc5 podman[474]: time="2026-11-13T12:44:20Z" level=info msg="API serv2026-11-13T12:44:25.654243+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Initializing Google Guest Agent...
+2026-11-13T12:44:25.654845+00:00 hh-fp-wc5 google_guest_agent_ma2026-11-13T12:44:25.674194+00:00 hh-fp-wc5 podman[553]: time="2026-11-13T12:44:25Z" level=info msg="/usr/bin/podman filtering at log level info"
+2026-11-13T12:44:25.679040+00:00 hh-fp-wc5 podman[553]: time="2026-11-13T12:44:25Z" level=info msg="[graphdriver] using prior storage driver: overlay"
+2026-11-13T12:44:25.682866+00:00 hh-fp-wc5 systemd[1]: nvmf-autoconnect.service: Deactivated successfully.
+2026-11-13T12:44:25.683256+00:00 hh-fp-wc5 exim4[517]: Starting MTA:
+2026-11-13T12:44:25.683391+00:00 hh-fp-wc5 exim4[596]: /usr/sbin/update-exim4.conf: 154: cannot open /etc/mailname: No such file
+2026-11-13T12:44:25.683445+00:00 hh-fp-wc5 systemd[1]: Finished nvmf-autoconnect.service - Connect NVMe-oF subsystems automatically during boot.
+2026-11-13T12:44:25.683786+00:00 hh-fp-wc5 podman[553]: time="2026-11-13T12:44:25Z" level=info msg="Setting parallel job count to 25"
+2026-11-13T12:44:25.695429+00:00 hh-fp-wc5 systemd[1]: var-lib-containers-storage-overlay.mount: Deactivated successfully.
+2026-11-13T12:44:25.709120+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Successfully activated service 'org.freedesktop.hostname1'
+2026-11-13T12:44:25.709237+00:00 hh-fp-wc5 systemd[1]: Started systemd-hostnamed.service - Hostname Service.
+2026-11-13T12:44:25.709918+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Activating via systemd: service name='org.freedesktop.PolicyKit1' unit='polkit.service' requested by ':1.8' (uid=0 pid=554 comm="/lib/systemd/systemd-hostnamed")
+2026-11-13T12:44:25.713386+00:00 hh-fp-wc5 systemd[1]: Starting polkit.service - Authorization Manager...
+2026-11-13T12:44:25.726498+00:00 hh-fp-wc5 polkitd[635]: Started polkitd version 122
+2026-11-13T12:44:25.744865+00:00 hh-fp-wc5 systemd[1]: var-lib-containers-storage-overlay.mount: Deactivated successfully.
+2026-11-13T12:44:25.746469+00:00 hh-fp-wc5 systemd[1]: Finished podman-restart.service - Podman Start All Containers With Restart Policy Set To Always.
+2026-11-13T12:44:25.748255+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Successfully activated service 'org.freedesktop.PolicyKit1'
+2026-11-13T12:44:25.748396+00:00 hh-fp-wc5 systemd[1]: Started polkit.service - Authorization Manager.
+2026-11-13T12:44:25.760708+00:00 hh-fp-wc5 systemd-hostnamed[554]: Hostname set to <hh-fp-wc5> (static)
+2026-11-13T12:44:25.783271+00:00 hh-fp-wc5 OSConfigAgent[541]: 2026-11-13T12:44:25.7828Z OSConfigAgent Info: OSConfig Agent (version 20260928.00-g1) started.
+2026-11-13T12:44:25.783432+00:00 hh-fp-wc5 systemd[1]: podman-auto-update.service: Deactivated successfully.
+2026-11-13T12:44:25.783508+00:00 hh-fp-wc5 systemd[1]: Finished podman-auto-update.service - Podman auto-update service.
+2026-11-13T12:44:25.911825+00:00 hh-fp-wc5 exim4[517]:  exim4.
+2026-11-13T12:44:25.912397+00:00 hh-fp-wc5 systemd[1]: Started exim4.service - LSB: exim Mail Transport Agent.
+
+Debian GNU/Linux 12 hh-fp-wc5 ttyS0
+
+hh-fp-wc5 login: 2026-11-13T12:44:27.665594+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Kill GuestAgentCorePlugin_20260921.00 plugin process completed with: "GuestAgentCorePlugin_20260921.00" plugin process(576) not found: process 576 does not exist, "/proc/576" not found
+2026-11-13T12:44:27.665727+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Kill GuestTelemetryExtension_1.1 plugin process completed with: "GuestTelemetryExtension_1.1" plugin process(849) not found: process 849 does not exist, "/proc/849" not found
+2026-11-13T12:44:27.665774+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Kill ManagedWorkloadIdentityExtension_1.0 plugin process completed with: "ManagedWorkloadIdentityExtension_1.0" plugin process(848) not found: process 848 does not exist, "/proc/848" not found
+2026-11-13T12:44:27.829652+00:00 hh-fp-wc5 google_guest_agent[865]: Initializing core plugin server...
+2026-11-13T12:44:27.829776+00:00 hh-fp-wc5 google_guest_agent[865]: Core plugin server listening on "/run/google-guest-agent/plugin-connections/GuestAgentCorePlugin_20260921.00.sock" using "unix"
+2026-11-13T12:44:27.830011+00:00 hh-fp-wc5 mwlid_extension[866]: Starting grpc server
+2026-11-13T12:44:27.830094+00:00 hh-fp-wc5 google_guest_agent[865]: Core plugin server registered. Starting to serve requests...
+2026-11-13T12:44:28.676200+00:00 hh-fp-wc5 mwlid_extension[866]: Starting extension
+2026-11-13T12:44:28.676738+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Successfully started plugin "ManagedWorkloadIdentityExtension_1.0"
+2026-11-13T12:44:28.676890+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin monitor job for plugin "ManagedWorkloadIdentity[   14.726381] Guest personality initialized and is inactive
+Extension_1.0"
+[   14.732841] VMCI host device registered (name=vmci, major=10, minor=123)
+2026-11-13T12:44[   14.741192] Initialized host personality
+:28.677001+00:00 hh-fp-wc5 mwlid_extension[866]: MWLID credentia[   14.752061] NET: Registered PF_VSOCK protocol family
+l refresh is not enabled, skipping run
+2026-11-13T12:44:28.677388+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin metrics monitor job for plugin "ManagedWorkloadIdentityExtension_1.0"
+2026-11-13T12:44:28.679196+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Instance has service account: false, setting ACS client isEnabled to false
+2026-11-13T12:44:28.681666+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Successfully started plugin "GuestTelemetryExtension_1.1"
+2026-11-13T12:44:28.681818+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin monitor job for plugin "GuestTelemetryExtension_1.1"
+2026-11-13T12:44:28.681942+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Successfully started plugin "GuestAgentCorePlugin_20260921.00"
+2026-11-13T12:44:28.682098+00:00 hh-fp-wc5 google_guest_agent[865]: Running core plugin...
+2026-11-13T12:44:28.682164+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Plugin manager initialized
+2026-11-13T12:44:28.682383+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting local plugins
+2026-11-13T12:44:28.682502+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin metrics monitor job for plugin "GuestTelemetryExtension_1.1"
+2026-11-13T12:44:28.682725+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin monitor job for plugin "GuestAgentCorePlugin_20260921.00"
+2026-11-13T12:44:28.683614+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Starting plugin metrics monitor job for plugin "GuestAgentCorePlugin_20260921.00"
+2026-11-13T12:44:28.685782+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Plugin "GuestAgentCorePlugin" already locally installed with revision "20260921.00", skipping local installation
+2026-11-13T12:44:28.686104+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Plugin "GuestTelemetryExtension" already locally installed with revision "1.1", skipping local installation
+2026-11-13T12:44:28.686550+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Plugin "ManagedWorkloadIdentityExtension" already locally installed with revision "1.0", skipping local installation
+2026-11-13T12:44:28.686635+00:00 hh-fp-wc5 google_guest_agent_manager[520]: No local plugins to install
+2026-11-13T12:44:28.686756+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Creating metric registry for "events_manager" with flush interval: 1m0s, max records: 10
+2026-11-13T12:44:28.691711+00:00 hh-fp-wc5 google_guest_agent[865]: Instance id is already set, no update required.
+2026-11-13T12:44:28.697221+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Cloud logging initialized (google_guest_agent_manager)
+2026-11-13T12:44:28.721438+00:00 hh-fp-wc5 google_guest_agent[865]: Running linux network management module setup.
+2026-11-13T12:44:28.723315+00:00 hh-fp-wc5 kernel: [   14.726381] Guest personality initialized and is inactive
+2026-11-13T12:44:28.723329+00:00 hh-fp-wc5 kernel: [   14.732841] VMCI host device registered (name=vmci, major=10, minor=123)
+2026-11-13T12:44:28.723331+00:00 hh-fp-wc5 kernel: [   14.741192] Initialized host personality
+2026-11-13T12:44:28.740026+00:00 hh-fp-wc5 kernel: [   14.752061] NET: Registered PF_VSOCK protocol family
+2026-11-13T12:44:28.744613+00:00 hh-fp-wc5 google_guest_agent[865]: Rolling back changes for netplan with reload [false]
+2026-11-13T12:44:28.745259+00:00 hh-fp-wc5 google_guest_agent[865]: Rolling back changes for NetworkManager with reload [true].
+2026-11-13T12:44:28.746152+00:00 hh-fp-wc5 google_guest_agent[865]: Rolling back changes for systemd-networkd with reload [true].
+2026-11-13T12:44:28.746260+00:00 hh-fp-wc5 google_guest_agent[865]: Rolling back changes for wicked with reload [true].
+2026-11-13T12:44:28.746310+00:00 hh-fp-wc5 google_guest_agent[865]: Rolling back changes for dhclient.
+2026-11-13T12:44:28.753084+00:00 hh-fp-wc5 google_guest_agent[865]: Rolled back network configuration for [netplan NetworkManager systemd-networkd wicked dhclient].
+2026-11-13T12:44:28.753211+00:00 hh-fp-wc5 google_guest_agent[865]: Setting up netplan interfaces.
+2026-11-13T12:44:29.056275+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: Reconfiguring with /run/systemd/network/10-netplan-all-en.network.
+2026-11-13T12:44:29.056391+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: DHCP lease lost
+2026-11-13T12:44:29.092373+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: DHCPv6 lease lost
+2026-11-13T12:44:29.148374+00:00 hh-fp-wc5 systemd-networkd[342]: ens4: DHCPv4 address 10.128.0.10/32, gateway 10.128.0.1 acquired from 169.254.169.254
+2026-11-13T12:44:29.149803+00:00 hh-fp-wc5 google_guest_agent[865]: Finished setting up netplan interfaces.
+2026-11-13T12:44:29.156155+00:00 hh-fp-wc5 google_guest_agent[865]: Finished linux network management module setup.
+2026-11-13T12:44:29.170838+00:00 hh-fp-wc5 networkd-dispatcher[922]:   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-11-13T12:44:29.171009+00:00 hh-fp-wc5 networkd-dispatcher[922]:                                  Dload  Upload   Total   Spent    Left  Speed
+2026-11-13T12:44:29.172398+00:00 hh-fp-wc5 networkd-dispatcher[922]: #015  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0#015100  4169  100  4169    0     0  2118k      0 --:--:-- --:--:-- --:--:-- 4071k
+2026-11-13T12:44:29.220808+00:00 hh-fp-wc5 google_guest_agent[865]: Initialized (version: "20260921.00")
+2026-11-13T12:44:29.223312+00:00 hh-fp-wc5 google_guest_agent[865]: Adjtime file "/etc/adjtime" does not exist, checking timedatectl status for rtc mode
+2026-11-13T12:44:29.223395+00:00 hh-fp-wc5 google_guest_agent[865]: Instance id is already set, no update required.
+2026-11-13T12:44:29.223595+00:00 hh-fp-wc5 google_guest_agent[865]: Creating metric registry for "scheduled-job-manager" with flush interval: 1m0s, max records: 10
+2026-11-13T12:44:29.227111+00:00 hh-fp-wc5 google_guest_agent[865]: Instance has service account: false, setting ACS client isEnabled to false
+2026-11-13T12:44:29.231534+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Activating via systemd: service name='org.freedesktop.timedate1' unit='dbus-org.freedesktop.timedate1.service' requested by ':1.13' (uid=0 pid=928 comm="timedatectl status")
+2026-11-13T12:44:29.237643+00:00 hh-fp-wc5 google_guest_agent[865]: Bootstrapping MDS mTLS credentials
+2026-11-13T12:44:29.237757+00:00 hh-fp-wc5 google_guest_agent[865]: Installing Root CA cert...
+2026-11-13T12:44:29.240226+00:00 hh-fp-wc5 google_guest_agent[865]: Successfully installed Root CA cert
+2026-11-13T12:44:29.240338+00:00 hh-fp-wc5 google_guest_agent[865]: Installing client credentials...
+2026-11-13T12:44:29.264740+00:00 hh-fp-wc5 systemd[1]: Starting systemd-timedated.service - Time & Date Service...
+2026-11-13T12:44:29.309694+00:00 hh-fp-wc5 dbus-daemon[470]: [system] Successfully activated service 'org.freedesktop.timedate1'
+2026-11-13T12:44:29.309802+00:00 hh-fp-wc5 systemd[1]: Started systemd-timedated.service - Time & Date Service.
+2026-11-13T12:44:29.316267+00:00 hh-fp-wc5 google_guest_agent[865]: Identified RTC mode isUTC to be: [true] from "/etc/adjtime"
+2026-11-13T12:44:29.316376+00:00 hh-fp-wc5 google_guest_agent[865]: Clock drift token has changed, resetting clock skew.
+2026-11-13T12:44:29.336826+00:00 hh-fp-wc5 google_guest_agent[865]: Successfully installed client credentials
+2026-11-13T12:44:29.337067+00:00 hh-fp-wc5 google_guest_agent[865]: Successfully bootstrapped MDS mTLS credentials
+2026-11-13T12:44:30.000573+00:00 hh-fp-wc5 systemd-resolved[457]: Clock change detected. Flushing caches.
+2026-11-13T12:44:30.001147+00:00 hh-fp-wc5 google_guest_agent[865]: Creating metric registry for "events_manager" with flush interval: 1m0s, max records: 10
+2026-11-13T12:44:30.011674+00:00 hh-fp-wc5 google_guest_agent[865]: Cloud logging initialized (core_plugin)
+2026-11-13T12:44:30.694028+00:00 hh-fp-wc5 systemd[1]: Started google-guest-agent-manager.service - Google Compute Engine Guest Agent Plugin Manager.
+2026-11-13T12:44:30.695231+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Google Guest Agent (version: "20260921.00") Initialized...
+2026-11-13T12:44:30.723097+00:00 hh-fp-wc5 systemd[1]: Starting google-startup-scripts.service - Google Compute Engine Startup Scripts...
+2026-11-13T12:44:30.727700+00:00 hh-fp-wc5 systemd[1]: Starting ssh.service - OpenBSD Secure Shell server...
+2026-11-13T12:44:30.771361+00:00 hh-fp-wc5 systemd[1]: Started ssh.service - OpenBSD Secure Shell server.
+2026-11-13T12:44:30.863132+00:00 hh-fp-wc5 google_compat_metadata_script_runner[1047]: Initialized Metadata Script Runner Compat (version 20260921.00)
+2026-11-13T12:44:30.863866+00:00 hh-fp-wc5 google_compat_metadata_script_runner[1047]: Enable core plugin set to: [true], launching script runner for event "startup" from "/usr/bin/gce_metadata_script_runner"
+2026-11-13T12:44:31.102826+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Running metadata script runner (version 20260921.00) for "startup" event
+2026-11-13T12:44:31.104371+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Found startup-script in metadata
+2026-11-13T12:44:31.149812+00:00 hh-fp-wc5 google_guest_agent[865]: Interface(lo) - State: {Index:1 MTU:65536 Name:lo HardwareAddr: Flags:up|loopback|running}, Addrs: [127.0.0.1/8 ::1/128]
+2026-11-13T12:44:31.149943+00:00 hh-fp-wc5 google_guest_agent[865]: Interface(ens4) - State: {Index:2 MTU:1460 Name:ens4 HardwareAddr:42:01:0a:80:00:0a Flags:up|broadcast|multicast|running}, Addrs: [10.128.0.10/32 fe80::4001:aff:fe80:a/64]
+2026-11-13T12:44:31.152611+00:00 hh-fp-wc5 google_guest_agent[865]: Local Routes: local 10.128.0.10 dev ens4 proto kernel scope host src 10.128.0.10 #012local 127.0.0.0/8 dev lo proto kernel scope host src 127.0.0.1 #012local 127.0.0.1 dev lo proto kernel scope host src 127.0.0.1 #012broadcast 127.255.255.255 dev lo proto kernel scope link src 127.0.0.1 
+2026-11-13T12:44:31.192909+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:31.383626+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:31.548130+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:31.721459+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:31.903671+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:32.171541+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:1 file:/etc/apt/mirrors/debian.list Mirrorlist [30 B]
+2026-11-13T12:44:32.179132+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:5 file:/etc/apt/mirrors/debian-security.list Mirrorlist [39 B]
+2026-11-13T12:44:32.244728+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Hit:7 https://packages.cloud.google.com/apt google-compute-engine-bookworm-stable InRelease
+2026-11-13T12:44:32.258703+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Hit:2 https://deb.debian.org/debian bookworm InRelease
+2026-11-13T12:44:32.271076+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:3 https://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+2026-11-13T12:44:32.278096+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Hit:8 https://packages.cloud.google.com/apt cloud-sdk-bookworm InRelease
+2026-11-13T12:44:32.296824+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:4 https://deb.debian.org/debian bookworm-backports InRelease [59.4 kB]
+2026-11-13T12:44:32.311989+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:6 https://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+2026-11-13T12:44:32.834645+00:00 hh-fp-wc5 mwlid_extension[866]: Cloud Logging Client Error: rpc error: code = Unauthenticated desc = transport: per-RPC creds failed due to error: credentials: cannot fetch token: metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Flogging.write" not defined
+2026-11-13T12:44:32.863550+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Get:9 https://deb.debian.org/debian-security bookworm-security/main Sources [288 kB]
+2026-11-13T12:44:32.939679+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Fetched 438 kB in 1s (554 kB/s)
+2026-11-13T12:44:33.804934+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Reading package lists...
+2026-11-13T12:44:33.834820+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Reading package lists...
+2026-11-13T12:44:33.859014+00:00 hh-fp-wc5 google_guest_agent_manager[520]: Cloud Logging Client Error: rpc error: code = Unauthenticated desc = transport: per-RPC creds failed due to error: credentials: cannot fetch token: metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Flogging.write" not defined
+2026-11-13T12:44:34.014560+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Building dependency tree...
+2026-11-13T12:44:34.015860+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Reading state information...
+2026-11-13T12:44:34.166625+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): podman is already the newest version (4.3.1+ds1-8+deb12u1+b3).
+2026-11-13T12:44:34.166775+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): crun is already the newest version (1.8.1-1+deb12u1).
+2026-11-13T12:44:34.166856+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): conmon is already the newest version (2.1.6+ds1-1).
+2026-11-13T12:44:34.166916+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): netavark is already the newest version (1.4.0-3).
+2026-11-13T12:44:34.166972+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): podman-compose is already the newest version (1.0.3-3).
+2026-11-13T12:44:34.167260+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): 0 upgraded, 0 newly installed, 0 to remove and 24 not upgraded.
+2026-11-13T12:44:34.194861+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:34.380225+00:00 hh-fp-wc5 systemd[1]: Reloading.
+2026-11-13T12:44:34.561801+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): Shutdown scheduled for Fri 2026-11-13 18:59:34 UTC, use 'shutdown -c' to cancel.
+2026-11-13T12:44:34.562160+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Metadata key("startup-script"), command("/bin/bash"): hh-window-startup: done (dead-man 375m armed)
+2026-11-13T12:44:34.562735+00:00 hh-fp-wc5 google_metadata_script_runner[1055]: Finished running startup scripts
+2026-11-13T12:44:34.568998+00:00 hh-fp-wc5 systemd[1]: google-startup-scripts.service: Deactivated successfully.
+[[0;32m  OK  [0m] Finished [0;1;39mgoogle-startup-sc…le Compute Engine Startup Scripts.
+2026-11-13T12:44:34.569314+00:00 hh-fp-wc5 systemd[1]: Finished google-startup-scripts.service - Google Compute Engine Startup Scripts.
+2026-11-13T12:44:34.569690+00:00 hh-fp-wc5 systemd[1]: google-startup-scripts.service: Consumed 2.193s CPU time.
+[[0;32m  OK  [0m] Reached target [0;1;39mmulti-user.target[0m - Multi-User System.
+2026-11-13T12:44:34.569806+00:00 hh-fp-wc5 systemd[1]: Reached target multi-user.target - Multi-User System.
+[[0;32m  OK  [0m] Reached target [0;1;39mgraphical.target[0m - Graphical Interface.
+2026-11-13T12:44:34.569913+00:00 hh-fp-wc5 systemd[1]: Reached target graphical.target - Graphical Interface.
+         Starting [0;1;39msystemd-update-ut… Record Runlevel Change in UTMP...
+2026-11-13T12:44:34.594963+00:00 hh-fp-wc5 systemd[1]: Starting systemd-update-utmp-runlevel.service - Record Runlevel Change in UTMP...
+[[0;32m  OK  [0m] Finished [0;1;39msystemd-update-ut… - Record Runlevel Change in UTMP.
+2026-11-13T12:44:34.604402+00:00 hh-fp-wc5 systemd[1]: systemd-update-utmp-runlevel.service: Deactivated successfully.
+2026-11-13T12:44:34.604571+00:00 hh-fp-wc5 systemd[1]: Finished systemd-update-utmp-runlevel.service - Record Runlevel Change in UTMP.
+2026-11-13T12:44:34.604831+00:00 hh-fp-wc5 systemd[1]: Startup finished in 2.586s (kernel) + 18.028s (userspace) = 20.614s.
+2026-11-13T12:44:35.033039+00:00 hh-fp-wc5 google_guest_agent[865]: Cloud Logging Client Error: rpc error: code = Unauthenticated desc = transport: per-RPC creds failed due to error: credentials: cannot fetch token: metadata: GCE metadata "instance/service-accounts/default/token?scopes=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Flogging.write" not defined
+2026-11-13T12:44:59.183920+00:00 hh-fp-wc5 systemd[1]: systemd-hostnamed.service: Deactivated successfully.
+2026-11-13T12:44:59.345394+00:00 hh-fp-wc5 systemd[1]: systemd-timedated.service: Deactivated successfully.
+2026-11-13T12:45:01.474922+00:00 hh-fp-wc5 systemd[1]: Created slice user-1000.slice - User Slice of UID 1000.
+2026-11-13T12:45:01.494985+00:00 hh-fp-wc5 systemd[1]: Starting user-runtime-dir@1000.service - User Runtime Directory /run/user/1000...
+2026-11-13T12:45:01.506557+00:00 hh-fp-wc5 systemd[1]: Finished user-runtime-dir@1000.service - User Runtime Directory /run/user/1000.
+2026-11-13T12:45:01.508239+00:00 hh-fp-wc5 systemd[1]: Starting user@1000.service - User Manager for UID 1000...
+2026-11-13T12:45:01.658539+00:00 hh-fp-wc5 systemd[1528]: Queued start job for default target default.target.
+2026-11-13T12:45:01.667153+00:00 hh-fp-wc5 systemd[1528]: Created slice app.slice - User Application Slice.
+2026-11-13T12:45:01.667296+00:00 hh-fp-wc5 systemd[1528]: Reached target paths.target - Paths.
+2026-11-13T12:45:01.667485+00:00 hh-fp-wc5 systemd[1528]: Reached target timers.target - Timers.
+2026-11-13T12:45:01.667542+00:00 hh-fp-wc5 systemd[1528]: Starting dbus.socket - D-Bus User Message Bus Socket...
+2026-11-13T12:45:01.667605+00:00 hh-fp-wc5 systemd[1528]: Listening on dirmngr.socket - GnuPG network certificate management daemon.
+2026-11-13T12:45:01.667659+00:00 hh-fp-wc5 systemd[1528]: Listening on gpg-agent-browser.socket - GnuPG cryptographic agent and passphrase cache (access for web browsers).
+2026-11-13T12:45:01.667715+00:00 hh-fp-wc5 systemd[1528]: Listening on gpg-agent-extra.socket - GnuPG cryptographic agent and passphrase cache (restricted).
+2026-11-13T12:45:01.667771+00:00 hh-fp-wc5 systemd[1528]: Listening on gpg-agent-ssh.socket - GnuPG cryptographic agent (ssh-agent emulation).
+2026-11-13T12:45:01.667818+00:00 hh-fp-wc5 systemd[1528]: Listening on gpg-agent.socket - GnuPG cryptographic agent and passphrase cache.
+2026-11-13T12:45:01.668542+00:00 hh-fp-wc5 systemd[1528]: Listening on dbus.socket - D-Bus User Message Bus Socket.
+2026-11-13T12:45:01.668607+00:00 hh-fp-wc5 systemd[1528]: Reached target sockets.target - Sockets.
+2026-11-13T12:45:01.668662+00:00 hh-fp-wc5 systemd[1528]: Reached target basic.target - Basic System.
+2026-11-13T12:45:01.668727+00:00 hh-fp-wc5 systemd[1528]: Reached target default.target - Main User Target.
+2026-11-13T12:45:01.668794+00:00 hh-fp-wc5 systemd[1528]: Startup finished in 145ms.
+2026-11-13T12:45:01.668848+00:00 hh-fp-wc5 systemd[1]: Started user@1000.service - User Manager for UID 1000.
+2026-11-13T12:45:01.670023+00:00 hh-fp-wc5 systemd[1]: Started session-1.scope - Session 1 of User stevenvitali.
+2026-11-13T12:45:09.259002+00:00 hh-fp-wc5 systemd[1]: Started session-3.scope - Session 3 of User stevenvitali.
+2026-11-13T12:45:23.094967+00:00 hh-fp-wc5 systemd[1]: Started session-4.scope - Session 4 of User stevenvitali.
+2026-11-13T12:45:35.195151+00:00 hh-fp-wc5 systemd[1]: Started session-5.scope - Session 5 of User stevenvitali.
+2026-11-13T12:45:44.451047+00:00 hh-fp-wc5 systemd[1]: Started session-6.scope - Session 6 of User stevenvitali.
+2026-11-13T12:45:47.198993+00:00 hh-fp-wc5 systemd[1]: Started session-7.scope - Session 7 of User stevenvitali.
+
+
+Specify --start=148524 in the next get-serial-port-output invocation to get only the new output starting from here.

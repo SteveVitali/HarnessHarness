@@ -1,0 +1,1 @@
+{"agent":"oracle","env":"podman","job_name":"w1-o-make-doom-for-mips-3","jobs_dir":"/var/lib/hh/runs/run-root-wc5/jobs","max_retries":0,"n_attempts":3,"n_concurrent":3,"no_force_build":true,"pin":"ff2a1ef48070a8df374669138e4d4db79b77f013","schema":"hh-harbor-job-config/1","tasks":["make-doom-for-mips"],"tasks_dir":"/opt/wc5/tb21/tasks"}

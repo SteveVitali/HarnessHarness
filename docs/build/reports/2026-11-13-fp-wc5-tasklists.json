@@ -1,0 +1,96 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the Wc5 re-proof ran on the thrice-repaired runner under the epoch-2 widened egress allowlist (sha256:86def07e\u2026) but the leg did NOT complete inside D=6h: the dead-man STOP fired at ~12:42:42Z with the held leg at 29/30 surfaces (query-optimize's H-allow in flight \u2014 inconclusive{backend_terminated}) and the dev leg never started. No reproof-packet.json landed; the task list stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}",
+ "gate": "GATE-G28e",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "the surface trials landed (O + H-pub + H-allow all three surface-outcome.json landed \u2014 the H-allow cell produced a REAL reward + ZERO denied hosts under the epoch-2 widened allowlist); no member-level packet verdict folded \u2014 the leg did not complete inside D=6h"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "inconclusive{backend_terminated} \u2014 the dead-man STOP landed at ~12:42:42Z with query-optimize's H-allow surface in flight (29/30 held surfaces landed; the O + H-pub cells completed)"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "never started \u2014 the dev leg launches only after the held leg's packet lands; the held leg was killed by the dead-man STOP at ~12:42:42Z on its last surface"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "never started \u2014 the dev leg launches only after the held leg's packet lands; the held leg was killed by the dead-man STOP at ~12:42:42Z on its last surface"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "never started \u2014 the dev leg launches only after the held leg's packet lands; the held leg was killed by the dead-man STOP at ~12:42:42Z on its last surface"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc5_verdict": "never started \u2014 the dev leg launches only after the held leg's packet lands; the held leg was killed by the dead-man STOP at ~12:42:42Z on its last surface"
+  }
+ ],
+ "recorded_at": "2026-11-13T13:00:00Z",
+ "residual_findings": "the widened allowlist IS verified live per-cell: every completed H-allow cell produced a REAL reward digest with ZERO denied hosts \u2014 the apt bootstrap that Wc4 denied outright (allowlist_gap) ran to completion under epoch-2 (no more exclude:runner_infeasible:allowlist_gap rows); the covering-verdict deficit is now a window-bound property (the real apt bootstrap makes each H-allow cell slower than Wc4's denied-fast path \u2014 the D=6h window cut the leg at 29/30 surfaces)",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists_state": "blocked",
+ "ticket": "R6.45e",
+ "verbatim_prereg_state": "blocked \u2014 task_lists.state read verbatim (2026-11-10-fp-prereg.json sha256 2e36bf81\u2026); the state does not move without 14/14 covering reproofed verdicts"
+}
