@@ -1,0 +1,45 @@
+{
+ "authorization": {
+  "ceiling_micros": 2565580,
+  "gate": "PROV-Wc5",
+  "quote_id": "pq-4183fe9dc342aa10",
+  "readout_path": "docs/build/readouts/GATE-G28e.md",
+  "verbatim_sha256": "a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996"
+ },
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-wc5.json",
+  "sha256": "34831a7113bbf3f1a83f1773f4d404e7ecc082bb3b62dcde0e4f35bdf05731e7"
+ },
+ "harvest": {
+  "journald": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/journald.log",
+   "sha256": "0d7125a939b920e27ea3f680b0a0570c4d130e3ffcf40fe210fd79f6c1cf62c8"
+  },
+  "manifest": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/MANIFEST.sha256",
+   "sha256": "ad72ab8f6f84940b3ff831287d8ac3c780cd804e8a50aa4ef4764a053ddaa6e7"
+  },
+  "run_root_tar": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/run-root-wc5.tar.gz",
+   "sha256": "ced0c73ff83ae4e873f6790e0b9b9cf131b70eeb13772b41e386e59fd14c4867"
+  },
+  "serial": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/serial.log",
+   "sha256": "73b4b10e242eb4692405c18cf1b2d7c16832e2e15421cacbbe0302d3698293dc"
+  },
+  "usage": {
+   "path": "docs/build/reports/compute/harvest/fp-wc5/usage.txt",
+   "sha256": "818404888af77e1880f0e5991c755475810f0ed0bc10421c93a6a4886d7da3b5"
+  }
+ },
+ "kind": "harvest",
+ "note": "harvested via the declared \u22641h harvest-only restart \u2014 the dead-man STOP fired at ~12:42:42Z (GCP max_run_duration), instance restarted ~12:44:06Z, run-root pulled verbatim over IAP ~12:48Z, DELETED ~12:52Z",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "recorded_at": "2026-11-13T12:50:00Z",
+ "schema": "hh-compute-receipt/1",
+ "window": "wc5"
+}
