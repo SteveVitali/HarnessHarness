@@ -1,0 +1,120 @@
+{
+    "id": "d419eb40-0345-4406-9063-83849bff1418",
+    "task_name": "terminal-bench/vulnerable-secret",
+    "trial_name": "vulnerable-secret__ZoyHZcj",
+    "trial_uri": "file:///var/lib/hh/runs/run-root-wc6/jobs/w1-o-vulnerable-secret-3/vulnerable-secret__ZoyHZcj",
+    "task_id": {
+        "path": "/opt/wc6/tb21/tasks/vulnerable-secret"
+    },
+    "source": "tasks",
+    "task_checksum": "31bfd4cc88f9a19081426c26cdceaf73ac0859231474a5eecb06f5b291d834af",
+    "config": {
+        "task": {
+            "path": "/opt/wc6/tb21/tasks/vulnerable-secret",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": "tasks"
+        },
+        "trial_name": "vulnerable-secret__ZoyHZcj",
+        "trials_dir": "/var/lib/hh/runs/run-root-wc6/jobs/w1-o-vulnerable-secret-3",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "oracle",
+            "import_path": null,
+            "model_name": null,
+            "base_url": null,
+            "model_api_key_name": null,
+            "model_api_format": null,
+            "skip_model_parsing": false,
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "resume_trajectory": false,
+            "load_trajectory": null,
+            "extra_allowed_hosts": [],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "user_agent": null,
+        "environment": {
+            "type": "podman",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "stream": false,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "extra_instructions": [],
+        "job_id": "887c5de9-1687-401b-9f18-3b7928b6ef58",
+        "source_trial": null
+    },
+    "agent_info": {
+        "name": "oracle",
+        "version": "1.0.0",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null,
+        "model_usage": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0
+        }
+    },
+    "verifier_environment_mode": "shared",
+    "exception_info": null,
+    "started_at": "2026-11-14T00:20:27.444846Z",
+    "finished_at": "2026-11-14T00:20:53.320411Z",
+    "environment_setup": {
+        "started_at": "2026-11-14T00:20:27.490282Z",
+        "finished_at": "2026-11-14T00:20:29.469304Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-11-14T00:20:29.469368Z",
+        "finished_at": "2026-11-14T00:20:29.469431Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-11-14T00:20:29.469521Z",
+        "finished_at": "2026-11-14T00:20:31.096238Z"
+    },
+    "verifier": {
+        "started_at": "2026-11-14T00:20:32.636834Z",
+        "finished_at": "2026-11-14T00:20:41.904496Z"
+    },
+    "step_results": null
+}

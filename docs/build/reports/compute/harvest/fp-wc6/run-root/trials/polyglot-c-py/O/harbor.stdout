@@ -1,0 +1,22 @@
+  3/3 Mean: 1.000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 0:00:33 0:00:00
+tasks • oracle
+┏━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Trials ┃ Exceptions ┃  Mean ┃ Pass@2 ┃
+┡━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│      3 │          0 │ 1.000 │  1.000 │
+└────────┴────────────┴───────┴────────┘
+
+┏━━━━━━━━┳━━━━━━━┓
+┃ Reward ┃ Count ┃
+┡━━━━━━━━╇━━━━━━━┩
+│ 1.0    │     3 │
+└────────┴───────┘
+
+Job Info
+Total runtime: 33s
+Results written to 
+/var/lib/hh/runs/run-root-wc6/jobs/w1-o-polyglot-c-py-3/result.json
+Inspect results by running `harbor view /var/lib/hh/runs/run-root-wc6/jobs`
+Share results by running `harbor upload 
+/var/lib/hh/runs/run-root-wc6/jobs/w1-o-polyglot-c-py-3`
+

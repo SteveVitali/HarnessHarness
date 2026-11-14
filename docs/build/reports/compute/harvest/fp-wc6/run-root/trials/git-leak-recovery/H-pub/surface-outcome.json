@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"ctrf":"sha256:17dba1e60686cdd9ac4a8445101d35109dad2a2ad6bc9fc64be41bd0e94c9d66","image":"alexgshaw/git-leak-recovery@sha256:62160e522a4238b8bcd522411ea97b5b200f811e5899d34947e66809bef7e586","reward":"sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},"harbor_exception":null,"rewards":[true,true,true],"wall_ms":43916}

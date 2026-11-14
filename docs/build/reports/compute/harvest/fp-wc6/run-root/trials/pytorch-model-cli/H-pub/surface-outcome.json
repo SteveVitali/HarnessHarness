@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"ctrf":"sha256:3c412519c24b926a15feb292a179ca9e1c3e92242cb96727ca4957992e556c6b","image":"alexgshaw/pytorch-model-cli@sha256:c996884b5fb5fb2c0c07d67da2c4f974f271f07234ed28e1a868240375c57a67","reward":"sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},"harbor_exception":null,"rewards":[true,true],"wall_ms":1362749}

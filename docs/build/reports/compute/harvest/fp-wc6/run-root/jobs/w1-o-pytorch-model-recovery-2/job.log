@@ -1,0 +1,82 @@
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__quysuza__env -f /tmp/tmp4uartf5p/pytorch-model-recovery__qUySuzA__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpvt4r37zo/docker-compose-environment.json -f /tmp/tmpd0h197ut/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pytorch-model-recovery/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__3tydzxn__env -f /tmp/tmp3onl17y_/pytorch-model-recovery__3TYdZXn__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp37lh1t88/docker-compose-environment.json -f /tmp/tmpt2avu2k7/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pytorch-model-recovery/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__3tydzxn__env -f /tmp/tmp3onl17y_/pytorch-model-recovery__3TYdZXn__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp37lh1t88/docker-compose-environment.json -f /tmp/tmpt2avu2k7/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc6/jobs/w1-o-pytorch-model-recovery-2/pytorch-model-recovery__3TYdZXn/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__quysuza__env -f /tmp/tmp4uartf5p/pytorch-model-recovery__qUySuzA__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpvt4r37zo/docker-compose-environment.json -f /tmp/tmpd0h197ut/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc6/jobs/w1-o-pytorch-model-recovery-2/pytorch-model-recovery__qUySuzA/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+Collecting main service artifacts
+Collecting main service artifacts
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__3tydzxn__env -f /tmp/tmp3onl17y_/pytorch-model-recovery__3TYdZXn__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp37lh1t88/docker-compose-environment.json -f /tmp/tmpt2avu2k7/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pytorch-model-recovery/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pytorch-model-recovery. Command: podman-compose --in-pod=false --project-name pytorch-model-recovery__quysuza__env -f /tmp/tmp4uartf5p/pytorch-model-recovery__qUySuzA__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpvt4r37zo/docker-compose-environment.json -f /tmp/tmpd0h197ut/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pytorch-model-recovery/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 

@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc6/tb21/tasks/pytorch-model-cli",
+        "source": "tasks"
+    },
+    "trial_name": "pytorch-model-cli__SLdXVn9",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc6/jobs/w1-o-pytorch-model-cli-2",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "3347e0e4-a895-4dbc-9088-8a73c26ff9ef"
+}

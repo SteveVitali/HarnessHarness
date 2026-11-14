@@ -1,0 +1,311 @@
+== wc6-prove launch held(10) R=3 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+held-launched
+[23:00:35Z] held:RUN
+[23:01:37Z] held:RUN
+[23:02:39Z] held:RUN
+[23:03:41Z] held:RUN
+[23:04:43Z] held:RUN
+[23:05:45Z] held:RUN
+[23:06:47Z] held:RUN
+[23:07:49Z] held:RUN
+[23:08:51Z] held:RUN
+[23:09:53Z] held:RUN
+[23:10:55Z] held:RUN
+[23:11:58Z] held:RUN
+[23:13:00Z] held:RUN
+[23:14:02Z] held:RUN
+[23:15:04Z] held:RUN
+[23:16:06Z] held:RUN
+[23:17:09Z] held:RUN
+[23:18:12Z] held:RUN
+[23:19:14Z] held:RUN
+[23:20:16Z] held:RUN
+[23:21:18Z] held:RUN
+[23:22:20Z] held:RUN
+[23:23:22Z] held:RUN
+[23:24:24Z] held:RUN
+[23:25:26Z] held:RUN
+[23:26:28Z] held:RUN
+[23:27:30Z] held:RUN
+[23:28:32Z] held:RUN
+[23:29:34Z] held:RUN
+[23:30:36Z] held:RUN
+[23:31:38Z] held:RUN
+[23:32:41Z] held:RUN
+[23:33:43Z] held:RUN
+[23:34:45Z] held:RUN
+[23:35:47Z] held:RUN
+[23:36:49Z] held:RUN
+[23:37:51Z] held:RUN
+[23:38:53Z] held:RUN
+[23:39:55Z] held:RUN
+[23:40:57Z] held:RUN
+[23:42:00Z] held:RUN
+[23:43:02Z] held:RUN
+[23:44:04Z] held:RUN
+[23:45:06Z] held:RUN
+[23:46:09Z] held:RUN
+[23:47:11Z] held:RUN
+[23:48:13Z] held:RUN
+[23:49:16Z] held:RUN
+[23:50:18Z] held:RUN
+[23:51:20Z] held:RUN
+[23:52:22Z] held:RUN
+[23:53:24Z] held:RUN
+[23:54:27Z] held:RUN
+[23:55:29Z] held:RUN
+[23:56:31Z] held:RUN
+[23:57:33Z] held:RUN
+[23:58:35Z] held:RUN
+[23:59:38Z] held:RUN
+[00:00:40Z] held:RUN
+[00:01:42Z] held:RUN
+[00:02:44Z] held:RUN
+[00:03:46Z] held:RUN
+[00:04:49Z] held:RUN
+[00:05:51Z] held:RUN
+[00:06:53Z] held:RUN
+[00:07:56Z] held:RUN
+[00:08:58Z] held:RUN
+[00:10:00Z] held:RUN
+[00:11:03Z] held:RUN
+[00:12:05Z] held:RUN
+[00:13:07Z] held:RUN
+[00:14:09Z] held:RUN
+[00:15:11Z] held:RUN
+[00:16:13Z] held:RUN
+[00:17:16Z] held:RUN
+[00:18:18Z] held:RUN
+[00:19:20Z] held:RUN
+[00:20:22Z] held:RUN
+[00:21:25Z] held:RUN
+[00:22:27Z] held:RUN
+[00:23:29Z] held:RUN
+[00:24:32Z] held:RUN
+[00:25:34Z] held:RUN
+[00:26:36Z] held:RUN
+[00:27:39Z] held:RUN
+[00:28:41Z] held:RUN
+[00:29:44Z] held:RUN
+[00:30:46Z] held:RUN
+[00:31:49Z] held:RUN
+[00:32:53Z] held:RUN
+[00:33:57Z] held:RUN
+[00:35:02Z] held:RUN
+[00:36:04Z] held:RUN
+[00:37:08Z] held:RUN
+[00:38:11Z] held:RUN
+[00:39:13Z] held:RUN
+[00:40:15Z] held:RUN
+[00:41:18Z] held:RUN
+[00:42:20Z] held:RUN
+[00:43:23Z] held:RUN
+[00:44:25Z] held:RUN
+[00:45:27Z] held:RUN
+[00:46:29Z] held:RUN
+[00:47:32Z] held:RUN
+[00:48:34Z] held:RUN
+[00:49:36Z] held:RUN
+[00:50:39Z] held:RUN
+[00:51:41Z] held:RUN
+[00:52:44Z] held:RUN
+[00:53:47Z] held:RUN
+[00:54:49Z] held:RUN
+[00:55:52Z] held:RUN
+[00:56:54Z] held:RUN
+[00:57:57Z] held:RUN
+[00:58:59Z] held:RUN
+[01:00:01Z] held:RUN
+[01:01:04Z] held:RUN
+[01:02:06Z] held:RUN
+[01:03:09Z] held:RUN
+[01:04:11Z] held:RUN
+[01:05:14Z] held:RUN
+[01:06:16Z] held:RUN
+[01:07:19Z] held:RUN
+[01:08:21Z] held:RUN
+[01:09:23Z] held:RUN
+[01:10:26Z] held:RUN
+[01:11:29Z] held:RUN
+[01:12:32Z] held:RUN
+[01:13:34Z] held:RUN
+[01:14:36Z] held:RUN
+[01:15:38Z] held:RUN
+[01:16:41Z] held:RUN
+[01:17:45Z] held:RUN
+[01:18:48Z] held:RUN
+[01:19:51Z] held:RUN
+[01:20:53Z] held:RUN
+[01:21:55Z] held:RUN
+[01:22:58Z] held:RUN
+[01:24:01Z] held:RUN
+[01:25:04Z] held:RUN
+[01:26:07Z] held:RUN
+[01:27:10Z] held:RUN
+[01:28:12Z] held:RUN
+[01:29:15Z] held:RUN
+[01:30:18Z] held:RUN
+[01:31:21Z] held:RUN
+[01:32:23Z] held:RUN
+[01:33:26Z] held:RUN
+[01:34:28Z] held:RUN
+[01:35:30Z] held:RUN
+[01:36:32Z] held:RUN
+[01:37:34Z] held:RUN
+[01:38:37Z] held:RUN
+[01:39:39Z] held:RUN
+[01:40:41Z] held:RUN
+[01:41:44Z] held:RUN
+[01:42:46Z] held:RUN
+[01:43:48Z] held:RUN
+[01:44:50Z] held:RUN
+[01:45:52Z] held:RUN
+[01:46:54Z] held:RUN
+[01:47:56Z] held:RUN
+[01:48:59Z] held:RUN
+[01:50:01Z] held:RUN
+[01:51:03Z] held:RUN
+[01:52:05Z] held:RUN
+[01:53:07Z] held:RUN
+[01:54:09Z] held:RUN
+[01:55:12Z] held:RUN
+[01:56:14Z] held:RUN
+[01:57:16Z] held:RUN
+[01:58:18Z] held:RUN
+[01:59:20Z] held:RUN
+[02:00:22Z] held:RUN
+[02:01:25Z] held:RUN
+[02:02:27Z] held:RUN
+[02:03:29Z] held:RUN
+[02:04:31Z] held:RUN
+[02:05:33Z] held:RUN
+[02:06:35Z] held:RUN
+[02:07:37Z] held:RUN
+[02:08:40Z] held:RUN
+[02:09:43Z] held:RUN
+[02:10:45Z] held:RUN
+[02:11:48Z] held:RUN
+[02:12:50Z] held:RUN
+[02:13:52Z] held:RUN
+[02:14:54Z] held:RUN
+[02:15:57Z] held:RUN
+[02:16:59Z] held:RUN
+[02:18:03Z] held:RUN
+[02:19:05Z] held:RUN
+[02:20:08Z] held:RUN
+[02:21:10Z] held:RUN
+[02:22:12Z] held:RUN
+[02:23:14Z] held:RUN
+[02:24:16Z] held:RUN
+[02:25:18Z] held:RUN
+[02:26:21Z] held:RUN
+[02:27:23Z] held:RUN
+[02:28:25Z] held:RUN
+[02:29:27Z] held:RUN
+[02:30:30Z] held:RUN
+[02:31:32Z] held:RUN
+[02:32:34Z] held:RUN
+[02:33:37Z] held:RUN
+[02:34:39Z] held:RUN
+[02:35:41Z] held:RUN
+[02:36:43Z] held:RUN
+[02:37:45Z] held:RUN
+[02:38:47Z] held:RUN
+[02:39:49Z] held:RUN
+[02:40:51Z] held:RUN
+[02:41:54Z] held:RUN
+[02:42:56Z] held:RUN
+[02:43:58Z] held:RUN
+[02:45:00Z] held:RUN
+[02:46:02Z] held:RUN
+[02:47:05Z] held:RUN
+[02:48:07Z] held:RUN
+[02:49:09Z] held:RUN
+[02:50:11Z] held:RUN
+[02:51:14Z] held:RUN
+[02:52:16Z] held:RUN
+[02:53:18Z] held:RUN
+[02:54:21Z] held:RUN
+[02:55:23Z] held:RUN
+[02:56:25Z] held:RUN
+[02:57:28Z] held:RUN
+[02:58:30Z] held:RUN
+[02:59:32Z] held:RUN
+[03:00:35Z] held:RUN
+[03:01:37Z] held:RUN
+[03:02:39Z] held:DONE
+== wc6-prove launch dev(4) R=2 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+dev-launched
+[03:02:43Z] dev:RUN
+[03:03:46Z] dev:RUN
+[03:04:48Z] dev:RUN
+[03:05:50Z] dev:RUN
+[03:06:53Z] dev:RUN
+[03:07:55Z] dev:RUN
+[03:08:57Z] dev:RUN
+[03:10:00Z] dev:RUN
+[03:11:02Z] dev:RUN
+[03:12:05Z] dev:RUN
+[03:13:07Z] dev:RUN
+[03:14:09Z] dev:RUN
+[03:15:12Z] dev:RUN
+[03:16:14Z] dev:RUN
+[03:17:16Z] dev:RUN
+[03:18:19Z] dev:RUN
+[03:19:21Z] dev:RUN
+[03:20:23Z] dev:RUN
+[03:21:26Z] dev:RUN
+[03:22:29Z] dev:RUN
+[03:23:31Z] dev:RUN
+[03:24:34Z] dev:RUN
+[03:25:36Z] dev:RUN
+[03:26:38Z] dev:RUN
+[03:27:40Z] dev:RUN
+[03:28:42Z] dev:RUN
+[03:29:45Z] dev:RUN
+[03:30:47Z] dev:RUN
+[03:31:49Z] dev:RUN
+[03:32:52Z] dev:RUN
+[03:33:54Z] dev:RUN
+[03:34:57Z] dev:RUN
+[03:35:59Z] dev:RUN
+[03:37:01Z] dev:RUN
+[03:38:04Z] dev:RUN
+[03:39:06Z] dev:RUN
+[03:40:08Z] dev:RUN
+[03:41:11Z] dev:RUN
+[03:42:13Z] dev:RUN
+[03:43:15Z] dev:RUN
+[03:44:17Z] dev:RUN
+[03:45:19Z] dev:RUN
+[03:46:22Z] dev:RUN
+[03:47:24Z] dev:RUN
+[03:48:26Z] dev:RUN
+[03:49:29Z] dev:DONE
+== held r 3 tasks 10 label recorded_execution
+  db-wal-recovery exclude:runner_infeasible:allowlist_gap{unknown}
+  git-leak-recovery exclude:runner_infeasible:allowlist_gap{unknown}
+  make-doom-for-mips exclude:runner_infeasible:allowlist_gap{unknown}
+  polyglot-c-py exclude:runner_infeasible:allowlist_gap{unknown}
+  prove-plus-comm exclude:runner_infeasible:allowlist_gap{unknown}
+  pypi-server exclude:runner_infeasible:allowlist_gap{unknown}
+  query-optimize repair:machinery
+  sqlite-db-truncate exclude:runner_infeasible:allowlist_gap{unknown}
+  torch-tensor-parallelism exclude:runner_infeasible:allowlist_gap{unknown}
+  vulnerable-secret exclude:runner_infeasible:allowlist_gap{unknown}
+== dev r 2 tasks 4 label recorded_execution
+  build-pmars exclude:runner_infeasible:allowlist_gap{unknown}
+  cancel-async-tasks exclude:runner_infeasible:allowlist_gap{unknown}
+  pytorch-model-cli exclude:runner_infeasible:allowlist_gap{unknown}
+  pytorch-model-recovery exclude:runner_infeasible:allowlist_gap{unknown}
+== wc6-prove done ==
