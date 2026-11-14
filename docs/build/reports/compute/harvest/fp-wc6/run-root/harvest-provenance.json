@@ -1,0 +1,17 @@
+{
+ "files": "run-root.tar.gz is the sha256-manifest-covered payload; MANIFEST.sha256 lists every member; journald.log + serial.log + usage.txt carried per the fp-wc3/wc4/wc5 pattern",
+ "locally_authored": {
+  "2026-11-14-fp-wc6-tasklists.json": "the hh-task-lists-outcome/1 frozen-list outcome \u2014 task_lists.state stays blocked verbatim (0/14 covering reproofed verdicts; the re-proof COMPLETED inside D=8h \u2014 both packets landed \u2014 yet every verdict is non-covering)",
+  "wc6-window-record.json": "the window receipt (hh-wc-repair/1) \u2014 runner/mediator/helper in-window digests at stamped be9a8433 (byte-identical to Wc4/Wc5) + the re_proof outcome record (completed; non-covering verdicts; widened allowlist verified live per-cell)"
+ },
+ "outcome_summary": "completed non-covering \u2014 the D=8h bound let the re-proof run to completion (both packets landed); every member's verdict is non-covering (13 allowlist_gap{unknown} + query-optimize repair:machinery); the list stays blocked verbatim",
+ "provenance": "the in-guest run-root /var/lib/hh/runs/run-root-wc6 was harvested live over IAP-ssh inside the nine-step teardown (harvest verified, instance deleted ~04:30Z, compute-open empty). run-root.tar.gz carries trials/ + jobs/ + prove-held/ + prove-dev/ + the window records; MANIFEST.sha256 verified locally; mediator-store internals (events.wal/blobs) are archive internals, not the committed record set",
+ "recorded_at": "2026-11-14T04:30:00Z",
+ "retained_during_window": {
+  "hh-carried-load-infra.json": "the LOAD act's record (set_digest sha256:254d590e\u2026, 6,325 ms, verified) \u2014 landed under run-root/ at load time",
+  "prove-held/ + prove-dev/": "both legs landed hh-reproof-packet/1 \u2014 the legs completed inside D=8h"
+ },
+ "schema": "hh-harvest-provenance/1",
+ "ticket": "R6.45f",
+ "window": "wc6"
+}

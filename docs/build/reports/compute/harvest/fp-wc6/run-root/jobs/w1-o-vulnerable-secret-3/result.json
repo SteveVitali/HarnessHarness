@@ -1,0 +1,43 @@
+{
+    "id": "887c5de9-1687-401b-9f18-3b7928b6ef58",
+    "started_at": "2026-11-14T00:20:27.373166",
+    "updated_at": "2026-11-14T00:20:53.565916",
+    "finished_at": "2026-11-14T00:20:53.565916",
+    "n_total_trials": 3,
+    "stats": {
+        "n_completed_trials": 3,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oracle__tasks": {
+                "n_trials": 3,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 1.0
+                    }
+                ],
+                "pass_at_k": {
+                    "2": 1.0
+                },
+                "reward_stats": {
+                    "reward": {
+                        "1.0": [
+                            "vulnerable-secret__ZoyHZcj",
+                            "vulnerable-secret__egtdD6V",
+                            "vulnerable-secret__rBkxSkX"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

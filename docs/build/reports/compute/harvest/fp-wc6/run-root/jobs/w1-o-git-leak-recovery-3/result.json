@@ -1,0 +1,43 @@
+{
+    "id": "90b837b1-b523-4ad9-b428-bafe396f9d6f",
+    "started_at": "2026-11-14T01:25:27.583074",
+    "updated_at": "2026-11-14T01:25:57.765733",
+    "finished_at": "2026-11-14T01:25:57.765733",
+    "n_total_trials": 3,
+    "stats": {
+        "n_completed_trials": 3,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oracle__tasks": {
+                "n_trials": 3,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 1.0
+                    }
+                ],
+                "pass_at_k": {
+                    "2": 1.0
+                },
+                "reward_stats": {
+                    "reward": {
+                        "1.0": [
+                            "git-leak-recovery__ZbPB9zF",
+                            "git-leak-recovery__vid6bDW",
+                            "git-leak-recovery__BQSyW67"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

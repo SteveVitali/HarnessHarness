@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc6/tb21/tasks/cancel-async-tasks",
+        "source": "tasks"
+    },
+    "trial_name": "cancel-async-tasks__AaKZBHk",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc6/jobs/w1-o-cancel-async-tasks-2",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "3fc6f6a3-955b-4d20-b1fa-ad7545c0bd86"
+}

@@ -1,0 +1,104 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the Wc6 re-proof on the thrice-repaired runner under the epoch-2 widened egress allowlist (sha256:86def07e\u2026) ran to COMPLETION inside D=8h (~23:05Z\u2192~03:53Z): both packets landed (prove-held r=3, prove-dev r=2, label recorded_execution). The widened allowlist verified live per-cell again \u2014 zero denied hosts, real reward.txt digests on every completed H-allow cell \u2014 yet every member's verdict is non-covering: 13 exclude:runner_infeasible:allowlist_gap{unknown} (O R/R + H-pub R/R, H-allow < R/R with denied_hosts [] \u2192 the committed classifier's {unknown} basis) + query-optimize repair:machinery (the standing append-only discordance). The task list stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}",
+ "gate": "GATE-G28f",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "repair:machinery"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc6_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  }
+ ],
+ "no_adjacent_donor_slots": "the 3 fp_dev7 blocked{no_adjacent_donor} slots have no member to re-proof and stay blocked regardless (recorded verbatim)",
+ "packet": {
+  "dev": "run-root/prove-dev/reproof-packet.json",
+  "evidence_label": "recorded_execution",
+  "held": "run-root/prove-held/reproof-packet.json",
+  "live_evidence_ref": "docs/build/reports/live/2026-11-14-reproof-wc6.json"
+ },
+ "phase": "fp",
+ "prior": "docs/build/reports/2026-11-13-fp-wc5-tasklists.json (superseded \u2014 the wc5 record's per-member baseline re-read honestly)",
+ "recorded_at": "2026-11-14T03:53:50Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists_state": "blocked",
+ "ticket": "R6.45f",
+ "window": "wc6"
+}

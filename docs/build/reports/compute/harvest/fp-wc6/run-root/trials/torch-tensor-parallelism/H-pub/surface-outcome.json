@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"ctrf":"sha256:1ef56273ca3c6d90dae19d9239a6028f3e9335de410ea35a2729fc31ce013f49","image":"alexgshaw/torch-tensor-parallelism@sha256:c50ac169e11465f41b49749fe87e4487f24d31a0c39c0906cd3242cc5499c690","reward":"sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},"harbor_exception":null,"rewards":[true,true,true],"wall_ms":496828}

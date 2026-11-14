@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc6/tb21/tasks/vulnerable-secret",
+        "source": "tasks"
+    },
+    "trial_name": "vulnerable-secret__rBkxSkX",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc6/jobs/w1-o-vulnerable-secret-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "887c5de9-1687-401b-9f18-3b7928b6ef58"
+}

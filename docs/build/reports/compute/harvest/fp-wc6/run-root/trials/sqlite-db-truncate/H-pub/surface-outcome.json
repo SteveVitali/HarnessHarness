@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"ctrf":"sha256:5ec8ba6b5f6f095fcad48d34d0476ede8748584553e2dbd82265f09923416e76","image":"alexgshaw/sqlite-db-truncate@sha256:aabac93c93bd1f310e6a6fb893911d7735026ed18491c72133c9196a09092ca4","reward":"sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},"harbor_exception":null,"rewards":[true,true,true],"wall_ms":32912}

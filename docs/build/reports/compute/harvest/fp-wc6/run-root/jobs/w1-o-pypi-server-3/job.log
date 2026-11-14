@@ -1,0 +1,123 @@
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+Agent 'oracle' does not declare an options_model; leftover kwargs are ignored
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__joygaqh__env -f /tmp/tmp64folmv5/pypi-server__joYgaqh__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp1p4k8b07/docker-compose-environment.json -f /tmp/tmprwq1v4sw/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__sebwy9l__env -f /tmp/tmppmwwuosg/pypi-server__seBwy9L__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpf06bua_a/docker-compose-environment.json -f /tmp/tmpq55z1aq3/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__qdi8jyb__env -f /tmp/tmptsob7nfh/pypi-server__QDi8Jyb__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpiz25e4be/docker-compose-environment.json -f /tmp/tmpd8a7w03u/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/solution/. main:/solution. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__joygaqh__env -f /tmp/tmp64folmv5/pypi-server__joYgaqh__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp1p4k8b07/docker-compose-environment.json -f /tmp/tmprwq1v4sw/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc6/jobs/w1-o-pypi-server-3/pypi-server__joYgaqh/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__qdi8jyb__env -f /tmp/tmptsob7nfh/pypi-server__QDi8Jyb__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpiz25e4be/docker-compose-environment.json -f /tmp/tmpd8a7w03u/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc6/jobs/w1-o-pypi-server-3/pypi-server__QDi8Jyb/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__sebwy9l__env -f /tmp/tmppmwwuosg/pypi-server__seBwy9L__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpf06bua_a/docker-compose-environment.json -f /tmp/tmpq55z1aq3/docker-compose-mounts.json cp /var/lib/hh/runs/run-root-wc6/jobs/w1-o-pypi-server-3/pypi-server__seBwy9L/agent/. main:/logs/agent. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+Collecting main service artifacts
+Collecting main service artifacts
+Collecting main service artifacts
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__joygaqh__env -f /tmp/tmp64folmv5/pypi-server__joYgaqh__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmp1p4k8b07/docker-compose-environment.json -f /tmp/tmprwq1v4sw/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__qdi8jyb__env -f /tmp/tmptsob7nfh/pypi-server__QDi8Jyb__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpiz25e4be/docker-compose-environment.json -f /tmp/tmpd8a7w03u/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 
+docker compose cp failed; retrying upload with tar stream: Docker compose command failed for environment pypi-server. Command: podman-compose --in-pod=false --project-name pypi-server__sebwy9l__env -f /tmp/tmppmwwuosg/pypi-server__seBwy9L__env-docker-compose-resources.json -f /root/.local/share/uv/tools/harbor/lib/python3.15/site-packages/harbor/environments/docker/docker-compose-prebuilt.yaml -f /tmp/tmpf06bua_a/docker-compose-environment.json -f /tmp/tmpq55z1aq3/docker-compose-mounts.json cp /opt/wc6/tb21/tasks/pypi-server/tests/. main:/tests. Return code: 2. Stdout: usage: podman-compose [-h] [-v] [--in-pod in_pod] [--pod-args pod_args]
+                      [--env-file env_file] [-f file] [--profile profile]
+                      [-p PROJECT_NAME] [--podman-path PODMAN_PATH]
+                      [--podman-args args] [--podman-pull-args args]
+                      [--podman-push-args args] [--podman-build-args args]
+                      [--podman-inspect-args args] [--podman-run-args args]
+                      [--podman-start-args args] [--podman-stop-args args]
+                      [--podman-rm-args args] [--podman-volume-args args]
+                      [--no-ansi] [--no-cleanup] [--dry-run]
+                      [--parallel PARALLEL] [--verbose]
+                      {help,version,wait,systemd,pull,push,build,up,down,ps,run,exec,start,stop,restart,logs,config,port,pause,unpause,kill,stats,images} ...
+podman-compose: error: argument command: invalid choice: 'cp' (choose from 'help', 'version', 'wait', 'systemd', 'pull', 'push', 'build', 'up', 'down', 'ps', 'run', 'exec', 'start', 'stop', 'restart', 'logs', 'config', 'port', 'pause', 'unpause', 'kill', 'stats', 'images')
+. Stderr: None. 

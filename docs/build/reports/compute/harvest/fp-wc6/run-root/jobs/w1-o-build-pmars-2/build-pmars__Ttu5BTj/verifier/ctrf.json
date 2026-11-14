@@ -1,0 +1,56 @@
+{
+    "results": {
+        "tool": {
+            "name": "pytest",
+            "version": "8.4.1"
+        },
+        "summary": {
+            "tests": 4,
+            "passed": 4,
+            "failed": 0,
+            "skipped": 0,
+            "pending": 0,
+            "other": 0,
+            "start": 1794625534.5017796,
+            "stop": 1794625534.6462085
+        },
+        "tests": [
+            {
+                "name": "test_outputs.py::test_pmars_works",
+                "status": "passed",
+                "duration": 0.11007332699773542,
+                "start": 1794625534.5230777,
+                "stop": 1794625534.6335766,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            },
+            {
+                "name": "test_outputs.py::test_headless_no_x11",
+                "status": "passed",
+                "duration": 0.009313260001363233,
+                "start": 1794625534.6339688,
+                "stop": 1794625534.6436083,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            },
+            {
+                "name": "test_outputs.py::test_debian_source_used",
+                "status": "passed",
+                "duration": 0.000783010002123774,
+                "start": 1794625534.643926,
+                "stop": 1794625534.6448889,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            },
+            {
+                "name": "test_outputs.py::test_built_from_source",
+                "status": "passed",
+                "duration": 0.0007468399962817784,
+                "start": 1794625534.6451046,
+                "stop": 1794625534.645996,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            }
+        ]
+    }
+}

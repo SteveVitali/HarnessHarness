@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc6/tb21/tasks/prove-plus-comm",
+        "source": "tasks"
+    },
+    "trial_name": "prove-plus-comm__6YTL7cN",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc6/jobs/w1-o-prove-plus-comm-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "b518aab3-f847-4339-92f3-b53546809fbf"
+}

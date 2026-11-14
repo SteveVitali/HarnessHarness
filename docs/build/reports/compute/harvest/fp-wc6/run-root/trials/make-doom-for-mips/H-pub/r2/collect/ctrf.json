@@ -1,0 +1,47 @@
+{
+    "results": {
+        "tool": {
+            "name": "pytest",
+            "version": "8.4.1"
+        },
+        "summary": {
+            "tests": 3,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "pending": 0,
+            "other": 0,
+            "start": 1794613821.7704737,
+            "stop": 1794613825.6679933
+        },
+        "tests": [
+            {
+                "name": "test_outputs.py::test_vm_execution",
+                "status": "passed",
+                "duration": 3.6284898120002254,
+                "start": 1794613821.837755,
+                "stop": 1794613825.4667141,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            },
+            {
+                "name": "test_outputs.py::test_frame_bmp_exists",
+                "status": "passed",
+                "duration": 0.0005269919997772377,
+                "start": 1794613825.4670517,
+                "stop": 1794613825.4678001,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            },
+            {
+                "name": "test_outputs.py::test_frame_bmp_similar_to_reference",
+                "status": "passed",
+                "duration": 0.19939457499958735,
+                "start": 1794613825.468035,
+                "stop": 1794613825.6677217,
+                "retries": 0,
+                "file_path": "test_outputs.py"
+            }
+        ]
+    }
+}
