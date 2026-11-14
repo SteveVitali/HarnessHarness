@@ -147,7 +147,7 @@
         "--metadata",
         "hh_deadman_minutes=495",
         "--metadata-from-file",
-        "startup-script=/Users/stevenvitali/MetaHarness-harnessharness/scripts/gce-backend/startup.sh,hh_packages=/var/folders/0r/9hmb0nh57nv2tqxgh71hd92m0000gn/T//hh-gce.yNqDis/packages.txt",
+        "startup-script=scripts/gce-backend/startup.sh,hh_packages=/var/folders/0r/9hmb0nh57nv2tqxgh71hd92m0000gn/T//hh-gce.yNqDis/packages.txt",
         "--labels",
         "hh-phase=fp,hh-window=wc6,hh-ticket=r6-45f,ttl=window"
       ],
