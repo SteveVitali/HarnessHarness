@@ -260,6 +260,24 @@
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 1
    }
+  },
+  {
+   "id": "wc6-runroot-size-1",
+   "date": "2026-11-14",
+   "recorded_by": "R6.45f subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic \u2014 the Wc6 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
+   "provenance": {
+    "finding": "docs/build/runs/R6.45f.md \u2014 the Wc6 harvest's run-root-wc6.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers; evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28f.md \u2014 PROV-Wc6 (the window this record layer belongs to)",
+    "handoff": "R6.45f \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc4 precedent"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-wc6/run-root-wc6\\.tar\\.gz$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 1
+   }
   }
  ]
 }
