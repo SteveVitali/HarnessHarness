@@ -1,0 +1,42 @@
+{
+ "balance_delta_usd": 0.0,
+ "balance_observed": "59.99988 \u2192 59.99988 (unchanged \u2014 no model spend; model_line none)",
+ "clock_honest": "the provider usage-ledger settlement clock (\u226524h elapsed) has not run \u2014 status pending, not settled",
+ "compute_estimate_usd": 1.75798,
+ "metered_model_calls": 0,
+ "model_line": "none",
+ "phase": "fp",
+ "phase_spend_rows": "+5 window:wc6 rows appended to docs/build/reports/live/PHASE_SPEND.jsonl",
+ "reads": [
+  {
+   "file": "~/hh-retained/wc6/settle/balance-pre.json",
+   "kind": "balance-pre",
+   "read_at": "2026-11-14T03:56:53Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wc6/settle/usage1.json",
+   "kind": "usage1",
+   "read_at": "2026-11-14T03:57:58Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wc6/settle/usage2.json",
+   "kind": "usage2",
+   "read_at": "2026-11-14T03:59:03Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wc6/settle/balance-post.json",
+   "kind": "balance-post",
+   "read_at": "2026-11-14T04:00:08Z",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-14T04:00:27Z",
+ "schema": "hh-settlement/1",
+ "status": "pending",
+ "ticket": "R6.45f",
+ "usage_observed": "all-zero buckets over the 24h range (request_count 0, usage_usd 0)",
+ "window": "wc6"
+}
