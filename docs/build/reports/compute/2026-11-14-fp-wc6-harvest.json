@@ -180,19 +180,19 @@
   },
   "harvest": {
     "journald": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc6/journald.log",
+      "path": "docs/build/reports/compute/harvest/fp-wc6/journald.log",
       "sha256": "2e735813a796f5b9b8554130b92d0783cb396e37de3aeb7ba3c8a719b8d85411"
     },
     "manifest": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc6/MANIFEST.sha256",
-      "sha256": "670882cecd704231864370d3e2707ff95af70334c67d5da55c71fe40b173d0d6"
+      "path": "docs/build/reports/compute/harvest/fp-wc6/MANIFEST.sha256",
+      "sha256": "6523d4031cf723c9d8c83399fe8589d5cab5d4b48125575d377d58e89788ef7f"
     },
     "run_root_tar": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc6/run-root.tar.gz",
+      "path": "docs/build/reports/compute/harvest/fp-wc6/run-root-wc6.tar.gz",
       "sha256": "0586bb58fca0f876c53d4796d85dec1f50e38b31b61cb6d38e2b6a28728b17fd"
     },
     "serial": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/harvest/fp-wc6/serial.log",
+      "path": "docs/build/reports/compute/harvest/fp-wc6/serial.log",
       "sha256": "b10570036a60e3cd57a132ed1441603b226b57779d14447ee852837bf3beae3d"
     },
     "verified_locally": true
