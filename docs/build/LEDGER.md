@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R6.45g
-lastCompleted:   GATE-G28g
+nextTicket: GATE-G29
+lastCompleted:   R6.45g
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-15T08:05:48Z
+updatedAt:       2026-11-15T15:20Z
 ```
 
 ## OPEN FINDINGS
