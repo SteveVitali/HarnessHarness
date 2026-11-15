@@ -1,5 +1,5 @@
 # GATE-G28h — PROV-Wc8: authorize the eighth repair window's compute (D=8h re-proof on the 7-defect runner under epoch-3) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -58,3 +58,14 @@ dispositions it.
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+Operator decision (verbatim, received 2026-11-15T19:40:00Z, channel: interactive): "authorized, continue"
+Disposition: PASSED — run; basis: "the compute authorized verbatim; R6.45h dispatches for the Wc8 body"
+Recorded verbatim: Wc8 $0 model (model_line: none, deliver-secret ABSENT); compute pq-b14f50e9fd44e669,
+ceiling 3,193,860 µ$ (~$3.19), formula 314,140x9 + 300x137x6 + 0.12x1; D=8h, restart<=1h, h_r 6h, C=4,
+~38 trials; the re-proof on the seven-defect-repaired runner abc8d850 under the epoch-3 freeze at D=8h;
+Σ-exceed recorded (38,380,970 µ$ ≈ $38.38 — scope amendments authorized).
+verbatim_sha256 = sha256_text("authorized, continue") = a8428147fe1c7c1577dfe062327cf41a19491a49daf68c9432b9f276f8569996 — stamped fp-wc8.json.
+GATE DECISIONS row: 2026-11-15T19:40:00Z | GATE-G28h
+Operator confirmation of agent-drafted text (verbatim, 2026-11-15T19:40:00Z): "authorized, continue"
+— covers sha256:27bdda6e3b96ced8. Signed by: the operator. Recorded by Devin (SWE-2 High, coordinator),
+which does not sign.
