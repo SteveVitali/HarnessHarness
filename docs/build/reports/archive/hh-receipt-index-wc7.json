@@ -1,0 +1,198 @@
+{
+ "artifacts": [],
+ "attempts": [
+  {
+   "attempt": "wc7-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "bc2d608ba3a09615d5ad3b18b4b2db7a7b9f6781",
+    "verify_receipt": "docs/build/reports/archive/2026-11-14-fp-wc6-verify.json",
+    "window": "wc6"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 3751,
+     "path": "wc7/2026-11-15-fp-wc7-cost.json",
+     "role": "window_record",
+     "sha256": "22db244f425421dbdf652a47801230513e22ff7dc79d85988f65c1af89f6d3bc"
+    },
+    {
+     "bytes": 25670,
+     "path": "wc7/2026-11-15-fp-wc7-harvest.json",
+     "role": "window_record",
+     "sha256": "bece8adf0696b0814adeb821acb662bd4fa10b114a29680b7794dc8f609f3ac7"
+    },
+    {
+     "bytes": 2509,
+     "path": "wc7/2026-11-15-fp-wc7-prepull.json",
+     "role": "window_record",
+     "sha256": "6458b19ebe1b0694f818aca868879451a4dbc0febe5d99ff086e73f89c7beaf8"
+    },
+    {
+     "bytes": 17871,
+     "path": "wc7/2026-11-15-fp-wc7-provision.json",
+     "role": "window_record",
+     "sha256": "d81fe0f6fadb2980f37f2d124a9eacc31a5b31cbd10e42cdaaffa48590d3d65f"
+    },
+    {
+     "bytes": 4531,
+     "path": "wc7/2026-11-15-fp-wc7-tasklists.json",
+     "role": "window_record",
+     "sha256": "68db5ebda327326552d1e2a55ad810447a3b1bbcf247d3616a105ffcc995b938"
+    },
+    {
+     "bytes": 53960,
+     "path": "wc7/2026-11-15-fp-wc7-teardown.json",
+     "role": "window_record",
+     "sha256": "6f666c279240ac1054a4ca54c159be8e3705cd259f01007ecbae8644e7db9eee"
+    },
+    {
+     "bytes": 16400,
+     "path": "wc7/2026-11-15-fp-wc7-verify.json",
+     "role": "window_record",
+     "sha256": "3792a11078b8e194a7e6e12a158e92f75ce68a3507fa7edca6ca2bc64daadd29"
+    },
+    {
+     "bytes": 221418,
+     "path": "wc7/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "44795e587d2b328b542bba09fbe0c485dc04d789725ed2d9ee5957f8aef441e2"
+    },
+    {
+     "bytes": 4689220,
+     "path": "wc7/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "d2ebdc5a2b3ff07815d2cc893cfdf8c1a3e6be4400e77ce65caf931926675272"
+    },
+    {
+     "bytes": 802970,
+     "path": "wc7/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "d4d7c3f7612e88518ae09dae78ddc3a6799416b9c34e0d46cfc1afb33e97bc62"
+    },
+    {
+     "bytes": 25,
+     "path": "wc7/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "5381452cabee81324f99fe0d5f6fceedc499186e4214635baae4d29cba3174da"
+    },
+    {
+     "bytes": 1374,
+     "path": "wc7/live/2026-11-15-reproof-wc7.json",
+     "role": "window_record",
+     "sha256": "e4052edcd0b944910e89056092fdf127b756ab1025c167abd089322791d49f62"
+    },
+    {
+     "bytes": 8046,
+     "path": "wc7/live/2026-11-15-reproof-wc7.transcript.txt",
+     "role": "window_record",
+     "sha256": "6602103604a1b7c05b340afb8b39e723a76ff697579f8c6a0b718bc6bca850cc"
+    },
+    {
+     "bytes": 1293,
+     "path": "wc7/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "2c2c9c8904a53f0daf1fdc365fd2b02bd2b2bd091d870c1809aa78cb60ab5e02"
+    },
+    {
+     "bytes": 7510,
+     "path": "wc7/run-root/prove-dev/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "6ae0c960965b050d056b294c3d22e6321d71b6fbf5d80ca6504307ec3fac326e"
+    },
+    {
+     "bytes": 5401,
+     "path": "wc7/run-root/prove-dev/reproof-register.json",
+     "role": "window_record",
+     "sha256": "9daaa713c0a515a11fffcefa5d9f18cb4d42a9906ef10b2c05998992157030c8"
+    },
+    {
+     "bytes": 16505,
+     "path": "wc7/run-root/prove-held/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "89821407fef33f6495450f90f7eff24a51168758fe8380cd050943cc543ffc4f"
+    },
+    {
+     "bytes": 13314,
+     "path": "wc7/run-root/prove-held/reproof-register.json",
+     "role": "window_record",
+     "sha256": "20ef26be5dfd60306eafe4ecca4d0e9446c91653d9874b4b9a502476478aad58"
+    },
+    {
+     "bytes": 3468,
+     "path": "wc7/run-root/wc7-window-record.json",
+     "role": "window_record",
+     "sha256": "08f4365d4e642d713db2174c8d8e092965a61806d3fc9d7883e75226f1f5cfec"
+    },
+    {
+     "bytes": 1188,
+     "path": "wc7/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "687f007ab0cd845200e8951c1b325c1e76a1d462512868f3dc0893f5fd1c6955"
+    },
+    {
+     "bytes": 577,
+     "path": "wc7/wiring/cfg-dev.json",
+     "role": "window_record",
+     "sha256": "e1d44418ea0dc847e0be4500bd27a912989aac080b42aa1daf0c54c763dac74d"
+    },
+    {
+     "bytes": 577,
+     "path": "wc7/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "7a874eb5da91f991b22abc23aaa8ea917eba5f1792119d369b36c77fa631a8bb"
+    },
+    {
+     "bytes": 871,
+     "path": "wc7/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "028a0dd620f7837f373cb9810ca5c9f420b92eda465d2d3d370dfb7dc46a344f"
+    },
+    {
+     "bytes": 516,
+     "path": "wc7/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 251,
+     "path": "wc7/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "ec797e2f89f18dc6b3858541f5b82fd1f221cc26fe4e5cceda7d2311000437b8"
+    },
+    {
+     "bytes": 2992,
+     "path": "wc7/wiring/wc7-load-infra.py",
+     "role": "window_record",
+     "sha256": "a429f8ff9c8fda85dded26940ff4956ec51bdcbced9e8229f6233fc5b2a51d04"
+    },
+    {
+     "bytes": 3573,
+     "path": "wc7/wiring/wc7-prove.sh",
+     "role": "window_record",
+     "sha256": "58cd921d9250e769d28802b3e3f451f55f1dcba481b8c747d18612ec21e54291"
+    },
+    {
+     "bytes": 2958,
+     "path": "wc7/wiring/wc7-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5234,
+     "path": "wc7/wiring/wc7-setup.sh",
+     "role": "window_record",
+     "sha256": "136d4d4016db2a8d2c9791755cb237e22f10b6c57f9ac52b022010c5e21fa305"
+    }
+   ],
+   "ticket": "R6.45g",
+   "window": "wc7"
+  }
+ ],
+ "schema": "hh-receipt-index/1"
+}
