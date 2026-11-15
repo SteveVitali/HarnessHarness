@@ -1,0 +1,95 @@
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+curl is already the newest version (7.88.1-10+deb12u14).
+The following additional packages will be installed:
+  bzip2 file libdeflate0 libfreetype6 libfribidi0 libglib2.0-0 libglib2.0-data
+  libgomp1 libgraphite2-3 libharfbuzz0b libimagequant0 libjbig0
+  libjpeg62-turbo liblcms2-2 liblerc4 liblzma5 libmagic-mgc libmagic1 libnsl2
+  libopenjp2-7 libpng16-16 libpython3-stdlib libpython3.11-minimal
+  libpython3.11-stdlib libraqm0 libtiff6 libtirpc-common libtirpc3 libwebp7
+  libwebpdemux2 libwebpmux3 libxml2 mailcap media-types mime-support python3
+  python3-minimal python3-olefile python3.11 python3.11-minimal
+  shared-mime-info xdg-user-dirs xz-utils
+Suggested packages:
+  bzip2-doc low-memory-monitor liblcms2-utils python3-doc python3-tk
+  python3-venv python-pil-doc python3.11-venv python3.11-doc binutils
+  binfmt-support
+The following NEW packages will be installed:
+  bzip2 file libdeflate0 libfreetype6 libfribidi0 libglib2.0-0 libglib2.0-data
+  libgomp1 libgraphite2-3 libharfbuzz0b libimagequant0 libjbig0
+  libjpeg62-turbo liblcms2-2 liblerc4 libmagic-mgc libmagic1 libnsl2
+  libopenjp2-7 libpng16-16 libpython3-stdlib libpython3.11-minimal
+  libpython3.11-stdlib libraqm0 libtiff6 libtirpc-common libtirpc3 libwebp7
+  libwebpdemux2 libwebpmux3 libxml2 mailcap media-types mime-support python3
+  python3-minimal python3-olefile python3-pil python3.11 python3.11-minimal
+  shared-mime-info xdg-user-dirs xz-utils
+The following packages will be upgraded:
+  liblzma5
+1 upgraded, 43 newly installed, 0 to remove and 44 not upgraded.
+Need to get 15.8 MB of archives.
+After this operation, 64.5 MB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian-security bookworm-security/main amd64 libpython3.11-minimal amd64 3.11.2-6+deb12u9 [821 kB]
+Get:2 http://deb.debian.org/debian-security bookworm-security/main amd64 python3.11-minimal amd64 3.11.2-6+deb12u9 [2055 kB]
+Get:3 http://deb.debian.org/debian bookworm/main amd64 python3-minimal amd64 3.11.2-1+b1 [26.3 kB]
+Get:4 http://deb.debian.org/debian bookworm/main amd64 media-types all 10.0.0 [26.1 kB]
+Get:5 http://deb.debian.org/debian bookworm/main amd64 mailcap all 3.70+nmu1 [32.0 kB]
+Get:6 http://deb.debian.org/debian bookworm/main amd64 mime-support all 3.66 [10.9 kB]
+Get:7 http://deb.debian.org/debian-security bookworm-security/main amd64 liblzma5 amd64 5.4.1-1+deb12u2 [206 kB]
+Get:8 http://deb.debian.org/debian bookworm/main amd64 libtirpc-common all 1.3.3+ds-1 [14.0 kB]
+Get:9 http://deb.debian.org/debian bookworm/main amd64 libtirpc3 amd64 1.3.3+ds-1 [85.2 kB]
+Get:10 http://deb.debian.org/debian bookworm/main amd64 libnsl2 amd64 1.3.0-2 [39.5 kB]
+Get:11 http://deb.debian.org/debian-security bookworm-security/main amd64 libpython3.11-stdlib amd64 3.11.2-6+deb12u9 [1798 kB]
+Get:12 http://deb.debian.org/debian-security bookworm-security/main amd64 python3.11 amd64 3.11.2-6+deb12u9 [575 kB]
+Get:13 http://deb.debian.org/debian bookworm/main amd64 libpython3-stdlib amd64 3.11.2-1+b1 [9312 B]
+Get:14 http://deb.debian.org/debian bookworm/main amd64 python3 amd64 3.11.2-1+b1 [26.3 kB]
+Get:15 http://deb.debian.org/debian bookworm/main amd64 bzip2 amd64 1.0.8-5+b1 [49.8 kB]
+Get:16 http://deb.debian.org/debian bookworm/main amd64 libmagic-mgc amd64 1:5.44-3 [305 kB]
+Get:17 http://deb.debian.org/debian bookworm/main amd64 libmagic1 amd64 1:5.44-3 [104 kB]
+Get:18 http://deb.debian.org/debian bookworm/main amd64 file amd64 1:5.44-3 [42.5 kB]
+Get:19 http://deb.debian.org/debian-security bookworm-security/main amd64 xz-utils amd64 5.4.1-1+deb12u2 [471 kB]
+Get:20 http://deb.debian.org/debian bookworm/main amd64 libdeflate0 amd64 1.14-1 [61.4 kB]
+Get:21 http://deb.debian.org/debian-security bookworm-security/main amd64 libpng16-16 amd64 1.6.39-2+deb12u6 [277 kB]
+Get:22 http://deb.debian.org/debian bookworm/main amd64 libfreetype6 amd64 2.12.1+dfsg-5+deb12u4 [398 kB]
+Get:23 http://deb.debian.org/debian bookworm/main amd64 libfribidi0 amd64 1.0.8-2.1 [65.0 kB]
+Err:24 http://deb.debian.org/debian bookworm/main amd64 libglib2.0-0 amd64 2.74.6-2+deb12u7
+  404  Not Found [IP: 127.0.0.1 3128]
+Err:25 http://deb.debian.org/debian bookworm/main amd64 libglib2.0-data all 2.74.6-2+deb12u7
+  404  Not Found [IP: 127.0.0.1 3128]
+Get:26 http://deb.debian.org/debian bookworm/main amd64 libgomp1 amd64 12.2.0-14+deb12u1 [116 kB]
+Get:27 http://deb.debian.org/debian bookworm/main amd64 libgraphite2-3 amd64 1.3.14-1 [81.2 kB]
+Get:28 http://deb.debian.org/debian bookworm/main amd64 libharfbuzz0b amd64 6.0.0+dfsg-3 [1945 kB]
+Get:29 http://deb.debian.org/debian bookworm/main amd64 libimagequant0 amd64 2.17.0-1 [32.5 kB]
+Get:30 http://deb.debian.org/debian bookworm/main amd64 libjbig0 amd64 2.1-6.1 [31.7 kB]
+Get:31 http://deb.debian.org/debian bookworm/main amd64 libjpeg62-turbo amd64 1:2.1.5-2 [166 kB]
+Get:32 http://deb.debian.org/debian-security bookworm-security/main amd64 liblcms2-2 amd64 2.14-2+deb12u1 [154 kB]
+Get:33 http://deb.debian.org/debian bookworm/main amd64 liblerc4 amd64 4.0.0+ds-2 [170 kB]
+Get:34 http://deb.debian.org/debian-security bookworm-security/main amd64 libopenjp2-7 amd64 2.5.0-2+deb12u3 [189 kB]
+Get:35 http://deb.debian.org/debian bookworm/main amd64 libraqm0 amd64 0.7.0-4.1 [10.6 kB]
+Get:36 http://deb.debian.org/debian bookworm/main amd64 libwebp7 amd64 1.2.4-0.2+deb12u1 [286 kB]
+Get:37 http://deb.debian.org/debian-security bookworm-security/main amd64 libtiff6 amd64 4.5.0-6+deb12u4 [316 kB]
+Get:38 http://deb.debian.org/debian bookworm/main amd64 libwebpdemux2 amd64 1.2.4-0.2+deb12u1 [99.4 kB]
+Get:39 http://deb.debian.org/debian bookworm/main amd64 libwebpmux3 amd64 1.2.4-0.2+deb12u1 [109 kB]
+Ign:40 http://deb.debian.org/debian bookworm/main amd64 libxml2 amd64 2.9.14+dfsg-1.3~deb12u4
+Get:41 http://deb.debian.org/debian bookworm/main amd64 python3-olefile all 0.46-3 [36.1 kB]
+Get:42 http://deb.debian.org/debian bookworm/main amd64 python3-pil amd64 9.4.0-1.1+deb12u1 [472 kB]
+Get:43 http://deb.debian.org/debian bookworm/main amd64 shared-mime-info amd64 2.2-1 [729 kB]
+Get:44 http://deb.debian.org/debian bookworm/main amd64 xdg-user-dirs amd64 0.18-1 [54.4 kB]
+Get:40 http://deb.debian.org/debian bookworm/main amd64 libxml2 amd64 2.9.14+dfsg-1.3~deb12u4 [687 kB]
+Fetched 13.2 MB in 4s (3749 kB/s)

@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc7/tb21/tasks/query-optimize",
+        "source": "tasks"
+    },
+    "trial_name": "query-optimize__uAX9Psc",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc7/jobs/w1-o-query-optimize-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "0fed7a53-15d8-4728-85c3-3812ea2ea3ab"
+}

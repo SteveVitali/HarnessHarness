@@ -1,0 +1,79 @@
+Get:1 http://deb.debian.org/debian stable InRelease [140 kB]
+Get:2 http://deb.debian.org/debian trixie InRelease [140 kB]
+Hit:3 http://deb.debian.org/debian trixie-updates InRelease
+Hit:4 http://deb.debian.org/debian-security trixie-security InRelease
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Ign:6 http://deb.debian.org/debian trixie/main amd64 Packages
+Ign:5 http://deb.debian.org/debian stable/main Sources
+Err:6 http://deb.debian.org/debian trixie/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3130]
+  404  Not Found [IP: 127.0.0.1 3130]
+Err:5 http://deb.debian.org/debian stable/main Sources
+  502  Bad Gateway [IP: 127.0.0.1 3130]
+  404  Not Found [IP: 127.0.0.1 3130]
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  bash-completion krb5-locales libbrotli1 libcom-err2 libcurl4t64
+  libgnutls30t64 libgssapi-krb5-2 libidn2-0 libk5crypto3 libkeyutils1
+  libkrb5-3 libkrb5support0 libldap-common libldap2 libnghttp2-14 libnghttp3-9
+  libp11-kit0 libpsl5t64 librtmp1 libsasl2-2 libsasl2-modules
+  libsasl2-modules-db libssh2-1t64 libtasn1-6 libunistring5 publicsuffix
+Suggested packages:
+  gnutls-bin krb5-doc krb5-user libsasl2-modules-gssapi-mit
+  | libsasl2-modules-gssapi-heimdal libsasl2-modules-ldap libsasl2-modules-otp
+  libsasl2-modules-sql
+The following NEW packages will be installed:
+  bash-completion curl krb5-locales libbrotli1 libcom-err2 libcurl4t64
+  libgnutls30t64 libgssapi-krb5-2 libidn2-0 libk5crypto3 libkeyutils1
+  libkrb5-3 libkrb5support0 libldap-common libldap2 libnghttp2-14 libnghttp3-9
+  libp11-kit0 libpsl5t64 librtmp1 libsasl2-2 libsasl2-modules
+  libsasl2-modules-db libssh2-1t64 libtasn1-6 libunistring5 publicsuffix
+0 upgraded, 27 newly installed, 0 to remove and 25 not upgraded.
+Need to get 5703 kB of archives.
+After this operation, 18.3 MB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian trixie/main amd64 bash-completion all 1:2.16.0-7 [319 kB]
+Get:2 http://deb.debian.org/debian-security trixie-security/main amd64 krb5-locales all 1.21.3-5+deb13u1 [101 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security/main amd64 libbrotli1 amd64 1.1.0-2+deb13u1 [304 kB]
+Get:4 http://deb.debian.org/debian-security trixie-security/main amd64 libkrb5support0 amd64 1.21.3-5+deb13u1 [33.1 kB]
+Err:5 http://deb.debian.org/debian trixie/main amd64 libcom-err2 amd64 1.47.2-3+b3
+  404  Not Found [IP: 127.0.0.1 3130]
+Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 libk5crypto3 amd64 1.21.3-5+deb13u1 [81.2 kB]
+Get:7 http://deb.debian.org/debian trixie/main amd64 libkeyutils1 amd64 1.6.3-6 [9456 B]
+Get:8 http://deb.debian.org/debian-security trixie-security/main amd64 libkrb5-3 amd64 1.21.3-5+deb13u1 [326 kB]
+Get:9 http://deb.debian.org/debian-security trixie-security/main amd64 libgssapi-krb5-2 amd64 1.21.3-5+deb13u1 [138 kB]
+Get:10 http://deb.debian.org/debian trixie/main amd64 libunistring5 amd64 1.3-2 [477 kB]
+Get:11 http://deb.debian.org/debian trixie/main amd64 libidn2-0 amd64 2.3.8-2 [109 kB]
+Get:12 http://deb.debian.org/debian trixie/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg1-9 [19.8 kB]
+Get:13 http://deb.debian.org/debian trixie/main amd64 libsasl2-2 amd64 2.1.28+dfsg1-9 [57.5 kB]
+Get:14 http://deb.debian.org/debian trixie/main amd64 libldap2 amd64 2.6.10+dfsg-1 [194 kB]
+Get:15 http://deb.debian.org/debian-security trixie-security/main amd64 libnghttp2-14 amd64 1.64.0-1.1+deb13u1 [76.2 kB]
+Get:16 http://deb.debian.org/debian trixie/main amd64 libnghttp3-9 amd64 1.8.0-1 [67.7 kB]
+Get:17 http://deb.debian.org/debian trixie/main amd64 libpsl5t64 amd64 0.21.2-1.1+b1 [57.2 kB]
+Get:18 http://deb.debian.org/debian trixie/main amd64 libp11-kit0 amd64 0.25.5-3 [425 kB]
+Err:19 http://deb.debian.org/debian trixie/main amd64 libtasn1-6 amd64 4.20.0-2
+  404  Not Found [IP: 127.0.0.1 3130]
+Get:20 http://deb.debian.org/debian-security trixie-security/main amd64 libgnutls30t64 amd64 3.8.9-3+deb13u4 [1469 kB]
+Get:21 http://deb.debian.org/debian trixie/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b5 [58.8 kB]
+Get:22 http://deb.debian.org/debian-security trixie-security/main amd64 libssh2-1t64 amd64 1.11.1-1+deb13u1 [245 kB]
+Get:23 http://deb.debian.org/debian-security trixie-security/main amd64 libcurl4t64 amd64 8.14.1-2+deb13u7 [392 kB]
+Get:24 http://deb.debian.org/debian-security trixie-security/main amd64 curl amd64 8.14.1-2+deb13u7 [270 kB]
+Get:25 http://deb.debian.org/debian trixie/main amd64 libldap-common all 2.6.10+dfsg-1 [35.1 kB]
+Get:26 http://deb.debian.org/debian trixie/main amd64 libsasl2-modules amd64 2.1.28+dfsg1-9 [66.7 kB]
+Get:27 http://deb.debian.org/debian trixie/main amd64 publicsuffix all 20250328.1952-0.1 [296 kB]
+Fetched 5628 kB in 2s (2988 kB/s)

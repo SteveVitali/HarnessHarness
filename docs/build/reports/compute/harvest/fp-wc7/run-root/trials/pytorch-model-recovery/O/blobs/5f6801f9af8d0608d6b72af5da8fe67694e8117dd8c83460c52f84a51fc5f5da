@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc7/tb21/tasks/pytorch-model-recovery",
+        "source": "tasks"
+    },
+    "trial_name": "pytorch-model-recovery__FkkXPHq",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc7/jobs/w1-o-pytorch-model-recovery-2",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "6d49c700-6eee-440d-b9ab-38cca2785708"
+}

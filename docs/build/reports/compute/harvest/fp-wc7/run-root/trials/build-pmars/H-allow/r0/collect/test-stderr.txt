@@ -1,0 +1,9 @@
+E: Failed to fetch http://deb.debian.org/debian/dists/stable/main/source/Sources  404  Not Found [IP: 127.0.0.1 3130]
+E: Failed to fetch http://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages  404  Not Found [IP: 127.0.0.1 3130]
+E: Some index files failed to download. They have been ignored, or old ones used instead.
+E: Failed to fetch http://deb.debian.org/debian/pool/main/e/e2fsprogs/libcom-err2_1.47.2-3%2bb3_amd64.deb  404  Not Found [IP: 127.0.0.1 3130]
+E: Failed to fetch http://deb.debian.org/debian/pool/main/libt/libtasn1-6/libtasn1-6_4.20.0-2_amd64.deb  404  Not Found [IP: 127.0.0.1 3130]
+E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?
+/tests/test.sh: line 8: curl: command not found
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found

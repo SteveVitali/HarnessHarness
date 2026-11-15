@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc7/tb21/tasks/sqlite-db-truncate",
+        "source": "tasks"
+    },
+    "trial_name": "sqlite-db-truncate__fLq5Nmq",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc7/jobs/w1-o-sqlite-db-truncate-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "44c31f2e-78ca-481e-9e3b-5307a9d4d695"
+}

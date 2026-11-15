@@ -1,0 +1,33 @@
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [370 kB]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Fetched 619 kB in 9s (71.2 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Some packages could not be installed. This may mean that you have
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ libcurl4 : Depends: libgssapi-krb5-2 (>= 1.17) but it is not going to be installed
+            Depends: libldap-2.5-0 (>= 2.5.4) but it is not installable
+            Depends: libpsl5 (>= 0.16.0) but it is not installable
+            Depends: librtmp1 (>= 2.3) but it is not installable
