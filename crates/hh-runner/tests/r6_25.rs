@@ -273,6 +273,7 @@ impl CellOps for FakeCell {
             exit_code: Some(0),
             timed_out: false,
             stdout: vec![],
+            stderr: vec![],
         })
     }
     fn terminate_group(&mut self, _p: &str) -> Result<(), CellError> {

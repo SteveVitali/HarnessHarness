@@ -50,6 +50,11 @@ pub struct CellOutcome {
     pub timed_out: bool,
     /// Captured stdout bytes.
     pub stdout: Vec<u8>,
+    /// Captured stderr bytes — the bootstrap diagnostics (apt `E:`/
+    /// `Err:` lines, `curl: (N)` errors) live on stderr; a null-sink
+    /// stderr leaves a failed verifier no recorded evidence (the Wc5/
+    /// Wc6 `allowlist_gap{unknown}` signature).
+    pub stderr: Vec<u8>,
 }
 
 /// `CellOps` — the cell primitive seam the lifecycle drives. The podman
@@ -134,7 +139,7 @@ impl CellOps for PodmanCell<'_> {
         use std::io::Read;
         let mut cmd = self.backend.exec_command(&spec.argv, Some(&spec.cwd), &[]);
         cmd.stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null());
         let mut child = cmd.spawn().map_err(|e| err("exec", e.to_string()))?;
         let deadline = spec
@@ -143,13 +148,18 @@ impl CellOps for PodmanCell<'_> {
         loop {
             if let Ok(Some(status)) = child.try_wait() {
                 let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
                 if let Some(mut s) = child.stdout.take() {
                     let _ = s.read_to_end(&mut stdout);
+                }
+                if let Some(mut s) = child.stderr.take() {
+                    let _ = s.read_to_end(&mut stderr);
                 }
                 return Ok(CellOutcome {
                     exit_code: status.code().map(|c| c as i64),
                     timed_out: false,
                     stdout,
+                    stderr,
                 });
             }
             if let Some(d) = deadline {
@@ -161,6 +171,7 @@ impl CellOps for PodmanCell<'_> {
                         exit_code: None,
                         timed_out: true,
                         stdout: Vec::new(),
+                        stderr: Vec::new(),
                     });
                 }
             }
@@ -371,6 +382,25 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
                     _ => files.test_stdout = Some(bytes),
                 }
             }
+        }
+        // The verifier's own streams are the bootstrap evidence: a
+        // `test.sh` that dies before its pytest leg (a denied/errored
+        // apt/curl/uvx bootstrap — the Wc5/Wc6 H-allow signature) writes
+        // no `/logs/verifier` file of its own, and the task's frozen
+        // script never redirects one. The exec capture is recorded
+        // verbatim — `test-stdout.txt` fills only the absent in-cell
+        // member (the task's own file wins), `test-stderr.txt` rides
+        // beside it so the §3.4 signature check sees `E:`/`curl:` lines
+        // on either stream.
+        if files.test_stdout.is_none() && !out.stdout.is_empty() {
+            let dst = plan.collect_dir.join("test-stdout.txt");
+            let _ = std::fs::write(&dst, &out.stdout);
+            files.test_stdout = Some(out.stdout.clone());
+        }
+        if !out.stderr.is_empty() {
+            let dst = plan.collect_dir.join("test-stderr.txt");
+            let _ = std::fs::write(&dst, &out.stderr);
+            files.test_stderr = Some(out.stderr.clone());
         }
         report.verify = Some(VerifyOutcome {
             files,

@@ -32,8 +32,13 @@ pub struct RewardFileSet {
     pub reward_txt: Option<Vec<u8>>,
     /// `/logs/verifier/ctrf.json` bytes.
     pub ctrf_json: Option<Vec<u8>>,
-    /// `/logs/verifier/test-stdout.txt` bytes.
+    /// `/logs/verifier/test-stdout.txt` bytes (or the verifier exec's
+    /// captured stdout when the task's frozen script writes no file).
     pub test_stdout: Option<Vec<u8>>,
+    /// The verifier exec's captured stderr — the bootstrap diagnostics
+    /// (apt `E:`/`Err:` lines, `curl: (N)`) live on stderr, never the
+    /// stdout leg.
+    pub test_stderr: Option<Vec<u8>>,
 }
 
 impl RewardFileSet {
@@ -45,6 +50,7 @@ impl RewardFileSet {
             ("reward.txt", &self.reward_txt),
             ("ctrf.json", &self.ctrf_json),
             ("test-stdout.txt", &self.test_stdout),
+            ("test-stderr.txt", &self.test_stderr),
         ] {
             if let Some(b) = bytes {
                 m.insert(
@@ -363,6 +369,11 @@ pub fn classify(
             .as_deref()
             .map(has_bootstrap_signature)
             .unwrap_or(false)
+            || files
+                .test_stderr
+                .as_deref()
+                .map(has_bootstrap_signature)
+                .unwrap_or(false)
         {
             return unavailable("bootstrap:signature");
         }

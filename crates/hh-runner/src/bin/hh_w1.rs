@@ -856,7 +856,7 @@ impl CellOps for DriveCell<'_> {
             .backend
             .exec_command(&spec.argv, Some(&spec.cwd), &self.env);
         cmd.stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .stdin(Stdio::null());
         let mut child = cmd.spawn().map_err(|e| CellError {
             op: "exec",
@@ -868,14 +868,20 @@ impl CellOps for DriveCell<'_> {
         loop {
             if let Ok(Some(s)) = child.try_wait() {
                 let mut stdout = Vec::new();
+                let mut stderr = Vec::new();
                 if let Some(mut o) = child.stdout.take() {
                     use std::io::Read;
                     let _ = o.read_to_end(&mut stdout);
+                }
+                if let Some(mut o) = child.stderr.take() {
+                    use std::io::Read;
+                    let _ = o.read_to_end(&mut stderr);
                 }
                 return Ok(CellOutcome {
                     exit_code: s.code().map(|c| c as i64),
                     timed_out: false,
                     stdout,
+                    stderr,
                 });
             }
             if let Some(d) = deadline {
@@ -887,6 +893,7 @@ impl CellOps for DriveCell<'_> {
                         exit_code: None,
                         timed_out: true,
                         stdout: vec![],
+                        stderr: vec![],
                     });
                 }
             }

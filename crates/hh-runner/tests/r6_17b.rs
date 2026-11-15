@@ -307,6 +307,7 @@ fn fault_injection_classifies_egress_denied() {
         reward_txt: None,
         ctrf_json: None,
         test_stdout: None,
+        test_stderr: None,
     };
     let rows = vec![MediatorRow {
         phase: "verify".into(),

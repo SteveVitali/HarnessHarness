@@ -132,6 +132,15 @@ pub fn registry_hosts() -> BTreeSet<String> {
 /// The always-denied answer-key hosts (§3.5 — denies are host-level).
 pub const PERMANENT_DENY_HOSTS: [&str; 2] = ["hub.harborframework.com", "tbench.ai"];
 
+/// Verify-phase-only mirror hosts — reachable only through an already-
+/// granted host's redirect, so no `tests/*` scan (ruling S-3) can ever
+/// name them: `release-assets.githubusercontent.com` is github.com's
+/// release-asset download target (the uv installer fetch path — the Wc6
+/// H-allow denial behind the duplicate-`Host` forward defect). A
+/// verify-phase grant names the redirect *destination*, never the apex
+/// github grant itself.
+pub const VERIFY_MIRROR_HOSTS: [&str; 1] = ["release-assets.githubusercontent.com"];
+
 /// `github.com` — denied whenever it is not granted (always in the
 /// first pass); named so the vocabulary has one home.
 pub const GITHUB: &str = "github.com";
@@ -178,7 +187,11 @@ impl Allowlist {
             .union(&registry_hosts())
             .cloned()
             .collect();
-        let verify: BTreeSet<String> = agent.union(&verify_extra).cloned().collect();
+        let verify: BTreeSet<String> = agent
+            .union(&verify_extra)
+            .cloned()
+            .chain(VERIFY_MIRROR_HOSTS.iter().map(|s| s.to_string()))
+            .collect();
         let mut permanent_denies: BTreeSet<String> =
             PERMANENT_DENY_HOSTS.iter().map(|s| s.to_string()).collect();
         permanent_denies.extend(mirror_denies.iter().cloned());
