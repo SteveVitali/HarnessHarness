@@ -1,0 +1,4 @@
+debconf: delaying package configuration, since apt-utils is not installed
+curl: (28) Proxy CONNECT aborted due to timeout
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found

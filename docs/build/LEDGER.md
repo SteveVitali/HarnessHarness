@@ -17,7 +17,7 @@
 ```
 projectStatus: IN_PROGRESS
 nextTicket: R6.45g
-lastCompleted:   R6.45f
+lastCompleted:   GATE-G28g
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-wc7-machinery
+chainTip:        codex/harnessharness-r6.45g
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-15T03:25Z
+updatedAt:       2026-11-15T14:58Z
 ```
 
 ## OPEN FINDINGS

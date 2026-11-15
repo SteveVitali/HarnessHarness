@@ -1,0 +1,27 @@
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3130]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3130]
+Ign:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+Err:4 http://deb.debian.org/debian bookworm/main amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3130]
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Package libsm6 is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+Package libxext6 is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+

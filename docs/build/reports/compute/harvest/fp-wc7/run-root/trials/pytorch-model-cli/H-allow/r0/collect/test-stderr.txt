@@ -1,0 +1,7 @@
+E: Failed to fetch http://deb.debian.org/debian/dists/bookworm/main/binary-amd64/Packages  502  Bad Gateway [IP: 127.0.0.1 3130]
+E: Some index files failed to download. They have been ignored, or old ones used instead.
+E: Package 'libsm6' has no installation candidate
+E: Package 'libxext6' has no installation candidate
+/tests/test.sh: line 8: curl: command not found
+/tests/test.sh: line 9: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 18: uvx: command not found

@@ -1,0 +1,42 @@
+{
+ "freeze": {
+  "carried_verbatim_from": "docs/build/reports/2026-11-14-fp-egress-allowlist-freeze-epoch-3.json",
+  "consumed_via": "cfg.freeze_file=/opt/wc7/freeze.json",
+  "digest": "sha256:787db9e1635a6ae8ebf5d50c88a1d4e33ba6fd3707f5a09dc20dee9398f6de21",
+  "epoch": 3
+ },
+ "in_window_machinery_steps": "recorded carry-overs only \u2014 upstream podman-compose 1.5.0 on PATH (smoke up+down rc 0); usermod -aG hh + podman.socket anomaly repaired (recurred \u2014 socket came up 660:root:root); unqualified-search-registries docker.io appended (the setup's grep -q matched the commented example \u2014 appended for real before pulls); corpus terminal-bench-2-1 @12b75656; harbor @ff2a1ef4; EPOCH-3 freeze landed verbatim at /opt/wc7/freeze.json (sha256:787db9e1\u2026); 14 task env images pulled by declared task.toml docker_image refs; images.json 14 digest-pinned members",
+ "live_evidence_ref": "docs/build/reports/live/2026-11-15-reproof-wc7.json",
+ "re_proof": {
+  "deadline_driver_epoch_utc": 1794757948,
+  "driver": "~/hh-retained/wc7/bin/wc7-prove.sh over IAP-ssh detached",
+  "outcome": "completed \u2014 the re-proof ran ~08:19Z\u2192~13:41Z under epoch-3 inside D=8h (~5.4h wall): BOTH legs landed hh-reproof-packet/1 (prove-held r=3 30 surfaces, prove-dev r=2 8 surfaces). 0/14 covering verdicts: 13 exclude:runner_infeasible:allowlist_gap{unknown} (O R/R + H-pub R/R, H-allow < R/R with denied_hosts [] \u2014 the committed classifier's {unknown} basis) + query-optimize repair:machinery (standing append-only discordance). SEVENTH machinery defect surfaced live: the verifier streams now land (the b8310b68 repair works \u2014 single-Host on the wire, every request allowed, zero denied hosts) yet apt's noble/universe Packages index (~15MB xz / ~50MB plain) exceeds the mediated forward's 8 MiB max_body cap in egress.rs (read_response_full r 8*1024*1024 \u2014 pre-existing since a7292296/R4.5c) \u2192 502 Bad Gateway \u2192 curl/uvx never install \u2192 reward.txt = 0 \u2192 verifier_unavailable:bootstrap:signature per cell.",
+  "seventh_defect": "mediated_forward_body_cap \u2014 read_response_full max_body 8 MiB (crates/hh-env/src/egress.rs) < Ubuntu noble/universe Packages index \u2192 502 on the verify bootstrap's apt fetch; diagnosed live from events.wal (all allowed, zero denied) + the landed test-stdout/stderr (E: 502 Bad Gateway [127.0.0.1:3128]). Repair is a further gate's scope \u2014 never fixed in-window.",
+  "surfaces": {
+   "dev": {
+    "incomplete": [],
+    "landed": 8,
+    "total": 8
+   },
+   "held": {
+    "incomplete": [],
+    "landed": 30,
+    "total": 30
+   }
+  }
+ },
+ "recorded_at": "2026-11-15T13:45:00Z",
+ "runner": {
+  "build": "source",
+  "commit": "83bfb897462d09c3ec9b4599ffe79d228d9a2010",
+  "in_window_digests": {
+   "hh-egress-mediator": "105946e5473a0f7e9846f524592bca491b84bef6e47362cd1f950366c6277029",
+   "hh-helper": "7fb122f5576927a126e205455d181dc8409f6aee0fdc9da6039f4f4b9db4f450",
+   "hh-w1": "89ffcc805d5a21cab1cc5aa0a5aae9a346bb7b41085acdce06816a91719b75ac"
+  },
+  "note": "four-times-repaired build \u2014 hh-w1 + mediator digests differ from Wc4\u2013Wc6 (b8310b68 touches hh-env + hh-runner); hh-helper byte-identical (repair touched no helper code). Repair-host builds cited: sha256:f9b6ad05\u2026/c8184fed\u2026/b1ba7ffdc\u2026/ed4e132a\u2026; Wc4\u2013Wc6 in-window sha256:f7b4d146\u2026/885df32d\u2026/7fb122f5\u2026"
+ },
+ "schema": "hh-wc-repair/1",
+ "ticket": "R6.45g",
+ "window": "wc7"
+}

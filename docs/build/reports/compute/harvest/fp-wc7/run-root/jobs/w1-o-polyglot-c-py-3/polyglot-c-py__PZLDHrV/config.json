@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc7/tb21/tasks/polyglot-c-py",
+        "source": "tasks"
+    },
+    "trial_name": "polyglot-c-py__PZLDHrV",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc7/jobs/w1-o-polyglot-c-py-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "202e5038-be8e-43dc-8013-db71a72b4942"
+}

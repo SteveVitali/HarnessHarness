@@ -1,0 +1,114 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the Wc7 re-proof on the four-times-repaired runner (b8310b68 duplicate-Host repair live-verified: single-Host on the wire, zero denied hosts, verifier streams landing as evidence) under the epoch-3 widened egress allowlist (sha256:787db9e1\u2026, release-assets.githubusercontent.com granted) ran to COMPLETION inside D=8h (~08:19Z\u2192~13:41Z, ~5.4h wall): both packets landed (prove-held r=3 30/30 surfaces, prove-dev r=2 8/8). A SEVENTH machinery defect surfaced: the mediated forward's 8 MiB max_body cap (crates/hh-env/src/egress.rs read_response_full) rejects Ubuntu noble/universe Packages index (~15MB xz) \u2192 502 Bad Gateway \u2192 apt bootstrap fails \u2192 curl/uvx never install \u2192 reward.txt = 0 \u2192 verifier_unavailable:bootstrap:signature per cell \u2014 classified honestly by the repaired machinery (no more allowlist_gap{unknown} rollup ambiguity at cell level; member verdicts stay allowlist_gap{unknown} by table rule since denied_hosts is empty). 13 exclude:runner_infeasible:allowlist_gap{unknown} + query-optimize repair:machinery (standing append-only discordance). The task list stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}. Repair of the body cap is a further gate's scope \u2014 never fixed in-window.",
+ "gate": "GATE-G28g",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "repair:machinery"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc7_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-1",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc7_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-2",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc7_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-3",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc7_verdict": "no_member_to_reproof"
+  }
+ ],
+ "recorded_at": "2026-11-15T13:50:00Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists": {
+  "state": "blocked"
+ },
+ "window": "wc7"
+}

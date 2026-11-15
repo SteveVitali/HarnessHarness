@@ -1,0 +1,12 @@
+{
+    "task": {
+        "path": "/opt/wc7/tb21/tasks/make-doom-for-mips",
+        "source": "tasks"
+    },
+    "trial_name": "make-doom-for-mips__WLFk8PK",
+    "trials_dir": "/var/lib/hh/runs/run-root-wc7/jobs/w1-o-make-doom-for-mips-3",
+    "environment": {
+        "type": "podman"
+    },
+    "job_id": "8206a3e1-301d-4d2e-935c-12091b95c220"
+}

@@ -1,0 +1,47 @@
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2211 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1471 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:7 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [55.6 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1557 kB]
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Get:11 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [61.7 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2179 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2324 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1792 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.0 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [36.0 kB]
+Get:19 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [669 B]
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Err:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Err:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Ign:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+Err:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages
+  502  Bad Gateway [IP: 127.0.0.1 3128]
+Fetched 14.6 MB in 18s (835 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Some packages could not be installed. This may mean that you have
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ libcurl4t64 : Depends: libgssapi-krb5-2 (>= 1.17) but it is not going to be installed
+               Depends: libpsl5t64 (>= 0.16.0) but it is not installable
+               Depends: librtmp1 (>= 2.3) but it is not installable
+               Depends: libssh-4 (>= 0.9.0) but it is not going to be installed
+               Recommends: ca-certificates but it is not going to be installed

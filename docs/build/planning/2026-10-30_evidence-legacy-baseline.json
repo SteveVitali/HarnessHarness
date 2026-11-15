@@ -278,6 +278,24 @@
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 1
    }
+  },
+  {
+   "id": "wc7-runroot-size-1",
+   "date": "2026-11-15",
+   "recorded_by": "R6.45g subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic \u2014 the Wc7 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
+   "provenance": {
+    "finding": "docs/build/runs/R6.45g.md \u2014 the Wc7 harvest's run-root-wc7.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (mediator-store internals excluded \u2014 events.wal/blobs are archive internals, never the git-committed record set); evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28g.md \u2014 PROV-Wc7 (the window this record layer belongs to)",
+    "handoff": "R6.45g \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc4/wc6 precedent"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-wc7/run-root-wc7\\.tar\\.gz$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 1
+   }
   }
  ]
 }

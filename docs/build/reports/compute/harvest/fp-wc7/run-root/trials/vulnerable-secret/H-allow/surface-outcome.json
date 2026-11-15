@@ -1,0 +1,1 @@
+{"denied_hosts":[],"digests":{"image":"alexgshaw/vulnerable-secret@sha256:61ebb40454dd103aa2f7e71ad6dafd91cf2b301e6bb07e69d5b472412d1ee15b","reward":"sha256:9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa","stdout":"sha256:afe5ff11794202d8e6e4d55f4b4c3b99eae4655195b91612e04f187d9774b5fd"},"harbor_exception":null,"rewards":[false,false,false],"wall_ms":37785}
