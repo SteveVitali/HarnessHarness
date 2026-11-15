@@ -17,10 +17,10 @@
 //! grant can never reach without it — the next denial behind the 400s).
 
 use std::collections::BTreeSet;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 
-use hharness_env::egress::{EgressTransport, LocalHttpTransport};
+use hharness_env::egress::{EgressTransport, LocalHttpTransport, FORWARD_MAX_BODY};
 use hharness_env::egress_allowlist::{Allowlist, ImageFamily, VERIFY_MIRROR_HOSTS};
 
 /// Serve one captured request: record the verbatim head bytes, answer a
@@ -42,6 +42,35 @@ fn serve_once(listener: TcpListener) -> std::thread::JoinHandle<String> {
         let mut w = r.into_inner();
         let _ = w.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
         head
+    })
+}
+
+/// Serve one response with a `body_len`-byte body (the apt-index scale
+/// leg's upstream). The request head is consumed first; the body is
+/// written in blocks, not a single giant allocation.
+fn serve_body(listener: TcpListener, body_len: usize) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let (s, _) = listener.accept().unwrap();
+        let mut r = BufReader::new(s);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let n = r.read_line(&mut line).unwrap();
+            if n == 0 || line == "\r\n" {
+                break;
+            }
+        }
+        let mut w = r.into_inner();
+        let head =
+            format!("HTTP/1.1 200 OK\r\nContent-Length: {body_len}\r\nConnection: close\r\n\r\n");
+        w.write_all(head.as_bytes()).unwrap();
+        let block = vec![b'x'; 1 << 20];
+        let mut left = body_len;
+        while left > 0 {
+            let n = left.min(block.len());
+            w.write_all(&block[..n]).unwrap();
+            left -= n;
+        }
     })
 }
 
@@ -102,6 +131,45 @@ fn forward_writes_one_host_and_no_hop_by_hop() {
     assert!(head.contains("User-Agent: Debian APT-HTTP/1.3 (2.7.7)"));
     assert!(head.contains("X-Custom: present"));
     assert!(head.contains("Connection: close"));
+}
+
+/// The Wc7 seventh defect (R6.45h): the forward's response buffer was
+/// capped at `read_response_full(_, 8 * 1024 * 1024)` — pre-existing
+/// since R4.5c (`a7292296`). Ubuntu `noble/universe`'s `Packages.xz`
+/// (~15 MB) crosses it: the read errors `body too large` mid-body,
+/// `forward` answers `Err`, the mediator maps the transport refusal to
+/// `502 Bad Gateway`, `apt-get update` can never fetch an index,
+/// `curl`/`uvx`/pytest never install, `reward.txt = 0` —
+/// `verifier_unavailable:bootstrap:signature` per cell, with
+/// `denied_hosts: []` (the cap rejected an *allowed* host's response,
+/// not the request). This leg serves an apt-index-scale body: on the
+/// pre-repair forward the unwrap fails (`read …: body too large`); the
+/// repaired forward returns `200` and every byte.
+#[test]
+fn forward_buffers_apt_scale_response_bodies() {
+    // Above the pre-repair 8 MiB cap, at the real `noble/universe`
+    // `Packages.xz` scale (~15 MB) — inside the repaired bound.
+    let body_len = 16 * 1024 * 1024usize;
+    assert!(body_len > 8 * 1024 * 1024, "must cross the pre-repair cap");
+    assert!(body_len < FORWARD_MAX_BODY, "must fit the repaired bound");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = serve_body(listener, body_len);
+    let t = LocalHttpTransport::default();
+    let resp = t
+        .forward(
+            "127.0.0.1".parse().unwrap(),
+            port,
+            "archive.ubuntu.com",
+            "GET",
+            "/ubuntu/dists/noble/universe/binary-amd64/Packages.xz",
+            &[],
+            None,
+        )
+        .unwrap();
+    server.join().unwrap();
+    assert_eq!(resp.status, 200);
+    assert_eq!(resp.body.len(), body_len);
 }
 
 #[test]

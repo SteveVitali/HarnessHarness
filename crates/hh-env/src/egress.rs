@@ -220,6 +220,22 @@ fn push_end_to_end_headers<'a>(out: &mut Vec<(&'a str, &'a str)>, client: &'a [(
     }
 }
 
+/// `FORWARD_MAX_BODY` — the most one forward's response body may buffer
+/// (bytes). The forward answers one complete [`WireResponse`]: its `body`
+/// is a `Vec<u8>` the mediator re-emits whole under `Content-Length`, so
+/// the bound caps one call's resident memory — it is a buffering bound,
+/// not a policy limit, and it never authorizes a deny. Sized for real
+/// package indexes and payloads: Ubuntu noble's `Packages.xz`/`Sources.xz`
+/// indexes run ~15–30 MB, and the pre-repair 8 MiB literal (R4.5c,
+/// `a7292296`) rejected `noble/universe`'s index mid-read →
+/// `EgressError::Transport` → the mediator's `502` → `apt-get update`
+/// dead under mediation (the Wc7 seventh defect —
+/// `verifier_unavailable:bootstrap:signature` with `denied_hosts: []`,
+/// every request *allowed*). 128 MiB leaves ~4–8× headroom over the
+/// largest archive indexes and covers ordinary `.deb` payloads; a
+/// genuinely larger artifact still answers the same typed refusal.
+pub const FORWARD_MAX_BODY: usize = 128 * 1024 * 1024;
+
 /// The local HTTP/1.1 transport — a plain `TcpStream` to the resolved
 /// address (hermetic: localhost fixtures; no TLS — TLS-terminating
 /// inspection is a deferred row, `tls.terminate` is always `false` at this
@@ -273,7 +289,7 @@ impl EgressTransport for LocalHttpTransport {
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hharness_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+        let (head, body) = hharness_wire::http::read_response_full(&mut r, FORWARD_MAX_BODY)
             .map_err(|e| format!("read {addr}:{port}: {e}"))?;
         Ok(WireResponse {
             status: head.status,
@@ -341,7 +357,7 @@ impl EgressTransport for LocalTlsTransport {
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hharness_wire::http::read_response_full(&mut r, 8 * 1024 * 1024)
+        let (head, body) = hharness_wire::http::read_response_full(&mut r, FORWARD_MAX_BODY)
             .map_err(|e| format!("read {addr}:{port}: {e}"))?;
         Ok(WireResponse {
             status: head.status,
