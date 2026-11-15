@@ -1410,6 +1410,7 @@ pub fn ingest_job(
             reward_txt: bytes_at("verifier/reward.txt").cloned(),
             ctrf_json: bytes_at("verifier/ctrf.json").cloned(),
             test_stdout: bytes_at("verifier/test-stdout.txt").cloned(),
+            test_stderr: bytes_at("verifier/test-stderr.txt").cloned(),
         };
         let reward_ppm = match parse_reward_files(&fset) {
             ChannelOutcome::Decided(p) => Some(p),

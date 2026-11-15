@@ -85,6 +85,7 @@ impl CellOps for DeniedBootstrapCell {
                 exit_code: Some(0),
                 timed_out: false,
                 stdout: vec![],
+                stderr: vec![],
             });
         }
         if spec.argv == ["bash", "/tests/test.sh"] {
@@ -102,6 +103,7 @@ impl CellOps for DeniedBootstrapCell {
             exit_code: Some(0),
             timed_out: false,
             stdout: vec![],
+            stderr: vec![],
         })
     }
     fn terminate_group(&mut self, _pattern: &str) -> Result<(), CellError> {

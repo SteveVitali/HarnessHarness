@@ -82,6 +82,7 @@ impl CellOps for RecordingCell {
                 exit_code: Some(0),
                 timed_out: false,
                 stdout: vec![],
+                stderr: vec![],
             });
         }
         self.log
@@ -93,12 +94,14 @@ impl CellOps for RecordingCell {
                     exit_code: None,
                     timed_out: true,
                     stdout: vec![],
+                    stderr: vec![],
                 });
             }
             return Ok(CellOutcome {
                 exit_code: Some(0),
                 timed_out: false,
                 stdout: vec![],
+                stderr: vec![],
             });
         }
         self.verify_execs += 1;
@@ -106,6 +109,7 @@ impl CellOps for RecordingCell {
             exit_code: Some(0),
             timed_out: false,
             stdout: vec![],
+            stderr: vec![],
         })
     }
     fn terminate_group(&mut self, pattern: &str) -> Result<(), CellError> {
@@ -232,6 +236,7 @@ fn files(
         reward_txt: txt.map(|s| s.as_bytes().to_vec()),
         ctrf_json: ctrf.map(|s| s.as_bytes().to_vec()),
         test_stdout: stdout.map(|s| s.as_bytes().to_vec()),
+        test_stderr: None,
     }
 }
 

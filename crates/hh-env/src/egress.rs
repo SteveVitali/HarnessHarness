@@ -188,6 +188,38 @@ impl ByteStream for std::os::unix::net::UnixStream {
     }
 }
 
+/// The hop-by-hop and authority headers a forwarding transport must never
+/// relay verbatim (RFC 7230 §6.1 + §5.4): `Host`/`Content-Length` are the
+/// transport's own (it writes both — a verbatim client copy produces the
+/// duplicate-`Host` request every origin must 400, the Wc5/Wc6 H-allow
+/// bootstrap failure), `Connection` and its named tokens ride the
+/// client→mediator hop only, and `Proxy-*` members are for the proxy hop,
+/// never the origin.
+const HOP_BY_HOP_HEADERS: [&str; 11] = [
+    "host",
+    "connection",
+    "content-length",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+];
+
+/// `push_end_to_end_headers(out, client)` — append only the headers the
+/// origin may see: every client member outside the closed hop-by-hop set
+/// (case-insensitive — `HOST` spells the same header).
+fn push_end_to_end_headers<'a>(out: &mut Vec<(&'a str, &'a str)>, client: &'a [(String, String)]) {
+    for (k, v) in client {
+        if !HOP_BY_HOP_HEADERS.contains(&k.to_ascii_lowercase().as_str()) {
+            out.push((k.as_str(), v.as_str()));
+        }
+    }
+}
+
 /// The local HTTP/1.1 transport — a plain `TcpStream` to the resolved
 /// address (hermetic: localhost fixtures; no TLS — TLS-terminating
 /// inspection is a deferred row, `tls.terminate` is always `false` at this
@@ -237,9 +269,7 @@ impl EgressTransport for LocalHttpTransport {
         let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
         hdrs.push(("Host", &host_header));
         hdrs.push(("Connection", "close"));
-        for (k, v) in headers {
-            hdrs.push((k.as_str(), v.as_str()));
-        }
+        push_end_to_end_headers(&mut hdrs, headers);
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
@@ -307,9 +337,7 @@ impl EgressTransport for LocalTlsTransport {
         let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
         hdrs.push(("Host", &host_header));
         hdrs.push(("Connection", "close"));
-        for (k, v) in headers {
-            hdrs.push((k.as_str(), v.as_str()));
-        }
+        push_end_to_end_headers(&mut hdrs, headers);
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
             .map_err(|e| format!("write {addr}:{port}: {e}"))?;
         let mut r = std::io::BufReader::new(s);
