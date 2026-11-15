@@ -58,9 +58,22 @@ fn http_fixture() -> (u16, thread::JoinHandle<()>) {
     let port = l.local_addr().unwrap().port();
     let h = thread::spawn(move || {
         for conn in l.incoming() {
-            let Ok(mut s) = conn else { break };
-            let mut buf = [0u8; 4096];
-            let _ = s.read(&mut buf);
+            let Ok(s) = conn else { break };
+            // Consume the request head to its blank-line terminator before
+            // replying — a single short `read` can return a partial head, and
+            // dropping the socket with request bytes still unread answers the
+            // client `RST` (`Connection reset by peer`), not a clean close.
+            let mut r = BufReader::new(s);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match r.read_line(&mut line) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) if line == "\r\n" => break,
+                    Ok(_) => {}
+                }
+            }
+            let mut s = r.into_inner();
             let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nok!\n");
         }
     });
