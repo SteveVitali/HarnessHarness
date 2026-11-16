@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-lane-probe" "w4-main" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-lane-probe" "w4-main" "egress-real-clients" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -270,6 +270,10 @@ leg_field() { # $1 leg, $2 field
     w4-main:kind)     printf 'script';;
     w4-main:names)    printf 'HH_MAIN_BASE_URL HH_MAIN_SCHEDULE_REF';;
     w4-main:test)     printf 'hh-runner:r6_26:live_w4_main_rounds';;
+    egress-real-clients:ticket)   printf 'R6.45k';;
+    egress-real-clients:provider) printf 'public-upstream';;
+    egress-real-clients:kind)     printf 'script';;
+    egress-real-clients:names)    printf '';;
     selftest:ticket)   printf 'selftest';;
     selftest:provider) printf 'none';;
     selftest:kind)     printf 'script';;
@@ -1724,6 +1728,36 @@ run_leg_w4_lane_probe() {
 run_leg_w4_main() {
   ASSERTIONS="the W4 main rounds (load + lane probe + rounds 1–5 of the seeded interleaved O/H schedule + checkpoint + teardown/harvest): registered by R6.26, executed in W4 under FP-E by R6.47 — until then every packet labels recorded execution"
   RESULT="skipped(executes-in-W4-under-R6.47)"
+}
+
+# `egress-real-clients` — the R6.45k real-client conformance leg
+# (insert spec §3.2; operator ruling R-4): the committed
+# scripts/egress-conformance harness builds the SUBJECT tree's
+# hh-egress-mediator + hh-cell-relay inside ubuntu:noble, renders the
+# phase policies through `hh-w1 render-policy`, and runs the extracted
+# member bootstrap shapes through relay 127.0.0.1:3128. $0, no secrets.
+# HH_EGRESS_SUBJECT_REF names the code under test (default HEAD — the
+# pre-fix red baseline dispatches it as the recorded subject sha);
+# HH_EGRESS_SHAPES narrows the shape set (default all).
+run_leg_egress_real_clients() {
+  ASSERTIONS="the real-client egress conformance battery (apt/uv/uvx/pip/npm bootstrap shapes extracted from the committed member tests/*, verify + agent phase policies rendered by hh-w1 render-policy): every requested row decided, zero mediator 5xx, tunnel.close eof + true bytes, S2 typed deny or epoch-4 grant — subject ${HH_EGRESS_SUBJECT_REF:-HEAD}"
+  command -v docker >/dev/null 2>&1 || { RESULT="skipped(docker-absent)"; return; }
+  local subject="${HH_EGRESS_SUBJECT_REF:-HEAD}"
+  local shapes="${HH_EGRESS_SHAPES:-}"
+  local out="$TMPD_L/egress-conformance"
+  mkdir -p "$out"
+  TRANSCRIPT_RAW="$TMPD_L/transcript.raw"
+  local -a args=(--subject "$subject" --out "$out" --keep)
+  [ -n "$shapes" ] && args+=(--shapes "$shapes")
+  if (cd "$REPO" && bash scripts/egress-conformance/run.sh "${args[@]}") \
+      >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    local v="no-verdict"
+    [ -f "$out/verdict.json" ] && v=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["result"]+":"+"|".join(json.load(open(sys.argv[1]))["failures"][:3]))' "$out/verdict.json" 2>/dev/null || echo verdict-unreadable)
+    RESULT="fail:egress-conformance:$v"
+  fi
+  ENDPOINT_HOST=""; MODEL_REPORTED=""
 }
 
 # ── record + spend write (ADR-0363 D2/D3/D4) ────────────────────────────

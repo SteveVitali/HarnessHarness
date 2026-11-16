@@ -70,7 +70,7 @@ pub struct SourceError {
 /// The resolver SPI — how the broker materialises a `SecretSource`. Implementors
 /// are kernel-side only; a resolver is *never* consulted to back-fill an
 /// environment value (there is no env fallback — SV-4/AC-R-2.8.3-10).
-pub trait SecretSourceResolver {
+pub trait SecretSourceResolver: Send {
     /// Resolve `source` to the secret value. `Err` = the source is unavailable
     /// or the item absent — both fail closed identically.
     fn resolve(&self, source: &SecretSource) -> Result<String, SourceError>;

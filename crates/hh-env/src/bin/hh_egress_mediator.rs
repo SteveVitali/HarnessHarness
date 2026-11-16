@@ -24,6 +24,7 @@ use std::net::IpAddr;
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::{Arc, Condvar, Mutex};
 
 use hharness_containment::egress::{ApprovalCache, EgressRequest};
 use hharness_containment::policy::{ContainmentPolicy, EgressProtocol};
@@ -185,12 +186,47 @@ fn load_policy(path: &PathBuf) -> Result<ContainmentPolicy, String> {
     ContainmentPolicy::from_json(&j).map_err(|e| format!("policy decode: {e}"))
 }
 
+/// `MAX_IN_FLIGHT` — the concurrency bound (R6.45k; D8): each accepted
+/// connection serves on its own thread, at most this many in flight —
+/// excess connections wait in the listener backlog, never dropped.
+const MAX_IN_FLIGHT: usize = 64;
+
+/// `Slots` — the in-flight permit set: `acquire` blocks while the bound
+/// is full; the returned guard releases on drop.
+struct Slots {
+    inner: Mutex<usize>,
+    free: Condvar,
+    max: usize,
+}
+struct Slot {
+    slots: Arc<Slots>,
+}
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let mut n = self.slots.inner.lock().unwrap_or_else(|p| p.into_inner());
+        *n = n.saturating_sub(1);
+        self.slots.free.notify_one();
+    }
+}
+impl Slots {
+    fn acquire(self: &Arc<Self>) -> Slot {
+        let mut n = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        while *n >= self.max {
+            n = self.free.wait(n).unwrap_or_else(|p| p.into_inner());
+        }
+        *n += 1;
+        Slot {
+            slots: Arc::clone(self),
+        }
+    }
+}
+
 fn main() {
     let c = parse();
-    let mut store = Store::open(&c.store_root).unwrap_or_else(|e| {
+    let store = Mutex::new(Store::open(&c.store_root).unwrap_or_else(|e| {
         eprintln!("hh-egress-mediator: store open: {e}");
         exit(3)
-    });
+    }));
     let mut manifest = RunManifest::minimal(hharness_ledger::manifest::RunKind::Experiment);
     manifest.configuration_id = None;
     manifest.configuration_version_id = None;
@@ -198,28 +234,31 @@ fn main() {
     manifest.environment_version_id = None;
     manifest.participant_class = hharness_ledger::manifest::ParticipantClass::Native;
     manifest.lease_ttl.writer_ms = 3_600_000;
-    let (run_id, lease) = match &c.run_id {
-        Some(id) if store.has_run(id) => {
-            let l = store
-                .acquire_writer("hh-egress-mediator", id, 3_600_000)
+    let (run_id, lease) = {
+        let mut store = store.lock().unwrap_or_else(|p| p.into_inner());
+        match &c.run_id {
+            Some(id) if store.has_run(id) => {
+                let l = store
+                    .acquire_writer("hh-egress-mediator", id, 3_600_000)
+                    .unwrap_or_else(|e| {
+                        eprintln!("hh-egress-mediator: resume lease: {e}");
+                        exit(3)
+                    });
+                (id.clone(), l)
+            }
+            Some(id) => store
+                .open_run_with_id(id, manifest, "hh-egress-mediator")
                 .unwrap_or_else(|e| {
-                    eprintln!("hh-egress-mediator: resume lease: {e}");
+                    eprintln!("hh-egress-mediator: open_run: {e}");
                     exit(3)
-                });
-            (id.clone(), l)
+                }),
+            None => store
+                .open_run(manifest, "hh-egress-mediator")
+                .unwrap_or_else(|e| {
+                    eprintln!("hh-egress-mediator: open_run: {e}");
+                    exit(3)
+                }),
         }
-        Some(id) => store
-            .open_run_with_id(id, manifest, "hh-egress-mediator")
-            .unwrap_or_else(|e| {
-                eprintln!("hh-egress-mediator: open_run: {e}");
-                exit(3)
-            }),
-        None => store
-            .open_run(manifest, "hh-egress-mediator")
-            .unwrap_or_else(|e| {
-                eprintln!("hh-egress-mediator: open_run: {e}");
-                exit(3)
-            }),
     };
     let _ = std::fs::remove_file(&c.socket);
     if let Some(d) = c.socket.parent() {
@@ -241,8 +280,13 @@ fn main() {
     // the opener every append refused `ScopeNotOpen{effect_id}` (and a
     // fabricated turn/tool_call refused `ScopeNotOpen`/`SchemaViolation`)
     // — the Wc defect: 500s for every request, zero egress rows.
-    if !effect_scope_open(&store, &run_id, &c.effect_id) {
-        let minter = hharness_env::events::EventMinter::new(&store, &run_id);
+    if !effect_scope_open(
+        &store.lock().unwrap_or_else(|p| p.into_inner()),
+        &run_id,
+        &c.effect_id,
+    ) {
+        let mut store_g = store.lock().unwrap_or_else(|p| p.into_inner());
+        let minter = hharness_env::events::EventMinter::new(&*store_g, &run_id);
         let risk = hharness_ontology::risk::RiskClass::UNKNOWN;
         let ev = minter
             .mint_effect(
@@ -261,10 +305,13 @@ fn main() {
                 eprintln!("hh-egress-mediator: mint effect scope: {e}");
                 exit(3)
             });
-        store.append(&run_id, &lease, vec![ev]).unwrap_or_else(|e| {
-            eprintln!("hh-egress-mediator: open effect scope: {e}");
-            exit(3)
-        });
+        store_g
+            .append(&run_id, &lease, vec![ev])
+            .unwrap_or_else(|e| {
+                eprintln!("hh-egress-mediator: open effect scope: {e}");
+                exit(3)
+            });
+        drop(store_g);
     }
     println!("ready socket={} run={run_id}", c.socket.display());
     use std::io::Write as _;
@@ -275,31 +322,62 @@ fn main() {
     let token = minter.mint(&c.effect_id, 1, &c.env_handle);
     let resolver_tokens = minter.resolver();
 
+    // D8 — one thread per accepted connection, bounded at MAX_IN_FLIGHT
+    // (excess conns wait in the backlog). The store + lease are shared:
+    // the store behind the Mutex — held only inside the mediator's
+    // `with_store` critical sections (pre_wire's requested→decided and
+    // the close/charge legs), never during byte pumping or the upstream
+    // exchange; the lease is an immutable `&Lease`. Each connection
+    // builds its own mediator (fresh broker + approval cache) and the
+    // policy re-reads per connection, as before — never per request
+    // inside the lock.
+    let store = Arc::new(store);
+    let lease = Arc::new(lease);
+    let cfg = Arc::new(c);
+    let token_str = Arc::new(token.token);
+    let slots = Arc::new(Slots {
+        inner: Mutex::new(0),
+        free: Condvar::new(),
+        max: MAX_IN_FLIGHT,
+    });
     for conn in listener.incoming() {
         let Ok(stream) = conn else { continue };
-        let policy = match load_policy(&c.policy) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("hh-egress-mediator: {e}");
-                continue;
-            }
-        };
-        let mut broker = CredentialBroker::new(Box::new(StaticVault::default()), "mediator");
-        let mut med = EgressMediator {
-            store: &mut store,
-            run_id: run_id.clone(),
-            lease: &lease,
-            tokens: resolver_tokens.clone(),
-            broker: &mut broker,
-            policy,
-            cache: ApprovalCache::default(),
-            budget_id: None,
-            participant_ref: c.participant.clone(),
-            resolver: make_resolver(&c),
-            transport: Box::new(LocalHttpTransport::default()),
-            inspect_hooks: std::collections::BTreeMap::new(),
-        };
-        serve_conn(stream, &mut med, &c, &token.token);
+        let _slot = slots.acquire();
+        let store = Arc::clone(&store);
+        let lease = Arc::clone(&lease);
+        let c = Arc::clone(&cfg);
+        let token = Arc::clone(&token_str);
+        let tokens = resolver_tokens.clone();
+        let run_id = run_id.clone();
+        let _ = std::thread::Builder::new()
+            .name("egress-conn".to_string())
+            .spawn(move || {
+                let _slot = _slot; // the permit lives for the conn's life
+                let policy = match load_policy(&c.policy) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("hh-egress-mediator: {e}");
+                        return;
+                    }
+                };
+                let mut broker =
+                    CredentialBroker::new(Box::new(StaticVault::default()), "mediator");
+                let mut med = EgressMediator {
+                    store: &*store,
+                    run_id: run_id.clone(),
+                    lease: &*lease,
+                    tokens,
+                    broker: &mut broker,
+                    policy,
+                    cache: ApprovalCache::default(),
+                    budget_id: None,
+                    participant_ref: c.participant.clone(),
+                    resolver: make_resolver(&c),
+                    transport: Box::new(LocalHttpTransport::default()),
+                    inspect_hooks: std::collections::BTreeMap::new(),
+                };
+                serve_conn(stream, &mut med, &c, &token);
+            });
     }
 }
 
@@ -319,9 +397,18 @@ fn make_resolver(c: &Cfg) -> Box<dyn hharness_env::egress::EgressResolver> {
     Box::new(StaticResolver { map })
 }
 
+/// `err_status(e)` — the typed failure status (D12): a declared timeout
+/// bound's lapse answers **504 Gateway Timeout**, everything else 502.
+fn err_status(e: &hharness_env::egress::EgressError) -> u16 {
+    match e {
+        hharness_env::egress::EgressError::Timeout { .. } => 504,
+        _ => 502,
+    }
+}
+
 fn serve_conn(
     stream: std::os::unix::net::UnixStream,
-    med: &mut EgressMediator,
+    med: &mut EgressMediator<'_, &Mutex<Store>>,
     c: &Cfg,
     token: &str,
 ) {
@@ -343,7 +430,7 @@ fn serve_conn(
     // rides the `security.egress.requested` payload member; the row's
     // only scope is the slot's phase effect (opened at startup).
     let chain = EMPTY_CHAIN.clone();
-    let started = med.store.now_ms();
+    let started = med.store.lock().unwrap_or_else(|p| p.into_inner()).now_ms();
     match med.gate(&req, &chain) {
         Ok(GateOutcome::Terminal(outcome)) => match outcome {
             MediatedOutcome::Refused { .. } | MediatedOutcome::RefusedCredential { .. } => {
@@ -364,35 +451,36 @@ fn serve_conn(
                     &mut stream,
                 ) {
                     Ok(_) => {}
+                    // A Timeout lapses at dial — before the 200 — so the
+                    // typed 504 answers cleanly; post-200 errors (emit)
+                    // are logged, the client sees the close.
+                    Err(e @ hharness_env::egress::EgressError::Timeout { .. }) => {
+                        reply(&mut stream, 504, format!("{e:?}").as_bytes())
+                    }
                     Err(e) => eprintln!("hh-egress-mediator: tunnel: {e:?}"),
                 }
             } else {
-                match med.forward(
+                // The streaming forward (D13): the upstream head streams
+                // through D10's response hygiene — exactly one framing
+                // member (`Transfer-Encoding: chunked`) + `Connection:
+                // close` — and the body re-chunks into the client with
+                // bounded resident memory, never the 128 MiB buffer.
+                match med.forward_stream(
                     &req,
                     &g.decision,
                     g.decided_by,
                     &g.effect_id,
                     g.started,
                     &chain,
+                    &mut stream,
                 ) {
-                    Ok(MediatedOutcome::Forwarded { response, .. }) => {
-                        let _ = http::write_response(
-                            &mut stream,
-                            response.status,
-                            &response
-                                .headers
-                                .iter()
-                                .map(|(k, v)| (k.as_str(), v.as_str()))
-                                .collect::<Vec<_>>(),
-                            &response.body,
-                        );
-                    }
+                    Ok(MediatedOutcome::Forwarded { .. }) => {}
                     Ok(MediatedOutcome::Refused { .. })
                     | Ok(MediatedOutcome::RefusedCredential { .. }) => {
                         reply(&mut stream, 403, b"egress denied")
                     }
                     Ok(_) => reply(&mut stream, 500, b"protocol"),
-                    Err(e) => reply(&mut stream, 502, format!("{e:?}").as_bytes()),
+                    Err(e) => reply(&mut stream, err_status(&e), format!("{e:?}").as_bytes()),
                 }
             }
         }

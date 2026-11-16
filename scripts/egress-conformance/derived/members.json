@@ -1,0 +1,285 @@
+{
+  "generated_from": {
+    "member_dirs": [
+      "docs/build/reports/compute/harvest/fp-w1/run-root/trials"
+    ],
+    "tasklists": [
+      "docs/build/reports/2026-11-15-fp-wc7-tasklists.json"
+    ]
+  },
+  "members": {
+    "build-pmars": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/build-pmars/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "cancel-async-tasks": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/cancel-async-tasks/H-allow/r0/staging/tests/test.sh",
+          "sha256": "79600a6b863def31b4daa008297423010cd2d6243e689d67503e118e4dc53397"
+        }
+      ]
+    },
+    "cobol-modernization": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/cobol-modernization/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "db-wal-recovery": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/db-wal-recovery/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "extract-elf": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/extract-elf/H-allow/r0/staging/tests/test.sh",
+          "sha256": "84ee50194effb4c72b9cbd0306cccaf0f855f3634227cd8359928722a53bbdaf"
+        }
+      ]
+    },
+    "fix-code-vulnerability": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/fix-code-vulnerability/H-allow/r0/staging/tests/test.sh",
+          "sha256": "f1611da693cb4cfc5e8482698c6a1858a5c67220ae9db89b50aed66584e9b17f"
+        }
+      ]
+    },
+    "fix-git": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/fix-git/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "gcode-to-text": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/gcode-to-text/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "git-leak-recovery": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/git-leak-recovery/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "headless-terminal": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/headless-terminal/H-allow/r0/staging/tests/test.sh",
+          "sha256": "bfaa32131cbbef985f9b0bbc3cb231ac51eb90579e6e3db55a2f09b5fa0f46b7"
+        }
+      ]
+    },
+    "largest-eigenval": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/largest-eigenval/H-allow/r0/staging/tests/test.sh",
+          "sha256": "fc40868bee6cbcfd6e906b0522dda9a778064ea9876e64a40a377d66087a174b"
+        }
+      ]
+    },
+    "make-doom-for-mips": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/make-doom-for-mips/H-allow/r0/staging/tests/test.sh",
+          "sha256": "25809a2ebcb714b1c4e55563b0db16add23e2fd9b68d03e51b1734f8dbb392e1"
+        }
+      ]
+    },
+    "modernize-scientific-stack": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/modernize-scientific-stack/H-allow/r0/staging/tests/test.sh",
+          "sha256": "e868c85466ebf4815e2e4efbd252bf50ad979bceb14325a9377b1bbf852f0281"
+        }
+      ]
+    },
+    "multi-source-data-merger": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/multi-source-data-merger/H-allow/r0/staging/tests/test.sh",
+          "sha256": "d5a00e64413c0e1ae452f38a1aa1a47c3ed7b4416bbfccae1a4c053025a336d1"
+        }
+      ]
+    },
+    "openssl-selfsigned-cert": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/openssl-selfsigned-cert/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "overfull-hbox": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/overfull-hbox/H-allow/r0/staging/tests/test.sh",
+          "sha256": "ab4ef5988c8694f6049eac703b7683a7f846c4714a61b764bd8e66e116abe16f"
+        }
+      ]
+    },
+    "password-recovery": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/password-recovery/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "polyglot-c-py": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/polyglot-c-py/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "polyglot-rust-c": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/polyglot-rust-c/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "prove-plus-comm": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/prove-plus-comm/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "pypi-server": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/pypi-server/H-allow/r0/staging/tests/test.sh",
+          "sha256": "d2b1220e42bcfdcce87907ac5bbd69ac210a3c94926545ca2439636786e7784e"
+        }
+      ]
+    },
+    "pytorch-model-cli": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/pytorch-model-cli/H-allow/r0/staging/tests/test.sh",
+          "sha256": "43fb67e537c7adc2df11c2367f47c876cb5d16a7c1ae16d0339c3a3364bb2b06"
+        }
+      ]
+    },
+    "pytorch-model-recovery": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/pytorch-model-recovery/H-allow/r0/staging/tests/test.sh",
+          "sha256": "6005f3a75ccfe00d7bed1005264b4a84a1f8e30cd780f8a97b3a804be7cc7a8e"
+        }
+      ]
+    },
+    "query-optimize": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/query-optimize/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "raman-fitting": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/raman-fitting/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "regex-log": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/regex-log/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "sanitize-git-repo": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/sanitize-git-repo/H-allow/r0/staging/tests/test.sh",
+          "sha256": "16014722171ae4479112051d2e8af7d0c5bb231bae6aff1b80cfa19e718c814f"
+        }
+      ]
+    },
+    "sqlite-db-truncate": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/sqlite-db-truncate/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "sqlite-with-gcov": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/sqlite-with-gcov/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    },
+    "torch-pipeline-parallelism": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/torch-pipeline-parallelism/H-allow/r0/staging/tests/test.sh",
+          "sha256": "cc9fd28b6590993fc37e4a99da771cbf04726c8c62fe308e802612241da69dea"
+        }
+      ]
+    },
+    "torch-tensor-parallelism": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/torch-tensor-parallelism/H-allow/r0/staging/tests/test.sh",
+          "sha256": "a7e6c9408b2401e4e7448371f7ddc72f3284caccfb56277d3cd4e98051868cdf"
+        }
+      ]
+    },
+    "tune-mjcf": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/tune-mjcf/H-allow/r0/staging/tests/test.sh",
+          "sha256": "343a0604775b960f47cb7ed04bc0c4f9e23f8439c4ba44d6027f0cb245327e97"
+        }
+      ]
+    },
+    "vulnerable-secret": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-wc6/run-root/trials/vulnerable-secret/H-allow/r0/staging/tests/test.sh",
+          "sha256": "d9e46bae71e0b119bdc8aaf689de9a780db29741cb5d46bfcc9090ad8943e08e"
+        }
+      ]
+    },
+    "write-compressor": {
+      "test_scripts": [
+        {
+          "path": "docs/build/reports/compute/harvest/fp-w1/run-root/trials/write-compressor/H-allow/r0/staging/tests/test.sh",
+          "sha256": "4770437ea96c3cc84684b4f99d55fb148fcac09f9ea1e8ef49de487716e6c334"
+        }
+      ]
+    }
+  },
+  "schema": "hh-egress-conformance-members/1"
+}

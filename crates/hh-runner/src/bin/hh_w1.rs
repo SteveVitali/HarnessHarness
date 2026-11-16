@@ -16,8 +16,9 @@ use std::process::{Child, Command, Stdio};
 use std::time::Instant;
 
 use hharness_env::egress_allowlist::{
-    admit_allowlist_mediated, cell_env_projection, Allowlist, AllowlistFreeze, ImageFamily,
-    MediatedCell, MediatedDecl, RelayPair, WithheldHost,
+    admit_allowlist_mediated, cell_env_projection, scan_hosts_in_text, Allowlist, AllowlistFreeze,
+    ImageFamily, MediatedCell, MediatedDecl, RelayPair, WithheldHost, EGRESS_RELAY_PORT,
+    EGRESS_SOCK_PATH, MODEL_SOCK_PATH,
 };
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_gateway::recording::{RecordedCall, RecordedReleased, RecordedResponse, Recording};
@@ -38,7 +39,7 @@ use hharness_wire::sha256::sha256_hex;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>"
+        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
     );
     std::process::exit(2)
 }
@@ -166,7 +167,14 @@ fn pin(cfg: &Cfg) -> Result<HarborPin, String> {
 }
 
 fn freeze(cfg: &Cfg) -> Result<AllowlistFreeze, String> {
-    let j = read_json(&cfg.freeze_file)?;
+    freeze_at(&cfg.freeze_file)
+}
+
+/// `freeze_at(path)` — the freeze-file parser `freeze` applies to
+/// `cfg.freeze_file`, factored so `render-policy` reads the committed
+/// artifact by the same code path (R6.45k).
+fn freeze_at(path: &str) -> Result<AllowlistFreeze, String> {
+    let j = read_json(path)?;
     let m = j
         .as_obj()
         .ok_or_else(|| "freeze must be an object".to_string())?;
@@ -216,6 +224,35 @@ fn freeze(cfg: &Cfg) -> Result<AllowlistFreeze, String> {
             .ok_or_else(|| "freeze.digest".to_string())?
             .to_string(),
     })
+}
+
+/// `mediated_phase_schedule(pol, rec)` — the sealed `ext["phase_schedule"]`
+/// after `admit_allowlist_mediated`: `h-run` and `render-policy` share
+/// this extraction so the mediator's policy file is always the
+/// transactional path's output, never a re-derivation (R6.45k).
+fn mediated_phase_schedule(
+    pol: &hharness_containment::policy::ContainmentPolicy,
+    rec: &EnvironmentRecord,
+) -> Result<Json, String> {
+    pol.ext
+        .get("phase_schedule")
+        .or_else(|| rec.ext.get("phase_schedule"))
+        .cloned()
+        .ok_or_else(|| "phase_schedule absent after admit".to_string())
+}
+
+/// `phase_layer(sched, phase)` — one sealed layer document out of the
+/// admitted `phase_schedule` (`setup`/`agent`/`verify`), parsed and
+/// re-emitted canonically — the mediator's per-phase policy bytes.
+fn phase_layer(sched: &Json, phase: &str) -> Result<Json, String> {
+    let l = sched
+        .get(phase)
+        .and_then(|e| e.get("layer"))
+        .cloned()
+        .ok_or_else(|| format!("phase_schedule.{phase}"))?;
+    let cp = hharness_containment::policy::ContainmentPolicy::from_json(&l)
+        .map_err(|e| format!("layer {phase}: {e}"))?;
+    Ok(cp.to_json())
 }
 
 fn task_image(cfg: &Cfg, task: &str) -> Result<String, String> {
@@ -280,6 +317,120 @@ fn cmd_freeze(args: &[String]) -> Result<String, String> {
     let f = AllowlistFreeze::freeze(&protocol, epoch, list);
     write_json(Path::new(&req(args, "--out")), &f.to_json())?;
     Ok(Json::obj([("digest", Json::str(&f.digest))]).to_canonical_string())
+}
+
+/// `hh-w1 render-policy` — emit one sealed phase layer exactly as
+/// `h-run` renders it for the mediator's `--policy` file (R6.45k's
+/// conformance harness consumes these bytes): the committed freeze
+/// parsed by `freeze_at`, `admit_allowlist_mediated` over the same
+/// record + declaration shapes `h_run_once` builds, and the same
+/// `mediated_phase_schedule`/`phase_layer` extraction — the policy
+/// bytes are the transactional path's output, never re-derived.
+fn cmd_render_policy(args: &[String]) -> Result<String, String> {
+    let frz = freeze_at(&req(args, "--freeze"))?;
+    let phase = req(args, "--phase");
+    if !matches!(phase.as_str(), "setup" | "agent" | "verify") {
+        return Err(format!(
+            "render-policy: --phase must be setup|agent|verify, not {phase}"
+        ));
+    }
+    let model_port: u16 = arg(args, "--model-port")
+        .map(|s| s.parse::<u16>().map_err(|_| "--model-port int".to_string()))
+        .transpose()?
+        .unwrap_or(8080);
+    let slot_token = arg(args, "--slot-token").unwrap_or_else(|| "hh-w1-slot-token".to_string());
+    let family = match arg(args, "--family").as_deref().unwrap_or("debian") {
+        "ubuntu" => ImageFamily::Ubuntu,
+        _ => ImageFamily::Debian,
+    };
+    // The record + declaration mirror h_run_once's — the record members
+    // (image tag, cell socket paths, relay bin) stamp the record only;
+    // the policy bytes ride the allowlist, model port and slot token.
+    let mut rec = EnvironmentRecord {
+        class: EnvironmentClass::LocalContainer,
+        image: ImageRef::Tag("hh-w1-render-policy".to_string()),
+        build_context: None,
+        platform: "linux/amd64".to_string(),
+        provisioning: ProvisioningRecipe::default(),
+        containment_policy_ref: ("w1".to_string(), "v0".to_string()),
+        limits: hharness_containment::policy::ResourceLimits::default(),
+        nondeterminism: vec![],
+        unpinned: BTreeSet::new(),
+        image_attestation: None,
+        ext: BTreeMap::new(),
+        canary_channels: vec![],
+    };
+    let mut pol = hharness_containment::policy::kernel_default(0);
+    let decl = MediatedDecl {
+        family,
+        allowlist: frz.list.clone(),
+        protocol_id: frz.protocol_id.clone(),
+        epoch: frz.epoch,
+        cell: MediatedCell {
+            socket_mounts: BTreeMap::from([
+                ("model".to_string(), MODEL_SOCK_PATH.to_string()),
+                ("egress".to_string(), EGRESS_SOCK_PATH.to_string()),
+            ]),
+            relay_bin: "hh-cell-relay".to_string(),
+            pairs: vec![
+                RelayPair {
+                    name: "model".to_string(),
+                    port: model_port,
+                },
+                RelayPair {
+                    name: "egress".to_string(),
+                    port: EGRESS_RELAY_PORT,
+                },
+            ],
+        },
+        model_port,
+        slot_token,
+    };
+    admit_allowlist_mediated(&mut rec, &mut pol, &decl, 0).map_err(|e| e.to_string())?;
+    let sched = mediated_phase_schedule(&pol, &rec)?;
+    let layer = phase_layer(&sched, &phase)?;
+    let out = req(args, "--out");
+    write_json(Path::new(&out), &layer)?;
+    Ok(Json::obj([
+        ("schema", Json::str("hh-w1-render-policy/1")),
+        ("phase", Json::str(&phase)),
+        ("out", Json::str(&out)),
+        ("protocol_id", Json::str(&frz.protocol_id)),
+        ("epoch", Json::Int(frz.epoch as i64)),
+        ("freeze_digest", Json::str(&frz.digest)),
+    ])
+    .to_canonical_string())
+}
+
+/// `hh-w1 scan-hosts` — the mechanical `tests/*` host scan (R6.45k's
+/// D16): the committed `scan_hosts_in_text` run over each named file,
+/// unioned and emitted sorted one per line — the same function the
+/// verify-set derivation cites, never a re-implementation.
+fn cmd_scan_hosts(args: &[String]) -> Result<String, String> {
+    let mut files: Vec<String> = arg(args, "--files")
+        .map(|s| s.split(',').map(str::to_string).collect())
+        .unwrap_or_default();
+    if let Some(list) = arg(args, "--list") {
+        let t = std::fs::read_to_string(&list).map_err(|e| format!("read {list}: {e}"))?;
+        files.extend(
+            t.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string),
+        );
+    }
+    if files.is_empty() {
+        return Err("scan-hosts: --files <a,b,…> or --list <f> required".to_string());
+    }
+    let mut hosts = BTreeSet::new();
+    for f in &files {
+        // tests/* carries binary fixtures (reference.jpg et al.) —
+        // scan lossy: URL hosts are ASCII, replacement chars split
+        // tokens exactly as the scan's own delimiters do.
+        let bytes = std::fs::read(f).map_err(|e| format!("read {f}: {e}"))?;
+        hosts.extend(scan_hosts_in_text(&String::from_utf8_lossy(&bytes)));
+    }
+    Ok(hosts.into_iter().collect::<Vec<_>>().join("\n"))
 }
 
 // ── task images ─────────────────────────────────────────────────────────
@@ -983,25 +1134,13 @@ fn h_run_once(
             slot_token: cfg.slot_token.clone(),
         };
         admit_allowlist_mediated(&mut rec, &mut pol, &decl, 0).map_err(|e| e.to_string())?;
-        // the sealed phase layers → the mediator's policy file
-        let sched = pol
-            .ext
-            .get("phase_schedule")
-            .or_else(|| rec.ext.get("phase_schedule"))
-            .cloned()
-            .ok_or_else(|| "phase_schedule absent after admit".to_string())?;
-        let layer = |p: &str| -> Result<Json, String> {
-            let l = sched
-                .get(p)
-                .and_then(|e| e.get("layer"))
-                .cloned()
-                .ok_or_else(|| format!("phase_schedule.{p}"))?;
-            let cp = hharness_containment::policy::ContainmentPolicy::from_json(&l)
-                .map_err(|e| format!("layer {p}: {e}"))?;
-            Ok(cp.to_json())
-        };
-        agent_policy = Some(layer("agent")?);
-        verify_policy = Some(layer("verify")?);
+        // the sealed phase layers → the mediator's policy file (the
+        // shared render — `hh-w1 render-policy` emits the same bytes
+        // through `mediated_phase_schedule`, never a re-derivation;
+        // R6.45k).
+        let sched = mediated_phase_schedule(&pol, &rec)?;
+        agent_policy = Some(phase_layer(&sched, "agent")?);
+        verify_policy = Some(phase_layer(&sched, "verify")?);
         // The verify layer's `version_id` — the `policy_version_id`
         // the mediator stamps on each row it decides under that layer.
         verify_version_id = verify_policy
@@ -1622,6 +1761,8 @@ fn main() {
         "probe-run" => cmd_probe_run(rest),
         "label-packet" => cmd_label_packet(rest),
         "index" => cmd_index(rest),
+        "render-policy" => cmd_render_policy(rest),
+        "scan-hosts" => cmd_scan_hosts(rest),
         _ => {
             eprintln!("unknown subcommand {cmd}");
             usage()
