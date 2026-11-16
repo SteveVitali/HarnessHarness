@@ -80,11 +80,11 @@
   },
   "receipts": {
     "provision": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-16-fp-smoke1-provision.json",
+      "path": "docs/build/reports/compute/2026-11-16-fp-smoke1-provision.json",
       "sha256": "8a6b0f8370c98521871e28001c15ce2df2c3debdd135ff2418b4ad87950d82e5"
     },
     "teardown": {
-      "path": "/Users/stevenvitali/MetaHarness-harnessharness/docs/build/reports/compute/2026-11-16-fp-smoke1-teardown.json"
+      "path": "docs/build/reports/compute/2026-11-16-fp-smoke1-teardown.json"
     }
   },
   "reconciliation": {
