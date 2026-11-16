@@ -1,105 +1,106 @@
-{"ts":"2026-10-21T15:56:14Z","ticket":"R4.5a","leg":"local-reachability","cost_usd":0,"cumulative_usd":0,"record":"2026-10-21-local-reachability.json"}
-{"ts":"2026-10-21T17:14:37Z","ticket":"R4.5b","leg":"local-run","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-local-run.json"}
-{"ts":"2026-10-21T18:02:41Z","ticket":"R4.5b","leg":"local-run","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-local-run.json"}
-{"ts":"2026-10-21T19:04:27Z","ticket":"R4.5c","leg":"https-reachability","cost_usd":0,"cumulative_usd":0.0,"record":"2026-10-21-https-reachability.json"}
-{"ts":"2026-10-21T20:01:56Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.05,"cumulative_usd":0.05,"record":"2026-10-21-anthropic-call.json"}
-{"ts":"2026-10-21T20:05:04Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.05,"cumulative_usd":0.1,"record":"2026-10-21-anthropic-call.json"}
-{"ts":"2026-10-21T20:05:11Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.05,"cumulative_usd":0.15,"record":"2026-10-21-openai-call.json"}
-{"ts":"2026-10-21T20:07:46Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.05,"cumulative_usd":0.2,"record":"2026-10-21-openai-call.json"}
-{"ts":"2026-10-21T20:08:02Z","ticket":"R4.5d","leg":"anthropic-call","cost_usd":0.000575,"cumulative_usd":0.200575,"record":"2026-10-21-anthropic-call.json"}
-{"ts":"2026-10-21T20:08:06Z","ticket":"R4.5d","leg":"openai-call","cost_usd":0.000020,"cumulative_usd":0.200595,"record":"2026-10-21-openai-call.json"}
-{"ts":"2026-10-21T22:31:33Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":5,"cumulative_usd":5.200595,"record":"2026-10-21-routing-probe.json"}
-{"ts":"2026-10-21T22:31:52Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":5,"cumulative_usd":10.200595,"record":"2026-10-21-routing-probe.json"}
-{"ts":"2026-10-21T22:33:54Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":5,"cumulative_usd":15.200595,"record":"2026-10-21-routing-probe.json"}
-{"ts":"2026-10-21T22:34:10Z","ticket":"R4.5e","leg":"routing-probe","cost_usd":0.000033,"cumulative_usd":15.200628,"record":"2026-10-21-routing-probe.json"}
-{"ts":"2026-10-21T23:12:11Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200628,"record":"2026-10-21-bench-manifest-live.json"}
-{"ts":"2026-10-21T23:12:19Z","ticket":"R4.6","leg":"bench-manifest-live","cost_usd":0,"cumulative_usd":15.200628,"record":"2026-10-21-bench-manifest-live.json"}
-{"ts":"2026-10-21T23:15:10Z","ticket":"R4.6","leg":"lt03-live","cost_usd":0.001489,"cumulative_usd":15.202117,"record":"2026-10-21-lt03-live.json"}
-{"ts":"2026-10-21T23:59:38Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-21-github-live.json"}
-{"ts":"2026-10-22T00:00:30Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}
-{"ts":"2026-10-22T00:01:47Z","ticket":"R4.7","leg":"github-live","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-github-live.json"}
-{"ts":"2026-10-22T02:19:48Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
-{"ts":"2026-10-22T02:20:58Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
-{"ts":"2026-10-22T02:58:06Z","ticket":"R4.7a","leg":"oauth-device","cost_usd":0,"cumulative_usd":15.202117,"record":"2026-10-22-oauth-device.json"}
-{"ts":"2026-10-22T03:44:39Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.05,"cumulative_usd":15.252117,"record":"2026-10-22-context-adapters.json"}
-{"ts":"2026-10-22T03:45:26Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252119,"record":"2026-10-22-context-adapters.json"}
-{"ts":"2026-10-22T03:46:37Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000002,"cumulative_usd":15.252121,"record":"2026-10-22-context-adapters.json"}
-{"ts":"2026-10-22T03:46:59Z","ticket":"R4.7b","leg":"context-adapters","cost_usd":0.000131,"cumulative_usd":15.252252,"record":"2026-10-22-context-adapters.json"}
-{"ts":"2026-10-22T04:32:05Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
-{"ts":"2026-10-22T04:32:49Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
-{"ts":"2026-10-22T04:33:00Z","ticket":"R4.7c","leg":"otel-live","cost_usd":0,"cumulative_usd":15.252252,"record":"2026-10-22-otel-live.json"}
-{"ts":"2026-10-22T05:55:21Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.000000,"cumulative_usd":15.252252,"record":"2026-10-22-judge-calibrate.json"}
-{"ts":"2026-10-22T05:56:26Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.000000,"cumulative_usd":15.252252,"record":"2026-10-22-judge-calibrate.json"}
-{"ts":"2026-10-22T05:57:20Z","ticket":"R4.7e","leg":"judge-calibrate","cost_usd":0.001722,"cumulative_usd":15.253974,"record":"2026-10-22-judge-calibrate.json"}
-{"ts":"2026-10-22T05:57:58Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":16.253974,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T05:58:59Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":17.253974,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:00:42Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":18.253974,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:01:48Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":19.253974,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:05:46Z","ticket":"R4.7e","leg":"judge-run","cost_usd":0.001786,"cumulative_usd":19.25576,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:08:35Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":20.25576,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:09:20Z","ticket":"R4.7e","leg":"judge-run","cost_usd":1,"cumulative_usd":21.25576,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T06:11:40Z","ticket":"R4.7e","leg":"judge-run","cost_usd":0.001945,"cumulative_usd":21.257705,"record":"2026-10-22-judge-run.json"}
-{"ts":"2026-10-22T18:56:13Z","ticket":"R4.15d","leg":"r4-15d-fetch","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-22-r4-15d-fetch.json"}
-{"ts":"2026-10-23T03:07:02Z","ticket":"L4.6","leg":"capstone-run-local","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-run-local.json"}
-{"ts":"2026-10-23T03:07:57Z","ticket":"L4.6","leg":"capstone-run-local","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-run-local.json"}
-{"ts":"2026-10-23T03:09:50Z","ticket":"L4.6","leg":"capstone-run-local","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-run-local.json"}
-{"ts":"2026-10-23T03:10:49Z","ticket":"L4.6","leg":"capstone-sandboxed-exec","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-sandboxed-exec.json"}
-{"ts":"2026-10-23T03:10:57Z","ticket":"L4.6","leg":"capstone-ledger-replay","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-ledger-replay.json"}
-{"ts":"2026-10-23T03:11:16Z","ticket":"L4.6","leg":"capstone-web","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-web.json"}
-{"ts":"2026-10-23T03:11:26Z","ticket":"L4.6","leg":"capstone-bundle-repro","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-bundle-repro.json"}
-{"ts":"2026-10-23T03:11:30Z","ticket":"L4.6","leg":"capstone-mcp","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-mcp.json"}
-{"ts":"2026-10-23T03:12:51Z","ticket":"L4.6","leg":"capstone-sandboxed-exec","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-sandboxed-exec.json"}
-{"ts":"2026-10-23T03:12:59Z","ticket":"L4.6","leg":"capstone-web","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-web.json"}
-{"ts":"2026-10-23T03:13:09Z","ticket":"L4.6","leg":"capstone-bundle-repro","cost_usd":0,"cumulative_usd":21.257705,"record":"2026-10-23-capstone-bundle-repro.json"}
-{"ts":"2026-10-23T03:13:20Z","ticket":"L4.6","leg":"capstone-run-anthropic","cost_usd":2,"cumulative_usd":23.257705,"record":"2026-10-23-capstone-run-anthropic.json"}
-{"ts":"2026-10-23T03:21:40Z","ticket":"L4.6","leg":"capstone-run-anthropic","cost_usd":2,"cumulative_usd":25.257705,"record":"2026-10-23-capstone-run-anthropic.json"}
-{"ts":"2026-10-23T03:22:13Z","ticket":"L4.6","leg":"capstone-run-openai","cost_usd":0.000158,"cumulative_usd":25.257863,"record":"2026-10-23-capstone-run-openai.json"}
-{"ts":"2026-10-23T03:23:02Z","ticket":"L4.6","leg":"capstone-judge","cost_usd":0.001905,"cumulative_usd":25.259768,"record":"2026-10-23-capstone-judge.json"}
-{"ts":"2026-10-23T03:23:51Z","ticket":"L4.6","leg":"capstone-fleet-webhook","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-capstone-fleet-webhook.json"}
-{"ts":"2026-10-23T04:28:56Z","ticket":"L4.6b","leg":"l4-6b-replay","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-l4-6b-replay.json"}
-{"ts":"2026-10-23T05:18:40Z","ticket":"L4.7","leg":"quickstart-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-quickstart-live.json"}
-{"ts":"2026-10-23T07:13:22Z","ticket":"L4.6a","leg":"plugin-memory-store","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-memory-store.json"}
-{"ts":"2026-10-23T07:14:29Z","ticket":"L4.6a","leg":"plugin-memory-store","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-memory-store.json"}
-{"ts":"2026-10-23T07:14:30Z","ticket":"L4.6a","leg":"plugin-compact-evict-oldest","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-compact-evict-oldest.json"}
-{"ts":"2026-10-23T07:14:31Z","ticket":"L4.6a","leg":"plugin-tracker-fixture","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-tracker-fixture.json"}
-{"ts":"2026-10-23T07:16:43Z","ticket":"L4.6a","leg":"embed-sdk-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-embed-sdk-live.json"}
-{"ts":"2026-10-23T07:16:45Z","ticket":"L4.6a","leg":"surface-mcp-lab","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-mcp-lab.json"}
-{"ts":"2026-10-23T07:34:17Z","ticket":"L4.6a","leg":"surface-mcp-lab","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-mcp-lab.json"}
-{"ts":"2026-10-23T07:34:33Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:10:31Z","ticket":"L4.6a","leg":"surface-mcp-lab","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-mcp-lab.json"}
-{"ts":"2026-10-23T08:10:43Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:11:28Z","ticket":"L4.6a","leg":"embed-sdk-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-embed-sdk-live.json"}
-{"ts":"2026-10-23T08:11:38Z","ticket":"L4.6a","leg":"plugin-memory-store","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-memory-store.json"}
-{"ts":"2026-10-23T08:11:39Z","ticket":"L4.6a","leg":"plugin-compact-evict-oldest","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-compact-evict-oldest.json"}
-{"ts":"2026-10-23T08:11:41Z","ticket":"L4.6a","leg":"plugin-tracker-fixture","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-tracker-fixture.json"}
-{"ts":"2026-10-23T08:12:31Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:13:04Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:13:12Z","ticket":"L4.6a","leg":"surface-mcp-lab","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-mcp-lab.json"}
-{"ts":"2026-10-23T08:13:37Z","ticket":"L4.6a","leg":"embed-sdk-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-embed-sdk-live.json"}
-{"ts":"2026-10-23T08:13:39Z","ticket":"L4.6a","leg":"plugin-memory-store","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-memory-store.json"}
-{"ts":"2026-10-23T08:13:40Z","ticket":"L4.6a","leg":"plugin-compact-evict-oldest","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-compact-evict-oldest.json"}
-{"ts":"2026-10-23T08:13:42Z","ticket":"L4.6a","leg":"plugin-tracker-fixture","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-tracker-fixture.json"}
-{"ts":"2026-10-23T08:23:25Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:23:42Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:24:02Z","ticket":"L4.6a","leg":"surface-mcp-lab","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-mcp-lab.json"}
-{"ts":"2026-10-23T08:24:35Z","ticket":"L4.6a","leg":"embed-sdk-live","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-embed-sdk-live.json"}
-{"ts":"2026-10-23T08:24:37Z","ticket":"L4.6a","leg":"plugin-memory-store","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-memory-store.json"}
-{"ts":"2026-10-23T08:24:38Z","ticket":"L4.6a","leg":"plugin-compact-evict-oldest","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-compact-evict-oldest.json"}
-{"ts":"2026-10-23T08:24:40Z","ticket":"L4.6a","leg":"plugin-tracker-fixture","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-plugin-tracker-fixture.json"}
-{"ts":"2026-10-23T08:30:01Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-10-23T08:31:17Z","ticket":"L4.6a","leg":"surface-acp","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-10-23-surface-acp.json"}
-{"ts":"2026-11-10T01:33:57Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-10-reproof.json"}
-{"ts":"2026-11-11T01:18:19Z","ticket":"R6.40","leg":"ps0","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-ps0.json"}
-{"ts":"2026-11-11T01:20:36Z","ticket":"R6.40","leg":"ps0","cost_usd":0.0,"cumulative_usd":25.259768,"record":"2026-11-11-ps0.json"}
-{"ts":"2026-11-11T01:21:27Z","ticket":"R6.40","leg":"pp0","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-pp0.json"}
-{"ts":"2026-11-11T01:21:28Z","ticket":"R6.40","leg":"corpus","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-corpus.json"}
+{"ts": "2026-10-21T15:56:14Z", "ticket": "R4.5a", "leg": "local-reachability", "cost_usd": 0, "cumulative_usd": 0, "record": "2026-10-21-local-reachability.json"}
+{"ts": "2026-10-21T17:14:37Z", "ticket": "R4.5b", "leg": "local-run", "cost_usd": 0, "cumulative_usd": 0.0, "record": "2026-10-21-local-run.json"}
+{"ts": "2026-10-21T18:02:41Z", "ticket": "R4.5b", "leg": "local-run", "cost_usd": 0, "cumulative_usd": 0.0, "record": "2026-10-21-local-run.json"}
+{"ts": "2026-10-21T19:04:27Z", "ticket": "R4.5c", "leg": "https-reachability", "cost_usd": 0, "cumulative_usd": 0.0, "record": "2026-10-21-https-reachability.json"}
+{"ts": "2026-10-21T20:01:56Z", "ticket": "R4.5d", "leg": "anthropic-call", "cost_usd": 0.05, "cumulative_usd": 0.05, "record": "2026-10-21-anthropic-call.json"}
+{"ts": "2026-10-21T20:05:04Z", "ticket": "R4.5d", "leg": "anthropic-call", "cost_usd": 0.05, "cumulative_usd": 0.1, "record": "2026-10-21-anthropic-call.json"}
+{"ts": "2026-10-21T20:05:11Z", "ticket": "R4.5d", "leg": "openai-call", "cost_usd": 0.05, "cumulative_usd": 0.15, "record": "2026-10-21-openai-call.json"}
+{"ts": "2026-10-21T20:07:46Z", "ticket": "R4.5d", "leg": "openai-call", "cost_usd": 0.05, "cumulative_usd": 0.2, "record": "2026-10-21-openai-call.json"}
+{"ts": "2026-10-21T20:08:02Z", "ticket": "R4.5d", "leg": "anthropic-call", "cost_usd": 0.000575, "cumulative_usd": 0.200575, "record": "2026-10-21-anthropic-call.json"}
+{"ts": "2026-10-21T20:08:06Z", "ticket": "R4.5d", "leg": "openai-call", "cost_usd": 2e-05, "cumulative_usd": 0.200595, "record": "2026-10-21-openai-call.json"}
+{"ts": "2026-10-21T22:31:33Z", "ticket": "R4.5e", "leg": "routing-probe", "cost_usd": 5, "cumulative_usd": 5.200595, "record": "2026-10-21-routing-probe.json"}
+{"ts": "2026-10-21T22:31:52Z", "ticket": "R4.5e", "leg": "routing-probe", "cost_usd": 5, "cumulative_usd": 10.200595, "record": "2026-10-21-routing-probe.json"}
+{"ts": "2026-10-21T22:33:54Z", "ticket": "R4.5e", "leg": "routing-probe", "cost_usd": 5, "cumulative_usd": 15.200595, "record": "2026-10-21-routing-probe.json"}
+{"ts": "2026-10-21T22:34:10Z", "ticket": "R4.5e", "leg": "routing-probe", "cost_usd": 3.3e-05, "cumulative_usd": 15.200628, "record": "2026-10-21-routing-probe.json"}
+{"ts": "2026-10-21T23:12:11Z", "ticket": "R4.6", "leg": "bench-manifest-live", "cost_usd": 0, "cumulative_usd": 15.200628, "record": "2026-10-21-bench-manifest-live.json"}
+{"ts": "2026-10-21T23:12:19Z", "ticket": "R4.6", "leg": "bench-manifest-live", "cost_usd": 0, "cumulative_usd": 15.200628, "record": "2026-10-21-bench-manifest-live.json"}
+{"ts": "2026-10-21T23:15:10Z", "ticket": "R4.6", "leg": "lt03-live", "cost_usd": 0.001489, "cumulative_usd": 15.202117, "record": "2026-10-21-lt03-live.json"}
+{"ts": "2026-10-21T23:59:38Z", "ticket": "R4.7", "leg": "github-live", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-21-github-live.json"}
+{"ts": "2026-10-22T00:00:30Z", "ticket": "R4.7", "leg": "github-live", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-22-github-live.json"}
+{"ts": "2026-10-22T00:01:47Z", "ticket": "R4.7", "leg": "github-live", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-22-github-live.json"}
+{"ts": "2026-10-22T02:19:48Z", "ticket": "R4.7a", "leg": "oauth-device", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-22-oauth-device.json"}
+{"ts": "2026-10-22T02:20:58Z", "ticket": "R4.7a", "leg": "oauth-device", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-22-oauth-device.json"}
+{"ts": "2026-10-22T02:58:06Z", "ticket": "R4.7a", "leg": "oauth-device", "cost_usd": 0, "cumulative_usd": 15.202117, "record": "2026-10-22-oauth-device.json"}
+{"ts": "2026-10-22T03:44:39Z", "ticket": "R4.7b", "leg": "context-adapters", "cost_usd": 0.05, "cumulative_usd": 15.252117, "record": "2026-10-22-context-adapters.json"}
+{"ts": "2026-10-22T03:45:26Z", "ticket": "R4.7b", "leg": "context-adapters", "cost_usd": 2e-06, "cumulative_usd": 15.252119, "record": "2026-10-22-context-adapters.json"}
+{"ts": "2026-10-22T03:46:37Z", "ticket": "R4.7b", "leg": "context-adapters", "cost_usd": 2e-06, "cumulative_usd": 15.252121, "record": "2026-10-22-context-adapters.json"}
+{"ts": "2026-10-22T03:46:59Z", "ticket": "R4.7b", "leg": "context-adapters", "cost_usd": 0.000131, "cumulative_usd": 15.252252, "record": "2026-10-22-context-adapters.json"}
+{"ts": "2026-10-22T04:32:05Z", "ticket": "R4.7c", "leg": "otel-live", "cost_usd": 0, "cumulative_usd": 15.252252, "record": "2026-10-22-otel-live.json"}
+{"ts": "2026-10-22T04:32:49Z", "ticket": "R4.7c", "leg": "otel-live", "cost_usd": 0, "cumulative_usd": 15.252252, "record": "2026-10-22-otel-live.json"}
+{"ts": "2026-10-22T04:33:00Z", "ticket": "R4.7c", "leg": "otel-live", "cost_usd": 0, "cumulative_usd": 15.252252, "record": "2026-10-22-otel-live.json"}
+{"ts": "2026-10-22T05:55:21Z", "ticket": "R4.7e", "leg": "judge-calibrate", "cost_usd": 0.0, "cumulative_usd": 15.252252, "record": "2026-10-22-judge-calibrate.json"}
+{"ts": "2026-10-22T05:56:26Z", "ticket": "R4.7e", "leg": "judge-calibrate", "cost_usd": 0.0, "cumulative_usd": 15.252252, "record": "2026-10-22-judge-calibrate.json"}
+{"ts": "2026-10-22T05:57:20Z", "ticket": "R4.7e", "leg": "judge-calibrate", "cost_usd": 0.001722, "cumulative_usd": 15.253974, "record": "2026-10-22-judge-calibrate.json"}
+{"ts": "2026-10-22T05:57:58Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 16.253974, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T05:58:59Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 17.253974, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:00:42Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 18.253974, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:01:48Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 19.253974, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:05:46Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 0.001786, "cumulative_usd": 19.25576, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:08:35Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 20.25576, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:09:20Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 1, "cumulative_usd": 21.25576, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T06:11:40Z", "ticket": "R4.7e", "leg": "judge-run", "cost_usd": 0.001945, "cumulative_usd": 21.257705, "record": "2026-10-22-judge-run.json"}
+{"ts": "2026-10-22T18:56:13Z", "ticket": "R4.15d", "leg": "r4-15d-fetch", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-22-r4-15d-fetch.json"}
+{"ts": "2026-10-23T03:07:02Z", "ticket": "L4.6", "leg": "capstone-run-local", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-run-local.json"}
+{"ts": "2026-10-23T03:07:57Z", "ticket": "L4.6", "leg": "capstone-run-local", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-run-local.json"}
+{"ts": "2026-10-23T03:09:50Z", "ticket": "L4.6", "leg": "capstone-run-local", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-run-local.json"}
+{"ts": "2026-10-23T03:10:49Z", "ticket": "L4.6", "leg": "capstone-sandboxed-exec", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-sandboxed-exec.json"}
+{"ts": "2026-10-23T03:10:57Z", "ticket": "L4.6", "leg": "capstone-ledger-replay", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-ledger-replay.json"}
+{"ts": "2026-10-23T03:11:16Z", "ticket": "L4.6", "leg": "capstone-web", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-web.json"}
+{"ts": "2026-10-23T03:11:26Z", "ticket": "L4.6", "leg": "capstone-bundle-repro", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-bundle-repro.json"}
+{"ts": "2026-10-23T03:11:30Z", "ticket": "L4.6", "leg": "capstone-mcp", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-mcp.json"}
+{"ts": "2026-10-23T03:12:51Z", "ticket": "L4.6", "leg": "capstone-sandboxed-exec", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-sandboxed-exec.json"}
+{"ts": "2026-10-23T03:12:59Z", "ticket": "L4.6", "leg": "capstone-web", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-web.json"}
+{"ts": "2026-10-23T03:13:09Z", "ticket": "L4.6", "leg": "capstone-bundle-repro", "cost_usd": 0, "cumulative_usd": 21.257705, "record": "2026-10-23-capstone-bundle-repro.json"}
+{"ts": "2026-10-23T03:13:20Z", "ticket": "L4.6", "leg": "capstone-run-anthropic", "cost_usd": 2, "cumulative_usd": 23.257705, "record": "2026-10-23-capstone-run-anthropic.json"}
+{"ts": "2026-10-23T03:21:40Z", "ticket": "L4.6", "leg": "capstone-run-anthropic", "cost_usd": 2, "cumulative_usd": 25.257705, "record": "2026-10-23-capstone-run-anthropic.json"}
+{"ts": "2026-10-23T03:22:13Z", "ticket": "L4.6", "leg": "capstone-run-openai", "cost_usd": 0.000158, "cumulative_usd": 25.257863, "record": "2026-10-23-capstone-run-openai.json"}
+{"ts": "2026-10-23T03:23:02Z", "ticket": "L4.6", "leg": "capstone-judge", "cost_usd": 0.001905, "cumulative_usd": 25.259768, "record": "2026-10-23-capstone-judge.json"}
+{"ts": "2026-10-23T03:23:51Z", "ticket": "L4.6", "leg": "capstone-fleet-webhook", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-capstone-fleet-webhook.json"}
+{"ts": "2026-10-23T04:28:56Z", "ticket": "L4.6b", "leg": "l4-6b-replay", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-l4-6b-replay.json"}
+{"ts": "2026-10-23T05:18:40Z", "ticket": "L4.7", "leg": "quickstart-live", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-quickstart-live.json"}
+{"ts": "2026-10-23T07:13:22Z", "ticket": "L4.6a", "leg": "plugin-memory-store", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-memory-store.json"}
+{"ts": "2026-10-23T07:14:29Z", "ticket": "L4.6a", "leg": "plugin-memory-store", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-memory-store.json"}
+{"ts": "2026-10-23T07:14:30Z", "ticket": "L4.6a", "leg": "plugin-compact-evict-oldest", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-compact-evict-oldest.json"}
+{"ts": "2026-10-23T07:14:31Z", "ticket": "L4.6a", "leg": "plugin-tracker-fixture", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-tracker-fixture.json"}
+{"ts": "2026-10-23T07:16:43Z", "ticket": "L4.6a", "leg": "embed-sdk-live", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-embed-sdk-live.json"}
+{"ts": "2026-10-23T07:16:45Z", "ticket": "L4.6a", "leg": "surface-mcp-lab", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-mcp-lab.json"}
+{"ts": "2026-10-23T07:34:17Z", "ticket": "L4.6a", "leg": "surface-mcp-lab", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-mcp-lab.json"}
+{"ts": "2026-10-23T07:34:33Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:10:31Z", "ticket": "L4.6a", "leg": "surface-mcp-lab", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-mcp-lab.json"}
+{"ts": "2026-10-23T08:10:43Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:11:28Z", "ticket": "L4.6a", "leg": "embed-sdk-live", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-embed-sdk-live.json"}
+{"ts": "2026-10-23T08:11:38Z", "ticket": "L4.6a", "leg": "plugin-memory-store", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-memory-store.json"}
+{"ts": "2026-10-23T08:11:39Z", "ticket": "L4.6a", "leg": "plugin-compact-evict-oldest", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-compact-evict-oldest.json"}
+{"ts": "2026-10-23T08:11:41Z", "ticket": "L4.6a", "leg": "plugin-tracker-fixture", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-tracker-fixture.json"}
+{"ts": "2026-10-23T08:12:31Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:13:04Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:13:12Z", "ticket": "L4.6a", "leg": "surface-mcp-lab", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-mcp-lab.json"}
+{"ts": "2026-10-23T08:13:37Z", "ticket": "L4.6a", "leg": "embed-sdk-live", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-embed-sdk-live.json"}
+{"ts": "2026-10-23T08:13:39Z", "ticket": "L4.6a", "leg": "plugin-memory-store", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-memory-store.json"}
+{"ts": "2026-10-23T08:13:40Z", "ticket": "L4.6a", "leg": "plugin-compact-evict-oldest", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-compact-evict-oldest.json"}
+{"ts": "2026-10-23T08:13:42Z", "ticket": "L4.6a", "leg": "plugin-tracker-fixture", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-tracker-fixture.json"}
+{"ts": "2026-10-23T08:23:25Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:23:42Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:24:02Z", "ticket": "L4.6a", "leg": "surface-mcp-lab", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-mcp-lab.json"}
+{"ts": "2026-10-23T08:24:35Z", "ticket": "L4.6a", "leg": "embed-sdk-live", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-embed-sdk-live.json"}
+{"ts": "2026-10-23T08:24:37Z", "ticket": "L4.6a", "leg": "plugin-memory-store", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-memory-store.json"}
+{"ts": "2026-10-23T08:24:38Z", "ticket": "L4.6a", "leg": "plugin-compact-evict-oldest", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-compact-evict-oldest.json"}
+{"ts": "2026-10-23T08:24:40Z", "ticket": "L4.6a", "leg": "plugin-tracker-fixture", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-plugin-tracker-fixture.json"}
+{"ts": "2026-10-23T08:30:01Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-10-23T08:31:17Z", "ticket": "L4.6a", "leg": "surface-acp", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-10-23-surface-acp.json"}
+{"ts": "2026-11-10T01:33:57Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-10-reproof.json"}
+{"ts": "2026-11-11T01:18:19Z", "ticket": "R6.40", "leg": "ps0", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-ps0.json"}
+{"ts": "2026-11-11T01:20:36Z", "ticket": "R6.40", "leg": "ps0", "cost_usd": 0.0, "cumulative_usd": 25.259768, "record": "2026-11-11-ps0.json"}
+{"ts": "2026-11-11T01:21:27Z", "ticket": "R6.40", "leg": "pp0", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-pp0.json"}
+{"ts": "2026-11-11T01:21:28Z", "ticket": "R6.40", "leg": "corpus", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-corpus.json"}
 {"ts": "2026-11-11T10:20:00Z", "ticket": "R6.44", "leg": "corpus", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-corpus-w3.json"}
-{"ts":"2026-11-11T15:48:44Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-reproof.json"}
-{"ts":"2026-11-11T16:53:03Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-reproof.json"}
-{"ts":"2026-11-11T23:50:49Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-11-reproof-wc2.json"}
-{"ts":"2026-11-12T10:58:49Z","ticket":"R6.45c","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-12-reproof-wc3.json"}
+{"ts": "2026-11-11T15:48:44Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-reproof.json"}
+{"ts": "2026-11-11T16:53:03Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-reproof.json"}
+{"ts": "2026-11-11T23:50:49Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-11-reproof-wc2.json"}
+{"ts": "2026-11-12T10:58:49Z", "ticket": "R6.45c", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-12-reproof-wc3.json"}
 {"cost_usd": 0, "cumulative_usd": 25.259768, "leg": "reproof", "record": "2026-11-12-reproof-wc4.json", "ticket": "R6.32", "ts": "2026-11-12T23:22:13Z"}
-{"ts":"2026-11-13T12:27:19Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-13-reproof-wc5.json"}
-{"ts":"2026-11-14T03:49:31Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-14-reproof-wc6.json"}
-{"ts":"2026-11-15T13:39:49Z","ticket":"R6.32","leg":"reproof","cost_usd":0,"cumulative_usd":25.259768,"record":"2026-11-15-reproof-wc7.json"}
+{"ts": "2026-11-13T12:27:19Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-13-reproof-wc5.json"}
+{"ts": "2026-11-14T03:49:31Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-14-reproof-wc6.json"}
+{"ts": "2026-11-15T13:39:49Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-15-reproof-wc7.json"}
+{"ts": "2026-11-15T23:20:51Z", "ticket": "R6.32", "leg": "reproof", "cost_usd": 0, "cumulative_usd": 25.259768, "record": "2026-11-15-reproof-wc8.json"}
 {"cost_usd": 0, "cumulative_usd": 25.259768, "leg": "egress-real-clients", "record": "2026-11-16-egress-real-clients-green.json", "ticket": "R6.45k", "ts": "2026-11-16T02:38:54Z"}

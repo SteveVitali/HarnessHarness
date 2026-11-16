@@ -1,0 +1,114 @@
+{
+ "coverage": "0/14 members carry a covering reproofed verdict \u2014 the Wc8 re-proof on the seven-defect-repaired runner (abc8d850: FORWARD_MAX_BODY=128MiB) under the epoch-3 widened egress allowlist (sha256:787db9e1\u2026, release-assets.githubusercontent.com granted) was EARLY-STOPPED under operator ruling R-1 (~20:54Z held-leg launch \u2192 ~23:20Z kill, inside D=8h): only 2 of 10 held members surfaced past O/H-pub and every completed H-allow cell failed verifier_unavailable:bootstrap:signature \u2014 prove-plus-comm r0/r1/r2 + make-doom-for-mips r0 (r1 in-flight at kill, r2 not started), reward.txt = 0, denied_hosts [] on every cell. First-error signature identical on all 4 completed cells: 'curl: (28) Proxy CONNECT aborted due to timeout' \u2192 uvx never installed \u2192 pytest never ran. events.wal shows the allowed astral.sh:443 CONNECT tunnel open ~300 s with bytes_up \u2248 800 / bytes_down 0 \u2014 the single-threaded mediator / tunnel-pump starvation (the audit's D8/D9 machinery discordance), NOT an allowlist deny. The max_body + duplicate-Host repairs held (apt update+install flowed whole through the mediator \u2014 curl itself installed fine; only the HTTPS CONNECT starved). No hh-reproof-packet/1 landed; the dev leg never launched. The task list stays blocked verbatim; subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}. early_stop:operator_ruling R-1 \u2014 machinery discordance repaired, never excluded.",
+ "gate": "GATE-G28h",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "incomplete{early_stop:operator_ruling R-1} \u2014 O 3/3 + H-pub 3/3 machinery-complete, H-allow r0/r1/r2 verifier_unavailable:bootstrap:signature (curl (28) CONNECT starve, denied_hosts [])"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "incomplete{early_stop:operator_ruling R-1} \u2014 O 3/3 + H-pub 3/3 machinery-complete, H-allow r0 verifier_unavailable:bootstrap:signature (curl (28) CONNECT starve), r1 in-flight at kill, r2 not started"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1}"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1} \u2014 the standing repair:machinery discordance stays recorded, never excluded"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1} \u2014 dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1} \u2014 dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1} \u2014 dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc8_verdict": "not_reached{early_stop:operator_ruling R-1} \u2014 dev leg never launched"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-1",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc8_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-2",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc8_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-3",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc8_verdict": "no_member_to_reproof"
+  }
+ ],
+ "recorded_at": "2026-11-15T23:55:00Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists": {
+  "state": "blocked"
+ },
+ "window": "wc8"
+}
