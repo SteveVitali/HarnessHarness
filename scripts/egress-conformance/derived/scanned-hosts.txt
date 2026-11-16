@@ -1,0 +1,5 @@
+astral.sh
+download.pytorch.org
+github.com
+repo.anaconda.com
+s3-us-west-2.amazonaws.com

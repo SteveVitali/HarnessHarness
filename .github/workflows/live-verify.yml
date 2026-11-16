@@ -20,6 +20,10 @@ on:
         description: "per-leg USD budget ceiling (the script's own cap still gates)"
         required: true
         default: "0"
+      subject_ref:
+        description: "egress-real-clients only: the code-under-test ref (a sha/ref archived by run.sh); empty = the dispatched ref"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -72,6 +76,7 @@ jobs:
           HH_LIVE_ENV: ${{ runner.temp }}/live.env
           LEGS: ${{ inputs.legs }}
           BUDGET: ${{ inputs.budget }}
+          HH_EGRESS_SUBJECT_REF: ${{ inputs.subject_ref }}
         run: |
           set -uo pipefail; set +x
           rc=0
