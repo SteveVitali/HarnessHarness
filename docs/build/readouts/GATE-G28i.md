@@ -117,3 +117,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G28i
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:af298c3b8b78d77c
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "continue" (operator, interactive) in response to the GATE-G28i presentation of smoke1/smoke2/smoke3 (quotes `pq-950d9be85a360626`/`pq-30c1a03d1dce50ea`/`pq-b2ed8578ab9ede1b`, each 830,480 µ$ ≤ 1,250,000; Σ 2,491,440 ≤ 3,500,000 µ$). Disposition: **`envelope_authorized` — run the smoke loop** (R6.45l dispatches smoke1 first, evaluating to SMOKE-PASS or envelope exhaustion → `blockedOn`). The envelope's `verbatim_sha256` stamps onto `fp-smoke{1,2,3}.json`; each smoke's quote stays under the envelope.
