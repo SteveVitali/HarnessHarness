@@ -1,0 +1,181 @@
+{
+ "authorization": {
+  "ceiling_micros": 830480,
+  "gate": "PROV-SMOKE",
+  "model_line": "none",
+  "quote_id": "pq-30c1a03d1dce50ea",
+  "readout_path": "docs/build/readouts/GATE-G28i.md",
+  "verbatim_sha256": "e256ee8e7aff6957a781d8328f0f68e26996564c81fa458da59fbca2305138ad"
+ },
+ "carried_load": {
+  "set_digest": "sha256:254d590e1c66a8300bc2ff26c1d03fcf2104985e614a6b4815f561081639de0e",
+  "verified": true
+ },
+ "cells": {
+  "prove-plus-comm/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 52,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 52,
+    "tunnel_closed": 15,
+    "undecided": 0
+   },
+   "verify_attempts": 1,
+   "wall_ms": 30588
+  },
+  "pytorch-model-cli/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 0,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 67
+    },
+    "decided": 417,
+    "deny_hosts": [
+     "download.pytorch.org"
+    ],
+    "mediator_err_5xx": 0,
+    "requested": 417,
+    "tunnel_closed": 67,
+    "undecided": 0
+   },
+   "verify_attempts": 2,
+   "wall_ms": 1014424
+  },
+  "query-optimize/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 33,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 33,
+    "tunnel_closed": 16,
+    "undecided": 0
+   },
+   "verify_attempts": 1,
+   "wall_ms": 1037712
+  },
+  "query-optimize/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": null,
+    "close_causes": null,
+    "decided": null,
+    "deny_hosts": null,
+    "mediator_err_5xx": null,
+    "requested": null,
+    "tunnel_closed": null,
+    "undecided": null
+   },
+   "verify_attempts": 1,
+   "wall_ms": 1034860
+  },
+  "torch-tensor-parallelism/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 43
+    },
+    "decided": 84,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 84,
+    "tunnel_closed": 43,
+    "undecided": 0
+   },
+   "verify_attempts": 1,
+   "wall_ms": 334601
+  }
+ },
+ "clauses": {
+  "denied_hosts_epoch_consistent": "pass \u2014 every cell-report's denied_hosts is [] \u2014 the only mediator denies are agent-phase download.pytorch.org, which the epoch's agent set denies by design (the coarse store-checker flags it outside permanent_denies\u222awithheld \u2014 recorded, same handling as smoke1)",
+  "h_allow_decided_reward1": "fail \u2014 all 4 H-allow cells decided (zero verifier_unavailable); prove-plus-comm / torch-tensor-parallelism / query-optimize reward 1; pytorch-model-cli decided reward 0 \u2014 the oracle agent's own torch install (pip --index download.pytorch.org) is denied by the AGENT layer by design (X-06 narrow agent set; 7 policy-consistent denies) \u2192 no weights.json \u2192 honest verifier grade 0",
+  "query_optimize_hpub_decided_reward1": "pass",
+  "tunnel_close_eof_only": "pass \u2014 every tunnel.closed close_cause eof with true byte counts (141 tunnels across the 4 mediated cells)",
+  "zero_5xx": "pass \u2014 zero mediator 5xx on every store"
+ },
+ "digests": {
+  "harvest_manifest": "7e7db2068ae1b8f552af10134b1eb77462d103cf9f1d9c0829c7f2a05fb6dac5",
+  "run_root_tar": "0caaac7351509450bb1453f9b52c39d8fc4dc4c1088c83045d6ecf71bb7b1851",
+  "store_check_epoch5": "4117cf1b092164fa455db8e322702dac0d7800c94c108631079c1704593732f9",
+  "verifier_first_errors": "cf77f1f94dbd8f91734a057c62c34bf29922b25a652d08c955e442e42f138370",
+  "window_record": "ae72308a45e303a6af8e4897accd3548e0067e2fc053ab8127964671182fe921"
+ },
+ "first_error_tally": "pytorch-model-cli: verifier ran fully (epoch-5 carried torch wheel CDN + MNIST datasets); failed tests \u2014 weights.json absent (oracle's agent-phase torch install policy-denied) \u2192 cli_tool 'Error loading weights' \u2192 4 failed / 2 passed \u2192 reward 0; the other 4 cells decided cleanly \u2014 run-root/verifier-first-errors.txt",
+ "freeze": {
+  "digest": "sha256:e61a6ed9771d506e0606dd7a953ebe49a56dc96d8427d9eb410ae492e7f3b328",
+  "epoch": 5,
+  "note": "epoch-5 minted this run under the operator-delegated declared-data scope call \u2014 verify += the runtime-observed download-r2.pytorch.org / ossci-datasets.s3.amazonaws.com / yann.lecun.com; agent/permanent_denies/withheld byte-identical to epoch-4 (checker 12/12 legs)"
+ },
+ "gate": {
+  "disposition": "envelope_authorized",
+  "readout": "docs/build/readouts/GATE-G28i.md",
+  "verbatim": "continue",
+  "verbatim_sha256": "e256ee8e7aff6957a781d8328f0f68e26996564c81fa458da59fbca2305138ad"
+ },
+ "instance": {
+  "created": "2026-11-16T04:38:14Z",
+  "deleted": "2026-11-16T05:09:18Z \u2014 teardown nine-step, h_r elapsed ~0.9 of 6",
+  "disk_gib": 150,
+  "image": "debian-12-bookworm-v20261014",
+  "machine_type": "e2-standard-8",
+  "name": "hh-fp-smoke2",
+  "zone": "us-central1-a"
+ },
+ "label": "non-evidence smoke (internal; never re-proof evidence)",
+ "outcome": "not_passed{task_reward_zero:pytorch-model-cli \u2014 allowlist_gap{agent_phase:download.pytorch.org} by design}",
+ "phase": "fp",
+ "receipts": [
+  "docs/build/reports/compute/2026-11-16-fp-smoke2-{provision,verify,prepull,harvest,teardown,cost}.json",
+  "docs/build/reports/archive/2026-11-16-fp-smoke2-{upload,verify}.json",
+  "docs/build/reports/2026-11-16-fp-smoke2-settlement.json"
+ ],
+ "recorded_at": "2026-11-16T05:25:00Z",
+ "residual": "machinery verified end-to-end \u2014 the residual is the oracle agent's declared-data posture: its own bootstrap needs a host the agent set denies by design (X-06 forbids agent-phase widening; a verify-phase epoch cannot fix this). The A5 legit-exclusion shape \u2014 re-scope{exclude-and-replace} or an agent-side derivation \u2014 is GATE-G28j's call; no further verify-phase epoch is owed by this window",
+ "runner": {
+  "build": "source",
+  "commit": "27ac8db985207e1d8ad112ae0e9c55d7d5bff52b",
+  "in_window_digests": {
+   "hh-egress-mediator": "8f830a7fbd5ae259450cb1a8db67e82def01cbfc57206753a89f3ae2d7853d79",
+   "hh-helper": "727b7b83a21ac39c8ff3c80bd8858a81469be08a28f907b39374e5a2753a14bd",
+   "hh-w1": "d91c2c3861fede1a0d416260d9f4b48f31b83d300fc21b1c3039e66bfb6051ea"
+  },
+  "note": "in-window digests byte-identical to smoke1's \u2014 the deterministic 27ac8db9 build; zero in-window code rebuilds, R-10 unexercised",
+  "rebuilds": []
+ },
+ "schema": "hh-smoke/1",
+ "smoke_pass": false,
+ "spend": {
+  "ceiling_micros": 830480,
+  "compute_estimate_micros": 273076,
+  "model": "$0"
+ },
+ "ticket": "R6.45l",
+ "window": "smoke2"
+}
