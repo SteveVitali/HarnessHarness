@@ -316,14 +316,22 @@ fn wc_forward_passes_apt_scale_response_bodies() {
         "allowed apt-scale forward must answer 200, not 502, got: {:?}",
         String::from_utf8_lossy(&resp[..resp.len().min(512)])
     );
-    let head_end = resp
-        .windows(4)
-        .position(|w| w == b"\r\n\r\n")
-        .expect("response head terminator");
+    // R6.45k D10/D13: the binary path streams the body re-framed
+    // `Transfer-Encoding: chunked` (exactly one framing member), so the
+    // relayed body is the de-chunked payload — read under the declared
+    // framing by the committed client-facing reader; a truncated chunk
+    // stream fails the read.
+    let (head, body) = hharness_wire::http::read_response_full(&mut &resp[..], 2 * big_len)
+        .expect("relayed response parses under its declared framing");
+    assert_eq!(head.status, 200);
     assert_eq!(
-        resp.len() - (head_end + 4),
+        body.len(),
         big_len,
         "the full fixture body must relay to the cell"
+    );
+    assert!(
+        body.iter().all(|&b| b == b'x'),
+        "the fixture bytes relay verbatim"
     );
 
     // The decided row — the allow is recorded, not a deny (the pre-repair

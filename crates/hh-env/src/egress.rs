@@ -558,7 +558,7 @@ impl Default for LocalHttpTransport {
 }
 
 /// The streaming upstream body [`LocalHttpTransport::forward_head`] hands
-/// back — the codec's [`BodyReader`] owning the buffered wire stream
+/// back — the codec's [`BodyReader`](hharness_wire::http::BodyReader) owning the buffered wire stream
 /// (bounded resident memory: one codec segment at a time — D13).
 impl BodySource for hharness_wire::http::BodyReader<std::io::BufReader<Box<dyn ByteStream>>> {
     fn next_chunk(&mut self) -> std::io::Result<Option<Vec<u8>>> {
