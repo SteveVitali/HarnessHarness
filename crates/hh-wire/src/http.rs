@@ -207,6 +207,20 @@ pub enum BodyMode {
     Close,
 }
 
+/// `bodiless(method, status)` — RFC 9112 §6.3: a response to a HEAD
+/// request, and any 1xx, 204 or 304 status, carries no body regardless of
+/// the declared framing. A `Content-Length: N` on a HEAD reply names the
+/// GET equivalent's size — not bytes that follow; a reader that waits for
+/// them stalls to its deadline and surfaces a timeout where none was owed
+/// (the R6.45k/D11 defect: HEAD/204/304 replies 502'd on the mediated
+/// forward path).
+pub fn bodiless(method: Option<&str>, status: u16) -> bool {
+    method.is_some_and(|m| m.eq_ignore_ascii_case("HEAD"))
+        || (100..200).contains(&status)
+        || status == 204
+        || status == 304
+}
+
 /// The body framing `head` declares. `Transfer-Encoding: chunked` takes the
 /// body when present (a sender mixing both is refused upstream by the proxy
 /// contract; here chunked wins — the declared length is untrusted framing).
@@ -227,14 +241,25 @@ pub fn body_mode(head: &ResponseHead) -> BodyMode {
     }
 }
 
+/// `body_mode_for(method, head)` — [`body_mode`] with the request context
+/// in scope: a [`bodiless`] status (1xx/204/304 on any method) or a HEAD
+/// response takes `Fixed(0)` — nothing follows the head, whatever the
+/// declared framing says.
+pub fn body_mode_for(method: Option<&str>, head: &ResponseHead) -> BodyMode {
+    if bodiless(method, head.status) {
+        return BodyMode::Fixed(0);
+    }
+    body_mode(head)
+}
+
 /// Incremental response-body reader — yields bytes per [`BodyMode`]:
 /// `Chunked` → one wire chunk per step; `Fixed`/`Close` → bounded reads.
 /// `Ok(None)` is the terminal step (last chunk consumed / length filled /
 /// EOF on close-delimited). This is the streaming primitive the model
 /// transport's SSE decode rides on (R4.5b) — arrival stamps are taken per
 /// step, never per assembled body.
-pub struct BodyReader<'a, R: BufRead> {
-    r: &'a mut R,
+pub struct BodyReader<R: BufRead> {
+    r: R,
     mode: BodyMode,
     /// Bytes still owed under `Fixed`.
     remaining: usize,
@@ -247,10 +272,26 @@ pub struct BodyReader<'a, R: BufRead> {
     done: bool,
 }
 
-impl<'a, R: BufRead> BodyReader<'a, R> {
+impl<R: BufRead> BodyReader<R> {
     /// Wrap `r` for the body `head` declares; `max_body` bounds the total.
-    pub fn new(r: &'a mut R, head: &ResponseHead, max_body: usize) -> BodyReader<'a, R> {
-        let mode = body_mode(head);
+    /// Status-based [`bodiless`] rules apply (1xx/204/304 take no body);
+    /// [`Self::new_for`] adds the request method (HEAD). `r` is owned —
+    /// a `&mut R` argument wraps by borrow (`&mut R: BufRead`), an owned
+    /// reader lets a caller stream the body past the call frame
+    /// (R6.45k/D13 — the mediated forward's streaming leg).
+    pub fn new(r: R, head: &ResponseHead, max_body: usize) -> BodyReader<R> {
+        Self::new_for(r, head, None, max_body)
+    }
+
+    /// Wrap `r` for the body `head` declares **to `method`** — the full
+    /// [`body_mode_for`] rule (HEAD/1xx/204/304 read no body).
+    pub fn new_for(
+        r: R,
+        head: &ResponseHead,
+        method: Option<&str>,
+        max_body: usize,
+    ) -> BodyReader<R> {
+        let mode = body_mode_for(method, head);
         BodyReader {
             r,
             mode,
@@ -318,9 +359,9 @@ impl<'a, R: BufRead> BodyReader<'a, R> {
             }
             BodyMode::Chunked => {
                 if self.pending == 0 {
-                    let size = read_chunk_size(self.r)?;
+                    let size = read_chunk_size(&mut self.r)?;
                     if size == 0 {
-                        read_trailers(self.r)?;
+                        read_trailers(&mut self.r)?;
                         self.done = true;
                         return Ok(None);
                     }
@@ -610,6 +651,17 @@ pub fn read_body(
     BodyReader::new(r, head, max_body).read_all()
 }
 
+/// [`read_body`] with the request method in scope — a HEAD reply (and any
+/// 1xx/204/304) reads no body whatever the declared framing says.
+pub fn read_body_for(
+    r: &mut impl BufRead,
+    head: &ResponseHead,
+    method: Option<&str>,
+    max_body: usize,
+) -> Result<Vec<u8>, HttpError> {
+    BodyReader::new_for(r, head, method, max_body).read_all()
+}
+
 /// Read one HTTP response under any declared body mode —
 /// `Content-Length`, `Transfer-Encoding: chunked`, or close-delimited.
 /// This is the client-facing reader (`hharness-env` egress, `hharness-mcp` posts,
@@ -619,8 +671,19 @@ pub fn read_response_full(
     r: &mut impl BufRead,
     max_body: usize,
 ) -> Result<(ResponseHead, Vec<u8>), HttpError> {
+    read_response_full_for(None, r, max_body)
+}
+
+/// [`read_response_full`] with the request method in scope (R6.45k/D11) —
+/// bodiless replies (HEAD, 1xx, 204, 304) return promptly with an empty
+/// body instead of blocking on bytes that never come.
+pub fn read_response_full_for(
+    method: Option<&str>,
+    r: &mut impl BufRead,
+    max_body: usize,
+) -> Result<(ResponseHead, Vec<u8>), HttpError> {
     let head = read_response_head(r)?;
-    let body = read_body(r, &head, max_body)?;
+    let body = read_body_for(r, &head, method, max_body)?;
     Ok((head, body))
 }
 

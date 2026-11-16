@@ -126,6 +126,83 @@ pub struct WireResponse {
     pub body: Vec<u8>,
 }
 
+/// `ForwardError` — the transport leg's typed failure (R6.45k; D12): a
+/// declared-bound lapse is `Timeout` — the mediator answers a typed **504**
+/// (`Gateway Timeout`), never a 502; everything else is `Failed` (502).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForwardError {
+    /// A declared timeout bound lapsed (connect/first-byte/read).
+    Timeout {
+        /// What lapsed and where.
+        detail: String,
+    },
+    /// The leg failed for a non-timeout reason.
+    Failed {
+        /// What failed.
+        detail: String,
+    },
+}
+
+impl ForwardError {
+    /// `Timeout` with context.
+    pub fn timeout(detail: impl Into<String>) -> Self {
+        ForwardError::Timeout {
+            detail: detail.into(),
+        }
+    }
+    /// `Failed` with context.
+    pub fn failed(detail: impl Into<String>) -> Self {
+        ForwardError::Failed {
+            detail: detail.into(),
+        }
+    }
+    /// The detail string.
+    pub fn detail(&self) -> &str {
+        match self {
+            ForwardError::Timeout { detail } | ForwardError::Failed { detail } => detail,
+        }
+    }
+}
+
+impl std::fmt::Display for ForwardError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForwardError::Timeout { detail } => write!(f, "timeout: {detail}"),
+            ForwardError::Failed { detail } => write!(f, "{detail}"),
+        }
+    }
+}
+
+/// `ForwardHead` — the upstream response head plus its live body source
+/// (R6.45k; D13): [`EgressTransport::forward_head`] hands the caller the
+/// head immediately and a [`BodySource`] it drains chunk-wise — bounded
+/// resident memory independent of the body's size.
+pub struct ForwardHead {
+    /// The upstream head (status + headers, hop-by-hop members included —
+    /// the caller applies the response-hygiene filter before re-emitting).
+    pub head: hharness_wire::http::ResponseHead,
+    /// The live body (None ⇒ nothing follows the head).
+    pub body: Option<Box<dyn BodySource>>,
+}
+
+/// `BodySource` — a streaming response body: successive chunks until
+/// `Ok(None)`.
+pub trait BodySource {
+    /// The next body segment; `Ok(None)` is the terminal boundary.
+    fn next_chunk(&mut self) -> std::io::Result<Option<Vec<u8>>>;
+}
+
+/// A `BodySource` over an already-buffered body (the `forward_head`
+/// default — one chunk, then terminal).
+struct BufferedBody {
+    rest: Option<Vec<u8>>,
+}
+impl BodySource for BufferedBody {
+    fn next_chunk(&mut self) -> std::io::Result<Option<Vec<u8>>> {
+        Ok(self.rest.take())
+    }
+}
+
 /// The transport seam — the *only* wire the mediator writes (mediated envs
 /// have no other network path). Implementations dial a **resolved address**
 /// (the consume-once answer), never re-resolve the name themselves.
@@ -141,16 +218,45 @@ pub trait EgressTransport {
         path: &str,
         headers: &[(String, String)],
         body: Option<&[u8]>,
-    ) -> Result<WireResponse, String>;
+    ) -> Result<WireResponse, ForwardError>;
+
+    /// `forward_head(…)` — the streaming half of [`Self::forward`]
+    /// (R6.45k; D13): the head as soon as it parses, then a [`BodySource`]
+    /// the caller drains — the buffered `forward` stays the answering API;
+    /// the default synthesizes the source from it (one buffered chunk).
+    #[allow(clippy::too_many_arguments)] // the arity is the wire request's.
+    fn forward_head(
+        &self,
+        addr: IpAddr,
+        port: u16,
+        host: &str,
+        method: &str,
+        path: &str,
+        headers: &[(String, String)],
+        body: Option<&[u8]>,
+    ) -> Result<ForwardHead, ForwardError> {
+        let r = self.forward(addr, port, host, method, path, headers, body)?;
+        Ok(ForwardHead {
+            head: hharness_wire::http::ResponseHead {
+                status: r.status,
+                headers: r
+                    .headers
+                    .iter()
+                    .map(|(k, v)| (k.to_ascii_lowercase(), v.clone()))
+                    .collect(),
+            },
+            body: Some(Box::new(BufferedBody { rest: Some(r.body) })),
+        })
+    }
 
     /// `dial(addr, port)` — open a byte stream to the *resolved* address
     /// for the CONNECT tunnel leg (R6.15; F11). The default refuses:
     /// a transport that cannot tunnel answers typed, never a silently
     /// plain forward. `LocalHttpTransport` dials `TcpStream` — the
     /// tunnelled bytes are `tls_opaque` by declaration.
-    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, String> {
+    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, ForwardError> {
         let _ = (addr, port);
-        Err("tunnel unsupported on this transport".to_string())
+        Err(ForwardError::failed("tunnel unsupported on this transport"))
     }
 
     /// Whether the transport terminates TLS at the mediator (a
@@ -169,6 +275,10 @@ pub trait EgressTransport {
 pub trait ByteStream: std::io::Read + std::io::Write + Send {
     /// A second handle on the same stream (the pump threads' two ends).
     fn try_clone(&self) -> std::io::Result<Box<dyn ByteStream>>;
+    /// Half-close the stream (R6.45k; D9 — the relay's pattern): one
+    /// direction's EOF propagates as `shutdown(Write)` on the peer, so the
+    /// other direction sees the close instead of hanging on a live socket.
+    fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()>;
 }
 impl ByteStream for std::net::TcpStream {
     fn try_clone(&self) -> std::io::Result<Box<dyn ByteStream>> {
@@ -176,6 +286,9 @@ impl ByteStream for std::net::TcpStream {
             let b: Box<dyn ByteStream> = Box::new(s);
             b
         })
+    }
+    fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()> {
+        std::net::TcpStream::shutdown(self, how)
     }
 }
 #[cfg(unix)]
@@ -185,6 +298,9 @@ impl ByteStream for std::os::unix::net::UnixStream {
             let b: Box<dyn ByteStream> = Box::new(s);
             b
         })
+    }
+    fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()> {
+        std::os::unix::net::UnixStream::shutdown(self, how)
     }
 }
 
@@ -209,6 +325,95 @@ const HOP_BY_HOP_HEADERS: [&str; 11] = [
     "upgrade",
 ];
 
+/// `TunnelCause` — how one tunnel-pump leg ended (D9): the close row's
+/// `close_cause` is computed from the two legs' real outcomes, never
+/// hard-coded.
+#[derive(Debug)]
+enum TunnelCause {
+    /// Clean EOF (or an already-closed write after the peer's half-close).
+    Eof,
+    /// The declared `TUNNEL_IDLE_TIMEOUT` fired on an idle leg.
+    IdleTimeout,
+    /// An io error ended the leg — the `error:<kind>` spelling.
+    Error(String),
+}
+
+/// `TunnelEnd` — one pump leg's result: bytes actually moved plus the
+/// true end cause (no `unwrap_or(0)` — an erroring leg still reports the
+/// bytes it moved).
+struct TunnelEnd {
+    bytes: u64,
+    cause: TunnelCause,
+}
+
+/// `tunnel_pump(r, w)` — copy `r → w` until EOF or error, counting real
+/// bytes (the 5 s-read-kill used to truncate the downstream count to 0).
+fn tunnel_pump(r: &mut dyn std::io::Read, w: &mut dyn std::io::Write) -> TunnelEnd {
+    let mut total = 0u64;
+    let mut buf = [0u8; 16384];
+    loop {
+        match r.read(&mut buf) {
+            Ok(0) => {
+                return TunnelEnd {
+                    bytes: total,
+                    cause: TunnelCause::Eof,
+                }
+            }
+            Ok(n) => {
+                if let Err(e) = w.write_all(&buf[..n]) {
+                    // A write to an already-closed peer is the peer's EOF,
+                    // not a transport error.
+                    let cause = match e.kind() {
+                        std::io::ErrorKind::BrokenPipe
+                        | std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::ConnectionAborted => TunnelCause::Eof,
+                        _ => TunnelCause::Error(e.kind().to_string()),
+                    };
+                    return TunnelEnd {
+                        bytes: total,
+                        cause,
+                    };
+                }
+                total += n as u64;
+            }
+            Err(e) => {
+                let cause = match e.kind() {
+                    std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
+                        TunnelCause::IdleTimeout
+                    }
+                    // A read on a socket the peer already closed surfaces
+                    // as reset — that IS the peer's EOF.
+                    std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::UnexpectedEof => TunnelCause::Eof,
+                    _ => TunnelCause::Error(e.kind().to_string()),
+                };
+                return TunnelEnd {
+                    bytes: total,
+                    cause,
+                };
+            }
+        }
+    }
+}
+
+/// `tunnel_close_cause(up, down)` — the `security.egress.tunnel.closed`
+/// `close_cause` member: any real error wins over an idle-timeout, which
+/// wins over a clean `eof` (`eof|idle_timeout|error:<kind>`).
+fn tunnel_close_cause(up: &TunnelEnd, down: &TunnelEnd) -> String {
+    for e in [&up.cause, &down.cause] {
+        if let TunnelCause::Error(kind) = e {
+            return format!("error:{kind}");
+        }
+    }
+    for e in [&up.cause, &down.cause] {
+        if matches!(e, TunnelCause::IdleTimeout) {
+            return "idle_timeout".to_string();
+        }
+    }
+    "eof".to_string()
+}
+
 /// `push_end_to_end_headers(out, client)` — append only the headers the
 /// origin may see: every client member outside the closed hop-by-hop set
 /// (case-insensitive — `HOST` spells the same header).
@@ -218,6 +423,50 @@ fn push_end_to_end_headers<'a>(out: &mut Vec<(&'a str, &'a str)>, client: &'a [(
             out.push((k.as_str(), v.as_str()));
         }
     }
+}
+
+/// The hop-by-hop **response** headers the mediator strips before
+/// re-emitting upstream's answer (R6.45k; D10 — RFC 9110 §7.6.1): the
+/// transport's own framing is re-declared below, never relayed — a
+/// verbatim upstream `Content-Length` duplicates the emitted one and a
+/// relayed `Transfer-Encoding: chunked` makes the client mis-parse an
+/// already-de-chunked body.
+const RESPONSE_HOP_BY_HOP: [&str; 7] = [
+    "connection",
+    "keep-alive",
+    "content-length",
+    "transfer-encoding",
+    "trailer",
+    "upgrade",
+    "proxy-authenticate",
+];
+
+/// `end_to_end_response_headers(upstream)` — the upstream response headers
+/// the client may see: every member outside the closed response hop-by-hop
+/// set, every `proxy-*` member, and every header `Connection:` names.
+/// Case-insensitive on the names; casing preserved on emit.
+pub fn end_to_end_response_headers(upstream: &[(String, String)]) -> Vec<(String, String)> {
+    // A `Connection: <token>` header names further hop-by-hop members.
+    let mut named: Vec<String> = Vec::new();
+    for (k, v) in upstream {
+        if k.eq_ignore_ascii_case("connection") {
+            named.extend(
+                v.split(',')
+                    .map(|t| t.trim().to_ascii_lowercase())
+                    .filter(|t| !t.is_empty()),
+            );
+        }
+    }
+    upstream
+        .iter()
+        .filter(|(k, _)| {
+            let n = k.to_ascii_lowercase();
+            !RESPONSE_HOP_BY_HOP.contains(&n.as_str())
+                && !n.starts_with("proxy-")
+                && !named.iter().any(|t| t == &n)
+        })
+        .cloned()
+        .collect()
 }
 
 /// `FORWARD_MAX_BODY` — the most one forward's response body may buffer
@@ -236,29 +485,106 @@ fn push_end_to_end_headers<'a>(out: &mut Vec<(&'a str, &'a str)>, client: &'a [(
 /// genuinely larger artifact still answers the same typed refusal.
 pub const FORWARD_MAX_BODY: usize = 128 * 1024 * 1024;
 
+// ── the declared timeout bounds (R6.45k; D9/D12) ────────────────────────────
+
+/// `CONNECT_TIMEOUT` — the dial bound on the forward and tunnel legs
+/// (D12: connect ≤ 10 s).
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// `FORWARD_IO_TIMEOUT` — the first-byte/read/write bound on the forward
+/// leg (D12: ≥ 60 s — a slow mirror or a generating index gets a full
+/// minute before the typed 504).
+pub const FORWARD_IO_TIMEOUT: Duration = Duration::from_secs(60);
+/// `TUNNEL_IDLE_TIMEOUT` — the declared idle bound on an established
+/// CONNECT tunnel leg (D9: no silent 5 s kill; ≥ 300 s, recorded — a leg
+/// that idles a full ten minutes answers `close_cause idle_timeout`,
+/// never a swallowed `eof`). Well above curl's observed ~300 s CONNECT
+/// patience so a real client's own timeout fires first.
+pub const TUNNEL_IDLE_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// `host_header(host, port)` — the `Host` authority for the wire (D14):
+/// the default port is omitted (`example.com`, never `example.com:80` /
+/// `:443`); a non-default port is always spelled.
+pub fn host_header(host: &str, port: u16) -> String {
+    if port == 80 || port == 443 {
+        host.to_string()
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+/// `io_fault(what, e)` — classify an io failure on the wire leg: deadline
+/// kinds are the typed [`ForwardError::Timeout`] (the mediator's 504),
+/// everything else `Failed`.
+fn io_fault(what: String, e: std::io::Error) -> ForwardError {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
+            ForwardError::timeout(format!("{what}: {e}"))
+        }
+        _ => ForwardError::failed(format!("{what}: {e}")),
+    }
+}
+
+/// `http_fault(what, e)` — the codec error map: `HttpError::Timeout` is
+/// the typed lapse, everything else `Failed`.
+fn http_fault(what: String, e: hharness_wire::http::HttpError) -> ForwardError {
+    match e {
+        hharness_wire::http::HttpError::Timeout => {
+            ForwardError::timeout(format!("{what}: deadline fired"))
+        }
+        other => ForwardError::failed(format!("{what}: {other}")),
+    }
+}
+
 /// The local HTTP/1.1 transport — a plain `TcpStream` to the resolved
 /// address (hermetic: localhost fixtures; no TLS — TLS-terminating
 /// inspection is a deferred row, `tls.terminate` is always `false` at this
 /// stage, so mediated traffic is plain HTTP to a checked address).
 pub struct LocalHttpTransport {
-    /// The dial/read timeout.
+    /// The forward leg's first-byte/read/write bound (default
+    /// [`FORWARD_IO_TIMEOUT`]; the tunnel leg's declared idle bound is
+    /// [`TUNNEL_IDLE_TIMEOUT`]).
     pub timeout: Duration,
+    /// The dial bound (default [`CONNECT_TIMEOUT`]).
+    pub connect_timeout: Duration,
 }
 
 impl Default for LocalHttpTransport {
     fn default() -> Self {
         LocalHttpTransport {
-            timeout: Duration::from_secs(5),
+            timeout: FORWARD_IO_TIMEOUT,
+            connect_timeout: CONNECT_TIMEOUT,
         }
     }
 }
 
+/// The streaming upstream body [`LocalHttpTransport::forward_head`] hands
+/// back — the codec's [`BodyReader`] owning the buffered wire stream
+/// (bounded resident memory: one codec segment at a time — D13).
+impl BodySource for hharness_wire::http::BodyReader<std::io::BufReader<Box<dyn ByteStream>>> {
+    fn next_chunk(&mut self) -> std::io::Result<Option<Vec<u8>>> {
+        hharness_wire::http::BodyReader::next_chunk(self).map_err(|e| match e {
+            hharness_wire::http::HttpError::Eof => {
+                std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "upstream eof mid-body")
+            }
+            hharness_wire::http::HttpError::Timeout => {
+                std::io::Error::new(std::io::ErrorKind::TimedOut, "upstream read deadline")
+            }
+            other => std::io::Error::new(std::io::ErrorKind::Other, other.to_string()),
+        })
+    }
+}
+
 impl EgressTransport for LocalHttpTransport {
-    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, String> {
-        let s =
-            TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
-        s.set_read_timeout(Some(self.timeout)).ok();
-        s.set_write_timeout(Some(self.timeout)).ok();
+    fn dial(&self, addr: IpAddr, port: u16) -> Result<Box<dyn ByteStream>, ForwardError> {
+        // The tunnel leg: connect under CONNECT_TIMEOUT, then the
+        // declared TUNNEL_IDLE_TIMEOUT on the established legs — never
+        // the forward path's first-byte bound (D9: a 5 s silence used to
+        // kill the downstream pump while the client hung 300 s).
+        let sa = std::net::SocketAddr::new(addr, port);
+        let s = TcpStream::connect_timeout(&sa, self.connect_timeout)
+            .map_err(|e| io_fault(format!("connect {addr}:{port}"), e))?;
+        s.set_read_timeout(Some(TUNNEL_IDLE_TIMEOUT)).ok();
+        s.set_write_timeout(Some(TUNNEL_IDLE_TIMEOUT)).ok();
         Ok(Box::new(s))
     }
 
@@ -271,26 +597,28 @@ impl EgressTransport for LocalHttpTransport {
         path: &str,
         headers: &[(String, String)],
         body: Option<&[u8]>,
-    ) -> Result<WireResponse, String> {
+    ) -> Result<WireResponse, ForwardError> {
         // R4.5b (ADR-0364 D1) — the wire shape is `hharness_wire::http`'s one
         // codec: request write + head parse + body per the declared mode
         // (`Content-Length`/`chunked`/close-delimited — the fixtures'
         // `Connection: close` answer reads the same). The dial stays here:
         // the mediator dials a *resolved* address, never a name.
-        let mut s =
-            TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
+        let sa = std::net::SocketAddr::new(addr, port);
+        let mut s = TcpStream::connect_timeout(&sa, self.connect_timeout)
+            .map_err(|e| io_fault(format!("connect {addr}:{port}"), e))?;
         s.set_read_timeout(Some(self.timeout)).ok();
         s.set_write_timeout(Some(self.timeout)).ok();
-        let host_header = format!("{host}:{port}");
+        let host_header = host_header(host, port);
         let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
         hdrs.push(("Host", &host_header));
         hdrs.push(("Connection", "close"));
         push_end_to_end_headers(&mut hdrs, headers);
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
-            .map_err(|e| format!("write {addr}:{port}: {e}"))?;
+            .map_err(|e| http_fault(format!("write {addr}:{port}"), e))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hharness_wire::http::read_response_full(&mut r, FORWARD_MAX_BODY)
-            .map_err(|e| format!("read {addr}:{port}: {e}"))?;
+        let (head, body) =
+            hharness_wire::http::read_response_full_for(Some(method), &mut r, FORWARD_MAX_BODY)
+                .map_err(|e| http_fault(format!("read {addr}:{port}"), e))?;
         Ok(WireResponse {
             status: head.status,
             headers: head
@@ -299,6 +627,45 @@ impl EgressTransport for LocalHttpTransport {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             body,
+        })
+    }
+
+    fn forward_head(
+        &self,
+        addr: IpAddr,
+        port: u16,
+        host: &str,
+        method: &str,
+        path: &str,
+        headers: &[(String, String)],
+        body: Option<&[u8]>,
+    ) -> Result<ForwardHead, ForwardError> {
+        // D13 — the streaming path: the same request shape as `forward`,
+        // but the head parses first and the body streams through a
+        // [`BodyReader`]-backed source — no `FORWARD_MAX_BODY` buffering
+        // bound on this leg (bounded resident memory is the guard).
+        let sa = std::net::SocketAddr::new(addr, port);
+        let mut s = TcpStream::connect_timeout(&sa, self.connect_timeout)
+            .map_err(|e| io_fault(format!("connect {addr}:{port}"), e))?;
+        s.set_read_timeout(Some(self.timeout)).ok();
+        s.set_write_timeout(Some(self.timeout)).ok();
+        let host_header = host_header(host, port);
+        let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
+        hdrs.push(("Host", &host_header));
+        hdrs.push(("Connection", "close"));
+        push_end_to_end_headers(&mut hdrs, headers);
+        hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
+            .map_err(|e| http_fault(format!("write {addr}:{port}"), e))?;
+        let mut r = std::io::BufReader::new(Box::new(s) as Box<dyn ByteStream>);
+        let head = hharness_wire::http::read_response_head(&mut r)
+            .map_err(|e| http_fault(format!("read {addr}:{port}"), e))?;
+        if hharness_wire::http::bodiless(Some(method), head.status) {
+            return Ok(ForwardHead { head, body: None });
+        }
+        let body = hharness_wire::http::BodyReader::new_for(r, &head, Some(method), usize::MAX);
+        Ok(ForwardHead {
+            head,
+            body: Some(Box::new(body)),
         })
     }
 }
@@ -315,15 +682,18 @@ pub struct LocalTlsTransport {
     /// The client TLS configuration (`ClientTls::webpki_roots()` plus
     /// any declared extra roots / mTLS client identity).
     pub tls: hharness_tls::ClientTls,
-    /// The dial/handshake/read timeout.
+    /// The dial/handshake/read bound (default [`FORWARD_IO_TIMEOUT`]).
     pub timeout: Duration,
+    /// The dial bound (default [`CONNECT_TIMEOUT`]).
+    pub connect_timeout: Duration,
 }
 
 impl Default for LocalTlsTransport {
     fn default() -> Self {
         LocalTlsTransport {
             tls: hharness_tls::ClientTls::webpki_roots(),
-            timeout: Duration::from_secs(5),
+            timeout: FORWARD_IO_TIMEOUT,
+            connect_timeout: CONNECT_TIMEOUT,
         }
     }
 }
@@ -338,9 +708,10 @@ impl EgressTransport for LocalTlsTransport {
         path: &str,
         headers: &[(String, String)],
         body: Option<&[u8]>,
-    ) -> Result<WireResponse, String> {
-        let s =
-            TcpStream::connect((addr, port)).map_err(|e| format!("connect {addr}:{port}: {e}"))?;
+    ) -> Result<WireResponse, ForwardError> {
+        let sa = std::net::SocketAddr::new(addr, port);
+        let s = TcpStream::connect_timeout(&sa, self.connect_timeout)
+            .map_err(|e| io_fault(format!("connect {addr}:{port}"), e))?;
         s.set_read_timeout(Some(self.timeout)).ok();
         s.set_write_timeout(Some(self.timeout)).ok();
         // The handshake terminates at the mediator — verification is the
@@ -348,17 +719,18 @@ impl EgressTransport for LocalTlsTransport {
         let mut s = self
             .tls
             .connect(s, host)
-            .map_err(|e| format!("tls {addr}:{port}: {e}"))?;
-        let host_header = format!("{host}:{port}");
+            .map_err(|e| ForwardError::failed(format!("tls {addr}:{port}: {e}")))?;
+        let host_header = host_header(host, port);
         let mut hdrs: Vec<(&str, &str)> = Vec::with_capacity(headers.len() + 2);
         hdrs.push(("Host", &host_header));
         hdrs.push(("Connection", "close"));
         push_end_to_end_headers(&mut hdrs, headers);
         hharness_wire::http::write_request(&mut s, method, path, &hdrs, body.unwrap_or(&[]))
-            .map_err(|e| format!("write {addr}:{port}: {e}"))?;
+            .map_err(|e| http_fault(format!("write {addr}:{port}"), e))?;
         let mut r = std::io::BufReader::new(s);
-        let (head, body) = hharness_wire::http::read_response_full(&mut r, FORWARD_MAX_BODY)
-            .map_err(|e| format!("read {addr}:{port}: {e}"))?;
+        let (head, body) =
+            hharness_wire::http::read_response_full_for(Some(method), &mut r, FORWARD_MAX_BODY)
+                .map_err(|e| http_fault(format!("read {addr}:{port}"), e))?;
         Ok(WireResponse {
             status: head.status,
             headers: head
@@ -578,16 +950,60 @@ pub enum EgressError {
         /// What failed.
         detail: String,
     },
+    /// A declared timeout bound lapsed on the wire leg (R6.45k; D12) —
+    /// the mediator answers a typed **504**, never a 502.
+    Timeout {
+        /// What lapsed and where.
+        detail: String,
+    },
 }
 
 // ── the mediator ─────────────────────────────────────────────────────────────
 
+/// `StoreAccess` — the mediator's ledger handle (R6.45k; D8): `&mut
+/// Store` for the in-process callers, `&Mutex<Store>` for the concurrent
+/// mediator binary. The mediator touches the store only inside
+/// `with_store`/`read_store` — the lock is held across each mint+append
+/// (the durable leg: one hash-chained parent at a time) and never across
+/// a wire leg (byte pumping / the upstream exchange run unlocked).
+pub trait StoreAccess {
+    /// Run `f` with exclusive `&mut Store` access.
+    fn with_store<R>(&mut self, f: impl FnOnce(&mut Store) -> R) -> R;
+    /// Run `f` with shared `&Store` access.
+    fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R;
+}
+
+impl<'a> StoreAccess for &'a mut Store {
+    fn with_store<R>(&mut self, f: impl FnOnce(&mut Store) -> R) -> R {
+        f(&mut **self)
+    }
+    fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R {
+        f(&**self)
+    }
+}
+
+impl<'a> StoreAccess for &'a std::sync::Mutex<Store> {
+    fn with_store<R>(&mut self, f: impl FnOnce(&mut Store) -> R) -> R {
+        // Poison recovery: a panicked conn thread leaves the ledger
+        // consistent (each append is one critical section) — the lock is
+        // recovered, never propagated as a second failure.
+        let mut g = self.lock().unwrap_or_else(|p| p.into_inner());
+        f(&mut *g)
+    }
+    fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R {
+        let g = self.lock().unwrap_or_else(|p| p.into_inner());
+        f(&*g)
+    }
+}
+
 /// `EgressMediator` — the kernel-side runtime composing the pure decision
 /// (`decide_egress`), the broker, the budget and the wire. One per
 /// mediated environment session; `policy`/`cache` evolve on `amend`.
-pub struct EgressMediator<'a> {
+/// `S` is the store handle — `&mut Store` in-process (the default),
+/// `&Mutex<Store>` in the concurrent mediator binary (D8).
+pub struct EgressMediator<'a, S: StoreAccess = &'a mut Store> {
     /// The store (the writer lease's target).
-    pub store: &'a mut Store,
+    pub store: S,
     /// The run.
     pub run_id: String,
     /// The writer lease.
@@ -614,8 +1030,11 @@ pub struct EgressMediator<'a> {
     pub inspect_hooks: std::collections::BTreeMap<String, Box<dyn InspectHook>>,
 }
 
-impl<'a> EgressMediator<'a> {
+impl<'a, S: StoreAccess> EgressMediator<'a, S> {
     /// Emit one audit event (durable before return — the ordering contract).
+    /// Mint+append is one `with_store` critical section — under the
+    /// concurrent mediator (D8) two threads can never mint the same
+    /// hash-chain head.
     fn emit(
         &mut self,
         class: &str,
@@ -623,23 +1042,28 @@ impl<'a> EgressMediator<'a> {
         effect_id: Option<&str>,
         chain: &ScopeChain,
     ) -> Result<Event, EgressError> {
-        let minter = EventMinter::new(self.store, &self.run_id);
-        let ev = match effect_id {
-            // An empty/None effect scope mints unscoped — an unattributed
-            // request must still leave a durable row (fail-closed audit).
-            Some(e) if !e.is_empty() => minter.mint_effect(class, payload, e, chain),
-            _ => minter.mint(class, payload),
-        }
-        .map_err(|e| EgressError::Ledger {
-            detail: format!("mint {class}: {e}"),
-        })?;
-        self.store
-            .append(&self.run_id, self.lease, vec![ev.clone()])
+        let run_id = self.run_id.clone();
+        let lease = self.lease;
+        self.store.with_store(|store| {
+            let minter = EventMinter::new(&*store, &run_id);
+            let ev = match effect_id {
+                // An empty/None effect scope mints unscoped — an
+                // unattributed request must still leave a durable row
+                // (fail-closed audit).
+                Some(e) if !e.is_empty() => minter.mint_effect(class, payload, e, chain),
+                _ => minter.mint(class, payload),
+            }
             .map_err(|e| EgressError::Ledger {
-                detail: format!("append {class}: {e}"),
+                detail: format!("mint {class}: {e}"),
             })?;
-        // Durable before return — the ordering contract.
-        Ok(ev)
+            store
+                .append(&run_id, lease, vec![ev.clone()])
+                .map_err(|e| EgressError::Ledger {
+                    detail: format!("append {class}: {e}"),
+                })?;
+            // Durable before return — the ordering contract.
+            Ok(ev)
+        })
     }
 
     /// Collect the sentinel spellings — `req.credential_sentinels` plus every
@@ -681,7 +1105,7 @@ impl<'a> EgressMediator<'a> {
         req: &EgressRequest,
         chain: &ScopeChain,
     ) -> Result<GateOutcome, EgressError> {
-        let started = self.store.now_ms();
+        let started = self.store.read_store(|s| s.now_ms());
         let sentinel_refs = Self::collect_sentinels(req);
 
         // 1. `requested` is durable before the decision runs.
@@ -948,8 +1372,16 @@ impl<'a> EgressMediator<'a> {
                 path: req.path.clone(),
             };
             match self
-                .broker
-                .mediate_sentinel(&mut *self.store, &self.run_id, self.lease, sentinel, &desc)
+                .store
+                .with_store(|st| {
+                    self.broker.mediate_sentinel(
+                        &mut *st,
+                        &self.run_id,
+                        self.lease,
+                        sentinel,
+                        &desc,
+                    )
+                })
                 .map_err(|e| EgressError::Broker {
                     detail: format!("mediate_sentinel: {e:?}"),
                 })? {
@@ -997,12 +1429,16 @@ impl<'a> EgressMediator<'a> {
         //     authority is spent" — the ask path's `resolve_ask` is the
         //     same gate for `approvals.requested`).
         if let Some(budget_id) = self.budget_id.clone() {
-            let acct =
-                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
-                    detail: format!("account open: {e:?}"),
-                })?;
-            let exceeded = acct.check(&budget_id).map_err(|e| EgressError::Budget {
-                detail: format!("check {budget_id}: {e:?}"),
+            let exceeded = self.store.with_store(|st| {
+                Account::open(&mut *st, &self.run_id)
+                    .map_err(|e| EgressError::Budget {
+                        detail: format!("account open: {e:?}"),
+                    })
+                    .and_then(|acct| {
+                        acct.check(&budget_id).map_err(|e| EgressError::Budget {
+                            detail: format!("check {budget_id}: {e:?}"),
+                        })
+                    })
             })?;
             let calls_exceeded = exceeded
                 .iter()
@@ -1073,7 +1509,10 @@ impl<'a> EgressMediator<'a> {
         chain: &ScopeChain,
         tls_terminated: bool,
     ) -> Result<Event, EgressError> {
-        let latency = self.store.now_ms().saturating_sub(started);
+        let latency = self
+            .store
+            .read_store(|s| s.now_ms())
+            .saturating_sub(started);
         self.emit(
             "security.egress.decided",
             egress_decided_payload(
@@ -1104,15 +1543,19 @@ impl<'a> EgressMediator<'a> {
     ) -> Result<MediatedOutcome, EgressError> {
         // The approvals-budget reserve — exhausted ⇒ deny{budget_exhausted}.
         if let Some(budget_id) = self.budget_id.clone() {
-            let mut acct =
-                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
-                    detail: format!("account open: {e:?}"),
-                })?;
-            match acct
-                .resolve_ask(self.lease, &budget_id)
-                .map_err(|e| EgressError::Budget {
-                    detail: format!("resolve_ask: {e:?}"),
-                })? {
+            let resolve = self.store.with_store(|st| {
+                Account::open(&mut *st, &self.run_id)
+                    .map_err(|e| EgressError::Budget {
+                        detail: format!("account open: {e:?}"),
+                    })
+                    .and_then(|mut acct| {
+                        acct.resolve_ask(self.lease, &budget_id)
+                            .map_err(|e| EgressError::Budget {
+                                detail: format!("resolve_ask: {e:?}"),
+                            })
+                    })
+            })?;
+            match resolve {
                 AskOutcome::Deny => {
                     let deny = EgressDecision {
                         decision: EgressVerdict::Deny,
@@ -1196,7 +1639,7 @@ impl<'a> EgressMediator<'a> {
             // ingress member — empty, never fabricated).
             remedies: Vec::new(),
         };
-        let asked_at = self.store.now_ms();
+        let asked_at = self.store.read_store(|s| s.now_ms());
         // R-2.11 (ADR-0343 D2) — the `action.intent.anchored` subject the
         // respond path's `label.endorsed{basis: approval}` pins. The
         // egress ask's intent is the *participant's* proposal — the
@@ -1204,39 +1647,43 @@ impl<'a> EgressMediator<'a> {
         // endorsement's `from`), minted durable before the pending so the
         // append-time check-5 subject lookup resolves.
         {
-            let mut anchor = EventMinter::new(self.store, &self.run_id)
-                .mint_effect(
-                    "action.intent.anchored",
-                    Json::obj([
-                        ("permission_id", Json::str(permission_id.clone())),
-                        ("effect_id", Json::str(effect_id.to_string())),
-                        ("subject_ref", Json::str(self.participant_ref.clone())),
-                        (
-                            "capability_ref",
-                            Json::obj([
-                                ("semantic_id", Json::str(cap.semantic_id.clone())),
-                                ("version_id", Json::str(cap.version_id.clone())),
-                            ]),
-                        ),
-                        ("args_canonical_hash", Json::str(args_hash.clone())),
-                    ]),
-                    effect_id,
-                    chain,
-                )
-                .map_err(|e| EgressError::Ledger {
-                    detail: format!("mint action.intent.anchored: {e}"),
-                })?;
-            anchor.provenance = Some(ProvenanceRecord::minted(
-                Origin::participant(self.participant_ref.clone(), "hh.hosting/1"),
-                PersistenceScope::Run,
-                asked_at,
-            ));
-            anchor.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
-            self.store
-                .append(&self.run_id, self.lease, vec![anchor])
-                .map_err(|e| EgressError::Ledger {
-                    detail: format!("append action.intent.anchored: {e}"),
-                })?;
+            self.store.with_store(|st| {
+                EventMinter::new(&*st, &self.run_id)
+                    .mint_effect(
+                        "action.intent.anchored",
+                        Json::obj([
+                            ("permission_id", Json::str(permission_id.clone())),
+                            ("effect_id", Json::str(effect_id.to_string())),
+                            ("subject_ref", Json::str(self.participant_ref.clone())),
+                            (
+                                "capability_ref",
+                                Json::obj([
+                                    ("semantic_id", Json::str(cap.semantic_id.clone())),
+                                    ("version_id", Json::str(cap.version_id.clone())),
+                                ]),
+                            ),
+                            ("args_canonical_hash", Json::str(args_hash.clone())),
+                        ]),
+                        effect_id,
+                        chain,
+                    )
+                    .map_err(|e| EgressError::Ledger {
+                        detail: format!("mint action.intent.anchored: {e}"),
+                    })
+                    .and_then(|mut anchor| {
+                        anchor.provenance = Some(ProvenanceRecord::minted(
+                            Origin::participant(self.participant_ref.clone(), "hh.hosting/1"),
+                            PersistenceScope::Run,
+                            asked_at,
+                        ));
+                        anchor.content_kind = Some(hharness_provenance::ContentKind::EffectIntent);
+                        st.append(&self.run_id, self.lease, vec![anchor])
+                            .map_err(|e| EgressError::Ledger {
+                                detail: format!("append action.intent.anchored: {e}"),
+                            })
+                            .map(|_| ())
+                    })
+            })?;
         }
         self.emit(
             "security.permission.pending",
@@ -1304,7 +1751,7 @@ impl<'a> EgressMediator<'a> {
         endorser: &ProvenanceRecord,
         chain: &ScopeChain,
     ) -> Result<GateOutcome, EgressError> {
-        let started = self.store.now_ms();
+        let started = self.store.read_store(|s| s.now_ms());
         let effect_id = req.effect_id.clone().unwrap_or_default();
         let mut amended_policy = None;
         match &response.choice {
@@ -1597,48 +2044,56 @@ impl<'a> EgressMediator<'a> {
                 &headers,
                 body.as_deref().map(|b| b.as_bytes()),
             )
-            .map_err(|e| EgressError::Transport {
-                detail: format!("forward {addr}:{}: {e}", req.port),
+            .map_err(|e| match e {
+                ForwardError::Timeout { detail } => EgressError::Timeout {
+                    detail: format!("forward {addr}:{}: {detail}", req.port),
+                },
+                ForwardError::Failed { detail } => EgressError::Transport {
+                    detail: format!("forward {addr}:{}: {detail}", req.port),
+                },
             })?;
 
         // (h) `network.calls` — one charge per forwarded call, attributed to
         //     the decided row's effect, source = the decided event.
         let mut charge_source = decided_ref.clone();
         if let Some(budget_id) = self.budget_id.clone() {
-            let mut acct =
-                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
-                    detail: format!("account open: {e:?}"),
-                })?;
-            let source = EventRef {
-                run_id: self.run_id.clone(),
-                event_id: decided_ref.clone(),
-            };
-            let mut attribution = Attribution::subject(
-                self.run_id.clone(),
-                budget_id.clone(),
-                self.participant_ref.clone(),
-            );
-            attribution.charged_to = default_charged_to("security.egress.decided");
-            attribution.component_class = Some(COMPONENT.to_string());
-            acct.charge(
-                self.lease,
-                &ChargeRequest {
-                    budget_id,
-                    quantity: ResourceQuantity {
-                        dimension: DimensionId::NetworkCalls,
-                        amount: 1,
-                        unit: "calls".to_string(),
-                        model_ref: None,
-                        measured_at: source.clone(),
+            self.store.with_store(|st| -> Result<(), EgressError> {
+                let mut acct =
+                    Account::open(&mut *st, &self.run_id).map_err(|e| EgressError::Budget {
+                        detail: format!("account open: {e:?}"),
+                    })?;
+                let source = EventRef {
+                    run_id: self.run_id.clone(),
+                    event_id: decided_ref.clone(),
+                };
+                let mut attribution = Attribution::subject(
+                    self.run_id.clone(),
+                    budget_id.clone(),
+                    self.participant_ref.clone(),
+                );
+                attribution.charged_to = default_charged_to("security.egress.decided");
+                attribution.component_class = Some(COMPONENT.to_string());
+                acct.charge(
+                    self.lease,
+                    &ChargeRequest {
+                        budget_id,
+                        quantity: ResourceQuantity {
+                            dimension: DimensionId::NetworkCalls,
+                            amount: 1,
+                            unit: "calls".to_string(),
+                            model_ref: None,
+                            measured_at: source.clone(),
+                        },
+                        source,
+                        attribution,
+                        reservation_id: None,
+                        cache_ttl: None,
                     },
-                    source,
-                    attribution,
-                    reservation_id: None,
-                    cache_ttl: None,
-                },
-            )
-            .map_err(|e| EgressError::Budget {
-                detail: format!("charge network.calls: {e:?}"),
+                )
+                .map_err(|e| EgressError::Budget {
+                    detail: format!("charge network.calls: {e:?}"),
+                })
+                .map(|_| ())
             })?;
             charge_source = decided_ref.clone();
         }
@@ -1648,6 +2103,189 @@ impl<'a> EgressMediator<'a> {
             decided_ref,
             charge_source,
             response,
+        })
+    }
+
+    /// `forward_stream(req, …, out)` — the streaming forward (R6.45k;
+    /// D13): identical `pre_wire`/charge legs as [`Self::forward`], but
+    /// the upstream body streams through the transport's
+    /// [`EgressTransport::forward_head`] into `out` — re-framed chunked
+    /// after the D10 response hygiene — so resident memory stays bounded
+    /// whatever the body size (the buffered `forward` API and its
+    /// `FORWARD_MAX_BODY` bound stay for the in-process callers). On a
+    /// head/write failure nothing is emitted to `out`; once the head is
+    /// written a mid-body failure closes the connection and the error is
+    /// returned typed for the record.
+    #[allow(clippy::too_many_arguments)] // the wire-leg material is a single tuple.
+    pub fn forward_stream(
+        &mut self,
+        req: &EgressRequest,
+        decision: &EgressDecision,
+        decided_by: DecidedBy,
+        effect_id: &str,
+        started: u64,
+        chain: &ScopeChain,
+        out: &mut impl std::io::Write,
+    ) -> Result<MediatedOutcome, EgressError> {
+        let (fresh, staged, decided_ref) =
+            match self.pre_wire(req, decision, decided_by, effect_id, started, chain)? {
+                PreWire::Refused(o) => return Ok(o),
+                PreWire::Ready {
+                    fresh,
+                    staged,
+                    decided_ref,
+                } => (fresh, staged, decided_ref),
+            };
+        let host_norm = req.host_norm();
+        let mut headers = req.headers.clone();
+        let mut path = req.path.clone();
+        let mut body = req.body.clone();
+        for (sentinel, claim_id) in &staged {
+            let Some((_bid, value)) = self.broker.drain_claim(claim_id) else {
+                return Err(EgressError::Broker {
+                    detail: format!("claim {claim_id} vanished before drain"),
+                });
+            };
+            for (k, v) in headers.iter_mut() {
+                if v.contains(sentinel.as_str()) {
+                    *v = v.replace(sentinel.as_str(), &value);
+                    let _ = k;
+                }
+            }
+            for text in [&mut path, &mut body].into_iter().flatten() {
+                if text.contains(sentinel.as_str()) {
+                    *text = text.replace(sentinel.as_str(), &value);
+                }
+            }
+        }
+        let addr = *fresh.first().ok_or_else(|| EgressError::Resolve {
+            detail: format!("{host_norm} resolved to no addresses"),
+        })?;
+        let map_fwd = |e: ForwardError, leg: &str| match e {
+            ForwardError::Timeout { detail } => EgressError::Timeout {
+                detail: format!("{leg} {addr}:{}: {detail}", req.port),
+            },
+            ForwardError::Failed { detail } => EgressError::Transport {
+                detail: format!("{leg} {addr}:{}: {detail}", req.port),
+            },
+        };
+        let method = req.method.as_deref().unwrap_or("GET").to_string();
+        let mut fh = self
+            .transport
+            .forward_head(
+                addr,
+                req.port,
+                &host_norm,
+                &method,
+                path.as_deref().unwrap_or("/"),
+                &headers,
+                body.as_deref().map(|b| b.as_bytes()),
+            )
+            .map_err(|e| map_fwd(e, "forward"))?;
+        // D10 — emit upstream's end-to-end headers only, then exactly one
+        // framing member (`Transfer-Encoding: chunked` re-frames whatever
+        // the upstream declared) and `Connection: close` (the mediator
+        // serves one request per client connection).
+        let kept = end_to_end_response_headers(
+            &fh.head
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<Vec<_>>(),
+        );
+        let mut hdrs: Vec<(String, String)> = kept;
+        hdrs.push(("Connection".to_string(), "close".to_string()));
+        let hdrs_ref: Vec<(&str, &str)> =
+            hdrs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        hharness_wire::http::write_response_head_chunked(out, fh.head.status, &hdrs_ref).map_err(
+            |e| EgressError::Transport {
+                detail: format!("response head: {e}"),
+            },
+        )?;
+        if let Some(src) = fh.body.as_mut() {
+            loop {
+                match src.next_chunk() {
+                    Ok(Some(chunk)) => {
+                        hharness_wire::http::write_chunk(out, &chunk).map_err(|e| {
+                            EgressError::Transport {
+                                detail: format!("response chunk: {e}"),
+                            }
+                        })?;
+                    }
+                    Ok(None) => break,
+                    Err(e) => {
+                        // The upstream body truncated mid-stream — the
+                        // head is already out; finish the frame so the
+                        // client isn't left hanging, then surface the
+                        // typed error for the record.
+                        let _ = hharness_wire::http::finish_chunked(out);
+                        return Err(if e.kind() == std::io::ErrorKind::TimedOut {
+                            EgressError::Timeout {
+                                detail: format!("forward {addr}:{}: {e}", req.port),
+                            }
+                        } else {
+                            EgressError::Transport {
+                                detail: format!("forward {addr}:{}: {e}", req.port),
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        hharness_wire::http::finish_chunked(out).map_err(|e| EgressError::Transport {
+            detail: format!("response finish: {e}"),
+        })?;
+
+        // `network.calls` — the same charge as the buffered path.
+        if let Some(budget_id) = self.budget_id.clone() {
+            self.store.with_store(|st| -> Result<(), EgressError> {
+                let mut acct =
+                    Account::open(&mut *st, &self.run_id).map_err(|e| EgressError::Budget {
+                        detail: format!("account open: {e:?}"),
+                    })?;
+                let source = EventRef {
+                    run_id: self.run_id.clone(),
+                    event_id: decided_ref.clone(),
+                };
+                let mut attribution = Attribution::subject(
+                    self.run_id.clone(),
+                    budget_id.clone(),
+                    self.participant_ref.clone(),
+                );
+                attribution.charged_to = default_charged_to("security.egress.decided");
+                attribution.component_class = Some(COMPONENT.to_string());
+                acct.charge(
+                    self.lease,
+                    &ChargeRequest {
+                        budget_id,
+                        quantity: ResourceQuantity {
+                            dimension: DimensionId::NetworkCalls,
+                            amount: 1,
+                            unit: "calls".to_string(),
+                            model_ref: None,
+                            measured_at: source.clone(),
+                        },
+                        source,
+                        attribution,
+                        reservation_id: None,
+                        cache_ttl: None,
+                    },
+                )
+                .map_err(|e| EgressError::Budget {
+                    detail: format!("charge network.calls: {e:?}"),
+                })
+                .map(|_| ())
+            })?;
+        }
+        Ok(MediatedOutcome::Forwarded {
+            request_ref: request_ref(req),
+            decided_ref: decided_ref.clone(),
+            charge_source: decided_ref,
+            response: WireResponse {
+                status: fh.head.status,
+                headers: vec![],
+                body: vec![],
+            },
         })
     }
 
@@ -1684,21 +2322,29 @@ impl<'a> EgressMediator<'a> {
         let addr = *fresh.first().ok_or_else(|| EgressError::Resolve {
             detail: format!("{host_norm} resolved to no addresses"),
         })?;
-        let upstream = self
-            .transport
-            .dial(addr, req.port)
-            .map_err(|e| EgressError::Transport {
-                detail: format!("tunnel {addr}:{}: {e}", req.port),
-            })?;
+        let upstream = self.transport.dial(addr, req.port).map_err(|e| match e {
+            ForwardError::Timeout { detail } => EgressError::Timeout {
+                detail: format!("tunnel {addr}:{}: {detail}", req.port),
+            },
+            ForwardError::Failed { detail } => EgressError::Transport {
+                detail: format!("tunnel {addr}:{}: {detail}", req.port),
+            },
+        })?;
         client
             .write_all(b"HTTP/1.1 200 Connection established\r\n\r\n")
             .and_then(|()| client.flush())
             .map_err(|e| EgressError::Transport {
                 detail: format!("tunnel 200: {e}"),
             })?;
-        // The byte pipe — two directions, drained to close. Reads are
-        // bounded by the caller's deadlines; a read error ends the leg
-        // honestly (the close row records the partial fold).
+        // The byte pipe — two directions, pumped to close (D9): real
+        // byte counts even on an erroring leg, and a direction's end
+        // propagates `shutdown(Write)` to the peer (the relay's pattern)
+        // so the other leg observes the close instead of hanging on a
+        // live socket. The legs carry the declared TUNNEL_IDLE_TIMEOUT —
+        // never a silent 5 s kill: a leg idle past it ends `idle_timeout`,
+        // and the close row's `close_cause` is the true outcome
+        // (`eof|idle_timeout|error:<kind>`) — never `unwrap_or(0)`, never
+        // a hard-coded "eof".
         let mut up_reader = upstream;
         let mut up_writer = up_reader.try_clone().map_err(|e| EgressError::Transport {
             detail: format!("tunnel upstream clone: {e}"),
@@ -1707,11 +2353,26 @@ impl<'a> EgressMediator<'a> {
             detail: format!("tunnel client clone: {e}"),
         })?;
         let up = std::thread::spawn(move || {
-            std::io::copy(&mut client_reader, &mut up_writer).unwrap_or(0)
+            let end = tunnel_pump(&mut *client_reader, &mut *up_writer);
+            let _ = up_writer.shutdown(std::net::Shutdown::Write);
+            end
         });
-        let bytes_down = std::io::copy(&mut up_reader, client).unwrap_or(0);
-        let bytes_up = up.join().unwrap_or(0);
-        let duration_ms = self.store.now_ms().saturating_sub(started);
+        let down_end = tunnel_pump(&mut *up_reader, client);
+        // The downstream leg ended (upstream EOF/idle/error): the tunnel
+        // is closing — shut the client socket fully so the still-running
+        // up pump's read observes the close (its own EOF), never a silent
+        // hang on a live socket.
+        let _ = client.shutdown(std::net::Shutdown::Both);
+        let up_end = up.join().unwrap_or(TunnelEnd {
+            bytes: 0,
+            cause: TunnelCause::Error("pump thread panicked".to_string()),
+        });
+        let (bytes_up, bytes_down) = (up_end.bytes, down_end.bytes);
+        let close_cause = tunnel_close_cause(&up_end, &down_end);
+        let duration_ms = self
+            .store
+            .read_store(|s| s.now_ms())
+            .saturating_sub(started);
         // The closing summary — durable before the charge.
         let closed_ev = self.emit(
             "security.egress.tunnel.closed",
@@ -1725,46 +2386,49 @@ impl<'a> EgressMediator<'a> {
                 ("bytes_up", Json::Int(bytes_up as i64)),
                 ("bytes_down", Json::Int(bytes_down as i64)),
                 ("duration_ms", Json::Int(duration_ms as i64)),
-                ("close_cause", Json::str("eof")),
+                ("close_cause", Json::str(close_cause)),
             ]),
             Some(effect_id),
             chain,
         )?;
         if let Some(budget_id) = self.budget_id.clone() {
-            let mut acct =
-                Account::open(&mut *self.store, &self.run_id).map_err(|e| EgressError::Budget {
-                    detail: format!("account open: {e:?}"),
-                })?;
-            let source = EventRef {
-                run_id: self.run_id.clone(),
-                event_id: decided_ref.clone(),
-            };
-            let mut attribution = Attribution::subject(
-                self.run_id.clone(),
-                budget_id.clone(),
-                self.participant_ref.clone(),
-            );
-            attribution.charged_to = default_charged_to("security.egress.tunnel.closed");
-            attribution.component_class = Some(COMPONENT.to_string());
-            acct.charge(
-                self.lease,
-                &ChargeRequest {
-                    budget_id,
-                    quantity: ResourceQuantity {
-                        dimension: DimensionId::NetworkCalls,
-                        amount: 1,
-                        unit: "calls".to_string(),
-                        model_ref: None,
-                        measured_at: source.clone(),
+            self.store.with_store(|st| -> Result<(), EgressError> {
+                let mut acct =
+                    Account::open(&mut *st, &self.run_id).map_err(|e| EgressError::Budget {
+                        detail: format!("account open: {e:?}"),
+                    })?;
+                let source = EventRef {
+                    run_id: self.run_id.clone(),
+                    event_id: decided_ref.clone(),
+                };
+                let mut attribution = Attribution::subject(
+                    self.run_id.clone(),
+                    budget_id.clone(),
+                    self.participant_ref.clone(),
+                );
+                attribution.charged_to = default_charged_to("security.egress.tunnel.closed");
+                attribution.component_class = Some(COMPONENT.to_string());
+                acct.charge(
+                    self.lease,
+                    &ChargeRequest {
+                        budget_id,
+                        quantity: ResourceQuantity {
+                            dimension: DimensionId::NetworkCalls,
+                            amount: 1,
+                            unit: "calls".to_string(),
+                            model_ref: None,
+                            measured_at: source.clone(),
+                        },
+                        source,
+                        attribution,
+                        reservation_id: None,
+                        cache_ttl: None,
                     },
-                    source,
-                    attribution,
-                    reservation_id: None,
-                    cache_ttl: None,
-                },
-            )
-            .map_err(|e| EgressError::Budget {
-                detail: format!("charge network.calls: {e:?}"),
+                )
+                .map_err(|e| EgressError::Budget {
+                    detail: format!("charge network.calls: {e:?}"),
+                })
+                .map(|_| ())
             })?;
         }
         Ok(MediatedOutcome::Tunneled {

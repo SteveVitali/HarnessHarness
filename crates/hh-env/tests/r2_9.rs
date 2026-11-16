@@ -346,7 +346,7 @@ impl EgressTransport for CaptureTransport {
         _path: &str,
         _headers: &[(String, String)],
         _body: Option<&[u8]>,
-    ) -> Result<WireResponse, String> {
+    ) -> Result<WireResponse, hharness_env::egress::ForwardError> {
         self.log.lock().unwrap().push(host.to_string());
         Ok(WireResponse {
             status: 200,

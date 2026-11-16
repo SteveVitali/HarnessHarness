@@ -194,6 +194,7 @@ impl FetchTransport {
         let transport = Box::new(LocalTlsTransport {
             tls: self.tls.clone(),
             timeout: std::time::Duration::from_secs(15),
+            connect_timeout: std::time::Duration::from_secs(10),
         });
         FetchLeg {
             token: token.token,
