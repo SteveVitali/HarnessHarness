@@ -97,8 +97,10 @@ fn verify_streams_land_in_collect_and_classify_bootstrap() {
         collect_dir: collect.clone(),
         agent_argv: vec!["bash".into(), "/solution/solve.sh".into()],
         agent_deadline_ms: None,
+        agent_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         verifier_argv: vec!["bash".into(), "/tests/test.sh".into()],
         verifier_deadline_ms: None,
+        verifier_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         max_grade_attempts: 1,
         logs_copyout: None,
     };

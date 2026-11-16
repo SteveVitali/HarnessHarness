@@ -121,8 +121,10 @@ fn plan(dir: &Path) -> CellPlan {
         collect_dir: dir.join("collect"),
         agent_argv: vec!["bash".to_string(), "/solution/solve.sh".to_string()],
         agent_deadline_ms: Some(12_000_000),
+        agent_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         verifier_argv: vec!["bash".to_string(), "/tests/test.sh".to_string()],
         verifier_deadline_ms: Some(12_000_000),
+        verifier_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         max_grade_attempts: 2,
         logs_copyout: None,
     }
