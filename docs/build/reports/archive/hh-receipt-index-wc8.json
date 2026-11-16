@@ -1,0 +1,246 @@
+{
+ "artifacts": [
+  {
+   "bytes": 79806,
+   "name": "trials/make-doom-for-mips/H-allow/r0/staging/tests/reference.jpg",
+   "note": "binary task fixture \u2014 not UTF-8 scannable; bytes retained in the operator's retained store (~/hh-retained/wc8/harvest/run-root)",
+   "path": "wc8/run-root/trials/make-doom-for-mips/H-allow/r0/staging/tests/reference.jpg",
+   "role": "run_root_member",
+   "sha256": "d1909be8f3266a72686c3945029a553b82e5b46acd624eda65f3fdd5eb339574",
+   "upload": "digest_only",
+   "window": "wc8"
+  },
+  {
+   "bytes": 79806,
+   "name": "trials/make-doom-for-mips/H-allow/r1/staging/tests/reference.jpg",
+   "note": "binary task fixture \u2014 not UTF-8 scannable; bytes retained in the operator's retained store (~/hh-retained/wc8/harvest/run-root)",
+   "path": "wc8/run-root/trials/make-doom-for-mips/H-allow/r1/staging/tests/reference.jpg",
+   "role": "run_root_member",
+   "sha256": "d1909be8f3266a72686c3945029a553b82e5b46acd624eda65f3fdd5eb339574",
+   "upload": "digest_only",
+   "window": "wc8"
+  },
+  {
+   "bytes": 79806,
+   "name": "trials/make-doom-for-mips/H-pub/r0/staging/tests/reference.jpg",
+   "note": "binary task fixture \u2014 not UTF-8 scannable; bytes retained in the operator's retained store (~/hh-retained/wc8/harvest/run-root)",
+   "path": "wc8/run-root/trials/make-doom-for-mips/H-pub/r0/staging/tests/reference.jpg",
+   "role": "run_root_member",
+   "sha256": "d1909be8f3266a72686c3945029a553b82e5b46acd624eda65f3fdd5eb339574",
+   "upload": "digest_only",
+   "window": "wc8"
+  },
+  {
+   "bytes": 79806,
+   "name": "trials/make-doom-for-mips/H-pub/r1/staging/tests/reference.jpg",
+   "note": "binary task fixture \u2014 not UTF-8 scannable; bytes retained in the operator's retained store (~/hh-retained/wc8/harvest/run-root)",
+   "path": "wc8/run-root/trials/make-doom-for-mips/H-pub/r1/staging/tests/reference.jpg",
+   "role": "run_root_member",
+   "sha256": "d1909be8f3266a72686c3945029a553b82e5b46acd624eda65f3fdd5eb339574",
+   "upload": "digest_only",
+   "window": "wc8"
+  },
+  {
+   "bytes": 79806,
+   "name": "trials/make-doom-for-mips/H-pub/r2/staging/tests/reference.jpg",
+   "note": "binary task fixture \u2014 not UTF-8 scannable; bytes retained in the operator's retained store (~/hh-retained/wc8/harvest/run-root)",
+   "path": "wc8/run-root/trials/make-doom-for-mips/H-pub/r2/staging/tests/reference.jpg",
+   "role": "run_root_member",
+   "sha256": "d1909be8f3266a72686c3945029a553b82e5b46acd624eda65f3fdd5eb339574",
+   "upload": "digest_only",
+   "window": "wc8"
+  },
+  {
+   "bytes": 1053992,
+   "name": "run-root.tar.gz",
+   "note": "the byte-exact harvested tar \u2014 non-UTF8 (unscannable by the REQ-XH-103 prescan); the tree rides as the prescanned wc8/run-root-tree.json bundle + per-member sha256 in wc8/harvest/MANIFEST.sha256; tar bytes retained in ~/hh-retained/wc8/harvest/run-root.tar.gz",
+   "path": null,
+   "role": "run_root_tar",
+   "sha256": "56f65cc25204d4c3c3589bfb9d799b0e4f5f7eb06d128aa3e0460cafabe0ac99",
+   "upload": "digest_only",
+   "window": "wc8"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "wc8-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "4868cc78c006a506db6b1efb54e33ad478420c90",
+    "verify_receipt": "docs/build/reports/archive/2026-11-15-fp-wc7-verify.json",
+    "window": "wc7"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 3655,
+     "path": "wc8/2026-11-15-fp-wc8-cost.json",
+     "role": "window_record",
+     "sha256": "69ea4cda38c16d87e87e7de16891bcc96b6217b18526f46b631d2f5b337a862b"
+    },
+    {
+     "bytes": 22145,
+     "path": "wc8/2026-11-15-fp-wc8-harvest.json",
+     "role": "window_record",
+     "sha256": "d5d094cae664748d63a3296c31671214966b27f0c33bead076c9b7bc3e682405"
+    },
+    {
+     "bytes": 2509,
+     "path": "wc8/2026-11-15-fp-wc8-prepull.json",
+     "role": "window_record",
+     "sha256": "592737d0f0dce6e287bf22cfcad2578794e07c769e47116b38376b3806ad018d"
+    },
+    {
+     "bytes": 17830,
+     "path": "wc8/2026-11-15-fp-wc8-provision.json",
+     "role": "window_record",
+     "sha256": "05479d3ee4fbdc0c76a7265fd646664eea4df6b25c0a4d72c428c87b0fdbe427"
+    },
+    {
+     "bytes": 5106,
+     "path": "wc8/2026-11-15-fp-wc8-tasklists.json",
+     "role": "window_record",
+     "sha256": "9b85014de3247ddd69a664ae7f06892dd535efb13e71129b15577bfeb36d8a31"
+    },
+    {
+     "bytes": 50576,
+     "path": "wc8/2026-11-15-fp-wc8-teardown.json",
+     "role": "window_record",
+     "sha256": "68a4edb6467f8a30b64f6f0cb32c5e641f20d9b5c8b973534fb2bccf6e14f6cb"
+    },
+    {
+     "bytes": 16400,
+     "path": "wc8/2026-11-15-fp-wc8-verify.json",
+     "role": "window_record",
+     "sha256": "61272523423c3fcb9f46eb99db285c6a0b4d518fc87d483d7fbcef773206873f"
+    },
+    {
+     "bytes": 32555,
+     "path": "wc8/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "de9737bfdd9cc8ba6881b54e51ec6481faa7364d456b499ebdf4bb2b89ec2134"
+    },
+    {
+     "bytes": 1092456,
+     "path": "wc8/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "1fe836afb610137ddcb0b770499207eb29091da1a0a49cd9c041df29baa053eb"
+    },
+    {
+     "bytes": 341320,
+     "path": "wc8/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "70bc08805fa9d4145377b06102146dd3c05a8b38d7bcbf63d0db1a2853571fc8"
+    },
+    {
+     "bytes": 24,
+     "path": "wc8/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "1d2cb40c21e4b68c21937ad368055ab295eaba59311b94ff45eb6e1b0d98ebda"
+    },
+    {
+     "bytes": 1354,
+     "path": "wc8/live/2026-11-15-reproof-wc8.json",
+     "role": "window_record",
+     "sha256": "7f495ed6b5544ea31f5af1534f87bb04899d4e3419d5e206c443e81f7e9bbd02"
+    },
+    {
+     "bytes": 3213,
+     "path": "wc8/live/2026-11-15-reproof-wc8.transcript.txt",
+     "role": "window_record",
+     "sha256": "13bc14fc231dc2f51d91b18bb97c9cdd1bad8b70475f2978fb92984beab757f7"
+    },
+    {
+     "bytes": 4995466,
+     "path": "wc8/run-root-tree.json",
+     "role": "window_record",
+     "sha256": "f37eb4c627958a0e9fb09c6c57e846455a6559859963533a8a6200647d525944"
+    },
+    {
+     "bytes": 1293,
+     "path": "wc8/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "04d7870db7b2d3133f5d3398df2f91c32321cf31324f821336dcdc9ccdb24e32"
+    },
+    {
+     "bytes": 4149,
+     "path": "wc8/run-root/verifier-first-errors.txt",
+     "role": "window_record",
+     "sha256": "c1d2a2d2ba75f0a2f66b4d5fd3c665bacecd11a5a6875860bf6a31ae37081a39"
+    },
+    {
+     "bytes": 4629,
+     "path": "wc8/run-root/wc8-window-record.json",
+     "role": "window_record",
+     "sha256": "fd80872379a49a1eb72203dfb7f0a6bf7f23365ef89000ff95de616a43f6bf14"
+    },
+    {
+     "bytes": 1254,
+     "path": "wc8/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "1933445b892a5f9c1d9b185b6f632a8709ebc100ed2fe3d04e7e5d1dd952631d"
+    },
+    {
+     "bytes": 577,
+     "path": "wc8/wiring/cfg-dev.json",
+     "role": "window_record",
+     "sha256": "a08822e041604fca1acfc8ac3124963472f8861d0a84cfc02f51b6d406b4d708"
+    },
+    {
+     "bytes": 577,
+     "path": "wc8/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "e0497a015e140baa1d0d83c82da8ed636b63a05a4dffdebbf3cce66fb99ba399"
+    },
+    {
+     "bytes": 871,
+     "path": "wc8/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "028a0dd620f7837f373cb9810ca5c9f420b92eda465d2d3d370dfb7dc46a344f"
+    },
+    {
+     "bytes": 516,
+     "path": "wc8/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 252,
+     "path": "wc8/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "a224d6d57f9e29a70971d77dad46edba6723d32d20fb96900215fdb0b5783105"
+    },
+    {
+     "bytes": 2992,
+     "path": "wc8/wiring/wc8-load-infra.py",
+     "role": "window_record",
+     "sha256": "a429f8ff9c8fda85dded26940ff4956ec51bdcbced9e8229f6233fc5b2a51d04"
+    },
+    {
+     "bytes": 3556,
+     "path": "wc8/wiring/wc8-prove.sh",
+     "role": "window_record",
+     "sha256": "e68894dd247896fc9acbe130d38520a837e0ee53a1c3bd8e1155bc0a17bca1a6"
+    },
+    {
+     "bytes": 2958,
+     "path": "wc8/wiring/wc8-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5234,
+     "path": "wc8/wiring/wc8-setup.sh",
+     "role": "window_record",
+     "sha256": "3726ee03491d89b915363f078a45e650ee3b77b82103c93e5ada70eca8dd09c8"
+    }
+   ],
+   "note": "R-9 footprint \u2014 the archive carries the raw run tree as the prescanned bundle wc8/run-root-tree.json (232 UTF-8 members) + MANIFEST.sha256 digests; the byte-exact tar + 5 binary fixtures are digest_only artifacts. Git gets summaries + digests + cited excerpts only. Wc8 early-stopped under operator ruling R-1: no reproof packet/register landed."
+  }
+ ],
+ "schema": "hh-receipt-index/1"
+}
