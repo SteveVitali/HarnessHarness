@@ -1,0 +1,151 @@
+run.sh: subject: 54ae9c9e90f6f13faea19daa8e8e68845b7c20a2
+run.sh: freeze epoch=4 digest=sha256:785d709206243d4f2… → policies rendered
+sha256:754d9ae3d6fc615f1caec3d5f96a1e54262e70d961b9087b7fc039ecdf9c9c2f
+conformance: [s1] apt-get update
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] apt-get install -y curl
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] curl -LsSf https://astral.sh/uv/0.9.5/install.sh | sh
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] source $HOME/.local/bin/env
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w gitpython==3.1.44   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w mujoco==3.3.5   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w numpy==2.3.1   -w pillow==11.2.1   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w numpy==2.3.4   -w pandas==2.3.3   -w matplotlib==3.10.7   -w scipy==1.16.3   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w pandas==2.3.3   -w pyarrow==22.0.0   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w pip==25.2   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w torch==2.7.0   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w torch==2.7.0   -w transformers==4.55.0   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s1] uvx   -p 3.13   -w pytest==8.4.1   -w torch==2.7.1   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s2] uvx   --index https://download.pytorch.org/whl/cpu   --index-strategy unsafe-best-match   -p 3.13   -w torch==2.7.1   -w torchvision==0.22.1   -w numpy==2.3.1   -w opencv-python==4.11.0.86   -w pytest==8.4.1   -w pytest-json-ctrf==0.3.5   pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s3] apt-get install -y python3-pip
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s3] pip install pytest==8.4.1 pytest-json-ctrf==0.3.5
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s3] pip install pytest==8.4.1 pytest-json-ctrf==0.3.5 --break-system-packages
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s3] pip install pytest==8.4.1 requests==2.32.5 pytest-json-ctrf==0.3.5
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s3] python -m pytest --version
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get update
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get install -y curl
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get install -y curl ffmpeg libsm6 libxext6
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get install -y curl gcc
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get install -y curl python3-pillow
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s4] apt-get install -y vim
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s5] apt-get update
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s5] apt-get install -y python3-pip npm
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s5] pip install --break-system-packages requests==2.32.5
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s5] cd /tmp && npm install --no-save is-number@7.0.0
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+conformance: [s5] curl -sS -o /dev/null -w 'github-deny:%{http_code}\n' --max-time 30 https://github.com/
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: not enough values to unpack (expected 6, got 5)
+{
+ "result": "pass",
+ "failures": []
+}
+conformance: verdict rc=0 → /out/verdict.json
+run.sh: out: /tmp/tmp.HD4EVL1IFZ/egress-conformance (rc=0)
+{
+ "result": "pass",
+ "subject": "54ae9c9e90f6",
+ "wal": {
+  "close_causes": {
+   "eof": 118
+  },
+  "decided": 996,
+  "denied_hosts": [
+   "download-r2.pytorch.org",
+   "github.com"
+  ],
+  "requested": 996,
+  "tunnel_closed": 118
+ },
+ "peak_conns": 0,
+ "failures": []
+}

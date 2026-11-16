@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_226 ADRs: 174 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_233 ADRs: 181 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -210,6 +210,13 @@ _226 ADRs: 174 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0440 | Reopen if (a) the compiled `ModelSurface` proves inexpressible for a governing REQ-XE-* row (the `UnexpressibleSurface` route — a profile or spec gap, not a renderer fork), (b) the `hh.model_io/1` frame vocabulary cannot durably carry a replay input a declared `transcript_render` member needs (an amendment candidate, never a second byte store), or (c) GATE-G24 refuses AR-24 and the stage-one E2 chain is re-planned. |
 | ADR-0441 | Reopen if (a) the E2-T8 detach/reattach spike fails and rung (2) cannot be verified — the rung-(3) amendment then goes to the operator before any binding-(a) work; (b) the AR-25 `open_session.exec` member needs shape changes at schema review (regeneration, never a patch); or (c) the helper's merged-stdio or in-cell-kill semantics prove unimplementable against the admitted cell backends, requiring a scoped amendment. |
 | ADR-0442 | Reopen if (a) a pinned O template requires a construct the subset cannot express and the extension changes the engine's refusal contract; (b) `python_jinja_tojson` goldens diverge from O's recorded bytes (the UNVERIFIED caveat resolves against admission); or (c) the crate home proves wrong at implementation (a second candidate is `hharness-context`, chosen only through a new record). |
+| ADR-0443 | Revisit if a smoke result is ever proposed as evidence (the class forbids it — a new ruling would be required), if the envelope needs more than 3 windows or a fourth ceiling class, or if the smoke/evidence boundary needs to move (e.g. an in-window change proposed without a landed regression). |
+| ADR-0444 | Revisit if a billed figure lands materially above its `cost_lib` estimate (the accounting then under-counts — surface it at once), if the $30 compute or $110 total bound needs to move (a new ruling, never a silent stretch), or at CAP6.2 when all billed reads exist. |
+| ADR-0445 | Revisit if the ladder's options need a sixth member, if Wc9 completes clean (the stop rule discharges — record it), or if a prediction-track pattern emerges that warrants an automatic rule (propose it as a new amendment, never apply silently). |
+| ADR-0446 | Discharges at R6.45k's recorded scan result — either epoch-4 minted under the recorded pattern, or the exclusion stands. Revisit only if the scan check itself proves unsound (a new gap found post-mint) — a new amendment row. |
+| ADR-0447 | Revisit if a future deny source reports partial or non-host-level denies (a denied shape the `denied_hosts` field cannot name), or if the re-fold of Wc4–Wc8 reveals a member whose `denied_hosts` was non-empty — its exclusion re-enters review honestly. |
+| ADR-0448 | Revisit if the pinned Harbor version's deadline semantics change at a re-pin, if a task family ships `task.toml` values outside the admitted bounds (the above-ceiling/malformed refusal path), or if overlapping-attempt evidence surfaces again after the fix — a new defect, not this correction's failure. |
+| ADR-0449 | Revisit immediately if any committed requirement is found to mandate in-repo raw trees (the caveat: keep current behavior and surface), if the private archive's `archive_verified` index is ever unavailable for a window (the raw tree then has no retention guarantee — stop and record), or at CAP6.2's retention review (REQ-XH-106). |
 
 ## Fired-and-answered triggers (BL-48)
 

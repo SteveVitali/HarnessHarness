@@ -150,7 +150,7 @@ pub fn frame_header(bytes: &[u8]) -> Option<SealHeader> {
 /// `address` is the `idp/1` content address **of the plaintext** — the
 /// construction binds every frame to it (wrong-address or foreign-key frames
 /// refuse at `open`, never silently decode).
-pub trait BlobCipher {
+pub trait BlobCipher: Send {
     /// The construction id — stamped in every frame header and surfaced by
     /// `audit_view`'s `encryption` member (e.g. `"aes-256-gcm.hh-blob.v1"`).
     fn algorithm(&self) -> &str;

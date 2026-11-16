@@ -308,7 +308,7 @@ impl EgressTransport for LoopbackDial {
         _p: &str,
         _hs: &[(String, String)],
         _b: Option<&[u8]>,
-    ) -> Result<hharness_env::egress::WireResponse, String> {
+    ) -> Result<hharness_env::egress::WireResponse, hharness_env::egress::ForwardError> {
         self.dialed.lock().unwrap().push(port);
         let _ = addr;
         Ok(hharness_env::egress::WireResponse {
@@ -321,11 +321,11 @@ impl EgressTransport for LoopbackDial {
         &self,
         _a: std::net::IpAddr,
         port: u16,
-    ) -> Result<Box<dyn hharness_env::egress::ByteStream>, String> {
+    ) -> Result<Box<dyn hharness_env::egress::ByteStream>, hharness_env::egress::ForwardError> {
         self.dialed.lock().unwrap().push(port);
         TcpStream::connect(("127.0.0.1", self.upstream_port))
             .map(|s| Box::new(s) as Box<dyn hharness_env::egress::ByteStream>)
-            .map_err(|e| e.to_string())
+            .map_err(|e| hharness_env::egress::ForwardError::failed(e.to_string()))
     }
 }
 

@@ -13,8 +13,47 @@
 //! `PodmanBackend` against a `podman` stub.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::disposition::EndCause;
+
+/// The deadline provenance — where a phase's enforced deadline came
+/// from (R6.45j/D15; ADR-0448): the task's own `task.toml` declaration
+/// resolved under the pinned Harbor semantics, or the drive config's
+/// machinery fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeadlineSource {
+    /// `[agent|verifier].timeout_sec` from the task's `task.toml`.
+    TaskToml,
+    /// `cfg.{agent,verify}_deadline_ms` — the machinery fallback.
+    CfgDefault,
+}
+
+impl DeadlineSource {
+    /// The `cell-report.json` spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeadlineSource::TaskToml => "task_toml",
+            DeadlineSource::CfgDefault => "cfg_default",
+        }
+    }
+}
+
+/// The per-exec marker env var the in-cell process tree carries
+/// (R6.45j/D17): `podman exec -e HH_EXEC_TAG=<tag>` lands the tag in
+/// every spawned process's `/proc/<pid>/environ`, and children inherit
+/// it. The lapse path walks for *this* tag — never a cmdline pattern
+/// the phase's processes may not carry (the verifier's
+/// `bash test.sh → uvx → pytest` tree never spells "agent").
+pub const EXEC_TAG_ENV: &str = "HH_EXEC_TAG";
+
+/// `hh-exec-<12-digit counter>` — zero-padded so one tag is never a
+/// prefix of another inside the environ bytes (`grep -F` substring
+/// matching cannot see the NUL terminator).
+fn next_exec_tag() -> String {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    format!("hh-exec-{:012}", SEQ.fetch_add(1, Ordering::Relaxed))
+}
 
 /// The cell filesystem root — written with the escaped leading slash
 /// the REQ-XB-105 source scan reserves for deliberate cell-interior
@@ -136,17 +175,73 @@ impl CellOps for PodmanCell<'_> {
             .map_err(|e| err("rm", e.to_string()))
     }
     fn exec(&mut self, spec: &CellExec) -> Result<CellOutcome, CellError> {
-        use std::io::Read;
-        let mut cmd = self.backend.exec_command(&spec.argv, Some(&spec.cwd), &[]);
-        cmd.stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .stdin(std::process::Stdio::null());
-        let mut child = cmd.spawn().map_err(|e| err("exec", e.to_string()))?;
-        let deadline = spec
-            .deadline_ms
-            .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
-        loop {
-            if let Ok(Some(status)) = child.try_wait() {
+        exec_guarded(self.backend, &spec.argv, &spec.cwd, &[], spec.deadline_ms)
+    }
+    fn terminate_group(&mut self, pattern: &str) -> Result<(), CellError> {
+        self.backend
+            .terminate_group(pattern)
+            .map_err(|e| err("terminate", e.to_string()))
+    }
+}
+
+/// `exec_guarded(backend, argv, cwd, env, deadline_ms)` — one phase exec
+/// under the D17 lapse enforcement (ADR-0448): a deadline-bearing exec
+/// runs in-cell through
+/// [`hharness_helper::podman::wrap_kill`] (`setsid timeout --kill-after`
+/// — the in-cell session-leader/group kill, the admitted mechanism the
+/// host-side pgid kill could not reach) carrying a unique `HH_EXEC_TAG`
+/// in its environment. On lapse the host-side `podman exec` client is
+/// killed, the tag's own in-cell process tree is TERM/KILLed by a
+/// `/proc/*/environ` walk, and death is CONFIRMED by a second walk
+/// before the outcome returns — the next `rm_glob`, verify attempt or
+/// copy-out never overlaps a survivor. The streams captured up to the
+/// lapse are kept — a timed-out verifier still lands its stdout/stderr
+/// as evidence. A lapse the sweeps cannot confirm refuses typed —
+/// the drive never proceeds on an unconfirmed kill.
+///
+/// `timeout`'s `124` exit is read as a lapse only when the deadline
+/// already elapsed (a phase legitimately exiting 124 early is never
+/// re-labelled). The host-side watcher stays the backstop at
+/// `deadline + TERM_GRACE + slack` — past it the client is killed and
+/// the tag sweep is authoritative.
+pub fn exec_guarded(
+    backend: &hharness_helper::podman::PodmanBackend,
+    argv: &[String],
+    cwd: &str,
+    env: &[(String, String)],
+    deadline_ms: Option<u64>,
+) -> Result<CellOutcome, CellError> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+    let tag = deadline_ms.map(|_| next_exec_tag());
+    let armed = hharness_helper::podman::wrap_kill(argv, deadline_ms);
+    let mut env_all: Vec<(String, String)> = env.to_vec();
+    if let Some(t) = &tag {
+        env_all.push((EXEC_TAG_ENV.to_string(), t.clone()));
+    }
+    let mut cmd = backend.exec_command(&armed, Some(cwd), &env_all);
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(Stdio::null());
+    let mut child = cmd.spawn().map_err(|e| err("exec", e.to_string()))?;
+    let started = Instant::now();
+    let deadline = deadline_ms.map(|ms| started + Duration::from_millis(ms));
+    // The in-cell `timeout` ladder needs the TERM→KILL grace plus the
+    // `podman exec` teardown before the host-side watcher pronounces a
+    // stuck exec; past the hard bound the tag sweep is authoritative.
+    let hard_deadline =
+        deadline.map(|d| d + Duration::from_millis(hharness_helper::exec::TERM_GRACE_MS + 15_000));
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            // `timeout` exits 124 only when it signalled the command —
+            // and only past the declared deadline; an early 124 is the
+            // phase's own exit code, never a lapse.
+            let lapse_by_exit = status.code() == Some(124)
+                && deadline
+                    .map(|d| Instant::now() + Duration::from_millis(50) >= d)
+                    .unwrap_or(false);
+            if !lapse_by_exit {
                 let mut stdout = Vec::new();
                 let mut stderr = Vec::new();
                 if let Some(mut s) = child.stdout.take() {
@@ -162,26 +257,71 @@ impl CellOps for PodmanCell<'_> {
                     stderr,
                 });
             }
-            if let Some(d) = deadline {
-                if std::time::Instant::now() > d {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    self.terminate_group("agent")?;
-                    return Ok(CellOutcome {
-                        exit_code: None,
-                        timed_out: true,
-                        stdout: Vec::new(),
-                        stderr: Vec::new(),
-                    });
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(5));
+            break;
         }
+        if let Some(hd) = hard_deadline {
+            if Instant::now() > hd {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(5));
     }
-    fn terminate_group(&mut self, pattern: &str) -> Result<(), CellError> {
-        self.backend
-            .terminate_group(pattern)
-            .map_err(|e| err("terminate", e.to_string()))
+    // Lapse cleanup: kill the lapsed exec's OWN in-cell process tree —
+    // whatever the phase — by its `HH_EXEC_TAG` environ marker (TERM →
+    // KILL), then CONFIRM death by a `/proc/*/environ` walk before the
+    // outcome returns. The streams captured up to the lapse are kept.
+    if let Some(t) = &tag {
+        backend
+            .terminate_exec_tag(t)
+            .map_err(|e| err("terminate_exec", e.to_string()))?;
+        confirm_dead(backend, t)?;
+    }
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    if let Some(mut s) = child.stdout.take() {
+        let _ = s.read_to_end(&mut stdout);
+    }
+    if let Some(mut s) = child.stderr.take() {
+        let _ = s.read_to_end(&mut stderr);
+    }
+    Ok(CellOutcome {
+        exit_code: None,
+        timed_out: true,
+        stdout,
+        stderr,
+    })
+}
+
+/// `confirm_dead(backend, tag)` — poll `/proc/*/environ` for the tag
+/// until no tagged process survives (bounded). An unconfirmed kill is
+/// a typed `confirm_dead` error — attempts never overlap and the next
+/// `rm_glob`/attempt/copy-out never runs over a survivor.
+fn confirm_dead(
+    backend: &hharness_helper::podman::PodmanBackend,
+    tag: &str,
+) -> Result<(), CellError> {
+    use std::time::{Duration, Instant};
+    let until =
+        Instant::now() + Duration::from_millis(hharness_helper::exec::TERM_GRACE_MS + 5_000);
+    loop {
+        let alive = backend
+            .exec_tag_alive(tag)
+            .map_err(|e| err("confirm_dead", e.to_string()))?;
+        if !alive {
+            return Ok(());
+        }
+        if Instant::now() > until {
+            return Err(err(
+                "confirm_dead",
+                format!(
+                    "lapsed exec tag {tag} still has live in-cell processes — \
+                     the next attempt/copy-out is refused, never overlapped"
+                ),
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(50));
     }
 }
 
@@ -201,10 +341,15 @@ pub struct CellPlan {
     pub agent_argv: Vec<String>,
     /// The enforced agent deadline (ms — the AR-07 product).
     pub agent_deadline_ms: Option<u64>,
+    /// The agent deadline's provenance (D15 — `task.toml` or the cfg
+    /// fallback); echoed into the cell report per phase.
+    pub agent_deadline_source: DeadlineSource,
     /// The verifier argv (`bash /tests/test.sh`).
     pub verifier_argv: Vec<String>,
     /// The enforced verifier deadline (ms).
     pub verifier_deadline_ms: Option<u64>,
+    /// The verifier deadline's provenance (D15).
+    pub verifier_deadline_source: DeadlineSource,
     /// The frozen same-cell regrade bound (proposed 2 — REQ-XB-111).
     pub max_grade_attempts: u32,
     /// The optional ST4 `/logs/agent` copy-out leg (R6.25/REQ-XC-317) —
@@ -226,6 +371,9 @@ pub struct PhaseListing {
 /// `VerifyOutcome` — what one ST5 leg observed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VerifyOutcome {
+    /// The ST5 attempt that produced `files` (1-based — collected
+    /// files belong to exactly one attempt; D17).
+    pub attempt: u32,
     /// The collected verifier bytes (paths → contents the channel
     /// classifies; `None` where the cell produced no file).
     pub files: crate::verdict::RewardFileSet,
@@ -248,6 +396,15 @@ pub struct CellReport {
     pub verify_attempts: u32,
     /// The final verify outcome.
     pub verify: Option<VerifyOutcome>,
+    /// The enforced agent deadline + provenance (D15; echoed plan
+    /// members — `cell-report.json` records them per phase).
+    pub agent_deadline_ms: Option<u64>,
+    /// The agent deadline's provenance.
+    pub agent_deadline_source: DeadlineSource,
+    /// The enforced verifier deadline.
+    pub verifier_deadline_ms: Option<u64>,
+    /// The verifier deadline's provenance.
+    pub verifier_deadline_source: DeadlineSource,
     /// The hashed `/logs/agent` copy-out (REQ-XC-317 — `None` where the
     /// plan carries no capture leg).
     pub native_log: Option<crate::capture::NativeLogBundle>,
@@ -295,13 +452,19 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         agent_terminated: false,
         verify_attempts: 0,
         verify: None,
+        agent_deadline_ms: plan.agent_deadline_ms,
+        agent_deadline_source: plan.agent_deadline_source,
+        verifier_deadline_ms: plan.verifier_deadline_ms,
+        verifier_deadline_source: plan.verifier_deadline_source,
         native_log: None,
     };
     // ST1 boundary — nothing phase-owned may already exist.
     if cell.present(TESTS_DIR)? {
         return Err(err(
             "phase_boundary",
-            format!("{TESTS_DIR} exists before the verify phase — the image ships a boundary file the lifecycle never creates"),
+            format!(
+                "{TESTS_DIR} exists before the verify phase — the image ships a boundary file the lifecycle never creates"
+            ),
         ));
     }
     if plan.oracle_participant && cell.present(SOLUTION_DIR)? {
@@ -338,9 +501,14 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         report.native_log = Some(crate::capture::copy_out_logs(cell, spec)?);
     }
     // ST5 — verify legs in the same cell, bounded; the participant is
-    // never re-launched.
-    for _attempt in 1..=plan.max_grade_attempts {
-        report.verify_attempts += 1;
+    // never re-launched. Each attempt collects under
+    // `collect/attempt-<n>`: a lapsed attempt's exec is confirmed dead
+    // before the next `rm_glob`/attempt (the exec's own lapse path),
+    // attempts never overlap, and the collected files belong to
+    // exactly one attempt — the top-level `collect/` members always
+    // name the LATEST attempt's bytes, never a stale earlier write.
+    for attempt in 1..=plan.max_grade_attempts {
+        report.verify_attempts = attempt;
         cell.rm_glob(REWARD_GLOB)?;
         if !cell.present(TESTS_DIR)? {
             stage_in(cell, &plan.host_staging.join("tests"), TESTS_DIR)?;
@@ -368,11 +536,14 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
             deadline_ms: plan.verifier_deadline_ms,
         })?;
         listing(cell, "verify", &mut report.listings);
-        // Copy-out — the reward-side bytes the channel classifies.
+        // Copy-out — the reward-side bytes the channel classifies,
+        // under this attempt's own dir.
+        let attempt_dir = plan.collect_dir.join(format!("attempt-{attempt}"));
+        let _ = std::fs::create_dir_all(&attempt_dir);
         let mut files = crate::verdict::RewardFileSet::default();
         let _ = std::fs::create_dir_all(&plan.collect_dir);
         for name in ["reward.json", "reward.txt", "ctrf.json", "test-stdout.txt"] {
-            let dst = plan.collect_dir.join(name);
+            let dst = attempt_dir.join(name);
             if cell.cp_out(&format!("{VERIFIER_DIR}/{name}"), &dst).is_ok() {
                 let bytes = std::fs::read(&dst).unwrap_or_default();
                 match name {
@@ -391,18 +562,38 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         // verbatim — `test-stdout.txt` fills only the absent in-cell
         // member (the task's own file wins), `test-stderr.txt` rides
         // beside it so the §3.4 signature check sees `E:`/`curl:` lines
-        // on either stream.
+        // on either stream. A lapsed attempt's partial streams land
+        // here too — the lapse no longer drops them (D17).
         if files.test_stdout.is_none() && !out.stdout.is_empty() {
-            let dst = plan.collect_dir.join("test-stdout.txt");
+            let dst = attempt_dir.join("test-stdout.txt");
             let _ = std::fs::write(&dst, &out.stdout);
             files.test_stdout = Some(out.stdout.clone());
         }
         if !out.stderr.is_empty() {
-            let dst = plan.collect_dir.join("test-stderr.txt");
+            let dst = attempt_dir.join("test-stderr.txt");
             let _ = std::fs::write(&dst, &out.stderr);
             files.test_stderr = Some(out.stderr.clone());
         }
+        // Re-materialize the top-level `collect/` members as exactly
+        // this attempt's bytes: a later attempt's absence is an absent
+        // file, never an earlier attempt's leftover (D17 — the Wc7
+        // `query-optimize` leak let a timed-out attempt's late write
+        // land under a later attempt's verdict).
+        for name in [
+            "reward.json",
+            "reward.txt",
+            "ctrf.json",
+            "test-stdout.txt",
+            "test-stderr.txt",
+        ] {
+            let top = plan.collect_dir.join(name);
+            let _ = std::fs::remove_file(&top);
+            if let Ok(b) = std::fs::read(attempt_dir.join(name)) {
+                let _ = std::fs::write(&top, b);
+            }
+        }
         report.verify = Some(VerifyOutcome {
+            attempt,
             files,
             timed_out: out.timed_out,
         });

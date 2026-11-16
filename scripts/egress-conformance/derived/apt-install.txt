@@ -1,0 +1,5 @@
+apt-get install -y curl
+apt-get install -y curl ffmpeg libsm6 libxext6
+apt-get install -y curl gcc
+apt-get install -y curl python3-pillow
+apt-get install -y vim

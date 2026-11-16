@@ -1,0 +1,208 @@
+{
+ "authorization": {
+  "ceiling_micros": 830480,
+  "gate": "PROV-SMOKE",
+  "model_line": "none",
+  "quote_id": "pq-950d9be85a360626",
+  "readout_path": "docs/build/readouts/GATE-G28i.md",
+  "verbatim_sha256": "e256ee8e7aff6957a781d8328f0f68e26996564c81fa458da59fbca2305138ad"
+ },
+ "carried_load": {
+  "set_digest": "sha256:254d590e1c66a8300bc2ff26c1d03fcf2104985e614a6b4815f561081639de0e",
+  "verified": true
+ },
+ "cells": {
+  "prove-plus-comm/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 52,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 52,
+    "tunnel_closed": 15,
+    "undecided": 0
+   },
+   "verify_attempts": 1
+  },
+  "pytorch-model-cli/H-allow-diag/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "verifier_unavailable:bootstrap:egress_denied",
+   "denied_hosts": [
+    "ossci-datasets.s3.amazonaws.com",
+    "yann.lecun.com"
+   ],
+   "diagnostic": true,
+   "reward_ppm": null,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 61
+    },
+    "decided": 415,
+    "deny_hosts": [
+     "download.pytorch.org",
+     "ossci-datasets.s3.amazonaws.com",
+     "yann.lecun.com"
+    ],
+    "mediator_err_5xx": 0,
+    "requested": 415,
+    "tunnel_closed": 61,
+    "undecided": 0
+   },
+   "verify_attempts": 2
+  },
+  "pytorch-model-cli/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "verifier_unavailable:bootstrap:egress_denied",
+   "denied_hosts": [
+    "download-r2.pytorch.org"
+   ],
+   "reward_ppm": null,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 38
+    },
+    "decided": 401,
+    "deny_hosts": [
+     "download-r2.pytorch.org",
+     "download.pytorch.org"
+    ],
+    "mediator_err_5xx": 0,
+    "requested": 401,
+    "tunnel_closed": 38,
+    "undecided": 0
+   },
+   "verify_attempts": 2
+  },
+  "query-optimize/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 33,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 33,
+    "tunnel_closed": 16,
+    "undecided": 0
+   },
+   "verify_attempts": 1
+  },
+  "query-optimize/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": null,
+    "close_causes": null,
+    "decided": null,
+    "deny_hosts": null,
+    "mediator_err_5xx": null,
+    "requested": null,
+    "tunnel_closed": null,
+    "undecided": null
+   },
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "denied_hosts": [],
+   "reward_ppm": 1000000,
+   "store": {
+    "bad_close": [],
+    "close_causes": {
+     "eof": 41
+    },
+    "decided": 82,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 82,
+    "tunnel_closed": 41,
+    "undecided": 0
+   },
+   "verify_attempts": 1
+  }
+ },
+ "clauses": {
+  "denied_hosts_epoch_consistent": "fail \u2014 verify-phase deny download-r2.pytorch.org absent from the epoch-4 deny set",
+  "h_allow_decided_reward1": "3/4 \u2014 prove-plus-comm, torch-tensor-parallelism, query-optimize decided reward 1; pytorch-model-cli verifier_unavailable:bootstrap:egress_denied",
+  "query_optimize_hpub_decided_reward1": "pass",
+  "tunnel_close_eof_only": "pass \u2014 every tunnel.closed close_cause eof with true byte counts",
+  "zero_5xx": "pass \u2014 zero mediator 5xx on every store (epoch-4 cells + diag)"
+ },
+ "diagnostic": {
+  "file": "/opt/smoke1/freeze-diag.json \u2014 window-local, uncommitted (epoch-4 verify + download-r2.pytorch.org)",
+  "note": "in-window non-evidence iteration per the A1 smoke class \u2014 NOT a committed freeze amendment; epoch-4 stays the carried freeze"
+ },
+ "digests": {
+  "harvest_manifest": "f0dea69ba2badaa5ccbdb1239aff5243ad416bb7252cf488f3cc2ca4be398d42",
+  "run_root_tar": "a88a51172d7a68f26840e7e550c55db2c30425d1491b87d56595a6f1a803ab87",
+  "store_check_diag": "bfeb08fe7915fa9d899a28ae4ff2dbad61425016ece3875d71aa1cb5f11d296c",
+  "store_check_epoch4": "4150c28096662f6860fa1c60ba5ee4033799913f8074de5d589be027a7075d80",
+  "verifier_first_errors": "57072bbdb7ecbaa4d122ce584c0d5f6239c6963a2422dfa0471e53766f05abab",
+  "window_record": "045788aabe2566da367028175d598f3f11b18098175f58ac903a126e39deb328"
+ },
+ "first_error_tally": "pytorch-model-cli: uvx wheel fetch denied to download-r2.pytorch.org (verify phase) \u2014 deeper diag denies ossci-datasets.s3.amazonaws.com + yann.lecun.com (MNIST/dataset hosts); the other 4 cells decided cleanly \u2014 run-root/verifier-first-errors.txt",
+ "freeze": {
+  "digest": "sha256:785d709206243d4f2ba75f2a98cb0774050b8e42b1d0eea5f1269dc291b84203",
+  "epoch": 4
+ },
+ "gate": {
+  "disposition": "envelope_authorized",
+  "readout": "docs/build/readouts/GATE-G28i.md",
+  "verbatim": "continue",
+  "verbatim_sha256": "e256ee8e7aff6957a781d8328f0f68e26996564c81fa458da59fbca2305138ad"
+ },
+ "instance": {
+  "created": "2026-11-16T03:31:45Z",
+  "deleted": "2026-11-16 ~04:23Z \u2014 teardown nine-step, h_r elapsed 0.0 of 6",
+  "disk_gib": 150,
+  "image": "debian-12-bookworm-v20261014",
+  "machine_type": "e2-standard-8",
+  "name": "hh-fp-smoke1",
+  "zone": "us-central1-a"
+ },
+ "label": "non-evidence smoke (internal; never re-proof evidence)",
+ "outcome": "not_passed{declared_data_residual:allowlist_gap{download-r2.pytorch.org\u2192ossci-datasets.s3.amazonaws.com,yann.lecun.com}}",
+ "phase": "fp",
+ "receipts": [
+  "docs/build/reports/compute/2026-11-16-fp-smoke1-{provision,verify,prepull,harvest,teardown,cost}.json",
+  "docs/build/reports/archive/2026-11-16-fp-smoke1-{upload,verify}.json",
+  "docs/build/reports/2026-11-16-fp-smoke1-settlement.json"
+ ],
+ "recorded_at": "2026-11-16T04:40:00Z",
+ "runner": {
+  "build": "source",
+  "commit": "27ac8db985207e1d8ad112ae0e9c55d7d5bff52b",
+  "in_window_digests": {
+   "hh-egress-mediator": "8f830a7fbd5ae259450cb1a8db67e82def01cbfc57206753a89f3ae2d7853d79",
+   "hh-helper": "727b7b83a21ac39c8ff3c80bd8858a81469be08a28f907b39374e5a2753a14bd",
+   "hh-w1": "d91c2c3861fede1a0d416260d9f4b48f31b83d300fc21b1c3039e66bfb6051ea"
+  },
+  "rebuilds": []
+ },
+ "schema": "hh-smoke/1",
+ "smoke_pass": false,
+ "spend": {
+  "ceiling_micros": 830480,
+  "compute_estimate_micros": 357320,
+  "model": "$0"
+ },
+ "ticket": "R6.45l",
+ "window": "smoke1"
+}

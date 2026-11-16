@@ -14,9 +14,9 @@
 //!   form (the token itself never enters a payload; only its hash does, so a
 //!   leaked ledger row cannot be replayed as a capability).
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use hharness_identity::idp::{idp_digest, idp_id};
 
@@ -72,10 +72,11 @@ impl AttributionToken {
 }
 
 /// `TokenMinter` — the kernel's one minter. Holds the table mutably; hands out
-/// `TokenResolver` clones (a shared `Rc<RefCell>` read view — the helper side
-/// resolves but cannot mint).
+/// `TokenResolver` clones (a shared `Arc<Mutex>` read view — the helper side
+/// resolves but cannot mint; `Send` for the concurrent mediator's conn
+/// threads, R6.45k/D8).
 pub struct TokenMinter {
-    table: Rc<RefCell<BTreeMap<String, TokenEntry>>>,
+    table: Arc<Mutex<BTreeMap<String, TokenEntry>>>,
     /// The kernel-held seed (derived from a kernel secret + run; never leaves
     /// the kernel).
     seed: [u8; 32],
@@ -87,7 +88,7 @@ impl TokenMinter {
     /// seed for determinism).
     pub fn new(seed: [u8; 32]) -> Self {
         TokenMinter {
-            table: Rc::new(RefCell::new(BTreeMap::new())),
+            table: Arc::new(Mutex::new(BTreeMap::new())),
             seed,
             counter: 0,
         }
@@ -110,7 +111,7 @@ impl TokenMinter {
         payload.push(0x1f);
         payload.extend_from_slice(binding.as_bytes());
         let token = format!("sha256:{}", idp_digest("attribution_token", &payload));
-        self.table.borrow_mut().insert(
+        self.table.lock().unwrap_or_else(|p| p.into_inner()).insert(
             token.clone(),
             TokenEntry {
                 effect_id: effect_id.to_string(),
@@ -131,7 +132,12 @@ impl TokenMinter {
     /// `expire(effect_id, attempt_no)` — the effect reached a terminal; its
     /// tokens die (a replayed token resolves `Unknown`).
     pub fn expire(&mut self, effect_id: &str, attempt_no: u64) {
-        for e in self.table.borrow_mut().values_mut() {
+        for e in self
+            .table
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values_mut()
+        {
             if e.effect_id == effect_id && e.attempt_no == attempt_no {
                 e.expired = true;
             }
@@ -141,7 +147,7 @@ impl TokenMinter {
     /// A `TokenResolver` — the read-only view the helper/executor holds.
     pub fn resolver(&self) -> TokenResolver {
         TokenResolver {
-            table: Rc::clone(&self.table),
+            table: Arc::clone(&self.table),
         }
     }
 }
@@ -149,13 +155,18 @@ impl TokenMinter {
 /// `TokenResolver` — the helper/executor's read view (resolve-only; no mint).
 #[derive(Clone)]
 pub struct TokenResolver {
-    table: Rc<RefCell<BTreeMap<String, TokenEntry>>>,
+    table: Arc<Mutex<BTreeMap<String, TokenEntry>>>,
 }
 
 impl TokenResolver {
     /// `resolve(token)` — the binding, or `Unknown` (expired/never minted).
     pub fn resolve(&self, token: &str) -> ResolveOutcome {
-        match self.table.borrow().get(token) {
+        match self
+            .table
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(token)
+        {
             Some(e) if !e.expired => ResolveOutcome::Resolved {
                 effect_id: e.effect_id.clone(),
                 attempt_no: e.attempt_no,

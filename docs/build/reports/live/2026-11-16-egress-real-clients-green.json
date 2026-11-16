@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    "the real-client egress conformance battery (apt/uv/uvx/pip/npm bootstrap shapes extracted from the committed member tests/*, verify + agent phase policies rendered by hh-w1 render-policy): every requested row decided, zero mediator 5xx, tunnel.close eof + true bytes, S2 typed deny or epoch-4 grant \u2014 subject 54ae9c9e90f6f13faea19daa8e8e68845b7c20a2"
+  ],
+  "cost_pricing": {
+    "retrieved": "2026-10-21",
+    "source": "operator ruling 2026-10-20 (round-4 GATE DECISIONS: $100 cap, pre-authorization, expires GATE-G6); provider published pricing pages pinned per model row as legs are declared",
+    "table": "docs/build/reports/live/pricing.json"
+  },
+  "cost_usd": 0.0,
+  "endpoint_host": null,
+  "git_head": "54ae9c9e90f6f13faea19daa8e8e68845b7c20a2",
+  "harness": "github-actions/run-43791844390",
+  "leg": "egress-real-clients",
+  "model_reported": null,
+  "provided": {},
+  "provider": "public-upstream",
+  "recorded_at": "2026-11-16T02:38:54Z",
+  "request_ids": [],
+  "response_headers": {},
+  "result": "pass",
+  "run_ledger_head": {
+    "path": "docs/build/runs/R6.45k.md",
+    "sha256": "c8a3677ea24e359c1f1904e8c53fe79f69d1d9dc51efb809f04a927b37838462"
+  },
+  "schema": "hh-live-evidence/1",
+  "spend_cumulative_usd": 25.259768,
+  "ticket": "R6.45k",
+  "token_usage": null,
+  "transcript_path": "docs/build/reports/live/2026-11-16-egress-real-clients-green.transcript.txt",
+  "transcript_sha256": "12c22bfd0f13020d843eb47b4303addd9009887501fd44fe2b486ed35c5f9f92"
+}

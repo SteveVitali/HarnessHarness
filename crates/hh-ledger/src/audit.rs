@@ -327,7 +327,7 @@ pub trait AuditSigner {
 /// bytes `verify` checks a `sig` against. `None` means the key is not held:
 /// `verify_run` then answers `SignerUnavailable` rather than fabricating ok
 /// (CC4 — an unverifiable signature is never "passed").
-pub trait AuditKeyResolver {
+pub trait AuditKeyResolver: Send {
     /// The key bytes for `key_id`, or `None` when not held.
     fn verify_key(&self, key_id: &str) -> Option<Vec<u8>>;
     /// Verify `sig` over `preimage` under `alg_ref`/`key` — `Some(true)`/

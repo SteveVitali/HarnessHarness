@@ -513,6 +513,92 @@ impl PodmanBackend {
         }
         Ok(())
     }
+
+    /// `terminate_exec_tag(tag)` — the D17 lapse sweep (ADR-0448): TERM
+    /// then KILL every in-cell process whose `/proc/<pid>/environ`
+    /// carries `HH_EXEC_TAG=<tag>` — the lapsed exec's OWN tree,
+    /// whatever its phase's cmdline spelling (the verifier's
+    /// `bash test.sh → uvx → pytest` never matches a phase-name
+    /// pattern; the tag is in the environ of every process the tagged
+    /// exec spawned). The tag rides in the walker's argv — never its
+    /// environ — so the walker cannot match itself (`$$` is excluded
+    /// regardless). `grep -F` is a fixed-string match; the caller's
+    /// tags are zero-padded so no tag prefixes another. An empty tag
+    /// refuses before argv — it would match nothing or everything.
+    /// A no-match pass is success.
+    pub fn terminate_exec_tag(&self, tag: &str) -> Result<(), BackendError> {
+        if tag.is_empty() {
+            return Err(BackendError {
+                op: "exec",
+                stderr: "empty exec tag matches no in-cell process".into(),
+                status: None,
+            });
+        }
+        for sig in ["TERM", "KILL"] {
+            let script = format!(
+                "for p in /proc/[0-9]*; do \
+                    i=${{p#/proc/}}; \
+                    if [ \"$i\" != \"$$\" ] \
+                    && grep -q -F -e 'HH_EXEC_TAG={tag}' \"$p/environ\" 2>/dev/null; \
+                    then kill -s {sig} \"$i\" 2>/dev/null; fi; \
+                    done"
+            );
+            let r = run(
+                "exec",
+                &[
+                    "exec".to_string(),
+                    self.container.clone(),
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    script,
+                ],
+            );
+            // The TERM pass is best-effort; the KILL pass's `podman
+            // exec` result is authoritative — an unreachable cell is a
+            // typed machinery error.
+            if sig == "KILL" {
+                r?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `exec_tag_alive(tag)` — `/proc/*/environ` walk for the tag:
+    /// `true` while any tagged process survives. The lapse path polls
+    /// this before the next `rm_glob`/attempt/copy-out — a survivor
+    /// means the tree is not confirmed dead.
+    pub fn exec_tag_alive(&self, tag: &str) -> Result<bool, BackendError> {
+        if tag.is_empty() {
+            return Err(BackendError {
+                op: "exec",
+                stderr: "empty exec tag matches no in-cell process".into(),
+                status: None,
+            });
+        }
+        let script = format!(
+            "for p in /proc/[0-9]*; do \
+                i=${{p#/proc/}}; \
+                if [ \"$i\" != \"$$\" ] \
+                && grep -q -F -e 'HH_EXEC_TAG={tag}' \"$p/environ\" 2>/dev/null; \
+                then exit 0; fi; \
+                done; exit 1"
+        );
+        let out = Command::new(podman_bin())
+            .args([
+                "exec".to_string(),
+                self.container.clone(),
+                "sh".to_string(),
+                "-c".to_string(),
+                script,
+            ])
+            .output()
+            .map_err(|e| BackendError {
+                op: "exec",
+                stderr: e.to_string(),
+                status: None,
+            })?;
+        Ok(out.status.success())
+    }
 }
 
 /// `wrap_kill(argv, deadline_ms)` — the in-cell process-tree kill

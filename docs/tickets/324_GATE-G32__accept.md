@@ -57,3 +57,5 @@ This gate does not pass while any `OPEN` row in `DEFERRALS.md` scoped to the Rou
 ## Operating clauses
 
 Follow [Round-6 invariants](../build/planning/2026-11-07_round6-invariants.md) (X-02, X-03, X-08; XO-04, XO-06) and the manifest operating rules. Consumes R6.1's gate-disposition templates. No code branch is created by a gate.
+
+> Amendment note 2026-11-16 (§10.5 row A2 / ADR-0444; operator ruling R-5, verbatim in the LEDGER `## GATE DECISIONS` `intervention-2026-11-15` row): the "$100 check (REQ-XH-110)" this gate presents is amended — CAP6.2's closure recompute reads **Σ authorized ≤ $100** and **Σ spent ≤ $110** under A2's accounting (completed windows at billed figures where they exist else `cost_lib` estimates, authorized-but-unrun at ceilings; model ≤ $70; $10 reserve). The verbatim REQ-XH-110 quote above keeps its bytes; the register row governs in application.
