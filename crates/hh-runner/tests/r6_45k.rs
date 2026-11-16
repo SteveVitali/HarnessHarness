@@ -15,7 +15,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use hharness_env::egress_allowlist::{
     admit_allowlist_mediated, scan_hosts_in_text, Allowlist, ImageFamily, MediatedCell,
-    MediatedDecl, RelayPair, EGRESS_RELAY_PORT, EGRESS_SOCK_PATH, MODEL_SOCK_PATH,
+    MediatedDecl, RelayPair, EGRESS_RELAY_PORT, EGRESS_SOCK_PATH, MODEL_RELAY_PORT_MIN,
+    MODEL_SOCK_PATH,
 };
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_runner::json_ext::JsonExt;
@@ -87,7 +88,7 @@ fn in_test_layer(list: &Allowlist, phase: &str) -> String {
             pairs: vec![
                 RelayPair {
                     name: "model".to_string(),
-                    port: 8080,
+                    port: MODEL_RELAY_PORT_MIN,
                 },
                 RelayPair {
                     name: "egress".to_string(),
@@ -95,7 +96,7 @@ fn in_test_layer(list: &Allowlist, phase: &str) -> String {
                 },
             ],
         },
-        model_port: 8080,
+        model_port: MODEL_RELAY_PORT_MIN,
         slot_token: "hh-w1-slot-token".to_string(),
     };
     admit_allowlist_mediated(&mut rec, &mut pol, &decl, 0).unwrap();

@@ -18,7 +18,7 @@ use std::time::Instant;
 use hharness_env::egress_allowlist::{
     admit_allowlist_mediated, cell_env_projection, scan_hosts_in_text, Allowlist, AllowlistFreeze,
     ImageFamily, MediatedCell, MediatedDecl, RelayPair, WithheldHost, EGRESS_RELAY_PORT,
-    EGRESS_SOCK_PATH, MODEL_SOCK_PATH,
+    EGRESS_SOCK_PATH, MODEL_RELAY_PORT_MIN, MODEL_SOCK_PATH,
 };
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_gateway::recording::{RecordedCall, RecordedReleased, RecordedResponse, Recording};
@@ -152,7 +152,7 @@ fn load_cfg(path: &str) -> Result<Cfg, String> {
             "ubuntu" => ImageFamily::Ubuntu,
             _ => ImageFamily::Debian,
         },
-        model_port: n("model_port", 8080) as u16,
+        model_port: n("model_port", MODEL_RELAY_PORT_MIN as u64) as u16,
         egress_port: n("egress_port", 3128) as u16,
         workdir_default: jstr(&j, "workdir_default").unwrap_or("/app").to_string(),
         slot_token: jstr(&j, "slot_token")
@@ -337,7 +337,7 @@ fn cmd_render_policy(args: &[String]) -> Result<String, String> {
     let model_port: u16 = arg(args, "--model-port")
         .map(|s| s.parse::<u16>().map_err(|_| "--model-port int".to_string()))
         .transpose()?
-        .unwrap_or(8080);
+        .unwrap_or(MODEL_RELAY_PORT_MIN);
     let slot_token = arg(args, "--slot-token").unwrap_or_else(|| "hh-w1-slot-token".to_string());
     let family = match arg(args, "--family").as_deref().unwrap_or("debian") {
         "ubuntu" => ImageFamily::Ubuntu,

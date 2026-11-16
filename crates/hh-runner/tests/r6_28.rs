@@ -132,7 +132,7 @@ fn ac1_mini_cell_reaches_endpoint_only_via_declared_profile() {
     // the declared `allowlist_mediated` profile, never a raw dial.
     let slot = hharness_runner::render::SlotInputs {
         slot_token: "toy-slot-token".to_string(),
-        model_port: 4_242,
+        model_port: 54_242,
         instruction: b"do the task".to_vec(),
         home: "/root".to_string(),
         user: "root".to_string(),
@@ -146,7 +146,7 @@ fn ac1_mini_cell_reaches_endpoint_only_via_declared_profile() {
             .unwrap();
     let base = cfg.env.get("OPENAI_BASE_URL").unwrap();
     assert!(
-        base.starts_with("http://127.0.0.1:4242"),
+        base.starts_with("http://127.0.0.1:54242"),
         "base-url setting is the cell's model-relay loopback: {base}"
     );
     // Other egress is mediated; loopback is the only direct route.

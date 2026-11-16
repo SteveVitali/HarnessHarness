@@ -141,7 +141,9 @@ pub struct SlotInputs {
     /// The slot token — the only credential rendered (X-05).
     pub slot_token: String,
     /// The cell's model relay port (`127.0.0.1:P_model`; the declared
-    /// cell-spec constant of design/34 §1.4).
+    /// cell-spec constant of design/34 §1.4). Must sit in the IANA
+    /// dynamic/private band (`MODEL_RELAY_PORT_MIN..=65535`) — the
+    /// registered range is the task's service space (R6.45n).
     pub model_port: u16,
     /// The verbatim instruction bytes (`instruction.md` content).
     pub instruction: Vec<u8>,
@@ -696,6 +698,12 @@ pub fn render(
     use_: RenderUse,
 ) -> Result<RenderedConfig, RenderError> {
     admission::validate(rec, &ValidationContext::first_pass())?;
+    // `slot.model_port` is the in-cell relay bind — a registered-range
+    // port is a silent EADDRINUSE against a task-owned service (the
+    // R6.45n pypi-server :8080 deadlock); refuse, never render a
+    // colliding cell.
+    hharness_env::egress_allowlist::check_model_relay_port(slot.model_port)
+        .map_err(|e| err("model_port", e.to_string()))?;
     let name = rec
         .get("harness")
         .and_then(|h| h.get("name"))
