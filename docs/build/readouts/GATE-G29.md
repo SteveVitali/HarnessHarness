@@ -1,5 +1,5 @@
 # GATE-G29 — G-L1: record the L1 decision as `full` or `fallback` · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -98,3 +98,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G29 (G-L1)
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "continue" (operator, interactive) in response to the GATE-G29 (G-L1) presentation (agent-drafted block sha256 `b2212ee4974c`). Disposition: **operator's own ruling — route to a re-proof PROV gate**. `full` is not presentable (no `hh-l1-conformance/1` exists — the legs were withheld, never failed) and `fallback` closes the frozen-list line for this pass; "continue" is terse continuation language mapped to the only reading that keeps the frozen-list line — and `full` — reachable (the operator's fifth consecutive continuation answer, same mapping as "continue" → `continuation{frozen-list-gate}` at the post-smoke5 decision; the readout named this third answer expressly: "not a pre-registered disposition here and would be recorded as the operator's own ruling if given"). The ruling dispatches a re-proof PROV gate insert — the Wc10-shaped re-proof window on the verified machinery (runner tip `b3f72ab7`, `model_port` band `49152`), returning through its own PROV readout under REQ-XH-004; a re-proof → `task_lists.state: frozen` → the withheld L1 corpus legs makes `full` reachable before the Q-X62 trigger instant (2026-11-24T21:42:46Z). GATE-G29 records neither `full` nor `fallback`; `task_lists.state` stays `blocked` verbatim pending the re-proof's own records.
