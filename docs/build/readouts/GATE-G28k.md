@@ -1,5 +1,5 @@
 # GATE-G28k — PROV-SMOKE post-repair diagnostic envelope: the non-evidence diagnostic smoke envelope's compute authorization (up to 2 smoke windows on the diagnostic recipe — pypi-server + make-doom-for-mips, H-allow r=1 + H-pub r=1 — $0 model, results never re-proof evidence) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -152,3 +152,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G28k
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "I authorize, please continue" (operator, interactive) in response to the GATE-G28k diagnostic-envelope presentation (agent-drafted block sha256 `e211ba90dfaa`; quotes `pq-9b4d23564e37c0b1`/`pq-684bcc89e7f7701d`, 830,480 µ$ each — Σ 1,660,960 ≤ 2,500,000). Disposition: **`envelope_authorized`** — R6.45n dispatches smoke4 first on the diagnostic recipe (pypi-server + make-doom-for-mips, H-allow + H-pub r=1) on the pinned repair tip `6801febf`; smoke5 is the same-recipe contingency only. The envelope's `verbatim_sha256` stamps onto `fp-smoke{4,5}.json`; each smoke's PROV checks authorization `match` before any create under REQ-XH-004.
