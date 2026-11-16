@@ -852,53 +852,17 @@ impl CellOps for DriveCell<'_> {
             };
             let _ = std::fs::write(dst, layer.to_canonical_string());
         }
-        let mut cmd = self
-            .backend
-            .exec_command(&spec.argv, Some(&spec.cwd), &self.env);
-        cmd.stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .stdin(Stdio::null());
-        let mut child = cmd.spawn().map_err(|e| CellError {
-            op: "exec",
-            detail: e.to_string(),
-        })?;
-        let deadline = spec
-            .deadline_ms
-            .map(|ms| Instant::now() + std::time::Duration::from_millis(ms));
-        loop {
-            if let Ok(Some(s)) = child.try_wait() {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                if let Some(mut o) = child.stdout.take() {
-                    use std::io::Read;
-                    let _ = o.read_to_end(&mut stdout);
-                }
-                if let Some(mut o) = child.stderr.take() {
-                    use std::io::Read;
-                    let _ = o.read_to_end(&mut stderr);
-                }
-                return Ok(CellOutcome {
-                    exit_code: s.code().map(|c| c as i64),
-                    timed_out: false,
-                    stdout,
-                    stderr,
-                });
-            }
-            if let Some(d) = deadline {
-                if Instant::now() > d {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    self.terminate_group("agent")?;
-                    return Ok(CellOutcome {
-                        exit_code: None,
-                        timed_out: true,
-                        stdout: vec![],
-                        stderr: vec![],
-                    });
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
+        // The D17 lapse machinery is the shared `exec_guarded`: the
+        // exec's own in-cell tree dies by its `HH_EXEC_TAG` environ
+        // marker (never a cmdline pattern the phase may not carry),
+        // death is /proc-confirmed, and the lapsed streams are kept.
+        hharness_runner::cell::exec_guarded(
+            self.backend,
+            &spec.argv,
+            &spec.cwd,
+            &self.env,
+            spec.deadline_ms,
+        )
     }
     fn terminate_group(&mut self, pat: &str) -> Result<(), CellError> {
         self.backend.terminate_group(pat).map_err(|e| CellError {
@@ -1144,13 +1108,32 @@ fn h_run_once(
             }
         }
     }
+    // D15/D18 — the task's own `task.toml` declarations drive the
+    // enforced deadlines (pinned Harbor semantics: multiplier 1.0,
+    // the cfg value is the absent-value fallback) and the cell's
+    // declared cpu/memory limits.
+    let decl = hharness_runner::task_toml::load_task_decl(
+        &std::path::Path::new(&cfg.tasks_dir).join(task),
+    )?;
+    let (agent_ms, agent_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.agent_timeout_sec,
+        cfg.agent_deadline_ms,
+    );
+    let (verify_ms, verify_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.verifier_timeout_sec,
+        cfg.verify_deadline_ms,
+    );
     let backend = PodmanBackend {
         container: container.clone(),
         image,
         workspace: work.display().to_string(),
         network: !mediated,
         extra_args: vec![],
-        cell: CellSpec::default(),
+        cell: CellSpec {
+            workdir: None,
+            cpus: decl.cpus.clone(),
+            memory_mb: decl.memory_mb,
+        },
         mounts,
         relay,
     };
@@ -1174,9 +1157,11 @@ fn h_run_once(
         host_staging: staging,
         collect_dir: collect.clone(),
         agent_argv,
-        agent_deadline_ms: Some(cfg.agent_deadline_ms),
+        agent_deadline_ms: Some(agent_ms),
+        agent_deadline_source: agent_src,
         verifier_argv,
-        verifier_deadline_ms: Some(cfg.verify_deadline_ms),
+        verifier_deadline_ms: Some(verify_ms),
+        verifier_deadline_source: verify_src,
         max_grade_attempts: cfg.max_grade_attempts,
         logs_copyout: None,
     };
@@ -1204,12 +1189,42 @@ fn h_run_once(
     let v = verdict::classify(&files, &rows, timed_out);
     let passed = v.success.unwrap_or(false);
     // record the cell drive report
+    let deadline_member = |ms: Option<u64>, src: hharness_runner::cell::DeadlineSource| {
+        Json::obj([
+            (
+                "deadline_ms",
+                ms.map(|m| Json::Int(m as i64)).unwrap_or(Json::Null),
+            ),
+            ("deadline_source", Json::str(src.as_str())),
+        ])
+    };
     let rep = Json::obj([
         (
             "agent_end_cause",
             Json::str(report.agent_end_cause.as_str()),
         ),
         ("verify_attempts", Json::Int(report.verify_attempts as i64)),
+        (
+            "verify_attempt",
+            report
+                .verify
+                .as_ref()
+                .map(|o| Json::Int(o.attempt as i64))
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "deadlines",
+            Json::obj([
+                (
+                    "agent",
+                    deadline_member(report.agent_deadline_ms, report.agent_deadline_source),
+                ),
+                (
+                    "verify",
+                    deadline_member(report.verifier_deadline_ms, report.verifier_deadline_source),
+                ),
+            ]),
+        ),
         ("classification", Json::str(&v.classification)),
         (
             "reward_ppm",

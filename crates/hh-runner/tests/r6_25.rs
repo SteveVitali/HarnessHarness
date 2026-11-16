@@ -311,8 +311,10 @@ fn ac1_copyout_after_agent_before_verify_and_work_alias_refused() {
         collect_dir: dir.join("collect"),
         agent_argv: vec!["agent".into()],
         agent_deadline_ms: Some(1000),
+        agent_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         verifier_argv: vec!["verify".into()],
         verifier_deadline_ms: Some(1000),
+        verifier_deadline_source: hharness_runner::cell::DeadlineSource::CfgDefault,
         max_grade_attempts: 1,
         logs_copyout: Some(spec),
     };

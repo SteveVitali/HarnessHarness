@@ -1,0 +1,67 @@
+{
+ "action": "HH cells now apply the task's declared [environment].cpus/memory_mb verbatim (Harbor semantics \u2014 the declared value IS the container limit; CellSpec's admitted AR-06 members): every member gets --cpus 1 and --memory 2048m; torch-tensor-parallelism gets --memory 8192m \u2014 at least the declared value in every case.",
+ "dated": "2026-11-16",
+ "declared": {
+  "build-pmars": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "cancel-async-tasks": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "db-wal-recovery": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "git-leak-recovery": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "make-doom-for-mips": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "polyglot-c-py": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "prove-plus-comm": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "pypi-server": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "pytorch-model-cli": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "pytorch-model-recovery": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "query-optimize": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "sqlite-db-truncate": {
+   "cpus": "1",
+   "memory_mb": 2048
+  },
+  "torch-tensor-parallelism": {
+   "cpus": "1",
+   "memory_mb": 8192
+  },
+  "vulnerable-secret": {
+   "cpus": "1",
+   "memory_mb": 2048
+  }
+ },
+ "defect": "D18",
+ "finding": "fp-wc8.json declares memory_per_trial_gib 6 (6144 MiB); torch-tensor-parallelism's task.toml declares memory_mb 8192 \u2014 the planning bound was below the task's declared need. Pre-fix, HH cells ran CellSpec::default() (no --cpus/--memory): an unbounded grant, not a declared one.",
+ "packing_recheck": "C=4 \u00d7 declared-max 8192 MiB = 32768 MiB > memory_gib_available 26 (26624 MiB) \u2014 the per-trial bound must cover the largest declared member: for a member set containing an 8192 MiB task, either memory_per_trial_gib \u2265 8 in the fp declaration or C \u2264 3 (3 \u00d7 8192 = 24576 \u2264 26624). For THIS re-proof member set only torch-tensor-parallelism declares 8192 \u2014 the worst 4-cell pack is 8192 + 3 \u00d7 2048 = 14336 MiB \u2248 14 GiB \u2264 26 GiB, so C = 4 stands; a future member set with \u2265 4 heavy declarants re-checks under the same rule.",
+ "schema": "hh-cell-resource-audit/1",
+ "ticket": "R6.45j"
+}

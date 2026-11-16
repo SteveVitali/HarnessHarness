@@ -1,0 +1,469 @@
+{
+ "adr": "ADR-0447",
+ "dated": "2026-11-16",
+ "note": "Appended re-classification of the Wc4\u2013Wc8 member verdicts. The discordance registers and packets are append-only \u2014 no landed row's bytes change; this record is the dated re-fold. Changed rows: 34. Sources: prove-held/prove-dev reproof-packet.json + reproof-register.json per window; the tasklists wcN_verdict strings re-read identically.",
+ "rows": [
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "refolded_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "db-wal-recovery",
+   "window": "wc4"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "refolded_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "git-leak-recovery",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "make-doom-for-mips",
+   "window": "wc4"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "refolded_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "polyglot-c-py",
+   "window": "wc4"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "refolded_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "prove-plus-comm",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "pypi-server",
+   "window": "wc4"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "repair:machinery",
+   "refolded_verdict": "repair:machinery",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "query-optimize",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "sqlite-db-truncate",
+   "window": "wc4"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [
+    "archive.ubuntu.com",
+    "security.ubuntu.com"
+   ],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "refolded_verdict": "exclude:runner_infeasible:allowlist_gap{archive.ubuntu.com}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "torch-tensor-parallelism",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-held/reproof-register.json",
+   "task": "vulnerable-secret",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-dev/reproof-register.json",
+   "task": "build-pmars",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-dev/reproof-register.json",
+   "task": "cancel-async-tasks",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-cli",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc4/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-recovery",
+   "window": "wc4"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "db-wal-recovery",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "git-leak-recovery",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "make-doom-for-mips",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "polyglot-c-py",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "prove-plus-comm",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "pypi-server",
+   "window": "wc6"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "repair:machinery",
+   "refolded_verdict": "repair:machinery",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "query-optimize",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "sqlite-db-truncate",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "torch-tensor-parallelism",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-held/reproof-register.json",
+   "task": "vulnerable-secret",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-dev/reproof-register.json",
+   "task": "build-pmars",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-dev/reproof-register.json",
+   "task": "cancel-async-tasks",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-cli",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc6/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-recovery",
+   "window": "wc6"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "db-wal-recovery",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "git-leak-recovery",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "make-doom-for-mips",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "polyglot-c-py",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "prove-plus-comm",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "pypi-server",
+   "window": "wc7"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "repair:machinery",
+   "refolded_verdict": "repair:machinery",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "query-optimize",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "sqlite-db-truncate",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "torch-tensor-parallelism",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "held",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-held/reproof-register.json",
+   "task": "vulnerable-secret",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-dev/reproof-register.json",
+   "task": "build-pmars",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-dev/reproof-register.json",
+   "task": "cancel-async-tasks",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-cli",
+   "window": "wc7"
+  },
+  {
+   "changed": true,
+   "denied_hosts": [],
+   "leg": "dev",
+   "prior_verdict": "exclude:runner_infeasible:allowlist_gap{unknown}",
+   "refolded_verdict": "repair:machinery{h_allow}",
+   "register": "docs/build/reports/compute/harvest/fp-wc7/run-root/prove-dev/reproof-register.json",
+   "task": "pytorch-model-recovery",
+   "window": "wc7"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [],
+   "leg": "held+dev",
+   "prior_verdict": "no member-level packet verdict folded \u2014 the leg did not complete inside D=6h (dead-man at 29/30 held surfaces)",
+   "refolded_verdict": "unchanged \u2014 nothing to re-fold",
+   "register": null,
+   "task": "(14 members)",
+   "window": "wc5"
+  },
+  {
+   "changed": false,
+   "denied_hosts": [],
+   "leg": "held+dev",
+   "prior_verdict": "incomplete{early_stop:operator_ruling R-1} / not_reached{early_stop:operator_ruling R-1} \u2014 early-stopped ~23:20Z inside D=8h; no hh-reproof-packet/1 landed",
+   "refolded_verdict": "unchanged \u2014 no allowlist_gap verdict was ever folded for Wc8; the H-allow cells' verifier_unavailable:bootstrap:signature with denied_hosts [] is already the machinery shape (curl (28) CONNECT starve, D8/D9)",
+   "register": null,
+   "task": "(14 members)",
+   "window": "wc8"
+  }
+ ],
+ "rule": "A5 \u2014 allowlist_gap requires a non-empty denied_hosts (denies are host-level); H-allow < R/R with denied_hosts [] is machinery{h_allow}: repaired, never excluded",
+ "ruling": "R-7 (intervention-2026-11-15 GATE DECISIONS)",
+ "schema": "hh-reclassification/1",
+ "ticket": "R6.45j"
+}

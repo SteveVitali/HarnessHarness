@@ -141,6 +141,9 @@ pub enum TaskVerdict {
         flaky: bool,
         /// The gap's denied host (`allowlist_gap`).
         host: Option<String>,
+        /// The machinery surface qualifier (A5 — `machinery{h_allow}`
+        /// when the H-allow discordance carried no denied host).
+        machinery_qualifier: Option<String>,
     },
 }
 
@@ -149,20 +152,71 @@ impl TaskVerdict {
     pub fn as_str(&self) -> String {
         match self {
             TaskVerdict::Admit => "admit".to_string(),
-            TaskVerdict::Discord { class, basis, .. } => match basis {
+            TaskVerdict::Discord {
+                class,
+                basis,
+                machinery_qualifier,
+                ..
+            } => match basis {
                 Some(b) => format!("exclude:{b}"),
-                None => format!("repair:{}", class.as_str()),
+                None => format!(
+                    "repair:{}{}",
+                    class.as_str(),
+                    machinery_qualifier
+                        .as_ref()
+                        .map(|q| format!("{{{q}}}"))
+                        .unwrap_or_default()
+                ),
             },
+        }
+    }
+
+    /// The register row's `classification` member — `o_fail[:flaky]` |
+    /// `machinery[{qualifier}]` | `allowlist_gap`.
+    pub fn register_classification(&self) -> String {
+        match self {
+            TaskVerdict::Admit => "admit".to_string(),
+            TaskVerdict::Discord {
+                class,
+                flaky,
+                machinery_qualifier,
+                ..
+            } => format!(
+                "{}{}{}",
+                class.as_str(),
+                machinery_qualifier
+                    .as_ref()
+                    .map(|q| format!("{{{q}}}"))
+                    .unwrap_or_default(),
+                if *flaky { ":flaky" } else { "" }
+            ),
         }
     }
 }
 
+/// `refold_a5(verdict, denied_hosts)` — the appended re-classification
+/// rule (ADR-0447; spec §10.5 row A5): an `allowlist_gap{…}` verdict
+/// whose row records no denied host re-folds to
+/// `repair:machinery{h_allow}`; a named-host gap and every other
+/// verdict keep their spelling. The register stays append-only — the
+/// re-fold lands as a dated record, never a rewrite.
+pub fn refold_a5(verdict: &str, denied_hosts: &[String]) -> String {
+    if verdict.starts_with("exclude:runner_infeasible:allowlist_gap{") && denied_hosts.is_empty() {
+        return "repair:machinery{h_allow}".to_string();
+    }
+    verdict.to_string()
+}
+
 /// `classify_task(o, h_pub, h_allow, harbor_cause, denied_hosts)` — the
-/// §3.8 admit rule, evaluated in table order:
+/// §3.8 admit rule under A5 (ADR-0447; spec §10.5), evaluated in table
+/// order:
 ///
 /// 1. O < R/R → `o_fail` (excluded; `flaky` when 0 < O < R);
 /// 2. O R/R, H-pub < R/R → `machinery` (repair, never excluded);
-/// 3. O R/R, H-pub R/R, H-allow < R/R → `allowlist_gap{host}`;
+/// 3. O R/R, H-pub R/R, H-allow < R/R with a named denied host →
+///    `allowlist_gap{host}` (denies are host-level — a gap that names
+///    no host is not a gap); with `denied_hosts: []` →
+///    `machinery{h_allow}` (repaired, never excluded);
 /// 4. else `admit`.
 pub fn classify_task(
     o: &[bool],
@@ -172,33 +226,44 @@ pub fn classify_task(
     denied_hosts: &[String],
 ) -> TaskVerdict {
     let all = |v: &[bool]| !v.is_empty() && v.iter().all(|b| *b);
+    let discord = |class, basis, flaky, host, machinery_qualifier| TaskVerdict::Discord {
+        class,
+        basis,
+        flaky,
+        host,
+        machinery_qualifier,
+    };
     if !all(o) {
-        return TaskVerdict::Discord {
-            class: DiscordClass::OFail,
-            basis: Some(oracle_fails_basis(harbor_cause)),
-            flaky: o.iter().any(|b| *b),
-            host: None,
-        };
+        return discord(
+            DiscordClass::OFail,
+            Some(oracle_fails_basis(harbor_cause)),
+            o.iter().any(|b| *b),
+            None,
+            None,
+        );
     }
     if !all(h_pub) {
-        return TaskVerdict::Discord {
-            class: DiscordClass::Machinery,
-            basis: None,
-            flaky: false,
-            host: None,
-        };
+        return discord(DiscordClass::Machinery, None, false, None, None);
     }
     if !all(h_allow) {
-        return TaskVerdict::Discord {
-            class: DiscordClass::AllowlistGap,
-            basis: Some(allowlist_gap_basis(
-                denied_hosts
-                    .first()
-                    .map(String::as_str)
-                    .unwrap_or("unknown"),
-            )),
-            flaky: false,
-            host: denied_hosts.first().cloned(),
+        return match denied_hosts.first() {
+            // A5: a named denied host makes the exclusion legitimate.
+            Some(host) => discord(
+                DiscordClass::AllowlistGap,
+                Some(allowlist_gap_basis(host)),
+                false,
+                Some(host.clone()),
+                None,
+            ),
+            // …and an empty `denied_hosts` is a machinery discordance —
+            // repaired, never excluded (`allowlist_gap{unknown}` is gone).
+            None => discord(
+                DiscordClass::Machinery,
+                None,
+                false,
+                None,
+                Some("h_allow".to_string()),
+            ),
         };
     }
     TaskVerdict::Admit
@@ -933,13 +998,7 @@ pub fn prove(
                 .unwrap_or("unclassified"),
             &outcomes["H-allow"].denied_hosts,
         );
-        if let TaskVerdict::Discord {
-            class,
-            flaky,
-            host: _,
-            ..
-        } = &verdict
-        {
+        if let TaskVerdict::Discord { .. } = &verdict {
             let mut digests = BTreeMap::new();
             let mut walls = BTreeMap::new();
             let o = &outcomes["O"];
@@ -967,7 +1026,7 @@ pub fn prove(
                 surfaces: counts.clone(),
                 repeats: plan.r,
                 digests,
-                classification: format!("{}{}", class.as_str(), if *flaky { ":flaky" } else { "" }),
+                classification: verdict.register_classification(),
                 denied_hosts: ha.denied_hosts.clone(),
                 harbor_exception: o.harbor_exception.clone(),
                 image_digest_equal,
