@@ -1,0 +1,45 @@
+{
+ "freeze": {
+  "carried_verbatim_from": "docs/build/reports/2026-11-14-fp-egress-allowlist-freeze-epoch-3.json",
+  "consumed_via": "cfg.freeze_file=/opt/wc8/freeze.json",
+  "digest": "sha256:787db9e1635a6ae8ebf5d50c88a1d4e33ba6fd3707f5a09dc20dee9398f6de21",
+  "epoch": 3,
+  "in_window_file_sha256": "028a0dd620f7837f373cb9810ca5c9f420b92eda465d2d3d370dfb7dc46a344f \u2014 verified live on-VM before teardown; byte-identical to Wc7's carried file"
+ },
+ "in_window_machinery_steps": "recorded carry-overs only (the prior worker's session record; verified against the harvest): upstream podman-compose on PATH, the usermod -aG hh + podman.socket anomaly repair where it recurred, unqualified-search-registries append, corpus/harbor pins, the epoch-3 freeze landed verbatim at /opt/wc8/freeze.json \u2014 verified live (file sha256 028a0dd6\u2026 carries the epoch-3 record digest sha256:787db9e1\u2026)",
+ "live_evidence_ref": "docs/build/reports/live/2026-11-15-reproof-wc8.json",
+ "re_proof": {
+  "driver": "~/hh-retained/wc8/bin/wc8-prove.sh over IAP-ssh (HH_W1_PROVE_CMD \u2192 hh-w1 prove)",
+  "early_stop": "operator_ruling R-1",
+  "eighth_defect": "mediated_connect_tunnel_starve \u2014 the audit's D8/D9 observed live. Every completed H-allow cell's first error is identical: 'curl: (28) Proxy CONNECT aborted due to timeout' (4/4 cells \u2014 prove-plus-comm r0/r1/r2, make-doom-for-mips r0). The verifier's apt update+install flowed WHOLE through the mediator (the max_body 128MiB + duplicate-Host repairs hold \u2014 curl itself installed) but the astral.sh:443 CONNECT tunnel \u2014 decided allow (denied_hosts: [] on every cell) \u2014 pumped bytes_up ~800 / bytes_down 0 for ~300 s until curl's own timeout (events.wal security.egress.tunnel.closed{duration_ms\u2248300492..300671, close_cause eof}). The single-threaded sequential mediator serve_conn + the blocking tunnel pump starved the HTTPS leg \u2192 uv install.sh never landed \u2192 uvx: command not found \u2192 pytest never ran \u2192 reward.txt = 0 \u2192 verifier_unavailable:bootstrap:signature per cell. Machinery discordance \u2014 repaired, never excluded; the repair is a further gate's scope.",
+  "outcome": "EARLY-STOPPED under operator ruling R-1 \u2014 the held leg 10@R=3 launched ~20:54Z and polled held:RUN until the ~23:20Z kill (live-verify leg result fail:prove-driver-rc). Only 2 of 10 held members surfaced past O/H-pub inside that window: prove-plus-comm (O 3/3 + H-pub 3/3 machinery-complete + H-allow r0/r1/r2 ALL verifier_unavailable:bootstrap:signature) and make-doom-for-mips (O 3/3 + H-pub 3/3 + H-allow r0 verifier_unavailable:bootstrap:signature, r1 in-flight at kill \u2014 mediator-store + staging only, no cell-report \u2014 r2 not started). The remaining 8 held members + the 4-member dev leg never reached a surface. No hh-reproof-packet/1 and no register landed; the packet-assembly code never ran.",
+  "surfaces": {
+   "dev": {
+    "detail": "leg never launched",
+    "landed": 0,
+    "total": 8
+   },
+   "held": {
+    "detail": "O 6/30 surfaces complete machinery-wise (2 members x r0..r2 oracle), H-pub 6/30 (2 members), H-allow 4 completed cells of 30 (all failed) + 1 in-flight at kill",
+    "landed_partial": 11,
+    "total": 30
+   }
+  }
+ },
+ "record_kind": "closeout \u2014 written post-harvest from the harvested run-root + the live-verified on-VM digests (the window's in-guest record writer never ran \u2014 the prove leg was killed under operator ruling R-1 before packet assembly)",
+ "recorded_at": "2026-11-15T23:56:00Z",
+ "runner": {
+  "build": "source",
+  "commit": "abc8d8503225156b2cdfbefc814e6ac56aa4baeb",
+  "digests_verified": "live over IAP-ssh 2026-11-15T23:5xZ \u2014 sha256sum on /var/lib/hh/wc8/bin/{hh-w1,hh-egress-mediator,hh-helper} before teardown",
+  "in_window_digests": {
+   "hh-egress-mediator": "cf9f69feb9c3f7336b48dad344078f1c3ab9bec794b65bb50ad0569c71913397",
+   "hh-helper": "7fb122f5576927a126e205455d181dc8409f6aee0fdc9da6039f4f4b9db4f450",
+   "hh-w1": "2ded2cd69bbe3ed69e7531087afd5131117c54db97123a62a80d9acf0fbb16c1"
+  },
+  "note": "seven-defect build \u2014 hh-w1 + mediator digests differ from Wc7's sha256:89ffcc80\u2026/105946e5\u2026 (abc8d850 touches hh-env/egress + mediator code); hh-helper byte-identical to Wc4\u2013Wc7 (the repair touched no helper code). Repair-host builds cited: sha256:f9b6ad05\u2026/c8184fed\u2026/b1ba7ffdc\u2026/ed4e132a\u2026; Wc4\u2013Wc6 in-window sha256:f7b4d146\u2026/885df32d\u2026/7fb122f5\u2026; Wc7 in-window sha256:89ffcc80\u2026/105946e5\u2026/7fb122f5\u2026"
+ },
+ "schema": "hh-wc-repair/1",
+ "ticket": "R6.45h",
+ "window": "wc8"
+}
