@@ -1,0 +1,542 @@
+wc9-prove: deadline 1794835811 (UTC-minted from creation_timestamp, ~15 min inside dead-man)
+== wc9-prove launch held(10) R=3 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+held-launched
+[06:09:19Z] held:RUN
+[06:09:22Z] ckpt-probe: {"distinct": 0, "completed": 0, "ok": true, "failing": []} (elapsed 8s)
+[06:10:25Z] held:RUN
+[06:10:28Z] ckpt-probe: {"distinct": 0, "completed": 0, "ok": true, "failing": []} (elapsed 73s)
+[06:11:31Z] held:RUN
+[06:11:33Z] ckpt-probe: {"distinct": 0, "completed": 3, "ok": true, "failing": []} (elapsed 139s)
+[06:12:36Z] held:RUN
+[06:12:39Z] ckpt-probe: {"distinct": 1, "completed": 4, "ok": true, "failing": []} (elapsed 205s)
+[06:13:43Z] held:RUN
+[06:13:46Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 272s)
+[06:14:49Z] held:RUN
+[06:14:52Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 338s)
+[06:15:55Z] held:RUN
+[06:15:58Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 404s)
+[06:17:02Z] held:RUN
+[06:17:06Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 472s)
+[06:18:10Z] held:RUN
+[06:18:14Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 540s)
+[06:19:17Z] held:RUN
+[06:19:20Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 606s)
+[06:20:23Z] held:RUN
+[06:20:27Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 673s)
+[06:21:30Z] held:RUN
+[06:21:34Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 740s)
+[06:22:36Z] held:RUN
+[06:22:40Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 806s)
+[06:23:43Z] held:RUN
+[06:23:46Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 872s)
+[06:24:49Z] held:RUN
+[06:24:53Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 939s)
+[06:25:57Z] held:RUN
+[06:26:02Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1008s)
+[06:27:05Z] held:RUN
+[06:27:08Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1074s)
+[06:28:11Z] held:RUN
+[06:28:15Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1141s)
+[06:29:18Z] held:RUN
+[06:29:21Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1207s)
+[06:30:24Z] held:RUN
+[06:30:27Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1273s)
+[06:31:30Z] held:RUN
+[06:31:32Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 1338s)
+[06:32:36Z] held:RUN
+[06:32:40Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1406s)
+[06:33:43Z] held:RUN
+[06:33:46Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1472s)
+[06:34:49Z] held:RUN
+[06:34:52Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1538s)
+[06:35:55Z] held:RUN
+[06:35:58Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1604s)
+[06:37:02Z] held:RUN
+[06:37:05Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1671s)
+[06:38:09Z] held:RUN
+[06:38:13Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1739s)
+[06:39:19Z] held:RUN
+[06:39:23Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1809s)
+[06:40:26Z] held:RUN
+[06:40:29Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1875s)
+[06:41:32Z] held:RUN
+[06:41:35Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 1941s)
+[06:42:39Z] held:RUN
+[06:42:42Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 2008s)
+[06:43:46Z] held:RUN
+[06:43:49Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 2075s)
+[06:44:53Z] held:RUN
+[06:44:57Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 2143s)
+[06:46:00Z] held:RUN
+[06:46:03Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 2209s)
+[06:47:06Z] held:RUN
+[06:47:09Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 2275s)
+[06:48:13Z] held:RUN
+[06:48:16Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2342s)
+[06:49:26Z] held:RUN
+[06:49:36Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2422s)
+[06:50:40Z] held:RUN
+[06:50:43Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2489s)
+[06:51:47Z] held:RUN
+[06:51:50Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2556s)
+[06:52:53Z] held:RUN
+[06:52:56Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2622s)
+[06:54:00Z] held:RUN
+[06:54:03Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2689s)
+[06:55:06Z] held:RUN
+[06:55:09Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2755s)
+[06:56:13Z] held:RUN
+[06:56:17Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2823s)
+[06:57:20Z] held:RUN
+[06:57:23Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2889s)
+[06:58:26Z] held:RUN
+[06:58:28Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 2954s)
+[06:59:32Z] held:RUN
+[06:59:35Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 3021s)
+[07:00:38Z] held:RUN
+[07:00:41Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 3087s)
+[07:01:46Z] held:RUN
+[07:01:49Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 3155s)
+[07:02:54Z] held:RUN
+[07:02:58Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 3224s)
+[07:04:00Z] held:RUN
+[07:04:03Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3289s)
+[07:05:07Z] held:RUN
+[07:05:11Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3357s)
+[07:06:15Z] held:RUN
+[07:06:17Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3423s)
+[07:07:21Z] held:RUN
+[07:07:24Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3490s)
+[07:08:27Z] held:RUN
+[07:08:30Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3556s)
+[07:09:33Z] held:RUN
+[07:09:35Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3621s)
+[07:10:39Z] held:RUN
+[07:10:42Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3688s)
+[07:11:44Z] held:RUN
+[07:11:47Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3753s)
+[07:12:50Z] held:RUN
+[07:12:53Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3819s)
+[07:13:56Z] held:RUN
+[07:13:58Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3884s)
+[07:15:01Z] held:RUN
+[07:15:05Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 3951s)
+[07:16:08Z] held:RUN
+[07:16:12Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 4018s)
+[07:17:15Z] held:RUN
+[07:17:18Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 4084s)
+[07:18:21Z] held:RUN
+[07:18:24Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 4150s)
+[07:19:27Z] held:RUN
+[07:19:31Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 4217s)
+[07:20:34Z] held:RUN
+[07:20:37Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4283s)
+[07:21:39Z] held:RUN
+[07:21:42Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4348s)
+[07:22:45Z] held:RUN
+[07:22:48Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4414s)
+[07:23:51Z] held:RUN
+[07:23:54Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4480s)
+[07:24:57Z] held:RUN
+[07:24:59Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4545s)
+[07:26:03Z] held:RUN
+[07:26:06Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4612s)
+[07:27:13Z] held:RUN
+[07:27:20Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4686s)
+[07:28:29Z] held:RUN
+[07:28:38Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4764s)
+[07:29:46Z] held:RUN
+[07:29:52Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4838s)
+[07:31:00Z] held:RUN
+[07:31:07Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4913s)
+[07:32:14Z] held:RUN
+[07:32:23Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 4989s)
+[07:33:29Z] held:RUN
+[07:33:37Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 5062s)
+[07:34:44Z] held:RUN
+[07:34:53Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 5139s)
+[07:36:02Z] held:RUN
+[07:36:10Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5216s)
+[07:37:22Z] held:RUN
+[07:37:32Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5298s)
+[07:38:49Z] held:RUN
+[07:39:05Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5391s)
+[07:40:15Z] held:RUN
+[07:40:34Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5480s)
+[07:41:46Z] held:RUN
+[07:41:56Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5562s)
+[07:42:59Z] held:RUN
+[07:43:01Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5627s)
+[07:44:10Z] held:RUN
+[07:44:12Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5698s)
+[07:45:15Z] held:RUN
+[07:45:17Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5763s)
+[07:46:26Z] held:RUN
+[07:46:32Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5838s)
+[07:47:46Z] held:RUN
+[07:47:56Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5922s)
+[07:49:01Z] held:RUN
+[07:49:03Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 5989s)
+[07:50:07Z] held:RUN
+[07:50:09Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 6055s)
+[07:51:11Z] held:RUN
+[07:51:13Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6119s)
+[07:52:16Z] held:RUN
+[07:52:18Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6184s)
+[07:53:21Z] held:RUN
+[07:53:23Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6249s)
+[07:54:31Z] held:RUN
+[07:54:34Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6320s)
+[07:55:37Z] held:RUN
+[07:55:39Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6385s)
+[07:56:41Z] held:RUN
+[07:56:43Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6449s)
+[07:57:45Z] held:RUN
+[07:57:47Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6513s)
+[07:58:50Z] held:RUN
+[07:58:52Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6578s)
+[07:59:54Z] held:RUN
+[07:59:56Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 6642s)
+[08:00:59Z] held:RUN
+[08:01:01Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 6707s)
+[08:02:04Z] held:RUN
+[08:02:07Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 6773s)
+[08:03:10Z] held:RUN
+[08:03:13Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 6839s)
+[08:04:20Z] held:RUN
+[08:04:24Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 6910s)
+[08:05:29Z] held:RUN
+[08:05:33Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 6979s)
+[08:06:40Z] held:RUN
+[08:06:44Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 7050s)
+[08:07:52Z] held:RUN
+[08:07:57Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 7123s)
+[08:09:06Z] held:RUN
+[08:09:12Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 7198s)
+[08:10:16Z] held:RUN
+[08:10:18Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 7264s)
+[08:11:21Z] held:RUN
+[08:11:24Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 7330s)
+[08:12:27Z] held:RUN
+[08:12:29Z] ckpt-probe: {"distinct": 3, "completed": 16, "ok": true, "failing": []} (elapsed 7395s)
+== checkpoint harvest 2026-11-16T08:12:29Z ==
+== CHECKPOINT 2026-11-16T08:12:37Z: 3 distinct members / 7395s elapsed → continue ({"distinct": 3, "completed": 16, "ok": true, "failing": []}) ==
+[08:13:40Z] held:RUN
+[08:14:43Z] held:RUN
+[08:15:46Z] held:RUN
+[08:16:51Z] held:RUN
+[08:17:54Z] held:RUN
+[08:18:57Z] held:RUN
+[08:19:59Z] held:RUN
+[08:21:03Z] held:RUN
+[08:22:07Z] held:RUN
+[08:23:11Z] held:RUN
+[08:24:14Z] held:RUN
+[08:25:18Z] held:RUN
+[08:26:21Z] held:RUN
+[08:27:23Z] held:RUN
+[08:28:27Z] held:RUN
+[08:29:30Z] held:RUN
+[08:30:33Z] held:RUN
+[08:31:36Z] held:RUN
+[08:32:39Z] held:RUN
+[08:33:41Z] held:RUN
+[08:34:45Z] held:RUN
+[08:35:48Z] held:RUN
+[08:36:51Z] held:RUN
+[08:37:54Z] held:RUN
+[08:38:58Z] held:RUN
+[08:40:00Z] held:RUN
+[08:41:04Z] held:RUN
+[08:42:07Z] held:RUN
+[08:43:10Z] held:RUN
+[08:44:13Z] held:RUN
+[08:45:17Z] held:RUN
+[08:46:20Z] held:RUN
+[08:47:24Z] held:RUN
+[08:48:27Z] held:RUN
+[08:49:30Z] held:RUN
+[08:50:33Z] held:RUN
+[08:51:37Z] held:RUN
+[08:52:40Z] held:RUN
+[08:53:43Z] held:RUN
+[08:54:46Z] held:RUN
+[08:55:50Z] held:RUN
+[08:56:52Z] held:RUN
+[08:57:55Z] held:RUN
+[08:58:58Z] held:RUN
+[09:00:01Z] held:RUN
+[09:01:03Z] held:RUN
+[09:02:06Z] held:RUN
+[09:03:08Z] held:RUN
+[09:04:11Z] held:RUN
+[09:05:14Z] held:RUN
+[09:06:17Z] held:RUN
+[09:07:19Z] held:RUN
+[09:08:22Z] held:RUN
+[09:09:25Z] held:RUN
+[09:10:28Z] held:RUN
+[09:11:31Z] held:RUN
+[09:12:33Z] held:RUN
+[09:13:36Z] held:RUN
+[09:14:39Z] held:RUN
+[09:15:42Z] held:RUN
+[09:16:45Z] held:RUN
+[09:17:48Z] held:RUN
+[09:18:51Z] held:RUN
+[09:19:54Z] held:RUN
+[09:20:57Z] held:RUN
+[09:21:59Z] held:RUN
+[09:23:02Z] held:RUN
+[09:24:05Z] held:RUN
+[09:25:08Z] held:RUN
+[09:26:11Z] held:RUN
+[09:27:13Z] held:RUN
+[09:28:17Z] held:RUN
+[09:29:20Z] held:RUN
+[09:30:23Z] held:RUN
+[09:31:26Z] held:RUN
+[09:32:28Z] held:RUN
+[09:33:32Z] held:RUN
+[09:34:35Z] held:RUN
+[09:35:38Z] held:RUN
+[09:36:40Z] held:RUN
+[09:37:43Z] held:RUN
+[09:38:46Z] held:RUN
+[09:39:49Z] held:RUN
+[09:40:52Z] held:RUN
+[09:41:55Z] held:RUN
+[09:43:03Z] held:
+[09:44:06Z] held:RUN
+[09:45:08Z] held:RUN
+[09:46:11Z] held:RUN
+[09:47:14Z] held:RUN
+[09:48:19Z] held:RUN
+[09:49:22Z] held:RUN
+[09:50:26Z] held:RUN
+[09:51:29Z] held:RUN
+[09:52:32Z] held:RUN
+[09:53:35Z] held:RUN
+[09:54:38Z] held:RUN
+[09:55:41Z] held:RUN
+[09:56:44Z] held:RUN
+[09:57:47Z] held:RUN
+[09:58:50Z] held:RUN
+[09:59:53Z] held:RUN
+[10:00:56Z] held:RUN
+[10:01:59Z] held:RUN
+[10:03:03Z] held:RUN
+[10:04:06Z] held:RUN
+[10:05:10Z] held:RUN
+[10:06:13Z] held:RUN
+[10:07:16Z] held:RUN
+[10:08:19Z] held:RUN
+[10:09:22Z] held:RUN
+[10:10:25Z] held:RUN
+[10:11:29Z] held:RUN
+[10:12:32Z] held:RUN
+[10:13:34Z] held:RUN
+[10:14:37Z] held:RUN
+[10:15:40Z] held:RUN
+[10:16:43Z] held:RUN
+[10:17:46Z] held:RUN
+[10:18:49Z] held:RUN
+[10:19:53Z] held:RUN
+[10:20:55Z] held:RUN
+[10:21:58Z] held:RUN
+[10:23:00Z] held:RUN
+[10:24:02Z] held:RUN
+[10:25:05Z] held:RUN
+[10:26:08Z] held:RUN
+[10:27:11Z] held:RUN
+[10:28:14Z] held:RUN
+[10:29:16Z] held:RUN
+[10:30:19Z] held:RUN
+[10:31:21Z] held:RUN
+[10:32:23Z] held:RUN
+[10:33:25Z] held:RUN
+[10:34:28Z] held:RUN
+[10:35:30Z] held:RUN
+[10:36:32Z] held:RUN
+[10:37:34Z] held:RUN
+[10:38:36Z] held:RUN
+[10:39:38Z] held:RUN
+[10:40:40Z] held:RUN
+[10:41:42Z] held:RUN
+[10:42:44Z] held:RUN
+[10:43:46Z] held:RUN
+[10:44:48Z] held:RUN
+[10:45:50Z] held:RUN
+[10:46:52Z] held:RUN
+[10:47:54Z] held:RUN
+[10:48:56Z] held:RUN
+[10:49:58Z] held:RUN
+[10:51:00Z] held:RUN
+[10:52:02Z] held:RUN
+[10:53:04Z] held:RUN
+[10:54:06Z] held:RUN
+[10:55:08Z] held:RUN
+[10:56:10Z] held:RUN
+[10:57:12Z] held:RUN
+[10:58:14Z] held:RUN
+[10:59:16Z] held:RUN
+[11:00:18Z] held:RUN
+[11:01:20Z] held:RUN
+[11:02:22Z] held:RUN
+[11:03:24Z] held:RUN
+[11:04:26Z] held:RUN
+[11:05:28Z] held:RUN
+[11:06:30Z] held:RUN
+[11:07:32Z] held:RUN
+[11:08:34Z] held:RUN
+[11:09:36Z] held:RUN
+[11:10:38Z] held:RUN
+[11:11:40Z] held:RUN
+[11:12:42Z] held:RUN
+[11:13:44Z] held:RUN
+[11:14:47Z] held:RUN
+[11:15:49Z] held:RUN
+[11:16:51Z] held:RUN
+[11:17:53Z] held:RUN
+[11:18:55Z] held:RUN
+[11:19:57Z] held:RUN
+[11:20:59Z] held:RUN
+[11:22:01Z] held:RUN
+[11:23:03Z] held:RUN
+[11:24:05Z] held:RUN
+[11:25:07Z] held:RUN
+[11:26:10Z] held:RUN
+[11:27:12Z] held:RUN
+[11:28:14Z] held:RUN
+[11:29:16Z] held:RUN
+[11:30:18Z] held:RUN
+[11:31:20Z] held:RUN
+[11:32:22Z] held:RUN
+[11:33:24Z] held:RUN
+[11:34:26Z] held:RUN
+[11:35:28Z] held:RUN
+[11:36:30Z] held:RUN
+[11:37:32Z] held:RUN
+[11:38:35Z] held:RUN
+[11:39:37Z] held:RUN
+[11:40:39Z] held:RUN
+[11:41:42Z] held:RUN
+[11:42:44Z] held:RUN
+[11:43:46Z] held:RUN
+[11:44:48Z] held:RUN
+[11:45:50Z] held:RUN
+[11:46:52Z] held:RUN
+[11:47:57Z] held:RUN
+[11:48:59Z] held:RUN
+[11:50:01Z] held:RUN
+[11:51:03Z] held:RUN
+[11:52:05Z] held:RUN
+[11:53:07Z] held:RUN
+[11:54:09Z] held:RUN
+[11:55:11Z] held:RUN
+[11:56:13Z] held:RUN
+[11:57:15Z] held:RUN
+[11:58:17Z] held:RUN
+[11:59:19Z] held:RUN
+[12:00:21Z] held:RUN
+[12:01:23Z] held:RUN
+[12:02:26Z] held:RUN
+[12:03:28Z] held:RUN
+[12:04:30Z] held:RUN
+[12:05:32Z] held:RUN
+[12:06:34Z] held:RUN
+[12:07:36Z] held:RUN
+[12:08:38Z] held:RUN
+[12:09:40Z] held:RUN
+[12:10:42Z] held:RUN
+[12:11:44Z] held:RUN
+[12:12:46Z] held:RUN
+[12:13:49Z] held:DONE
+== wc9-prove launch dev(4) R=2 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+dev-launched
+[12:13:53Z] dev:RUN
+[12:14:55Z] dev:RUN
+[12:15:57Z] dev:RUN
+[12:16:59Z] dev:RUN
+[12:18:01Z] dev:RUN
+[12:19:03Z] dev:RUN
+[12:20:05Z] dev:RUN
+[12:21:07Z] dev:RUN
+[12:22:10Z] dev:RUN
+[12:23:12Z] dev:RUN
+[12:24:14Z] dev:RUN
+[12:25:16Z] dev:RUN
+[12:26:18Z] dev:RUN
+[12:27:20Z] dev:RUN
+[12:28:22Z] dev:RUN
+[12:29:24Z] dev:RUN
+[12:30:27Z] dev:RUN
+[12:31:29Z] dev:RUN
+[12:32:31Z] dev:RUN
+[12:33:33Z] dev:RUN
+[12:34:35Z] dev:RUN
+[12:35:37Z] dev:RUN
+[12:36:39Z] dev:RUN
+[12:37:41Z] dev:RUN
+[12:38:43Z] dev:RUN
+[12:39:45Z] dev:RUN
+[12:40:47Z] dev:RUN
+[12:41:49Z] dev:RUN
+[12:42:51Z] dev:RUN
+[12:43:53Z] dev:RUN
+[12:44:55Z] dev:RUN
+[12:45:57Z] dev:RUN
+[12:47:00Z] dev:RUN
+[12:48:02Z] dev:RUN
+[12:49:04Z] dev:RUN
+[12:50:06Z] dev:RUN
+[12:51:08Z] dev:RUN
+[12:52:10Z] dev:RUN
+[12:53:12Z] dev:RUN
+[12:54:14Z] dev:RUN
+[12:55:16Z] dev:RUN
+[12:56:18Z] dev:RUN
+[12:57:20Z] dev:RUN
+[12:58:22Z] dev:RUN
+[12:59:25Z] dev:RUN
+[13:00:27Z] dev:RUN
+[13:01:29Z] dev:RUN
+[13:02:32Z] dev:RUN
+[13:03:34Z] dev:RUN
+[13:04:36Z] dev:RUN
+[13:05:38Z] dev:RUN
+[13:06:40Z] dev:RUN
+[13:07:42Z] dev:RUN
+[13:08:45Z] dev:RUN
+[13:09:47Z] dev:RUN
+[13:10:49Z] dev:RUN
+[13:11:51Z] dev:RUN
+[13:12:53Z] dev:RUN
+[13:13:55Z] dev:RUN
+[13:14:57Z] dev:RUN
+[13:15:59Z] dev:RUN
+[13:17:02Z] dev:RUN
+[13:18:04Z] dev:RUN
+[13:19:06Z] dev:RUN
+[13:20:08Z] dev:RUN
+[13:21:10Z] dev:RUN
+[13:22:12Z] dev:RUN
+[13:23:14Z] dev:RUN
+[13:24:16Z] dev:RUN
+[13:25:18Z] dev:RUN
+[13:26:20Z] dev:RUN
+[13:27:22Z] dev:RUN
+[13:28:24Z] dev:RUN
+[13:29:26Z] dev:RUN
+[13:30:28Z] dev:RUN
+wc9-prove: poll deadline

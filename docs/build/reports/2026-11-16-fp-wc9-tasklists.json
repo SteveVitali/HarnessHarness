@@ -1,0 +1,114 @@
+{
+ "coverage": "9/14 members carry a covering `admit` (reproofed) verdict \u2014 the Wc9 evidence re-proof on the hardened runner at the declared pinned commit 27ac8db9 under epoch-5 (sha256:e61a6ed9\u2026) ran the held leg to COMPLETION inside D=8h (~06:09Z\u2192~12:10Z, ~6h): the hh-reproof-packet/1 + register landed (prove-held) \u2014 9 `admit` + pypi-server `repair:machinery` (all 6 cells decided reward 0 \u2014 the standing append-only discordance class, recorded never excluded; query-optimize's standing discordance did NOT re-occur \u2014 admit). The R-8 early-inspection checkpoint FIRED 08:12:31Z at \u22653 distinct members' H-allow cells \u2192 all decided reward 1 \u2192 continue. The dev leg ran behind it: build-pmars + cancel-async-tasks all-4 cells decided reward 1; pytorch-model-cli H-pub 2/2 decided 1 + H-allow 2/2 decided reward 0 with the whole verify bootstrap mediated (69 eof tunnels \u2014 the recorded allowlist_gap{download.pytorch.org} AGENT-phase legit exclusion under A5/R-7, denied_hosts epoch-consistent); pytorch-model-recovery H-pub 2/2 decided 1 + H-allow in-flight when the in-guest dead-man STOPPED the instance at 74/76 cells \u2014 the dev packet never minted (driver poll deadline ~13:25Z minted UTC, honest fail:prove-driver-rc). Mediator stores: zero 5xx, eof-only closes, zero undecided, denied_hosts [] on every completed cell (the store-checker flags only the by-design agent-phase download.pytorch.org denies \u2014 recorded verbatim, same handling as smoke2). task_lists.state stays `blocked` verbatim: pypi-server's machinery{repair} discordance + the incomplete dev leg + pytorch-model-cli's exclusion leaving the easy dev slot with no covering member (the medium donor pool is fully consumed \u2014 REQ-XH-127(c) walk recorded) + the 3 standing blocked{no_adjacent_donor} slots. Post-Wc9 stop rule (A3/R-8) TRIGGERED: a member carries a machinery{\u2026} discordance \u2192 blockedOn + a scope-decision readout owed (options 2\u20135) \u2014 no Wc10 drafted. Subject legs keep withheld{un_reproofed_successor}/withheld{no_adjacent_donor}.",
+ "gate": "GATE-G28j",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "admitted{prove-plus-comm}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "admitted{make-doom-for-mips}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "admitted{torch-tensor-parallelism}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only incl. ~3.0 GB wheel tunnels, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "admitted{vulnerable-secret}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "blocked{machinery_discordance}",
+   "wc9_verdict": "repair:machinery \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all DECIDED but reward 0 on every cell (denied_hosts [], eof-only, 0 5xx) \u2014 the append-only discordance register class; a machinery repair is a further gate's scope, never excluded; post-Wc9 stop rule (A3/R-8) triggered \u2192 blockedOn + scope-decision readout owed, no Wc10"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "admitted{git-leak-recovery}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "admitted{polyglot-c-py}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "admitted{db-wal-recovery}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "admitted{sqlite-db-truncate}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "admitted{query-optimize}",
+   "wc9_verdict": "reproofed \u2014 O 1/1 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit) \u2014 the standing Wc4 repair:machinery discordance did NOT re-occur under epoch-5 on the hardened runner"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "blocked{incomplete_leg}",
+   "wc9_verdict": "incomplete{dead_man} \u2014 O 1/1 + H-pub 2/2 + H-allow 2/2 all decided reward 1 landed, but the dev packet never minted (in-guest dead-man STOP at 74/76 cells; driver poll deadline exhausted \u2192 fail:prove-driver-rc) \u2014 the per-cell evidence stands, no covering verdict recorded"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "blocked{incomplete_leg}",
+   "wc9_verdict": "incomplete{dead_man} \u2014 O 1/1 + H-pub 2/2 + H-allow 2/2 all decided reward 1 landed, but the dev packet never minted \u2014 same dead-man class as cancel-async-tasks"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{adjacent_order_exhausted}",
+   "wc9_verdict": "exclude:runner_infeasible:allowlist_gap{download.pytorch.org} \u2014 the recorded agent-phase legit exclusion (A5/R-7): H-pub 2/2 decided 1, H-allow 2/2 DECIDED reward 0 with the whole verify bootstrap mediated (69 eof tunnels, denied_hosts epoch-consistent) \u2014 the oracle's own torch install denied by the AGENT layer by design (X-06); the REQ-XH-127(c) walk records the easy dev cell's committed order exhausted and the shared medium donor pool fully consumed (build-pmars + pytorch-model-recovery serving their own slots, the rest excluded) \u2014 no covering successor exists"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "blocked{incomplete_leg}",
+   "wc9_verdict": "incomplete{dead_man} \u2014 O 1/1 + H-pub 2/2 decided reward 1 landed; H-allow cells in-flight at the in-guest dead-man STOP (74/76) \u2014 no packet, no covering verdict"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-1",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc9_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-2",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc9_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-3",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc9_verdict": "no_member_to_reproof"
+  }
+ ],
+ "recorded_at": "2026-11-16T14:05:00Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists": {
+  "state": "blocked"
+ },
+ "window": "wc9"
+}
