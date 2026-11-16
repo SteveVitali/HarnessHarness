@@ -20,6 +20,27 @@
 > dispositions the readout. Pending operator review is RETURN PASS; a failed technical prerequisite
 > is `blockedOn`. Agents never sign or infer approval; silence is not approval.
 
+## Criterion (verbatim from the spec)
+
+Spec [§10.3](../experiments-spec.md#s10), gate table (verbatim):
+
+> | PROV-Wc (at most once) | first | the triggering event: a W1 machinery repair (W1′), a gate-A L1 failure (W3′) or a restart overflow | compute quote (planning, bound, ceiling with restart, h_r and egress terms) within Wc's remaining reservation (at most $1.94, less any W1 export overrun taken from it); which of W1′, W3′ or restart overflow; D, restart and h_r; the repair's scope and its new participant or runner version record (REQ-XC-330); $0 model; Σ ≤ $20 recomputed (REQ-XH-118) |
+
+§10.1.4, Wc row (verbatim):
+
+> | Wc | at most one contingency window: a repair re-proof (W1′), an L1 rerun on gate-B (W3′), or a harvest-restart overflow; D = 4 h gives about 1.75 h of trial time after overhead, load and the admission cut-off (≈ 42 oracle trials at C = 4), and a larger repair is not runnable in the first pass, a scope decision PROV-Wc records | $0 | its own PROV-Wc gate | if not authorized by FP-E, its reservation is released to W4 except one restart-overflow reservation (REQ-XH-126) |
+
+Cited requirement, verbatim:
+
+> | **REQ-XH-004** | Every paid execution ticket SHALL be preceded by a GATE row whose readout records verbatim the model authorization, the compute authorization (separately), the quote id and the hard-cap formula. No ticket authorizes spend. | Readout template fields; the guard refuses dispatch of an execution row without a PASSED gate. · `AC-10.3-1` · D |
+
+Wc9 is a **recorded spec deviation — a ninth repair window**: the spec's gate table
+declares PROV-Wc "at most once" and the Wc row "at most one contingency window" —
+discharged at R6.45; the recorded Wc2–Wc8 amendments were discharged at R6.45b–R6.45h.
+Under the R-5/A2 accounting the first-pass compute ceiling is $30 (completed windows
+at billed/estimate figures, authorized-but-unrun at ceilings); the readout carries
+the amended budget table, never the superseded Σ-of-ceilings rule.
+
 ## What the readout must contain (pre-registered — every element present before presentation)
 
 1. **The Wc8 outcome** — `early_stop:operator_ruling R-1`, `blocked` verbatim, the D8/D9 machinery discordance observed live (first-error-line tally cited).

@@ -21,6 +21,22 @@
 > is `blockedOn`. Agents never sign or infer approval; silence is not approval. The readout's status
 > is set from the operator's R-3 words as recorded — the agent signs nothing.
 
+## Criterion (verbatim from the spec + the rulings)
+
+Spec [§10.3](../experiments-spec.md#s10), gate table (verbatim):
+
+> | PROV-Wc (at most once) | first | the triggering event: a W1 machinery repair (W1′), a gate-A L1 failure (W3′) or a restart overflow | compute quote (planning, bound, ceiling with restart, h_r and egress terms) within Wc's remaining reservation (at most $1.94, less any W1 export overrun taken from it); which of W1′, W3′ or restart overflow; D, restart and h_r; the repair's scope and its new participant or runner version record (REQ-XC-330); $0 model; Σ ≤ $20 recomputed (REQ-XH-118) |
+
+Cited requirement, verbatim:
+
+> | **REQ-XH-004** | Every paid execution ticket SHALL be preceded by a GATE row whose readout records verbatim the model authorization, the compute authorization (separately), the quote id and the hard-cap formula. No ticket authorizes spend. | Readout template fields; the guard refuses dispatch of an execution row without a PASSED gate. · `AC-10.3-1` · D |
+
+The smoke window class is **new** — it exists under amendment row A1 (R-3, recorded by
+R6.45i), not under the spec's declared table. The criterion this gate presents is
+therefore the amended-R-3 ruling verbatim (the GATE DECISIONS row) plus the §10.3
+gate-rule above: a smoke window is declared compute under an envelope, $0 model,
+non-evidence — never a declared spec window and never silently treated as one.
+
 ## The authorization this readout records (R-3, verbatim per the session's rulings)
 
 The non-evidence smoke envelope, **amended R-3** as recorded in the GATE DECISIONS row:
