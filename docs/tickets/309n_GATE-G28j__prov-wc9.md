@@ -69,3 +69,5 @@ the amended budget table, never the superseded Σ-of-ceilings rule.
 
 - The window's execution — R6.45m's body (fleshed after this gate).
 - Re-litigating R-3's smoke envelope or R-5's accounting — they are cited, not re-decided.
+
+> Amendment note 2026-11-16 (§10.5 rows A2 + A3 / ADR-0444, ADR-0445 — the amendments this contract already applies): the verbatim §10.3/§10.1.4 quotes above keep their pre-amendment bytes ("Σ ≤ $20 recomputed"; "at most one contingency window") — the spec body is frozen; the amendments govern in application as this contract states (the A2 budget table, never the superseded Σ-of-ceilings rule; the A3 ladder + prediction-track table + early-inspection checkpoint). Recorded so the dated register entry is resolvable from every row citing the old rule's text.

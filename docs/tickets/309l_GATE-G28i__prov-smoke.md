@@ -66,3 +66,5 @@ The non-evidence smoke envelope, **amended R-3** as recorded in the GATE DECISIO
 - Any evidence-window act: the smoke results are never re-proof evidence, never a `hh-reproof-packet/1` input, never a frozen-list outcome.
 - Wc9 itself — GATE-G28j + R6.45m own it; this envelope authorizes only the smoke loop.
 - The conformance leg — R6.45k's `egress-real-clients` is its own registered $0 leg, cited here only as smoke-context evidence.
+
+> Amendment note 2026-11-16 (§10.5 row A2 / ADR-0444; operator ruling R-5, LEDGER `## GATE DECISIONS` `intervention-2026-11-15`): the verbatim §10.3 PROV-Wc quote above carries the pre-amendment "Σ ≤ $20 recomputed" phrase — the spec body is frozen and the quote keeps its bytes; under A2 the first-pass compute accounting is ≤ $30 with completed windows at billed/estimate figures (never ceilings) and authorized-but-unrun at ceilings. The smoke envelope's own accounting is the R-3 envelope (each ≤ 1,250,000 µ$, Σ ≤ 3,500,000 µ$) declared above, counted under A2's rule.
