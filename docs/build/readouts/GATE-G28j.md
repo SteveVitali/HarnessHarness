@@ -214,3 +214,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G28j
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:6e59ff12d4222adf
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "ok, continue" (operator, interactive) in response to the PROV-Wc9 presentation. Disposition: **`run`** — R6.45m dispatches for the Wc9 body: PROV-Wc9 → LOAD → the hardened runner at pinned commit `27ac8db985207e1d8ad112ae0e9c55d7d5bff52b` under epoch-5 `sha256:e61a6ed9…` → re-proof at D=8h with the early-inspection checkpoint (≥3 distinct members' H-allow cells OR 2.5h into the prove leg — all decided reward 1 → continue, else `early_stop`) → frozen-list → teardown → upload → settle. The `verbatim_sha256` stamps onto `fp-wc9.json`.
