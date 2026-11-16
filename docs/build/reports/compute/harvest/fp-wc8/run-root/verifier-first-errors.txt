@@ -1,0 +1,49 @@
+# Wc8 — verifier first-error excerpts (R-9 cited excerpts; the raw run tree lives in the private archive `wc8/harvest/run-root.tar.gz` sha256:56f65cc25204d4c3c3589bfb9d799b0e4f5f7eb06d128aa3e0460cafabe0ac99)
+#
+# First-error-line tally across the 4 completed H-allow cells — 4/4 identical signature:
+#   1. debconf: delaying package configuration, since apt-utils is not installed   (apt ran — apt update+install SUCCEEDED through the mediator)
+#   2. curl: (28) Proxy CONNECT aborted due to timeout                              ← FIRST ERROR — the HTTPS CONNECT starved
+#   3. /tests/test.sh: line 10: /root/.local/bin/env: No such file or directory    (uv install.sh never landed)
+#   4. /tests/test.sh: line 19: uvx: command not found                             (pytest never ran → reward.txt = 0)
+#
+# ── trials/prove-plus-comm/H-allow/r0/collect/test-stderr.txt (cell-report: verifier_unavailable:bootstrap:signature, denied_hosts: [], agent_end exited{0}, reward_ppm null) ──
+debconf: delaying package configuration, since apt-utils is not installed
+curl: (28) Proxy CONNECT aborted due to timeout
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found
+# events.wal — the allowed CONNECT starved (verbatim rows):
+security.egress.decided  {decision:"allow", decided_by:"policy", host_norm:"astral.sh", port:443, method:"CONNECT", protocol:"https_connect", checked_addrs:[104.26.13.77, 104.26.12.77, 172.67.68.3, 2606:4700:20::…]}
+security.egress.tunnel.closed {bytes_down:0, bytes_up:812, close_cause:"eof", duration_ms:300492, host_norm:"astral.sh", port:443, request_ref:"sha256:a0ded472c010bbdb0a3da4b479a6de5437f7fa931f752c78ddf9dde36f22cbbf"}
+# (a second CONNECT — releases.astral.sh:443 — was requested and allowed; the cell ended before it could complete)
+
+# ── trials/prove-plus-comm/H-allow/r1/collect/test-stderr.txt (same classification) ──
+debconf: delaying package configuration, since apt-utils is not installed
+curl: (28) Proxy CONNECT aborted due to timeout
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found
+security.egress.tunnel.closed {bytes_down:0, bytes_up:812, close_cause:"eof", duration_ms:300543, host_norm:"astral.sh", port:443}
+
+# ── trials/prove-plus-comm/H-allow/r2/collect/test-stderr.txt (same classification) ──
+debconf: delaying package configuration, since apt-utils is not installed
+curl: (28) Proxy CONNECT aborted due to timeout
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found
+security.egress.tunnel.closed {bytes_down:0, bytes_up:812, close_cause:"eof", duration_ms:300470, host_norm:"astral.sh", port:443}
+
+# ── trials/make-doom-for-mips/H-allow/r0/collect/test-stderr.txt (agent_end agent_timeout; same classification) ──
+debconf: delaying package configuration, since apt-utils is not installed
+curl: (28) Proxy CONNECT aborted due to timeout
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found
+security.egress.tunnel.closed {bytes_down:0, bytes_up:788, close_cause:"eof", duration_ms:300671, host_norm:"astral.sh", port:443}
+
+# Diagnosis (machinery evidence, REQ-XB-125 — discordance repaired, never excluded):
+#   The allowed astral.sh:443 CONNECT tunnel pumped the client's ~800 B up and ZERO bytes
+#   down for ~300 s until curl's timeout — the single-threaded sequential mediator
+#   (hh_egress_mediator.rs: for conn in listener.incoming() { serve_conn(...) }) plus the
+#   blocking tunnel pump (egress.rs forward_tunnel: std::io::copy both directions, no
+#   concurrency) starved the HTTPS leg — the audit's D8/D9, matching Wc7's CONNECT-hang
+#   evidence. denied_hosts: [] on every cell — the requests were ALLOWED; this is a
+#   machinery discordance, never an allowlist_gap. The max_body 128MiB + duplicate-Host
+#   repairs held: apt's whole update+install flowed through the same mediator (curl's own
+#   .deb installed); only the CONNECT tunnel starved.
