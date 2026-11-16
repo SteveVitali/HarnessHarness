@@ -45,6 +45,8 @@ needs. A Round-6 contract cites this file by clause ID instead of restating it.
    banned claims phrasing (`scripts/claims-lexicon.json` once landed; until then the
    `scripts/check-position.sh` list).
 
+> **Amendment note 2026-11-16 (§10.5 row A2 / ADR-0444; operator ruling R-5, verbatim in the LEDGER `## GATE DECISIONS` `intervention-2026-11-15` row):** X-02's figures are superseded in application — the first-pass total ceiling is **$110** (was $100); first-pass **compute ≤ $30** (was $20 as Σ of declared ceilings); completed windows count at HUMAN-H18 billed figures where a reconcile read exists, else at their recorded `cost_lib` estimate (PHASE_SPEND) — never at their ceilings; authorized-but-unrun windows count at ceilings; model ≤ $70 and the $10 unauthorized reserve are unchanged. X-02's other clauses stand: purchased Ollama credit counts in full (Q-X63 — against the amended $110), no contract authorizes spend, spend is authorized only by a recorded gate readout quoting the amount verbatim (REQ-XH-004), enforcement stays mechanical. The recorded Σ-of-declared-ceilings exceed history (≈ $38.38) is superseded, never erased.
+
 ## Operating clauses
 
 - **XO-01 Orientation.** Deferrals first (`bash scripts/deferrals-open.sh`), then this row's
