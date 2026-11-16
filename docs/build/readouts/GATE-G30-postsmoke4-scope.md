@@ -1,5 +1,5 @@
 # GATE-G30 — post-smoke4 scope decision: the diagnostic window verified the exec-drain repair AND named a new machinery defect class (`machinery{model-port-collision}` — the in-cell model relay owns 127.0.0.1:8080, the task's own `pypi-server -p 8080` gets EADDRINUSE, the upload POST lands on the never-answering model stub → deterministic H-allow `agent_timeout` ×2) → `blockedOn` stands; the §6 ladder; no smoke5, no Wc10 · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -104,3 +104,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G30 (post-smoke4 scope decision)
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "continue" (operator, interactive) in response to the GATE-G30 post-smoke4 scope-decision presentation (agent-drafted block sha256 `4909a2d7ab18`). Disposition: **`re-scope{harden-again}`** — the verbatim is terse continuation language, and `harden-again` is the only ladder option that continues the machinery line (the operator's third consecutive continuation answer, same mapping as "I authorized, proceed" at the post-Wc9 decision); the alternatives all stop or redirect the line, which "continue" cannot mean. The disposition dispatches a bounded repair of the diagnosed `machinery{model-port-collision}` — typed refusal on bind conflict and/or a task-aware relay-port assignment, with a regression battery, the same $0-repair → gated-diagnostic pattern the exec-drain followed. Any verification of that repair returns through its own gate and PROV under REQ-XH-004 (smoke5's minted declaration stands authorized-but-unrun under the GATE-G28k envelope for exactly that bounded purpose); **no Wc10 is drafted**; `task_lists.state` stays `blocked` verbatim pending it.
