@@ -1,5 +1,5 @@
 # GATE-G30 — post-Wc9 scope decision: the A3/R-8 stop rule's `blockedOn` presentation (pypi-server `repair:machinery` + dev leg `incomplete{dead_man}` + the exhausted REQ-XH-127(c) walk → `task_lists.state: blocked` verbatim; the §6 ladder, options 2–5; no Wc10 is drafted) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -254,3 +254,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G30 (post-Wc9 scope decision)
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "I authorized, proceed" (operator, interactive) in response to the GATE-G30 post-Wc9 scope-decision presentation (agent-drafted block sha256 `b86dd62d86622512`). Disposition: **`re-scope{harden-again}`** — the bounded post-repair diagnostic line. The records-only diagnosis already discriminated machinery-vs-task-provability: the `agent_timeout` signature is the shared `exec_guarded` capture path's undrained pipes, repaired at `0c4e0547` + `4679635d` on `codex/harnessharness-exec-drain` (PR #404; the XO-05 `exec_drain` battery passes 4/4 post-fix and the agent's captured streams now persist as `collect/agent-{stdout,stderr}.txt`). The instrument that remains is the diagnosis's prescribed post-repair verification — a bounded non-evidence smoke leg on pypi-server + make-doom-for-mips under a NEW smoke envelope (the R-3 smoke class, A1 label). A run-time gate insert (`GATE-G28k` envelope + `R6.45n` smoke body) presents that envelope; any smoke returns through its own PROV under REQ-XH-004; **no Wc10 is drafted**; the task list stays `blocked` verbatim pending it.
