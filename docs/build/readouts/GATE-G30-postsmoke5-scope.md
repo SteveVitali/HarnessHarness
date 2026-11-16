@@ -1,5 +1,5 @@
 # GATE-G30 — post-smoke5 scope decision: the diagnostic envelope is CLOSED and BOTH named machinery defect classes carry recorded repair + live verification (`machinery{exec-pipe-undrained}` smoke4, `machinery{model-port-collision}` smoke5 — 4/4 cells `exited{0}` reward 1 incl. the previously deterministic-timeout member+plane); no new defect class named → `blockedOn` lifts toward the frozen-list continuation's own gate per the 309q exit clause; no further spend under this envelope · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -132,3 +132,5 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G30 (post-smoke5 scope decision)
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+> **Signature (Reading 1, 2026-11-16)** — verbatim "continue" (operator, interactive) in response to the GATE-G30 post-smoke5 scope-decision presentation (agent-drafted block sha256 `2b5458fedfe0`). Disposition: **`continuation{frozen-list-gate}`** — the verbatim is terse continuation language, and `continuation{frozen-list-gate}` is the only ladder option that continues the chain (the operator's fourth consecutive continuation answer, same mapping as "continue" → `re-scope{harden-again}` at the post-smoke4 decision and "I authorize, please continue" → `envelope_authorized` at G28k); `re-scope{end-first-pass-early}` and `not_run` both stop the line, which "continue" cannot mean. The disposition: the chain proceeds to the frozen-list continuation's own gate presentation — G-L1 / GATE-G29 per the manifest chain, its `full`|`fallback` dispositions over its own evidence chain, created from `_TEMPLATE.md` at presentation; any `run`-shape continuation under it returns through its own PROV readout under REQ-XH-004. No further spend under GATE-G28k (envelope closed); `task_lists.state` stays `blocked` verbatim pending the continuation's own records.
