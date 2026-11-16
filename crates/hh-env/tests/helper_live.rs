@@ -1160,10 +1160,23 @@ fn ac_s2_detached_child_is_detected() {
         !detached.is_empty(),
         "a live background child must surface in detached[]"
     );
-    // Clean up the orphan.
-    let _ = std::process::Command::new("pkill")
-        .args(["-f", "sleep 30"])
-        .status();
+    // Clean up the orphan — signal only this execution's own detached
+    // group (`process_ref = "pgrp:<pgid>"`). A command-line match
+    // (`pkill -f "sleep 30"`) also hit every other `sleep 30` on the host —
+    // including `ac_s2_deadline_is_helper_enforced`'s child running
+    // concurrently in this binary, which then died of an unsolicited
+    // SIGTERM before its deadline (exit 143, no `failure`) and settled
+    // `executor_error` instead of `timeout`.
+    for d in &detached {
+        if let Some(pgid) = d
+            .get("process_ref")
+            .and_then(Json::as_str)
+            .and_then(|r| r.strip_prefix("pgrp:"))
+            .and_then(|p| p.parse::<u32>().ok())
+        {
+            hharness_helper::exec::kill_group(pgid, 9);
+        }
+    }
     client.shutdown();
 }
 
