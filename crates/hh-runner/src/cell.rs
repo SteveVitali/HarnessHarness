@@ -514,6 +514,21 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
     } else {
         report.agent_end_cause = EndCause::Exited(agent.exit_code.unwrap_or(-1));
     }
+    // The agent exec's captured streams are evidence exactly like the
+    // verifier's `test-*.txt`: a phase whose transcript is dropped
+    // with the `CellOutcome` leaves a timed-out/failed cell no
+    // recorded bytes (the Wc9 pypi-server freeze position had to be
+    // inferred from the oracle transcript + the mediator WAL, never
+    // byte-confirmed). Persist non-empty streams verbatim —
+    // `agent-*.txt` sits beside the reward files at the collect top
+    // level; the per-attempt re-materialization never touches it.
+    let _ = std::fs::create_dir_all(&plan.collect_dir);
+    if !agent.stdout.is_empty() {
+        let _ = std::fs::write(plan.collect_dir.join("agent-stdout.txt"), &agent.stdout);
+    }
+    if !agent.stderr.is_empty() {
+        let _ = std::fs::write(plan.collect_dir.join("agent-stderr.txt"), &agent.stderr);
+    }
     listing(cell, "agent", &mut report.listings);
     // ST4 — seal is the store-side row; the drive records the boundary,
     // then the kernel-mediated `/logs/agent` copy-out (REQ-XC-317 —

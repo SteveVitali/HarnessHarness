@@ -21,7 +21,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use hharness_runner::cell::exec_guarded;
+use hharness_runner::cell::{
+    exec_guarded, run_cell, CellError, CellExec, CellOps, CellOutcome, CellPlan, DeadlineSource,
+};
+use hharness_runner::disposition::EndCause;
 
 /// `HH_PODMAN_BIN`/`HH_PODMAN_LOG` are process-global — the stub legs
 /// serialize on this lock so parallel test scheduling never crosses two
@@ -234,6 +237,120 @@ fn xo05_lapse_outcome_keeps_all_drained_bytes() {
     // partial stream is all ~160 KiB, never the ~64 KiB pipe residue.
     assert_eq!(out.stdout.len(), (OUT_KIB * 1024) as usize);
     assert!(out.stdout.iter().all(|b| *b == b'D'));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ── XO-05e — a lapsed agent's streams land in the collect dir ─────────
+
+/// The diagnosis's observability candidate (`secondary_site`): the
+/// agent exec's captured streams ride back in `CellOutcome` but
+/// `run_cell` dropped them — the H-cell agent transcript was never
+/// persisted to the cell dir, so pypi-server's freeze position had to
+/// be inferred from the oracle transcript + the mediator WAL, never
+/// byte-confirmed. Pre-fix `collect/agent-stdout.txt` and
+/// `collect/agent-stderr.txt` never exist; post-fix they carry the
+/// exec's bytes verbatim (the verifier streams' `test-*.txt` rule —
+/// non-empty streams only — applied to the agent phase).
+struct ScriptedCell {
+    agent_out: Vec<u8>,
+    agent_err: Vec<u8>,
+    terminated: Vec<String>,
+}
+
+impl CellOps for ScriptedCell {
+    fn present(&mut self, _p: &str) -> Result<bool, CellError> {
+        Ok(false)
+    }
+    fn ls_dir(&mut self, _p: &str) -> Result<Vec<String>, CellError> {
+        Ok(vec![])
+    }
+    fn cp_in(&mut self, _s: &std::path::Path, _d: &str) -> Result<(), CellError> {
+        Ok(())
+    }
+    fn cp_out(&mut self, s: &str, d: &std::path::Path) -> Result<(), CellError> {
+        // Attempt 1's verifier produced reward.txt = 1 — the drive
+        // decides and stops after one attempt.
+        if s == "/logs/verifier/reward.txt" {
+            std::fs::write(d, b"1\n").map_err(|e| CellError {
+                op: "cp_out",
+                detail: e.to_string(),
+            })
+        } else {
+            Err(CellError {
+                op: "cp_out",
+                detail: format!("no file {s}"),
+            })
+        }
+    }
+    fn rm_glob(&mut self, _g: &str) -> Result<(), CellError> {
+        Ok(())
+    }
+    fn exec(&mut self, spec: &CellExec) -> Result<CellOutcome, CellError> {
+        if spec.argv == ["bash", "/solution/solve.sh"] {
+            // The pypi-server shape: the agent lapsed its deadline —
+            // the exec kept every captured byte but the outcome is a
+            // lapse (the stub's own drain made this reachable; the
+            // pre-drain code would have parked here instead).
+            return Ok(CellOutcome {
+                exit_code: None,
+                timed_out: true,
+                stdout: self.agent_out.clone(),
+                stderr: self.agent_err.clone(),
+            });
+        }
+        Ok(CellOutcome {
+            exit_code: Some(0),
+            timed_out: false,
+            stdout: vec![],
+            stderr: vec![],
+        })
+    }
+    fn terminate_group(&mut self, p: &str) -> Result<(), CellError> {
+        self.terminated.push(p.to_string());
+        Ok(())
+    }
+}
+
+#[test]
+fn xo05_lapsed_agent_streams_land_in_collect() {
+    let dir = scratch("agent-transcript");
+    let staging = dir.join("staging");
+    std::fs::create_dir_all(staging.join("tests")).unwrap();
+    let collect = dir.join("collect");
+    let mut cell = ScriptedCell {
+        agent_out: vec![b'A'; 78_095], // pypi-server's oracle transcript size
+        agent_err: b"agent-err-line\n".to_vec(),
+        terminated: vec![],
+    };
+    let plan = CellPlan {
+        oracle_participant: false,
+        workdir: "/app".to_string(),
+        host_staging: staging,
+        collect_dir: collect.clone(),
+        agent_argv: vec!["bash".into(), "/solution/solve.sh".into()],
+        agent_deadline_ms: Some(900_000),
+        agent_deadline_source: DeadlineSource::TaskToml,
+        verifier_argv: vec!["bash".into(), "/tests/test.sh".into()],
+        verifier_deadline_ms: Some(600_000),
+        verifier_deadline_source: DeadlineSource::TaskToml,
+        max_grade_attempts: 2,
+        logs_copyout: None,
+    };
+    let report = run_cell(&mut cell, &plan).unwrap();
+    // The lapse end-cause and the group termination are unchanged.
+    assert_eq!(report.agent_end_cause, EndCause::AgentTimeout);
+    assert_eq!(cell.terminated, vec!["agent".to_string()]);
+    // The captured agent streams land verbatim in the collect dir —
+    // pre-fix both members were absent (the bytes died with the
+    // dropped CellOutcome).
+    assert_eq!(
+        std::fs::read(collect.join("agent-stdout.txt")).unwrap(),
+        cell.agent_out
+    );
+    assert_eq!(
+        std::fs::read(collect.join("agent-stderr.txt")).unwrap(),
+        cell.agent_err
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
