@@ -1,5 +1,5 @@
 # GATE-G28l — PROV-Wc10: authorize the Wc10 evidence re-proof's compute (the re-proof on the verified machinery at pinned `b3f72ab7`, epoch-5, D = 8 h, `model_port` in the dynamic/private band) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -85,10 +85,8 @@ claims never fabricate `frozen`.
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
-<!-- Appended only when the operator has answered; an agent never writes these lines on its own authority:
-Operator decision (verbatim, received <date -u +%FT%TZ> via <channel>): "<exact words>"
-Disposition: <run | not_run | re-scope{harden-again} | re-scope{exclude-and-replace} | re-scope{end-first-pass-early}>; basis: "<words>"
-GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G28l (PROV-Wc10)
-Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
-Signed by: the operator. Recorded by <harness/model>, which does not sign.
--->
+Operator decision (verbatim, received 2026-11-16T23:26:47Z via interactive): "ok, run and continue"
+Disposition: run; basis: "ok, run and continue"
+GATE DECISIONS row: 2026-11-16T23:26:47Z | GATE-G28l (PROV-Wc10)
+Operator confirmation of agent-drafted text (verbatim, 2026-11-16T23:26:47Z): "ok, run and continue" — covers sha256:713df7089baa
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.

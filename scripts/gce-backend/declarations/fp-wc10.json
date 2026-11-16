@@ -5,7 +5,7 @@
   "model_line": "none",
   "quote_id": "pq-a2d99ef16c6c3814",
   "readout_path": "docs/build/readouts/GATE-G28l.md",
-  "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  "verbatim_sha256": "1b8292c0487dd01b30dde67b5e32518b2c96d7808a002bed3f2ee65bb7b828b7"
  },
  "boot_disk": {
   "size_gib": 300,
