@@ -191,6 +191,22 @@ fn upstream(serve: impl FnOnce(TcpStream) + Send + 'static) -> u16 {
     port
 }
 
+/// Read an upstream fixture's request head through the blank line, so no
+/// request bytes remain unread when the fixture closes (a Linux close with
+/// unread receive data aborts the connection with RST).
+fn drain_request_head(s: &TcpStream) {
+    let mut r = BufReader::new(s);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match r.read_line(&mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) if line == "\r\n" || line == "\n" => return,
+            Ok(_) => {}
+        }
+    }
+}
+
 fn read_head(r: &mut impl BufRead) -> (u16, Vec<(String, String)>) {
     let mut status = 0u16;
     let mut hdrs = Vec::new();
@@ -731,8 +747,12 @@ fn d13_large_body_streams_bounded() {
     // the streaming path delivers it whole, Vec-free (bounded RSS).
     const SIZE: usize = 250 * 1024 * 1024;
     let port = upstream(move |mut s| {
-        let mut b = [0u8; 512];
-        let _ = s.read(&mut b);
+        // Consume the whole request head, not one `read`: the mediator
+        // writes the request in several segments, and a close with
+        // unread bytes in the receive queue makes Linux send RST
+        // (discarding the still-unsent tail of the 250 MiB body) instead
+        // of a FIN — the client then sees ECONNRESET mid-body.
+        drain_request_head(&s);
         let _ =
             s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {SIZE}\r\n\r\n").as_bytes());
         let chunk = vec![7u8; 1024 * 1024];
