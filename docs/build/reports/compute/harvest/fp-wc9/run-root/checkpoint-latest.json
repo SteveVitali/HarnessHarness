@@ -1,0 +1,190 @@
+{
+ "all_decided_reward1": true,
+ "cells": {
+  "make-doom-for-mips/H-allow/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 20
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-allow/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 18
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-allow/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 20
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 42
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "undecided_requests": 0,
+   "verify_attempts": 1
+  }
+ },
+ "cells_completed": 16,
+ "distinct_h_allow_members": 3,
+ "failing_checkpoint_cells": [],
+ "h_allow_completed": 7,
+ "members_with_h_allow": [
+  "make-doom-for-mips",
+  "prove-plus-comm",
+  "torch-tensor-parallelism"
+ ],
+ "run_root": "/var/lib/hh/runs/run-root-wc9",
+ "schema": "hh-wc9-checkpoint/1-window-local"
+}

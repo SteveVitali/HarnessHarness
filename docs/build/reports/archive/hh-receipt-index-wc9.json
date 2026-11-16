@@ -1,0 +1,243 @@
+{
+ "artifacts": [
+  {
+   "bytes": 16676464,
+   "name": "run-root.tar.gz",
+   "note": "the byte-exact harvested tar \u2014 non-UTF8 (unscannable by the REQ-XH-103 prescan); the tree rides as the prescanned wc9/run-root-tree.json bundle (1949 UTF-8 members, 9 non-UTF8 skipped) + per-member sha256 in wc9/harvest/MANIFEST.sha256; tar bytes retained in ~/hh-retained/wc9/harvest/run-root.tar.gz",
+   "path": null,
+   "role": "run_root_tar",
+   "sha256": "f8b4d05e5ab6ad1d57b3feac7cc0d4277eacf121914180df14500ff49bac61b0",
+   "upload": "digest_only",
+   "window": "wc9"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "wc9-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "3bd732420558a75bdfad3091f90190af443a1d97",
+    "verify_receipt": "docs/build/reports/archive/2026-11-16-fp-smoke2-verify.json",
+    "window": "smoke2"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 3751,
+     "path": "wc9/2026-11-16-fp-wc9-cost.json",
+     "role": "window_record",
+     "sha256": "15b1ae4297d3d1e6cd626f579356933c821177de5c82503ee64b1a520d394138"
+    },
+    {
+     "bytes": 25665,
+     "path": "wc9/2026-11-16-fp-wc9-harvest.json",
+     "role": "window_record",
+     "sha256": "a8f0c3593f01c6b5481f27becf194485773c58b22c09436ae68fa74a66c84bac"
+    },
+    {
+     "bytes": 2509,
+     "path": "wc9/2026-11-16-fp-wc9-prepull.json",
+     "role": "window_record",
+     "sha256": "bc6cadae8c74e863dbb4f80ad26310d15d0dc655d50d786bea5dd46baefc11b1"
+    },
+    {
+     "bytes": 17871,
+     "path": "wc9/2026-11-16-fp-wc9-provision.json",
+     "role": "window_record",
+     "sha256": "50b97dc84640c464e5f229ddc4ca29662c2e5b3d76922203e73f0351cb67eecd"
+    },
+    {
+     "bytes": 7265,
+     "path": "wc9/2026-11-16-fp-wc9-tasklists.json",
+     "role": "window_record",
+     "sha256": "78d06f851a26f01a5e3e54124ebf8629ec277ecefc38bf6f37f234a6788ddf83"
+    },
+    {
+     "bytes": 53957,
+     "path": "wc9/2026-11-16-fp-wc9-teardown.json",
+     "role": "window_record",
+     "sha256": "84e5f138595d3892098ee94cc7c43e8fb46bdb2a17d7c49e2f7814e50ff1e71c"
+    },
+    {
+     "bytes": 17068,
+     "path": "wc9/2026-11-16-fp-wc9-verify.json",
+     "role": "window_record",
+     "sha256": "810ca68b0de1ec545f7f3f02e5cd94d3ed7de0d35b04b02951129ddde1524b34"
+    },
+    {
+     "bytes": 24969931,
+     "path": "wc9/run-root-tree.json",
+     "role": "window_record",
+     "sha256": "1efb67657a159d946527effde29fef7fa68949c2f3c758cbc3f02e52fd9d342e"
+    },
+    {
+     "bytes": 265660,
+     "path": "wc9/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "d5bcafc5492425412ed834f421cc5c1da34bbd2651221ac7ae2a8cd93fc4c118"
+    },
+    {
+     "bytes": 5450052,
+     "path": "wc9/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "d6349d6227592e3c8308ab10a06a6a24d7c86f8b95b09b8b122811b311589d53"
+    },
+    {
+     "bytes": 157266,
+     "path": "wc9/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "6f615b2089bbfa3892227e0a667915cbf6d0d609734da293b4f61be70e6e14b3"
+    },
+    {
+     "bytes": 19,
+     "path": "wc9/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "d3786b1c11a6c51624bdfdb6bf394a5199cdcb995140fc0d4ebcf573c29ee8c2"
+    },
+    {
+     "bytes": 1296,
+     "path": "wc9/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "cdf4e1a81bf47bc3d414a84dd9ed0f9e7717ad84b7824b684aefa6022b0bd1be"
+    },
+    {
+     "bytes": 577,
+     "path": "wc9/wiring/cfg-dev.json",
+     "role": "window_record",
+     "sha256": "4353a3680a905e6cbdd8d109d2bb0e618678031835e26abc66b174f0e5a9ae27"
+    },
+    {
+     "bytes": 577,
+     "path": "wc9/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "4aca20f194ac7e4a1613ee2607d78c6ac3146f933879166c42ec052d250d5ec4"
+    },
+    {
+     "bytes": 971,
+     "path": "wc9/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "a73b81af88c9102ae12b1e85acc063c20e1b88373cb02f1caf8c2be1212512c7"
+    },
+    {
+     "bytes": 516,
+     "path": "wc9/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 252,
+     "path": "wc9/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "99c10d7f2f47f6a4cc04b1716b48fc4cd144357f6cbf8feb66b2f8f97dbcfb1a"
+    },
+    {
+     "bytes": 4242,
+     "path": "wc9/wiring/wc9-checkpoint.py",
+     "role": "window_record",
+     "sha256": "6660d29ef5244dbb592f2d400317cfef1521671e5a716c7919c106308e6ccfe6"
+    },
+    {
+     "bytes": 4523,
+     "path": "wc9/wiring/wc9-closeout.py",
+     "role": "window_record",
+     "sha256": "bc54989b7fd3ac77b1971c728d504de4ca71a745525b506f9fd1e8ebbe46c6d0"
+    },
+    {
+     "bytes": 2992,
+     "path": "wc9/wiring/wc9-load-infra.py",
+     "role": "window_record",
+     "sha256": "a429f8ff9c8fda85dded26940ff4956ec51bdcbced9e8229f6233fc5b2a51d04"
+    },
+    {
+     "bytes": 7219,
+     "path": "wc9/wiring/wc9-prove.sh",
+     "role": "window_record",
+     "sha256": "76f7a22b21594527b13f21bfb277d866f78de7320c2a6cf9803a00e731607801"
+    },
+    {
+     "bytes": 2958,
+     "path": "wc9/wiring/wc9-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5407,
+     "path": "wc9/wiring/wc9-setup.sh",
+     "role": "window_record",
+     "sha256": "82ad3dea0317271c160a2e2511e03657916df74c0fd28c8d8d569df939297fd2"
+    },
+    {
+     "bytes": 4809,
+     "path": "wc9/wiring/wc9-store-check.py",
+     "role": "window_record",
+     "sha256": "cbecdaed3a2e198fbb7881a2fd07594715d07357614c26026c3887879b29bea8"
+    },
+    {
+     "bytes": 1360,
+     "path": "wc9/live/2026-11-16-reproof-wc9.json",
+     "role": "window_record",
+     "sha256": "346961a368d1aa8b78683a3c13491a04e160bb5ad0dd8547d857495fd1cc80ec"
+    },
+    {
+     "bytes": 20270,
+     "path": "wc9/live/2026-11-16-reproof-wc9.transcript.txt",
+     "role": "window_record",
+     "sha256": "da910947718b261a05e7d1a3d43d35a7f2fa0e9859bca21256dfc6c94d589c8d"
+    },
+    {
+     "bytes": 4577,
+     "path": "wc9/run-root/checkpoint-latest.json",
+     "role": "window_record",
+     "sha256": "c75bc868ee6061ac41657da2ed0c6b619cf9658890604d47f79b3770cbb9f984"
+    },
+    {
+     "bytes": 1275,
+     "path": "wc9/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "d143ca6c9100e2dad2df2fac4af4bde478006f63cba723a7dabb2e9d53d1084b"
+    },
+    {
+     "bytes": 293,
+     "path": "wc9/run-root/runner-digests.txt",
+     "role": "window_record",
+     "sha256": "f3c824ee4c35f283d6d3fab42e1ee62342c6da4a64ba4cba2e0cfcfa3248c371"
+    },
+    {
+     "bytes": 2363,
+     "path": "wc9/run-root/verifier-first-errors.txt",
+     "role": "window_record",
+     "sha256": "61f16eda0c1714a1a8fcfc54720f740b5fc7b4e2c00205efa371997b44c37b38"
+    },
+    {
+     "bytes": 26124,
+     "path": "wc9/run-root/wc9-store-check.json",
+     "role": "window_record",
+     "sha256": "dfd780dd1cc959111e8c4005ef3d6d4d920948a505b48fc0507a4b1e0ddb0ce6"
+    },
+    {
+     "bytes": 20609,
+     "path": "wc9/run-root/wc9-window-record.json",
+     "role": "window_record",
+     "sha256": "9115fb8fefec676bd6aa54c77adf5b8ca6c213725f5426fc3414d891a15bdb21"
+    },
+    {
+     "bytes": 4351,
+     "path": "wc9/run-root/prove-held/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "7416013e0ffe6a52bd02584f2c2a695024ae15709c3274519cc83d31b545c99a"
+    },
+    {
+     "bytes": 1447,
+     "path": "wc9/run-root/prove-held/reproof-register.json",
+     "role": "window_record",
+     "sha256": "45845238164eaa6b8f860b2841e6f5c9247f6bdb423e85faf2b1cde985375e24"
+    }
+   ]
+  }
+ ],
+ "schema": "hh-receipt-index/1"
+}
