@@ -14,7 +14,7 @@ INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${
 : "${HH_L1_OUT_DIR:?}"
 mkdir -p "$HH_L1_OUT_DIR"
 gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
-  "mkdir -p $RR/l1 && python3 $R/ws1-l1-driver.py --cfg $R/cfg.json \
+  "mkdir -p $RR/l1 && sudo python3 $R/ws1-l1-driver.py --cfg $R/cfg.json \
      --corpus-dir $RR/corpus-out/recordings \
      --gate-a-list $R/gate-a.json --h-set-dir $R/h-set \
      --layers-file $R/layers.json --admission $R/admissions/mini-swe-agent.json \

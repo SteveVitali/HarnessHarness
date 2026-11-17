@@ -21,7 +21,7 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
      --mode record --seal-recordings \
      --slots \$(python3 -c 'print(\",\".join(f\"ws1-corpus-{i:02d}:850000:high\" for i in range(1,29)))') \
      --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30 & \
-   sleep 6 && python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
+   sleep 6 && sudo python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
      --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
      --w1-bin $R/bin/hh-w1 \
      --admission $R/admissions/mini-swe-agent.json \

@@ -20,7 +20,7 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
      --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
      --slots ws1-pp0-1:850000:high,ws1-pp0-2:850000:high,ws1-pp0-3:850000:high,ws1-pp0-4:850000:high,ws1-pp0-5:850000:high,ws1-pp0-6:850000:high,ws1-pp0-7:850000:high,ws1-pp0-8:850000:high,ws1-pp0-9:850000:high \
      --session-out $RR/pp0-session.json --sentinel $R/pp0-session-done --poll-seconds 30 & \
-   sleep 6 && python3 $R/ws1-pp0-driver.py --cfg $R/cfg.json \
+   sleep 6 && sudo python3 $R/ws1-pp0-driver.py --cfg $R/cfg.json \
      --tasks $WS1_PP0_TASKS --layers-file $R/layers.json \
      --w1-bin $R/bin/hh-w1 \
      --admissions-dir $R/admissions --proxy-session $RR/pp0-session.json \
