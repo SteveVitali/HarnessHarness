@@ -1791,8 +1791,10 @@ fn arm_run_once(
                 "D=$(dirname \"$(dirname \"$(readlink /opt/hh-harness-link/bin/python)\")\") && \
                  mkdir -p \"$D\" && cp -a /opt/python/. \"$D/\" && \
                  T=$(head -1 /opt/hh-harness-link/bin/{name} | tr -d '#!') && \
-                 mkdir -p \"$(dirname \"$(dirname \"$T\")\")\" && \
-                 ln -sfn /opt/hh-harness-link \"$(dirname \"$(dirname \"$T\")\")\""
+                 L=$(dirname \"$(dirname \"$T\")\") && \
+                 mkdir -p \"$(dirname \"$L\")\" && \
+                 rmdir \"$L\" 2>/dev/null; \
+                 ln -sfnT /opt/hh-harness-link \"$L\""
             );
             let _ = hharness_runner::cell::exec_guarded(
                 &backend,
@@ -1813,19 +1815,27 @@ fn arm_run_once(
         path_parts.insert(0, "/opt/node/bin".to_string());
         // `install.version_probe` names the entry the image is expected
         // to carry (`bin/<arm>`); the bundle lacks the shim, so mint it
-        // in-cell pointed at the package's cli.js.
-        if let Some(name) = admission
+        // at the probe path pointed at the package's declared bin entry.
+        if let Some(probe_path) = admission
             .get("install")
             .and_then(|i| i.get("version_probe"))
             .and_then(Json::as_arr)
             .and_then(|a| a.first())
             .and_then(Json::as_str)
-            .and_then(|p| p.rsplit('/').next().map(str::to_string))
         {
             let script = format!(
-                "f=$(find /opt/hh-harness-link -maxdepth 3 -name cli.js | head -1) && \
-                 printf '#!/bin/sh\\nexec /opt/node/bin/node \"$f\" \"$@\"\\n' \
-                 > /usr/local/bin/{name} && chmod +x /usr/local/bin/{name}"
+                "P=$(find /opt/hh-harness-link -maxdepth 4 -name package.json \
+                 -not -path '*/node_modules/*' | head -1) && \
+                 f=$(/opt/node/bin/node -p \"(() => {{ \
+                 const p = require('$P'); const b = p.bin || {{}}; \
+                 const e = typeof b === 'string' ? b \
+                 : Object.values(b)[0] || ''; \
+                 const path = require('path'); \
+                 return e ? path.resolve(path.dirname('$P'), e) : ''; \
+                 }})()\") && \
+                 mkdir -p \"$(dirname '{probe_path}')\" && \
+                 printf '#!/bin/sh\\nexec /opt/node/bin/node \"%s\" \"$@\"\\n' \"$f\" \
+                 > '{probe_path}' && chmod +x '{probe_path}'"
             );
             let _ = hharness_runner::cell::exec_guarded(
                 &backend,
