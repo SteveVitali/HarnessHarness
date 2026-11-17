@@ -973,6 +973,15 @@ impl Proxy {
             if stopping {
                 return;
             }
+            // Writer-lease renewal — the acquired TTL (1h) is shorter
+            // than a full leg; renew once under the margin so appends
+            // never meet `lease expired` mid-run.
+            let now = self.core.store.now_ms();
+            if self.core.lease.expires_at_ms.saturating_sub(now) < 600_000 {
+                if let Ok(next) = self.core.store.renew(&self.core.lease) {
+                    self.core.lease = next;
+                }
+            }
             if !self.tick() {
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
