@@ -1730,6 +1730,14 @@ impl EmbedService {
         Ok(())
     }
 
+    /// The session's lifecycle reads for a drive host — `(finished,
+    /// turn_active)`, `None` for an unknown session.
+    pub fn session_state(&self, sess_id: &str) -> Option<(bool, bool)> {
+        self.session(sess_id)
+            .ok()
+            .map(|s| (s.finished, s.turn_active))
+    }
+
     /// The session's armed exec surfaces — the L1 host reads the ids
     /// before [`rebind_exec_executor`] (each bound surface gets one
     /// clone of the shared replay queue).
