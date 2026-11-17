@@ -1,0 +1,856 @@
+{
+ "cells": {
+  "build-pmars/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "build-pmars/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 13
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "build-pmars/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "build-pmars/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "cancel-async-tasks/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "cancel-async-tasks/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 13
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "cancel-async-tasks/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "cancel-async-tasks/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "db-wal-recovery/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "git-leak-recovery/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-allow/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 20
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-allow/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 18
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-allow/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 20
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "make-doom-for-mips/H-pub/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "polyglot-c-py/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "prove-plus-comm/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-allow/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 24
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-allow/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 24
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-allow/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 26
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-pub/r0": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-pub/r1": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pypi-server/H-pub/r2": {
+   "agent_end_cause": "agent_timeout",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pytorch-model-cli/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 69
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 2
+  },
+  "pytorch-model-cli/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 69
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 0,
+   "surface_wall_ms": null,
+   "verify_attempts": 2
+  },
+  "pytorch-model-cli/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 2
+  },
+  "pytorch-model-cli/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 2
+  },
+  "pytorch-model-recovery/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "pytorch-model-recovery/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 15
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 16
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "query-optimize/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 13
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 13
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "sqlite-db-truncate/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 42
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 42
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 43
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "torch-tensor-parallelism/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-allow/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-allow/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-allow/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {
+    "eof": 14
+   },
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-pub/r0": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-pub/r1": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  },
+  "vulnerable-secret/H-pub/r2": {
+   "agent_end_cause": "exited{0}",
+   "classification": "decided",
+   "close_causes": {},
+   "denied_hosts": [],
+   "mediator_5xx": 0,
+   "reward_ppm": 1000000,
+   "surface_wall_ms": null,
+   "verify_attempts": 1
+  }
+ },
+ "freeze": {
+  "carried_verbatim_from": "docs/build/reports/2026-11-16-fp-egress-allowlist-freeze-epoch-5.json",
+  "consumed_via": "cfg.freeze_file=/opt/wc9/freeze.json",
+  "digest": "sha256:e61a6ed9771d506e0606dd7a953ebe49a56dc96d8427d9eb410ae492e7f3b328",
+  "epoch": 5
+ },
+ "packets": {
+  "dev": null,
+  "held": {
+   "evidence_label": "recorded_execution",
+   "r": 3,
+   "tasks": 10,
+   "verdicts": {
+    "db-wal-recovery": "admit",
+    "git-leak-recovery": "admit",
+    "make-doom-for-mips": "admit",
+    "polyglot-c-py": "admit",
+    "prove-plus-comm": "admit",
+    "pypi-server": "repair:machinery",
+    "query-optimize": "admit",
+    "sqlite-db-truncate": "admit",
+    "torch-tensor-parallelism": "admit",
+    "vulnerable-secret": "admit"
+   }
+  }
+ },
+ "phase": "fp",
+ "recorded_at": "2026-11-16T13:49:22Z",
+ "runner": {
+  "build": "source",
+  "commit": "27ac8db985207e1d8ad112ae0e9c55d7d5bff52b",
+  "in_window_digests": {
+   "hh-egress-mediator": "sha256:8f830a7fbd5ae259450cb1a8db67e82def01cbfc57206753a89f3ae2d7853d79",
+   "hh-helper": "sha256:727b7b83a21ac39c8ff3c80bd8858a81469be08a28f907b39374e5a2753a14bd",
+   "hh-w1": "sha256:d91c2c3861fede1a0d416260d9f4b48f31b83d300fc21b1c3039e66bfb6051ea"
+  }
+ },
+ "schema": "hh-wc-repair/1",
+ "ticket": "R6.45m",
+ "window": "wc9"
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "hh-discordance-diagnosis/1",
+  "recorded_at": "2026-11-16T17:30:00Z",
+  "window": "wc9",
+  "member": "pypi-server",
+  "discordance": "machinery{h_allow}",
+  "diagnosis_kind": "bounded-local (harvest + podman repro; no cloud window, $0 spend)",
+  "verdict": {
+    "class": "residual_machinery_reparable",
+    "task_provability": "provable — the member's H-allow cell CAN produce reward-1 under the declared constraints; the oracle trajectory completes in ~121 s vs the task_toml 900 s agent deadline",
+    "summary": "The agent_timeout x6 signature is produced by the shared w1 cell-exec capture path, not by the h_allow egress leg and not by task difficulty. exec_guarded (crates/hh-runner/src/cell.rs) pipes the exec'd process's stdout and stderr but never drains them until after the child exits; when the oracle solve.sh's output crosses the effective pipe capacity (~64 KiB OS pipe +/- podman/conmon slack), the in-cell writer blocks (in-cell freeze) or the exec never returns after in-cell completion (return hang); the in-cell timeout ladder then lapses the exec at 900 s and kill-on-lapse (HH_EXEC_TAG sweep) produces agent_timeout. pypi-server froze mid-script (before Step 2.5's pip) so the pypi-server/upload work never landed -> reward 0; make-doom-for-mips shows the identical signature with completed work -> agent_timeout + reward 1.",
+    "mediator_verdict": "fully exonerated — identical agent_timeout x3 on the H-pub surface which carries zero mediated tunnels; every H-allow request decided allow, eof-only closes, decide latency p50 7-8 ms / max 108 ms"
+  },
+  "mechanism": {
+    "defect_site": "crates/hh-runner/src/cell.rs exec_guarded (podman exec child spawned with Stdio::piped() on stdout and stderr; read_to_end called only after try_wait observes exit — neither stream is drained while the child runs)",
+    "secondary_site": "agent exec captured stdout/stderr are kept in CellOutcome on lapse but dropped by run_cell — the H-cell agent transcript is never persisted to the cell dir (observability gap; the freeze position is inferred from the oracle transcript + WAL, not byte-confirmed)",
+    "failure_modes": [
+      "in-cell write-block: the container-side writer blocks once cumulative unread output crosses the effective bound (~64 KiB pipe + conmon/socket slack) — zero forward progress, zero egress attempts, until the 900 s in-cell timeout ladder kills the tagged tree",
+      "exec return-hang: the in-cell script completes but podman exec cannot finish delivering captured output to the full host-side pipe, so the exec never exits — try_wait never fires -> same 900 s lapse -> agent_timeout even though all work completed"
+    ],
+    "why_pypi_reward_0": "the freeze lands at ~60.4-60.6 KB of transcript — inside the window between the venv pip install's last egress (t~80 s) and Step 2.5's first index fetch (python3 -m pip install build twine) — so Steps 2.5-6 (twine install, htpasswd, pypi-server start, vectorops build+upload) never ran; the verify then finds no local index -> decided reward 0",
+    "why_doom_reward_1": "make-doom-for-mips emits ~67.7 KB; its needed artifacts (linked doomgeneric_mips) exist before/at the bound -> work complete -> verify passes -> decided reward 1 despite the same agent_timeout",
+    "effective_bound_note": "the per-cell byte bound is not fixed in the evidence: pypi-server's freeze at ~60.5 KB transcript and doom's completion through ~66 KB imply the bound varies with conmon/socket buffering and per-run transcript size (clang warnings on stderr count separately); bounded bracket ~60-78+ KB. The class-level mechanism is code-proven; the per-cell constant is not byte-exact from harvest alone."
+  },
+  "evidence": {
+    "wc9_cells": {
+      "pypi-server H-allow r0/r1/r2": "agent_timeout, decided, reward_ppm 0, denied_hosts []",
+      "pypi-server H-pub r0/r1/r2": "agent_timeout, decided, reward_ppm 0 (zero mediated tunnels — declared_deps cell, direct network)",
+      "make-doom-for-mips H-allow+H-pub x6": "agent_timeout, decided, reward_ppm 1000000 (work complete — the end_cause is an exec artifact)",
+      "all other members": "exited{0} decided reward 1 (oracle stdout <= ~56 KB each)"
+    },
+    "pypi_agent_phase_egress_wal": {
+      "requests": "177-179, all decided allow (zero denies at agent-phase granularity)",
+      "decide_latency_ms": "p50 7-8, p90 17, max 44-108",
+      "tunnels": "24-26, all close_cause eof, ~38.7 MB bytes_down, max duration 8.9 s",
+      "timeline": "burst t~2-19 s: 148 GET deb.debian.org (apt update+install); gap ~41 s (venv creation); burst t~59-80 s: 9 CONNECT pypi.org/files.pythonhosted.org (the venv pip install); GAP ~841 s of ZERO egress until the 900 s lapse; burst t~921-927 s: verify bootstrap (deb.debian.org, astral.sh, releases.astral.sh, github.com, release-assets.githubusercontent.com, pypi.org, files.pythonhosted.org — decided under the verify policy layer)",
+      "interpretation": "the agent froze between two network steps with zero attempted requests — a denied or errored fetch would still emit a requested/decided row"
+    },
+    "oracle_transcripts": {
+      "source": "run-root jobs w1-o-* agent/oracle.txt (harbor O surface)",
+      "pypi-server": "78,095 B, agent_execution ~121 s, reward 1 x3",
+      "make-doom-for-mips": "67,729 B, agent_execution ~120 s, reward 1 x3 — [Linking doomgeneric_mips] at byte 65,920",
+      "build-pmars": "51,514 B ~50 s | pytorch-model-cli 56,419 B | all remaining members <= 6.9 KB — the only two >~60 KB members are the only two agent_timeout members (ordinal-perfect cohort split)"
+    },
+    "bounded_local_repro": {
+      "environment": "operator's Mac, podman 6.1.4 applehv VM (linux/arm64 host; images amd64 under qemu — timing inflated, mechanics identical)",
+      "undrained_exec_200kb_probe": "in-cell writer blocked at ~169 KB delivered-side with the exec's stdout piped and never read — demonstrates the in-cell freeze mode on local libpod",
+      "undrained_exec_78kb_probe": "at exactly the pypi-server oracle volume (78,095 B) the in-cell script ran to completion while podman exec did not return within the poll window — demonstrates the return-hang mode (the doom signature)",
+      "actual_solve_repro": "the real alexgshaw/pypi-server:20251031 image + the Wc9-staged solve.sh under `podman exec ... > unread-fifo`: solve.sh completed end-to-end (htpasswd, pypi-server, vectorops sdist+wheel, twine upload '200 OK', /tmp/out.txt = 78,093 B) while the podman exec process stayed alive blocked on the unread pipe — the complete-work + non-returning-exec conjunction exec_guarded pronounces agent_timeout",
+      "note": "VM slack differs from the runner's (>=78 KB absorbed in-cell here vs ~60.5 KB implied on the Wc9 cell) — the defect class is identical, the byte constant is stack-dependent"
+    }
+  },
+  "discriminators_discharged": {
+    "agent_phase_denied_hosts": "[] — all 177-179 requests decided allow; the epoch-5 agent allowlist covered every host the trajectory touched (deb.debian.org, pypi.org, files.pythonhosted.org)",
+    "mediated_egress_slowdown": "none — decide p50 7-8 ms, tunnels <= 8.9 s, 38.7 MB moved in <1 s bursts; the 841 s hole contains zero requests, not slow ones",
+    "h_pub_same_signature": "H-pub (no mediator, direct network) agent_timeout x3 — the mediator cannot be the delta",
+    "task_deadline_too_short": "no — the same work runs ~121 s under harbor O; the declared 900 s deadline is ~7x the needed wall",
+    "o_vs_h_delta": "harbor streams exec output continuously; the w1 cell pipes it and never drains — the only structural delta between surfaces"
+  },
+  "repair_candidates": [
+    "exec_guarded: drain stdout and stderr concurrently while the child runs (reader threads or poll+read into a bounded spool) — removes both failure modes for every cell, both H surfaces",
+    "alternative: redirect the in-cell phase output to a file and copy-out at end of phase (exec streams become non-blocking)",
+    "observability: persist the agent exec's captured streams to the cell dir on lapse (the bytes are already kept in CellOutcome; run_cell drops them) — would have made this byte-exact"
+  ],
+  "scope_decision_input": "the discordance is reparable machinery on the shared exec path — the `machinery{h_allow}` cell fold was correct to flag machinery, but the repair target is exec_guarded's stream handling (H-pub + H-allow both), NOT the hardened egress leg which the evidence fully exonerates; a machinery repair in the chain is viable and small; a bounded smoke leg re-running pypi-server + make-doom-for-mips after the drain fix would verify the repair against the recorded signature",
+  "caveats": [
+    "w1-side agent stdout is not retained — freeze position is transcript+WAL inference; the effective bound is bracketed ~60-78+ KB, not byte-exact",
+    "local repro ran under applehv/qemu (slower wall) — mechanics identical to the runner's local-libpod path; byte constants differ",
+    "no cloud window, no model calls, $0 spend; harvest + repo source + podman VM only"
+  ]
+}

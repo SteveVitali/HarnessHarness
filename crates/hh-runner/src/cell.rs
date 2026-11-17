@@ -204,6 +204,14 @@ impl CellOps for PodmanCell<'_> {
 /// re-labelled). The host-side watcher stays the backstop at
 /// `deadline + TERM_GRACE + slack` — past it the client is killed and
 /// the tag sweep is authoritative.
+///
+/// Both pipes are drained on dedicated threads for the life of the
+/// child — an in-cell writer that crosses the OS pipe bound never
+/// stalls mid-script, and a completed phase's exec can finish
+/// delivering its tail (the Wc9 exec-drain repair — the undrained
+/// pipes produced pypi-server's in-cell freeze and
+/// make-doom-for-mips' return hang, both surfacing as
+/// `agent_timeout`).
 pub fn exec_guarded(
     backend: &hharness_helper::podman::PodmanBackend,
     argv: &[String],
@@ -211,7 +219,6 @@ pub fn exec_guarded(
     env: &[(String, String)],
     deadline_ms: Option<u64>,
 ) -> Result<CellOutcome, CellError> {
-    use std::io::Read;
     use std::process::Stdio;
     use std::time::{Duration, Instant};
     let tag = deadline_ms.map(|_| next_exec_tag());
@@ -225,6 +232,11 @@ pub fn exec_guarded(
         .stderr(Stdio::piped())
         .stdin(Stdio::null());
     let mut child = cmd.spawn().map_err(|e| err("exec", e.to_string()))?;
+    // Drain each stream for the life of the child — the pipe can never
+    // fill, so the in-cell writer is never write-blocked and the exec
+    // can always finish delivering a completed phase's output.
+    let drain_out = drain_stream(child.stdout.take());
+    let drain_err = drain_stream(child.stderr.take());
     let started = Instant::now();
     let deadline = deadline_ms.map(|ms| started + Duration::from_millis(ms));
     // The in-cell `timeout` ladder needs the TERM→KILL grace plus the
@@ -242,19 +254,11 @@ pub fn exec_guarded(
                     .map(|d| Instant::now() + Duration::from_millis(50) >= d)
                     .unwrap_or(false);
             if !lapse_by_exit {
-                let mut stdout = Vec::new();
-                let mut stderr = Vec::new();
-                if let Some(mut s) = child.stdout.take() {
-                    let _ = s.read_to_end(&mut stdout);
-                }
-                if let Some(mut s) = child.stderr.take() {
-                    let _ = s.read_to_end(&mut stderr);
-                }
                 return Ok(CellOutcome {
                     exit_code: status.code().map(|c| c as i64),
                     timed_out: false,
-                    stdout,
-                    stderr,
+                    stdout: join_drain(drain_out),
+                    stderr: join_drain(drain_err),
                 });
             }
             break;
@@ -278,20 +282,38 @@ pub fn exec_guarded(
             .map_err(|e| err("terminate_exec", e.to_string()))?;
         confirm_dead(backend, t)?;
     }
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    if let Some(mut s) = child.stdout.take() {
-        let _ = s.read_to_end(&mut stdout);
-    }
-    if let Some(mut s) = child.stderr.take() {
-        let _ = s.read_to_end(&mut stderr);
-    }
     Ok(CellOutcome {
         exit_code: None,
         timed_out: true,
-        stdout,
-        stderr,
+        stdout: join_drain(drain_out),
+        stderr: join_drain(drain_err),
     })
+}
+
+/// Spawn a thread draining one piped stream into a `Vec` for the
+/// stream's whole lifetime — the reader returns at EOF, after the
+/// child exits or its pipe closes.
+fn drain_stream<R: std::io::Read + Send + 'static>(
+    stream: Option<R>,
+) -> Option<std::thread::JoinHandle<Vec<u8>>> {
+    stream.map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = s.read_to_end(&mut buf);
+            buf
+        })
+    })
+}
+
+/// Collect a drain thread's captured bytes — the handle's buffer once
+/// EOF lands (the exited/killed child closes its ends; a detached
+/// writer holding the pipe parks the join exactly like the pre-drain
+/// `read_to_end` did — never a new hang class), empty on a panicked
+/// reader or an absent stream.
+fn join_drain(handle: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    handle
+        .map(|h| h.join().unwrap_or_default())
+        .unwrap_or_default()
 }
 
 /// `confirm_dead(backend, tag)` — poll `/proc/*/environ` for the tag
@@ -491,6 +513,21 @@ pub fn run_cell(cell: &mut dyn CellOps, plan: &CellPlan) -> Result<CellReport, C
         report.agent_end_cause = EndCause::AgentTimeout;
     } else {
         report.agent_end_cause = EndCause::Exited(agent.exit_code.unwrap_or(-1));
+    }
+    // The agent exec's captured streams are evidence exactly like the
+    // verifier's `test-*.txt`: a phase whose transcript is dropped
+    // with the `CellOutcome` leaves a timed-out/failed cell no
+    // recorded bytes (the Wc9 pypi-server freeze position had to be
+    // inferred from the oracle transcript + the mediator WAL, never
+    // byte-confirmed). Persist non-empty streams verbatim —
+    // `agent-*.txt` sits beside the reward files at the collect top
+    // level; the per-attempt re-materialization never touches it.
+    let _ = std::fs::create_dir_all(&plan.collect_dir);
+    if !agent.stdout.is_empty() {
+        let _ = std::fs::write(plan.collect_dir.join("agent-stdout.txt"), &agent.stdout);
+    }
+    if !agent.stderr.is_empty() {
+        let _ = std::fs::write(plan.collect_dir.join("agent-stderr.txt"), &agent.stderr);
     }
     listing(cell, "agent", &mut report.listings);
     // ST4 — seal is the store-side row; the drive records the boundary,

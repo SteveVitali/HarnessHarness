@@ -280,10 +280,27 @@ def cmd_costrecord(argv):
     print(path)
 
 
+def repo_member(p, repo):
+    """Resolve a committed record's path member: verbatim when it
+    exists, else as the repo-relative member it denotes — a record
+    minted with the dev checkout root (`/…/MetaHarness-…/docs/…`)
+    still validates in a clean checkout. Only an existing repo member
+    substitutes; an unresolvable path keeps its verbatim failure."""
+    if not p or os.path.exists(p):
+        return p
+    for anchor in ("docs/", "scripts/"):
+        i = p.find("/" + anchor)
+        if i >= 0:
+            cand = os.path.join(repo, p[i + 1:])
+            if os.path.exists(cand):
+                return cand
+    return p
+
+
 def cmd_costvalidate(argv):
     rec = load(argv[2])
-    receipt = load(argv[3])
     repo = argv[4]
+    receipt = load(repo_member(argv[3], repo))
     if rec.get("schema") != "hh-compute-cost/1":
         refuse("cost.schema")
     # reconciliation appends carry supersedes_estimate_of; the base record
@@ -291,13 +308,12 @@ def cmd_costvalidate(argv):
     base = "supersedes_estimate_of" not in rec
     if receipt.get("kind") != "teardown":
         refuse("receipt.not_teardown")
-    decl_path = None
     # recompute needs the declaration; it rides the receipt's declaration ref
-    decl_path = receipt.get("declaration", {}).get("path")
+    decl_path = repo_member(receipt.get("declaration", {}).get("path"), repo)
     if not decl_path or not os.path.exists(decl_path):
         refuse("declaration.absent")
     decl = load(decl_path)
-    prov_p = rec.get("receipts", {}).get("provision", {}).get("path")
+    prov_p = repo_member(rec.get("receipts", {}).get("provision", {}).get("path"), repo)
     prov = load(prov_p) if prov_p and os.path.exists(prov_p) else None
     rate_rows, _ = _lib.load_rate_rows(decl, repo)
     lifecycle = merged_lifecycle(receipt, prov)

@@ -1,0 +1,35 @@
+{
+ "schema": "hh-diag/1",
+ "recorded_at": "2026-11-16T19:45:00Z",
+ "window": "smoke4",
+ "member": "pypi-server",
+ "discordance": "agent_timeout{H-allow only} \u2014 deterministic \u00d72",
+ "diagnosis_kind": "residual_machinery_reparable",
+ "verdict": "new machinery defect class named by the smoke \u2014 machinery{model-port-collision:relay-8080-vs-task}: the mediated cell's model relay binds 127.0.0.1:8080 in-cell before the agent starts; the task's own `pypi-server -p 8080` gets EADDRINUSE (captured live in /var/log/pypiserver.log); twine's `twine upload` POST to localhost:8080 then lands on the never-answering model-stub relay and stalls until the task_toml 900s deadline. The repaired exec-capture path is exonerated: the same cell drained 1,678,026 B (r1) / 1,720,851 B (r2) of agent stdout continuously \u2014 the pipe never stalled; the stall is the POST, not the stream.",
+ "mechanism": "hh_w1.rs h_run_once `if mediated` (ll.1110-1230): RelayPair{model, cfg.model_port=8080} + RelayPair{egress, 3128} bind in-cell loopback via the carried relay; `model.sock` is a python stub that listen(1)s and never answers. cell_env_projection sets http_proxy=127.0.0.1:3128 + no_proxy=127.0.0.1,localhost \u2014 the upload bypasses the mediator by design (0 requests for localhost:8080 in the WAL). Under H-pub no relay/env is installed (env=[], mounts=[], relay=None) so :8080 is free and the task completes in ~82s. No check anywhere reconciles the drive-declared model_port with ports the task's own services need; the failure mode is a silent deadlock, not a typed refusal.",
+ "evidence": [
+  "run-root-smoke4/trials/pypi-server/H-allow{,-r1}/r0/collect/agent-stdout.txt \u2014 1,678,026 B and 1,720,851 B; transcript ends mid-upload (`Uploading vectorops-0.1.0-py3-none-any.whl` + rich progress frames) after all six solve.sh steps",
+  "rerun live inspection 19:17Z \u2014 /var/log/pypiserver.log inside hh-w1-pypi-server-allow: `OSError: [Errno 98] Address already in use` at wsgiref server_bind",
+  "mediator WAL (both allow runs): 161/161 and 178/178 requested\u2192decided, 0 unpaired, 0 denials, eof-only tunnel.closed, zero 5xx \u2014 agent egress finished 18:51-18:53Z, then a 13-min egress-quiet gap to the ~19:06Z deadline",
+  "cell-report.json \u00d72: agent_end_cause agent_timeout, reward_ppm 0, denied_hosts [], deadline_source task_toml",
+  "comparison cells: pypi-server/H-pub exited{0} reward_ppm 1000000 (76,792 B transcript, ~82s); make-doom-for-mips both planes exited{0} reward_ppm 1000000 (~65.7KB each \u2014 past the old ~64KiB pipe bound)",
+  "verifier test-stdout: pip install --index-url http://localhost:8080/simple vectorops==0.1.0 \u2192 connection-broken retries then 'No matching distribution' \u2014 the wedged relay answered nothing useful; after kill the port freed",
+  "harvest docs/build/reports/compute/harvest/fp-smoke4/ (MANIFEST.sha256 + run-root.tar.gz verified) + receipts 2026-11-16-fp-smoke4-{provision,verify,prepull,harvest,teardown,cost}.json"
+ ],
+ "discriminators_discharged": [
+  "NOT the repaired pipe defect \u2014 the signature was output freeze at the ~64KiB bound; this leg carried 26x that to the wire continuously",
+  "NOT egress mediation \u2014 zero requests for localhost:8080 (no_proxy bypass by design), zero denials, eof-only closes on both allow runs",
+  "NOT task-provability \u2014 the identical solve.sh completes reward 1 under H-pub in 82s; the failure is the harness's own listener occupying the task's port, reproduced deterministically"
+ ],
+ "repair_candidates": [
+  "1. Detect the collision and refuse typed (preferred): before agent exec, reconcile RelayPair ports + model_port against the task's declared service ports (or probe the bind) \u2014 Refused{cell.port_collision:8080} instead of a silent 900s deadlock",
+  "2. Move the in-cell relay bind off well-known task ports: model_port default 8080 collides with a real terminal-bench member; a high-ephemeral or task-aware port assignment avoids the class (declared-data fix, no contract change if the port is a drive param)",
+  "3. Recorded Wc9 context: in Wc9 the allow cells froze at ~60.5KB before ever reaching Step 4's bind \u2014 the port collision was latent then; the drain repair unmasked it (same discordance slot, different mechanism)"
+ ],
+ "scope_decision_input": "R6.45n exit condition: a newly named defect class \u2192 blockedOn + \u00a76-shaped readout (docs/build/readouts/GATE-G30-postsmoke4-scope.md), no further spend. The repaired exec-drain path itself is verified by this window.",
+ "caveats": [
+  "non-evidence smoke \u2014 nothing here folds into hh-reproof-packet/1 or hh-reproof-register/1; task_lists.state unchanged",
+  "the rerun (H-allow r2) was a window-local A1/R-10 diagnostic iteration: same cell shape, no code patch, recorded as trials/pypi-server/H-allow (the original preserved as H-allow-r1)",
+  "the model-port collision is latent under the canonical drive config as well (model_port default 8080) \u2014 pypi-server/H-allow is unprovable under mediation until the defect is repaired or the port moves"
+ ]
+}
