@@ -1824,7 +1824,7 @@ fn arm_run_once(
             .and_then(Json::as_str)
         {
             let script = format!(
-                "P=$(find /opt/hh-harness-link -maxdepth 4 -name package.json \
+                "P=$(find /opt/hh-harness-link/ -maxdepth 4 -name package.json \
                  -not -path '*/node_modules/*' | head -1) && \
                  f=$(/opt/node/bin/node -p \"(() => {{ \
                  const p = require('$P'); const b = p.bin || {{}}; \
