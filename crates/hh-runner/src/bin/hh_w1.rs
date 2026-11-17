@@ -946,6 +946,10 @@ fn o_run(cfg: &Cfg, task: &str, r: u32, work: &Path) -> Result<SurfaceOutcome, S
 struct DriveCell<'a> {
     backend: &'a PodmanBackend,
     env: Vec<(String, String)>,
+    /// A distinct env for the verifier phase (hosted-arm cells: the
+    /// agent's closed render carries the slot token — it never enters
+    /// the verify phase's environment).
+    verify_env: Option<Vec<(String, String)>>,
     agent_argv: Vec<String>,
     verifier_argv: Vec<String>,
     policy_dst: Option<PathBuf>,
@@ -1007,11 +1011,15 @@ impl CellOps for DriveCell<'_> {
         // exec's own in-cell tree dies by its `HH_EXEC_TAG` environ
         // marker (never a cmdline pattern the phase may not carry),
         // death is /proc-confirmed, and the lapsed streams are kept.
+        let env = match (&self.verify_env, spec.argv == self.verifier_argv) {
+            (Some(ve), true) => ve,
+            _ => &self.env,
+        };
         hharness_runner::cell::exec_guarded(
             self.backend,
             &spec.argv,
             &spec.cwd,
-            &self.env,
+            env,
             spec.deadline_ms,
         )
     }
@@ -1284,6 +1292,7 @@ fn h_run_once(
     let mut dc = DriveCell {
         backend: &backend,
         env,
+        verify_env: None,
         agent_argv: agent_argv.clone(),
         verifier_argv: verifier_argv.clone(),
         policy_dst,
@@ -1435,6 +1444,375 @@ fn h_run(
     }
     o.wall_ms = t0.elapsed().as_millis() as u64;
     Ok(o)
+}
+
+// ── the hosted-arm cell drive (Ws1 PP0/corpus/L1; R6.45q) ────────────────
+//
+// `arm_run_once` — one hosted-arm slot in a mediated cell. The drive is
+// `h_run_once`'s mediated topology verbatim (admit_allowlist_mediated →
+// sealed phase layers → egress-mediator spawn → the relay pair →
+// run_cell + deadlines + collect_denied), with the hosted differences:
+// the agent argv/env/files come from `render::render` (RenderUse::
+// HostedArm — the closed env carries the slot token, never argv), the
+// image is the arm's layer image (`--image`, the R6.32b carried-export
+// digest loaded at LOAD), `oracle_participant` is false (no /solution
+// copy-in), the `/logs/agent` ST4 copy-out captures the trajectory, and
+// the host-side `model.sock` is answered by a unix→TCP forwarder to the
+// session proxy's `--model-upstream` loopback listen (the Wc stub's
+// shape, piping) — never a dead socket.
+//
+// The rendered env is the agent phase's environment verbatim; the
+// verify phase gets only the proxy-routing subset (the slot token never
+// enters a verifier environment). Egress binds the declared
+// `EGRESS_RELAY_PORT` (3128) — `closed_env`'s proxy hints are
+// authoritative.
+
+/// The slot-side parameters of one hosted-arm run (the session grant's
+/// members the render folds into `SlotInputs` + the upstream wiring).
+struct ArmSlot<'a> {
+    slot_id: &'a str,
+    slot_token: &'a str,
+    model_upstream_port: u16,
+    slot_slice_micros: u64,
+}
+
+fn arm_run_once(
+    cfg: &Cfg,
+    task: &str,
+    image: &str,
+    admission: &Json,
+    slot: &Path,
+    arm: &ArmSlot<'_>,
+) -> Result<(Json, Vec<String>), String> {
+    let staging = stage_task(cfg, task, slot)?;
+    let collect = slot.join("collect");
+    let work = slot.join("work");
+    let _ = std::fs::create_dir_all(&work);
+    let instruction = std::fs::read(Path::new(&cfg.tasks_dir).join(task).join("instruction.md"))
+        .map_err(|e| format!("instruction: {e}"))?;
+    let home = image_env(image, "HOME").unwrap_or_else(|| "/root".to_string());
+    let user = image_env(image, "USER").unwrap_or_else(|| "root".to_string());
+    let decl = hharness_runner::task_toml::load_task_decl(
+        &std::path::Path::new(&cfg.tasks_dir).join(task),
+    )?;
+    let (agent_ms, agent_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.agent_timeout_sec,
+        cfg.agent_deadline_ms,
+    );
+    let (verify_ms, verify_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.verifier_timeout_sec,
+        cfg.verify_deadline_ms,
+    );
+    let slot_inputs = hharness_runner::render::SlotInputs {
+        slot_token: arm.slot_token.to_string(),
+        model_port: cfg.model_port,
+        instruction: instruction.clone(),
+        home,
+        user,
+        agent_wall_timeout_s: agent_ms / 1000,
+        proxy_budget_ceiling_usd_micros: arm.slot_slice_micros,
+        slot_id: arm.slot_id.to_string(),
+    };
+    let rc = hharness_runner::render::render(
+        admission,
+        &slot_inputs,
+        hharness_runner::render::RenderUse::HostedArm,
+    )
+    .map_err(|e| e.to_string())?;
+    let render_rec = hharness_runner::render::rendered_record(&rc, admission, &slot_inputs)
+        .map_err(|e| e.to_string())?;
+    let _ = write_json(&slot.join("hh-harness-render.json"), &render_rec);
+
+    let agent_argv = rc.argv.clone();
+    let verifier_argv = vec!["bash".to_string(), "/tests/test.sh".to_string()];
+
+    // Mediated topology — verbatim from h_run_once's mediated arm.
+    let mut rec_env = EnvironmentRecord {
+        class: EnvironmentClass::LocalContainer,
+        image: ImageRef::Tag(image.to_string()),
+        build_context: None,
+        platform: "linux/amd64".to_string(),
+        provisioning: ProvisioningRecipe::default(),
+        containment_policy_ref: ("w1".to_string(), "v0".to_string()),
+        limits: hharness_containment::policy::ResourceLimits::default(),
+        nondeterminism: vec![],
+        unpinned: BTreeSet::new(),
+        image_attestation: None,
+        ext: BTreeMap::new(),
+        canary_channels: vec![],
+    };
+    let mut pol = hharness_containment::policy::kernel_default(0);
+    let frz = freeze(cfg)?;
+    let list = frz.list.clone();
+    let model_sock = slot.join("model.sock");
+    let egress_sock = slot.join("egress.sock");
+    let cell_decl = MediatedCell {
+        socket_mounts: BTreeMap::from([
+            ("model".to_string(), model_sock.display().to_string()),
+            ("egress".to_string(), egress_sock.display().to_string()),
+        ]),
+        relay_bin: cfg.relay_bin.clone(),
+        pairs: vec![
+            RelayPair {
+                name: "model".to_string(),
+                port: cfg.model_port,
+            },
+            RelayPair {
+                name: "egress".to_string(),
+                port: EGRESS_RELAY_PORT,
+            },
+        ],
+    };
+    let mdecl = MediatedDecl {
+        family: cfg.family,
+        allowlist: list,
+        protocol_id: frz.protocol_id.clone(),
+        epoch: frz.epoch,
+        cell: cell_decl,
+        model_port: cfg.model_port,
+        slot_token: arm.slot_token.to_string(),
+    };
+    admit_allowlist_mediated(&mut rec_env, &mut pol, &mdecl, 0).map_err(|e| e.to_string())?;
+    let sched = mediated_phase_schedule(&pol, &rec_env)?;
+    let agent_policy = Some(phase_layer(&sched, "agent")?);
+    let verify_policy = Some(phase_layer(&sched, "verify")?);
+    let verify_version_id = verify_policy
+        .as_ref()
+        .and_then(|p| p.get("version_id"))
+        .and_then(Json::as_str)
+        .map(str::to_string);
+    let policy_file = slot.join("policy.json");
+    std::fs::write(
+        &policy_file,
+        agent_policy.as_ref().unwrap().to_canonical_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    let policy_dst = Some(policy_file.clone());
+    // The host-side model socket answered by a unix→TCP forwarder to
+    // the session proxy (the stub's socket-file contract, piping —
+    // each accepted conn streams to 127.0.0.1:<upstream>).
+    let fwd_script = format!(
+        "import socket,threading,shutil\n\
+         s=socket.socket(socket.AF_UNIX)\n\
+         s.bind({:?})\n\
+         s.listen(64)\n\
+         def pump(a,b):\n\
+         \ttry: shutil.copyfileobj(a,b)\n\
+         \texcept OSError: pass\n\
+         \ttry: b.close()\n\
+         \texcept OSError: pass\n\
+         def serve(c):\n\
+         \tu=socket.socket()\n\
+         \tu.connect(('127.0.0.1',{}))\n\
+         \tthreading.Thread(target=pump,args=(c.makefile('rb'),u.makefile('wb')),daemon=True).start()\n\
+         \tpump(u.makefile('rb'),c.makefile('wb'))\n\
+         while True:\n\
+         \tc,_=s.accept()\n\
+         \tthreading.Thread(target=serve,args=(c,),daemon=True).start()\n",
+        model_sock.display().to_string(),
+        arm.model_upstream_port
+    );
+    let _fwd = Command::new("python3")
+        .args(["-c", &fwd_script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    let store_root = slot.join("mediator-store");
+    let run_id = format!("ws1-{}", arm.slot_id);
+    let med = Command::new(&cfg.mediator_bin)
+        .args([
+            "--store-root".to_string(),
+            store_root.display().to_string(),
+            "--socket".to_string(),
+            egress_sock.display().to_string(),
+            "--policy".to_string(),
+            policy_file.display().to_string(),
+            "--env-handle".to_string(),
+            format!("env-{run_id}"),
+            "--effect-id".to_string(),
+            format!("eff-{run_id}"),
+            "--participant".to_string(),
+            arm.slot_id.to_string(),
+            "--run-id".to_string(),
+            run_id.clone(),
+        ])
+        .stdout(Stdio::from(
+            std::fs::File::create(slot.join("mediator.log")).map_err(|e| e.to_string())?,
+        ))
+        .stderr(Stdio::from(
+            std::fs::File::create(slot.join("mediator.err")).map_err(|e| e.to_string())?,
+        ))
+        .spawn()
+        .map_err(|e| format!("mediator spawn: {e}"))?;
+    let guard = MediatorGuard { child: med };
+    let sock_deadline = Instant::now() + std::time::Duration::from_secs(10);
+    while !egress_sock.exists() {
+        if Instant::now() > sock_deadline {
+            return Err(format!(
+                "mediator egress socket {} never bound",
+                egress_sock.display()
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    // The verify phase's env: the proxy-routing subset only — the
+    // slot token and key channels never enter a verifier exec.
+    let proxy = format!("http://127.0.0.1:{EGRESS_RELAY_PORT}");
+    let verify_env: Vec<(String, String)> = vec![
+        ("http_proxy".into(), proxy.clone()),
+        ("https_proxy".into(), proxy.clone()),
+        ("HTTP_PROXY".into(), proxy.clone()),
+        ("HTTPS_PROXY".into(), proxy),
+        ("no_proxy".into(), "127.0.0.1,localhost".into()),
+        ("NO_PROXY".into(), "127.0.0.1,localhost".into()),
+        ("HOME".into(), slot_inputs.home.clone()),
+        ("USER".into(), slot_inputs.user.clone()),
+    ];
+    let backend = PodmanBackend {
+        container: format!("hh-ws1-{}", arm.slot_id),
+        image: image.to_string(),
+        workspace: work.display().to_string(),
+        network: false,
+        extra_args: vec![],
+        cell: CellSpec {
+            workdir: None,
+            cpus: decl.cpus.clone(),
+            memory_mb: decl.memory_mb,
+        },
+        mounts: vec![
+            SocketMount {
+                name: "model".to_string(),
+                host_path: model_sock.display().to_string(),
+            },
+            SocketMount {
+                name: "egress".to_string(),
+                host_path: egress_sock.display().to_string(),
+            },
+        ],
+        relay: Some(RelaySpec {
+            host_bin: cfg.relay_bin.clone(),
+            pairs: vec![
+                ("model".to_string(), cfg.model_port),
+                ("egress".to_string(), EGRESS_RELAY_PORT),
+            ],
+        }),
+    };
+    backend.create().map_err(|e| e.to_string())?;
+    backend.start().map_err(|e| e.to_string())?;
+    // Slot-invariant rendered files + the adapter's setup exec land
+    // before the agent phase (provisioning, never phase-owned paths).
+    for f in &rc.files {
+        let tmp = slot.join(format!("render-file-{}", f.path.replace('/', "_")));
+        std::fs::write(&tmp, &f.bytes).map_err(|e| e.to_string())?;
+        backend
+            .cp_in(&tmp.display().to_string(), &f.path)
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(sa) = &rc.setup_argv {
+        let _ = hharness_runner::cell::exec_guarded(&backend, sa, "/", &[], Some(60_000))
+            .map_err(|e| format!("setup exec: {e}"))?;
+    }
+    let workdir = backend
+        .image_workdir()
+        .unwrap_or_else(|_| cfg.workdir_default.clone());
+    let mut dc = DriveCell {
+        backend: &backend,
+        env: rc.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+        verify_env: Some(verify_env),
+        agent_argv: agent_argv.clone(),
+        verifier_argv: verifier_argv.clone(),
+        policy_dst,
+        agent_policy,
+        verify_policy,
+    };
+    let plan = CellPlan {
+        oracle_participant: false,
+        workdir,
+        host_staging: staging,
+        collect_dir: collect.clone(),
+        agent_argv,
+        agent_deadline_ms: Some(agent_ms),
+        agent_deadline_source: agent_src,
+        verifier_argv,
+        verifier_deadline_ms: Some(verify_ms),
+        verifier_deadline_source: verify_src,
+        max_grade_attempts: cfg.max_grade_attempts,
+        logs_copyout: Some(
+            hharness_runner::capture::copyout_spec("/logs/agent", &slot.join("native-log"), &work)
+                .map_err(|e| e.to_string())?,
+        ),
+    };
+    let report = run_cell(&mut dc, &plan).map_err(|e| format!("run_cell: {e}"))?;
+    let _ = backend.stop();
+    drop(guard);
+    let denied = collect_denied(&store_root, &run_id, verify_version_id.as_deref());
+    let rep = Json::obj([
+        (
+            "agent_end_cause",
+            Json::str(report.agent_end_cause.as_str()),
+        ),
+        ("verify_attempts", Json::Int(report.verify_attempts as i64)),
+        (
+            "native_log",
+            report
+                .native_log
+                .as_ref()
+                .map(|b| b.to_json())
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "denied_hosts",
+            Json::Arr(denied.iter().map(|h| Json::str(h.clone())).collect()),
+        ),
+    ]);
+    let _ = write_json(&slot.join("cell-report.json"), &rep);
+    Ok((rep, denied))
+}
+
+/// `image_env(image, name)` — the image-declared env member (podman
+/// inspect → Config.Env `NAME=value`); the slot's HOME/USER source.
+fn image_env(image: &str, name: &str) -> Option<String> {
+    let out = Command::new("podman")
+        .args(["image", "inspect", image])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let j = json::parse(&String::from_utf8_lossy(&out.stdout)).ok()?;
+    let env = j.as_arr()?.first()?.get("Config")?.get("Env")?.as_arr()?;
+    env.iter()
+        .filter_map(Json::as_str)
+        .find_map(|e| e.strip_prefix(&format!("{name}=")).map(str::to_string))
+}
+
+fn cmd_arm_run(args: &[String]) -> Result<String, String> {
+    let cfg = load_cfg(&req(args, "--cfg"))?;
+    let task = req(args, "--task");
+    let image = req(args, "--image");
+    let admission = read_json(&req(args, "--admission"))?;
+    let slot_id = req(args, "--slot-id");
+    let tok_file = req(args, "--slot-token-file");
+    let slot_token = std::fs::read_to_string(&tok_file)
+        .map_err(|e| format!("slot token: {e}"))?
+        .trim()
+        .to_string();
+    let upstream: u16 = req(args, "--model-upstream")
+        .parse()
+        .map_err(|_| "--model-upstream int")?;
+    let slice: u64 = arg(args, "--slot-slice-micros")
+        .map(|s| s.parse::<u64>().unwrap_or(0))
+        .unwrap_or(0);
+    let out = PathBuf::from(req(args, "--out"));
+    let _ = std::fs::create_dir_all(&out);
+    let arm = ArmSlot {
+        slot_id: &slot_id,
+        slot_token: &slot_token,
+        model_upstream_port: upstream,
+        slot_slice_micros: slice,
+    };
+    let (rep, _denied) = arm_run_once(&cfg, &task, &image, &admission, &out, &arm)?;
+    Ok(rep.to_canonical_string())
 }
 
 fn cmd_o_run(args: &[String]) -> Result<String, String> {
@@ -1755,6 +2133,7 @@ fn main() {
         "observe" => cmd_observe(rest),
         "o-run" => cmd_o_run(rest),
         "h-run" => cmd_h_run(rest),
+        "arm-run" => cmd_arm_run(rest),
         "prove" => cmd_prove(rest),
         "fault" => cmd_fault(rest),
         "census" => cmd_census(rest),
