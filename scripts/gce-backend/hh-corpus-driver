@@ -13,7 +13,9 @@ INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${
 LISTEN="${HH_CORPUS_LISTEN:-127.0.0.1:49152}"
 mkdir -p "$HH_CORPUS_OUT_DIR"
 gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
-  "sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus $RR/corpus-out $RR/corpus; mkdir -p $RR/corpus && \
+  "sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus $RR/corpus-out $RR/corpus $RR/corpus-session.json && \
+   sudo rm -f $R/corpus-session-done $R/corpus-sentinel-done && \
+   sudo mkdir -p $RR/corpus && \
    sudo env OLLAMA_API_KEY=\"\$(sudo cat $R/ollama-key 2>/dev/null || true)\" \
    python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
      --store-root $RR/proxy-store --run-id fp-ws1-corpus \
@@ -21,7 +23,7 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
      --mode record --seal-recordings \
      --slots \$(python3 -c 'print(\",\".join(f\"ws1-corpus-{i:02d}:850000:high\" for i in range(1,29)))') \
      --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30 & \
-   for i in \$(seq 1 30); do [ -f $RR/corpus-session.json ] && break; sleep 2; done && sudo python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
+   for i in \$(seq 1 150); do [ -f $RR/corpus-session.json ] && break; sleep 2; done && sudo python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
      --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
      --w1-bin $R/bin/hh-w1 \
      --admission $R/admissions/mini-swe-agent.json \

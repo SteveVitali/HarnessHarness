@@ -208,8 +208,9 @@ def start_replay(a, slot_id, recording, strict):
            "--poll-seconds", "2"]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL)
-    # wait for the session doc (grants live) — bounded
-    for _ in range(300):
+    # wait for the session doc (grants live) — bounded; a fresh
+    # store init can take a minute+
+    for _ in range(900):
         if os.path.exists(sess_out):
             break
         if proc.poll() is not None:
