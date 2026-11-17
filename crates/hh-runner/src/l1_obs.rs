@@ -35,8 +35,6 @@
 //!   UNVERIFIED `extra` leg of design/36 §1.2 resolves to the tested
 //!   fallback, as the contract directs).
 
-use std::collections::{BTreeSet, VecDeque};
-
 use hharness_wire::json::{parse, Json};
 
 use crate::json_ext::JsonExt;
@@ -80,18 +78,13 @@ pub const INVERT_FILLER: char = 'x';
 pub const SUBMIT_MARKER: &str = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT";
 
 /// The raw observation — O's `(output, returncode, exception_info)`
-/// per executed action (design/36 §1.2).
-#[derive(Debug, Clone, PartialEq)]
-pub struct RawObservation {
-    /// The command's merged stdout+stderr (UTF-8 after
-    /// `errors="replace"` — the recorded doc carries the replaced
-    /// text, never raw bytes).
-    pub output: String,
-    /// The exit code (`-1` on timeout — E1 A.4).
-    pub returncode: i64,
-    /// The exception detail when the environment reported one.
-    pub exception_info: Option<Json>,
-}
+/// per executed action (design/36 §1.2). The canonical home is
+/// `hh_env::obs_replay` (the type rides the `ToolExecutor` seam too —
+/// CC1, one observation type); re-exported here.
+pub use hharness_env::obs_replay::RawObservation;
+/// The `ToolExecutor`-seam doubles — re-exported for the L1 host
+/// surface (`spec.exec` arms bind the shared clone per cap).
+pub use hharness_env::obs_replay::{ObsReplayExecutor, SharedObsReplayExecutor};
 
 /// `jinja_truthy(j)` — Python truthiness for the
 /// `{%- if output.exception_info %}` guard.
@@ -230,45 +223,39 @@ pub trait L1Exec {
     fn run(&mut self, command: &str) -> Result<RawObservation, L1Error>;
 }
 
-/// `ObsReplay` — the observation-replay executor's core: serves O's
-/// recorded raw observations one per action (K2). A sequence overrun
-/// is a typed `observation_overrun` refusal — never a fabricated
-/// observation.
+/// `ObsReplay` — the `L1Exec`-seam replay: serves O's recorded raw
+/// observations one per action (K2) over the canonical
+/// `hh_env::obs_replay::ObsReplayCore` queue (CC1 — one replay fold).
+/// A sequence overrun is a typed `observation_overrun` refusal —
+/// never a fabricated observation.
 #[derive(Debug, Clone)]
 pub struct ObsReplay {
-    raws: VecDeque<RawObservation>,
-    served: Vec<RawObservation>,
+    core: hharness_env::obs_replay::ObsReplayCore,
 }
 
 impl ObsReplay {
     /// `ObsReplay::new(raws)` — the recorded sequence to serve.
     pub fn new(raws: Vec<RawObservation>) -> ObsReplay {
         ObsReplay {
-            raws: raws.into(),
-            served: Vec::new(),
+            core: hharness_env::obs_replay::ObsReplayCore::new(raws),
         }
     }
 
     /// The next recorded raw — `observation_overrun` past the end.
     pub fn next(&mut self) -> Result<RawObservation, L1Error> {
-        let raw = self.raws.pop_front().ok_or_else(|| {
-            err(
-                "observation_overrun",
-                "observation replay exhausted — a request beyond the recorded sequence is a fail, never a fabricated observation",
-            )
-        })?;
-        self.served.push(raw.clone());
-        Ok(raw)
+        self.core
+            .next()
+            .map_err(|e| err("observation_overrun", e.to_string()))
     }
 
     /// How many recorded raws remain.
     pub fn remaining(&self) -> usize {
-        self.raws.len()
+        self.core.remaining()
     }
 
     /// The raws served so far, in order.
     pub fn served(&self) -> &[RawObservation] {
-        &self.served
+        self.core.served()
     }
 }
 
@@ -278,108 +265,6 @@ impl L1Exec for ObsReplay {
     }
 }
 
-/// `ObsReplayExecutor` — the observation-replay double bound onto the
-/// HH exec seam (`hh_env::executor::ToolExecutor`, `executor.rs:565`):
-/// `execute` serves the next recorded `(output, returncode,
-/// exception_info)`, emitting the output as one `stdout` chunk and the
-/// exit status on the terminal report; `exception_info` rides
-/// [`ObsReplayExecutor::last_observation`] (the report vocabulary has
-/// no exception member — reported, never coerced). Overrun refuses
-/// `EnvError::Unsupported{l1.observation_replay}` — typed, never a
-/// fabricated result.
-pub struct ObsReplayExecutor {
-    replay: ObsReplay,
-    decl: hharness_env::executor::ExecutorDeclaration,
-    last: Option<RawObservation>,
-}
-
-impl ObsReplayExecutor {
-    /// `ObsReplayExecutor::new(raws)` — the recorded sequence.
-    pub fn new(raws: Vec<RawObservation>) -> ObsReplayExecutor {
-        ObsReplayExecutor {
-            replay: ObsReplay::new(raws),
-            decl: hharness_env::executor::ExecutorDeclaration {
-                executor_id: "l1.observation_replay/1".to_string(),
-                isolation_support: hharness_containment::policy::IsolationClass::None,
-                dedup_support: hharness_env::executor::DedupSupport::None,
-                probe_support: hharness_env::executor::ProbeSupport::None,
-                interrupt: hharness_env::executor::InterruptSupport::Unsupported,
-                error_classes: ["executor_error".to_string()]
-                    .into_iter()
-                    .collect::<BTreeSet<_>>(),
-                streams: true,
-                domains: [hharness_hir::kinds::EffectDomain::Exec]
-                    .into_iter()
-                    .collect(),
-            },
-            last: None,
-        }
-    }
-
-    /// The raw triple the last `execute` served.
-    pub fn last_observation(&self) -> Option<&RawObservation> {
-        self.last.as_ref()
-    }
-
-    /// The underlying replay (remaining/served counts).
-    pub fn replay(&self) -> &ObsReplay {
-        &self.replay
-    }
-}
-
-impl hharness_env::executor::ToolExecutor for ObsReplayExecutor {
-    fn declaration(&self) -> &hharness_env::executor::ExecutorDeclaration {
-        &self.decl
-    }
-
-    fn execute(
-        &mut self,
-        request: &hharness_env::executor::ExecutionRequest,
-        sink: &mut dyn FnMut(hharness_env::executor::ExecutorSignal),
-    ) -> Result<hharness_env::executor::TerminalReport, hharness_env::errors::EnvError> {
-        let raw = self
-            .replay
-            .next()
-            .map_err(|e| hharness_env::errors::EnvError::Unsupported {
-                capability: "l1.observation_replay",
-                detail: e.to_string(),
-            })?;
-        sink(hharness_env::executor::ExecutorSignal {
-            token: request.attribution_token.clone(),
-            kind: hharness_env::capture::CaptureKind::OutputChunk {
-                stream: "stdout".to_string(),
-                data: raw.output.clone(),
-            },
-        });
-        let original_size = raw.output.len() as u64;
-        self.last = Some(raw.clone());
-        Ok(hharness_env::executor::TerminalReport {
-            status: hharness_env::executor::TerminalStatus::Ok,
-            exit_status: Some(raw.returncode),
-            outcome_hint: "applied".to_string(),
-            retryable_hint: None,
-            detail_ref: None,
-            truncated: false,
-            omitted_bytes: 0,
-            original_size,
-        })
-    }
-
-    fn probe(
-        &self,
-        _effect_id: &str,
-        _attempt_no: u64,
-    ) -> Result<hharness_env::executor::ProbeVerdict, hharness_env::errors::EnvError> {
-        Ok(hharness_env::executor::ProbeVerdict::Undeterminable)
-    }
-}
-
-/// `raws_from_messages(messages)` — recover the raw observation
-/// sequence from a request's message list. Each `role:"tool"` message
-/// contributes one raw: its `extra.raw_observation
-/// {output,returncode,exception_info}` members when present (the
-/// native-trajectory leg, design/36 §1.2 — UNVERIFIED upstream, so the
-/// member shape is declared here), else the tested template inverse
 /// over the rendered `content`.
 pub fn raws_from_messages(messages: &[Json]) -> Result<Vec<RawObservation>, L1Error> {
     let mut out = Vec::new();

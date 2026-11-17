@@ -1688,6 +1688,57 @@ impl EmbedService {
         Ok(())
     }
 
+    /// `rebind_exec_executor(sess, surface_id, executor)` — the L1
+    /// host's substitution seam (spec §7.4 REQ-XD-103; R6.45q): swap
+    /// one armed cap's executor — `ObsReplayExecutor` for L1.1's
+    /// observation-replay leg — re-running the `executor::bind` check
+    /// so a requirement the double cannot satisfy refuses typed at
+    /// rebind, never a downgrade mid-drive. Runtime posture only —
+    /// the same arm path as `arm_exec_capabilities`, per surface.
+    /// Call before `drive`; a finished session refuses.
+    pub fn rebind_exec_executor(
+        &mut self,
+        sess_id: &str,
+        surface_id: &str,
+        executor: Box<dyn hharness_env::executor::ToolExecutor>,
+    ) -> Result<(), EmbedError> {
+        let s = self.session_mut(sess_id)?;
+        if s.finished {
+            return Err(EmbedError::Refused {
+                reason: "exec_cap_rebind_inadmissible".to_string(),
+            });
+        }
+        let cap = s
+            .exec_caps
+            .iter_mut()
+            .find(|c| c.surface_id == surface_id)
+            .ok_or_else(|| EmbedError::Refused {
+                reason: format!("exec_cap_unarmed:{surface_id}"),
+            })?;
+        let req = hharness_env::executor::ExecutionRequirement::from_json(
+            &cap.capability.execution_requirement,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("exec_cap_requirement:{}:{e:?}", surface_id),
+        })?;
+        hharness_env::executor::bind(executor.declaration(), cap.declared.domain, &req).map_err(
+            |e| EmbedError::Refused {
+                reason: format!("exec_cap_unbound:{}:{e:?}", surface_id),
+            },
+        )?;
+        cap.executor = executor;
+        Ok(())
+    }
+
+    /// The session's armed exec surfaces — the L1 host reads the ids
+    /// before [`rebind_exec_executor`] (each bound surface gets one
+    /// clone of the shared replay queue).
+    pub fn exec_surface_ids(&self, sess_id: &str) -> Vec<String> {
+        self.session(sess_id)
+            .map(|s| s.exec_caps.iter().map(|c| c.surface_id.clone()).collect())
+            .unwrap_or_default()
+    }
+
     /// Drive the session's control loop until it parks or finishes, then
     /// scan the newly durable prefix (host asks, turn/flags).
     pub(crate) fn drive(&mut self, sess_id: &str) -> Result<(), EmbedError> {
