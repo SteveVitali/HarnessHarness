@@ -39,7 +39,7 @@ use hharness_wire::sha256::sha256_hex;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
+        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 l1-fold --spec <f> --out <dir>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
     );
     std::process::exit(2)
 }
@@ -2120,6 +2120,348 @@ fn cmd_index(args: &[String]) -> Result<String, String> {
     Ok("index: ok".to_string())
 }
 
+// ── l1-fold ───────────────────────────────────────────────────────
+// The Ws1 L1 fold (R6.45q; spec §7.4 REQ-XD-103/104/109): the
+// deterministic half of `l1_gate::run_sequence` composed over
+// externally-supplied drives — the driver emits L1Drive JSON docs
+// (`hh-l1-drive-report` captures + proxy receipts for O cells,
+// `hh-l1-drive` events + receipts for H legs); this surface parses
+// them, runs stable_prefix / compare_drives / diff_record /
+// conformance_record verbatim, and emits `hh-l1-diff/1` per gated
+// divergence + the `hh-l1-conformance/1` record bound to the exact H.
+//
+// spec.json shape:
+//   {canon_id, surface, cell_facts:[[k,v]], corpus_digest,
+//    h_id:{participant_ref,version,digest}, o_id:{…},
+//    coverage:<Json>, census_covered:<int>, recorded_at,
+//    seqs:[{seq_id, o_a:DRIVE, o_b:DRIVE, h1:DRIVE, h2:DRIVE,
+//           endpoint_first_1:[turn,path]|null,
+//           endpoint_first_2:[turn,path]|null}]}
+// DRIVE := {requests:[{turn,method,path,content_type,body,upstream_body}],
+//           parsed_actions:[[{command,tool_call_id}]],
+//           executed_actions:[[…]], termination, submission,
+//           extra_request, refusal:{rule,detail}|null}
+fn l1_b64_decode(s: &str) -> Result<Vec<u8>, String> {
+    fn v(c: u8) -> Result<u8, String> {
+        match c {
+            b'A'..=b'Z' => Ok(c - b'A'),
+            b'a'..=b'z' => Ok(c - b'a' + 26),
+            b'0'..=b'9' => Ok(c - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err(format!("b64 char {c}")),
+        }
+    }
+    let b: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace()).collect();
+    let mut out = Vec::with_capacity(b.len() * 3 / 4);
+    let mut i = 0;
+    while i + 4 <= b.len() {
+        let (a, bb, c, d) = (v(b[i])?, v(b[i + 1])?, v(b[i + 2])?, v(b[i + 3])?);
+        out.push((a << 2) | (bb >> 4));
+        if b[i + 2] != b'=' {
+            out.push((bb << 4) | (c >> 2));
+        }
+        if b[i + 3] != b'=' {
+            out.push((c << 6) | d);
+        }
+        i += 4;
+    }
+    Ok(out)
+}
+
+fn l1_body(j: &Json, plain: &str, b64: &str) -> Result<Vec<u8>, String> {
+    if let Some(s) = j.get(b64).and_then(Json::as_str) {
+        return l1_b64_decode(s);
+    }
+    Ok(j.get(plain)
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .as_bytes()
+        .to_vec())
+}
+
+fn l1_actions(j: Option<&Json>) -> Vec<Vec<hharness_runner::l1_drive::L1Action>> {
+    j.and_then(Json::as_arr)
+        .map(|steps| {
+            steps
+                .iter()
+                .map(|st| {
+                    st.as_arr()
+                        .map(|acts| {
+                            acts.iter()
+                                .map(|a| hharness_runner::l1_drive::L1Action {
+                                    command: jstr(a, "command").unwrap_or_default().to_string(),
+                                    tool_call_id: jstr(a, "tool_call_id")
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn l1_drive_from_json(j: &Json) -> Result<hharness_runner::l1_drive::L1Drive, String> {
+    let mut requests = Vec::new();
+    for r in j
+        .get("requests")
+        .and_then(Json::as_arr)
+        .cloned()
+        .unwrap_or_default()
+    {
+        requests.push(hharness_runner::l1_drive::CapturedRequest {
+            turn: r.get("turn").and_then(Json::as_int).unwrap_or(0) as usize,
+            method: jstr(&r, "method").unwrap_or_default().to_string(),
+            path: jstr(&r, "path").unwrap_or_default().to_string(),
+            content_type: jstr(&r, "content_type").map(str::to_string),
+            body: l1_body(&r, "body", "body_b64")?,
+            upstream_body: l1_body(&r, "upstream_body", "upstream_body_b64")?,
+        });
+    }
+    let refusal = j.get("refusal").and_then(|r| {
+        r.as_obj().map(|_| hharness_runner::l1_obs::L1Error {
+            rule: Box::leak(
+                jstr(r, "rule")
+                    .unwrap_or("drive")
+                    .to_string()
+                    .into_boxed_str(),
+            ),
+            detail: jstr(r, "detail").unwrap_or_default().to_string(),
+        })
+    });
+    Ok(hharness_runner::l1_drive::L1Drive {
+        requests,
+        parsed_actions: l1_actions(j.get("parsed_actions")),
+        executed_actions: l1_actions(j.get("executed_actions")),
+        termination: jstr(j, "termination")
+            .unwrap_or("exception{unspecified}")
+            .to_string(),
+        submission: jstr(j, "submission").map(str::to_string),
+        extra_request: j
+            .get("extra_request")
+            .and_then(Json::as_bool)
+            .unwrap_or(false),
+        refusal,
+    })
+}
+
+fn l1_identity_from_json(j: &Json) -> hharness_runner::l1_gate::L1Identity {
+    hharness_runner::l1_gate::L1Identity {
+        participant_ref: jstr(j, "participant_ref").unwrap_or_default().to_string(),
+        version: jstr(j, "version").unwrap_or_default().to_string(),
+        digest: jstr(j, "digest").unwrap_or_default().to_string(),
+    }
+}
+
+fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
+    let spec_p = req(args, "--spec");
+    let out = PathBuf::from(req(args, "--out"));
+    let _ = std::fs::create_dir_all(&out);
+    let spec = read_json(&spec_p)?;
+    let canon_id = jstr(&spec, "canon_id")
+        .unwrap_or("hh-l1-canon/1")
+        .to_string();
+    let surface = jstr(&spec, "surface").unwrap_or("openai-chat").to_string();
+    let cell_facts: Vec<(String, String)> = spec
+        .get("cell_facts")
+        .and_then(Json::as_arr)
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    p.as_arr().and_then(|kv| {
+                        Some((
+                            kv.first()?.as_str()?.to_string(),
+                            kv.get(1)?.as_str()?.to_string(),
+                        ))
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let corpus_digest = jstr(&spec, "corpus_digest").unwrap_or_default().to_string();
+    let h_id = l1_identity_from_json(&spec.get("h_id").cloned().unwrap_or(Json::Null));
+    let o_id = l1_identity_from_json(&spec.get("o_id").cloned().unwrap_or(Json::Null));
+    let coverage = spec.get("coverage").cloned().unwrap_or(Json::Null);
+    let census_covered = spec
+        .get("census_covered")
+        .and_then(Json::as_int)
+        .unwrap_or(0) as usize;
+    let recorded_at = jstr(&spec, "recorded_at")
+        .unwrap_or("2026-11-17T00:00:00Z")
+        .to_string();
+    let canon = || {
+        hharness_gateway::replay::canonicalizer_for(&canon_id, &cell_facts)
+            .map_err(|e| format!("canonicalizer: {e:?}"))
+    };
+
+    let mut seqs: Vec<hharness_runner::l1_gate::SeqOutcome> = Vec::new();
+    let mut diff_docs: Vec<Json> = Vec::new();
+    for seq in spec
+        .get("seqs")
+        .and_then(Json::as_arr)
+        .cloned()
+        .unwrap_or_default()
+    {
+        let seq_id = jstr(&seq, "seq_id").unwrap_or("seq").to_string();
+        let drive_a = l1_drive_from_json(&seq.get("o_a").cloned().unwrap_or(Json::Null))?;
+        let drive_b = l1_drive_from_json(&seq.get("o_b").cloned().unwrap_or(Json::Null))?;
+        let h1 = l1_drive_from_json(&seq.get("h1").cloned().unwrap_or(Json::Null))?;
+        let h2 = l1_drive_from_json(&seq.get("h2").cloned().unwrap_or(Json::Null))?;
+        let c = canon()?;
+        let s = hharness_runner::l1_gate::stable_prefix(c.as_ref(), &surface, &drive_a, &drive_b);
+        let total = drive_a.requests.len().max(drive_b.requests.len());
+        // L1.1 — whole-trajectory gate (usize::MAX), strict endpoint
+        // first-divergence folded as a gated request-level divergence.
+        let mut div1 = hharness_runner::l1_gate::compare_drives(
+            c.as_ref(),
+            &surface,
+            &drive_a,
+            &h1,
+            usize::MAX,
+            total,
+        );
+        let ep1 = seq
+            .get("endpoint_first_1")
+            .and_then(Json::as_arr)
+            .and_then(|a| {
+                Some((
+                    a.first()?.as_int()? as usize,
+                    a.get(1)?.as_str()?.to_string(),
+                ))
+            });
+        if let Some((t, pth)) = &ep1 {
+            if !div1
+                .iter()
+                .any(|d| d.turn == Some(*t) && d.level == "request")
+            {
+                div1.push(hharness_runner::l1_gate::L1Divergence {
+                    level: "request",
+                    turn: Some(*t),
+                    path: pth.clone(),
+                    detail: "strict endpoint refusal".to_string(),
+                    gated: true,
+                });
+            }
+        }
+        let l1_1 = hharness_runner::l1_gate::LegOutcome {
+            result: if div1.iter().any(|d| d.gated) {
+                "fail"
+            } else {
+                "pass"
+            },
+            divergences: div1,
+            endpoint_first: ep1,
+            h_drive: Some(h1.clone()),
+            o_drive: None,
+        };
+        // L1.2 — gated on requests 1…s(S).
+        let div2 =
+            hharness_runner::l1_gate::compare_drives(c.as_ref(), &surface, &drive_a, &h2, s, total);
+        let ep2 = seq
+            .get("endpoint_first_2")
+            .and_then(Json::as_arr)
+            .and_then(|a| {
+                Some((
+                    a.first()?.as_int()? as usize,
+                    a.get(1)?.as_str()?.to_string(),
+                ))
+            });
+        let l1_2 = hharness_runner::l1_gate::LegOutcome {
+            result: if div2.iter().any(|d| d.gated) {
+                "fail"
+            } else {
+                "pass"
+            },
+            divergences: div2,
+            endpoint_first: ep2,
+            h_drive: Some(h2.clone()),
+            o_drive: None,
+        };
+        // diff records — one durable `hh-l1-diff/1` per gated divergence.
+        let cmp = canon()?;
+        for (leg, outcome, hd) in [("l1_1", &l1_1, &h1), ("l1_2", &l1_2, &h2)] {
+            for d in outcome.divergences.iter().filter(|d| d.gated) {
+                let cv = |dr: &hharness_runner::l1_drive::L1Drive| -> String {
+                    d.turn
+                        .and_then(|t| dr.requests.get(t - 1))
+                        .and_then(|r| cmp.canonicalize(&surface, &r.upstream_body).ok())
+                        .map(|cv| String::from_utf8_lossy(&cv.bytes).into_owned())
+                        .unwrap_or_default()
+                };
+                diff_docs.push(hharness_runner::l1_gate::diff_record(
+                    &seq_id,
+                    leg,
+                    d,
+                    &canon_id,
+                    &o_id,
+                    &h_id,
+                    &cv(&drive_a),
+                    &cv(hd),
+                    &recorded_at,
+                ));
+            }
+        }
+        seqs.push(hharness_runner::l1_gate::SeqOutcome {
+            seq_id,
+            stable: s,
+            total,
+            l1_1,
+            l1_2,
+            diffs: vec![],
+        });
+    }
+    let seq_refs: Vec<&hharness_runner::l1_gate::SeqOutcome> = seqs.iter().collect();
+    let conf = hharness_runner::l1_gate::conformance_record(
+        &seq_refs,
+        &coverage,
+        census_covered,
+        &canon_id,
+        &corpus_digest,
+        &h_id,
+        &o_id,
+        &recorded_at,
+    );
+    write_json(&out.join("hh-l1-conformance.json"), &conf)?;
+    write_json(&out.join("hh-l1-diffs.json"), &Json::Arr(diff_docs.clone()))?;
+    Ok(Json::obj([
+        ("conformance", conf),
+        ("diffs", Json::Int(diff_docs.len() as i64)),
+    ])
+    .to_canonical_string())
+}
+
+// ── l1-raws ───────────────────────────────────────────────────────
+// Extract the recorded `RawObservation` queue from a corpus
+// recording (R6.45q): L1.1's obs_replay executor is fed exactly this
+// — the raw env effects embedded in the recorded tool messages.
+// Emits [{output, returncode, exception_info}].
+fn cmd_l1_raws(args: &[String]) -> Result<String, String> {
+    let rec_path = req(args, "--recording");
+    let out = PathBuf::from(req(args, "--out"));
+    let rec_j = read_json(&rec_path)?;
+    let rec = Recording::parse(&rec_j).map_err(|e| format!("recording: {e}"))?;
+    let raws = hharness_runner::l1_obs::raws_from_recording(&rec)
+        .map_err(|e| format!("raws: {}", e.detail))?;
+    let arr: Vec<Json> = raws
+        .iter()
+        .map(|r| {
+            Json::obj([
+                ("output", Json::str(&r.output)),
+                ("returncode", Json::Int(r.returncode)),
+                (
+                    "exception_info",
+                    r.exception_info.clone().unwrap_or(Json::Null),
+                ),
+            ])
+        })
+        .collect();
+    write_json(&out, &Json::Arr(arr.clone()))?;
+    Ok(format!("raws: {}", arr.len()))
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(cmd) = args.first() else { usage() };
@@ -2137,6 +2479,8 @@ fn main() {
         "prove" => cmd_prove(rest),
         "fault" => cmd_fault(rest),
         "census" => cmd_census(rest),
+        "l1-fold" => cmd_l1_fold(rest),
+        "l1-raws" => cmd_l1_raws(rest),
         "probe-run" => cmd_probe_run(rest),
         "label-packet" => cmd_label_packet(rest),
         "index" => cmd_index(rest),
