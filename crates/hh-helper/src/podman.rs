@@ -240,7 +240,13 @@ impl PodmanBackend {
     /// `/work` mounts the environment workspace; a bounded pids limit;
     /// no new privileges; seccomp is podman's default profile (ptrace,
     /// process_vm_*, io_uring denied — the probe battery verifies).
+    /// Idempotent: a same-named leftover from a crashed cell is removed
+    /// first — slot names are unique per cell, so a collision is stale.
     pub fn create(&self) -> Result<(), BackendError> {
+        let _ = run(
+            "rm",
+            &["rm".to_string(), "-f".to_string(), self.container.clone()],
+        );
         run("create", &self.create_args())?;
         Ok(())
     }
