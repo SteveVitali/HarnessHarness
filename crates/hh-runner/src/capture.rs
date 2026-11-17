@@ -221,6 +221,18 @@ pub fn hash_host_tree(root: &Path) -> Result<NativeLogBundle, CellError> {
             })?;
             if ft.is_dir() {
                 walk(&p.path(), acc)?;
+            } else if ft.is_symlink() {
+                // A copied link has no member bytes of its own: a
+                // link that resolves to a regular file contributes
+                // its target's content; a dangling or directory link
+                // contributes nothing (the member still sits in the
+                // copied tree — the manifest hashes readable files).
+                if std::fs::metadata(p.path())
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+                {
+                    acc.push(p.path());
+                }
             } else {
                 acc.push(p.path());
             }
