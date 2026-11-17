@@ -1712,6 +1712,20 @@ fn arm_run_once(
         let _ = hharness_runner::cell::exec_guarded(&backend, sa, "/", &[], Some(60_000))
             .map_err(|e| format!("setup exec: {e}"))?;
     }
+    // The cell contract's `/logs/agent` (the ST4 copy-out source) is a
+    // provisioning dir — the rendered argv writes trajectories into it.
+    let _ = hharness_runner::cell::exec_guarded(
+        &backend,
+        &[
+            "/bin/mkdir".to_string(),
+            "-p".to_string(),
+            "/logs/agent".to_string(),
+        ],
+        "/",
+        &[],
+        Some(60_000),
+    )
+    .map_err(|e| format!("logs-agent mkdir: {e}"))?;
     let workdir = backend
         .image_workdir()
         .unwrap_or_else(|_| cfg.workdir_default.clone());
