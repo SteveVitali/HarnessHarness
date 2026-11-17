@@ -119,6 +119,7 @@ struct Cfg {
     egress_port: u16,
     workdir_default: String,
     slot_token: String,
+    node_dist_dir: String,
 }
 
 fn load_cfg(path: &str) -> Result<Cfg, String> {
@@ -157,6 +158,12 @@ fn load_cfg(path: &str) -> Result<Cfg, String> {
         workdir_default: jstr(&j, "workdir_default").unwrap_or("/app").to_string(),
         slot_token: jstr(&j, "slot_token")
             .unwrap_or("hh-w1-slot-token")
+            .to_string(),
+        // Host-side node runtime tree copied into arms that declare
+        // `runtime.node` (pi, claude-code) — the layer images carry no
+        // runtime, so provisioning materializes the declared version.
+        node_dist_dir: jstr(&j, "node_dist_dir")
+            .unwrap_or("/opt/ws1/node")
             .to_string(),
     })
 }
@@ -1702,6 +1709,20 @@ fn arm_run_once(
     // Slot-invariant rendered files + the adapter's setup exec land
     // before the agent phase (provisioning, never phase-owned paths).
     for f in &rc.files {
+        if let Some(parent) = std::path::Path::new(&f.path).parent() {
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &[
+                    "/bin/mkdir".to_string(),
+                    "-p".to_string(),
+                    parent.to_string_lossy().to_string(),
+                ],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("render-file mkdir: {e}"))?;
+        }
         let tmp = slot.join(format!("render-file-{}", f.path.replace('/', "_")));
         std::fs::write(&tmp, &f.bytes).map_err(|e| e.to_string())?;
         backend
@@ -1726,12 +1747,79 @@ fn arm_run_once(
         Some(60_000),
     )
     .map_err(|e| format!("logs-agent mkdir: {e}"))?;
+    // Agent PATH — the harness bundle's `bin/` (through the declared
+    // link) plus the node's runtime dir for arms that declare
+    // `runtime.node` (pi, claude-code): the admission pins the version,
+    // provisioning materializes it from the host-side dist tree.
+    let mut path_parts = vec![
+        "/usr/local/bin".to_string(),
+        "/opt/hh-harness-link/bin".to_string(),
+    ];
+    if admission
+        .get("runtime")
+        .and_then(|r| r.get("node"))
+        .is_some()
+    {
+        let mkdir = |p: &str| {
+            hharness_runner::cell::exec_guarded(
+                &backend,
+                &["/bin/mkdir".to_string(), "-p".to_string(), p.to_string()],
+                "/",
+                &[],
+                Some(60_000),
+            )
+        };
+        let _ = mkdir("/opt/node").map_err(|e| format!("node mkdir: {e}"))?;
+        let _ = mkdir("/usr/local/bin").map_err(|e| format!("bin mkdir: {e}"))?;
+        backend
+            .cp_in(&format!("{}/.", cfg.node_dist_dir), "/opt/node")
+            .map_err(|e| format!("node cp_in: {e}"))?;
+        path_parts.insert(0, "/opt/node/bin".to_string());
+        // `install.version_probe` names the entry the image is expected
+        // to carry (`bin/<arm>`); the bundle lacks the shim, so mint it
+        // in-cell pointed at the package's cli.js.
+        if let Some(name) = admission
+            .get("install")
+            .and_then(|i| i.get("version_probe"))
+            .and_then(Json::as_arr)
+            .and_then(|a| a.first())
+            .and_then(Json::as_str)
+            .and_then(|p| p.rsplit('/').next().map(str::to_string))
+        {
+            let script = format!(
+                "f=$(find /opt/hh-harness-link -maxdepth 3 -name cli.js | head -1) && \
+                 printf '#!/bin/sh\\nexec /opt/node/bin/node \"$f\" \"$@\"\\n' \
+                 > /usr/local/bin/{name} && chmod +x /usr/local/bin/{name}"
+            );
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &["/bin/sh".to_string(), "-c".to_string(), script],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("bin shim: {e}"))?;
+        }
+    }
     let workdir = backend
         .image_workdir()
         .unwrap_or_else(|_| cfg.workdir_default.clone());
     let mut dc = DriveCell {
         backend: &backend,
-        env: rc.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+        env: {
+            let mut e: Vec<(String, String)> =
+                rc.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            path_parts.extend([
+                "/usr/local/sbin".to_string(),
+                "/usr/local/bin".to_string(),
+                "/usr/bin".to_string(),
+                "/usr/sbin".to_string(),
+                "/sbin".to_string(),
+                "/bin".to_string(),
+            ]);
+            e.push(("PATH".to_string(), path_parts.join(":")));
+            e
+        },
         verify_env: Some(verify_env),
         agent_argv: agent_argv.clone(),
         verifier_argv: verifier_argv.clone(),
