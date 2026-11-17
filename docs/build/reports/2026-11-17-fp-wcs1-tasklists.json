@@ -1,0 +1,126 @@
+{
+ "coverage": "17/17 slots carry a covering `admit` verdict \u2014 the Wcs1 bounded successor re-proof on the verified machinery at the declared pinned commit b3f72ab7 under epoch-5 (sha256:e61a6ed9\u2026) ran BOTH legs to COMPLETION well inside D=8h (~05:19Z\u2192~07:12Z, ~1.9h): held packet minted `admit` for query-optimize + merge-diff-arc-agi-task @ R=3; dev packet minted `admit` for cobol-modernization + extract-elf + openssl-selfsigned-cert + sqlite-with-gcov @ R=2 \u2014 14 trials, 42 cells, EVERY cell `decided` reward 1 `exited{0}`, `denied_hosts []`, zero machinery{\u2026} register rows, zero verifier_unavailable:* cells, zero harbor_exceptions. Every Wc10 exclusion class discharged on re-run: query-optimize's o_fail:flaky oracle landed [true,true,true] (transient nondeterminism) and its verifier_unavailable:bootstrap:signature cell did not recur; all four drawn-member oracle_fails_on_O exclusions (cobol-modernization, extract-elf, openssl-selfsigned-cert, sqlite-with-gcov) were W1-era artifacts \u2014 each oracle passes cleanly on the verified machinery. store-check: 14 mediated cells, pass, zero failures. pytorch-model-cli's recorded epoch-5 `allowlist_gap{download.pytorch.org}` exclusion stands verbatim (not rerun \u2014 deterministic declared-data gap); it served easy slot 0 only via the adjacent-order walk after the drawn member's exclusion, and cobol-modernization's admit now covers that slot directly \u2014 the exclusion no longer leaves any slot uncovered. Held draw: 10/10 slots covered; dev draw fp_dev7: 7/7 slots covered (easy cobol-modernization; hard cancel-async-tasks, build-pmars; medium pytorch-model-recovery, extract-elf, openssl-selfsigned-cert, sqlite-with-gcov). The post-Wcs1 stop rule does NOT fire \u2014 no machinery{\u2026} register row, no verifier_unavailable:* cell, no incomplete leg. task_lists.state \u2192 `frozen`: every subject slot admits a covering-verdict member \u2014 the withheld L1 corpus legs' `withheld{un_reproofed_successor}` precondition is now met.",
+ "gate": "GATE-G28m",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "admitted{prove-plus-comm}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "admitted{make-doom-for-mips}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "admitted{torch-tensor-parallelism}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "admitted{vulnerable-secret}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "admitted{pypi-server}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "admitted{git-leak-recovery}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "admitted{polyglot-c-py}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "admitted{db-wal-recovery}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "admitted{sqlite-db-truncate}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit (b3f72ab7, epoch-5)"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "admitted{query-optimize}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=3 \u2014 O [true,true,true] + H-pub 3/3 + H-allow 3/3 all decided reward 1; Wc10's o_fail:flaky + verifier_unavailable:bootstrap:signature did not recur (transient, discharged)"
+  },
+  {
+   "cell": "held",
+   "member": "merge-diff-arc-agi-task",
+   "slot_state": "admitted{merge-diff-arc-agi-task}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=3 \u2014 the committed medium-order successor for slot 6; all surfaces decided reward 1 (spare covering member \u2014 query-optimize admits directly)"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "admitted{cancel-async-tasks}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit covering hard slot 0 (drawn torch-pipeline-parallelism excluded)"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "admitted{build-pmars}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit covering hard slot 1 (drawn polyglot-rust-c excluded)"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "admitted{pytorch-model-recovery}",
+   "wcs1_verdict": "carried from Wc10 verbatim \u2014 reproofed admit covering medium slot 0 (drawn modernize-scientific-stack excluded)"
+  },
+  {
+   "cell": "dev",
+   "member": "cobol-modernization",
+   "slot_state": "admitted{cobol-modernization}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=2 \u2014 the DRAWN easy member; O/H-pub/H-allow all [true,true]; Wc10's drawn-exclusion oracle_fails_on_O discharged \u2014 the slot no longer needs the adjacent-order walk"
+  },
+  {
+   "cell": "dev",
+   "member": "extract-elf",
+   "slot_state": "admitted{extract-elf}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=2 \u2014 DRAWN medium slot 1 member; all surfaces [true,true]; oracle_fails_on_O discharged \u2014 no_adjacent_donor resolved"
+  },
+  {
+   "cell": "dev",
+   "member": "openssl-selfsigned-cert",
+   "slot_state": "admitted{openssl-selfsigned-cert}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=2 \u2014 DRAWN medium slot 2 member; all surfaces [true,true]; oracle_fails_on_O discharged \u2014 no_adjacent_donor resolved"
+  },
+  {
+   "cell": "dev",
+   "member": "sqlite-with-gcov",
+   "slot_state": "admitted{sqlite-with-gcov}",
+   "wcs1_verdict": "reproofed in Wcs1 @ R=2 \u2014 DRAWN medium slot 3 member; all surfaces [true,true]; oracle_fails_on_O discharged \u2014 no_adjacent_donor resolved"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "excluded{allowlist_gap{download.pytorch.org}}",
+   "wcs1_verdict": "NOT rerun \u2014 recorded epoch-5 agent-phase exclusion stands verbatim (egress-proxy 403 on /whl/cpu/torch/, declared data); served easy slot 0 in Wc10 only because the drawn member was excluded \u2014 cobol-modernization's Wcs1 admit covers the slot directly, so the exclusion no longer leaves any slot uncovered"
+  }
+ ],
+ "recorded_at": "2026-11-17T07:25:10Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists": {
+  "state": "frozen"
+ },
+ "window": "wcs1"
+}

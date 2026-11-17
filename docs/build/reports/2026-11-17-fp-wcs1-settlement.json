@@ -1,0 +1,42 @@
+{
+ "balance_delta_usd": 0.0,
+ "balance_observed": "59.99988 \u2192 59.99988 (unchanged \u2014 no model spend; model_line none)",
+ "boundary_flags": [],
+ "clock_honest": "the provider usage-ledger settlement clock (\u226524h elapsed) has not run \u2014 status pending, not settled",
+ "compute_estimate_usd": 0.853518,
+ "metered_model_calls": 0,
+ "model_line": "none",
+ "phase": "fp",
+ "reads": [
+  {
+   "file": "~/hh-retained/wcs1/settle/read-1.json",
+   "kind": "balance-pre",
+   "read_at": "2026-11-17T07:42:19Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wcs1/settle/usage1.json",
+   "kind": "usage1",
+   "read_at": "2026-11-17T07:46:50Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wcs1/settle/usage2.json",
+   "kind": "usage2",
+   "read_at": "2026-11-17T07:47:56Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/wcs1/settle/read-4.json",
+   "kind": "balance-post",
+   "read_at": "2026-11-17T07:45:35Z",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-17T07:48:03Z",
+ "schema": "hh-settlement/1",
+ "status": "pending",
+ "ticket": "R6.45p",
+ "usage_observed": "all-zero buckets over the 24h range (request_count 0, usage_usd 0)",
+ "window": "wcs1"
+}

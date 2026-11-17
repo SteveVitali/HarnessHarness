@@ -14,7 +14,8 @@
 - **Sequence:** 309t of 325 · **Phase:** Round 6 · **Kind:** gate
 - **Block:** Wcs1 · **Alias:** GATE PROV-Wcs1
 - **base_branch:** current checkout
-- **Depends on:** R6.45o, the post-Wc10 scope-decision readout (recorded ruling)
+- **Depends on:** R6.45o
+- **Also depends (record, not a chain row):** the post-Wc10 scope-decision readout `docs/build/readouts/GATE-G30-postwc10-scope.md` (recorded ruling)
 - **Readout:** `docs/build/readouts/GATE-G28m.md` (owed — presented to the operator; not pre-answered)
 
 > **Milestone gate — NOT an `implement-spec` input.** The chain STOPS here until the operator

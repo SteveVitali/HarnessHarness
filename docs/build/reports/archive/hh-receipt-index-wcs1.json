@@ -1,0 +1,255 @@
+{
+ "schema": "hh-receipt-index/1",
+ "artifacts": [
+  {
+   "bytes": 679606,
+   "name": "run-root.tar.gz",
+   "note": "the byte-exact harvested tar \u2014 non-UTF8 (unscannable by the REQ-XH-103 prescan); the tree rides as the prescanned wcs1/run-root-tree.json bundle (783 UTF-8 members, 0 non-UTF8) + per-member sha256 in wcs1/harvest/MANIFEST.sha256; tar bytes retained in ~/hh-retained/wcs1/harvest/run-root.tar.gz",
+   "path": null,
+   "role": "run_root_tar",
+   "sha256": "3bc8fbbc746b79fc9c525daef8995af296864c1bc37f903d8a8b594bc3dcd27e",
+   "upload": "digest_only",
+   "window": "wcs1"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "wcs1-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "6d315bfbb1200e073ae52518ef58cc0229d046f8",
+    "verify_receipt": "docs/build/reports/archive/2026-11-17-fp-wc10-verify.json",
+    "window": "wc10"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 3744,
+     "path": "wcs1/2026-11-17-fp-wcs1-cost.json",
+     "role": "window_record",
+     "sha256": "259b659d32e4f2a01bc74cbcbeb337c271aee92e5806687043991e8700e61090"
+    },
+    {
+     "bytes": 23761,
+     "path": "wcs1/2026-11-17-fp-wcs1-harvest.json",
+     "role": "window_record",
+     "sha256": "5f022b97637865ce8963078f950d544ffad5563c30d5fa32f8f63fb568cc96f6"
+    },
+    {
+     "bytes": 2512,
+     "path": "wcs1/2026-11-17-fp-wcs1-prepull.json",
+     "role": "window_record",
+     "sha256": "c116e9f007334dfa63561b14a7827044117bbbab8c418e199ae63c0a2a6f9cd2"
+    },
+    {
+     "bytes": 17882,
+     "path": "wcs1/2026-11-17-fp-wcs1-provision.json",
+     "role": "window_record",
+     "sha256": "4d537d898483dca9cc2a7ffb21e9527613c315a9e811718400085306ab590206"
+    },
+    {
+     "bytes": 7000,
+     "path": "wcs1/2026-11-17-fp-wcs1-tasklists.json",
+     "role": "window_record",
+     "sha256": "96d09ad33374e2b3e9c64251e28070234bba7b6cc0210877e79033006067eadc"
+    },
+    {
+     "bytes": 52056,
+     "path": "wcs1/2026-11-17-fp-wcs1-teardown.json",
+     "role": "window_record",
+     "sha256": "91df192dcfdc46006f9cd3c8a657c1a877e352d18dac8ec6283f553cb6831db4"
+    },
+    {
+     "bytes": 16414,
+     "path": "wcs1/2026-11-17-fp-wcs1-verify.json",
+     "role": "window_record",
+     "sha256": "d59ed95f46d785daf5713699f62dd887449e23e0e8a0c82c262f16b39553bdf0"
+    },
+    {
+     "bytes": 6699903,
+     "path": "wcs1/run-root-tree.json",
+     "role": "window_record",
+     "sha256": "97f83cbf78b7f336c27c3128ebdd5a7923f75aef07701648dc7544329f445314"
+    },
+    {
+     "bytes": 107068,
+     "path": "wcs1/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "e679d398f7fd45c06083bef21df0e02a0f71947babbaa7d72bec56bb0698c5d6"
+    },
+    {
+     "bytes": 2310986,
+     "path": "wcs1/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "8d28c9d45b4316819543d69d698c0d16bd4025308db81fdfdb69907d819de648"
+    },
+    {
+     "bytes": 467551,
+     "path": "wcs1/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "de409988dab18f92c57a2f12b7dfb530dbc5c66335ebe4ec447dbd42231ff196"
+    },
+    {
+     "bytes": 23,
+     "path": "wcs1/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "9a253b2d8986cd2cc11a57e3065b85bfafe191db1720065aaac806965c8aeec1"
+    },
+    {
+     "bytes": 1338,
+     "path": "wcs1/live/2026-11-17-reproof-wcs1.json",
+     "role": "window_record",
+     "sha256": "228444a61cfcf24d3b7596c263fb8414a2b03668b4ba7eba24ef66bd3a7abb98"
+    },
+    {
+     "bytes": 11847,
+     "path": "wcs1/live/2026-11-17-reproof-wcs1.transcript.txt",
+     "role": "window_record",
+     "sha256": "96d4dbb4872fdb80a566b50b4c0b13f689b43edef08de9d6baaa438da3dd70a6"
+    },
+    {
+     "bytes": 4578,
+     "path": "wcs1/run-root/checkpoint-latest.json",
+     "role": "window_record",
+     "sha256": "2f2b1ae743a54a912e8646410ed9edc20c2cf0ffe7f039b68457dd613e2786fc"
+    },
+    {
+     "bytes": 1259,
+     "path": "wcs1/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "343bbc530dfcefd7911122b1bc37f65184029ba47f96c57d477cb1d876210171"
+    },
+    {
+     "bytes": 296,
+     "path": "wcs1/run-root/runner-digests.txt",
+     "role": "window_record",
+     "sha256": "03546c062661ab1882e69839e28ad7337a1079c5bdc5387d28432da19a0fc7a0"
+    },
+    {
+     "bytes": 168,
+     "path": "wcs1/run-root/verifier-first-errors.txt",
+     "role": "window_record",
+     "sha256": "53f4ad5e18a9d9711a324ea93cf47f48823dbd82144c7569d808fdf6966c8cd5"
+    },
+    {
+     "bytes": 10242,
+     "path": "wcs1/run-root/wcs1-store-check.json",
+     "role": "window_record",
+     "sha256": "0412014218c33fe219837ddd50f4ca4e97571bc871ad1997f3690f9c666d28d8"
+    },
+    {
+     "bytes": 8614,
+     "path": "wcs1/run-root/wcs1-window-record.json",
+     "role": "window_record",
+     "sha256": "22045002df6723a26bd158d6a1675cd28585bbda4b019cad2667f0353f57cf79"
+    },
+    {
+     "bytes": 2082,
+     "path": "wcs1/run-root/prove-dev/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "5065e161116fcca1e9cd5655ca9a436ec08091c46dbae51fe19f1c7167f50a58"
+    },
+    {
+     "bytes": 44,
+     "path": "wcs1/run-root/prove-dev/reproof-register.json",
+     "role": "window_record",
+     "sha256": "07c43d55d9269d5fa03bf3973649c884ea681de953f73ede4faeace5f85d3a2c"
+    },
+    {
+     "bytes": 1796,
+     "path": "wcs1/run-root/prove-held/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "d550cd879c08df5125e787b618b8610c877cc79188b99c7b5d0a28e35e3d0725"
+    },
+    {
+     "bytes": 44,
+     "path": "wcs1/run-root/prove-held/reproof-register.json",
+     "role": "window_record",
+     "sha256": "07c43d55d9269d5fa03bf3973649c884ea681de953f73ede4faeace5f85d3a2c"
+    },
+    {
+     "bytes": 1297,
+     "path": "wcs1/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "dc608f64e403a2c6c5574d4b64c66a2b2b48c60bbf086b349e2d2930e2963bec"
+    },
+    {
+     "bytes": 569,
+     "path": "wcs1/wiring/cfg-dev.json",
+     "role": "window_record",
+     "sha256": "be76f38ffb2f1db1b485ac56d0f20870ed82b53764fc742baa580657909ba753"
+    },
+    {
+     "bytes": 569,
+     "path": "wcs1/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "c816ca370700168ae6700aef421abd04e4a77d03cb8427d7212e18dc3a22ca33"
+    },
+    {
+     "bytes": 2160,
+     "path": "wcs1/wiring/fp-wcs1.json",
+     "role": "window_record",
+     "sha256": "81f2ce07266b22ada11d6bf9c8a6b0f3ef72a3be5bcc8bfdc5a483a1aabd7751"
+    },
+    {
+     "bytes": 971,
+     "path": "wcs1/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "a73b81af88c9102ae12b1e85acc063c20e1b88373cb02f1caf8c2be1212512c7"
+    },
+    {
+     "bytes": 516,
+     "path": "wcs1/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 252,
+     "path": "wcs1/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "a270ef23350e460647efa25c2269044b597b73b9c5bb62d857cb9200d43356a7"
+    },
+    {
+     "bytes": 4245,
+     "path": "wcs1/wiring/wcs1-checkpoint.py",
+     "role": "window_record",
+     "sha256": "0205aa055bfdd8b744d056480ef9bed9c920c7207d98f6be054d5d3d5681c38a"
+    },
+    {
+     "bytes": 4530,
+     "path": "wcs1/wiring/wcs1-closeout.py",
+     "role": "window_record",
+     "sha256": "0c8f10cd6cab67646ed3a04f25aeb4e27cd49c8b12650c35e9af23b91f154da5"
+    },
+    {
+     "bytes": 2992,
+     "path": "wcs1/wiring/wcs1-load-infra.py",
+     "role": "window_record",
+     "sha256": "a429f8ff9c8fda85dded26940ff4956ec51bdcbced9e8229f6233fc5b2a51d04"
+    },
+    {
+     "bytes": 2958,
+     "path": "wcs1/wiring/wcs1-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5150,
+     "path": "wcs1/wiring/wcs1-setup.sh",
+     "role": "window_record",
+     "sha256": "1c23aca67433d3ba69ead89838e72c0740ac1ed787ab903461c12b1cf3302a29"
+    },
+    {
+     "bytes": 4814,
+     "path": "wcs1/wiring/wcs1-store-check.py",
+     "role": "window_record",
+     "sha256": "56eb34f2c76280d7fb3228acd0c91ef8b2160a6a04707acd0db8c6b4609a4f04"
+    }
+   ]
+  }
+ ]
+}
