@@ -36,7 +36,7 @@ usage() {
 
 # ── leg registry (bash-3.2 safe: case tables, no assoc arrays) ──────────
 # fields per leg: ticket · provider · kind · required NAMEs
-legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "w4-lane-probe" "w4-main" "egress-real-clients" "selftest"; }
+legs() { printf '%s\n' "local-reachability" "local-run" "https-reachability" "anthropic-call" "openai-call" "routing-probe" "lt03-live" "bench-manifest-live" "github-live" "oauth-device" "context-adapters" "judge-calibrate" "judge-run" "otel-live" "r4-15d-fetch" "capstone-run-local" "capstone-run-anthropic" "capstone-run-openai" "capstone-sandboxed-exec" "capstone-judge" "capstone-ledger-replay" "capstone-web" "capstone-mcp" "capstone-fleet-webhook" "capstone-bundle-repro" "l4-6b-replay" "quickstart-live" "surface-acp" "surface-mcp-lab" "embed-sdk-live" "plugin-memory-store" "plugin-compact-evict-oldest" "plugin-tracker-fixture" "admission-build" "reproof" "carried-artifacts" "archive-upload" "ps0" "pp0" "corpus" "l1" "w4-lane-probe" "w4-main" "egress-real-clients" "selftest"; }
 leg_field() { # $1 leg, $2 field
   case "$1:$2" in
     local-reachability:ticket)   printf 'R4.5a';;
@@ -260,6 +260,11 @@ leg_field() { # $1 leg, $2 field
     corpus:kind)     printf 'script';;
     corpus:names)    printf 'HH_CORPUS_BASE_URL HH_CORPUS_SLOT_TOKEN HH_PS_STAGE_RECORD HH_PP_EVIDENCE_DIR';;
     corpus:test)     printf 'hh-runner:r6_26:live_corpus_record';;
+    l1:ticket)   printf 'R6.45q';;
+    l1:provider) printf 'hh-model-proxy';;
+    l1:kind)     printf 'script';;
+    l1:names)    printf '';;
+    l1:test)     printf 'hh-runner:r6_28:live_l1_conformance';;
     w4-lane-probe:ticket)   printf 'R6.47';;
     w4-lane-probe:provider) printf 'hh-model-proxy';;
     w4-lane-probe:kind)     printf 'script';;
@@ -1717,6 +1722,26 @@ run_leg_corpus() {
     RESULT="pass"
   else
     RESULT="fail:corpus-driver-rc"
+  fi
+}
+
+run_leg_l1() {
+  ASSERTIONS="the §7.4 L1 conformance battery — L1.0 stable-prefix + L1.1 strict response/observation replay + L1.2 lenient/live over the gate-A partition's 8 trajectories against the exact frozen H-set; hh-l1-diff/1 per gated divergence, hh-l1-conformance/1 binding l1_pass_id to H's identity — registered by R6.28, executed in Ws1 by R6.45q: subject legs admit only against a frozen development list (REQ-XH-114)"
+  local st; st="$(fp_task_lists_state)"
+  if [ "$st" != "frozen" ]; then
+    RESULT="withheld{un_reproofed_successor:task_lists_state=$st}"
+    return
+  fi
+  local drv="${HH_L1_DRIVER:-}"
+  if [ -z "$drv" ] || [ ! -x "$drv" ]; then
+    RESULT="skipped(l1-driver-absent:HH_L1_DRIVER)"
+    return
+  fi
+  TRANSCRIPT_RAW="$(mktemp "${TMPDIR:-/tmp}/hh-l1.XXXXXX")"
+  if "$drv" >"$TRANSCRIPT_RAW" 2>&1; then
+    RESULT="pass"
+  else
+    RESULT="fail:l1-driver-rc"
   fi
 }
 

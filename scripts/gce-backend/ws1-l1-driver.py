@@ -26,14 +26,16 @@ The comparison fold (`stable_prefix`/`compare_drives`/`diff_record`/
 the driver passes its captured L1Drive docs to `hh-w1 l1-fold` and
 writes the emitted `hh-l1-diff/1`/`hh-l1-conformance/1` rows.
 
-STATUS (authored 2026-11-17): L1.0's O-drive path is wired end-to-end
-(arm-run + replay session + capture extraction). The H-drive seam —
-the kernel-embedded HIR's model/exec adapters binding the replay
-endpoint — is the remaining machinery: the committed kernel run
-surface (`hh run start`) needs its gateway endpoint + obs/live exec
-wiring resolved. Until then this driver emits typed
-`withheld{l1_h_drive:seam_unresolved}` rows for L1.1/L1.2 rather than
-a fabricated conformance — never a scored refusal, never frozen.
+STATUS (authored 2026-11-17, corrected): the L1Sequence contract
+makes obs_a/obs_b the recorded environment sequences for BOTH O runs
+— L1.0/L1.1 are observation-replay drives, not live-exec cells, so
+arm-run alone does NOT implement them. Every leg except L1.2's exec
+needs an obs-replay exec adapter (positional server on the exec seam
+returning recorded (stdout,stderr,exit), typed obs_replay_diverged on
+command mismatch): a cell-side exec shim for hosted arms, a replay
+env variant for the kernel H. Neither is committed. Until the adapter
+lands this driver emits typed `withheld{l1_obs_replay:adapter_absent}`
+rows for all three legs — never a fabricated conformance.
 
 usage:
   ws1-l1-driver.py --cfg cfg.json --corpus-dir DIR --gate-a-list F \

@@ -751,3 +751,11 @@ fn ac7_l1_record_refuses_as_parity_evidence() {
     assert_eq!(e.rule, "l1_not_parity");
     assert!(refuse_parity_input(&Json::obj([("schema", Json::str("x"))])).is_ok());
 }
+
+/// §7.4's L1 conformance legs — L1.0/L1.1/L1.2 over gate-A against the
+/// frozen H-set — run only inside Ws1 under FP-S (R6.45q, `scripts/
+/// live-verify.sh l1`); the driver composes the committed l1_gate fold
+/// over real drives — never a fixture row for live evidence.
+#[test]
+#[ignore = "live — ADR-0363: scripts/live-verify.sh l1 — the Ws1 L1 legs run only inside Ws1 under FP-S (R6.45q)"]
+fn live_l1_conformance() {}
