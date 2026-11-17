@@ -14,7 +14,8 @@ INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${
 : "${HH_L1_OUT_DIR:?}"
 mkdir -p "$HH_L1_OUT_DIR"
 gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
-  "sudo rm -rf $RR/l10-* $RR/l11-* $RR/l12-* $RR/*-raws.json \
+  "sudo podman rm -f \$(sudo podman ps -aq --filter name=hh-ws1-ws1-l1) 2>/dev/null; \
+   sudo rm -rf $RR/l10-* $RR/l11-* $RR/l12-* $RR/*-raws.json \
      $RR/proxy-store/runs/l10-* $RR/proxy-store/runs/l11-* \
      $RR/proxy-store/runs/l12-* $RR/l1-out; \
    sudo mkdir -p $RR/l1 && sudo python3 $R/ws1-l1-driver.py --cfg $R/cfg.json \
