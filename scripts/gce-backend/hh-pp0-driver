@@ -22,6 +22,7 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
      --session-out $RR/pp0-session.json --sentinel $R/pp0-session-done --poll-seconds 30 & \
    sleep 6 && python3 $R/ws1-pp0-driver.py --cfg $R/cfg.json \
      --tasks $WS1_PP0_TASKS --layers-file $R/layers.json \
+     --w1-bin $R/bin/hh-w1 \
      --admissions-dir $R/admissions --proxy-session $RR/pp0-session.json \
      --model-upstream ${LISTEN##*:} --out-dir $RR/pp0-evidence --run-root $RR; \
    touch $R/pp0-session-done"

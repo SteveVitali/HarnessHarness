@@ -302,6 +302,20 @@ def main():
         rec_file = ent.get("recording")
         row = {"trajectory": sid, "task": task}
         rec_p = os.path.join(a.corpus_dir, rec_file) if rec_file else None
+        if (not rec_p or not os.path.exists(rec_p)) and \
+                os.path.isdir(a.corpus_dir):
+            # resolve the sealed recording by its slot_id member
+            for fn in os.listdir(a.corpus_dir):
+                if not fn.endswith(".json"):
+                    continue
+                try:
+                    d = read_json(os.path.join(a.corpus_dir, fn))
+                except Exception:
+                    continue
+                if d.get("slot_id") == sid and \
+                        d.get("schema") == "hh.model_proxy.recording/1":
+                    rec_p = os.path.join(a.corpus_dir, fn)
+                    break
         recording = read_json(rec_p) if rec_p and os.path.exists(rec_p) \
             else {"calls": []}
         n_calls = recorded_len(recording)

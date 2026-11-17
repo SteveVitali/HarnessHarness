@@ -120,6 +120,7 @@ def main():
     ap.add_argument("--model-upstream", required=True, type=int)
     ap.add_argument("--slot-slice-micros", type=int, default=850000)
     ap.add_argument("--out-dir", required=True)
+    ap.add_argument("--w1-bin", default="hh-w1")
     ap.add_argument("--run-root", required=True)
     a = ap.parse_args()
 
@@ -156,7 +157,7 @@ def main():
                 f.write(token)
             os.chmod(tok_file, 0o600)
             cmd = [
-                "hh-w1", "arm-run",
+                [a.w1_bin, "arm-run"],
                 "--cfg", a.cfg,
                 "--task", task,
                 "--image", image,

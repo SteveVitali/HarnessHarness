@@ -23,6 +23,7 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
      --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30 & \
    sleep 6 && python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
      --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
+     --w1-bin $R/bin/hh-w1 \
      --admission $R/admissions/mini-swe-agent.json \
      --proxy-session $RR/corpus-session.json \
      --model-upstream ${LISTEN##*:} --out-dir $RR/corpus-out --run-root $RR; \
