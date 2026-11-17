@@ -998,7 +998,16 @@ fn handle_conn(core: &mut Core, gate: &mut Gate, mut stream: TcpStream) {
         Ok(s) => s,
         Err(_) => return,
     });
-    let (head, body) = match read_request(&mut r, 16 * 1024 * 1024) {
+    // The accept loop is single-threaded: a client that connects and
+    // never finishes its request would wedge every later conn. Bound
+    // the request read (loopback bodies are small); cleared as soon
+    // as head+body are complete so a slow response stream is free.
+    let _ = r
+        .get_ref()
+        .set_read_timeout(Some(std::time::Duration::from_secs(60)));
+    let read = read_request(&mut r, 16 * 1024 * 1024);
+    let _ = r.get_ref().set_read_timeout(None);
+    let (head, body) = match read {
         Ok(Some(v)) => v,
         _ => return,
     };
