@@ -191,6 +191,26 @@ fn upstream(serve: impl FnOnce(TcpStream) + Send + 'static) -> u16 {
     port
 }
 
+/// Read an upstream fixture's request head through the blank line, so no
+/// request bytes remain unread when the fixture closes (a Linux close with
+/// unread receive data aborts the connection with RST) and the fixture
+/// never replies + closes while the mediator is still writing the head
+/// (`write_request` writes it in several segments — the late ones hit
+/// EPIPE). Every request this battery forwards is bodiless (`req` sets
+/// `body: None` → `Content-Length: 0`), so the head is the whole request.
+fn drain_request_head(s: &TcpStream) {
+    let mut r = BufReader::new(s);
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match r.read_line(&mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) if line == "\r\n" || line == "\n" => return,
+            Ok(_) => {}
+        }
+    }
+}
+
 fn read_head(r: &mut impl BufRead) -> (u16, Vec<(String, String)>) {
     let mut status = 0u16;
     let mut hdrs = Vec::new();
@@ -312,6 +332,9 @@ fn d8_concurrent_forwards_no_lost_rows() {
     thread::spawn(move || loop {
         let Ok((mut s, _)) = l.accept() else { break };
         thread::spawn(move || {
+            // Consume the forwarded request head before replying — closing
+            // with request bytes unread answers the mediator RST.
+            drain_request_head(&s);
             thread::sleep(Duration::from_millis(150));
             let _ =
                 s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
@@ -366,8 +389,9 @@ fn d9_upstream_silence_then_sends_delivers() {
     // Upstream silent 8 s (past the old 5 s idle kill) then sends — the
     // client must still receive the late bytes.
     let port = upstream(|mut s| {
-        let mut b = [0u8; 512];
-        let _ = s.read(&mut b);
+        // The client's whole tunnel payload (`CLIENTHELLO`), not one
+        // `read` that may return a prefix.
+        let _ = s.read_exact(&mut [0u8; 11]);
         thread::sleep(Duration::from_secs(8));
         let _ = s.write_all(b"late-bytes");
         let _ = s.shutdown(std::net::Shutdown::Both);
@@ -423,8 +447,9 @@ fn d9_eof_propagates_and_close_row_is_true() {
     // Upstream: read 8 bytes, write 4, close. Client sees EOF promptly;
     // the closed row carries true counts + `eof`.
     let port = upstream(|mut s| {
-        let mut b = [0u8; 64];
-        let _ = s.read(&mut b);
+        // Exactly the client's 8-byte payload (`CLIENTHI`) — a short
+        // `read` would reply + close with tunnel bytes still in flight.
+        let _ = s.read_exact(&mut [0u8; 8]);
         let _ = s.write_all(b"PONG");
         let _ = s.shutdown(std::net::Shutdown::Both);
     });
@@ -505,8 +530,10 @@ fn d9_eof_propagates_and_close_row_is_true() {
 #[test]
 fn d10_chunked_upstream_emits_one_framing_header_and_close() {
     let port = upstream(|mut s| {
-        let mut b = [0u8; 1024];
-        let _ = s.read(&mut b);
+        // The whole request head, not one `read`: the mediator writes the
+        // request line + headers as separate segments, and replying +
+        // closing before the last lands answers its writes EPIPE/RST.
+        drain_request_head(&s);
         let _ = s.write_all(
             b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\nTrailer: X-T\r\nProxy-X: 1\r\n\r\n4\r\nabcd\r\n0\r\nX-T: v\r\n\r\n",
         );
@@ -556,8 +583,10 @@ fn d10_chunked_upstream_emits_one_framing_header_and_close() {
 #[test]
 fn d10_no_duplicate_content_length() {
     let port = upstream(|mut s| {
-        let mut b = [0u8; 1024];
-        let _ = s.read(&mut b);
+        // The whole request head, not one `read`: the mediator writes the
+        // request line + headers as separate segments, and replying +
+        // closing before the last lands answers its writes EPIPE/RST.
+        drain_request_head(&s);
         let _ = s.write_all(
             b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nhello",
         );
@@ -608,8 +637,7 @@ fn d11_head_and_bodiless_statuses_answer_promptly() {
         // The upstream emits a head declaring a body then stays silent —
         // the bodiless codec must not wait for the phantom 999 bytes.
         let port = upstream(move |mut s| {
-            let mut b = [0u8; 1024];
-            let _ = s.read(&mut b);
+            drain_request_head(&s);
             let _ = s.write_all(status_head.as_bytes());
             thread::sleep(Duration::from_secs(6));
             let _ = s.shutdown(std::net::Shutdown::Both);
@@ -649,16 +677,14 @@ fn d11_head_and_bodiless_statuses_answer_promptly() {
 fn d12_slow_first_byte_ok_lapse_is_typed_timeout() {
     // First byte at ~1.5 s under a 3 s declared bound → OK.
     let port_ok = upstream(|mut s| {
-        let mut b = [0u8; 512];
-        let _ = s.read(&mut b);
+        drain_request_head(&s);
         thread::sleep(Duration::from_millis(1500));
         let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
         let _ = s.shutdown(std::net::Shutdown::Both);
     });
     // Never answers inside the declared 3 s bound → typed Timeout.
-    let port_lapse = upstream(|mut s| {
-        let mut b = [0u8; 512];
-        let _ = s.read(&mut b);
+    let port_lapse = upstream(|s| {
+        drain_request_head(&s);
         thread::sleep(Duration::from_secs(10));
     });
     let mut rig = rig("d12");
@@ -731,8 +757,12 @@ fn d13_large_body_streams_bounded() {
     // the streaming path delivers it whole, Vec-free (bounded RSS).
     const SIZE: usize = 250 * 1024 * 1024;
     let port = upstream(move |mut s| {
-        let mut b = [0u8; 512];
-        let _ = s.read(&mut b);
+        // Consume the whole request head, not one `read`: the mediator
+        // writes the request in several segments, and a close with
+        // unread bytes in the receive queue makes Linux send RST
+        // (discarding the still-unsent tail of the 250 MiB body) instead
+        // of a FIN — the client then sees ECONNRESET mid-body.
+        drain_request_head(&s);
         let _ =
             s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {SIZE}\r\n\r\n").as_bytes());
         let chunk = vec![7u8; 1024 * 1024];

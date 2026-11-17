@@ -23,9 +23,21 @@ use hharness_runner::json_ext::JsonExt;
 use hharness_wire::json::{self, Json};
 
 const W1: &str = env!("CARGO_BIN_EXE_hh_w1");
+/// The epoch-3 freeze as a byte-copy fixture under `tests/fixtures/` —
+/// the CI readers gate bars gated test sources from reading committed
+/// documentation content; the copy is byte-identical to the canonical
+/// build-reports record (same sha256 as its committed `.sha256`,
+/// pinned below — append-only record, never edited in place).
 fn epoch3() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/build/reports/2026-11-14-fp-egress-allowlist-freeze-epoch-3.json")
+        .join("tests/fixtures/r6_45k/2026-11-14-fp-egress-allowlist-freeze-epoch-3.json")
+}
+const EPOCH3_SHA256: &str = "028a0dd620f7837f373cb9810ca5c9f420b92eda465d2d3d370dfb7dc46a344f";
+
+#[test]
+fn epoch3_fixture_is_the_committed_freeze_bytes() {
+    let bytes = std::fs::read(epoch3()).unwrap();
+    assert_eq!(hharness_wire::sha256::sha256_hex(&bytes), EPOCH3_SHA256);
 }
 
 fn scratch(tag: &str) -> PathBuf {
