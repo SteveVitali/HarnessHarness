@@ -1,0 +1,27 @@
+# wc10 — verifier first-error excerpts (R-11; cited excerpts per the R-9
+# footprint — the raw run tree lives on the controller + in the private
+# archive upload).
+# ── pytorch-model-cli/H-allow/r0 (cell-report: decided, denied_hosts: []) ──
+debconf: delaying package configuration, since apt-utils is not installed
+downloading uv 0.9.5 x86_64-unknown-linux-gnu
+Downloading networkx (2.0MiB)
+Downloading pillow (6.8MiB)
+Downloading sympy (6.0MiB)
+Downloading opencv-python (60.1MiB)
+Downloading pygments (1.2MiB)
+Downloading numpy (15.9MiB)
+# ── pytorch-model-cli/H-allow/r1 (cell-report: decided, denied_hosts: []) ──
+debconf: delaying package configuration, since apt-utils is not installed
+downloading uv 0.9.5 x86_64-unknown-linux-gnu
+Downloading pygments (1.2MiB)
+Downloading networkx (2.0MiB)
+Downloading pillow (6.8MiB)
+Downloading numpy (15.9MiB)
+Downloading opencv-python (60.1MiB)
+Downloading sympy (6.0MiB)
+# ── query-optimize/H-allow/r0 (cell-report: verifier_unavailable:bootstrap:signature, denied_hosts: []) ──
+debconf: delaying package configuration, since apt-utils is not installed
+downloading uv 0.9.5 x86_64-unknown-linux-gnu
+curl: (22) The requested URL returned error: 504
+/tests/test.sh: line 10: /root/.local/bin/env: No such file or directory
+/tests/test.sh: line 19: uvx: command not found

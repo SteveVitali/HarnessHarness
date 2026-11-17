@@ -1,0 +1,114 @@
+{
+ "coverage": "12/14 members carry a covering `admit` (reproofed) verdict \u2014 the Wc10 evidence re-proof on the verified machinery at the declared pinned commit b3f72ab7 under epoch-5 (sha256:e61a6ed9\u2026) ran BOTH legs to COMPLETION inside D=8h (~23:51Z\u2192~02:58Z, ~3.1h): the held hh-reproof-packet/1 + register landed (prove-held, 9 `admit` + query-optimize `exclude:runner_infeasible:oracle_fails_on_O{unclassified}`) and the dev packet + register landed (prove-dev, 3 `admit` + pytorch-model-cli register-rolled `machinery{h_allow}`). The R-8-shaped early-inspection checkpoint FIRED ~00:26Z at \u22653 distinct members' H-allow cells \u2192 all decided reward 1 \u2192 continue. pypi-server \u2014 the Wc9 machinery{repair} discordance that held the list \u2014 ran 6/6 cells decided reward 1 `exited{0}` at model_port 49152 (the repair verified live on the re-proof itself, not a smoke). pytorch-model-recovery \u2014 Wc9's dead-man casualty \u2014 completed all 6 cells decided 1 (no incomplete leg). The dev register's `machinery{h_allow}` for pytorch-model-cli rolls up a cell signature byte-identical to Wc9's recorded `allowlist_gap{download.pytorch.org}` legit exclusion (decided-0, exited{0}, denied_hosts []; the persisted agent-stderr \u2014 surfaced by the exec-drain repair Wc9 lacked \u2014 shows the egress-proxy 403 on /whl/cpu/torch/ while same-index numpy passed); A5's denied_hosts-nonempty literal labels it machinery, the committed exclusion records it agent-phase-legit (A5/R-7). store-check (38 mediated cells): zero 5xx, eof-only closes; flags only the by-design agent-phase download.pytorch.org denies + the one verifier_unavailable cell \u2014 recorded verbatim. task_lists.state stays `blocked` verbatim: query-optimize's new exclusion (register `o_fail:flaky` \u2014 O 2/3 oracle nondeterminism, harbor_exception null; H-allow 2/3 + r0 `verifier_unavailable:bootstrap:signature`) walks the medium committed order to merge-diff-arc-agi-task \u2014 never re-proofed \u2192 blocked{un_reproofed_successor}; pytorch-model-cli's exclusion walks the easy adjacent order \u2014 fully consumed \u2192 blocked{adjacent_order_exhausted}; the 3 standing blocked{no_adjacent_donor} slots. Post-Wc10 stop rule (A3/R-8) TRIGGERED on the record's literal terms \u2014 the register carries `machinery{h_allow}` and a cell carries `verifier_unavailable:*` \u2192 blockedOn + a \u00a76-shaped scope-decision readout owed (options 2\u20135), no Wc11.",
+ "gate": "GATE-G28l",
+ "members": [
+  {
+   "cell": "held",
+   "member": "prove-plus-comm",
+   "slot_state": "admitted{prove-plus-comm}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "make-doom-for-mips",
+   "slot_state": "admitted{make-doom-for-mips}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "torch-tensor-parallelism",
+   "slot_state": "admitted{torch-tensor-parallelism}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "vulnerable-secret",
+   "slot_state": "admitted{vulnerable-secret}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "pypi-server",
+   "slot_state": "admitted{pypi-server}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit) \u2014 the Wc9 `repair:machinery` discordance DISCHARGED on the re-proof itself: model_port 49152 holds the relay clear of the task's :8080; six cells `exited{0}`, denied_hosts [], eof-only, 0 5xx"
+  },
+  {
+   "cell": "held",
+   "member": "git-leak-recovery",
+   "slot_state": "admitted{git-leak-recovery}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "polyglot-c-py",
+   "slot_state": "admitted{polyglot-c-py}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "db-wal-recovery",
+   "slot_state": "admitted{db-wal-recovery}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "sqlite-db-truncate",
+   "slot_state": "admitted{sqlite-db-truncate}",
+   "wc10_verdict": "reproofed \u2014 O 3/3 + H-pub 3/3 + H-allow 3/3 all decided reward 1 (packet admit), eof-only, 0 5xx, denied_hosts []"
+  },
+  {
+   "cell": "held",
+   "member": "query-optimize",
+   "slot_state": "blocked{un_reproofed_successor}",
+   "wc10_verdict": "exclude:runner_infeasible:oracle_fails_on_O{unclassified} (register `o_fail:flaky`) \u2014 O 2/3 (one repeat scored 0, harbor_exception null \u2014 oracle nondeterminism, NOT the systematic W1 `o_fail` machinery signature), H-pub 3/3, H-allow 2/3 with r0 `verifier_unavailable:bootstrap:signature` (single cell; r1/r2 verified clean). The medium committed order's next member `merge-diff-arc-agi-task` was never re-proofed (outside the 14-member wc_reproof scope; REQ-XH-116's further-successor leg needs its own window) \u2014 no covering verdict exists"
+  },
+  {
+   "cell": "dev",
+   "member": "cancel-async-tasks",
+   "slot_state": "admitted{cancel-async-tasks}",
+   "wc10_verdict": "reproofed \u2014 O 2/2 + H-pub 2/2 + H-allow 2/2 all decided reward 1 (packet admit) \u2014 the Wc9 incomplete{dead_man} slot now covered"
+  },
+  {
+   "cell": "dev",
+   "member": "build-pmars",
+   "slot_state": "admitted{build-pmars}",
+   "wc10_verdict": "reproofed \u2014 O 2/2 + H-pub 2/2 + H-allow 2/2 all decided reward 1 (packet admit) \u2014 the Wc9 incomplete{dead_man} slot now covered"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-cli",
+   "slot_state": "blocked{adjacent_order_exhausted}",
+   "wc10_verdict": "register `machinery{h_allow}` over the recorded `allowlist_gap{download.pytorch.org}` signature \u2014 O 2/2 + H-pub 2/2 decided 1, H-allow 2/2 DECIDED reward 0 (exited{0}, denied_hosts []); the persisted agent-stderr (surfaced by the exec-drain repair) shows the egress-proxy 403 on `download.pytorch.org/whl/cpu/torch/` while same-index numpy + deb.debian.org passed \u2014 the agent-phase legit exclusion mechanism verbatim (A5/R-7), the A5 denied_hosts-nonempty literal rolling it up as machinery. The REQ-XH-127(c) walk records the easy dev cell's committed order exhausted (build-pmars + pytorch-model-recovery serving their own slots) \u2014 no covering successor exists"
+  },
+  {
+   "cell": "dev",
+   "member": "pytorch-model-recovery",
+   "slot_state": "admitted{pytorch-model-recovery}",
+   "wc10_verdict": "reproofed \u2014 O 2/2 + H-pub 2/2 + H-allow 2/2 all decided reward 1 (packet admit) \u2014 the Wc9 incomplete{dead_man} member completed inside ~30 min dev-leg wall"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-1",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc10_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-2",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc10_verdict": "no_member_to_reproof"
+  },
+  {
+   "cell": "dev",
+   "member": "dev-no_adjacent_donor-3",
+   "slot_state": "blocked{no_adjacent_donor}",
+   "wc10_verdict": "no_member_to_reproof"
+  }
+ ],
+ "recorded_at": "2026-11-17T03:30:00Z",
+ "schema": "hh-task-lists-outcome/1",
+ "task_lists": {
+  "state": "blocked"
+ },
+ "window": "wc10"
+}

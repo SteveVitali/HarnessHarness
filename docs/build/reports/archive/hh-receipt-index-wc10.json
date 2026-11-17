@@ -1,0 +1,255 @@
+{
+ "artifacts": [
+  {
+   "bytes": 21524099,
+   "name": "run-root.tar.gz",
+   "note": "the byte-exact harvested tar \u2014 non-UTF8 (unscannable by the REQ-XH-103 prescan); the tree rides as the prescanned wc10/run-root-tree.json bundle (2,034 UTF-8 members, 10 non-UTF8 skipped) + per-member sha256 in wc10/harvest/MANIFEST.sha256; tar bytes retained in ~/hh-retained/wc10/harvest/run-root.tar.gz",
+   "path": null,
+   "role": "run_root_tar",
+   "sha256": "5a44b9d299fac0f89dd04d94a4010df6b22d8bf0cfd60b5d0a2df1f186ea2718",
+   "upload": "digest_only",
+   "window": "wc10"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "wc10-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "ab1e8634e0134c05ca07a7218a6b72f1f1e248ce",
+    "verify_receipt": "docs/build/reports/archive/2026-11-16-fp-wc9-verify.json",
+    "window": "wc9"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 2512,
+     "path": "wc10/2026-11-16-fp-wc10-prepull.json",
+     "role": "window_record",
+     "sha256": "77cfc442ff0143e39b682c05ce5fc68c248d55ece0c361406eeb9f4ece432486"
+    },
+    {
+     "bytes": 17911,
+     "path": "wc10/2026-11-16-fp-wc10-provision.json",
+     "role": "window_record",
+     "sha256": "7d27f00a7a4789159501dc3abbf8291bb1c9b9f921f9776c6f287ad40ac7d40e"
+    },
+    {
+     "bytes": 16414,
+     "path": "wc10/2026-11-16-fp-wc10-verify.json",
+     "role": "window_record",
+     "sha256": "628669fb0730495096b172d1e2435731d1aabf7df0e4904b9ef97d059affd404"
+    },
+    {
+     "bytes": 3751,
+     "path": "wc10/2026-11-17-fp-wc10-cost.json",
+     "role": "window_record",
+     "sha256": "c9ef17de2d95a23442e1fce91e35c8d05d65e2ea79bc6ade2b59653707a44a3e"
+    },
+    {
+     "bytes": 25687,
+     "path": "wc10/2026-11-17-fp-wc10-harvest.json",
+     "role": "window_record",
+     "sha256": "b4beb8884dcaeee4e8f27d29cbeb1a4accd430ce90e705e38c7caf5a5e49e335"
+    },
+    {
+     "bytes": 7858,
+     "path": "wc10/2026-11-17-fp-wc10-tasklists.json",
+     "role": "window_record",
+     "sha256": "91ea6e52fcd11a987566d43595662504af71cac352afce21c5adcfcc67ec72f4"
+    },
+    {
+     "bytes": 53982,
+     "path": "wc10/2026-11-17-fp-wc10-teardown.json",
+     "role": "window_record",
+     "sha256": "69b0caaf4d0e28dae45283f7d690a5130cb9527456e5b7ff414c538b1cfa43ad"
+    },
+    {
+     "bytes": 276707,
+     "path": "wc10/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "f2c6fc2eb5b222d2b559353c3971972c9a1dc19c4696758ec5a3be919d39efe8"
+    },
+    {
+     "bytes": 4840382,
+     "path": "wc10/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "32f2fc8aa319a610355876f5fc995f08236b2463ddcb5b6b86908a41001c9c52"
+    },
+    {
+     "bytes": 821206,
+     "path": "wc10/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "64a0b6b912c1a571dc0a699a7178d8064423921f7c3edae6b3b9f3344c0ac9e9"
+    },
+    {
+     "bytes": 24,
+     "path": "wc10/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "da41719d80523465b2f5bd0776c1ebaecc12761258ce057d77b030c0a45a795d"
+    },
+    {
+     "bytes": 1338,
+     "path": "wc10/live/2026-11-17-reproof-wc10.json",
+     "role": "window_record",
+     "sha256": "d7338414e0e6186fb0a028e9e9cbd3bea8183df7f1680117c6e3e504bb13f6f4"
+    },
+    {
+     "bytes": 8099,
+     "path": "wc10/live/2026-11-17-reproof-wc10.transcript.txt",
+     "role": "window_record",
+     "sha256": "da465809a66d9d54272ebcedbe466e2265e27655bae60c66db23f1b7f5213e30"
+    },
+    {
+     "bytes": 26787105,
+     "path": "wc10/run-root-tree.json",
+     "role": "window_record",
+     "sha256": "f0d2b01b5e0508812fad0d3063bdca57aec8ddfbb5405dd3022f34424a1aa440"
+    },
+    {
+     "bytes": 4555,
+     "path": "wc10/run-root/checkpoint-latest.json",
+     "role": "window_record",
+     "sha256": "69b41816a6a496a81aab6767d225e54c896e6ca18e8b97cbe343865263acdc14"
+    },
+    {
+     "bytes": 1280,
+     "path": "wc10/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "41bb3b3f206f6a7048c34a7c4b06edf70d999669950842362c41aaeeb9963027"
+    },
+    {
+     "bytes": 3535,
+     "path": "wc10/run-root/prove-dev/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "27da63f3bec2c4e02a2bef92849d72e00e1dfddb10a748d6549656807eef61c5"
+    },
+    {
+     "bytes": 1478,
+     "path": "wc10/run-root/prove-dev/reproof-register.json",
+     "role": "window_record",
+     "sha256": "91aad8e0390ced39d64e4d2081cd428787a38928dc21d1f03a8f061ed2b586ae"
+    },
+    {
+     "bytes": 4407,
+     "path": "wc10/run-root/prove-held/reproof-packet.json",
+     "role": "window_record",
+     "sha256": "f893168dff5157c6583b1168768dac41c93795b308d3d6285ab3d558519284e7"
+    },
+    {
+     "bytes": 1462,
+     "path": "wc10/run-root/prove-held/reproof-register.json",
+     "role": "window_record",
+     "sha256": "5f038c1941c39b976c7fcc53296de0a1ba63cade13da77d229182361a38a9ebc"
+    },
+    {
+     "bytes": 296,
+     "path": "wc10/run-root/runner-digests.txt",
+     "role": "window_record",
+     "sha256": "e3bd2141049c558e3ac357ef13f4882d701ff01e52beb530429271ce3cd50890"
+    },
+    {
+     "bytes": 1344,
+     "path": "wc10/run-root/verifier-first-errors.txt",
+     "role": "window_record",
+     "sha256": "82c0330d8208387b584ce1c8444aeb8687df575f1429e1136d48627eaa935670"
+    },
+    {
+     "bytes": 27666,
+     "path": "wc10/run-root/wc10-store-check.json",
+     "role": "window_record",
+     "sha256": "28bfc56bae4dec50d6094f041f09dc92647537dfa615581ee5fea04c39be8382"
+    },
+    {
+     "bytes": 21470,
+     "path": "wc10/run-root/wc10-window-record.json",
+     "role": "window_record",
+     "sha256": "c914704c5365961c3b48bcfe7298506cb87748f6a40b2c11eabcfaa38f67d13c"
+    },
+    {
+     "bytes": 1297,
+     "path": "wc10/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "ea3cdcf57fbaec43493d4349240cf28262ebbc8c8336b360703b26c1ac94ed6d"
+    },
+    {
+     "bytes": 586,
+     "path": "wc10/wiring/cfg-dev.json",
+     "role": "window_record",
+     "sha256": "08c7bd9b356da2cac5ee0d0210e4489bac9feb43d6fe9cc806ed26b76ba769e4"
+    },
+    {
+     "bytes": 586,
+     "path": "wc10/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "fd735ce64506f795082c0f13d741a13f7afba6179b0919945960da2c4a02507b"
+    },
+    {
+     "bytes": 2160,
+     "path": "wc10/wiring/fp-wc10.json",
+     "role": "window_record",
+     "sha256": "05aafba1aa9916725823647cb0f219f5bde792c7f160dca77e92055b4b38da9c"
+    },
+    {
+     "bytes": 971,
+     "path": "wc10/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "a73b81af88c9102ae12b1e85acc063c20e1b88373cb02f1caf8c2be1212512c7"
+    },
+    {
+     "bytes": 516,
+     "path": "wc10/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 252,
+     "path": "wc10/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "560c56116b07509407cd007f5b807df2d56938dce648882c256d223927be3624"
+    },
+    {
+     "bytes": 4245,
+     "path": "wc10/wiring/wc10-checkpoint.py",
+     "role": "window_record",
+     "sha256": "328f66a381fc58daea348ef403dd96e8402a84f11ab229d06c7d744741e569c3"
+    },
+    {
+     "bytes": 4530,
+     "path": "wc10/wiring/wc10-closeout.py",
+     "role": "window_record",
+     "sha256": "9a3e86139580eac12ed259def6c306a19c33ce7475b26ae03cf513a21ea18b8f"
+    },
+    {
+     "bytes": 2992,
+     "path": "wc10/wiring/wc10-load-infra.py",
+     "role": "window_record",
+     "sha256": "a429f8ff9c8fda85dded26940ff4956ec51bdcbced9e8229f6233fc5b2a51d04"
+    },
+    {
+     "bytes": 2958,
+     "path": "wc10/wiring/wc10-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5426,
+     "path": "wc10/wiring/wc10-setup.sh",
+     "role": "window_record",
+     "sha256": "d6c69f58533c2aa3e0c4170f65036125b02167d52f04fcc66e4262bc3b2028b3"
+    },
+    {
+     "bytes": 4814,
+     "path": "wc10/wiring/wc10-store-check.py",
+     "role": "window_record",
+     "sha256": "cc79073a4f17875069b2c515443eee8c68598ed44f905c046ea622a18a333c6f"
+    }
+   ]
+  }
+ ],
+ "schema": "hh-receipt-index/1"
+}
