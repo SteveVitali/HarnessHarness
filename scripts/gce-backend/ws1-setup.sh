@@ -155,7 +155,7 @@ for arm in "${ARM_A[@]}"; do
     python3 - "$LAYERS" "$arm" "$t" "$ld/iidfile" <<'PY'
 import json,sys
 lj=json.load(open(sys.argv[1])); iid=open(sys.argv[4]).read().strip()
-lj.setdefault(sys.argv[3],{})[sys.argv[2]]=iid
+lj.setdefault(sys.argv[2],{})[sys.argv[3]]=iid
 json.dump(lj,open(sys.argv[1],"w"),indent=1,sort_keys=True)
 PY
   done
