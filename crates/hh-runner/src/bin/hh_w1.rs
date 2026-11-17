@@ -1603,20 +1603,24 @@ fn arm_run_once(
     // the session proxy (the stub's socket-file contract, piping —
     // each accepted conn streams to 127.0.0.1:<upstream>).
     let fwd_script = format!(
-        "import socket,threading,shutil\n\
+        "import socket,threading\n\
          s=socket.socket(socket.AF_UNIX)\n\
          s.bind({:?})\n\
          s.listen(64)\n\
          def pump(a,b):\n\
-         \ttry: shutil.copyfileobj(a,b)\n\
+         \ttry:\n\
+         \t\twhile True:\n\
+         \t\t\td=a.recv(65536)\n\
+         \t\t\tif not d: break\n\
+         \t\t\tb.sendall(d)\n\
          \texcept OSError: pass\n\
-         \ttry: b.close()\n\
+         \ttry: b.shutdown(socket.SHUT_WR)\n\
          \texcept OSError: pass\n\
          def serve(c):\n\
          \tu=socket.socket()\n\
          \tu.connect(('127.0.0.1',{}))\n\
-         \tthreading.Thread(target=pump,args=(c.makefile('rb'),u.makefile('wb')),daemon=True).start()\n\
-         \tpump(u.makefile('rb'),c.makefile('wb'))\n\
+         \tthreading.Thread(target=pump,args=(c,u),daemon=True).start()\n\
+         \tpump(u,c)\n\
          while True:\n\
          \tc,_=s.accept()\n\
          \tthreading.Thread(target=serve,args=(c,),daemon=True).start()\n",
