@@ -73,7 +73,7 @@ def main():
                 f.write(token)
             os.chmod(tok_file, 0o600)
             cmd = [
-                [a.w1_bin, "arm-run"],
+                a.w1_bin, "arm-run",
                 "--cfg", a.cfg,
                 "--task", task,
                 "--image", image,
