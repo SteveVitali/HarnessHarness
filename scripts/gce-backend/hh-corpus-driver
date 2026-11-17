@@ -17,13 +17,12 @@ gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap
    sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus $RR/corpus-out $RR/corpus $RR/corpus-session.json; \
    sudo rm -f $R/corpus-session-done $R/corpus-sentinel-done; \
    sudo mkdir -p $RR/corpus; \
-   sudo env OLLAMA_API_KEY=\"\$(sudo cat $R/ollama-key 2>/dev/null || true)\" \
-   python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
+   sudo sh -c 'export OLLAMA_API_KEY=\$(cat $R/ollama-key 2>/dev/null || true); exec python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
      --store-root $RR/proxy-store --run-id fp-ws1-corpus \
      --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
      --mode record --seal-recordings \
-     --slots \$(python3 -c 'print(\",\".join(f\"ws1-corpus-{i:02d}:850000:high\" for i in range(1,29)))') \
-     --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30 & \
+     --slots ws1-corpus-01:850000:high,ws1-corpus-02:850000:high,ws1-corpus-03:850000:high,ws1-corpus-04:850000:high,ws1-corpus-05:850000:high,ws1-corpus-06:850000:high,ws1-corpus-07:850000:high,ws1-corpus-08:850000:high,ws1-corpus-09:850000:high,ws1-corpus-10:850000:high,ws1-corpus-11:850000:high,ws1-corpus-12:850000:high,ws1-corpus-13:850000:high,ws1-corpus-14:850000:high,ws1-corpus-15:850000:high,ws1-corpus-16:850000:high,ws1-corpus-17:850000:high,ws1-corpus-18:850000:high,ws1-corpus-19:850000:high,ws1-corpus-20:850000:high,ws1-corpus-21:850000:high,ws1-corpus-22:850000:high,ws1-corpus-23:850000:high,ws1-corpus-24:850000:high,ws1-corpus-25:850000:high,ws1-corpus-26:850000:high,ws1-corpus-27:850000:high,ws1-corpus-28:850000:high \
+     --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30' & \
    for i in \$(seq 1 150); do [ -f $RR/corpus-session.json ] && break; sleep 2; done; \
    if [ -f $RR/corpus-session.json ]; then sudo python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
      --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
