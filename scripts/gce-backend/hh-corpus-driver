@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# hh-corpus-driver — the Ws1 corpus leg controller driver (R6.45q).
+# Invoked by scripts/live-verify.sh corpus (HH_CORPUS_DRIVER). Drives
+# ws1-proxy-session.py (record mode, --seal-recordings) +
+# ws1-corpus-driver.py on the Ws1 VM — 7 dev tasks x 4 = 28 slots —
+# then fetches the recordings + manifest to HH_CORPUS_OUT_DIR.
+set -euo pipefail
+set +x
+WS1="${WS1_SESSION_DIR:-$HOME/hh-retained/ws1}"
+R="/var/lib/hh/ws1"; RR="/var/lib/hh/runs/run-root-ws1"
+INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${WS1_ZONE:-us-central1-a}"
+: "${HH_CORPUS_OUT_DIR:?}"
+LISTEN="${HH_CORPUS_LISTEN:-127.0.0.1:49152}"
+mkdir -p "$HH_CORPUS_OUT_DIR"
+gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
+  "mkdir -p $RR/corpus && \
+   sudo env OLLAMA_API_KEY=\"\$(cat $R/ollama-key 2>/dev/null || true)\" \
+   python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
+     --store-root $RR/proxy-store --run-id fp-ws1-corpus \
+     --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
+     --mode record --seal-recordings \
+     --slots \$(python3 -c 'print(\",\".join(f\"ws1-corpus-{i:02d}:850000:high\" for i in range(1,29)))') \
+     --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30 & \
+   sleep 6 && python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
+     --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
+     --admission $R/admissions/mini-swe-agent.json \
+     --proxy-session $RR/corpus-session.json \
+     --model-upstream ${LISTEN##*:} --out-dir $RR/corpus-out --run-root $RR; \
+   touch $R/corpus-session-done"
+gcloud compute scp --tunnel-through-iap --project "$PROJ" --zone "$ZONE" \
+  --recurse "$INST:$RR/corpus-out/" "$HH_CORPUS_OUT_DIR"

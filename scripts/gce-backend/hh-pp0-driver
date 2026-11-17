@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# hh-pp0-driver — the Ws1 PP0 leg controller driver (R6.45q wiring).
+# Invoked by scripts/live-verify.sh pp0 (HH_PP0_DRIVER). Drives the
+# committed ws1-proxy-session.py (live mode) + ws1-pp0-driver.py on the
+# Ws1 VM, then fetches the hh-pp0-ag-evidence/1 set to HH_PP_EVIDENCE_DIR.
+# Slot tokens ride env/remote umask-077 files only — never argv.
+set -euo pipefail
+set +x
+WS1="${WS1_SESSION_DIR:-$HOME/hh-retained/ws1}"
+R="/var/lib/hh/ws1"; RR="/var/lib/hh/runs/run-root-ws1"
+INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${WS1_ZONE:-us-central1-a}"
+: "${HH_PP_EVIDENCE_DIR:?}"
+LISTEN="${HH_PP_LISTEN:-127.0.0.1:49152}"
+mkdir -p "$HH_PP_EVIDENCE_DIR"
+gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
+  "mkdir -p $RR/pp0-evidence && touch $R/pp0-sentinel-done 2>/dev/null || true; \
+   sudo env OLLAMA_API_KEY=\"\$(cat $R/ollama-key 2>/dev/null || true)\" \
+   python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
+     --store-root $RR/proxy-store --run-id fp-ws1-pp0 \
+     --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
+     --slots ws1-pp0-1:850000:high,ws1-pp0-2:850000:high,ws1-pp0-3:850000:high,ws1-pp0-4:850000:high,ws1-pp0-5:850000:high,ws1-pp0-6:850000:high,ws1-pp0-7:850000:high,ws1-pp0-8:850000:high,ws1-pp0-9:850000:high \
+     --session-out $RR/pp0-session.json --sentinel $R/pp0-session-done --poll-seconds 30 & \
+   sleep 6 && python3 $R/ws1-pp0-driver.py --cfg $R/cfg.json \
+     --tasks $WS1_PP0_TASKS --layers-file $R/layers.json \
+     --admissions-dir $R/admissions --proxy-session $RR/pp0-session.json \
+     --model-upstream ${LISTEN##*:} --out-dir $RR/pp0-evidence --run-root $RR; \
+   touch $R/pp0-session-done"
+gcloud compute scp --tunnel-through-iap --project "$PROJ" --zone "$ZONE" \
+  --recurse "$INST:$RR/pp0-evidence/" "$HH_PP_EVIDENCE_DIR"
