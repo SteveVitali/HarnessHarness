@@ -1776,18 +1776,33 @@ fn arm_run_once(
         backend
             .cp_in(&format!("{}/.", cfg.python_dist_dir), "/opt/python")
             .map_err(|e| format!("python cp_in: {e}"))?;
-        let script = "D=$(dirname \"$(dirname \"$(readlink \
-             /opt/hh-harness-link/bin/python)\")\") && mkdir -p \"$D\" \
-             && cp -a /opt/python/. \"$D/\""
-            .to_string();
-        let _ = hharness_runner::cell::exec_guarded(
-            &backend,
-            &["/bin/sh".to_string(), "-c".to_string(), script],
-            "/",
-            &[],
-            Some(60_000),
-        )
-        .map_err(|e| format!("python link: {e}"))?;
+        // `install.version_probe` names the entry (`bin/<arm>`); the
+        // venv script shebangs to the uv tools dir — link it to the
+        // bundle so the interpreter resolves.
+        if let Some(name) = admission
+            .get("install")
+            .and_then(|i| i.get("version_probe"))
+            .and_then(Json::as_arr)
+            .and_then(|a| a.first())
+            .and_then(Json::as_str)
+            .and_then(|p| p.rsplit('/').next().map(str::to_string))
+        {
+            let script = format!(
+                "D=$(dirname \"$(dirname \"$(readlink /opt/hh-harness-link/bin/python)\")\") && \
+                 mkdir -p \"$D\" && cp -a /opt/python/. \"$D/\" && \
+                 T=$(head -1 /opt/hh-harness-link/bin/{name} | tr -d '#!') && \
+                 mkdir -p \"$(dirname \"$(dirname \"$T\")\")\" && \
+                 ln -sfn /opt/hh-harness-link \"$(dirname \"$(dirname \"$T\")\")\""
+            );
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &["/bin/sh".to_string(), "-c".to_string(), script],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("python link: {e}"))?;
+        }
     }
     if runtime.and_then(|r| r.get("node")).is_some() {
         let _ = mkdir("/opt/node").map_err(|e| format!("node mkdir: {e}"))?;
