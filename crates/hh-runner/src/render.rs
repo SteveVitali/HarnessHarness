@@ -541,8 +541,12 @@ fn render_pi(rec: &Json, slot: &SlotInputs) -> Result<RenderedConfig, RenderErro
     // pi's `resolveConfigValue` resolves `process.env[apiKey]`, so the
     // adapter's `$OPENAI_API_KEY` spelling would be sent verbatim
     // (the `$`-form is not dereferenced); the env-name form resolves.
+    // `compat.supportsStore=false` — pi's openai-completions payload
+    // emits `store:false` under the detected-default compat; the lane
+    // policy refuses `store` outright (§4.2 — a state-sharing member
+    // upstream cannot honour), so the declared compat suppresses it.
     let models_json = format!(
-        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true\n        }}\n      ]\n    }}\n  }}\n}}\n",
+        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true,\n          \"compat\": {{\n            \"supportsStore\": false\n          }}\n        }}\n      ]\n    }}\n  }}\n}}\n",
         py_json_str(&url),
         py_json_str(&model)
     );

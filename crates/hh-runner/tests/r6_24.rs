@@ -172,7 +172,7 @@ fn ac1_pi_golden_mirrors_the_adapter() {
     let models = String::from_utf8(rc.files[0].bytes.clone()).unwrap();
     assert_eq!(
         models,
-        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:58080/v1\",\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true\n        }\n      ]\n    }\n  }\n}\n"
+        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:58080/v1\",\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true,\n          \"compat\": {\n            \"supportsStore\": false\n          }\n        }\n      ]\n    }\n  }\n}\n"
     );
     assert_eq!(rc.files[0].path, "/tmp/harbor-pi-agent/models.json");
     secret_free(&rc);
