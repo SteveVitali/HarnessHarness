@@ -120,6 +120,7 @@ struct Cfg {
     workdir_default: String,
     slot_token: String,
     node_dist_dir: String,
+    python_dist_dir: String,
 }
 
 fn load_cfg(path: &str) -> Result<Cfg, String> {
@@ -164,6 +165,9 @@ fn load_cfg(path: &str) -> Result<Cfg, String> {
         // runtime, so provisioning materializes the declared version.
         node_dist_dir: jstr(&j, "node_dist_dir")
             .unwrap_or("/opt/ws1/node")
+            .to_string(),
+        python_dist_dir: jstr(&j, "python_dist_dir")
+            .unwrap_or("/opt/ws1/python")
             .to_string(),
     })
 }
@@ -1755,20 +1759,37 @@ fn arm_run_once(
         "/usr/local/bin".to_string(),
         "/opt/hh-harness-link/bin".to_string(),
     ];
-    if admission
-        .get("runtime")
-        .and_then(|r| r.get("node"))
-        .is_some()
-    {
-        let mkdir = |p: &str| {
-            hharness_runner::cell::exec_guarded(
-                &backend,
-                &["/bin/mkdir".to_string(), "-p".to_string(), p.to_string()],
-                "/",
-                &[],
-                Some(60_000),
-            )
-        };
+    let runtime = admission.get("runtime");
+    let mkdir = |p: &str| {
+        hharness_runner::cell::exec_guarded(
+            &backend,
+            &["/bin/mkdir".to_string(), "-p".to_string(), p.to_string()],
+            "/",
+            &[],
+            Some(60_000),
+        )
+    };
+    if runtime.and_then(|r| r.get("python")).is_some() {
+        // The uv-tool bundle shebangs to its build-time managed python —
+        // the dist tree is materialized where `bin/python` points.
+        let _ = mkdir("/opt/python").map_err(|e| format!("python mkdir: {e}"))?;
+        backend
+            .cp_in(&format!("{}/.", cfg.python_dist_dir), "/opt/python")
+            .map_err(|e| format!("python cp_in: {e}"))?;
+        let script = "D=$(dirname \"$(dirname \"$(readlink \
+             /opt/hh-harness-link/bin/python)\")\") && mkdir -p \"$D\" \
+             && cp -a /opt/python/. \"$D/\""
+            .to_string();
+        let _ = hharness_runner::cell::exec_guarded(
+            &backend,
+            &["/bin/sh".to_string(), "-c".to_string(), script],
+            "/",
+            &[],
+            Some(60_000),
+        )
+        .map_err(|e| format!("python link: {e}"))?;
+    }
+    if runtime.and_then(|r| r.get("node")).is_some() {
         let _ = mkdir("/opt/node").map_err(|e| format!("node mkdir: {e}"))?;
         let _ = mkdir("/usr/local/bin").map_err(|e| format!("bin mkdir: {e}"))?;
         backend
