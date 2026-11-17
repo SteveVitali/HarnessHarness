@@ -41,9 +41,13 @@ ADMISSION_FILES = {
 }
 
 def proxy_slot_stats(store_root, run_id):
-    """Read the proxy run's events.wal → per-slot {receipt_count,
-    endpoint_errors} — the AG6/AG8 inputs (the proxy receipts every
-    granted call and types endpoint protocol errors on its rows)."""
+    """Read the proxy run's events.wal → per-slot {receipts,
+    endpoint_errors} — the AG6/AG8 inputs. Wal events carry no literal
+    `slot_id`: the slot attribution chain is the slice reservation —
+    every terminal model call emits `measurement.cost.attributed`
+    whose `attribution.participant_ref` is the slot id and whose
+    `source_event.event_id` is the terminal call event carrying the
+    disposition."""
     stats = {}
     wal = None
     for dp, _, fns in os.walk(store_root):
@@ -52,6 +56,7 @@ def proxy_slot_stats(store_root, run_id):
                 wal = os.path.join(dp, fn)
     if not wal:
         return stats
+    events = {}
     for line in open(wal, errors="replace"):
         line = line.strip()
         if not line:
@@ -60,15 +65,23 @@ def proxy_slot_stats(store_root, run_id):
             e = json.loads(line)
         except Exception:
             continue
-        pay = e.get("payload") or e
-        sid = pay.get("slot_id") or (e.get("slot_id"))
+        ev = e.get("v") or e
+        eid = ev.get("event_id")
+        if eid:
+            events[eid] = ev
+    for ev in events.values():
+        if (ev.get("class") or "") != "measurement.cost.attributed":
+            continue
+        pay = ev.get("payload") or {}
+        sid = (pay.get("attribution") or {}).get("participant_ref")
         if not sid:
             continue
         st = stats.setdefault(sid, {"receipts": 0, "endpoint_errors": []})
-        cls = e.get("class") or pay.get("kind") or ""
-        if "receipt" in cls:
-            st["receipts"] += 1
-        disp = pay.get("disposition") or pay.get("class") or ""
+        st["receipts"] += 1
+        src = (pay.get("source_event") or {}).get("event_id")
+        term = events.get(src) or {}
+        term_pay = term.get("payload") or {}
+        disp = term_pay.get("disposition") or ""
         if "endpoint" in str(disp) or "protocol" in str(disp):
             st["endpoint_errors"].append(str(disp))
     return stats

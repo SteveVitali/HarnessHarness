@@ -13,8 +13,8 @@ INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${
 LISTEN="${HH_CORPUS_LISTEN:-127.0.0.1:49152}"
 mkdir -p "$HH_CORPUS_OUT_DIR"
 gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
-  "sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus; mkdir -p $RR/corpus && \
-   sudo env OLLAMA_API_KEY=\"\$(cat $R/ollama-key 2>/dev/null || true)\" \
+  "sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus $RR/corpus-out $RR/corpus; mkdir -p $RR/corpus && \
+   sudo env OLLAMA_API_KEY=\"\$(sudo cat $R/ollama-key 2>/dev/null || true)\" \
    python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
      --store-root $RR/proxy-store --run-id fp-ws1-corpus \
      --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
