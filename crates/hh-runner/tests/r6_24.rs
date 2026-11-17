@@ -165,10 +165,14 @@ fn ac1_pi_golden_mirrors_the_adapter() {
     assert!(!rc.env.contains_key("OPENAI_BASE_URL")); // Pi's spec disables the base-url env destination.
     only_token_credential(&rc.env, &["OPENAI_API_KEY"]);
     // models.json — Python json.dumps(indent=2)+"\n" byte for byte.
+    // `apiKey` at this pin is an env-var name, not a `$`-ref —
+    // `resolveConfigValue` resolves `process.env[apiKey]` (pi
+    // 0.52.3 live-verified: the `$OPENAI_API_KEY` form is sent
+    // verbatim and the slot gate refuses it).
     let models = String::from_utf8(rc.files[0].bytes.clone()).unwrap();
     assert_eq!(
         models,
-        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:58080/v1\",\n      \"apiKey\": \"$OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true\n        }\n      ]\n    }\n  }\n}\n"
+        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:58080/v1\",\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true\n        }\n      ]\n    }\n  }\n}\n"
     );
     assert_eq!(rc.files[0].path, "/tmp/harbor-pi-agent/models.json");
     secret_free(&rc);

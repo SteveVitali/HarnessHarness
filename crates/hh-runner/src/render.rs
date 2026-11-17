@@ -537,8 +537,12 @@ fn render_pi(rec: &Json, slot: &SlotInputs) -> Result<RenderedConfig, RenderErro
     let env = closed_env(env, slot)?;
     // `json.dumps(models_json, indent=2) + "\n"` — Python's pretty form,
     // insertion-ordered keys, byte for byte (`_write_custom_models_json`).
+    // `apiKey` at this pin is an env-var name or a literal value —
+    // pi's `resolveConfigValue` resolves `process.env[apiKey]`, so the
+    // adapter's `$OPENAI_API_KEY` spelling would be sent verbatim
+    // (the `$`-form is not dereferenced); the env-name form resolves.
     let models_json = format!(
-        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"$OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true\n        }}\n      ]\n    }}\n  }}\n}}\n",
+        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true\n        }}\n      ]\n    }}\n  }}\n}}\n",
         py_json_str(&url),
         py_json_str(&model)
     );
