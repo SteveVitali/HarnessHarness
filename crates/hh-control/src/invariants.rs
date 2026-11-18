@@ -266,10 +266,19 @@ fn inv5(events: &[EventEnvelope], guard: GuardPoint, out: &mut Vec<InvariantViol
     let mut committed: BTreeSet<(String, u64)> = BTreeSet::new();
     let mut idem: BTreeMap<String, String> = BTreeMap::new();
     for ev in events {
+        // The attempt series keys on the *innermost* scope member: the
+        // durable-dispatch chain stamps `{turn ⊃ model_call ⊃ tool_call}`
+        // plus `effect_id` on every effect row, so the first-non-null
+        // order would collide every `action.effect.*` under one
+        // `model_call` at `attempt_no:1` (`attempt_not_increasing` +
+        // `duplicate_commit` on the second effect of a multi-call
+        // response). `effect_id` is INV-5's own key — "≤ 1 `committed`
+        // per `(effect_id, attempt_no)`" — and a `model.call.requested`
+        // carries no inner scope, so it still keys on `model_call_id`.
         let scope_id = [
-            ev.scope.model_call_id.as_deref(),
             ev.scope.effect_id.as_deref(),
             ev.scope.tool_call_id.as_deref(),
+            ev.scope.model_call_id.as_deref(),
             ev.scope.child_run_id.as_deref(),
         ]
         .iter()

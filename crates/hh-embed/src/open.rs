@@ -690,13 +690,19 @@ impl EmbedService {
         // `configuration_id`): a requires-approval capability under
         // `unattended` resolves by Π-12 below — `decided{decider: policy,
         // reason: unattended}` — never a refusal. The refusal case is a
-        // declared mode that *demands* a human (`manual`/`tiered`/
-        // `auto_review`) under unattended attendance — that combination
-        // can only hang, so `UnattendedRequiresInput` fires pre-ledger.
+        // declared mode that *demands* a human (`manual`/`tiered`/`sync`)
+        // under unattended attendance — that combination can only hang,
+        // so `UnattendedRequiresInput` fires pre-ledger. `auto_review`
+        // is not on the list: under `unattended` it lowers to Π-12's
+        // `auto_review` member — the sealed `HarnessRule{auto_review}`
+        // endorses at the chain's `auto_reviewer` stage, and with no
+        // matching rule the stage resolves `deny` fail-closed (R-2.8.7
+        // I-P2). It never waits on a human, so the combination cannot
+        // hang.
         let cap_decl = parse_host_caps(supplies);
         let human_mode = matches!(
             approval_mode,
-            Some("manual") | Some("tiered") | Some("auto_review") | Some("sync")
+            Some("manual") | Some("tiered") | Some("sync")
         );
         if attendance.value == "unattended" && human_mode {
             return Err(EmbedError::UnattendedRequiresInput);
@@ -1053,7 +1059,28 @@ impl EmbedService {
                 "hh-embed/open_session",
                 self.store.now_ms(),
             );
-            let holder_ref = hharness_hir::refs::Ref::selected(holder.clone(), "latest");
+            // The pre-authorization's holder is the definition's
+            // `AgentProcess` — `authorize`'s `pre_authorized` leg and
+            // `resolve_handles` both match `holder.semantic_id ==
+            // proposer`, and the proposer at dispatch IS the agent
+            // (`exec_no_proposer` derives the same coordinate). A
+            // handle minted to the service's lease-holder label could
+            // never cover an agent's proposal — the `policy_rule` leg
+            // would be dead by construction. Fallback to the service
+            // holder keeps the legacy row for a doc without an agent.
+            let proposer_ref = sealed
+                .document
+                .nodes
+                .iter()
+                .find(|n| {
+                    matches!(
+                        n.semantic,
+                        hharness_hir::records::KindRecord::AgentProcess(_)
+                    )
+                })
+                .map(|n| n.semantic_id())
+                .unwrap_or_else(|| holder.clone());
+            let holder_ref = hharness_hir::refs::Ref::selected(proposer_ref, "latest");
             let minted = {
                 let store = &self.store;
                 let mut alloc = |kind: &str| store.alloc_id(kind);
@@ -1131,7 +1158,36 @@ impl EmbedService {
             attached_payload,
         )?;
 
-        let surfaces = driver_surfaces(&cap_decl);
+        let mut surfaces = driver_surfaces(&cap_decl);
+        // R6.45q — an `open_session.exec`-armed surface is *delivered*:
+        // G-INTERPRET validates each emitted call against
+        // `delivered_surfaces` (`config.surfaces` — supplies caps +
+        // `hh.submit`), so the armed surface's compiled `SurfaceSpec`
+        // must land here too or every call rejects `unknown_surface`
+        // (and supplies-style specs carry no `params`, which would read
+        // the call's args `schema_violation`). `bind_surface` is pure —
+        // the executor arm lands later in `arm_session_exec` (it needs
+        // the env handle), so the spec derives here at byte-identical
+        // identity.
+        if let Some(decl) = exec {
+            for mut spec in exec_surface_specs(&sealed.document, decl)? {
+                match surfaces
+                    .iter_mut()
+                    .find(|s| s.surface_id == spec.surface_id)
+                {
+                    // The armed binding's param contract refines a
+                    // supplies-style spec for the same surface (that
+                    // entry carries no `params`, so every call's args
+                    // read `schema_violation`). The caller's declared
+                    // `risk_class` is preserved verbatim.
+                    Some(existing) => {
+                        spec.risk_class = existing.risk_class;
+                        *existing = spec;
+                    }
+                    None => surfaces.push(spec),
+                }
+            }
+        }
         let control_variant = control_slot_variant(&sealed.document)
             .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string());
         let compute_variant =
@@ -1314,7 +1370,14 @@ impl EmbedService {
         // capability's `execution_requirement`) — absent ⇒ no arming,
         // byte-identical legacy behavior.
         if let Some(decl) = exec {
-            self.arm_session_exec(&run_id, &session_id, decl, &sealed.document)?;
+            self.arm_session_exec(
+                &run_id,
+                &session_id,
+                decl,
+                &sealed,
+                attendance,
+                approval_mode,
+            )?;
         }
 
         // Permission asks declared on the supplies — durable pending +
@@ -2579,7 +2642,9 @@ impl EmbedService {
         run_id: &str,
         sess_id: &str,
         decl: &hharness_embed_schema::types::ExecArmDecl,
-        doc: &hharness_hir::document::HirDocument,
+        sealed: &hharness_hir::SealedDefinition,
+        attendance: &AttendanceDeclaration,
+        approval_mode: Option<&str>,
     ) -> Result<(), EmbedError> {
         use hharness_hir::kinds::ToolEffects;
         use hharness_hir::records::{KindRecord, SurfaceRecord};
@@ -2610,6 +2675,7 @@ impl EmbedService {
             .ok_or_else(|| EmbedError::Refused {
                 reason: "exec_env_unavailable".to_string(),
             })?;
+        let doc = &sealed.document;
         let proposer = doc
             .nodes
             .iter()
@@ -2618,6 +2684,21 @@ impl EmbedService {
             .ok_or_else(|| EmbedError::Refused {
                 reason: "exec_no_proposer".to_string(),
             })?;
+        // ADR-0026's derived-view rule — each armed cap's monitor table
+        // is the run's durable `security.permission.*` fold (`project`
+        // is the designed rebuild): the `pre_authorize`/`approval`
+        // `granted` rows landed at open are the handles `authorize`'s
+        // coverage + `pre_authorized` legs read. A fresh table here
+        // denies every effect `NoCoveringGrant` even where the sealed
+        // definition conferred the grant — the durable record is the
+        // truth, never the arm's empty view. The sealed `auto_review`
+        // rules arm the chain's `auto_reviewer` stage likewise (I-P2 —
+        // the sealed rule is the only ask→allow endorsement).
+        let handle_table = hharness_monitor::table::HandleTable::project(
+            self.store.events(run_id).map_err(ledger_err)?,
+            u64::MAX,
+        );
+        let auto_review_rules = hharness_monitor::approval::auto_review_rules(sealed);
         let mut caps = Vec::new();
         for sid in &decl.surfaces {
             let node = doc.node(sid).ok_or_else(|| EmbedError::Refused {
@@ -2677,13 +2758,30 @@ impl EmbedService {
                     })
                 }
             };
-            let mut monitor = hharness_monitor::monitor::Monitor::new(
-                hharness_monitor::table::HandleTable::default(),
-                hharness_monitor::policy::default_table(
-                    &format!("pol-{run_id}"),
-                    hharness_monitor::policy::Mode::Attended,
-                ),
-            );
+            // Π-12's attendance/mode lowering (I-P4; ADR-0208 §D.5): a
+            // declared `unattended` session arms `Mode::Unattended`
+            // monitors; `approval_mode` selects the `UnattendedPolicy`
+            // member — `unattended_defer` → `defer`, `auto_review` →
+            // `auto_review` (the sealed `HarnessRule{auto_review}`
+            // endorses at the chain's `auto_reviewer` stage; no matching
+            // rule resolves `deny` fail-closed — R-2.8.7 I-P2), anything
+            // else keeps the `deny` default. Attended declarations keep
+            // the attended table (asks route to the human chain).
+            let policy_mode = if attendance.value == "unattended" {
+                hharness_monitor::policy::Mode::Unattended
+            } else {
+                hharness_monitor::policy::Mode::Attended
+            };
+            let mut policy_table =
+                hharness_monitor::policy::default_table(&format!("pol-{run_id}"), policy_mode);
+            policy_table.unattended_policy = match approval_mode {
+                Some("unattended_defer") => hharness_monitor::policy::UnattendedPolicy::Defer,
+                Some("auto_review") => hharness_monitor::policy::UnattendedPolicy::AutoReview,
+                _ => hharness_monitor::policy::UnattendedPolicy::Deny,
+            };
+            let mut monitor =
+                hharness_monitor::monitor::Monitor::new(handle_table.clone(), policy_table);
+            monitor.auto_review_rules = auto_review_rules.clone();
             monitor.proposers.insert(
                 proposer.clone(),
                 hharness_provenance::Label::at(hharness_provenance::AuthorityClass::Principal),
@@ -4076,6 +4174,81 @@ pub(crate) fn driver_surfaces(caps: &[HostCap]) -> Vec<SurfaceSpec> {
     v
 }
 
+/// `exec_surface_specs` — the delivered `SurfaceSpec` set for an
+/// `open_session.exec` declaration: one spec per named `ToolCapability`
+/// node, `surface_id`/`params` from the same `bind_surface` the executor
+/// arm runs (`param` keys are the surface's argument order — the names
+/// the wire args carry — `required`/`kind` read off the capability's
+/// `input_schema`). An unnameable or non-capability member refuses with
+/// the arm path's own typed spellings so the spec arm and the executor
+/// arm never disagree.
+fn exec_surface_specs(
+    doc: &hharness_hir::document::HirDocument,
+    decl: &hharness_embed_schema::types::ExecArmDecl,
+) -> Result<Vec<SurfaceSpec>, EmbedError> {
+    use hharness_hir::records::{KindRecord, SurfaceRecord};
+    let mut out = Vec::new();
+    for sid in &decl.surfaces {
+        let node = doc.node(sid).ok_or_else(|| EmbedError::Refused {
+            reason: format!("exec_surface_unknown:{sid}"),
+        })?;
+        let rec = match &node.semantic {
+            KindRecord::ToolCapability(r) => r.clone(),
+            _ => {
+                return Err(EmbedError::Refused {
+                    reason: format!("exec_surface_not_capability:{sid}"),
+                })
+            }
+        };
+        let tool_surface = match &node.surface {
+            Some(SurfaceRecord::Tool(t)) => t.clone(),
+            _ => {
+                return Err(EmbedError::Refused {
+                    reason: format!("exec_surface_no_surface:{sid}"),
+                })
+            }
+        };
+        let binding =
+            hharness_compiler::equiv::bind_surface(node, &tool_surface, &rec.input_schema);
+        let required: std::collections::BTreeSet<&str> = match rec.input_schema.get("required") {
+            Some(Json::Arr(a)) => a.iter().filter_map(Json::as_str).collect(),
+            _ => std::collections::BTreeSet::new(),
+        };
+        let kind_of = |name: &str| {
+            rec.input_schema
+                .get("properties")
+                .and_then(|p| p.get(name))
+                .and_then(|s| s.get("type"))
+                .and_then(Json::as_str)
+                .map(param_kind_from)
+                .unwrap_or(ParamKind::Any)
+        };
+        let params = binding
+            .arg_map
+            .keys()
+            .map(|name| {
+                (
+                    name.clone(),
+                    ParamSpec {
+                        required: required.contains(name.as_str()),
+                        kind: kind_of(name),
+                        enum_values: vec![],
+                        domain: vec![],
+                    },
+                )
+            })
+            .collect();
+        out.push(SurfaceSpec {
+            surface_id: binding.surface_id.clone(),
+            semantic_id: binding.hir_node_id.clone(),
+            params,
+            risk_class: None,
+            family: binding.family_id.clone(),
+        });
+    }
+    Ok(out)
+}
+
 /// The `open_session`/`fork` result record (the contract's `Session`) —
 /// the parameter list is the record's own field list (a constructor,
 /// not a call graph).
@@ -4269,6 +4442,30 @@ pub(crate) fn environment_spec(
             });
     }
     policy.net.mode = hharness_containment::policy::NetMode::None;
+    // `exec_allow[]` — the deployer's declared exec prefixes, part of the
+    // environment's own containment statement (recorded in
+    // `security.containment.applied.effective_policy_hash` like the
+    // writable-root list). The kernel default's `exec.allow` is the empty
+    // set — an `exec`/`spawn_process` effect under it denies
+    // `amendable:add_exec_allow` at Stage 1; the member names the
+    // prefixes the environment admits. Absent ⇒ byte-identical legacy.
+    if let Some(allows) = info.get("exec_allow") {
+        let Json::Arr(items) = allows else {
+            return Err(EmbedError::EnvironmentUnavailable {
+                reason: "exec_allow must be an array".to_string(),
+            });
+        };
+        let mut set = Vec::with_capacity(items.len());
+        for a in items {
+            let Some(s) = a.as_str() else {
+                return Err(EmbedError::EnvironmentUnavailable {
+                    reason: "exec_allow members must be strings".to_string(),
+                });
+            };
+            set.push(s.to_string());
+        }
+        policy.fs.exec = hharness_containment::policy::ExecPolicy::Allow(set);
+    }
     // S4.14b (R-2.8.4¹) — the binding may *raise* the boundary:
     // `isolation_class` is honoured only above the `process_sandbox`
     // floor (a binding declaring `none` is refused — an external input

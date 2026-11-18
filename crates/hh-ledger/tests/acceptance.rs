@@ -690,6 +690,81 @@ fn scope_chain_and_open_close_rules_are_enforced() {
 }
 
 #[test]
+fn induced_tool_calls_hold_the_model_call_scope_open() {
+    let (mut s, run, lease) = open("mc-span");
+    let mut t = k_ev("t1", "lifecycle.turn.started", Json::Null);
+    t.scope.turn_id = Some("turn-1".into());
+    let mut m = k_ev("m1", "model.call.requested", Json::obj([]));
+    m.scope.turn_id = Some("turn-1".into());
+    m.scope.model_call_id = Some("mc-1".into());
+    let mut p = k_ev("p1", "action.tool.proposed", Json::obj([]));
+    p.scope.turn_id = Some("turn-1".into());
+    p.scope.model_call_id = Some("mc-1".into());
+    p.scope.tool_call_id = Some("tc-1".into());
+    s.append(&run, &lease, vec![t, m, p]).unwrap();
+    // `model.call.completed{calls}` is the conditional closer (CC1): a call
+    // that induced tool calls holds the `model_call` scope open — the
+    // dispatch leg and its settlement tail still name it.
+    let mut done = k_ev(
+        "m2",
+        "model.call.completed",
+        Json::obj([(
+            "calls",
+            Json::Arr(vec![Json::obj([
+                ("tool_call_id", Json::str("tc-1")),
+                ("args_raw", Json::str("{}")),
+            ])]),
+        )]),
+    );
+    done.scope.turn_id = Some("turn-1".into());
+    done.scope.model_call_id = Some("mc-1".into());
+    s.append(&run, &lease, vec![done]).unwrap();
+    // The post-completion dispatch leg — a chain-stamped row lands.
+    let mut st = k_ev("ts1", "action.tool.started", Json::obj([]));
+    st.scope.turn_id = Some("turn-1".into());
+    st.scope.model_call_id = Some("mc-1".into());
+    st.scope.tool_call_id = Some("tc-1".into());
+    s.append(&run, &lease, vec![st]).unwrap();
+    // The `tool_call` closer lands too; `mc-1` stays open for the
+    // settlement tail by design (verdict/K4/unattributed rows name it).
+    let mut tc = ev("tc1", "action.tool.completed", Json::obj([]));
+    tc.scope.turn_id = Some("turn-1".into());
+    tc.scope.model_call_id = Some("mc-1".into());
+    tc.scope.tool_call_id = Some("tc-1".into());
+    s.append(&run, &lease, vec![tc]).unwrap();
+    let mut tail = k_ev("ts2", "action.tool.started", Json::obj([]));
+    tail.scope.turn_id = Some("turn-1".into());
+    tail.scope.model_call_id = Some("mc-1".into());
+    s.append(&run, &lease, vec![tail]).unwrap();
+    assert!(s
+        .open_scopes(&run)
+        .unwrap()
+        .iter()
+        .any(|(id, _)| id == "mc-1"));
+    // A call that induced no tool calls still closes at `completed` —
+    // chain-stamped rows refuse `ScopeNotOpen` after it.
+    let mut m3 = k_ev("m3", "model.call.requested", Json::obj([]));
+    m3.scope.turn_id = Some("turn-1".into());
+    m3.scope.model_call_id = Some("mc-2".into());
+    let mut done2 = k_ev(
+        "m4",
+        "model.call.completed",
+        Json::obj([("calls", Json::Arr(vec![]))]),
+    );
+    done2.scope.turn_id = Some("turn-1".into());
+    done2.scope.model_call_id = Some("mc-2".into());
+    s.append(&run, &lease, vec![m3, done2]).unwrap();
+    let mut bad = k_ev("ts3", "action.tool.started", Json::obj([]));
+    bad.scope.turn_id = Some("turn-1".into());
+    bad.scope.model_call_id = Some("mc-2".into());
+    assert!(matches!(
+        s.append(&run, &lease, vec![bad]),
+        Err(LedgerError::ScopeNotOpen { scope, id })
+            if scope == "model_call_id" && id == "mc-2"
+    ));
+}
+
+#[test]
 fn provenance_rules_are_enforced_at_append() {
     let (mut s, run, lease) = open("prov");
     // A provenance-mandatory class without a record → MissingProvenance.

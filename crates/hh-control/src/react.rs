@@ -100,6 +100,14 @@ impl Default for ReactMinimal {
 mod ext {
     pub const FORMAT_ERROR_STREAK: &str = "format_error_streak";
     pub const PENDING_INTENTS: &str = "pending_intents";
+    /// `model_call_id`s whose proposed intents an `act` already drained —
+    /// a repeat `model_completed` for one of these is a stale cue (its
+    /// work dispatched), never a format error.
+    pub const DISPATCHED_CALLS: &str = "dispatched_calls";
+    /// `tool_call_id` → owning `model_call_id` for every live
+    /// `pending_intents` entry (the `action.tool.proposed` scope join —
+    /// id spellings stay lane-defined, I2).
+    pub const INTENT_OWNERS: &str = "intent_owners";
     pub const SUBMISSIONS: &str = "submissions";
     pub const MODEL_RETRIES: &str = "model_retries";
     pub const LAST_ERROR_CLASS: &str = "last_error_class";
@@ -187,6 +195,32 @@ impl ReactMinimal {
         }
     }
 
+    /// `intent_owners` — the live `tool_call_id → model_call_id` join the
+    /// `action.tool.proposed` scope folds (ADR-0027's call nesting is a
+    /// ledger fact, never an id-spelling assumption).
+    fn intent_owners(state: &ControlState) -> std::collections::BTreeMap<String, String> {
+        match state.extension.get(ext::INTENT_OWNERS) {
+            Some(Json::Obj(m)) => m
+                .iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect(),
+            _ => std::collections::BTreeMap::new(),
+        }
+    }
+
+    fn set_owners(state: &mut ControlState, owners: std::collections::BTreeMap<String, String>) {
+        Self::set_ext(
+            state,
+            ext::INTENT_OWNERS,
+            Json::Obj(
+                owners
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Json::str(v)))
+                    .collect(),
+            ),
+        );
+    }
+
     /// `propose{act}` — the loop's next-step decision.
     fn propose(&self, state: &ControlState) -> ControlDecision {
         ControlDecision {
@@ -260,13 +294,21 @@ impl ControlStrategy for ReactMinimal {
                         // fold or a re-proposed call never double-dispatches
                         // (INV-5's commit uniqueness at the intent level).
                         if !p.contains(&tc) {
-                            p.push(tc);
+                            p.push(tc.clone());
                         }
                         Self::set_ext(
                             state,
                             ext::PENDING_INTENTS,
                             Json::Arr(p.iter().map(Json::str).collect()),
                         );
+                        // The owning `model_call_id` rides the row's scope —
+                        // the completion cue dispatches only its own intents
+                        // (a wedged steer/follow-up may pop ahead of it).
+                        if let Some(mc) = ev.scope.model_call_id.clone() {
+                            let mut owners = Self::intent_owners(state);
+                            owners.insert(tc, mc);
+                            Self::set_owners(state, owners);
+                        }
                     }
                 }
                 "action.effect.intended" => {
@@ -371,18 +413,55 @@ impl ControlStrategy for ReactMinimal {
                 use hharness_gateway::vocab::StopReason as Gw;
                 match stop_reason {
                     Gw::ToolUse => {
-                        let intents = Self::pending_intents(state);
-                        if intents.is_empty() {
-                            // `tool_use` with no admissible calls is the
-                            // format-error row (every call was rejected at
-                            // G-INTERPRET).
-                            self.format_error(state)
-                        } else {
-                            Self::set_ext(state, ext::PENDING_INTENTS, Json::Arr(vec![]));
+                        // Ownership partition — the cue dispatches only the
+                        // intents *its own* call proposed (the
+                        // `action.tool.proposed` scope join; an entry with
+                        // no recorded owner stays attributed to the call
+                        // that just completed, the pre-partition rule). A
+                        // wedged cue (a steer/follow-up can pop ahead of a
+                        // completion) must not drain a sibling call's
+                        // intents under this act, and a completion whose
+                        // intents an earlier `act` already consumed is a
+                        // stale cue — the call *did* propose admissible
+                        // work, so it is never the `tool_use{no intents}`
+                        // format-error row.
+                        let mut owners = Self::intent_owners(state);
+                        let (mine, rest): (Vec<String>, Vec<String>) = Self::pending_intents(state)
+                            .into_iter()
+                            .partition(|tc| match owners.get(tc) {
+                                Some(o) => o == model_call_id,
+                                None => true,
+                            });
+                        if !mine.is_empty() {
+                            for tc in &mine {
+                                owners.remove(tc);
+                            }
+                            Self::set_ext(
+                                state,
+                                ext::PENDING_INTENTS,
+                                Json::Arr(rest.iter().map(Json::str).collect()),
+                            );
+                            Self::set_owners(state, owners);
+                            let mut dispatched: Vec<String> =
+                                match state.extension.get(ext::DISPATCHED_CALLS) {
+                                    Some(Json::Arr(items)) => items
+                                        .iter()
+                                        .filter_map(|i| i.as_str().map(String::from))
+                                        .collect(),
+                                    _ => vec![],
+                                };
+                            if !dispatched.contains(model_call_id) {
+                                dispatched.push(model_call_id.clone());
+                            }
+                            Self::set_ext(
+                                state,
+                                ext::DISPATCHED_CALLS,
+                                Json::Arr(dispatched.iter().map(Json::str).collect()),
+                            );
                             ControlDecision {
                                 stamp: stamp_for(state, DecisionPoint::Act, None),
                                 kind: DecisionKind::Act {
-                                    intents: intents
+                                    intents: mine
                                         .iter()
                                         .map(|tc| Json::obj([("tool_call_id", Json::str(tc))]))
                                         .collect(),
@@ -390,6 +469,19 @@ impl ControlStrategy for ReactMinimal {
                                     on_partial: OnPartial::FailBatch,
                                 },
                             }
+                        } else if matches!(
+                            state.extension.get(ext::DISPATCHED_CALLS),
+                            Some(Json::Arr(items)) if items.iter().any(|i| i.as_str() == Some(model_call_id.as_str()))
+                        ) {
+                            // Stale `model_completed` — this call's intents
+                            // already dispatched under an earlier pop of
+                            // its cue; the loop's next step is a propose.
+                            self.propose(state)
+                        } else {
+                            // `tool_use` with no admissible calls is the
+                            // format-error row (every call was rejected at
+                            // G-INTERPRET).
+                            self.format_error(state)
                         }
                     }
                     // `{end}` ≡ `end_turn | stop_sequence`; `refusal` takes
@@ -400,6 +492,7 @@ impl ControlStrategy for ReactMinimal {
                     // `{length}` ≡ `max_output` → `fail_calls` then `propose`.
                     Gw::MaxOutput => {
                         Self::set_ext(state, ext::PENDING_INTENTS, Json::Arr(vec![]));
+                        Self::set_owners(state, std::collections::BTreeMap::new());
                         self.propose(state)
                     }
                     // `pause_turn` → `retry{target: model_call}` — a control
@@ -1408,6 +1501,125 @@ mod tests {
             }
             other => panic!("expected act, got {other:?}"),
         }
+    }
+
+    /// R6.45q — the ws1 offline replay's wedge regression: a `follow_up`
+    /// (or any mid-turn cue) can pop ahead of a `model_completed`, so a
+    /// completion cue must dispatch only the intents *its own* call
+    /// proposed (the `action.tool.proposed` scope join), and a repeat
+    /// completion whose intents already dispatched is a stale cue —
+    /// `propose`, never a `format_error` streak charge. Unowned entries
+    /// (lanes that mint unscoped proposed rows) keep the pre-partition
+    /// rule: they belong to the call that just completed.
+    #[test]
+    fn model_completed_dispatches_only_its_own_intents() {
+        let mut s = opened();
+        ReactMinimal::set_ext(
+            &mut s,
+            ext::PENDING_INTENTS,
+            Json::Arr(vec![
+                Json::str("mc-2.tc1"),
+                Json::str("mc-9.tc1"),
+                Json::str("tc-loose"),
+            ]),
+        );
+        ReactMinimal::set_ext(
+            &mut s,
+            ext::INTENT_OWNERS,
+            Json::Obj(
+                [
+                    ("mc-2.tc1".to_string(), Json::str("mc-2")),
+                    ("mc-9.tc1".to_string(), Json::str("mc-9")),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        );
+        // mc-2's completion acts on its own intent plus the unowned one;
+        // mc-9's intent stays pending for its own cue.
+        let d = decide(
+            &mut s,
+            Cue::ModelCompleted {
+                model_call_id: "mc-2".into(),
+                response_ref: "r".into(),
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
+            },
+        );
+        match d {
+            DecisionKind::Act { intents, .. } => {
+                let tcs: Vec<&str> = intents
+                    .iter()
+                    .filter_map(|i| i.get("tool_call_id").and_then(Json::as_str))
+                    .collect();
+                assert_eq!(tcs, vec!["mc-2.tc1", "tc-loose"]);
+            }
+            other => panic!("expected act, got {other:?}"),
+        }
+        assert_eq!(
+            ReactMinimal::pending_intents(&s),
+            vec!["mc-9.tc1".to_string()]
+        );
+        // A repeat pop of the same cue — the intents already dispatched —
+        // is a stale cue: propose, no streak charge.
+        let d = decide(
+            &mut s,
+            Cue::ModelCompleted {
+                model_call_id: "mc-2".into(),
+                response_ref: "r".into(),
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
+            },
+        );
+        assert!(
+            matches!(d, DecisionKind::Propose { .. }),
+            "stale completion should propose, got {d:?}"
+        );
+        assert_eq!(
+            s.extension
+                .get(ext::FORMAT_ERROR_STREAK)
+                .and_then(Json::as_int),
+            Some(0),
+            "a stale completion never charges the format-error streak"
+        );
+        // mc-9's completion dispatches its own intent.
+        let d = decide(
+            &mut s,
+            Cue::ModelCompleted {
+                model_call_id: "mc-9".into(),
+                response_ref: "r".into(),
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
+            },
+        );
+        match d {
+            DecisionKind::Act { intents, .. } => {
+                assert_eq!(intents.len(), 1);
+                assert_eq!(
+                    intents[0].get("tool_call_id").and_then(Json::as_str),
+                    Some("mc-9.tc1")
+                );
+            }
+            other => panic!("expected act, got {other:?}"),
+        }
+        // Now a completion for a call that proposed nothing admissible is
+        // still the honest format-error row.
+        let d = decide(
+            &mut s,
+            Cue::ModelCompleted {
+                model_call_id: "mc-42".into(),
+                response_ref: "r".into(),
+                stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
+            },
+        );
+        assert!(
+            matches!(d, DecisionKind::Propose { .. }),
+            "empty tool_use should propose (streak 1), got {d:?}"
+        );
+        assert_eq!(
+            s.extension
+                .get(ext::FORMAT_ERROR_STREAK)
+                .and_then(Json::as_int),
+            Some(1),
+            "a genuinely-empty tool_use charges the streak"
+        );
     }
 
     #[test]

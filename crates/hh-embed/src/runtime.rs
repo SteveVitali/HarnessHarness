@@ -69,8 +69,33 @@ pub struct KernelSink<'a> {
     pub env_handle: Option<String>,
 }
 
+/// The writer-lease renewal headroom — an append whose remaining lease
+/// is under this bound renews first, so a drive spanning the TTL (60 s
+/// manifest default) never fences mid-turn while the store record is
+/// still the same generation.
+const LEASE_RENEW_HEADROOM_MS: u64 = 30_000;
+
 impl LedgerSink for KernelSink<'_> {
     fn append(&mut self, mut events: Vec<Event>) -> Result<(), String> {
+        // A long-running drive renews its writer lease before expiry —
+        // the TTL is wall-clock (60 s manifest default) and a drive can
+        // span it, so an append whose remaining lease is under the
+        // headroom renews first. `Store::renew` extends the same
+        // generation in place and mints the audited
+        // `lifecycle.lease.renewed` row; a renewal failure (already
+        // fenced/expired) falls through to the append's own `Fenced`
+        // outcome, honest either way.
+        let now = self.store.now_ms();
+        if self
+            .lease
+            .expires_at_ms
+            .saturating_sub(now)
+            .lt(&LEASE_RENEW_HEADROOM_MS)
+        {
+            if let Ok(renewed) = self.store.renew(&self.lease) {
+                self.lease = renewed;
+            }
+        }
         // The sink owns the kernel provenance — the driver emits rows
         // either bare (its plain `append`) or carrying an explicit
         // delegate origin (verification claims — kept verbatim, never
@@ -726,13 +751,17 @@ impl DispatchGate {
                         ),
                     },
                 };
-                // A dedup-serve or refusal carries no settlement for `ef`
-                // — the ref is dropped so the driver appends the honest
-                // terminal under `ef` instead of validating nothing.
-                let keep_ref = !matches!(outcome, SettledOutcome::Refused)
-                    || err.as_deref() == Some("duplicate_of:");
+                // `dispatch_adopted` resolves `dref.settlement_ref` only
+                // when the outcome's terminal row landed durable — an
+                // authorization `Refused` mints the effect's own
+                // `action.effect.refused` (+ `action.tool.rejected`)
+                // before returning, so the ref must ride the outcome:
+                // dropping it re-mints the terminal under the already-
+                // closed `effect` scope (`ScopeNotOpen{effect_id}`).
+                // The nothing-landed refusals return `Err` above, never
+                // reach this arm.
                 GateOutcome {
-                    durable_effect_ref: keep_ref.then_some(dref),
+                    durable_effect_ref: Some(dref),
                     outcome,
                     submission_ref: sub,
                     error_class: err,
@@ -3356,7 +3385,7 @@ pub fn probe_uname_slots(
                 env_handle_id: handle.to_string(),
                 attribution_token: token.clone(),
                 deadline_ms: cap.ladder.run_deadline_ms.or(Some(10_000)),
-                ladder: cap.ladder.clone(),
+                ladder: cap.ladder,
                 retain_bytes_cap: cap.output_policy.retain_bytes_cap,
                 idempotency_key: format!("{run_id}.probe.uname.1"),
                 commit_evidence: hharness_env::helper::CommitEvidence::ReadOnly,

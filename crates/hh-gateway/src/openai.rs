@@ -110,6 +110,7 @@ pub fn assistant_msg(
     content: Option<&str>,
     extra: &std::collections::BTreeMap<String, Json>,
     calls: &[(String, String, String)],
+    emit_index: bool,
 ) -> Json {
     let mut m = std::collections::BTreeMap::new();
     m.insert(
@@ -123,15 +124,24 @@ pub fn assistant_msg(
     if !calls.is_empty() {
         let tcs: Vec<Json> = calls
             .iter()
-            .map(|(id, name, args)| {
+            .enumerate()
+            .map(|(i, (id, name, args))| {
                 let mut f = std::collections::BTreeMap::new();
                 f.insert("name".into(), Json::str(name.clone()));
                 f.insert("arguments".into(), Json::str(args.clone()));
-                Json::obj([
+                let mut tc = vec![
                     ("id", Json::str(id.clone())),
                     ("type", Json::str("function")),
                     ("function", Json::Obj(f)),
-                ])
+                ];
+                // `tool_call_index: emit` — the provider's own
+                // transcript spelling carries a positional `index`
+                // member the replay re-sends (REQ-XE-108's verbatim
+                // rule; position, never a re-derived id).
+                if emit_index {
+                    tc.insert(0, ("index", Json::Int(i as i64)));
+                }
+                Json::obj(tc)
             })
             .collect();
         m.insert("tool_calls".into(), Json::Arr(tcs));

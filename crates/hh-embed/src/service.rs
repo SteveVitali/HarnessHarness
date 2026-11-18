@@ -1986,6 +1986,10 @@ impl EmbedService {
                 .set_compaction_port(Box::new(crate::runtime::KernelCompaction::new(ctx.clone())));
         }
         let outcome = driver.run(model, gate, &mut asm, &mut sink);
+        // A long drive may have renewed the writer lease inside the sink
+        // (LEASE_RENEW_HEADROOM_MS); take it before `sink`'s store borrow
+        // ends so the session copy below stays current.
+        let sink_lease = sink.lease.clone();
         // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
         // env's idle boundary; the declared cadence take lands durable
         // below while the run is still open.
@@ -2003,6 +2007,9 @@ impl EmbedService {
         s.driver = Some(driver);
         s.model_fail_plan = fail_left;
         s.next_invoke = None;
+        // A long drive may have renewed the writer lease inside the sink
+        // (LEASE_RENEW_HEADROOM_MS); keep the session copy current.
+        s.lease = Some(sink_lease);
         match outcome {
             Ok(_r) => {
                 s.turn_active = false;

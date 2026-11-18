@@ -477,6 +477,54 @@ fn resolved_sealed(tag: &str) -> (SealedDefinition, hharness_registry::store::Re
 }
 
 #[test]
+fn r6_reseal_of_an_equal_definition_registers_idempotently() {
+    // A drive that re-resolves and re-seals the same document stamps
+    // volatile resolution members — `assembly.resolved`
+    // (`resolved_at`, `registry_snapshot_id`), the seal's
+    // `attestation.verified_at`, and the `version.version_id`s derived
+    // over them. The definition's identity excludes all of them, so
+    // re-registering is R6's idempotent hit, never `conflicting body`.
+    let (sealed, mut store) = resolved_sealed("reseal-idempotent");
+    let v1 = store
+        .register(
+            RegistryRecord::SealedDefinition(sealed.clone()),
+            &kernel(),
+            None,
+        )
+        .expect("first registration");
+    let mut resealed = sealed.clone();
+    let doc = &mut resealed.document;
+    if let Some(Json::Obj(asm)) = doc.assembly.as_mut() {
+        if let Some(Json::Obj(r)) = asm.get_mut("resolved") {
+            r.insert("resolved_at".to_string(), Json::Int(999_999));
+            r.insert(
+                "registry_snapshot_id".to_string(),
+                Json::str("sha256:other-snapshot"),
+            );
+        }
+    }
+    let n = &mut doc.nodes[0];
+    if let Some(att) = n.provenance.attestation.as_mut() {
+        att.verified_at += 1;
+    }
+    n.version.version_id = Some("sha256:recomputed-id".to_string());
+    let v2 = store
+        .register(RegistryRecord::SealedDefinition(resealed), &kernel(), None)
+        .expect("re-registration is idempotent");
+    assert_eq!(v1.version_id, v2.version_id);
+    // A genuinely different body under the same identity still conflicts.
+    let mut divergent = sealed.clone();
+    divergent.definition_ref.version_id = v1.version_id.clone();
+    divergent.document.nodes[0]
+        .ext
+        .insert("test/divergence".to_string(), Json::Int(1));
+    let err = store
+        .register(RegistryRecord::SealedDefinition(divergent), &kernel(), None)
+        .expect_err("a different body under the same version_id conflicts");
+    assert!(format!("{err:?}").contains("conflicting body"));
+}
+
+#[test]
 fn identity_exposes_root_and_configuration_ids() {
     let (sealed, _store) = resolved_sealed("identity");
     let def = hharness_assembly::identity(&sealed);
