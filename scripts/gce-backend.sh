@@ -678,7 +678,10 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
     return 0
   fi
   # 2a: remote sha256 manifest + tar over the run root
-  vm "mkdir -p '$rroot' && cd '$rroot' && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz" \
+  # run-roots carry root-owned evidence (0600 slot tokens, container-
+  # bind native-log dirs) — the manifest+tar step must read as root or
+  # the manifest silently skips members (REQ-XB-220 completeness)
+  vm "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"$rroot\" && cd \"$rroot\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'" \
     > "$TMPD/remote.sha" || return 1
   # 2b: copy back over IAP-scp
   gdo compute scp --tunnel-through-iap --project "$PROJECT" --zone "$ZONE" \
@@ -701,7 +704,7 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
     fi
   fi
   # journald + serial output travel with the run root (REQ-XB-220)
-  vm 'journalctl --no-pager -o short-iso' > "$HARV_DIR/journald.log" 2>/dev/null || true
+  vm 'sudo journalctl --no-pager -o short-iso' > "$HARV_DIR/journald.log" 2>/dev/null || true
   gdo compute instances get-serial-port-output "$INSTANCE" \
     --project "$PROJECT" --zone "$ZONE" > "$HARV_DIR/serial.log" 2>/dev/null || true
   # harvested text is leak-swept before it may persist (ADR-0363 D6)
